@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/docs/assets/superqode.png" alt="SuperQode Logo" width="200">
+   <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/docs/assets/superqode.png" alt="SuperQode Logo" width="200">
 </p>
 
 <h1 align="center">SuperQode</h1>
 
 <p align="center">
-  <strong>Super Quality Engineering for Agentic AI</strong><br>
+  <strong>Super Quality Engineering for Agentic Coding Teams</strong><br>
   <em>Let agents break the code. Prove the fix. Ship with confidence.</em>
 </p>
 

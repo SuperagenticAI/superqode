@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.1.0"
+version = "0.1.1"
 description = "SuperQode: Super Quality Engineering for Agentic Coding Teams"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -98,6 +98,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+superqode = ["agents/data/*.toml"]
 
 [tool.ruff]
 line-length = 100
