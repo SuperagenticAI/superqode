@@ -41,10 +41,14 @@ class ThoughtType(Enum):
     WRITING = "writing"
     DEBUGGING = "debugging"
     REFLECTING = "reflecting"
+    EXECUTING = "executing"
+    VERIFYING = "verifying"
+    TESTING = "testing"
+    REFACTORING = "refactoring"
     GENERAL = "general"
 
 
-# Thought styling
+# Thought styling - colorful icons for visual clarity
 THOUGHT_STYLES = {
     ThoughtType.PLANNING: {"icon": "📋", "color": "#3b82f6", "label": "Planning"},
     ThoughtType.ANALYZING: {"icon": "🔬", "color": "#8b5cf6", "label": "Analyzing"},
@@ -54,6 +58,10 @@ THOUGHT_STYLES = {
     ThoughtType.WRITING: {"icon": "✏️", "color": "#22c55e", "label": "Writing"},
     ThoughtType.DEBUGGING: {"icon": "🐛", "color": "#ef4444", "label": "Debugging"},
     ThoughtType.REFLECTING: {"icon": "💭", "color": "#ec4899", "label": "Reflecting"},
+    ThoughtType.EXECUTING: {"icon": "⚡", "color": "#f97316", "label": "Executing"},
+    ThoughtType.VERIFYING: {"icon": "✅", "color": "#10b981", "label": "Verifying"},
+    ThoughtType.TESTING: {"icon": "🧪", "color": "#6366f1", "label": "Testing"},
+    ThoughtType.REFACTORING: {"icon": "🔧", "color": "#a855f7", "label": "Refactoring"},
     ThoughtType.GENERAL: {"icon": "💡", "color": "#a1a1aa", "label": "Thinking"},
 }
 
@@ -69,29 +77,99 @@ class ThoughtChunk:
 
 
 def classify_thought(text: str) -> ThoughtType:
-    """Classify a thought based on its content."""
+    """
+    Classify a thought based on its content.
+
+    Uses keyword matching to determine the type of reasoning/activity
+    the agent is performing. Order matters - more specific matches first.
+    """
     text_lower = text.lower()
 
+    # Testing - check first as it's specific
     if any(
-        w in text_lower for w in ["plan", "step", "approach", "strategy", "first", "then", "next"]
+        w in text_lower
+        for w in ["test", "pytest", "unittest", "assertion", "expect", "should pass", "should fail"]
+    ):
+        return ThoughtType.TESTING
+
+    # Verifying - checking if something works
+    if any(
+        w in text_lower
+        for w in ["verify", "confirm", "validate", "check if", "ensure", "make sure", "works"]
+    ):
+        return ThoughtType.VERIFYING
+
+    # Executing - running commands
+    if any(
+        w in text_lower
+        for w in ["run", "execute", "running", "executing", "shell", "command", "npm", "pip"]
+    ):
+        return ThoughtType.EXECUTING
+
+    # Refactoring - restructuring code
+    if any(
+        w in text_lower
+        for w in ["refactor", "restructure", "reorganize", "clean up", "simplify", "extract"]
+    ):
+        return ThoughtType.REFACTORING
+
+    # Debugging - fixing issues
+    if any(
+        w in text_lower
+        for w in ["debug", "error", "fix", "issue", "problem", "bug", "traceback", "exception"]
+    ):
+        return ThoughtType.DEBUGGING
+
+    # Planning - strategizing approach
+    if any(
+        w in text_lower
+        for w in ["plan", "step", "approach", "strategy", "first", "then", "next", "let me", "i'll"]
     ):
         return ThoughtType.PLANNING
-    elif any(w in text_lower for w in ["analyze", "understand", "examine", "look at", "check"]):
+
+    # Analyzing - understanding code/problem
+    if any(
+        w in text_lower
+        for w in ["analyze", "understand", "examine", "look at", "check", "inspect", "review"]
+    ):
         return ThoughtType.ANALYZING
-    elif any(w in text_lower for w in ["decide", "choose", "option", "should i", "best way"]):
+
+    # Deciding - making choices
+    if any(
+        w in text_lower
+        for w in ["decide", "choose", "option", "should i", "best way", "which", "either", "or"]
+    ):
         return ThoughtType.DECIDING
-    elif any(w in text_lower for w in ["search", "find", "look for", "grep", "locate"]):
+
+    # Searching - finding files/code
+    if any(
+        w in text_lower
+        for w in ["search", "find", "look for", "grep", "locate", "where is", "looking for"]
+    ):
         return ThoughtType.SEARCHING
-    elif any(w in text_lower for w in ["read", "file", "content", "see what"]):
+
+    # Reading - examining content
+    if any(
+        w in text_lower
+        for w in ["read", "reading", "content", "see what", "open", "view", "contents of"]
+    ):
         return ThoughtType.READING
-    elif any(w in text_lower for w in ["write", "create", "add", "implement", "modify"]):
+
+    # Writing - creating/modifying code
+    if any(
+        w in text_lower
+        for w in ["write", "create", "add", "implement", "modify", "update", "change", "edit"]
+    ):
         return ThoughtType.WRITING
-    elif any(w in text_lower for w in ["debug", "error", "fix", "issue", "problem", "bug"]):
-        return ThoughtType.DEBUGGING
-    elif any(w in text_lower for w in ["think", "consider", "hmm", "wait", "actually"]):
+
+    # Reflecting - meta-thinking
+    if any(
+        w in text_lower
+        for w in ["think", "consider", "hmm", "wait", "actually", "interesting", "notice"]
+    ):
         return ThoughtType.REFLECTING
-    else:
-        return ThoughtType.GENERAL
+
+    return ThoughtType.GENERAL
 
 
 class ThinkingBubble(Static):

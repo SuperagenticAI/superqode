@@ -706,6 +706,69 @@ class AgentStreamClient:
         except Exception:
             return False
 
+    async def reset_session(self) -> bool:
+        """
+        Reset the session (e.g., after model change).
+
+        Creates a new session without restarting the agent process.
+
+        Returns:
+            True if reset was successful, False otherwise.
+        """
+        try:
+            # Cancel any pending operations
+            await self.cancel()
+
+            # Clear internal state
+            self._tool_calls.clear()
+            self._current_message = ""
+            self._pending_requests.clear()
+
+            # Create new session
+            await self._new_session()
+
+            return True
+        except Exception as e:
+            self._emit(StreamEventType.ERROR, f"Session reset failed: {e}")
+            return False
+
+    async def switch_agent(self, new_command: str) -> bool:
+        """
+        Switch to a different agent command.
+
+        Stops the current agent and starts a new one with the given command.
+
+        Args:
+            new_command: The new agent command to run.
+
+        Returns:
+            True if switch was successful, False otherwise.
+        """
+        try:
+            # Stop current agent
+            await self.stop()
+
+            # Update command
+            self.agent_command = new_command
+
+            # Clear state
+            self._tool_calls.clear()
+            self._current_message = ""
+            self._pending_requests.clear()
+            self._session_id = ""
+            self._request_id = 0
+
+            # Start fresh
+            return await self.start()
+
+        except Exception as e:
+            self._emit(StreamEventType.ERROR, f"Agent switch failed: {e}")
+            return False
+
+    def get_session_id(self) -> str:
+        """Get the current session ID."""
+        return self._session_id
+
 
 # ============================================================================
 # SIMPLE STREAMING CLIENT (for non-ACP agents like basic OpenCode)

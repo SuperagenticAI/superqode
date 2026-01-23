@@ -206,6 +206,83 @@ class ACPClient:
         except Exception:
             return False
 
+    async def switch_model(self, new_model: str) -> bool:
+        """
+        Switch to a new model, creating a new session.
+
+        When the user changes the model, we need to:
+        1. Stop the current session cleanly
+        2. Update the model configuration
+        3. Start fresh with a new session
+
+        Args:
+            new_model: The new model identifier to switch to.
+
+        Returns:
+            True if switch was successful, False otherwise.
+        """
+        try:
+            # Cancel any pending operations
+            await self.cancel()
+
+            # Stop the current agent process
+            await self.stop()
+
+            # Update model
+            self.model = new_model
+
+            # Reset internal state
+            self._session_id = ""
+            self._tool_calls.clear()
+            self._terminals.clear()
+            self._terminal_count = 0
+            self.reset_stats()
+
+            # Start fresh with new session
+            return await self.start()
+
+        except Exception as e:
+            if self.on_thinking:
+                await self.on_thinking(f"[model switch error] {e}")
+            return False
+
+    async def reset_session(self) -> bool:
+        """
+        Reset the current session without changing the model.
+
+        Creates a new session with the same configuration.
+
+        Returns:
+            True if reset was successful, False otherwise.
+        """
+        try:
+            # Cancel any pending operations
+            await self.cancel()
+
+            # Reset internal state
+            self._tool_calls.clear()
+            self._terminals.clear()
+            self._terminal_count = 0
+            self.reset_stats()
+
+            # Create new session
+            await self._new_session()
+
+            return True
+
+        except Exception as e:
+            if self.on_thinking:
+                await self.on_thinking(f"[session reset error] {e}")
+            return False
+
+    def get_current_model(self) -> Optional[str]:
+        """Get the currently configured model."""
+        return self.model
+
+    def get_session_id(self) -> str:
+        """Get the current session ID."""
+        return self._session_id
+
     # ========================================================================
     # Internal Methods
     # ========================================================================
