@@ -84,11 +84,13 @@ class TestProvidersCommand:
 
 
 class TestQECommand:
-    """Tests for QE commands."""
+    """Tests for QE commands (superqe CLI)."""
 
     def test_qe_help(self, runner):
         """Test qe command help."""
-        result = runner.invoke(cli_main, ["qe", "--help"])
+        from superqode.superqe_cli import superqe
+
+        result = runner.invoke(superqe, ["--help"])
 
         assert result.exit_code == 0
         assert "qe" in result.output.lower() or "quality" in result.output.lower()

@@ -46,6 +46,7 @@ mlx = [
 ]
 dev = [
     "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
     "coverage>=7.0.0",
     "ruff>=0.1.0",
@@ -146,6 +147,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+asyncio_mode = "auto"
 
 [tool.bandit]
 exclude_dirs = ["tests", "examples", "docs", "scripts", "reference_code", "site"]

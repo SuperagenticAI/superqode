@@ -7,6 +7,8 @@ __pycache__/
 .claude/
 .cursor/
 .cursorrules
+CLAUDE.md
+AGENTS.md
 .ruff_cache/
 .superqode/
 .DS_Store
