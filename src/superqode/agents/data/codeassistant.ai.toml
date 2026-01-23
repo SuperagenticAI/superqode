@@ -1,0 +1,51 @@
+# Schema defined in agent_schema.py
+# https://github.com/codeassistant/codeassistant
+
+identity = "codeassistant.ai"
+name = "Code Assistant"
+short_name = "codeassistant"
+url = "https://github.com/codeassistant/codeassistant"
+protocol = "acp"
+author_name = "Code Assistant"
+author_url = "https://github.com/codeassistant"
+publisher_name = "SuperQode Team"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "An AI coding assistant built in Rust for autonomous code analysis and modification."
+tags = ["rust", "autonomous", "analysis"]
+run_command."*" = "code-assistant"
+
+help = '''
+# Code Assistant
+
+**Rust-Based AI Coding Assistant**
+
+Code Assistant is an AI coding assistant built in Rust for autonomous code analysis and modification. It provides fast and efficient code assistance.
+
+## Key Features
+
+- **Rust-Based**: Built in Rust for performance and safety
+- **Autonomous**: Autonomous code analysis and modification
+- **Fast**: High performance due to Rust implementation
+- **ACP Compatible**: Full Agent Client Protocol support
+
+## Installation
+
+Install Code Assistant via Cargo:
+
+```bash
+cargo install code-assistant
+```
+
+**Requirements:**
+- Rust toolchain (rustc and cargo)
+- Cargo package manager
+
+---
+
+**GitHub**: https://github.com/codeassistant/codeassistant
+'''
+
+[actions."*".install]
+command = "cargo install code-assistant"
+description = "Install Code Assistant via Cargo"

@@ -1,0 +1,51 @@
+# Schema defined in agent_schema.py
+# https://github.com/vtcode/vtcode
+
+identity = "vtcode.ai"
+name = "VT Code"
+short_name = "vtcode"
+url = "https://github.com/vtcode/vtcode"
+protocol = "acp"
+author_name = "VT Code"
+author_url = "https://github.com/vtcode"
+publisher_name = "SuperQode Team"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "A versatile coding agent implementing ACP for seamless integration with compatible development environments."
+tags = ["versatile", "acp", "integration"]
+run_command."*" = "vtcode-acp"
+
+help = '''
+# VT Code
+
+**Versatile Coding Agent**
+
+VT Code is a versatile coding agent implementing ACP for seamless integration with compatible development environments.
+
+## Key Features
+
+- **Versatile**: Works with multiple development environments
+- **ACP Integration**: Full Agent Client Protocol support
+- **Seamless Integration**: Easy integration with existing workflows
+- **Cross-Platform**: Works on multiple operating systems
+
+## Installation
+
+Install VT Code ACP adapter via npm:
+
+```bash
+npm install -g vtcode-acp
+```
+
+**Requirements:**
+- Node.js (v16 or higher)
+- npm
+
+---
+
+**GitHub**: https://github.com/vtcode/vtcode
+'''
+
+[actions."*".install]
+command = "npm install -g vtcode-acp"
+description = "Install VT Code ACP adapter"

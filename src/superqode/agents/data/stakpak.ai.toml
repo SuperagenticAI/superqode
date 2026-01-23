@@ -1,0 +1,51 @@
+# Schema defined in agent_schema.py
+# https://github.com/stakpak/stakpak
+
+identity = "stakpak.ai"
+name = "Stakpak"
+short_name = "stakpak"
+url = "https://github.com/stakpak/stakpak"
+protocol = "acp"
+author_name = "Stakpak"
+author_url = "https://github.com/stakpak"
+publisher_name = "SuperQode Team"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "An ACP-compatible agent focused on providing comprehensive code assistance and collaboration features."
+tags = ["code-assistance", "collaboration", "acp"]
+run_command."*" = "stakpak"
+
+help = '''
+# Stakpak
+
+**Comprehensive Code Assistance Agent**
+
+Stakpak is an ACP-compatible agent focused on providing comprehensive code assistance and collaboration features for development teams.
+
+## Key Features
+
+- **Code Assistance**: Comprehensive code analysis and suggestions
+- **Collaboration**: Team collaboration features
+- **ACP Compatible**: Full Agent Client Protocol support
+- **Extensible**: Plugin system for custom functionality
+
+## Installation
+
+Install Stakpak via pip:
+
+```bash
+pip install stakpak
+```
+
+**Requirements:**
+- Python 3.8 or higher
+- pip
+
+---
+
+**GitHub**: https://github.com/stakpak/stakpak
+'''
+
+[actions."*".install]
+command = "pip install stakpak"
+description = "Install Stakpak"

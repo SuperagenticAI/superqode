@@ -1,0 +1,51 @@
+# Schema defined in agent_schema.py
+# https://github.com/cagent/cagent
+
+identity = "cagent.ai"
+name = "cagent"
+short_name = "cagent"
+url = "https://github.com/cagent/cagent"
+protocol = "acp"
+author_name = "cagent"
+author_url = "https://github.com/cagent"
+publisher_name = "SuperQode Team"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "A powerful, easy-to-use, customizable multi-agent runtime that orchestrates AI agents."
+tags = ["multi-agent", "orchestration", "runtime"]
+run_command."*" = "cagent"
+
+help = '''
+# cagent
+
+**Multi-Agent Runtime**
+
+cagent is a powerful, easy-to-use, customizable multi-agent runtime that orchestrates AI agents for complex development tasks.
+
+## Key Features
+
+- **Multi-Agent**: Orchestrate multiple AI agents simultaneously
+- **Customizable**: Highly customizable runtime configuration
+- **Easy to Use**: Simple API for agent orchestration
+- **ACP Compatible**: Full Agent Client Protocol support
+
+## Installation
+
+Install cagent via pip:
+
+```bash
+pip install cagent
+```
+
+**Requirements:**
+- Python 3.8 or higher
+- pip
+
+---
+
+**GitHub**: https://github.com/cagent/cagent
+'''
+
+[actions."*".install]
+command = "pip install cagent"
+description = "Install cagent"

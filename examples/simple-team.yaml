@@ -1,0 +1,92 @@
+# =============================================================================
+# SuperQode - Simple Team Configuration
+# =============================================================================
+# A minimal configuration for a dev + QA team with cross-model validation.
+# =============================================================================
+
+superqode:
+  version: "1.0"
+  name: "Simple Dev Team"
+
+# =============================================================================
+# PROVIDERS
+# =============================================================================
+providers:
+  anthropic:
+    api_key: ${ANTHROPIC_API_KEY}
+  openai:
+    api_key: ${OPENAI_API_KEY}
+
+# =============================================================================
+# MCP SERVERS
+# =============================================================================
+mcp:
+  filesystem:
+    command: uvx
+    args: [mcp-server-filesystem, --root, .]
+  git:
+    command: uvx
+    args: [mcp-server-git]
+  terminal:
+    command: uvx
+    args: [mcp-server-terminal]
+
+# =============================================================================
+# TEAM
+# =============================================================================
+team:
+  dev:
+    description: "Development"
+    roles:
+      fullstack:
+        description: "Full-stack developer"
+        provider: anthropic
+        model: claude-sonnet-4
+        mcp: [filesystem, git, terminal]
+        persona: |
+          You are a Senior Full-Stack Developer.
+          Write clean, tested, documented code.
+          When done, hand off to QA for review.
+        handoff:
+          to: qe.reviewer
+          when: task_complete
+
+  qe:
+    description: "Quality Engineering"
+    roles:
+      reviewer:
+        description: "Code reviewer"
+        provider: openai              # Different provider for cross-validation!
+        model: gpt-4
+        mcp: [filesystem, git]
+        persona: |
+          You are a Code Reviewer.
+          Review code from developers.
+          Check: correctness, security, performance.
+          Approve or request changes.
+        cross_validation:
+          enabled: true
+          exclude_same_model: true
+        handoff:
+          to: qe.tester
+          when: approved
+
+      tester:
+        description: "Test runner"
+        provider: anthropic
+        model: claude-haiku
+        mcp: [filesystem, git, terminal]
+        persona: |
+          You are a QA Tester.
+          Run tests, write new tests, report results.
+
+# =============================================================================
+# WORKFLOWS
+# =============================================================================
+workflows:
+  default:
+    steps:
+      - role: dev.fullstack
+      - role: qe.reviewer
+        cross_model: true
+      - role: qe.tester

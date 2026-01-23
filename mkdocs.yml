@@ -1,0 +1,251 @@
+# =============================================================================
+# SuperQode Documentation Configuration
+# =============================================================================
+# MkDocs configuration for SuperQode documentation
+# Build: mkdocs build
+# Serve: mkdocs serve
+# =============================================================================
+
+site_name: SuperQode
+site_url: https://superagenticai.github.io/superqode
+site_description: "Super Quality Engineering for Agentic Coding Teams - Let agents break the code. Prove the fix. Ship with confidence."
+site_author: SuperQode Team
+
+repo_name: SuperagenticAI/superqode
+repo_url: https://github.com/SuperagenticAI/superqode
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; 2024-2026 SuperQode Team
+
+theme:
+  name: material
+  logo: assets/superqode.png
+  favicon: assets/superqode.png
+
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.tabs.link
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - content.action.view
+    - toc.follow
+
+  icon:
+    repo: fontawesome/brands/github
+    admonition:
+      note: octicons/tag-16
+      abstract: octicons/checklist-16
+      info: octicons/info-16
+      tip: octicons/squirrel-16
+      success: octicons/check-16
+      question: octicons/question-16
+      warning: octicons/alert-16
+      failure: octicons/x-circle-16
+      danger: octicons/zap-16
+      bug: octicons/bug-16
+      example: octicons/beaker-16
+      quote: octicons/quote-16
+
+plugins:
+  - search:
+      lang: en
+      separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      auto_append:
+        - includes/abbreviations.md
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+extra:
+  version:
+    provider: mike
+    default: latest
+
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/SuperagenticAI/superqode
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/superqode
+    - icon: fontawesome/brands/discord
+      link: https://discord.gg/superqode
+
+  analytics:
+    provider: google
+    property: G-XXXXXXXXXX
+
+  consent:
+    title: Cookie consent
+    description: >-
+      We use cookies to recognize your repeated visits and preferences, as well
+      as to measure the effectiveness of our documentation and whether users
+      find what they're searching for.
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/extra.js
+
+nav:
+  - 🏠 Home: index.md
+
+  - 🚀 Getting Started:
+    - getting-started/index.md
+    - 📦 Installation: getting-started/installation.md
+    - ⚡ Quick Start: getting-started/quickstart.md
+    - 🎯 Your First QE Session: getting-started/first-session.md
+    - ⚙️ Configuration: getting-started/configuration.md
+    - 🧭 Troubleshooting: getting-started/troubleshooting.md
+
+  - 📚 Concepts:
+    - concepts/index.md
+    - 🤖 What is SuperQE?: concepts/superqe.md
+    - 🔌 Three Modes: concepts/modes.md
+    - 📁 Ephemeral Workspace: concepts/workspace.md
+    - 👥 QE Roles: concepts/roles.md
+    - 📊 Quality Reports: concepts/qr.md
+    - 💡 Allow Suggestions: concepts/suggestions.md
+
+
+  - ⚙️ Configuration:
+    - configuration/index.md
+    - 📄 superqode.yaml Reference: configuration/yaml-reference.md
+    - 👥 Team Configuration: configuration/team.md
+    - 🔧 MCP Configuration: configuration/mcp-config.md
+    - 🔇 Noise Configuration: configuration/noise-config.md
+    - 📖 Guidance Configuration: configuration/guidance-config.md
+
+  - 🛡️ QE Features:
+    - qe-features/index.md
+    - 🔇 Noise Filtering: qe-features/noise-filtering.md
+    - 💬 Natural Language QE: qe-features/natural-language-qe.md
+    - 📜 Constitution System: qe-features/constitution.md
+    - ✅ Fix Verifier: qe-features/fix-verifier.md
+    - 🔧 MCP Tools: qe-features/mcp-tools.md
+    - 🧪 Test Generation: qe-features/test-generation.md
+    - 📁 Artifacts & Reports: qe-features/artifacts.md
+
+  - 🔌 Providers:
+    - providers/index.md
+    - 🔑 BYOK Providers: providers/byok.md
+    - 🤖 ACP Agents: providers/acp.md
+    - 💻 Local Models: providers/local.md
+    - 🌐 OpenResponses: providers/openresponses.md
+
+  - 🔗 Integration:
+    - integration/index.md
+    - 🔄 CI/CD Integration: integration/cicd.md
+    - 📝 IDE Integration: integration/ide.md
+    - 🍺 Homebrew Releases: integration/homebrew.md
+    - 🐙 GitHub Actions: integration/github-actions.md
+    - 🦊 GitLab CI: integration/gitlab-ci.md
+
+  - 🔬 Advanced:
+    - advanced/index.md
+    - 🏗️ Architecture Overview: advanced/architecture.md
+    - ⚙️ Execution Pipeline: advanced/execution-pipeline.md
+    - 📁 Workspace Internals: advanced/workspace-internals.md
+    - 🔒 Safety & Permissions: advanced/safety-permissions.md
+    - 🧪 Evaluation Engine: advanced/evaluation-engine.md
+    - 🧠 Memory & Learning: advanced/memory.md
+    - 🔧 Tools System: advanced/tools-system.md
+    - 📖 Guidance System: advanced/guidance-system.md
+    - ⚓ Harness System: advanced/harness-system.md
+    - 📋 Session Management: advanced/session-management.md
+    - 🧭 TUI Reference: advanced/tui.md
+    - 💻 CLI Reference:
+      - cli-reference/index.md
+      - 🔍 QE Commands: cli-reference/qe-commands.md
+      - ⚙️ Config Commands: cli-reference/config-commands.md
+      - 🔌 Provider Commands: cli-reference/provider-commands.md
+      - 💡 Suggestion Commands: cli-reference/suggestion-commands.md
+      - 🤖 Agents Commands: cli-reference/agents-commands.md
+      - 🔐 Auth Commands: cli-reference/auth-commands.md
+      - 👥 Roles Commands: cli-reference/roles-commands.md
+      - 🌐 Serve Commands: cli-reference/serve-commands.md
+      - 🎬 Init Commands: cli-reference/init-commands.md
+      - 🧪 SuperQE Commands: cli-reference/superqe-commands.md
+    - 📖 API Reference:
+      - api-reference/index.md
+      - 📊 JSONL Events: api-reference/jsonl-events.md
+      - 🐍 Python SDK: api-reference/python-sdk.md
+
+  - 🏢 Enterprise:
+    - enterprise/index.md
+    - 💬 Natural Language QE: qe-features/natural-language-qe.md
+    - ✅ Fix Verifier: qe-features/fix-verifier.md
+    - 🧪 Test Generation: qe-features/test-generation.md
+    - 🔄 CI Outputs: integration/cicd.md
+    - 📝 IDE / LSP: integration/ide.md
+    - 🌐 Server Commands: cli-reference/serve-commands.md

@@ -1,0 +1,152 @@
+[project]
+name = "superqode"
+version = "0.1.0"
+description = "SuperQode: Super Quality Engineering for Agentic Coding Teams"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    {name = "Shashi Jagtap", email = "shashi@super-agentic.ai"},
+    {name = "Shashi Jagtap", email = "shashikant.jagtap@icloud.com"}
+]
+maintainers = [
+    {name = "Shashi Jagtap", email = "team@super-agentic.ai"},
+    {name = "Shashi Jagtap", email = "shashikant.jagtap@icloud.com"}
+]
+keywords = ["ai", "coding-agents", "multi-agent", "orchestration", "sdlc", "automation", "mcp", "kubernetes", "superqode"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Build Tools",
+]
+
+dependencies = [
+    "pyyaml>=6.0",
+    "click>=8.0.0",
+    "litellm>=1.80.11",
+    "agent-client-protocol>=0.7.0",
+    "prompt_toolkit>=3.0.0",
+    "rich>=13.0.0",
+    "textual>=0.47.0",
+    "mcp>=1.25.0",
+    "anyio>=4.0.0",
+    "httpx>=0.24.0",
+    "httpx-sse>=0.4.0",
+    "codeoptix>=0.1.0",
+    "superopt>=0.1.1",
+]
+
+[project.optional-dependencies]
+mlx = [
+    "mlx-lm>=0.28.3,<0.30.0; python_version < '3.14'",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "coverage>=7.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+]
+testing = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "coverage>=7.0.0",
+    "bandit>=1.7.0",
+    "httpx>=0.24.0",
+]
+linters = [
+    "bandit>=1.7.5",
+    "pylint>=3.0.0",
+    "flake8>=6.1.0",
+    "safety>=2.3.0",
+    "pip-audit>=2.6.0",
+]
+ui-testing = [
+    "selenium>=4.0.0",
+    "playwright>=1.0.0",
+]
+performance = [
+    "locust>=2.0.0",
+]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.4.0",
+    "pymdown-extensions>=10.0.0",
+    "mkdocs-minify-plugin>=0.7.0",
+]
+
+[project.urls]
+Repository = "https://github.com/SuperagenticAI/superqode"
+Documentation = "https://superagenticai.github.io/superqode/"
+Issues = "https://github.com/SuperagenticAI/superqode/issues"
+Changelog = "https://github.com/SuperagenticAI/superqode/blob/main/CHANGELOG.md"
+
+[project.scripts]
+superqode = "superqode.main:cli_main"
+superqe = "superqode.superqe_cli:main"
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".eggs",
+    "*.egg",
+    "build",
+    "dist",
+    "site",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "F",      # pyflakes
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "E402",   # module-import-not-at-top-of-file
+    "F401",   # unused import
+    "F541",   # f-string missing placeholders
+    "F811",   # redefined while unused
+    "F821",   # undefined name
+    "F823",   # undefined local
+    "F841",   # unused variable
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["superqode"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.bandit]
+exclude_dirs = ["tests", "examples", "docs", "scripts", "reference_code", "site"]
+skips = ["B101"]  # Skip assert_used test (tests use assert)

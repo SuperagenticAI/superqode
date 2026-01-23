@@ -1,0 +1,1314 @@
+# superqode-all.yaml
+# ============================================
+# COMPREHENSIVE QE TESTING ROLES REFERENCE
+# ============================================
+# This file contains ALL possible QE testing roles.
+# It is NOT used by default - it's a reference guide.
+# Copy roles from here to superqode.yaml as needed.
+#
+# To use a role from this file:
+# 1. Copy the role definition to your superqode.yaml
+# 2. Enable it: enabled: true
+# 3. Configure provider/model as needed
+# 4. Set expert_prompt_enabled: true for expert prompts
+# ============================================
+
+superqode:
+  version: "2.0"
+  team_name: Comprehensive QE Team Reference
+  description: Complete reference of all QE testing roles
+
+team:
+  qe:
+    description: Quality Engineering & Testing - Complete Reference
+    deep_analysis_roles: []  # Use all enabled implemented QE roles
+    roles:
+      # ============================================
+      # 1. TESTING LEVELS (SDLC Foundation)
+      # ============================================
+      unit_tester:
+        description: Unit testing - isolated component testing, mocking, coverage
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - coverage
+        - edge_cases
+        - error_handling
+        - mocking
+        - isolation
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Unit Testing Specialist focusing on isolated tests. Focus: Test-driven development (TDD), mocking/stubbing, code coverage analysis, test isolation, fast feedback loops. Tools: Jest, Pytest, JUnit, Mocha, coverage reporters.'
+
+      integration_tester:
+        description: Integration testing - component integration, service testing
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - integration
+        - boundaries
+        - services
+        - databases
+        - queues
+        - contracts
+        timeout_seconds: 450
+        max_findings: 40
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an Integration Testing Specialist. Focus: Component integration, service boundaries, database testing, message queue testing, API contract verification. Tools: Testcontainers, WireMock, database fixtures.'
+
+      system_tester:
+        description: System testing - complete integrated system validation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - system_requirements
+        - integration
+        - end_to_end
+        - system_behavior
+        - functional_requirements
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a System Testing Specialist ensuring the complete integrated system meets all requirements. Focus: Complete system validation, requirement verification, system behavior analysis, integration testing, end-to-end workflows. Tools: System test frameworks, requirement traceability tools, system monitoring.'
+
+      acceptance_tester:
+        description: User Acceptance Testing (UAT) - end-user validation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - user_acceptance
+        - business_requirements
+        - user_scenarios
+        - user_validation
+        - deployment_readiness
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a User Acceptance Testing Specialist validating that the system meets end-user needs and business requirements. Focus: User scenario testing, business requirement validation, user workflow verification, deployment readiness assessment. Tools: UAT frameworks, user acceptance criteria, business requirement tools.'
+
+      alpha_tester:
+        description: Alpha testing - internal staff validation at developer site
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - internal_testing
+        - early_validation
+        - internal_feedback
+        - developer_site_testing
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an Alpha Testing Specialist performing internal validation by staff at the developer site. Focus: Early validation, internal feedback collection, controlled environment testing, rapid iteration. Tools: Internal testing frameworks, feedback collection tools.'
+
+      beta_tester:
+        description: Beta testing - limited external user validation in field
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - external_testing
+        - field_validation
+        - user_feedback
+        - real_world_testing
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Beta Testing Specialist performing validation with a limited group of external users in real-world conditions. Focus: Field testing, user feedback collection, real-world scenario validation, production-like environment testing. Tools: Beta testing platforms, feedback collection tools, analytics.'
+
+      operational_acceptance_tester:
+        description: Operational Acceptance Testing (OAT) - backup/restore, maintenance, security
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - backup_restore
+        - maintenance_tasks
+        - operational_security
+        - disaster_recovery
+        - operational_readiness
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an Operational Acceptance Testing Specialist ensuring the system is ready for operations. Focus: Backup and restore procedures, maintenance task validation, operational security, disaster recovery, operational readiness. Tools: OAT frameworks, backup/restore tools, maintenance procedures.'
+
+      # ============================================
+      # 2. FUNCTIONAL TESTING
+      # ============================================
+      api_tester:
+        description: API testing - REST/GraphQL validation, schema testing
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - endpoints
+        - contracts
+        - security
+        - validation
+        - schema
+        - auth
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an API Testing Specialist. Focus: REST/GraphQL endpoint testing, request/response validation, error handling, rate limiting, authentication flows. Tools: Postman, Insomnia, REST Assured, SuperTest.'
+
+      contract_tester:
+        description: Contract testing - consumer-driven contracts, Pact
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - contracts
+        - apis
+        - interfaces
+        - validation
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Contract Testing Specialist ensuring API compatibility. Focus: Consumer-driven contract testing, provider verification, breaking change detection, API versioning validation. Tools: Pact, Spring Cloud Contract, Dredd.'
+
+      ui_tester:
+        description: UI testing - visual regression, cross-browser testing
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - ui
+        - visual
+        - cross_browser
+        - responsive
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a UI Testing Specialist focusing on visual quality. Focus: Visual regression testing, cross-browser compatibility, responsive design validation, screenshot comparison. Tools: Percy, Chromatic, BackstopJS, Applitools.'
+
+      smoke_tester:
+        description: Smoke testing - basic functionality verification
+        coding_agent: opencode
+        enabled: false
+        role_type: execution
+        test_pattern: '**/test_smoke*.py'
+        fail_fast: true
+        detect_flakes: false
+        timeout_seconds: 60
+        expert_prompt_enabled: true
+        job_description: 'You are a Smoke Testing Specialist ensuring basic functionality works. Focus: Critical path testing, build verification, basic sanity checks, fast feedback, deployment readiness assessment. Tools: Basic test suites, health checks, API endpoint verification.'
+
+      sanity_tester:
+        description: Sanity testing - core functionality validation
+        coding_agent: opencode
+        enabled: false
+        role_type: execution
+        test_pattern: '**/test_sanity*.py'
+        fail_fast: false
+        detect_flakes: false
+        timeout_seconds: 120
+        expert_prompt_enabled: true
+        job_description: 'You are a Sanity Testing Specialist validating core functionality. Focus: Regression of critical features, basic workflow validation, error condition handling, configuration testing. Tools: Targeted test suites, manual verification checklists.'
+
+      regression_tester:
+        description: Regression testing - full test suite execution
+        coding_agent: opencode
+        enabled: false
+        role_type: execution
+        test_pattern: '**/*test* **/*spec*'
+        fail_fast: false
+        detect_flakes: true
+        timeout_seconds: 600
+        expert_prompt_enabled: true
+        job_description: 'You are a Regression Testing Specialist ensuring no functionality breaks. Focus: Full test suite execution, change impact analysis, automated test maintenance, flaky test detection. Tools: Complete test automation suites, test reporting.'
+
+      lint_tester:
+        description: Linting - fast static checks across the codebase
+        coding_agent: opencode
+        enabled: false
+        role_type: execution
+        timeout_seconds: 300
+        expert_prompt_enabled: true
+        job_description: 'You are a Linting Specialist running fast linters. Focus: Detect style, correctness, and consistency issues. Tools: Ruff, ESLint, Biome, golangci-lint, Clippy.'
+
+      monkey_tester:
+        description: Monkey/Gorilla testing - random input testing, crash detection
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - random_testing
+        - crash_detection
+        - fault_tolerance
+        - robustness
+        - error_handling
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Monkey/Gorilla Testing Specialist using random inputs to find crashes and unexpected behavior. Focus: Random input generation, crash detection, fault tolerance testing, robustness validation, error handling verification. Tools: Random test generators, fuzzing tools, crash analyzers.'
+
+      exploratory_tester:
+        description: Exploratory testing - session-based, charter-based testing
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - session_based_testing
+        - charter_based_testing
+        - test_design
+        - bug_hunting
+        - risk_analysis
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an Exploratory Testing Specialist using structured exploration techniques. Focus: Session-based exploratory testing, charter-based testing, simultaneous test design and execution, risk-based testing, bug hunting. Tools: Session sheets, test charters, note-taking tools, screen recording.'
+
+      happy_path_tester:
+        description: Happy path testing - ideal user flow without errors
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - ideal_flows
+        - positive_testing
+        - user_journeys
+        - success_scenarios
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Happy Path Testing Specialist validating ideal user flows. Focus: Ideal user journeys, positive testing scenarios, success path validation, core functionality verification. Tools: User journey frameworks, workflow testing tools.'
+
+      # ============================================
+      # 3. PERFORMANCE TESTING
+      # ============================================
+      performance_tester:
+        description: Performance testing - benchmarking, profiling, optimization
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - performance
+        - load
+        - stress
+        - scalability
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Performance Testing Specialist. Focus: Response time analysis, throughput testing, bottleneck identification, resource utilization, optimization recommendations. Tools: k6, JMeter, Gatling, Locust, profilers.'
+
+      load_tester:
+        description: Load testing - capacity planning, concurrent user simulation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - load
+        - concurrent_users
+        - throughput
+        - response_time
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Load Testing Specialist. Focus: Concurrent user simulation, capacity planning, scalability testing, breaking point identification. Tools: k6, JMeter, Gatling, Artillery.'
+
+      stress_tester:
+        description: Stress testing - system limits, failure modes, recovery
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - stress
+        - limits
+        - failure_points
+        - recovery
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Stress Testing Specialist. Focus: System breaking points, failure mode analysis, recovery testing, resource exhaustion, chaos engineering. Tools: Chaos Monkey, Gremlin, stress-ng, Pumba.'
+
+      endurance_tester:
+        description: Endurance/Soak testing - long-duration load testing
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - endurance
+        - soak_testing
+        - memory_leaks
+        - long_duration
+        - resource_degradation
+        timeout_seconds: 1800
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an Endurance/Soak Testing Specialist testing system behavior under sustained load. Focus: Long-duration testing, memory leak detection, resource degradation analysis, stability validation over time. Tools: Extended load testing tools, memory profilers, monitoring systems.'
+
+      spike_tester:
+        description: Spike testing - sudden massive traffic bursts
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - spike_testing
+        - sudden_load
+        - traffic_bursts
+        - recovery
+        - resilience
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Spike Testing Specialist testing system reaction to sudden massive traffic bursts. Focus: Sudden load spikes, traffic burst handling, system recovery, resilience under sudden load. Tools: Spike testing tools, load generators, monitoring systems.'
+
+      scalability_tester:
+        description: Scalability testing - horizontal/vertical scaling validation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - scalability
+        - horizontal_scaling
+        - vertical_scaling
+        - capacity_planning
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Scalability Testing Specialist validating system scaling capabilities. Focus: Horizontal scaling (more nodes), vertical scaling (more resources), capacity planning, scaling strategies. Tools: Cloud scaling tools, load balancers, scaling frameworks.'
+
+      volume_tester:
+        description: Volume testing - large data volume handling
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - volume_testing
+        - large_datasets
+        - data_processing
+        - performance_under_load
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Volume Testing Specialist testing system behavior with large data volumes. Focus: Large dataset processing, data volume handling, performance under data load, data processing efficiency. Tools: Data generators, volume testing tools, performance monitors.'
+
+      capacity_tester:
+        description: Capacity testing - maximum capacity determination
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - capacity
+        - maximum_load
+        - breaking_points
+        - resource_limits
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Capacity Testing Specialist determining maximum system capacity. Focus: Maximum load capacity, breaking points, resource limits, capacity planning, performance boundaries. Tools: Capacity testing tools, load generators, resource monitors.'
+
+      # ============================================
+      # 4. SECURITY & COMPLIANCE
+      # ============================================
+      security_tester:
+        description: Security testing - vulnerability scanning, OWASP testing
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - security
+        - vulnerabilities
+        - owasp
+        - penetration
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Security Testing Specialist. Focus: OWASP Top 10 testing, vulnerability scanning, penetration testing basics, security code review. Tools: OWASP ZAP, Burp Suite, Snyk, SonarQube.'
+
+      penetration_tester:
+        description: Penetration testing - ethical hacking, exploit verification
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - penetration
+        - attacks
+        - exploits
+        - security_gaps
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Penetration Testing Specialist (ethical hacking). Focus: Vulnerability exploitation, attack vector analysis, security assessment, remediation recommendations. Note: Only for authorized testing in controlled environments.'
+
+      fuzz_tester:
+        description: Fuzz testing - malformed/random data injection for crash detection
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - fuzzing
+        - random_data
+        - malformed_input
+        - crash_detection
+        - security_vulnerabilities
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Fuzz Testing Specialist injecting malformed or random data to trigger crashes or security vulnerabilities. Focus: Random/malformed input generation, crash detection, memory leak detection, security vulnerability discovery. Tools: AFL, libFuzzer, American Fuzzy Lop, FuzzBench.'
+
+      compliance_tester:
+        description: Compliance testing - GDPR, HIPAA, PCI-DSS, SOC 2 validation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - compliance
+        - regulations
+        - gdpr
+        - hipaa
+        - pci_dss
+        - soc2
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Compliance Testing Specialist ensuring software meets regulatory requirements. Focus: GDPR compliance, HIPAA compliance, PCI-DSS validation, SOC 2 compliance, regulatory requirement verification. Tools: Compliance frameworks, audit tools, regulatory checklists.'
+
+      vulnerability_scanner:
+        description: Automated vulnerability scanning - security flaw detection
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - vulnerability_scanning
+        - automated_security
+        - security_flaws
+        - cve_detection
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Vulnerability Scanner using automated tools to detect security flaws. Focus: Automated vulnerability detection, CVE scanning, security flaw identification, vulnerability assessment. Tools: OWASP ZAP, Nessus, OpenVAS, Snyk, Dependabot.'
+
+      # ============================================
+      # 5. USER EXPERIENCE
+      # ============================================
+      usability_tester:
+        description: Usability testing - user experience, heuristic evaluation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - ux
+        - user_experience
+        - intuitiveness
+        - efficiency
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Usability Testing Specialist. Focus: Heuristic evaluation, cognitive walkthrough, user flow analysis, UX best practices, error prevention.'
+
+      accessibility_tester:
+        description: Accessibility testing - WCAG compliance, screen readers
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - wcag
+        - screen_readers
+        - keyboard_nav
+        - contrast
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an Accessibility Testing Specialist. Focus: WCAG 2.1/2.2 compliance, screen reader testing, keyboard navigation, color contrast, ARIA attributes. Tools: axe-core, WAVE, VoiceOver, NVDA, Pa11y.'
+
+      compatibility_tester:
+        description: Compatibility testing - cross-browser, OS, device, network compatibility
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - browser_compatibility
+        - os_compatibility
+        - device_compatibility
+        - network_compatibility
+        - backward_compatibility
+        - forward_compatibility
+        timeout_seconds: 450
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Compatibility Testing Specialist ensuring software works across different environments. Focus: Cross-browser testing, OS compatibility, device compatibility, network condition testing, backward/forward compatibility validation. Tools: BrowserStack, Sauce Labs, VirtualBox, Docker, network emulators.'
+
+      i18n_tester:
+        description: Internationalization testing - Unicode, RTL, locale handling
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - internationalization
+        - unicode
+        - rtl_support
+        - locale_handling
+        - character_encoding
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an Internationalization (i18n) Testing Specialist ensuring software works globally. Focus: Unicode support, RTL (right-to-left) languages, locale handling, character encoding, date/time formatting. Tools: i18n testing tools, locale simulators, Unicode validators.'
+
+      l10n_tester:
+        description: Localization testing - translation, cultural adaptation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - localization
+        - translation
+        - cultural_adaptation
+        - language_support
+        - regional_variants
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Localization (l10n) Testing Specialist ensuring software is properly localized. Focus: Translation accuracy, cultural adaptation, language-specific formatting, regional variants, cultural appropriateness. Tools: Translation management tools, locale testing frameworks.'
+
+      # ============================================
+      # 6. TECHNICAL & CODE-CENTRIC
+      # ============================================
+      static_tester:
+        description: Static testing - code review, requirements review, design review
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - code_review
+        - requirements_review
+        - design_review
+        - static_analysis
+        - quality_review
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Static Testing Specialist reviewing code, requirements, and designs without execution. Focus: Code review, requirements review, design review, static code analysis, quality review. Tools: Static analysis tools, code review tools, requirements management tools.'
+
+      mutation_tester:
+        description: Mutation testing - test quality assessment via code mutations
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - mutation_testing
+        - test_quality
+        - test_coverage
+        - mutation_score
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Mutation Testing Specialist assessing test suite quality by mutating code. Focus: Code mutation, mutation score calculation, test quality assessment, test coverage validation. Tools: Mutation testing frameworks (PIT, Stryker, MutPy).'
+
+      white_box_tester:
+        description: White-box testing - statement/branch/path coverage analysis
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - code_coverage
+        - statement_coverage
+        - branch_coverage
+        - path_coverage
+        - structural_testing
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a White-Box Testing Specialist analyzing code structure and coverage. Focus: Statement coverage, branch coverage, path coverage, code coverage analysis, structural testing. Tools: Coverage tools (JaCoCo, Istanbul, Coverage.py).'
+
+      property_based_tester:
+        description: Property-based testing - invariant validation with random inputs
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - property_based_testing
+        - invariants
+        - random_inputs
+        - test_generation
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Property-Based Testing Specialist validating properties/invariants with random inputs. Focus: Property definition, invariant validation, random input generation, test case generation, property verification. Tools: QuickCheck, Hypothesis, PropEr.'
+
+      # ============================================
+      # 7. SPECIALIZED DOMAINS
+      # ============================================
+      ai_ml_tester:
+        description: AI/ML testing - bias, fairness, robustness, adversarial testing
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - ai_testing
+        - ml_testing
+        - bias_detection
+        - fairness
+        - robustness
+        - adversarial_testing
+        - model_drift
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an AI/ML Testing Specialist validating machine learning models. Focus: Bias detection, fairness testing, robustness testing, adversarial testing, model drift detection, accuracy validation. Tools: AI testing frameworks, fairness tools, adversarial testing tools.'
+
+      chaos_engineer:
+        description: Chaos engineering - deliberate failure injection for resilience
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - chaos_engineering
+        - failure_injection
+        - resilience
+        - fault_tolerance
+        - system_reliability
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Chaos Engineering Specialist deliberately injecting failures to test system resilience. Focus: Failure injection, resilience testing, fault tolerance validation, system reliability, recovery testing. Tools: Chaos Monkey, Gremlin, Chaos Toolkit, Litmus.'
+
+      cloud_tester:
+        description: Cloud platform testing - AWS, GCP, Azure validation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - cloud_testing
+        - aws
+        - gcp
+        - azure
+        - cloud_native
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Cloud Testing Specialist validating cloud-native applications. Focus: Cloud platform testing (AWS, GCP, Azure), cloud-native architectures, cloud services validation, scalability in cloud. Tools: Cloud testing tools, cloud monitoring, cloud-native frameworks.'
+
+      blockchain_tester:
+        description: Blockchain testing - smart contracts, consensus, immutability
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - blockchain
+        - smart_contracts
+        - consensus
+        - immutability
+        - decentralized_apps
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Blockchain Testing Specialist validating blockchain applications. Focus: Smart contract testing, consensus mechanism testing, immutability validation, decentralized app testing. Tools: Blockchain testing frameworks, smart contract testing tools, blockchain simulators.'
+
+      iot_tester:
+        description: IoT testing - embedded devices, Hardware-in-the-Loop testing
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - iot
+        - embedded_testing
+        - hardware_in_loop
+        - sensor_testing
+        - device_testing
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an IoT Testing Specialist validating Internet of Things applications. Focus: Embedded device testing, Hardware-in-the-Loop (HIL) testing, sensor testing, device connectivity, IoT protocols. Tools: IoT testing frameworks, HIL simulators, IoT device emulators.'
+
+      etl_tester:
+        description: ETL testing - Extract, Transform, Load data warehouse validation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - etl
+        - data_warehouse
+        - data_transformation
+        - data_integrity
+        - data_quality
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an ETL Testing Specialist validating Extract, Transform, Load processes. Focus: Data extraction validation, transformation accuracy, load verification, data warehouse testing, data quality. Tools: ETL testing tools, data validation frameworks, data quality tools.'
+
+      mobile_tester:
+        description: Mobile testing - iOS, Android device and OS testing
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - mobile_testing
+        - ios
+        - android
+        - mobile_devices
+        - mobile_os
+        timeout_seconds: 450
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Mobile Testing Specialist validating mobile applications. Focus: iOS testing, Android testing, mobile device compatibility, mobile OS testing, mobile-specific features. Tools: Appium, XCUITest, Espresso, mobile device farms, mobile testing tools.'
+
+      visual_regression_tester:
+        description: Visual regression testing - snapshot/pixel-perfect UI testing
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - visual_regression
+        - snapshot_testing
+        - pixel_perfect
+        - ui_comparison
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Visual Regression Testing Specialist detecting UI changes. Focus: Snapshot testing, pixel-perfect comparison, visual diff detection, UI consistency validation. Tools: Percy, Chromatic, BackstopJS, Applitools, visual regression tools.'
+
+      # ============================================
+      # 8. ISO 25010 QUALITY ATTRIBUTES
+      # ============================================
+      reliability_tester:
+        description: Reliability testing - maturity, availability, fault tolerance, recoverability
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - reliability
+        - maturity
+        - availability
+        - fault_tolerance
+        - recoverability
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Reliability Testing Specialist validating system reliability attributes. Focus: Maturity testing, availability validation, fault tolerance testing, recoverability verification. Tools: Reliability testing frameworks, availability monitors, fault injection tools.'
+
+      maintainability_tester:
+        description: Maintainability testing - modularity, reusability, analysability, modifiability, testability
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - maintainability
+        - modularity
+        - reusability
+        - analysability
+        - modifiability
+        - testability
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Maintainability Testing Specialist validating code maintainability attributes. Focus: Modularity assessment, reusability validation, analysability testing, modifiability verification, testability assessment. Tools: Code quality tools, maintainability metrics, static analysis tools.'
+
+      portability_tester:
+        description: Portability testing - adaptability, installability, replaceability
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - portability
+        - adaptability
+        - installability
+        - replaceability
+        - platform_independence
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Portability Testing Specialist validating system portability attributes. Focus: Adaptability testing, installability validation, replaceability verification, platform independence. Tools: Portability testing frameworks, installation tools, platform compatibility tools.'
+
+      # ============================================
+      # 9. RECOVERY & RESILIENCE
+      # ============================================
+      recovery_tester:
+        description: Recovery testing - system recovery after failures
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - recovery
+        - failure_recovery
+        - system_recovery
+        - data_recovery
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Recovery Testing Specialist validating system recovery after failures. Focus: Failure recovery, system recovery procedures, data recovery validation, recovery time testing. Tools: Recovery testing frameworks, failure injection tools, recovery monitors.'
+
+      disaster_recovery_tester:
+        description: Disaster recovery testing - backup/restore, disaster scenarios
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - disaster_recovery
+        - backup_restore
+        - disaster_scenarios
+        - business_continuity
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Disaster Recovery Testing Specialist validating disaster recovery procedures. Focus: Backup and restore testing, disaster scenario validation, business continuity testing, RTO/RPO validation. Tools: DR testing frameworks, backup/restore tools, disaster simulation tools.'
+
+      backup_tester:
+        description: Backup testing - backup and restore functionality validation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - backup
+        - restore
+        - data_backup
+        - backup_validation
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Backup Testing Specialist validating backup and restore functionality. Focus: Backup validation, restore testing, backup integrity, backup scheduling. Tools: Backup testing tools, restore validation frameworks.'
+
+      resilience_tester:
+        description: Resilience testing - system resilience under failures
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - resilience
+        - fault_tolerance
+        - system_resilience
+        - failure_handling
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Resilience Testing Specialist validating system resilience under failures. Focus: Fault tolerance testing, system resilience validation, failure handling, graceful degradation. Tools: Resilience testing frameworks, fault injection tools, chaos engineering tools.'
+
+      # ============================================
+      # 10. INFRASTRUCTURE & DEPLOYMENT
+      # ============================================
+      installation_tester:
+        description: Installation testing - installation/uninstallation validation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - installation
+        - uninstallation
+        - setup
+        - deployment
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an Installation Testing Specialist validating installation and uninstallation procedures. Focus: Installation validation, uninstallation testing, setup verification, deployment procedures. Tools: Installation testing tools, deployment frameworks.'
+
+      configuration_tester:
+        description: Configuration testing - configuration management validation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - configuration
+        - config_management
+        - environment_config
+        - settings_validation
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Configuration Testing Specialist validating configuration management. Focus: Configuration validation, environment configuration testing, settings verification, config change testing. Tools: Configuration testing tools, config management frameworks.'
+
+      deployment_tester:
+        description: Deployment testing - deployment process validation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - deployment
+        - deployment_process
+        - ci_cd
+        - release_validation
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Deployment Testing Specialist validating deployment processes. Focus: Deployment procedure validation, CI/CD pipeline testing, release validation, rollback testing. Tools: Deployment testing tools, CI/CD validation frameworks.'
+
+      # ============================================
+      # 11. DATA & MIGRATION
+      # ============================================
+      db_tester:
+        description: Database testing - data integrity, migrations, performance
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - databases
+        - queries
+        - schema
+        - data_integrity
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Database Testing Specialist. Focus: Data integrity, migration testing, stored procedures, query performance, referential integrity, data validation. Tools: DbUnit, tSQLt, pgTAP, data generators.'
+
+      data_migration_tester:
+        description: Data migration testing - data migration validation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - data_migration
+        - migration_validation
+        - data_transformation
+        - migration_testing
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Data Migration Testing Specialist validating data migration processes. Focus: Migration validation, data transformation accuracy, migration integrity, migration rollback testing. Tools: Migration testing tools, data validation frameworks.'
+
+      data_quality_tester:
+        description: Data quality testing - data quality and integrity validation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - data_quality
+        - data_integrity
+        - data_validation
+        - data_accuracy
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Data Quality Testing Specialist validating data quality and integrity. Focus: Data quality validation, data integrity checking, data accuracy verification, data completeness. Tools: Data quality tools, data validation frameworks, data profiling tools.'
+
+      # ============================================
+      # 12. DOCUMENTATION & STANDARDS
+      # ============================================
+      documentation_tester:
+        description: Documentation testing - documentation accuracy and completeness
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - documentation
+        - doc_accuracy
+        - doc_completeness
+        - user_docs
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Documentation Testing Specialist validating documentation accuracy and completeness. Focus: Documentation accuracy, completeness validation, user documentation testing, technical documentation review. Tools: Documentation testing tools, doc review frameworks.'
+
+      standards_tester:
+        description: Standards testing - ISO, IEEE industry standards compliance
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - standards
+        - iso_compliance
+        - ieee_compliance
+        - industry_standards
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Standards Testing Specialist validating industry standards compliance. Focus: ISO standards compliance, IEEE standards compliance, industry standards validation. Tools: Standards compliance frameworks, compliance checkers.'
+
+      interoperability_tester:
+        description: Interoperability testing - system interoperability validation
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - interoperability
+        - system_integration
+        - cross_system
+        - compatibility
+        timeout_seconds: 600
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an Interoperability Testing Specialist validating system interoperability. Focus: Cross-system compatibility, integration testing, interoperability validation, system communication. Tools: Interoperability testing frameworks, integration testing tools.'
+
+      # ============================================
+      # 13. TESTING INFRASTRUCTURE
+      # ============================================
+      test_architect:
+        description: Test architecture - strategy, frameworks, infrastructure
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - architecture
+        - strategy
+        - coverage
+        - test_design
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Test Architect designing testing strategies. Focus: Test framework selection, test infrastructure, CI/CD test integration, test data management, best practices.'
+
+      automation_engineer:
+        description: Test automation - framework development, CI/CD integration
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - automation
+        - frameworks
+        - ci_cd
+        - maintenance
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Test Automation Engineer. Focus: Automation framework development, maintainable tests, CI/CD integration, parallel execution, reporting.'
+
+      fullstack:
+        description: Full-stack QE - comprehensive testing across all layers
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: heuristic
+        focus_areas:
+        - code_quality
+        - architecture
+        - testing
+        - security
+        - performance
+        timeout_seconds: 900
+        max_findings: 100
+        min_confidence: 0.6
+        expert_prompt_enabled: true
+        job_description: 'You are a Full-Stack Quality Engineer ensuring software quality. Core Responsibilities: Review code for quality, security, and correctness, write comprehensive test suites, perform all types of testing (unit, integration, E2E), identify bugs, security issues, and performance problems, validate requirements and acceptance criteria, approve or reject code for deployment. Testing Types: Unit, Integration, API, E2E, Performance, Security. Tools: Jest, Pytest, Cypress, Playwright, k6, OWASP ZAP.'
+
+      # Legacy aliases (for backward compatibility)
+      e2e:
+        description: End-to-end testing - complete user workflows
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - workflows
+        - integration
+        - user_journeys
+        - cross_system
+        timeout_seconds: 600
+        max_findings: 30
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an End-to-End Testing Specialist for complete user journeys. Focus: Full workflow testing, cross-system integration, real-world scenario validation, user experience verification. Tools: Playwright, Cypress, Selenium, test data management.'
+
+      performance:
+        description: Performance testing - load, stress, scalability
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - load_testing
+        - stress_testing
+        - scalability
+        - bottlenecks
+        - monitoring
+        timeout_seconds: 480
+        max_findings: 25
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are a Performance Testing Specialist ensuring system scalability. Focus: Load testing, stress testing, scalability validation, performance monitoring, bottleneck identification. Tools: k6, Artillery, JMeter, monitoring dashboards.'
+
+      e2e_tester:
+        description: E2E testing - end-to-end user journey testing
+        coding_agent: opencode
+        provider: xai
+        model: grok-code
+        enabled: false
+        role_type: detection
+        focus_areas:
+        - workflows
+        - integration
+        - user_journeys
+        timeout_seconds: 300
+        max_findings: 50
+        min_confidence: 0.7
+        expert_prompt_enabled: true
+        job_description: 'You are an E2E Testing Specialist. Focus: Complete user journey testing, cross-system flows, realistic test scenarios, test data management. Tools: Cypress, Playwright, Selenium, TestCafe.'

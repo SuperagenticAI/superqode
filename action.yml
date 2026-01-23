@@ -1,0 +1,225 @@
+# SuperQE GitHub Action
+#
+# Use this action in your workflows to run SuperQE analysis.
+#
+# Example usage:
+#
+#   - uses: superqode/superqode@v1
+#     with:
+#       mode: quick
+#       path: ./src
+#
+# Or with full options:
+#
+#   - uses: superqode/superqode@v1
+#     with:
+#       mode: deep
+#       path: .
+#       timeout: 1800
+#       junit-report: qe-results.xml
+#       fail-on-findings: true
+
+name: 'SuperQE'
+description: 'Run SuperQE (Super Quality Engineering) analysis on your codebase'
+author: 'SuperQode'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  mode:
+    description: 'QE mode: quick (fast, pre-commit) or deep (full, pre-release)'
+    required: false
+    default: 'quick'
+
+  path:
+    description: 'Path to analyze (relative to repository root)'
+    required: false
+    default: '.'
+
+  timeout:
+    description: 'Timeout in seconds (default: 60 for quick, 1800 for deep)'
+    required: false
+
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.11'
+
+  junit-report:
+    description: 'Path to write JUnit XML report'
+    required: false
+    default: 'qe-results.xml'
+
+  fail-on-findings:
+    description: 'Fail the workflow if critical findings are found'
+    required: false
+    default: 'true'
+
+  upload-artifacts:
+    description: 'Upload QE artifacts (patches, tests, QIR)'
+    required: false
+    default: 'true'
+
+  comment-on-pr:
+    description: 'Comment QIR summary on pull requests'
+    required: false
+    default: 'true'
+
+outputs:
+  success:
+    description: 'Whether the QE session passed'
+    value: ${{ steps.qe.outputs.success }}
+
+  findings-count:
+    description: 'Number of findings'
+    value: ${{ steps.qe.outputs.findings_count }}
+
+  critical-count:
+    description: 'Number of critical findings'
+    value: ${{ steps.qe.outputs.critical_count }}
+
+  tests-passed:
+    description: 'Number of tests passed'
+    value: ${{ steps.qe.outputs.tests_passed }}
+
+  tests-failed:
+    description: 'Number of tests failed'
+    value: ${{ steps.qe.outputs.tests_failed }}
+
+  qir-path:
+    description: 'Path to the generated QIR'
+    value: ${{ steps.qe.outputs.qir_path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: 'pip'
+
+    - name: Install SuperQode
+      shell: bash
+      run: |
+        pip install superqode
+
+    - name: Run QE Session
+      id: qe
+      shell: bash
+      run: |
+        set +e
+
+        MODE="${{ inputs.mode }}"
+        PATH_ARG="${{ inputs.path }}"
+        JUNIT="${{ inputs.junit-report }}"
+        TIMEOUT_ARG=""
+
+        if [ -n "${{ inputs.timeout }}" ]; then
+          TIMEOUT_ARG="--timeout ${{ inputs.timeout }}"
+        fi
+
+        # Run SuperQE
+        if [ "$MODE" = "deep" ]; then
+          superqe deep "$PATH_ARG" --junit "$JUNIT" $TIMEOUT_ARG --json > qe-output.json 2>&1
+        else
+          superqe quick "$PATH_ARG" --junit "$JUNIT" $TIMEOUT_ARG --json > qe-output.json 2>&1
+        fi
+
+        EXIT_CODE=$?
+
+        # Parse output and set outputs
+        if [ -f qe-output.json ]; then
+          echo "success=$(jq -r '.success // false' qe-output.json)" >> $GITHUB_OUTPUT
+          echo "findings_count=$(jq -r '.findings_count // 0' qe-output.json)" >> $GITHUB_OUTPUT
+          echo "critical_count=$(jq -r '.critical_count // 0' qe-output.json)" >> $GITHUB_OUTPUT
+          echo "tests_passed=$(jq -r '.tests_passed // 0' qe-output.json)" >> $GITHUB_OUTPUT
+          echo "tests_failed=$(jq -r '.tests_failed // 0' qe-output.json)" >> $GITHUB_OUTPUT
+          echo "qir_path=$(jq -r '.qir_path // ""' qe-output.json)" >> $GITHUB_OUTPUT
+        else
+          echo "success=false" >> $GITHUB_OUTPUT
+          echo "findings_count=0" >> $GITHUB_OUTPUT
+          echo "critical_count=0" >> $GITHUB_OUTPUT
+          echo "tests_passed=0" >> $GITHUB_OUTPUT
+          echo "tests_failed=0" >> $GITHUB_OUTPUT
+          echo "qir_path=" >> $GITHUB_OUTPUT
+        fi
+
+        # Exit with original code if fail-on-findings is true
+        if [ "${{ inputs.fail-on-findings }}" = "true" ]; then
+          exit $EXIT_CODE
+        fi
+
+        exit 0
+
+    - name: Upload QE Artifacts
+      if: inputs.upload-artifacts == 'true' && always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: superqe-artifacts
+        path: .superqode/qe-artifacts/
+        retention-days: 30
+        if-no-files-found: ignore
+
+    - name: Upload JUnit Results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: superqe-junit-results
+        path: ${{ inputs.junit-report }}
+        if-no-files-found: ignore
+
+    - name: Comment QIR on PR
+      if: inputs.comment-on-pr == 'true' && github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const qirPath = '.superqode/qe-artifacts/reports/';
+
+          // Find the latest QIR
+          let qirContent = 'No QIR generated.';
+          if (fs.existsSync(qirPath)) {
+            const files = fs.readdirSync(qirPath).filter(f => f.endsWith('.md'));
+            if (files.length > 0) {
+              const latestQir = files.sort().pop();
+              qirContent = fs.readFileSync(`${qirPath}${latestQir}`, 'utf8');
+              // Truncate if too long
+              if (qirContent.length > 60000) {
+                qirContent = qirContent.substring(0, 60000) + '\n\n...(truncated)';
+              }
+            }
+          }
+
+          // Find existing SuperQE comment
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+
+          const superqodeComment = comments.find(c =>
+            c.body.includes('SuperQE Quality Investigation Report')
+          );
+
+          const body = `## 🔬 SuperQE Quality Investigation Report\n\n${qirContent}\n\n---\n*Generated by [SuperQode](https://github.com/superqode/superqode)*`;
+
+          if (superqodeComment) {
+            // Update existing comment
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: superqodeComment.id,
+              body: body
+            });
+          } else {
+            // Create new comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+          }

@@ -1,0 +1,56 @@
+# Goose AI
+# https://github.com/block/goose
+
+identity = "goose.ai"
+name = "Goose"
+short_name = "goose"
+url = "https://github.com/block/goose"
+protocol = "acp"
+author_name = "Block"
+author_url = "https://www.block.xyz/"
+publisher_name = "SuperQode Team"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "Goose is a developer tool that helps you write code faster by automating repetitive tasks."
+tags = ["automation", "productivity", "block"]
+run_command."*" = "goose"
+
+help = '''
+# Goose
+
+Goose is a developer tool that helps you write code faster by automating repetitive tasks.
+
+Goose uses AI to understand your codebase and help you write code more efficiently. It can:
+
+- Generate code based on natural language descriptions
+- Refactor existing code
+- Write tests
+- Fix bugs
+- Document code
+
+Goose integrates with your existing development workflow and tools.
+
+---
+[GitHub Repository](https://github.com/block/goose)
+'''
+
+welcome = '''
+Hi there! I'm Goose, your AI coding companion from Block.
+
+I can help you:
+- Generate code from descriptions
+- Refactor and improve existing code
+- Write tests and documentation
+- Debug and fix issues
+- Automate repetitive coding tasks
+
+What can I help you build today?
+'''
+
+[actions."*".install]
+command = "curl -fsSL https://github.com/block/goose/releases/latest/download/install.sh | bash"
+description = "Install Goose using the official installer"
+
+[actions."*".install_cargo]
+command = "cargo install goose"
+description = "Install Goose via Cargo (requires Rust)"

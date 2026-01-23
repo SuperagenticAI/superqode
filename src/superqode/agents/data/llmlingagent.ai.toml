@@ -1,0 +1,51 @@
+# Schema defined in agent_schema.py
+# https://github.com/llmling/llmling-agent
+
+identity = "llmlingagent.ai"
+name = "LLMling-Agent"
+short_name = "llmlingagent"
+url = "https://github.com/llmling/llmling-agent"
+protocol = "acp"
+author_name = "LLMling"
+author_url = "https://github.com/llmling"
+publisher_name = "SuperQode Team"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "A framework for creating and managing LLM-powered agents to provide structured interactions."
+tags = ["framework", "llm", "structured"]
+run_command."*" = "llmling-agent"
+
+help = '''
+# LLMling-Agent
+
+**LLM-Powered Agent Framework**
+
+LLMling-Agent is a framework for creating and managing LLM-powered agents to provide structured interactions for development workflows.
+
+## Key Features
+
+- **Framework**: Complete framework for agent development
+- **LLM-Powered**: Built on top of large language models
+- **Structured Interactions**: Provides structured agent interactions
+- **ACP Compatible**: Full Agent Client Protocol support
+
+## Installation
+
+Install LLMling-Agent via pip:
+
+```bash
+pip install llmling-agent
+```
+
+**Requirements:**
+- Python 3.8 or higher
+- pip
+
+---
+
+**GitHub**: https://github.com/llmling/llmling-agent
+'''
+
+[actions."*".install]
+command = "pip install llmling-agent"
+description = "Install LLMling-Agent"

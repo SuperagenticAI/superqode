@@ -1,0 +1,180 @@
+# =============================================================================
+# SuperQode - BYOK + ACP Team Configuration Example
+# =============================================================================
+# This example demonstrates both execution modes:
+#   - BYOK (Bring Your Own Key): Direct LLM API calls via gateway
+#   - ACP (Agent Client Protocol): Full coding agent capabilities
+#
+# SECURITY: SuperQode NEVER stores your API keys.
+# All keys are read from YOUR environment variables at runtime.
+# =============================================================================
+
+superqode:
+  version: "1.0"
+  team_name: "Hybrid Development Team"
+  description: "Team using both BYOK (direct LLM) and ACP (coding agents)"
+
+  # Gateway configuration for BYOK mode
+  gateway:
+    type: "litellm"  # Options: "litellm" (default), "direct" (future)
+
+  # Cost tracking (LiteLLM built-in)
+  cost_tracking:
+    enabled: true
+    show_after_task: true
+
+  # Error handling
+  errors:
+    surface_rate_limits: true
+    surface_auth_errors: true
+
+# =============================================================================
+# TEAM CONFIGURATION
+# =============================================================================
+team:
+  # ---------------------------------------------------------------------------
+  # DEVELOPMENT - Using BYOK (Direct LLM)
+  # ---------------------------------------------------------------------------
+  dev:
+    description: "Development roles using direct LLM APIs"
+    roles:
+      # BYOK mode - Direct Claude API
+      fullstack:
+        description: "Full-stack development with Claude"
+        mode: "byok"  # Explicit BYOK mode
+        provider: "anthropic"
+        model: "claude-sonnet-4-20250514"
+        enabled: true
+        job_description: |
+          You are a Senior Full-Stack Developer.
+          Write clean, maintainable code with proper error handling.
+          Focus on TypeScript, React, Node.js, and PostgreSQL.
+
+      # BYOK mode - Direct OpenAI API
+      backend:
+        description: "Backend development with GPT-4"
+        mode: "byok"
+        provider: "openai"
+        model: "gpt-4o"
+        enabled: true
+        job_description: |
+          You are a Backend Engineer specializing in APIs.
+          Design RESTful APIs with proper validation and security.
+
+      # BYOK mode - Using Groq for fast inference
+      quick_tasks:
+        description: "Quick coding tasks with Groq"
+        mode: "byok"
+        provider: "groq"
+        model: "llama-3.3-70b-versatile"
+        enabled: true
+        job_description: |
+          Handle quick coding tasks, refactoring, and simple fixes.
+          Prioritize speed and correctness.
+
+      # BYOK mode - Using local Ollama
+      local_dev:
+        description: "Local development with Ollama"
+        mode: "byok"
+        provider: "ollama"
+        model: "qwen2.5-coder:32b"
+        enabled: true
+        job_description: |
+          Local development without API costs.
+          Good for experimentation and learning.
+
+  # ---------------------------------------------------------------------------
+  # QE - Using ACP (Coding Agents)
+  # ---------------------------------------------------------------------------
+  qe:
+    description: "QE roles using full coding agents"
+    roles:
+      # ACP mode - OpenCode agent
+      reviewer:
+        description: "Code review with OpenCode agent"
+        mode: "acp"  # Explicit ACP mode
+        agent: "opencode"
+        agent_config:
+          provider: "opencode"
+          model: "glm-4.7-free"
+        enabled: true
+        job_description: |
+          Review code for bugs, security issues, and best practices.
+          Use file access to examine the full codebase.
+          Run tests and validate changes.
+
+      # ACP mode - Claude Code (coming soon)
+      tester:
+        description: "Testing with Claude Code agent"
+        mode: "acp"
+        agent: "claude-code"
+        enabled: true
+        job_description: |
+          Write and run comprehensive tests.
+          Use shell access to execute test suites.
+
+  # ---------------------------------------------------------------------------
+  # DEVOPS - Mixed BYOK and ACP
+  # ---------------------------------------------------------------------------
+  devops:
+    description: "DevOps roles with mixed execution modes"
+    roles:
+      # BYOK mode - DeepSeek for cost-effective infra work
+      infra:
+        description: "Infrastructure with DeepSeek"
+        mode: "byok"
+        provider: "deepseek"
+        model: "deepseek-chat"
+        enabled: true
+        job_description: |
+          Write Terraform, Kubernetes manifests, and CI/CD pipelines.
+          Focus on security and cost optimization.
+
+      # ACP mode - OpenCode for complex deployments
+      deployer:
+        description: "Deployments with OpenCode agent"
+        mode: "acp"
+        agent: "opencode"
+        agent_config:
+          provider: "anthropic"
+          model: "claude-sonnet-4-20250514"
+        enabled: true
+        job_description: |
+          Handle complex deployments requiring file access and shell commands.
+          Validate configurations and run deployment scripts.
+
+# =============================================================================
+# PROVIDER CONFIGURATION (for reference)
+# =============================================================================
+# These are the environment variables you need to set:
+#
+# BYOK Providers:
+#   export ANTHROPIC_API_KEY="sk-ant-..."      # For anthropic provider
+#   export OPENAI_API_KEY="sk-..."             # For openai provider
+#   export GROQ_API_KEY="gsk_..."              # For groq provider
+#   export DEEPSEEK_API_KEY="sk-..."           # For deepseek provider
+#
+# Local Providers (no API key needed):
+#   Ollama: Just run 'ollama serve' locally
+#
+# ACP Agents:
+#   OpenCode: Run 'opencode' and use /connect to configure
+#   Claude Code: Coming soon
+#
+# =============================================================================
+
+# MCP servers (optional, for enhanced capabilities)
+mcp_servers:
+  filesystem:
+    transport: stdio
+    command: uvx
+    args: ["mcp-server-filesystem", "--root", "."]
+    enabled: true
+
+  github:
+    transport: stdio
+    command: uvx
+    args: ["mcp-server-github"]
+    env:
+      GITHUB_TOKEN: "${GITHUB_TOKEN}"
+    enabled: true

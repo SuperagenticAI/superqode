@@ -1,0 +1,56 @@
+# Schema defined in agent_schema.py
+# https://openai.com/codex
+
+identity = "codex.openai.com"
+name = "Codex"
+short_name = "codex"
+url = "https://openai.com/codex"
+protocol = "acp"
+author_name = "OpenAI"
+author_url = "https://openai.com"
+publisher_name = "SuperQode Team"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "OpenAI's code generation agent with streaming terminal output and community adapters."
+tags = ["openai", "codex", "streaming"]
+run_command."*" = "codex-acp"
+
+help = '''
+# Codex
+
+**OpenAI's Code Generation Agent**
+
+Codex is OpenAI's code generation agent with streaming terminal output and community adapters. It provides powerful code completion and generation capabilities.
+
+## Key Features
+
+- **Streaming Output**: Real-time streaming terminal output for better developer experience
+- **Community Adapters**: Multiple community-maintained adapters available
+- **Code Generation**: Advanced code generation and completion
+- **ACP Integration**: Full Agent Client Protocol support
+
+## Installation
+
+Install Codex ACP adapter via npm:
+
+```bash
+npm install -g @zed-industries/codex-acp
+```
+
+**Requirements:**
+- Node.js (v16 or higher)
+- npm
+
+## ACP Integration
+
+Codex supports the Agent Client Protocol through the official adapter by Zed Industries. This adapter enables Codex to work with ACP-compatible editors.
+
+---
+
+**Website**: https://openai.com/codex
+**ACP Adapter**: https://github.com/zed-industries/codex-acp
+'''
+
+[actions."*".install]
+command = "npm install -g @zed-industries/codex-acp"
+description = "Install Codex ACP adapter"

@@ -1,0 +1,89 @@
+# =============================================================================
+# SuperQode - Local Models Team Configuration Example
+# =============================================================================
+# This example demonstrates using local/self-hosted models in QE roles.
+# All roles use mode: "local" for local providers (Ollama, MLX, LM Studio).
+#
+# SETUP REQUIREMENTS:
+# - Ollama: Run 'ollama serve' and pull models (e.g., ollama pull llama3.2:3b)
+# - MLX: Start server with 'mlx_lm.server --model <model-id>'
+# - LM Studio: Open GUI, load model, start Local Server
+# =============================================================================
+
+superqode:
+  version: "1.0"
+  team_name: "Local Models QE Team"
+  description: "Quality Engineering team using local/self-hosted models"
+
+# =============================================================================
+# TEAM CONFIGURATION
+# =============================================================================
+team:
+  qe:
+    description: "Quality Engineering"
+    roles:
+      # Security testing with Ollama
+      local_ollama_security_tester:
+        description: "Security testing with Ollama (local)"
+        mode: "local"
+        provider: "ollama"
+        model: "llama3.2:3b"
+        enabled: true
+        job_description: |
+          You are a security tester using local Ollama model.
+          Identify security vulnerabilities, injection flaws, and authentication issues.
+          Review code for OWASP Top 10 vulnerabilities.
+          Test for SQL injection, XSS, CSRF, and other common security issues.
+
+      # Security testing with MLX (Apple Silicon)
+      local_mlx_security_tester:
+        description: "Security testing with MLX (local)"
+        mode: "local"
+        provider: "mlx"
+        model: "mlx-community/Qwen2.5-Coder-32B-Instruct-4bit"
+        enabled: true
+        job_description: |
+          You are a security tester using local MLX model on Apple Silicon.
+          Identify security vulnerabilities and test for common attack vectors.
+          Review authentication, authorization, and data validation.
+          Test for security best practices and compliance.
+
+      # Security testing with LM Studio
+      local_lmstudio_security_tester:
+        description: "Security testing with LM Studio (local)"
+        mode: "local"
+        provider: "lmstudio"
+        model: "qwen2.5-coder:7b"
+        enabled: true
+        job_description: |
+          You are a security tester using local LM Studio model.
+          Identify security vulnerabilities, injection flaws, and authentication issues.
+          Review code for security best practices.
+          Test for common vulnerabilities and security misconfigurations.
+
+# =============================================================================
+# SETUP INSTRUCTIONS
+# =============================================================================
+#
+# Ollama Setup:
+#   1. Install: https://ollama.ai/
+#   2. Start: ollama serve
+#   3. Pull model: ollama pull llama3.2:3b
+#   4. Verify: ollama list
+#
+# MLX Setup:
+#   1. Install: pip install mlx-lm
+#   2. Start server: mlx_lm.server --model mlx-community/Qwen2.5-Coder-32B-Instruct-4bit
+#   3. Server runs on: http://localhost:8080
+#   4. Verify: curl http://localhost:8080/v1/models
+#
+# LM Studio Setup:
+#   1. Download: https://lmstudio.ai/
+#   2. Open LM Studio application
+#   3. Download model (search for 'qwen2.5-coder:7b' or 'llama3.2:3b')
+#   4. Load model in LM Studio
+#   5. Start Local Server (Local Server tab → Start Server)
+#   6. Server runs on: http://localhost:1234
+#   7. Verify: curl http://localhost:1234/v1/models
+#
+# =============================================================================

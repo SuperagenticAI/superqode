@@ -1,0 +1,57 @@
+# Schema defined in agent_schema.py
+# https://github.com/MoonshotAI/kimi-cli
+identity = "kimi.com"
+name = "Kimi CLI"
+short_name = "kimi"
+url = "https://www.kimi.com/"
+protocol = "acp"
+author_name = "Moonshot AI"
+author_url = "https://www.kimi.com/"
+publisher_name = "SuperQode Team"
+publisher_url = "https://github.com/your-org/superqode"
+type = "coding"
+description = "Kimi CLI is a new CLI agent that can help you with your software development tasks and terminal operations."
+tags = ["moonshot-ai", "kimi", "chinese"]
+run_command."*" = "kimi --acp"
+
+help = '''
+# Kimi CLI
+
+Kimi CLI is a new CLI agent that can help you with your software development tasks and terminal operations.
+
+## Features
+
+- **Chinese Language Support**: Native support for Chinese developers
+- **Terminal Operations**: Execute and manage terminal commands
+- **Code Development**: Assist with software development tasks
+- **ACP Integration**: Full Agent Client Protocol support
+
+## Setup Instructions
+
+See the following [instructions](https://github.com/MoonshotAI/kimi-cli?tab=readme-ov-file#usage) for how to configure Kimi before running.
+
+## Installation
+
+Install via UV (recommended):
+```bash
+uv tool install kimi-cli --no-cache
+```
+
+Upgrade when needed:
+```bash
+uv tool upgrade kimi-cli --no-cache
+```
+
+---
+
+**Website**: https://www.kimi.com/
+**GitHub**: https://github.com/MoonshotAI/kimi-cli
+'''
+
+[actions."*".install]
+command = "uv tool install kimi-cli --no-cache"
+description = "Install Kimi CLI"
+
+[actions."*".upgrade]
+command = "uv tool upgrade kimi-cli --no-cache"
+description = "Upgrade Kimi CLI"

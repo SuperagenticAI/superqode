@@ -1,0 +1,48 @@
+# Schema defined in agent_schema.py
+# https://github.com/google-gemini/gemini-cli
+identity = "geminicli.com"
+name = "Gemini CLI"
+short_name = "gemini"
+url = "https://geminicli.com/"
+protocol = "acp"
+author_name = "Google"
+author_url = "https://www.google.com"
+publisher_name = "SuperQode Team"
+publisher_url = "https://github.com/your-org/superqode"
+type = "coding"
+description = "Query and edit large codebases, generate apps from images or PDFs, and automate complex workflows—all from your terminal."
+tags = ["google", "gemini", "multimodal"]
+run_command."*" = "gemini --experimental-acp"
+
+help = '''
+# Gemini CLI
+
+**Build, debug & deploy with AI**
+
+Query and edit large codebases, generate apps from images or PDFs, and automate complex workflows—all from your terminal.
+
+## Key Features
+
+- **Large Codebase Support**: Handle million-line codebases with ease
+- **Multimodal Input**: Generate apps from images, PDFs, and documents
+- **Workflow Automation**: Automate complex development workflows
+- **Terminal-Native**: Built for developers who live in the command line
+
+## Installation
+
+Install globally via npm:
+```bash
+npm install -g @google/gemini-cli
+```
+
+For ACP support, ensure you have the experimental ACP flag enabled.
+
+---
+
+**Website**: https://geminicli.com/
+**GitHub**: https://github.com/google-gemini/gemini-cli
+'''
+
+[actions."*".install]
+command = "npm install -g @google/gemini-cli"
+description = "Install Gemini CLI"
