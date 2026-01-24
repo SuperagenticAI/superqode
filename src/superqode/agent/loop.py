@@ -723,6 +723,13 @@ class AgentLoop:
             tool_calls = []
             had_content = False
 
+            # Buffer for accumulating thinking content chunks
+            # Local models stream thinking in tiny pieces - accumulate for readable display
+            thinking_buffer = ""
+            import time as _time
+
+            last_thinking_emit = _time.time()
+
             try:
                 async for chunk in self.gateway.stream_completion(
                     messages=gateway_messages,
@@ -738,9 +745,25 @@ class AgentLoop:
                             await self.on_thinking("Operation cancelled by user")
                         return
 
-                    # Handle thinking content if available
-                    if chunk.thinking_content and self.on_thinking:
-                        await self.on_thinking(chunk.thinking_content)
+                    # Handle thinking content if available - BUFFER for readable display
+                    if chunk.thinking_content:
+                        thinking_buffer += chunk.thinking_content
+                        current_time = _time.time()
+
+                        # Emit thinking content when:
+                        # 1. Buffer has a complete sentence (ends with . ? ! or newline)
+                        # 2. Buffer exceeds 200 chars (long enough to be readable)
+                        # 3. 500ms has passed since last emit (prevent stale buffer)
+                        should_emit = (
+                            thinking_buffer.rstrip().endswith((".", "?", "!", "\n"))
+                            or len(thinking_buffer) > 200
+                            or (current_time - last_thinking_emit > 0.5 and len(thinking_buffer) > 20)
+                        )
+
+                        if should_emit and self.on_thinking and thinking_buffer.strip():
+                            await self.on_thinking(thinking_buffer.strip())
+                            thinking_buffer = ""
+                            last_thinking_emit = current_time
 
                     if chunk.content:
                         full_content += chunk.content
@@ -749,7 +772,17 @@ class AgentLoop:
 
                     if chunk.tool_calls:
                         tool_calls.extend(chunk.tool_calls)
+
+                # Flush any remaining thinking content after streaming completes
+                if thinking_buffer.strip() and self.on_thinking:
+                    await self.on_thinking(thinking_buffer.strip())
+                    thinking_buffer = ""
+
             except Exception as e:
+                # Flush thinking buffer before handling error
+                if thinking_buffer.strip() and self.on_thinking:
+                    await self.on_thinking(thinking_buffer.strip())
+
                 error_msg = str(e)
                 error_type = type(e).__name__
                 # Yield error message so it's displayed

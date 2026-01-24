@@ -35,7 +35,15 @@ from textual.widgets import (
 )
 from textual.widgets.option_list import Option
 from textual.reactive import reactive
+from textual.message import Message
 from textual import events
+# Optional clipboard support - gracefully handle if not available
+try:
+    import pyperclip
+
+    HAS_CLIPBOARD = True
+except ImportError:
+    HAS_CLIPBOARD = False
 
 
 class AgentStatus(Enum):
@@ -65,6 +73,270 @@ class AgentInfo:
     homepage: str = ""
     downloads: int = 0
     rating: float = 0.0
+    # Installation info (populated from TOML/registry)
+    install_command: str = ""
+    install_description: str = ""
+    run_command: str = ""
+    requirements: List[str] = field(default_factory=list)
+    documentation_url: str = ""
+
+
+@dataclass
+class InstallStep:
+    """A single installation step."""
+
+    order: int
+    description: str
+    command: str
+    is_optional: bool = False
+
+
+def copy_to_clipboard(text: str) -> bool:
+    """
+    Copy text to clipboard.
+
+    Returns True if successful, False otherwise.
+    """
+    if not HAS_CLIPBOARD:
+        return False
+    try:
+        pyperclip.copy(text)
+        return True
+    except Exception:
+        return False
+
+
+class InstallGuidancePanel(ModalScreen):
+    """
+    Modal panel showing installation guidance for an agent.
+
+    Shows installation commands, requirements, and documentation links
+    with copy buttons. Does NOT auto-install - users run commands manually.
+    """
+
+    BINDINGS = [
+        Binding("escape", "dismiss", "Close"),
+        Binding("c", "copy_main", "Copy Command"),
+        Binding("enter", "dismiss", "Close"),
+    ]
+
+    CSS = """
+    InstallGuidancePanel {
+        align: center middle;
+    }
+
+    #install-dialog {
+        width: 80%;
+        max-width: 100;
+        height: auto;
+        max-height: 80%;
+        background: #0a0a0a;
+        border: double #a855f7;
+        padding: 2;
+    }
+
+    #install-header {
+        height: 3;
+        margin-bottom: 1;
+    }
+
+    #install-title {
+        text-style: bold;
+        color: #a855f7;
+    }
+
+    #install-subtitle {
+        color: #71717a;
+    }
+
+    #requirements-section {
+        height: auto;
+        margin-bottom: 1;
+        padding: 1;
+        background: #18181b;
+        border: round #27272a;
+    }
+
+    #requirements-title {
+        text-style: bold;
+        color: #f59e0b;
+        margin-bottom: 1;
+    }
+
+    #commands-section {
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    .command-box {
+        height: auto;
+        margin-bottom: 1;
+        padding: 1;
+        background: #1a1a1a;
+        border: round #3f3f46;
+    }
+
+    .command-label {
+        color: #22c55e;
+        margin-bottom: 0;
+    }
+
+    .command-text {
+        color: #e4e4e7;
+        background: #0d0d0d;
+        padding: 0 1;
+        margin: 0;
+    }
+
+    .copy-hint {
+        color: #52525b;
+        text-align: right;
+    }
+
+    #docs-section {
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    #docs-link {
+        color: #3b82f6;
+    }
+
+    #action-buttons {
+        height: 3;
+        margin-top: 1;
+    }
+
+    #action-buttons Button {
+        margin-right: 1;
+    }
+
+    .copy-btn {
+        background: #3b82f6;
+    }
+
+    .close-btn {
+        background: #3f3f46;
+    }
+    """
+
+    def __init__(self, agent: AgentInfo, **kwargs):
+        super().__init__(**kwargs)
+        self.agent = agent
+        self._copied = False
+
+    def compose(self) -> ComposeResult:
+        """Compose the install guidance panel."""
+        with Container(id="install-dialog"):
+            # Header
+            with Container(id="install-header"):
+                yield Static(
+                    f" Install {self.agent.name}", id="install-title"
+                )
+                yield Static(
+                    "Run these commands in your terminal to install the agent",
+                    id="install-subtitle",
+                )
+
+            # Requirements section
+            if self.agent.requirements:
+                with Container(id="requirements-section"):
+                    yield Static(" Requirements", id="requirements-title")
+                    reqs_text = Text()
+                    for req in self.agent.requirements:
+                        reqs_text.append(f"  • {req}\n", style="#a1a1aa")
+                    yield Static(reqs_text)
+
+            # Commands section
+            with Container(id="commands-section"):
+                # Main install command
+                if self.agent.install_command:
+                    with Container(classes="command-box"):
+                        yield Static(
+                            f" {self.agent.install_description or 'Install Command'}",
+                            classes="command-label",
+                        )
+                        yield Static(
+                            Text(f"$ {self.agent.install_command}", style="bold"),
+                            classes="command-text",
+                            id="main-command",
+                        )
+                        yield Static(
+                            "[Press C to copy]" if HAS_CLIPBOARD else "",
+                            classes="copy-hint",
+                        )
+
+                # Run command info
+                if self.agent.run_command:
+                    with Container(classes="command-box"):
+                        yield Static(" Run Command (after install)", classes="command-label")
+                        yield Static(
+                            Text(f"$ {self.agent.run_command}", style="bold"),
+                            classes="command-text",
+                            id="run-command",
+                        )
+
+            # Documentation section
+            if self.agent.documentation_url or self.agent.homepage or self.agent.repository:
+                with Container(id="docs-section"):
+                    doc_url = (
+                        self.agent.documentation_url
+                        or self.agent.homepage
+                        or self.agent.repository
+                    )
+                    yield Static(
+                        Text.assemble(
+                            (" Documentation: ", "#6b7280"),
+                            (doc_url, "underline #3b82f6"),
+                        ),
+                        id="docs-link",
+                    )
+
+            # Action buttons
+            with Horizontal(id="action-buttons"):
+                if HAS_CLIPBOARD:
+                    yield Button(
+                        " Copy Install Command",
+                        id="btn-copy",
+                        classes="copy-btn",
+                        variant="primary",
+                    )
+                yield Button("Close", id="btn-close", classes="close-btn")
+
+            # Status message
+            yield Static("", id="status-message")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "btn-copy":
+            self.action_copy_main()
+        elif event.button.id == "btn-close":
+            self.dismiss()
+
+    def action_copy_main(self) -> None:
+        """Copy the main install command to clipboard."""
+        if self.agent.install_command and copy_to_clipboard(self.agent.install_command):
+            self._copied = True
+            try:
+                status = self.query_one("#status-message", Static)
+                status.update(Text(" Copied to clipboard!", style="bold #22c55e"))
+            except Exception:
+                pass
+        elif not HAS_CLIPBOARD:
+            try:
+                status = self.query_one("#status-message", Static)
+                status.update(
+                    Text(
+                        " Copy manually: Select the command above",
+                        style="#f59e0b",
+                    )
+                )
+            except Exception:
+                pass
+
+    def action_dismiss(self) -> None:
+        """Close the panel."""
+        self.dismiss()
 
 
 # Theme colors matching SuperQode style
@@ -296,7 +568,7 @@ class AgentStoreScreen(Screen):
         Binding("j", "next_agent", "Next", show=True),
         Binding("k", "prev_agent", "Previous", show=True),
         Binding("enter", "launch_agent", "Launch", show=True),
-        Binding("i", "install_agent", "Install", show=True),
+        Binding("i", "install_agent", "Setup Guide", show=True),
         Binding("u", "uninstall_agent", "Uninstall", show=False),
         Binding("/", "focus_search", "Search", show=True),
         Binding("escape", "dismiss", "Back", show=True),
@@ -408,7 +680,7 @@ class AgentStoreScreen(Screen):
                 yield Static("Select an agent", id="detail-content")
                 with Horizontal(id="detail-actions"):
                     yield Button("Launch", id="btn-launch", classes="action-button launch-btn")
-                    yield Button("Install", id="btn-install", classes="action-button install-btn")
+                    yield Button(" Setup Guide", id="btn-install", classes="action-button install-btn")
 
         yield Footer()
 
@@ -473,11 +745,13 @@ class AgentStoreScreen(Screen):
         # Update buttons
         install_btn = self.query_one("#btn-install", Button)
         if agent.status == AgentStatus.INSTALLED:
-            install_btn.label = "Uninstall"
+            # Agent already installed - show uninstall option
+            install_btn.label = " Uninstall"
             install_btn.remove_class("install-btn")
             install_btn.add_class("uninstall-btn")
         else:
-            install_btn.label = "Install"
+            # Show setup guide (not auto-install)
+            install_btn.label = " Setup Guide"
             install_btn.remove_class("uninstall-btn")
             install_btn.add_class("install-btn")
 
@@ -518,6 +792,7 @@ class AgentStoreScreen(Screen):
             if self._selected_agent.status == AgentStatus.INSTALLED:
                 self.action_uninstall_agent()
             else:
+                # Show setup guide (not auto-install)
                 self.action_install_agent()
 
     def action_next_agent(self) -> None:
@@ -543,11 +818,10 @@ class AgentStoreScreen(Screen):
             self.dismiss()
 
     def action_install_agent(self) -> None:
-        """Install the selected agent."""
-        if self._selected_agent and self._on_install:
-            self._on_install(self._selected_agent)
-            self._selected_agent.status = AgentStatus.INSTALLED
-            self._update_detail_panel()
+        """Show install guidance for the selected agent."""
+        if self._selected_agent:
+            # Show the install guidance panel (does NOT auto-install)
+            self.app.push_screen(InstallGuidancePanel(self._selected_agent))
 
     def action_uninstall_agent(self) -> None:
         """Uninstall the selected agent."""
@@ -584,41 +858,80 @@ def create_sample_agents() -> List[AgentInfo]:
             tags=["ai", "coding", "assistant"],
             downloads=50000,
             rating=4.8,
+            install_command="curl -fsSL https://claude.ai/install.sh | bash && npm install -g @zed-industries/claude-code-acp",
+            install_description="Install Claude Code + ACP adapter",
+            run_command="claude-code-acp",
+            requirements=["Node.js 18+", "npm"],
+            documentation_url="https://claude.ai/code",
         ),
         AgentInfo(
             id="opencode",
             name="OpenCode",
             description="Open-source AI coding agent with ACP protocol support.",
-            author="OpenCode Team",
+            author="SST",
             version="0.5.0",
             category="code",
             status=AgentStatus.AVAILABLE,
             tags=["ai", "coding", "open-source"],
             downloads=10000,
             rating=4.5,
+            install_command="npm i -g opencode-ai",
+            install_description="Install OpenCode",
+            run_command="opencode acp",
+            requirements=["Node.js 18+", "npm"],
+            documentation_url="https://opencode.ai/",
+            repository="https://github.com/sst/opencode",
         ),
         AgentInfo(
-            id="docgen",
-            name="DocGen",
-            description="Automated documentation generator using AI.",
-            author="DocTools Inc",
-            version="2.1.0",
-            category="docs",
+            id="gemini-cli",
+            name="Gemini CLI",
+            description="Google's Gemini AI in your terminal with ACP support.",
+            author="Google",
+            version="1.0.0",
+            category="code",
             status=AgentStatus.AVAILABLE,
-            tags=["documentation", "ai", "automation"],
-            downloads=25000,
-            rating=4.2,
+            tags=["ai", "google", "gemini"],
+            downloads=20000,
+            rating=4.6,
+            install_command="npm install -g @anthropic-ai/gemini-cli",
+            install_description="Install Gemini CLI",
+            run_command="gemini --experimental-acp",
+            requirements=["Node.js 18+", "npm", "Google Cloud account"],
+            documentation_url="https://ai.google.dev/gemini-api/docs",
         ),
         AgentInfo(
-            id="test-runner",
-            name="Test Runner",
-            description="AI-powered test generation and execution agent.",
-            author="QA Labs",
-            version="1.3.0",
-            category="test",
+            id="codex",
+            name="Codex",
+            description="OpenAI's code generation agent with streaming terminal output.",
+            author="OpenAI",
+            version="1.0.0",
+            category="code",
             status=AgentStatus.AVAILABLE,
-            tags=["testing", "qa", "automation"],
+            tags=["ai", "openai", "coding"],
+            downloads=30000,
+            rating=4.4,
+            install_command="npm install -g @zed-industries/codex-acp",
+            install_description="Install Codex ACP adapter",
+            run_command="codex-acp",
+            requirements=["Node.js 18+", "npm", "OpenAI API key"],
+            documentation_url="https://openai.com/codex",
+        ),
+        AgentInfo(
+            id="goose",
+            name="Goose",
+            description="Block's developer agent that automates engineering tasks.",
+            author="Block",
+            version="1.0.0",
+            category="code",
+            status=AgentStatus.AVAILABLE,
+            tags=["ai", "automation", "coding"],
             downloads=15000,
-            rating=4.0,
+            rating=4.3,
+            install_command="pipx install goose-ai",
+            install_description="Install Goose",
+            run_command="goose",
+            requirements=["Python 3.10+", "pipx"],
+            documentation_url="https://github.com/block/goose",
+            repository="https://github.com/block/goose",
         ),
     ]

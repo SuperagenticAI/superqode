@@ -28,6 +28,7 @@ from textual.reactive import reactive
 from textual.widgets import Static
 from textual.containers import Container, Horizontal, Vertical
 from textual.timer import Timer
+from textual.message import Message
 from textual import events
 
 
@@ -382,11 +383,37 @@ class ConnectionPanel(Container):
         yield Static("", classes="panel-stats")
 
 
+class ModelChanged(Message):
+    """
+    Message posted when user changes the model.
+
+    When a user selects a new model, this message is posted to inform
+    the parent app that it should reset the session with the new model.
+    """
+
+    def __init__(self, model_info: Dict[str, str]) -> None:
+        """
+        Initialize ModelChanged message.
+
+        Args:
+            model_info: Dictionary with model details:
+                - name: Display name of the model
+                - provider: Provider name (anthropic, openai, etc.)
+                - id: Model identifier for API calls
+        """
+        super().__init__()
+        self.model_info = model_info
+        self.model_name = model_info.get("name", "")
+        self.model_id = model_info.get("id", "")
+        self.provider = model_info.get("provider", "")
+
+
 class ModelSelector(Container):
     """
     Model selection widget.
 
     Allows switching between available models/providers.
+    Posts ModelChanged message when user selects a new model.
     """
 
     DEFAULT_CSS = """
@@ -432,6 +459,7 @@ class ModelSelector(Container):
         super().__init__(**kwargs)
         self.models = models  # [{"name": "...", "provider": "...", "id": "..."}]
         self._on_select = on_select
+        self._current_model_id: Optional[str] = None
 
     def on_key(self, event: events.Key) -> None:
         """Handle key events."""
@@ -442,9 +470,32 @@ class ModelSelector(Container):
             self.selected_index = min(len(self.models) - 1, self.selected_index + 1)
             event.prevent_default()
         elif event.key == "enter":
-            if self._on_select and self.models:
-                self._on_select(self.models[self.selected_index])
+            if self.models:
+                selected_model = self.models[self.selected_index]
+                new_model_id = selected_model.get("id", "")
+
+                # Only trigger if model actually changed
+                if new_model_id != self._current_model_id:
+                    self._current_model_id = new_model_id
+
+                    # Post ModelChanged message for parent app to handle
+                    self.post_message(ModelChanged(selected_model))
+
+                # Also call callback if provided
+                if self._on_select:
+                    self._on_select(selected_model)
+
             event.prevent_default()
+
+    def set_current_model(self, model_id: str) -> None:
+        """Set the current model ID (to detect actual changes)."""
+        self._current_model_id = model_id
+
+        # Update selected index to match
+        for i, model in enumerate(self.models):
+            if model.get("id") == model_id:
+                self.selected_index = i
+                break
 
     def watch_selected_index(self, index: int) -> None:
         """React to selection changes."""

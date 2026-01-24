@@ -685,6 +685,10 @@ class ConversationLog(RichLog):
         self._messages: list[tuple[str, str, str]] = []  # (role, text, agent_name)
         self._last_response: str = ""
         self._last_error: str = ""  # Track last error for easy copy
+        # Track thinking and tool calls for agent sessions
+        self._thinking_lines: list[str] = []
+        self._tool_calls: list[dict] = []
+        self._streaming_response: str = ""
         # Force console width to None (unlimited) immediately after init
         self._force_unlimited_width = True
 
@@ -948,6 +952,338 @@ class ConversationLog(RichLog):
                 padding=(1, 2),
             )
         )
+
+    # =========================================================================
+    # ENHANCED STREAMING OUTPUT METHODS
+    # These methods provide better display for agent thinking and responses
+    # Compatible with BYOK, ACP, and Local modes
+    # =========================================================================
+
+    def start_agent_session(
+        self,
+        agent_name: str,
+        model_name: str = "",
+        mode: str = "acp",
+        approval_mode: str = "ask",
+    ):
+        """
+        Start a new agent output session with header.
+
+        Args:
+            agent_name: Name of the agent (e.g., "OpenCode", "Claude")
+            model_name: Model being used (e.g., "gpt-4o", "claude-sonnet")
+            mode: Connection mode ("acp", "byok", "local")
+            approval_mode: Approval mode ("auto", "ask", "deny")
+        """
+        # Reset streaming state
+        self._streaming_response = ""
+        self._streaming_thinking = ""
+        self._thinking_lines = []
+        self._tool_calls = []
+        self._session_start_time = None
+
+        try:
+            from time import monotonic
+            self._session_start_time = monotonic()
+        except Exception:
+            pass
+
+        # Mode badges
+        mode_badges = {
+            "acp": ("🔌", "ACP", THEME["success"]),
+            "byok": ("🔑", "BYOK", THEME["cyan"]),
+            "local": ("💻", "Local", THEME["warning"]),
+        }
+        mode_icon, mode_label, mode_color = mode_badges.get(
+            mode.lower(), ("●", mode.upper(), THEME["muted"])
+        )
+
+        # Approval mode
+        approval_badges = {
+            "auto": ("🟢", "AUTO", THEME["success"]),
+            "ask": ("🟡", "ASK", THEME["warning"]),
+            "deny": ("🔴", "DENY", THEME["error"]),
+        }
+        app_icon, app_label, app_color = approval_badges.get(
+            approval_mode, ("🟡", "ASK", THEME["warning"])
+        )
+
+        # Build header
+        header = Text()
+        header.append("\n")
+
+        # Gradient line
+        gradient = ["#6d28d9", "#7c3aed", "#8b5cf6", "#a855f7", "#c084fc"]
+        line = "─" * 60
+        for i, char in enumerate(line):
+            header.append(char, style=gradient[i % len(gradient)])
+        header.append("\n")
+
+        # Agent name
+        agent_color = AGENT_COLORS.get(agent_name.lower(), THEME["purple"])
+        agent_icon = AGENT_ICONS.get(agent_name.lower(), "🤖")
+        header.append(f"  {agent_icon} ", style=f"bold {agent_color}")
+        header.append(agent_name.upper(), style=f"bold {THEME['text']}")
+        header.append(" is working\n", style=THEME["muted"])
+
+        # Model and mode info
+        header.append("  Model: ", style=THEME["dim"])
+        header.append(model_name or "auto", style=f"bold {THEME['cyan']}")
+        header.append(f"  │  {mode_icon} ", style=mode_color)
+        header.append(mode_label, style=f"bold {mode_color}")
+        header.append(f"  │  {app_icon} ", style=app_color)
+        header.append(app_label, style=f"bold {app_color}")
+        header.append("\n")
+
+        self.write(header)
+
+    def add_thinking(self, text: str, category: str = "general"):
+        """
+        Add a thinking/reasoning line (always visible).
+
+        This method ALWAYS shows thinking regardless of show_thinking_logs setting
+        because it's explicitly called for important agent reasoning.
+
+        Args:
+            text: The thinking text to display
+            category: Category for icon selection (planning, analyzing, etc.)
+        """
+        if not text or not text.strip():
+            return
+
+        # Ensure auto-scroll is ON
+        self.auto_scroll = True
+
+        # Store for later copy
+        self._thinking_lines.append(text)
+
+        # Category icons
+        icons = {
+            "planning": "📋",
+            "analyzing": "🔬",
+            "deciding": "🤔",
+            "searching": "🔍",
+            "reading": "📖",
+            "writing": "✏️",
+            "debugging": "🐛",
+            "executing": "⚡",
+            "verifying": "✅",
+            "testing": "🧪",
+            "refactoring": "🔧",
+            "general": "💭",
+        }
+        icon = icons.get(category.lower(), "💭")
+
+        # Auto-detect category from text if not specified
+        if category == "general":
+            text_lower = text.lower()
+            if any(w in text_lower for w in ["test", "pytest", "expect"]):
+                icon = "🧪"
+            elif any(w in text_lower for w in ["run", "execute", "command"]):
+                icon = "⚡"
+            elif any(w in text_lower for w in ["verify", "confirm", "check"]):
+                icon = "✅"
+            elif any(w in text_lower for w in ["debug", "error", "fix", "bug"]):
+                icon = "🐛"
+            elif any(w in text_lower for w in ["plan", "step", "approach"]):
+                icon = "📋"
+            elif any(w in text_lower for w in ["search", "find", "look"]):
+                icon = "🔍"
+            elif any(w in text_lower for w in ["read", "file", "content"]):
+                icon = "📖"
+            elif any(w in text_lower for w in ["write", "create", "add"]):
+                icon = "✏️"
+
+        # Display thinking line
+        line = Text()
+        line.append(f"  {icon} ", style=f"bold {THEME['pink']}")
+        line.append(text, style=f"italic {THEME['muted']}")
+        line.append("\n")
+        self.write(line)
+
+    def add_response_chunk(self, text: str):
+        """
+        Add a chunk of response text (for streaming).
+
+        Accumulates chunks into the streaming response buffer.
+
+        Args:
+            text: The response chunk to add
+        """
+        if not text:
+            return
+
+        self._streaming_response += text
+        self.auto_scroll = True
+
+        # For streaming, we show chunks as they come
+        chunk_text = Text()
+        chunk_text.append(text, style=THEME["text"])
+        self.write(chunk_text)
+
+    def add_tool_call(
+        self,
+        tool_name: str,
+        status: str = "running",
+        file_path: str = "",
+        command: str = "",
+        output: str = "",
+    ):
+        """
+        Add a tool call display.
+
+        Args:
+            tool_name: Name of the tool being called
+            status: Status ("pending", "running", "success", "error")
+            file_path: File path if applicable
+            command: Command if it's a shell tool
+            output: Tool output/result
+        """
+        self._tool_calls.append({
+            "name": tool_name,
+            "status": status,
+            "path": file_path,
+            "command": command,
+        })
+
+        # Status icons and colors
+        status_map = {
+            "pending": ("○", THEME["muted"]),
+            "running": ("◐", THEME["purple"]),
+            "success": ("✦", THEME["success"]),
+            "error": ("✕", THEME["error"]),
+        }
+        status_icon, status_color = status_map.get(status, ("●", THEME["muted"]))
+
+        # Tool type icons
+        tool_icons = {
+            "read": "↳",
+            "write": "↲",
+            "edit": "⟳",
+            "shell": "▸",
+            "bash": "▸",
+            "search": "⌕",
+            "glob": "⋮",
+            "grep": "⌕",
+        }
+        tool_icon = "•"
+        for key, icon in tool_icons.items():
+            if key in tool_name.lower():
+                tool_icon = icon
+                break
+
+        # Build display
+        line = Text()
+        line.append(f"  {status_icon} ", style=f"bold {status_color}")
+        line.append(f"{tool_icon} ", style=THEME["dim"])
+        line.append(tool_name, style=THEME["text"])
+
+        if file_path:
+            line.append(f"  {file_path}", style=THEME["dim"])
+        elif command:
+            cmd_short = command[:40] + "..." if len(command) > 40 else command
+            line.append(f"  $ {cmd_short}", style=THEME["dim"])
+
+        if output and status in ("success", "error"):
+            output_short = output[:50] + "..." if len(output) > 50 else output
+            line.append(f"\n    → {output_short}", style=THEME["muted"])
+
+        line.append("\n")
+        self.write(line)
+
+    def end_agent_session(
+        self,
+        success: bool = True,
+        response_text: str = "",
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        thinking_tokens: int = 0,
+        cost: float = 0.0,
+    ):
+        """
+        End the agent output session with summary.
+
+        Args:
+            success: Whether the session completed successfully
+            response_text: Final response text (if not already streamed)
+            prompt_tokens: Number of prompt tokens used
+            completion_tokens: Number of completion tokens used
+            thinking_tokens: Number of thinking tokens used
+            cost: Cost in dollars
+        """
+        # Calculate duration
+        duration = 0.0
+        if hasattr(self, "_session_start_time") and self._session_start_time:
+            try:
+                from time import monotonic
+                duration = monotonic() - self._session_start_time
+            except Exception:
+                pass
+
+        # Store final response for copy
+        if response_text:
+            self._last_response = response_text
+            self._streaming_response = response_text
+        elif self._streaming_response:
+            self._last_response = self._streaming_response
+
+        # Build footer
+        footer = Text()
+        footer.append("\n")
+
+        # Status line
+        if success:
+            gradient = ["#059669", "#10b981", "#34d399", "#6ee7b7"]
+            for i, char in enumerate("─" * 60):
+                footer.append(char, style=gradient[i % len(gradient)])
+            footer.append("\n")
+            footer.append("  ✦ ", style=f"bold {THEME['success']}")
+            footer.append("Completed", style=f"bold {THEME['text']}")
+        else:
+            for i, char in enumerate("─" * 60):
+                footer.append(char, style=THEME["error"])
+            footer.append("\n")
+            footer.append("  ✕ ", style=f"bold {THEME['error']}")
+            footer.append("Failed", style=f"bold {THEME['error']}")
+
+        # Stats
+        stats = []
+        if duration > 0:
+            stats.append(f"⏱ {duration:.1f}s")
+
+        total_tokens = prompt_tokens + completion_tokens
+        if total_tokens > 0:
+            stats.append(f"📊 {total_tokens:,} tokens")
+
+        if thinking_tokens > 0:
+            stats.append(f"💭 {thinking_tokens:,} thinking")
+
+        if cost > 0:
+            stats.append(f"💰 ${cost:.4f}")
+
+        tool_count = len(getattr(self, "_tool_calls", []))
+        if tool_count > 0:
+            stats.append(f"🔧 {tool_count} tools")
+
+        if stats:
+            footer.append("  │  ", style=THEME["dim"])
+            footer.append("  ".join(stats), style=THEME["muted"])
+
+        footer.append("\n")
+
+        # Copy hint
+        footer.append("  [Ctrl+Shift+C to copy response]", style=THEME["dim"])
+        footer.append("\n")
+
+        self.write(footer)
+
+    def get_thinking_text(self) -> str:
+        """Get all thinking text for copying."""
+        return "\n".join(getattr(self, "_thinking_lines", []))
+
+    def get_streaming_response(self) -> str:
+        """Get the accumulated streaming response."""
+        return getattr(self, "_streaming_response", "")
 
 
 class ApprovalWidget(Static):

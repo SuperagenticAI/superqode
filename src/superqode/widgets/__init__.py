@@ -48,6 +48,8 @@ __all__ = [
     "get_sidebar_panels",
     "get_file_reference",
     "get_leader_key",
+    # Unified output display (recommended for new code)
+    "get_unified_output",
 ]
 
 
@@ -412,3 +414,64 @@ def get_leader_key():
     )
 
     return LeaderKeyPopup, LeaderKeyMixin, LEADER_KEYS
+
+
+def get_unified_output():
+    """
+    Lazy load the Unified Output Display.
+
+    This is the recommended widget for displaying agent output.
+    It works consistently across BYOK, ACP, and Local modes,
+    and supports copy to clipboard.
+
+    Usage:
+        (
+            UnifiedOutputDisplay,
+            ThinkingSection,
+            ResponseSection,
+            OutputMode,
+            OutputStats,
+            copy_to_clipboard,
+        ) = get_unified_output()
+
+        # In your app
+        output = UnifiedOutputDisplay(mode=OutputMode.BYOK)
+        output.set_agent_info("Claude", "claude-3-opus")
+        output.start_session()
+
+        # Handle streaming
+        output.start_thinking()
+        output.append_thinking("Analyzing the code...")
+        output.complete_thinking()
+
+        output.start_response()
+        output.append_response("Here's what I found...")
+        output.complete_response(prompt_tokens=100, completion_tokens=500)
+    """
+    from superqode.widgets.unified_output import (
+        UnifiedOutputDisplay,
+        ThinkingSection,
+        ResponseSection,
+        OutputMode,
+        OutputState,
+        OutputStats,
+        ThinkingEntry,
+        Theme,
+        CopyRequested,
+        CopyComplete,
+        copy_to_clipboard,
+    )
+
+    return (
+        UnifiedOutputDisplay,
+        ThinkingSection,
+        ResponseSection,
+        OutputMode,
+        OutputState,
+        OutputStats,
+        ThinkingEntry,
+        Theme,
+        CopyRequested,
+        CopyComplete,
+        copy_to_clipboard,
+    )
