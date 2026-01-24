@@ -123,13 +123,16 @@ class ACPClient:
     async def start(self) -> bool:
         """Start the ACP agent subprocess."""
         try:
-            # Build command with model if specified
+            # Use command as-is - model selection is handled via ACP protocol
+            # Don't add -m flag as not all agents support it (e.g., opencode acp)
             cmd = self.command
-            if self.model:
-                cmd = f"{cmd} -m {self.model}"
 
             env = os.environ.copy()
             env["PYTHONUNBUFFERED"] = "1"
+
+            # Add --print-logs for debugging if needed
+            if "opencode" in cmd:
+                cmd = f"{cmd} --print-logs"
 
             self._process = await asyncio.create_subprocess_shell(
                 cmd,

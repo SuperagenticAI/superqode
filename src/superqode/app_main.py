@@ -4456,25 +4456,13 @@ team:
             message = f"{file_context}\n\n{message}"
             self._current_file_context = ""  # Clear after use
 
-        # Claude Code uses full ACP protocol - route to dedicated handler
-        if agent_type in ("claude", "codex", "openhands") and self._use_jsonrpc_acp_client():
+        # Route ACP-compatible agents to the JSON-RPC ACP client
+        # OpenCode, Claude, Codex, OpenHands all support ACP protocol
+        acp_agents = ("opencode", "claude", "codex", "openhands")
+        if agent_type in acp_agents:
             self._run_acp_jsonrpc_client(
                 message, agent_type, model, display_name, log, persona_context
             )
-            return
-
-        if agent_type == "claude":
-            self._run_claude_acp(message, model, display_name, log, persona_context)
-            return
-
-        # Codex uses full ACP protocol - route to dedicated handler
-        if agent_type == "codex":
-            self._run_codex_acp(message, model, display_name, log, persona_context)
-            return
-
-        # OpenHands uses full ACP protocol - route to dedicated handler
-        if agent_type == "openhands":
-            self._run_openhands_acp(message, model, display_name, log, persona_context)
             return
 
         try:
@@ -4710,8 +4698,12 @@ team:
             message = f"{file_context}\n\n{message}"
             self._current_file_context = ""
 
-        # Choose command and model display
-        if agent_type == "claude":
+        # Choose command and model display based on agent type
+        if agent_type == "opencode":
+            command = "opencode acp"
+            model_display = f"opencode/{model}" if model else "opencode/auto"
+            # OpenCode handles its own API keys via its config
+        elif agent_type == "claude":
             command = "claude-code-acp"
             model_display = f"claude/{model}" if model else "claude/auto"
             if "ANTHROPIC_API_KEY" not in os.environ:
@@ -4756,7 +4748,15 @@ team:
         # Stop thinking, start streaming animation
         self.call_from_thread(self._stop_thinking)
         self.call_from_thread(self._start_stream_animation, log)
-        self.call_from_thread(self._show_agent_header_with_model, display_name, model_display, log)
+
+        # Use enhanced agent session header (always visible)
+        self.call_from_thread(
+            log.start_agent_session,
+            display_name,
+            model_display,
+            "acp",
+            self.approval_mode,
+        )
 
         text_parts: list[str] = []
         tool_actions: list[dict] = []
@@ -4773,22 +4773,27 @@ team:
             return ""
 
         async def on_message(text: str) -> None:
+            """Handle agent message chunks - ALWAYS visible."""
             if text:
                 text_parts.append(text)
-                self.call_from_thread(self._show_thinking_line, f"💬 {text}", log)
+                # Use add_thinking which always displays (not filtered by show_thinking_logs)
+                self.call_from_thread(log.add_thinking, text, "general")
 
         async def on_thinking(text: str) -> None:
+            """Handle agent thinking - ALWAYS visible."""
             if text:
-                self.call_from_thread(self._show_thinking_line, f"🧠 {text}", log)
+                # Use add_thinking which always displays
+                self.call_from_thread(log.add_thinking, text, "analyzing")
 
         async def on_tool_call(tool_call: dict) -> None:
+            """Handle tool calls - ALWAYS visible."""
             title = tool_call.get("title", "")
             raw_input = tool_call.get("rawInput", {})
+            kind = tool_call.get("kind", "")
             tool_actions.append({"tool": title, "input": raw_input})
 
             file_path = raw_input.get("path", raw_input.get("filePath", ""))
             if file_path:
-                kind = tool_call.get("kind", "")
                 if kind in ("edit", "write", "delete"):
                     if file_path not in files_modified:
                         files_modified.append(file_path)
@@ -4796,35 +4801,53 @@ team:
                     if file_path not in files_read:
                         files_read.append(file_path)
 
-            msg_text = self._format_tool_message_rich(title, raw_input)
-            self.call_from_thread(self._show_thinking_line, msg_text, log)
+            # Use add_tool_call which always displays
+            command = raw_input.get("command", "")
+            self.call_from_thread(
+                log.add_tool_call,
+                title,
+                "running",
+                file_path,
+                command,
+            )
 
         async def on_tool_update(update: dict) -> None:
+            """Handle tool updates - ALWAYS visible."""
             status = update.get("status", "")
             output = update.get("rawOutput") or update.get("output") or update.get("result")
             tool_title = update.get("title") or "Tool"
 
             if status == "completed":
-                if output:
-                    output_str = str(output)
-                    self.call_from_thread(
-                        self._show_thinking_line, f"✅ {tool_title}: {output_str}", log
-                    )
-                else:
-                    self.call_from_thread(
-                        self._show_thinking_line, f"✅ {tool_title} completed", log
-                    )
-            elif status == "failed":
-                error_msg = str(output) if output else "failed"
+                output_str = str(output)[:100] if output else ""
                 self.call_from_thread(
-                    self._show_thinking_line, f"❌ {tool_title} failed: {error_msg}", log
+                    log.add_tool_call,
+                    tool_title,
+                    "success",
+                    "",
+                    "",
+                    output_str,
+                )
+            elif status == "failed":
+                error_msg = str(output)[:100] if output else "failed"
+                self.call_from_thread(
+                    log.add_tool_call,
+                    tool_title,
+                    "error",
+                    "",
+                    "",
+                    error_msg,
                 )
 
         async def on_plan(entries: list[dict]) -> None:
+            """Handle plan updates - ALWAYS visible."""
             if entries:
-                self.call_from_thread(
-                    self._show_thinking_line, f"📋 Plan: {len(entries)} tasks", log
-                )
+                plan_text = f"Plan: {len(entries)} tasks"
+                for i, entry in enumerate(entries[:5], 1):
+                    task = entry.get("content", entry.get("title", ""))[:50]
+                    plan_text += f"\n  {i}. {task}"
+                if len(entries) > 5:
+                    plan_text += f"\n  ... and {len(entries) - 5} more"
+                self.call_from_thread(log.add_thinking, plan_text, "planning")
 
         async def on_permission_request(options: list[dict], tool_call: dict) -> str:
             tool_name = tool_call.get("title", "unknown")
@@ -4910,40 +4933,53 @@ team:
             self._agent_process = None
             self.call_from_thread(self._stop_stream_animation)
 
-            action_summary = {
-                "tool_count": stats.get("tool_count", len(tool_actions)),
-                "files_modified": stats.get("files_modified", files_modified),
-                "files_read": stats.get("files_read", files_read),
-                "duration": stats.get("duration", 0.0),
-                "file_diffs": self._compute_file_diffs(stats.get("files_modified", files_modified)),
-            }
+            # Get response text
+            response_text = "".join(text_parts) if text_parts else ""
 
-            if text_parts:
-                response_text = "".join(text_parts)
-                if response_text.strip():
-                    self.call_from_thread(
-                        self._show_final_outcome, response_text, display_name, action_summary, log
-                    )
-                else:
-                    self.call_from_thread(
-                        self._show_completion_summary, display_name, action_summary, log
-                    )
-            elif not self._cancel_requested:
+            # Use enhanced end_agent_session for consistent output
+            self.call_from_thread(
+                log.end_agent_session,
+                True,  # success
+                response_text,
+                stats.get("prompt_tokens", 0),
+                stats.get("completion_tokens", 0),
+                stats.get("thinking_tokens", 0),
+                stats.get("cost", 0.0),
+            )
+
+            # Also show the final outcome if there's response text
+            if response_text.strip():
+                action_summary = {
+                    "tool_count": stats.get("tool_count", len(tool_actions)),
+                    "files_modified": stats.get("files_modified", files_modified),
+                    "files_read": stats.get("files_read", files_read),
+                    "duration": stats.get("duration", 0.0),
+                    "file_diffs": self._compute_file_diffs(stats.get("files_modified", files_modified)),
+                }
                 self.call_from_thread(
-                    self._show_completion_summary, display_name, action_summary, log
+                    self._show_final_outcome, response_text, display_name, action_summary, log
                 )
+
         except FileNotFoundError:
             self._agent_process = None
             self._acp_client = None
             self.call_from_thread(self._stop_thinking)
             self.call_from_thread(self._stop_stream_animation)
-            self.call_from_thread(log.add_error, f"❌ {command} not found. Install it first.")
+            self.call_from_thread(
+                log.end_agent_session,
+                False,  # failed
+                f"❌ {command} not found. Install it first.",
+            )
         except Exception as e:
             self._agent_process = None
             self._acp_client = None
             self.call_from_thread(self._stop_thinking)
             self.call_from_thread(self._stop_stream_animation)
-            self.call_from_thread(log.add_error, f"❌ Error: {str(e)}")
+            self.call_from_thread(
+                log.end_agent_session,
+                False,  # failed
+                f"❌ Error: {str(e)}",
+            )
 
     def _compute_file_diffs(self, files_modified: list) -> dict:
         """Compute diff data for modified files.
