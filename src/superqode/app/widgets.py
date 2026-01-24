@@ -685,6 +685,10 @@ class ConversationLog(RichLog):
         self._messages: list[tuple[str, str, str]] = []  # (role, text, agent_name)
         self._last_response: str = ""
         self._last_error: str = ""  # Track last error for easy copy
+        # Track thinking and tool calls for agent sessions
+        self._thinking_lines: list[str] = []
+        self._tool_calls: list[dict] = []
+        self._streaming_response: str = ""
         # Force console width to None (unlimited) immediately after init
         self._force_unlimited_width = True
 

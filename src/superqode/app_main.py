@@ -3942,101 +3942,57 @@ team:
         provider = self._pure_mode.session.provider
         model = self._pure_mode.session.model
 
-        # For local models, show only the scanning animation (no thinking logs)
-        # For BYOK, show thinking logs as usual
+        # Set up callbacks for BYOK/Local to show thinking logs like ACP
+        # Clean, minimal display - just show what action is happening, not content
         from superqode.providers.registry import PROVIDERS, ProviderCategory
 
         provider_def = PROVIDERS.get(provider)
         is_local = provider_def and provider_def.category == ProviderCategory.LOCAL
 
-        # Set up callbacks for BYOK to show thinking logs (like ACP)
-        if not is_local:
-
-            def on_tool_call(name: str, args: dict):
-                """Handle tool call - show in thinking logs like ACP."""
-                # Format tool call message similar to ACP
-                tool_msg = self._format_tool_message_rich(name, args)
-                # Use helper method that handles threading correctly
-                self._show_byok_thinking_line(tool_msg, log)
-
-            def on_tool_result(name: str, result):
-                """Handle tool result - show in thinking logs like ACP."""
-                from superqode.tools.base import ToolResult
-
-                if isinstance(result, ToolResult):
-                    if result.success:
-                        # Special handling for todo_read tool - format nicely with emojis
-                        if name == "todo_read" and result.output:
-                            try:
-                                import json
-
-                                todos = json.loads(str(result.output))
-                                if todos:
-                                    formatted_todos = self._format_todo_list(todos)
-                                    # Count tasks by status
-                                    completed = sum(
-                                        1 for t in todos if t.get("status") == "completed"
-                                    )
-                                    in_progress = sum(
-                                        1 for t in todos if t.get("status") == "in_progress"
-                                    )
-                                    pending = sum(1 for t in todos if t.get("status") == "pending")
-
-                                    # Show summary
-                                    summary_parts = []
-                                    if completed > 0:
-                                        summary_parts.append(f"{completed} done")
-                                    if in_progress > 0:
-                                        summary_parts.append(f"{in_progress} active")
-                                    if pending > 0:
-                                        summary_parts.append(f"{pending} pending")
-
-                                    summary = ", ".join(summary_parts) if summary_parts else "empty"
-
-                                    self._show_byok_thinking_line(f"📋 Task List ({summary}):", log)
-                                    for todo_line in formatted_todos:
-                                        self._show_byok_thinking_line(f"  {todo_line}", log)
-                                else:
-                                    self._show_byok_thinking_line(f"📋 No tasks in todo list", log)
-                            except (json.JSONDecodeError, KeyError):
-                                # Fallback to normal display if JSON parsing fails
-                                output_str = str(result.output)
-                                # Truncate long outputs
-                                if len(output_str) > 200:
-                                    output_str = output_str[:200] + "..."
-                                self._show_byok_thinking_line(f"✅ {name}: {output_str}", log)
-                        elif result.output:
-                            output_str = str(result.output)
-                            # Truncate long outputs
-                            if len(output_str) > 200:
-                                output_str = output_str[:200] + "..."
-                            self._show_byok_thinking_line(f"✅ {name}: {output_str}", log)
-                        else:
-                            self._show_byok_thinking_line(f"✅ {name} completed", log)
-                    else:
-                        error_msg = str(result.error) if result.error else "failed"
-                        self._show_byok_thinking_line(f"❌ {name} failed: {error_msg}", log)
+        def _safe_call(func, *args):
+            """Call function safely - handles threading correctly."""
+            try:
+                self.call_from_thread(func, *args)
+            except RuntimeError as e:
+                if "different thread" in str(e).lower():
+                    func(*args)
                 else:
-                    result_str = str(result)
-                    if len(result_str) > 200:
-                        result_str = result_str[:200] + "..."
-                    self._show_byok_thinking_line(f"✅ {name}: {result_str}", log)
+                    raise
 
-            async def on_thinking_async(text: str):
-                """Handle thinking text - show in thinking logs like ACP."""
-                if text.strip():
-                    self._show_byok_thinking_line(f"🧠 {text}", log)
+        def on_tool_call(name: str, args: dict):
+            """Handle tool call - minimal display: just tool + target."""
+            file_path = args.get("path", args.get("file_path", args.get("filePath", "")))
+            command = args.get("command", "")
+            # Show just the action, no content
+            _safe_call(log.add_tool_call, name, "running", file_path, command, "")
 
-            # Set callbacks on pure_mode
-            self._pure_mode.on_tool_call = on_tool_call
-            self._pure_mode.on_tool_result = on_tool_result
-            self._pure_mode.on_thinking = on_thinking_async
+        def on_tool_result(name: str, result):
+            """Handle tool result - minimal display: just success/failure."""
+            from superqode.tools.base import ToolResult
 
-            # Ensure callbacks are set on the agent
-            if self._pure_mode._agent:
-                self._pure_mode._agent.on_tool_call = on_tool_call
-                self._pure_mode._agent.on_tool_result = on_tool_result
-                self._pure_mode._agent.on_thinking = on_thinking_async
+            if isinstance(result, ToolResult):
+                status = "success" if result.success else "error"
+                # Don't show output content - just the status
+                _safe_call(log.add_tool_call, name, status, "", "", "")
+            else:
+                _safe_call(log.add_tool_call, name, "success", "", "", "")
+
+        async def on_thinking_async(text: str):
+            """Handle thinking - suppress all verbose output for local models."""
+            # For local models, don't show any thinking logs - they're too verbose
+            # The scanning animation is enough feedback
+            pass
+
+        # Set callbacks on pure_mode (for both local and cloud providers)
+        self._pure_mode.on_tool_call = on_tool_call
+        self._pure_mode.on_tool_result = on_tool_result
+        self._pure_mode.on_thinking = on_thinking_async
+
+        # Ensure callbacks are set on the agent
+        if self._pure_mode._agent:
+            self._pure_mode._agent.on_tool_call = on_tool_call
+            self._pure_mode._agent.on_tool_result = on_tool_result
+            self._pure_mode._agent.on_thinking = on_thinking_async
 
         # Start thinking animation - shows animated bar and thinking indicator
         self._start_thinking(f"🤖 Processing with {provider}/{model}...")
@@ -4773,20 +4729,20 @@ team:
             return ""
 
         async def on_message(text: str) -> None:
-            """Handle agent message chunks - ALWAYS visible."""
+            """Handle agent message chunks - stream to response area."""
             if text:
                 text_parts.append(text)
-                # Use add_thinking which always displays (not filtered by show_thinking_logs)
-                self.call_from_thread(log.add_thinking, text, "general")
+                # Stream response chunks directly - don't show in thinking logs
+                self.call_from_thread(log.add_response_chunk, text)
 
         async def on_thinking(text: str) -> None:
-            """Handle agent thinking - ALWAYS visible."""
+            """Handle agent thinking - toggleable with Ctrl+T."""
             if text:
-                # Use add_thinking which always displays
-                self.call_from_thread(log.add_thinking, text, "analyzing")
+                # Use _show_thinking_line which respects show_thinking_logs toggle
+                self.call_from_thread(self._show_thinking_line, f"💭 {text}", log)
 
         async def on_tool_call(tool_call: dict) -> None:
-            """Handle tool calls - ALWAYS visible."""
+            """Handle tool calls - show in thinking logs (toggleable)."""
             title = tool_call.get("title", "")
             raw_input = tool_call.get("rawInput", {})
             kind = tool_call.get("kind", "")
@@ -4801,53 +4757,32 @@ team:
                     if file_path not in files_read:
                         files_read.append(file_path)
 
-            # Use add_tool_call which always displays
+            # Show tool call in thinking logs (toggleable with Ctrl+T)
             command = raw_input.get("command", "")
-            self.call_from_thread(
-                log.add_tool_call,
-                title,
-                "running",
-                file_path,
-                command,
-            )
+            if command:
+                self.call_from_thread(self._show_thinking_line, f"🔧 {title}: $ {command[:50]}", log)
+            elif file_path:
+                self.call_from_thread(self._show_thinking_line, f"🔧 {title}: {file_path}", log)
+            else:
+                self.call_from_thread(self._show_thinking_line, f"🔧 {title}", log)
 
         async def on_tool_update(update: dict) -> None:
-            """Handle tool updates - ALWAYS visible."""
+            """Handle tool updates - show in thinking logs (toggleable)."""
             status = update.get("status", "")
-            output = update.get("rawOutput") or update.get("output") or update.get("result")
             tool_title = update.get("title") or "Tool"
 
             if status == "completed":
-                output_str = str(output)[:100] if output else ""
-                self.call_from_thread(
-                    log.add_tool_call,
-                    tool_title,
-                    "success",
-                    "",
-                    "",
-                    output_str,
-                )
+                self.call_from_thread(self._show_thinking_line, f"✅ {tool_title} completed", log)
             elif status == "failed":
-                error_msg = str(output)[:100] if output else "failed"
-                self.call_from_thread(
-                    log.add_tool_call,
-                    tool_title,
-                    "error",
-                    "",
-                    "",
-                    error_msg,
-                )
+                output = update.get("rawOutput") or update.get("output") or update.get("result")
+                error_msg = str(output)[:50] if output else "failed"
+                self.call_from_thread(self._show_thinking_line, f"❌ {tool_title}: {error_msg}", log)
 
         async def on_plan(entries: list[dict]) -> None:
-            """Handle plan updates - ALWAYS visible."""
+            """Handle plan updates - show in thinking logs (toggleable)."""
             if entries:
-                plan_text = f"Plan: {len(entries)} tasks"
-                for i, entry in enumerate(entries[:5], 1):
-                    task = entry.get("content", entry.get("title", ""))[:50]
-                    plan_text += f"\n  {i}. {task}"
-                if len(entries) > 5:
-                    plan_text += f"\n  ... and {len(entries) - 5} more"
-                self.call_from_thread(log.add_thinking, plan_text, "planning")
+                plan_text = f"📋 Plan: {len(entries)} tasks"
+                self.call_from_thread(self._show_thinking_line, plan_text, log)
 
         async def on_permission_request(options: list[dict], tool_call: dict) -> str:
             tool_name = tool_call.get("title", "unknown")
@@ -15333,12 +15268,12 @@ team:
         t = Text()
         t.append("\n\n\n")
         goodbye_art = """
-  ██████╗  ██████╗  ██████╗ ██████╗ ██████╗ ██╗   ██╗███████╗██╗
- ██╔════╝ ██╔═══██╗██╔═══██╗██╔══██╗██╔══██╗╚██╗ ██╔╝██╔════╝██║
- ██║  ██╗ ██║   ██║██║   ██║██║  ██║██████╦╝ ╚████╔╝ █████╗  ██║
- ██║  ╚██╗██║   ██║██║   ██║██║  ██║██╔══██╗  ╚██╔╝  ██╔══╝  ╚═╝
- ╚██████╔╝╚██████╔╝╚██████╔╝██████╔╝██████╦╝   ██║   ███████╗██╗
-  ╚═════╝  ╚═════╝  ╚═════╝ ╚═════╝ ╚═════╝    ╚═╝   ╚══════╝╚═╝
+   ______                ____               __
+  / ____/___  ____  ____/ / /_  __  _____  / /
+ / / __/ __ \\/ __ \\/ __  / __ \\/ / / / _ \\/ /
+/ /_/ / /_/ / /_/ / /_/ / /_/ / /_/ /  __/_/
+\\____/\\____/\\____/\\__,_/_.___/\\__, /\\___(_)
+                             /____/
 """
         for i, line in enumerate(goodbye_art.strip().split("\n")):
             color = GRADIENT[i % len(GRADIENT)]
