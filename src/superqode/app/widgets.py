@@ -704,18 +704,17 @@ class ConversationLog(RichLog):
 
     def _update_console_width(self) -> None:
         """Update the internal Rich console width - FORCE UNLIMITED (NO CHARACTER LIMITS)."""
-        # Get actual terminal width to use as maximum
+        # Get actual terminal width - use a very large value to prevent truncation
         import shutil
 
         try:
             terminal_width = shutil.get_terminal_size().columns
-            # Use terminal width or a very large value (9999) to prevent truncation
-            target_width = terminal_width if terminal_width > 0 else 9999
+            # Use terminal width * 2 to ensure no truncation, minimum 200
+            target_width = max(terminal_width * 2, 200) if terminal_width > 0 else 500
         except Exception:
-            target_width = 9999  # Very large fallback
+            target_width = 500  # Large fallback
 
-        # Set console width to a very large value to prevent any truncation
-        # Try multiple possible attribute names for the internal console
+        # Set console width on all possible console attributes
         console_attrs = [
             "_console",
             "console",
@@ -730,14 +729,14 @@ class ConversationLog(RichLog):
                 if hasattr(self, attr):
                     console = getattr(self, attr)
                     if console and hasattr(console, "width"):
-                        # Set to very large value to prevent truncation
                         console.width = target_width
-                        # Also try to set legacy_width if it exists
                         if hasattr(console, "legacy_width"):
                             console.legacy_width = target_width
-                        # Try to set max_width if it exists
                         if hasattr(console, "max_width"):
                             console.max_width = target_width
+                        # Also set soft_wrap to True for natural wrapping
+                        if hasattr(console, "soft_wrap"):
+                            console.soft_wrap = True
             except Exception:
                 continue
 
@@ -806,18 +805,19 @@ class ConversationLog(RichLog):
 
     def write(self, *args, **kwargs):
         """Override write to ensure console width is always correct - NO LIMITS."""
-        # Ensure console width is updated before writing - force unlimited
+        # Ensure console width is updated before writing
         self._update_console_width()
-        # Also try to access and modify the console directly
-        try:
-            # Try to get the internal console from RichLog
-            if hasattr(self, "_console"):
-                self._console.width = None
-            if hasattr(self, "console"):
-                self.console.width = None
-        except Exception:
-            pass
-        return super().write(*args, **kwargs)
+
+        # Process args to ensure Text objects have proper overflow handling
+        processed_args = []
+        for arg in args:
+            if isinstance(arg, Text):
+                # Ensure Text uses fold overflow for natural wrapping
+                if not hasattr(arg, "overflow") or arg.overflow != "fold":
+                    arg.overflow = "fold"
+            processed_args.append(arg)
+
+        return super().write(*processed_args, **kwargs)
 
     def add_system(self, text: str):
         self._messages.append(("system", text, ""))
@@ -984,6 +984,7 @@ class ConversationLog(RichLog):
 
         try:
             from time import monotonic
+
             self._session_start_time = monotonic()
         except Exception:
             pass
@@ -1139,12 +1140,14 @@ class ConversationLog(RichLog):
             command: Command if it's a shell tool
             output: Tool output/result
         """
-        self._tool_calls.append({
-            "name": tool_name,
-            "status": status,
-            "path": file_path,
-            "command": command,
-        })
+        self._tool_calls.append(
+            {
+                "name": tool_name,
+                "status": status,
+                "path": file_path,
+                "command": command,
+            }
+        )
 
         # Status icons and colors
         status_map = {
@@ -1179,14 +1182,16 @@ class ConversationLog(RichLog):
         line.append(tool_name, style=THEME["text"])
 
         if file_path:
+            # Show full file path - let widget handle wrapping
             line.append(f"  {file_path}", style=THEME["dim"])
         elif command:
-            cmd_short = command[:40] + "..." if len(command) > 40 else command
+            # Show more of the command - 100 chars instead of 40
+            cmd_short = command[:100] + "..." if len(command) > 100 else command
             line.append(f"  $ {cmd_short}", style=THEME["dim"])
 
         if output and status in ("success", "error"):
-            output_short = output[:50] + "..." if len(output) > 50 else output
-            line.append(f"\n    → {output_short}", style=THEME["muted"])
+            # Show full output - no truncation, let the widget handle wrapping
+            line.append(f"\n    → {output}", style=THEME["muted"])
 
         line.append("\n")
         self.write(line)
@@ -1216,6 +1221,7 @@ class ConversationLog(RichLog):
         if hasattr(self, "_session_start_time") and self._session_start_time:
             try:
                 from time import monotonic
+
                 duration = monotonic() - self._session_start_time
             except Exception:
                 pass

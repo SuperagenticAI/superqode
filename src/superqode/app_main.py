@@ -514,6 +514,7 @@ class SuperQodeApp(App):
     is_busy = reactive(False)
     sidebar_visible = reactive(False)
     show_thinking_logs = reactive(True)  # Toggle for thinking logs visibility
+    show_verbose_agent_logs = reactive(False)  # Show raw [agent] session logs (verbose mode)
     approval_mode = reactive(
         "ask"
     )  # "auto", "ask", "deny" - default to ask for safety - permission handling mode
@@ -1579,6 +1580,11 @@ class SuperQodeApp(App):
         """Toggle visibility of thinking/log output."""
         self.show_thinking_logs = not self.show_thinking_logs
         log = self.query_one("#log", ConversationLog)
+
+        # Also toggle on the current TUI logger if one exists
+        if hasattr(self, "_current_tui_logger") and self._current_tui_logger:
+            self._current_tui_logger.logger.config.show_thinking = self.show_thinking_logs
+
         if self.show_thinking_logs:
             log.add_info("💭 Thinking logs: ON - you'll see agent's work")
         else:
@@ -3234,6 +3240,8 @@ class SuperQodeApp(App):
             self._health_cmd(args, log)
         elif c == "mode":
             self._set_approval_mode(args, log)
+        elif c == "log":
+            self._handle_log_verbosity(args, log)
         elif c == "redo":
             self._handle_redo(log)
         elif c == "checkpoints":
@@ -3707,6 +3715,100 @@ team:
             log.add_error(f"Invalid mode: {mode}")
             log.add_system("Valid modes: auto, ask, deny")
 
+    def _handle_log_verbosity(self, args: str, log: ConversationLog):
+        """Handle :log command to control log verbosity."""
+        from superqode.logging import LogVerbosity
+
+        level = args.strip().lower()
+
+        if not level:
+            # Show current verbosity settings
+            t = Text()
+            t.append("\n  📋 ", style=f"bold {THEME['purple']}")
+            t.append("Log Verbosity Settings\n\n", style=f"bold {THEME['purple']}")
+
+            t.append("  Controls how much detail is shown in agent logs\n\n", style=THEME["muted"])
+
+            # Get current verbosity
+            current_verbosity = "normal"
+            if hasattr(self, "_current_tui_logger") and self._current_tui_logger:
+                current_verbosity = self._current_tui_logger.logger.config.verbosity.value
+
+            levels = [
+                ("minimal", "◇", THEME["muted"], "Status only - no content"),
+                ("normal", "◆", THEME["cyan"], "Summarized tool outputs"),
+                ("verbose", "◈", THEME["purple"], "Full outputs with syntax highlighting"),
+            ]
+
+            for lvl, icon, color, desc in levels:
+                current = " ◀ current" if current_verbosity == lvl else ""
+                t.append(f"    {icon} ", style=color)
+                t.append(f":log {lvl:<10}", style=f"bold {color}")
+                t.append(f" — {desc}", style=THEME["muted"])
+                if current:
+                    t.append(current, style=f"bold {color}")
+                t.append("\n", style="")
+
+            t.append("\n  💡 ", style=THEME["muted"])
+            t.append("Ctrl+T toggles thinking logs on/off\n", style=THEME["dim"])
+            t.append(f"     Thinking logs: ", style=THEME["dim"])
+            thinking_status = "ON" if self.show_thinking_logs else "OFF"
+            thinking_color = THEME["success"] if self.show_thinking_logs else THEME["muted"]
+            t.append(f"{thinking_status}\n", style=f"bold {thinking_color}")
+
+            self._show_command_output(log, t)
+            return
+
+        # Map level names to LogVerbosity
+        verbosity_map = {
+            "minimal": LogVerbosity.MINIMAL,
+            "min": LogVerbosity.MINIMAL,
+            "normal": LogVerbosity.NORMAL,
+            "default": LogVerbosity.NORMAL,
+            "verbose": LogVerbosity.VERBOSE,
+            "full": LogVerbosity.VERBOSE,
+            "debug": LogVerbosity.VERBOSE,
+        }
+
+        if level in verbosity_map:
+            new_verbosity = verbosity_map[level]
+
+            # Update the current TUI logger if one exists
+            if hasattr(self, "_current_tui_logger") and self._current_tui_logger:
+                self._current_tui_logger.set_verbosity(new_verbosity)
+
+            # Update verbose agent logs flag
+            self.show_verbose_agent_logs = new_verbosity == LogVerbosity.VERBOSE
+
+            icons = {"minimal": "◇", "normal": "◆", "verbose": "◈"}
+            colors = {
+                "minimal": THEME["muted"],
+                "normal": THEME["cyan"],
+                "verbose": THEME["purple"],
+            }
+            descs = {
+                "minimal": "Showing status only - no output content",
+                "normal": "Showing summarized outputs (up to 200 chars)",
+                "verbose": "Showing full outputs + raw agent session logs",
+            }
+
+            # Normalize level name
+            display_level = (
+                "minimal"
+                if level in ("min",)
+                else "verbose"
+                if level in ("full", "debug")
+                else level
+            )
+
+            log.add_success(
+                f"{icons.get(display_level, '◆')} Log verbosity: {display_level.upper()}"
+            )
+            log.add_system(descs.get(display_level, ""))
+        else:
+            log.add_error(f"Invalid verbosity: {level}")
+            log.add_system("Valid levels: minimal, normal, verbose")
+
     # ========================================================================
     # Model Query Interception
     # ========================================================================
@@ -3942,8 +4044,9 @@ team:
         provider = self._pure_mode.session.provider
         model = self._pure_mode.session.model
 
-        # Set up callbacks for BYOK/Local to show thinking logs like ACP
-        # Clean, minimal display - just show what action is happening, not content
+        # Set up callbacks for BYOK/Local modes
+        # Tool calls are ALWAYS visible (the agent's actual work)
+        # Thinking logs are toggleable with Ctrl+T
         from superqode.providers.registry import PROVIDERS, ProviderCategory
 
         provider_def = PROVIDERS.get(provider)
@@ -3960,28 +4063,45 @@ team:
                     raise
 
         def on_tool_call(name: str, args: dict):
-            """Handle tool call - minimal display: just tool + target."""
+            """Handle tool call - ALWAYS visible."""
             file_path = args.get("path", args.get("file_path", args.get("filePath", "")))
             command = args.get("command", "")
-            # Show just the action, no content
             _safe_call(log.add_tool_call, name, "running", file_path, command, "")
 
         def on_tool_result(name: str, result):
-            """Handle tool result - minimal display: just success/failure."""
+            """Handle tool result - ALWAYS visible with JSON parsing."""
             from superqode.tools.base import ToolResult
 
             if isinstance(result, ToolResult):
                 status = "success" if result.success else "error"
-                # Don't show output content - just the status
-                _safe_call(log.add_tool_call, name, status, "", "", "")
+                output = result.output if result.output else result.error
+                output_str = str(output) if output else ""
+
+                # Try to parse and display JSON nicely
+                if status == "success" and output_str:
+                    formatted = self._format_tool_output(name, output_str, log)
+                    if formatted:
+                        return
+
+                # Fallback - show full output, no truncation
+                _safe_call(log.add_tool_call, name, status, "", "", output_str)
             else:
-                _safe_call(log.add_tool_call, name, "success", "", "", "")
+                output_str = str(result) if result else ""
+
+                # Try JSON parsing first
+                if output_str:
+                    formatted = self._format_tool_output(name, output_str, log)
+                    if formatted:
+                        return
+
+                # Show full output, no truncation
+                _safe_call(log.add_tool_call, name, "success", "", "", output_str)
 
         async def on_thinking_async(text: str):
-            """Handle thinking - suppress all verbose output for local models."""
-            # For local models, don't show any thinking logs - they're too verbose
-            # The scanning animation is enough feedback
-            pass
+            """Handle thinking - toggleable with Ctrl+T."""
+            if text and text.strip():
+                # Use _show_thinking_line which respects show_thinking_logs toggle
+                _safe_call(self._show_thinking_line, f"🧠 {text}", log)
 
         # Set callbacks on pure_mode (for both local and cloud providers)
         self._pure_mode.on_tool_call = on_tool_call
@@ -4719,6 +4839,18 @@ team:
         files_modified: list[str] = []
         files_read: list[str] = []
 
+        # Buffer for accumulating thinking chunks
+        thinking_buffer: list[str] = []
+        last_thinking_time = [0.0]  # Use list to allow mutation in nested function
+
+        def _flush_thinking_buffer():
+            """Flush accumulated thinking chunks to display."""
+            if thinking_buffer:
+                full_text = "".join(thinking_buffer).strip()
+                if full_text:
+                    self.call_from_thread(self._show_thinking_line, f"💭 {full_text}", log)
+                thinking_buffer.clear()
+
         def _pick_option(options: list[dict], preferred_kinds: list[str]) -> str:
             for kind in preferred_kinds:
                 match = next((o for o in options if o.get("kind") == kind), None)
@@ -4731,18 +4863,78 @@ team:
         async def on_message(text: str) -> None:
             """Handle agent message chunks - stream to response area."""
             if text:
+                # Flush any pending thinking before showing response
+                _flush_thinking_buffer()
+
                 text_parts.append(text)
-                # Stream response chunks directly - don't show in thinking logs
+                # Stream response chunks directly - always visible
                 self.call_from_thread(log.add_response_chunk, text)
 
         async def on_thinking(text: str) -> None:
-            """Handle agent thinking - toggleable with Ctrl+T."""
-            if text:
-                # Use _show_thinking_line which respects show_thinking_logs toggle
-                self.call_from_thread(self._show_thinking_line, f"💭 {text}", log)
+            """Handle agent thinking/session logs - toggleable with Ctrl+T."""
+            import time
+
+            if not text:
+                return
+
+            # Filter out raw agent stdout logs - these are verbose session logs
+            # The [agent] prefix comes from non-JSON output from the agent process
+            if text.startswith("[agent]"):
+                # Only show in verbose mode (`:log verbose`)
+                if self.show_verbose_agent_logs:
+                    clean_text = text[8:]  # Remove "[agent] " prefix
+                    self.call_from_thread(self._show_thinking_line, f"📡 {clean_text}", log)
+                return
+
+            # Filter out other verbose prefixes
+            if text.startswith("[error]") or text.startswith("[startup"):
+                # Show errors but in a cleaner format
+                clean_text = text.replace("[error] ", "").replace("[startup error] ", "")
+                self.call_from_thread(log.add_error, clean_text)
+                return
+
+            # Buffer thinking chunks and display as complete thoughts
+            # This prevents word-by-word display when chunks come in small pieces
+            current_time = time.time()
+            thinking_buffer.append(text)
+            buffer_text = "".join(thinking_buffer)
+
+            # Only flush when we have a complete thought:
+            # 1. Buffer ends with sentence-ending punctuation followed by space or end
+            # 2. Buffer has accumulated substantial text (>150 chars with any word boundary)
+            # 3. Text ends with double newline (paragraph break)
+            buffer_stripped = buffer_text.rstrip()
+
+            # Check for complete sentences (punctuation followed by end or space)
+            ends_with_sentence = (
+                buffer_stripped.endswith(".")
+                or buffer_stripped.endswith("!")
+                or buffer_stripped.endswith("?")
+                or buffer_stripped.endswith(":")
+            ) and (
+                text.endswith((".", "!", "?", ":"))  # Chunk itself ends with punct
+                or text.endswith(" ")  # Or followed by space
+                or len(buffer_text) > 50  # Or buffer is substantial
+            )
+
+            # Check for paragraph breaks
+            has_paragraph_break = "\n\n" in buffer_text or buffer_text.endswith("\n")
+
+            # Check for substantial accumulated text
+            has_enough_text = len(buffer_text) > 150 and buffer_text.rstrip()[-1] in " \n.!?:"
+
+            should_flush = ends_with_sentence or has_paragraph_break or has_enough_text
+
+            if should_flush:
+                _flush_thinking_buffer()
+
+            last_thinking_time[0] = current_time
 
         async def on_tool_call(tool_call: dict) -> None:
-            """Handle tool calls - show in thinking logs (toggleable)."""
+            """Handle tool calls - ALWAYS visible (this is the agent's actual work)."""
+            # Flush any pending thinking before showing tool call
+            _flush_thinking_buffer()
+
             title = tool_call.get("title", "")
             raw_input = tool_call.get("rawInput", {})
             kind = tool_call.get("kind", "")
@@ -4757,32 +4949,54 @@ team:
                     if file_path not in files_read:
                         files_read.append(file_path)
 
-            # Show tool call in thinking logs (toggleable with Ctrl+T)
+            # ALWAYS show tool calls - this is the agent's actual work
             command = raw_input.get("command", "")
-            if command:
-                self.call_from_thread(self._show_thinking_line, f"🔧 {title}: $ {command[:50]}", log)
-            elif file_path:
-                self.call_from_thread(self._show_thinking_line, f"🔧 {title}: {file_path}", log)
-            else:
-                self.call_from_thread(self._show_thinking_line, f"🔧 {title}", log)
+            self.call_from_thread(
+                log.add_tool_call,
+                title,
+                "running",
+                file_path,
+                command,
+            )
 
         async def on_tool_update(update: dict) -> None:
-            """Handle tool updates - show in thinking logs (toggleable)."""
+            """Handle tool updates - ALWAYS visible with full JSON parsing."""
             status = update.get("status", "")
+            output = update.get("rawOutput") or update.get("output") or update.get("result")
             tool_title = update.get("title") or "Tool"
 
             if status == "completed":
-                self.call_from_thread(self._show_thinking_line, f"✅ {tool_title} completed", log)
+                # Try to parse and display JSON nicely
+                formatted = self._format_tool_output(tool_title, output, log)
+                if not formatted:
+                    # Fallback to simple display - show full output, no truncation
+                    output_str = str(output) if output else ""
+                    self.call_from_thread(
+                        log.add_tool_call,
+                        tool_title,
+                        "success",
+                        "",
+                        "",
+                        output_str,
+                    )
             elif status == "failed":
-                output = update.get("rawOutput") or update.get("output") or update.get("result")
-                error_msg = str(output)[:50] if output else "failed"
-                self.call_from_thread(self._show_thinking_line, f"❌ {tool_title}: {error_msg}", log)
+                error_msg = str(output) if output else "failed"
+                self.call_from_thread(
+                    log.add_tool_call,
+                    tool_title,
+                    "error",
+                    "",
+                    "",
+                    error_msg,
+                )
 
         async def on_plan(entries: list[dict]) -> None:
-            """Handle plan updates - show in thinking logs (toggleable)."""
+            """Handle plan updates - ALWAYS visible."""
             if entries:
-                plan_text = f"📋 Plan: {len(entries)} tasks"
-                self.call_from_thread(self._show_thinking_line, plan_text, log)
+                # Plans are important - always show
+                self.call_from_thread(
+                    log.add_thinking, f"📋 Plan: {len(entries)} tasks", "planning"
+                )
 
         async def on_permission_request(options: list[dict], tool_call: dict) -> str:
             tool_name = tool_call.get("title", "unknown")
@@ -4889,7 +5103,9 @@ team:
                     "files_modified": stats.get("files_modified", files_modified),
                     "files_read": stats.get("files_read", files_read),
                     "duration": stats.get("duration", 0.0),
-                    "file_diffs": self._compute_file_diffs(stats.get("files_modified", files_modified)),
+                    "file_diffs": self._compute_file_diffs(
+                        stats.get("files_modified", files_modified)
+                    ),
                 }
                 self.call_from_thread(
                     self._show_final_outcome, response_text, display_name, action_summary, log
@@ -8070,6 +8286,354 @@ team:
                 msg = f"🔴 {msg}"
 
         return msg
+
+    def _format_tool_output(self, tool_name: str, output: Any, log: ConversationLog) -> bool:
+        """Format and display tool output with proper JSON parsing.
+
+        Returns True if output was formatted and displayed, False otherwise.
+        """
+        import json
+
+        if not output:
+            return False
+
+        output_str = str(output)
+
+        # Try to parse as JSON
+        try:
+            # Check if it looks like JSON
+            stripped = output_str.strip()
+            if not stripped.startswith("{") and not stripped.startswith("["):
+                return False
+
+            data = json.loads(output_str)
+
+            tool_lower = tool_name.lower()
+
+            # Handle TODO/Task lists
+            if "todo" in tool_lower or self._is_todo_list(data):
+                self._display_todo_list(data, log)
+                return True
+
+            # Handle file search results (glob, grep, search)
+            if any(x in tool_lower for x in ("glob", "search", "grep", "find")):
+                self._display_file_results(data, tool_name, log)
+                return True
+
+            # Handle task lists (Claude Code style)
+            if "task" in tool_lower and isinstance(data, list):
+                self._display_task_list(data, log)
+                return True
+
+            # Handle errors
+            if isinstance(data, dict) and ("error" in data or "errors" in data):
+                self._display_error_result(data, log)
+                return True
+
+            # Handle plan entries
+            if isinstance(data, list) and data and isinstance(data[0], dict) and "step" in data[0]:
+                self._display_plan(data, log)
+                return True
+
+            # Handle generic success/result dicts
+            if isinstance(data, dict) and ("success" in data or "result" in data or "ok" in data):
+                self._display_success_result(data, tool_name, log)
+                return True
+
+            # For other JSON, show formatted
+            if isinstance(data, list) and len(data) <= 10:
+                self._display_generic_list(data, tool_name, log)
+                return True
+            elif isinstance(data, dict) and len(data) <= 6:
+                self._display_generic_dict(data, tool_name, log)
+                return True
+
+        except (json.JSONDecodeError, TypeError, KeyError):
+            pass
+
+        return False
+
+    def _is_todo_list(self, data: Any) -> bool:
+        """Check if data looks like a TODO list."""
+        if not isinstance(data, list) or not data:
+            return False
+        first = data[0]
+        if not isinstance(first, dict):
+            return False
+        return any(k in first for k in ("status", "title", "priority", "completed"))
+
+    def _display_todo_list(self, data: Any, log: ConversationLog) -> None:
+        """Display a TODO list with nice formatting."""
+        from rich.text import Text
+
+        if isinstance(data, dict) and "todos" in data:
+            data = data["todos"]
+
+        if not isinstance(data, list):
+            return
+
+        if not data:
+            self.call_from_thread(log.write, Text("  📋 No tasks", style="#71717a"))
+            return
+
+        # Count statuses
+        completed = sum(
+            1 for t in data if isinstance(t, dict) and t.get("status") in ("completed", "done")
+        )
+        in_progress = sum(
+            1 for t in data if isinstance(t, dict) and t.get("status") in ("in_progress", "active")
+        )
+        pending = sum(
+            1 for t in data if isinstance(t, dict) and t.get("status") in ("pending", None)
+        )
+
+        # Header with summary
+        parts = []
+        if completed:
+            parts.append(f"✅ {completed}")
+        if in_progress:
+            parts.append(f"🔄 {in_progress}")
+        if pending:
+            parts.append(f"○ {pending}")
+
+        header = Text()
+        header.append("  📋 ", style="#06b6d4")
+        header.append(f"Tasks: {' · '.join(parts) if parts else 'none'}\n", style="#e4e4e7")
+        self.call_from_thread(log.write, header)
+
+        # Task items (limit to 8)
+        for item in data[:8]:
+            if not isinstance(item, dict):
+                continue
+
+            status = item.get("status", "pending")
+            title = item.get("title", item.get("name", item.get("description", str(item))))
+            priority = item.get("priority", "normal")
+
+            # Status icons
+            status_icons = {
+                "completed": ("✅", "#22c55e"),
+                "done": ("✅", "#22c55e"),
+                "in_progress": ("🔄", "#a855f7"),
+                "active": ("🔄", "#a855f7"),
+                "pending": ("○", "#71717a"),
+                "blocked": ("🚫", "#ef4444"),
+            }
+            icon, color = status_icons.get(status, ("○", "#71717a"))
+
+            # Priority styling
+            title_style = "#e4e4e7"
+            if priority in ("high", "important"):
+                title_style = "#f59e0b"
+            elif priority in ("critical", "urgent"):
+                title_style = "#ef4444"
+            elif status in ("completed", "done"):
+                title_style = "#71717a"
+
+            line = Text()
+            line.append(f"    {icon} ", style=color)
+            line.append(f"{str(title)}\n", style=title_style)
+            self.call_from_thread(log.write, line)
+
+        if len(data) > 8:
+            more = Text()
+            more.append(f"    ... and {len(data) - 8} more\n", style="#71717a")
+            self.call_from_thread(log.write, more)
+
+    def _display_file_results(self, data: Any, tool_name: str, log: ConversationLog) -> None:
+        """Display file search results."""
+        from rich.text import Text
+
+        files = []
+        if isinstance(data, list):
+            files = [str(f) for f in data if f]
+        elif isinstance(data, dict):
+            files = data.get("files", data.get("matches", data.get("results", [])))
+            if not isinstance(files, list):
+                return
+
+        if not files:
+            self.call_from_thread(log.write, Text("  🔍 No matches found\n", style="#71717a"))
+            return
+
+        # Header
+        header = Text()
+        header.append("  🔍 ", style="#06b6d4")
+        header.append(f"Found {len(files)} file{'s' if len(files) != 1 else ''}\n", style="#e4e4e7")
+        self.call_from_thread(log.write, header)
+
+        # File list (limit to 6)
+        for f in files[:6]:
+            ext = str(f).split(".")[-1].lower() if "." in str(f) else ""
+            icons = {
+                "py": "🐍",
+                "js": "📜",
+                "ts": "📜",
+                "rs": "🦀",
+                "go": "🐹",
+                "md": "📝",
+                "json": "⚙️",
+                "yaml": "⚙️",
+            }
+            icon = icons.get(ext, "📄")
+
+            path_str = str(f)
+            if len(path_str) > 55:
+                path_str = "..." + path_str[-52:]
+
+            line = Text()
+            line.append(f"    {icon} ", style="#52525b")
+            line.append(f"{path_str}\n", style="#06b6d4")
+            self.call_from_thread(log.write, line)
+
+        if len(files) > 6:
+            more = Text()
+            more.append(f"    ... and {len(files) - 6} more\n", style="#71717a")
+            self.call_from_thread(log.write, more)
+
+    def _display_task_list(self, data: list, log: ConversationLog) -> None:
+        """Display Claude Code style task list."""
+        from rich.text import Text
+
+        header = Text()
+        header.append("  📝 ", style="#a855f7")
+        header.append(f"{len(data)} task{'s' if len(data) != 1 else ''}\n", style="#e4e4e7")
+        self.call_from_thread(log.write, header)
+
+        for task in data[:5]:
+            if not isinstance(task, dict):
+                continue
+
+            status = task.get("status", "pending")
+            subject = task.get("subject", task.get("title", ""))
+            task_id = task.get("id", "")
+
+            icons = {
+                "completed": ("✅", "#22c55e"),
+                "in_progress": ("⏳", "#a855f7"),
+                "pending": ("○", "#71717a"),
+            }
+            icon, color = icons.get(status, ("○", "#71717a"))
+
+            line = Text()
+            line.append(f"    {icon} ", style=color)
+            if task_id:
+                line.append(f"[{task_id}] ", style="#52525b")
+            line.append(
+                f"{str(subject)}\n", style="#e4e4e7" if status != "completed" else "#71717a"
+            )
+            self.call_from_thread(log.write, line)
+
+    def _display_error_result(self, data: dict, log: ConversationLog) -> None:
+        """Display error result."""
+        from rich.text import Text
+
+        errors = data.get("errors", [data.get("error")]) if isinstance(data, dict) else []
+
+        header = Text()
+        header.append("  ⚠️ ", style="#ef4444")
+        header.append(f"{len(errors)} error{'s' if len(errors) != 1 else ''}\n", style="#ef4444")
+        self.call_from_thread(log.write, header)
+
+        for err in errors[:3]:
+            msg = err.get("message", str(err)) if isinstance(err, dict) else str(err)
+            line = Text()
+            line.append("    ✕ ", style="#ef4444")
+            line.append(f"{str(msg)}\n", style="#ef4444")
+            self.call_from_thread(log.write, line)
+
+    def _display_plan(self, data: list, log: ConversationLog) -> None:
+        """Display plan steps."""
+        from rich.text import Text
+
+        header = Text()
+        header.append("  📋 ", style="#a855f7")
+        header.append("Plan:\n", style="#e4e4e7")
+        self.call_from_thread(log.write, header)
+
+        for i, step in enumerate(data[:5], 1):
+            if not isinstance(step, dict):
+                continue
+
+            desc = step.get("description", step.get("step", step.get("action", "")))
+            status = step.get("status", "pending")
+
+            icon = "✓" if status in ("completed", "done") else str(i)
+            color = "#22c55e" if status in ("completed", "done") else "#a855f7"
+
+            line = Text()
+            line.append(f"    {icon}. ", style=color)
+            line.append(f"{str(desc)}\n", style="#e4e4e7")
+            self.call_from_thread(log.write, line)
+
+    def _display_success_result(self, data: dict, tool_name: str, log: ConversationLog) -> None:
+        """Display success/result dict."""
+        from rich.text import Text
+
+        success = data.get("success", data.get("ok", True))
+        result_val = data.get("result", data.get("message", data.get("output", "")))
+
+        line = Text()
+        if success:
+            line.append("  ✓ ", style="#22c55e")
+            if result_val:
+                line.append(f"{str(result_val)}\n", style="#e4e4e7")
+            else:
+                line.append("Success\n", style="#22c55e")
+        else:
+            line.append("  ✕ ", style="#ef4444")
+            error = data.get("error", data.get("message", "Failed"))
+            line.append(f"{str(error)}\n", style="#ef4444")
+        self.call_from_thread(log.write, line)
+
+    def _display_generic_list(self, data: list, tool_name: str, log: ConversationLog) -> None:
+        """Display a generic list."""
+        from rich.text import Text
+
+        header = Text()
+        header.append(f"  ✦ {tool_name}: ", style="#a855f7")
+        header.append(f"{len(data)} items\n", style="#e4e4e7")
+        self.call_from_thread(log.write, header)
+
+        for item in data[:5]:
+            line = Text()
+            line.append("    • ", style="#52525b")
+
+            if isinstance(item, dict):
+                display = None
+                for key in ("name", "title", "path", "message", "value", "text"):
+                    if key in item:
+                        display = item[key]
+                        break
+                if display is None:
+                    display = str(item)
+                line.append(f"{str(display)}\n", style="#e4e4e7")
+            else:
+                line.append(f"{str(item)}\n", style="#e4e4e7")
+            self.call_from_thread(log.write, line)
+
+        if len(data) > 5:
+            more = Text()
+            more.append(f"    ... and {len(data) - 5} more\n", style="#71717a")
+            self.call_from_thread(log.write, more)
+
+    def _display_generic_dict(self, data: dict, tool_name: str, log: ConversationLog) -> None:
+        """Display a generic dict."""
+        from rich.text import Text
+
+        for key, val in list(data.items())[:4]:
+            line = Text()
+            line.append(f"  {key}: ", style="#a855f7")
+            val_str = str(val)
+            if len(val_str) > 50:
+                val_str = val_str[:47] + "..."
+            line.append(f"{val_str}\n", style="#e4e4e7")
+            self.call_from_thread(log.write, line)
+
+        if len(data) > 4:
+            more = Text()
+            more.append(f"  ... +{len(data) - 4} more fields\n", style="#71717a")
+            self.call_from_thread(log.write, more)
 
     def _strip_ansi(self, text: str) -> str:
         """Remove ANSI escape codes from text."""
@@ -15112,6 +15676,16 @@ team:
                 ],
             ),
             (
+                "📋 Log Verbosity",
+                THEME["cyan"],
+                [
+                    (":log", "Show current log verbosity"),
+                    (":log minimal", "Status only - no output content"),
+                    (":log normal", "Summarized outputs (default)"),
+                    (":log verbose", "Full outputs with highlighting"),
+                ],
+            ),
+            (
                 "⌨️ Keyboard Shortcuts",
                 THEME["gold"],
                 [
@@ -15256,6 +15830,7 @@ team:
 
     async def _exit_sequence_async(self, log: ConversationLog):
         """Await ACP/subprocess cleanup, then show goodbye and exit."""
+        # Stop ACP client
         if self._acp_client is not None:
             try:
                 await asyncio.wait_for(self._acp_client.stop(), timeout=2.0)
@@ -15263,6 +15838,21 @@ team:
                 pass
             self._acp_client = None
 
+        # Cancel all pending workers
+        try:
+            self.workers.cancel_all()
+        except Exception:
+            pass
+
+        # Cancel any pending asyncio tasks related to this app
+        try:
+            for task in asyncio.all_tasks():
+                if not task.done() and task != asyncio.current_task():
+                    task.cancel()
+        except Exception:
+            pass
+
+        # Show goodbye screen
         log.clear()
         term_width = shutil.get_terminal_size().columns
         t = Text()
@@ -15297,7 +15887,9 @@ team:
         t.append("Keep building amazing things!", style="italic #71717a")
         t.append(" 🚀\n\n\n", style="")
         log.write(t)
-        self.set_timer(1.0, lambda: self.exit())
+
+        # Exit after a short delay to show the goodbye screen
+        self.set_timer(0.5, lambda: self.exit())
 
     def _cleanup_on_exit(self):
         """Clean up all running processes and timers before exit."""
@@ -15316,8 +15908,13 @@ team:
                     pass
             self._agent_process = None
 
-        # ACP client is stopped in _exit_sequence_async (await stop() before exit)
-        # so asyncio subprocess transports close while the loop is still running.
+        # Force kill ACP client process if it exists (sync cleanup)
+        if self._acp_client is not None:
+            try:
+                if hasattr(self._acp_client, "_process") and self._acp_client._process:
+                    self._acp_client._process.terminate()
+            except Exception:
+                pass
 
         # Stop all timers
         if self._thinking_timer:
@@ -15335,6 +15932,23 @@ team:
         # Clear busy state
         self.is_busy = False
         self._permission_pending = False
+
+        # Stop any pending workers
+        try:
+            self.workers.cancel_all()
+        except Exception:
+            pass
+
+    def action_quit(self) -> None:
+        """Handle quit action (Ctrl+C) - clean up properly before exit."""
+        # Get the log widget
+        try:
+            log = self.query_one("#conversation-log", ConversationLog)
+            self._do_exit(log)
+        except Exception:
+            # Fallback: just clean up and exit immediately
+            self._cleanup_on_exit()
+            self.exit()
 
     # ========================================================================
     # Coding Agent Features: Approval, Diff, Plan, History, File Viewer
