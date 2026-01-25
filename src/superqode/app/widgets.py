@@ -33,7 +33,8 @@ class GradientLogo(Static):
     """ASCII logo with purple→pink→orange gradient - BIG display."""
 
     def render(self) -> Text:
-        lines = ASCII_LOGO.strip().split("\n")
+        # Split and filter empty lines, but preserve leading whitespace
+        lines = [line for line in ASCII_LOGO.split("\n") if line.strip()]
         result = Text()
 
         for i, line in enumerate(lines):
