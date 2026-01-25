@@ -1,7 +1,7 @@
 # Goose AI
 # https://github.com/block/goose
 
-identity = "goose.ai"
+identity = "goose.block.xyz"
 name = "Goose"
 short_name = "goose"
 url = "https://github.com/block/goose"
@@ -13,7 +13,7 @@ publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
 description = "Goose is a developer tool that helps you write code faster by automating repetitive tasks."
 tags = ["automation", "productivity", "block"]
-run_command."*" = "goose"
+run_command."*" = "goose mcp"
 
 help = '''
 # Goose
@@ -48,9 +48,5 @@ What can I help you build today?
 '''
 
 [actions."*".install]
-command = "curl -fsSL https://github.com/block/goose/releases/latest/download/install.sh | bash"
-description = "Install Goose using the official installer"
-
-[actions."*".install_cargo]
-command = "cargo install goose"
-description = "Install Goose via Cargo (requires Rust)"
+command = "pipx install goose-ai"
+description = "Install Goose via pipx"

@@ -1,7 +1,7 @@
 # Schema defined in agent_schema.py
 # https://github.com/vtcode/vtcode
 
-identity = "vtcode.ai"
+identity = "vtcode.dev"
 name = "VT Code"
 short_name = "vtcode"
 url = "https://github.com/vtcode/vtcode"
@@ -13,7 +13,7 @@ publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
 description = "A versatile coding agent implementing ACP for seamless integration with compatible development environments."
 tags = ["versatile", "acp", "integration"]
-run_command."*" = "vtcode-acp"
+run_command."*" = "vtcode --acp"
 
 help = '''
 # VT Code

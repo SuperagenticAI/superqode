@@ -1,7 +1,7 @@
 # Schema defined in agent_schema.py
 # https://github.com/stakpak/stakpak
 
-identity = "stakpak.ai"
+identity = "stakpak.dev"
 name = "Stakpak"
 short_name = "stakpak"
 url = "https://github.com/stakpak/stakpak"
@@ -13,7 +13,7 @@ publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
 description = "An ACP-compatible agent focused on providing comprehensive code assistance and collaboration features."
 tags = ["code-assistance", "collaboration", "acp"]
-run_command."*" = "stakpak"
+run_command."*" = "stakpak --acp"
 
 help = '''
 # Stakpak

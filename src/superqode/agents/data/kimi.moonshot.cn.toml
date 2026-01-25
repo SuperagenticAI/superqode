@@ -1,6 +1,6 @@
 # Schema defined in agent_schema.py
 # https://github.com/MoonshotAI/kimi-cli
-identity = "kimi.com"
+identity = "kimi.moonshot.cn"
 name = "Kimi CLI"
 short_name = "kimi"
 url = "https://www.kimi.com/"

@@ -1,7 +1,7 @@
 # Schema defined in agent_schema.py
 # https://github.com/cagent/cagent
 
-identity = "cagent.ai"
+identity = "cagent.dev"
 name = "cagent"
 short_name = "cagent"
 url = "https://github.com/cagent/cagent"
@@ -13,7 +13,7 @@ publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
 description = "A powerful, easy-to-use, customizable multi-agent runtime that orchestrates AI agents."
 tags = ["multi-agent", "orchestration", "runtime"]
-run_command."*" = "cagent"
+run_command."*" = "cagent --acp"
 
 help = '''
 # cagent

@@ -1,19 +1,19 @@
 # Schema defined in agent_schema.py
-# https://github.com/fastagent/fast-agent
+# https://github.com/evalstate/fast-agent
 
 identity = "fastagent.ai"
 name = "fast-agent"
-short_name = "fastagent"
-url = "https://github.com/fastagent/fast-agent"
+short_name = "fast-agent"
+url = "https://github.com/evalstate/fast-agent"
 protocol = "acp"
 author_name = "fast-agent"
-author_url = "https://github.com/fastagent"
+author_url = "https://github.com/evalstate"
 publisher_name = "SuperQode Team"
 publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
-description = "Create and interact with sophisticated Agents and Workflows in minutes."
-tags = ["workflows", "sophisticated", "rapid"]
-run_command."*" = "fast-agent-acp"
+description = "Create and interact with sophisticated Agents and Workflows in minutes. MCP native."
+tags = ["workflows", "mcp", "rapid"]
+run_command."*" = "fast-agent --acp"
 
 help = '''
 # fast-agent
@@ -25,33 +25,42 @@ fast-agent allows you to create and interact with sophisticated Agents and Workf
 ## Key Features
 
 - **Rapid Development**: Create agents and workflows in minutes
+- **MCP Native**: Built-in Model Context Protocol support
 - **Sophisticated**: Support for complex agent interactions
 - **Workflows**: Built-in workflow management
 - **ACP Compatible**: Full Agent Client Protocol support
 
 ## Installation
 
-Install fast-agent via npm:
+Install fast-agent via uv (recommended):
 
 ```bash
-npm install -g fast-agent
+uv tool install fast-agent-mcp
 ```
 
-Run ACP mode:
+Or via pip:
 
 ```bash
-fast-agent-acp
+pip install fast-agent-mcp
+```
+
+## ACP Mode
+
+Run with ACP support:
+
+```bash
+fast-agent --acp
 ```
 
 **Requirements:**
-- Node.js (v16 or higher)
-- npm
+- Python 3.10+
+- uv (recommended) or pip
 
 ---
 
-**GitHub**: https://github.com/fastagent/fast-agent
+**GitHub**: https://github.com/evalstate/fast-agent
 '''
 
 [actions."*".install]
-command = "npm install -g fast-agent"
-description = "Install fast-agent"
+command = "uv tool install fast-agent-mcp"
+description = "Install fast-agent via uv"

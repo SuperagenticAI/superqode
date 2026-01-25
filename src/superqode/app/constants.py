@@ -2,19 +2,19 @@
 SuperQode App Constants - Theme, Icons, Colors, and Messages.
 """
 
-# Clean ASCII art for SUPERQODE - Slant style
+# Clean ASCII art for SUPERQODE - Slant style (from figlet)
 ASCII_LOGO = """
-   _____                       ____          __
-  / ___/__  ______  ___  _____/ __ \\____  __/ /__
-  \\__ \\/ / / / __ \\/ _ \\/ ___/ / / / __ \\/ _  / _ \\
+   _____                       ____            __
+  / ___/__  ______  ___  _____/ __ \\____  ____/ /__
+  \\__ \\/ / / / __ \\/ _ \\/ ___/ / / / __ \\/ __  / _ \\
  ___/ / /_/ / /_/ /  __/ /  / /_/ / /_/ / /_/ /  __/
 /____/\\__,_/ .___/\\___/_/   \\___\\_\\____/\\__,_/\\___/
           /_/
 """
 
 # Compact logo for header
-COMPACT_LOGO = """   _____                       ____          __
-  / ___/__  ______  ___  _____/ __ \\____  __/ /__
+COMPACT_LOGO = """   _____                       ____            __
+  / ___/__  ______  ___  _____/ __ \\____  ____/ /__
 /____/\\__,_/ .___/\\___/_/   \\___\\_\\____/\\__,_/\\___/"""
 
 TAGLINE_PART1 = "Orchestrate Coding Agents"
@@ -137,27 +137,46 @@ ICONS = {
     "exit": "👋",
 }
 
+# 14 Official ACP Agents - Colors
 AGENT_COLORS = {
-    "claude": "#d97706",
-    "opencode": "#22c55e",
-    "codex": "#10b981",
-    "gemini": "#4285f4",
-    "goose": "#8b5cf6",
-    "kimi": "#f43f5e",
-    "augment": "#06b6d4",
-    "openhands": "#f97316",
+    # Tier 1 - Major Agents
+    "gemini": "#4285f4",  # Google Blue
+    "claude": "#d97706",  # Anthropic Orange
+    "claude-code": "#d97706",  # Anthropic Orange
+    "codex": "#10b981",  # OpenAI Green
+    "junie": "#fe315d",  # JetBrains Pink
+    "goose": "#8b5cf6",  # Block Purple
+    "kimi": "#5b21b6",  # Moonshot Deep Purple
+    "opencode": "#22c55e",  # Open Source Green
+    # Tier 2 - Community Agents
+    "stakpak": "#0ea5e9",  # Sky Blue
+    "vtcode": "#f59e0b",  # Amber
+    "auggie": "#ec4899",  # Pink
+    "code-assistant": "#f97316",  # Rust Orange
+    "cagent": "#6366f1",  # Indigo
+    "fast-agent": "#14b8a6",  # Teal
+    "llmling-agent": "#a855f7",  # Purple
 }
 
-# Unique meaningful icons for each agent
+# 14 Official ACP Agents - Icons
 AGENT_ICONS = {
+    # Tier 1 - Major Agents
+    "gemini": "✨",  # Sparkles - Google Gemini's multimodal nature
     "claude": "🧡",  # Orange heart - Anthropic's warm AI
-    "opencode": "🌿",  # Seedling - open source growth
+    "claude-code": "🧡",  # Orange heart - Anthropic's warm AI
     "codex": "📜",  # Scroll - OpenAI codex knowledge
-    "gemini": "✨",  # Sparkles - Google Gemini's dual nature
-    "goose": "🦆",  # Duck - Block's Goose (close cousin)
-    "kimi": "🌸",  # Cherry blossom - Moonshot AI's Kimi (Asian origin)
-    "augment": "🔮",  # Crystal ball - Augment's AI vision
-    "openhands": "🤝",  # Handshake - OpenHands collaboration
+    "junie": "🧠",  # Brain - JetBrains intelligence
+    "goose": "🦆",  # Duck - Block's Goose
+    "kimi": "🌙",  # Moon - Moonshot AI's Kimi
+    "opencode": "🌿",  # Seedling - open source growth
+    # Tier 2 - Community Agents
+    "stakpak": "📦",  # Package - code packages
+    "vtcode": "⚡",  # Lightning - versatile & fast
+    "auggie": "🔮",  # Crystal ball - Augment's AI vision
+    "code-assistant": "🦀",  # Crab - Rust language
+    "cagent": "🤖",  # Robot - multi-agent orchestration
+    "fast-agent": "🚀",  # Rocket - fast workflows
+    "llmling-agent": "🔗",  # Link - framework connections
 }
 
 # Rich thinking messages with emojis - FUN & ENGAGING!

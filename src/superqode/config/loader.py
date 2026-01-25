@@ -635,16 +635,22 @@ Critique and improve code quality from development.""",
         ),
     }
 
-    # Available ACP agents for direct connection
+    # Available ACP agents for direct connection (14 Official ACP Agents)
     config.code_agents = [
-        "claude-code",  # Terminal-first coding, large codebases
-        "opencode",  # GitHub integration, client/server
-        "gemini-cli",  # Multimodal, complex workflows
-        "codex-cli",  # OpenAI coding assistant
-        "auggie",  # Multi-editor support
-        "kimi-cli",  # Chinese language support
-        "goose",  # Task automation
-        "openhands",  # Complex software engineering
+        "gemini",  # Google's reference ACP implementation
+        "claude-code",  # Anthropic's Claude via Zed SDK adapter
+        "codex",  # OpenAI's code generation agent
+        "junie",  # JetBrains' AI agent for IDE ecosystem
+        "goose",  # Square's open-source agent
+        "kimi",  # CLI AI agent with ACP support
+        "opencode",  # Open-source coding agent
+        "stakpak",  # ACP-compatible code assistance
+        "vtcode",  # Versatile coding agent
+        "auggie",  # Agentic code capabilities
+        "code-assistant",  # AI coding assistant in Rust
+        "cagent",  # Multi-agent runtime
+        "fast-agent",  # Sophisticated agent workflows
+        "llmling-agent",  # LLM-powered agent framework
     ]
 
     # Provider configurations
@@ -708,23 +714,83 @@ Critique and improve code quality from development.""",
         ),
     }
 
-    # ACP Agents
+    # ACP Agents (14 Official ACP Agents)
     config.agents = {
         "acp": {
+            "gemini": {
+                "enabled": True,
+                "description": "Gemini CLI - Google's reference ACP implementation",
+                "install_command": "npm install -g @anthropic-ai/gemini-cli",
+                "api_key_env": "GEMINI_API_KEY",
+            },
             "claude-code": {
                 "enabled": True,
-                "description": "Claude Code by Anthropic - Terminal-based coding assistant",
-                "install_command": "npm install -g @zed-industries/claude-code-acp",
+                "description": "Claude Code - Anthropic's Claude via Zed SDK adapter",
+                "install_command": "npm install -g @anthropic-ai/claude-code",
+                "api_key_env": "ANTHROPIC_API_KEY",
             },
-            "openhands": {
+            "codex": {
                 "enabled": True,
-                "description": "OpenHands - Open-source AI coding agent",
-                "install_command": "pip install openhands",
+                "description": "Codex - OpenAI's code generation agent",
+                "install_command": "npm install -g @openai/codex",
+                "api_key_env": "OPENAI_API_KEY",
+            },
+            "junie": {
+                "enabled": True,
+                "description": "JetBrains Junie - AI agent for IDE ecosystem",
+                "install_command": "npm install -g @jetbrains/junie",
             },
             "goose": {
                 "enabled": True,
-                "description": "Goose - Developer tool for faster coding",
+                "description": "Goose - Square's open-source agent",
                 "install_command": "curl -fsSL https://github.com/block/goose/releases/latest/download/install.sh | bash",
+            },
+            "kimi": {
+                "enabled": True,
+                "description": "Kimi CLI - CLI AI agent with ACP support",
+                "install_command": "npm install -g @anthropic-ai/kimi-cli",
+                "api_key_env": "MOONSHOT_API_KEY",
+            },
+            "opencode": {
+                "enabled": True,
+                "description": "OpenCode - Open-source coding agent",
+                "install_command": "go install github.com/opencode-ai/opencode@latest",
+            },
+            "stakpak": {
+                "enabled": True,
+                "description": "Stakpak - ACP-compatible code assistance",
+                "install_command": "npm install -g stakpak",
+            },
+            "vtcode": {
+                "enabled": True,
+                "description": "VT Code - Versatile coding agent",
+                "install_command": "npm install -g vtcode",
+            },
+            "auggie": {
+                "enabled": True,
+                "description": "Augment Code - Agentic code capabilities",
+                "install_command": "npm install -g @anthropic-ai/auggie",
+                "api_key_env": "AUGMENT_API_KEY",
+            },
+            "code-assistant": {
+                "enabled": True,
+                "description": "Code Assistant - AI coding assistant in Rust",
+                "install_command": "cargo install code-assistant",
+            },
+            "cagent": {
+                "enabled": True,
+                "description": "cagent - Multi-agent runtime orchestration",
+                "install_command": "npm install -g cagent",
+            },
+            "fast-agent": {
+                "enabled": True,
+                "description": "fast-agent - Sophisticated agent workflows",
+                "install_command": "pip install fast-agent",
+            },
+            "llmling-agent": {
+                "enabled": True,
+                "description": "LLMling-Agent - LLM-powered agent framework",
+                "install_command": "pip install llmling-agent",
             },
         }
     }

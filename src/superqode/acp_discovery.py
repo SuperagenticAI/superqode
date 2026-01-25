@@ -4,14 +4,21 @@ SuperQode ACP Agent Discovery - Auto-Discover Available Agents.
 Automatically discovers ACP-compatible agents installed on the system
 and provides a unified interface for connecting to them.
 
-Supported Agents:
-- OpenCode (opencode acp)
-- OpenHands (openhands acp)
-- Claude Code (claude-code-acp)
-- Codex (codex-acp, npx @openai/codex-acp)
-- Goose (goose acp)
-- Gemini (gemini-cli acp)
-- Cursor (cursor acp)
+Supported Agents (14 Official ACP Agents):
+- Gemini CLI (gemini) - Google's reference ACP implementation
+- Claude Code (claude-code-acp) - Anthropic's Claude via Zed SDK adapter
+- Codex (codex-acp) - OpenAI's code generation agent
+- JetBrains Junie (junie) - JetBrains' AI agent for IDE ecosystem
+- Goose (goose acp) - Square's open-source agent
+- Kimi CLI (kimi) - CLI AI agent with ACP support
+- OpenCode (opencode acp) - Open-source coding agent
+- Stakpak (stakpak) - ACP-compatible code assistance agent
+- VT Code (vtcode) - Versatile coding agent
+- Augment Code (auggie) - Agentic capabilities for code analysis
+- Code Assistant (code-assistant) - AI coding assistant in Rust
+- cagent (cagent) - Multi-agent runtime orchestration
+- fast-agent (fast-agent) - Sophisticated agent workflows
+- LLMling-Agent (llmling-agent) - LLM-powered agent framework
 
 Features:
 - Auto-detection of installed agents
@@ -128,112 +135,267 @@ class DiscoveredAgent:
 # ============================================================================
 
 KNOWN_AGENTS: List[Dict[str, Any]] = [
+    # =========================================================================
+    # 1. Gemini CLI - Google's Reference ACP Implementation
+    # =========================================================================
+    {
+        "name": "Gemini CLI",
+        "short_name": "gemini",
+        "command": ["gemini", "--experimental-acp"],
+        "alt_commands": [
+            ["npx", "-y", "@google/gemini-cli", "--experimental-acp"],
+            ["gemini-cli", "--experimental-acp"],
+        ],
+        "icon": "✨",
+        "color": "#4285f4",
+        "description": "Google's reference ACP implementation showing full potential of agent integration",
+        "website": "https://github.com/google-gemini/gemini-cli",
+        "requires_api_key": True,
+        "api_key_env_vars": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+        "check_command": ["gemini", "--version"],
+    },
+    # =========================================================================
+    # 2. Claude Code - Anthropic's Claude via Zed SDK Adapter
+    # =========================================================================
+    {
+        "name": "Claude Code",
+        "short_name": "claude-code",
+        "command": ["claude", "--acp"],
+        "alt_commands": [
+            ["npx", "-y", "@anthropic-ai/claude-code", "--acp"],
+            ["claude-code-acp"],
+            ["npx", "@anthropic-ai/claude-code-acp"],
+        ],
+        "icon": "🧡",
+        "color": "#d97706",
+        "description": "Anthropic's Claude integrated through Zed's SDK adapter",
+        "website": "https://claude.ai/code",
+        "requires_api_key": True,
+        "api_key_env_vars": ["ANTHROPIC_API_KEY"],
+        "check_command": ["claude", "--version"],
+    },
+    # =========================================================================
+    # 3. Codex - OpenAI's Code Generation Agent
+    # =========================================================================
+    {
+        "name": "Codex",
+        "short_name": "codex",
+        "command": ["codex", "--acp"],
+        "alt_commands": [
+            ["npx", "-y", "@openai/codex", "--acp"],
+            ["npx", "@openai/codex-acp"],
+        ],
+        "icon": "📜",
+        "color": "#10b981",
+        "description": "OpenAI's code generation agent with streaming terminal output",
+        "website": "https://github.com/openai/codex",
+        "requires_api_key": True,
+        "api_key_env_vars": ["OPENAI_API_KEY", "CODEX_API_KEY"],
+        "check_command": ["codex", "--version"],
+    },
+    # =========================================================================
+    # 4. JetBrains Junie - JetBrains AI Agent
+    # =========================================================================
+    {
+        "name": "JetBrains Junie",
+        "short_name": "junie",
+        "command": ["junie", "--acp"],
+        "alt_commands": [
+            ["npx", "-y", "@jetbrains/junie", "--acp"],
+        ],
+        "icon": "🧠",
+        "color": "#fe315d",
+        "description": "JetBrains' AI agent with ACP support across their entire IDE ecosystem",
+        "website": "https://www.jetbrains.com/junie/",
+        "requires_api_key": False,  # Uses JetBrains account
+        "api_key_env_vars": ["JETBRAINS_API_KEY"],
+        "check_command": ["junie", "--version"],
+    },
+    # =========================================================================
+    # 5. Goose - Square's Open-Source Agent
+    # =========================================================================
+    {
+        "name": "Goose",
+        "short_name": "goose",
+        "command": ["goose", "mcp"],
+        "alt_commands": [
+            ["goose", "acp"],
+            ["goose", "--acp"],
+        ],
+        "icon": "🦆",
+        "color": "#8b5cf6",
+        "description": "Square's open-source agent with native ACP implementation",
+        "website": "https://github.com/block/goose",
+        "requires_api_key": True,
+        "api_key_env_vars": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY"],
+        "check_command": ["goose", "--version"],
+    },
+    # =========================================================================
+    # 6. Kimi CLI - CLI AI Agent with ACP
+    # =========================================================================
+    {
+        "name": "Kimi CLI",
+        "short_name": "kimi",
+        "command": ["kimi", "--acp"],
+        "alt_commands": [
+            ["npx", "-y", "@anthropic-ai/kimi-cli", "--acp"],
+            ["kimi-cli", "--acp"],
+        ],
+        "icon": "🌙",
+        "color": "#5b21b6",
+        "description": "CLI AI agent implementing ACP with support for various development workflows",
+        "website": "https://github.com/anthropics/kimi-cli",
+        "requires_api_key": True,
+        "api_key_env_vars": ["MOONSHOT_API_KEY", "KIMI_API_KEY"],
+        "check_command": ["kimi", "--version"],
+    },
+    # =========================================================================
+    # 7. OpenCode - Open-Source Coding Agent
+    # =========================================================================
     {
         "name": "OpenCode",
         "short_name": "opencode",
         "command": ["opencode", "acp"],
+        "alt_commands": [
+            ["opencode", "--acp"],
+        ],
         "icon": "🌿",
         "color": "#22c55e",
-        "description": "Open-source AI coding assistant",
-        "website": "https://opencode.dev",
+        "description": "Open-source coding agent with ACP implementation for flexible integration",
+        "website": "https://github.com/opencode-ai/opencode",
         "requires_api_key": False,  # Uses cloud with free tier
-        "api_key_env_vars": [],
+        "api_key_env_vars": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
         "check_command": ["opencode", "--version"],
     },
+    # =========================================================================
+    # 8. Stakpak - ACP-Compatible Code Assistance
+    # =========================================================================
     {
-        "name": "OpenHands",
-        "short_name": "openhands",
-        "command": ["openhands", "acp"],
-        "icon": "🤝",
+        "name": "Stakpak",
+        "short_name": "stakpak",
+        "command": ["stakpak", "--acp"],
+        "alt_commands": [
+            ["npx", "-y", "stakpak", "--acp"],
+        ],
+        "icon": "📦",
+        "color": "#0ea5e9",
+        "description": "ACP-compatible agent for comprehensive code assistance and collaboration",
+        "website": "https://stakpak.dev",
+        "requires_api_key": True,
+        "api_key_env_vars": ["STAKPAK_API_KEY", "OPENAI_API_KEY"],
+        "check_command": ["stakpak", "--version"],
+    },
+    # =========================================================================
+    # 9. VT Code - Versatile Coding Agent
+    # =========================================================================
+    {
+        "name": "VT Code",
+        "short_name": "vtcode",
+        "command": ["vtcode", "--acp"],
+        "alt_commands": [
+            ["vt-code", "--acp"],
+            ["npx", "-y", "vtcode", "--acp"],
+        ],
+        "icon": "⚡",
+        "color": "#f59e0b",
+        "description": "Versatile coding agent implementing ACP for seamless integration",
+        "website": "https://vtcode.dev",
+        "requires_api_key": True,
+        "api_key_env_vars": ["VTCODE_API_KEY", "OPENAI_API_KEY"],
+        "check_command": ["vtcode", "--version"],
+    },
+    # =========================================================================
+    # 10. Augment Code (Auggie) - Agentic Code Capabilities
+    # =========================================================================
+    {
+        "name": "Augment Code",
+        "short_name": "auggie",
+        "command": ["auggie", "--acp"],
+        "alt_commands": [
+            ["augment", "--acp"],
+            ["npx", "-y", "@anthropic-ai/auggie", "--acp"],
+        ],
+        "icon": "🔮",
+        "color": "#ec4899",
+        "description": "Powerful agentic capabilities to analyze code, make changes, and execute tools",
+        "website": "https://www.augmentcode.com",
+        "requires_api_key": True,
+        "api_key_env_vars": ["AUGMENT_API_KEY"],
+        "check_command": ["auggie", "--version"],
+    },
+    # =========================================================================
+    # 11. Code Assistant - AI Coding Assistant in Rust
+    # =========================================================================
+    {
+        "name": "Code Assistant",
+        "short_name": "code-assistant",
+        "command": ["code-assistant", "--acp"],
+        "alt_commands": [
+            ["ca", "--acp"],
+        ],
+        "icon": "🦀",
         "color": "#f97316",
-        "description": "AI software development agent",
-        "website": "https://github.com/All-Hands-AI/OpenHands",
+        "description": "AI coding assistant built in Rust for autonomous code analysis and modification",
+        "website": "https://github.com/anthropics/code-assistant",
         "requires_api_key": True,
         "api_key_env_vars": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
-        "check_command": ["openhands", "--version"],
+        "check_command": ["code-assistant", "--version"],
     },
+    # =========================================================================
+    # 12. cagent - Multi-Agent Runtime
+    # =========================================================================
     {
-        "name": "Claude Code",
-        "short_name": "claude-code",
-        "command": ["claude-code-acp"],
+        "name": "cagent",
+        "short_name": "cagent",
+        "command": ["cagent", "--acp"],
         "alt_commands": [
-            ["npx", "@zed-industries/claude-code-acp"],
-            ["npx", "-y", "@zed-industries/claude-code-acp"],
+            ["npx", "-y", "cagent", "--acp"],
         ],
-        "icon": "🧡",
-        "color": "#d97706",
-        "description": "Anthropic's Claude for coding",
-        "website": "https://claude.ai",
-        "requires_api_key": True,
-        "api_key_env_vars": ["ANTHROPIC_API_KEY"],
-        "check_command": ["claude-code-acp", "--version"],
-    },
-    {
-        "name": "Codex",
-        "short_name": "codex",
-        "command": ["npx", "@openai/codex-acp"],
-        "alt_commands": [
-            ["codex-acp"],
-            ["npx", "-y", "@openai/codex-acp"],
-        ],
-        "icon": "📜",
-        "color": "#10b981",
-        "description": "OpenAI Codex CLI",
-        "website": "https://openai.com",
-        "requires_api_key": True,
-        "api_key_env_vars": ["OPENAI_API_KEY", "CODEX_API_KEY"],
-        "check_command": ["npx", "@openai/codex-acp", "--version"],
-    },
-    {
-        "name": "Goose",
-        "short_name": "goose",
-        "command": ["goose", "acp"],
-        "icon": "🦆",
-        "color": "#8b5cf6",
-        "description": "Block's AI coding assistant",
-        "website": "https://github.com/block/goose",
+        "icon": "🤖",
+        "color": "#6366f1",
+        "description": "Powerful, easy-to-use, customizable multi-agent runtime that orchestrates AI agents",
+        "website": "https://github.com/anthropics/cagent",
         "requires_api_key": True,
         "api_key_env_vars": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
-        "check_command": ["goose", "--version"],
+        "check_command": ["cagent", "--version"],
     },
+    # =========================================================================
+    # 13. fast-agent - Sophisticated Agent Workflows
+    # =========================================================================
     {
-        "name": "Gemini CLI",
-        "short_name": "gemini",
-        "command": ["gemini-cli", "acp"],
+        "name": "fast-agent",
+        "short_name": "fast-agent",
+        "command": ["fast-agent", "--acp"],
         "alt_commands": [
-            ["gemini", "acp"],
+            ["fastagent", "--acp"],
+            ["npx", "-y", "fast-agent", "--acp"],
         ],
-        "icon": "✨",
-        "color": "#4285f4",
-        "description": "Google's Gemini AI",
-        "website": "https://ai.google.dev",
-        "requires_api_key": True,
-        "api_key_env_vars": ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
-        "check_command": ["gemini-cli", "--version"],
-    },
-    {
-        "name": "Cursor",
-        "short_name": "cursor",
-        "command": ["cursor", "acp"],
-        "icon": "▸",
-        "color": "#06b6d4",
-        "description": "Cursor AI editor agent",
-        "website": "https://cursor.sh",
-        "requires_api_key": False,  # Uses Cursor's backend
-        "api_key_env_vars": [],
-        "check_command": ["cursor", "--version"],
-    },
-    {
-        "name": "Aider",
-        "short_name": "aider",
-        "command": ["aider", "--acp"],
-        "icon": "🔧",
-        "color": "#f43f5e",
-        "description": "AI pair programming in terminal",
-        "website": "https://aider.chat",
+        "icon": "🚀",
+        "color": "#14b8a6",
+        "description": "Create and interact with sophisticated Agents and Workflows in minutes",
+        "website": "https://github.com/anthropics/fast-agent",
         "requires_api_key": True,
         "api_key_env_vars": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
-        "check_command": ["aider", "--version"],
+        "check_command": ["fast-agent", "--version"],
+    },
+    # =========================================================================
+    # 14. LLMling-Agent - LLM-Powered Agent Framework
+    # =========================================================================
+    {
+        "name": "LLMling-Agent",
+        "short_name": "llmling-agent",
+        "command": ["llmling-agent", "--acp"],
+        "alt_commands": [
+            ["llmling", "--acp"],
+            ["pip", "run", "llmling-agent", "--acp"],
+        ],
+        "icon": "🔗",
+        "color": "#a855f7",
+        "description": "Framework for creating and managing LLM-powered agents with structured interactions",
+        "website": "https://github.com/anthropics/llmling-agent",
+        "requires_api_key": True,
+        "api_key_env_vars": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
+        "check_command": ["llmling-agent", "--version"],
     },
 ]
 
@@ -396,44 +558,166 @@ class ACPDiscovery:
         """Get available models for an agent."""
         # Predefined models based on agent type
         models_map = {
+            # Gemini CLI - Google's models
+            "gemini": [
+                AgentModel(
+                    id="gemini-2.5-pro",
+                    name="Gemini 2.5 Pro",
+                    provider="google",
+                    description="Latest Gemini Pro with 2M context",
+                    context_window=2000000,
+                ),
+                AgentModel(
+                    id="gemini-2.5-flash",
+                    name="Gemini 2.5 Flash",
+                    provider="google",
+                    description="Fast Gemini with 1M context",
+                    context_window=1000000,
+                ),
+                AgentModel(
+                    id="gemini-2.0-flash",
+                    name="Gemini 2.0 Flash",
+                    provider="google",
+                    description="Previous generation flash model",
+                    context_window=1000000,
+                ),
+                AgentModel(
+                    id="gemini-2.0-flash-thinking",
+                    name="Gemini 2.0 Flash Thinking",
+                    provider="google",
+                    description="Flash model with extended thinking",
+                    context_window=1000000,
+                ),
+                AgentModel(
+                    id="gemini-exp-1206",
+                    name="Gemini Experimental",
+                    provider="google",
+                    description="Experimental Gemini model",
+                    context_window=2000000,
+                ),
+            ],
+            # Claude Code - Anthropic's models
+            "claude-code": [
+                AgentModel(
+                    id="claude-sonnet-4-20250514",
+                    name="Claude Sonnet 4",
+                    provider="anthropic",
+                    description="Latest Claude Sonnet",
+                ),
+                AgentModel(
+                    id="claude-opus-4-20250514",
+                    name="Claude Opus 4",
+                    provider="anthropic",
+                    description="Most capable Claude model",
+                ),
+                AgentModel(
+                    id="claude-3-5-sonnet-20241022",
+                    name="Claude 3.5 Sonnet",
+                    provider="anthropic",
+                    description="Previous generation Sonnet",
+                ),
+            ],
+            # Codex - OpenAI's models
+            "codex": [
+                AgentModel(
+                    id="o3", name="O3", provider="openai", description="Latest reasoning model"
+                ),
+                AgentModel(
+                    id="o3-mini", name="O3 Mini", provider="openai", description="Fast reasoning"
+                ),
+                AgentModel(id="o1", name="O1", provider="openai", description="Advanced reasoning"),
+                AgentModel(id="o1-mini", name="O1 Mini", provider="openai", description="Fast O1"),
+                AgentModel(
+                    id="gpt-4.1", name="GPT-4.1", provider="openai", description="Latest GPT"
+                ),
+                AgentModel(
+                    id="gpt-4o", name="GPT-4o", provider="openai", description="Multimodal GPT"
+                ),
+            ],
+            # JetBrains Junie
+            "junie": [
+                AgentModel(id="auto", name="Auto", description="Automatic model selection"),
+                AgentModel(id="junie-pro", name="Junie Pro", description="JetBrains Pro model"),
+            ],
+            # Goose - Square's agent
+            "goose": [
+                AgentModel(id="auto", name="Auto", description="Automatic model selection"),
+                AgentModel(id="claude-3-5-sonnet", name="Claude 3.5 Sonnet", provider="anthropic"),
+                AgentModel(id="gpt-4o", name="GPT-4o", provider="openai"),
+                AgentModel(id="gemini-2.5-pro", name="Gemini 2.5 Pro", provider="google"),
+            ],
+            # Kimi CLI
+            "kimi": [
+                AgentModel(
+                    id="moonshot-v1-128k",
+                    name="Moonshot V1 128K",
+                    provider="moonshot",
+                    context_window=128000,
+                ),
+                AgentModel(
+                    id="moonshot-v1-32k",
+                    name="Moonshot V1 32K",
+                    provider="moonshot",
+                    context_window=32000,
+                ),
+                AgentModel(
+                    id="moonshot-v1-8k",
+                    name="Moonshot V1 8K",
+                    provider="moonshot",
+                    context_window=8000,
+                ),
+            ],
+            # OpenCode
             "opencode": [
                 AgentModel(
                     id="auto", name="Auto", is_free=True, description="Automatic model selection"
                 ),
                 AgentModel(id="claude-3-5-sonnet", name="Claude 3.5 Sonnet", is_free=True),
                 AgentModel(id="gpt-4o", name="GPT-4o", is_free=True),
-                AgentModel(id="gemini-1.5-pro", name="Gemini 1.5 Pro", is_free=True),
+                AgentModel(id="gemini-2.5-pro", name="Gemini 2.5 Pro", is_free=True),
             ],
-            "openhands": [
-                AgentModel(id="default", name="Default", description="Default model"),
+            # Stakpak
+            "stakpak": [
+                AgentModel(id="auto", name="Auto", description="Automatic model selection"),
+                AgentModel(
+                    id="stakpak-pro", name="Stakpak Pro", description="Enhanced capabilities"
+                ),
             ],
-            "claude-code": [
-                AgentModel(id="claude-3-5-sonnet-20241022", name="Claude 3.5 Sonnet"),
-                AgentModel(id="claude-3-opus-20240229", name="Claude 3 Opus"),
+            # VT Code
+            "vtcode": [
+                AgentModel(id="auto", name="Auto", description="Automatic model selection"),
+                AgentModel(
+                    id="vtcode-pro", name="VT Code Pro", description="Enhanced capabilities"
+                ),
             ],
-            "codex": [
-                AgentModel(id="gpt-5.2", name="GPT-5.2 (Latest)"),
-                AgentModel(id="gpt-5.2-pro", name="GPT-5.2 Pro"),
-                AgentModel(id="gpt-5.2-codex", name="GPT-5.2 Codex"),
-                AgentModel(id="gpt-5.1", name="GPT-5.1"),
-                AgentModel(id="gpt-5.1-codex", name="GPT-5.1 Codex"),
-                AgentModel(id="gpt-5.1-codex-mini", name="GPT-5.1 Codex Mini"),
-                AgentModel(id="gpt-4o", name="GPT-4o"),
-                AgentModel(id="gpt-4-turbo", name="GPT-4 Turbo"),
+            # Augment Code (Auggie)
+            "auggie": [
+                AgentModel(id="auto", name="Auto", description="Automatic model selection"),
+                AgentModel(id="auggie-pro", name="Auggie Pro", description="Enhanced capabilities"),
             ],
-            "goose": [
-                AgentModel(id="default", name="Default"),
+            # Code Assistant
+            "code-assistant": [
+                AgentModel(id="auto", name="Auto", description="Automatic model selection"),
+                AgentModel(id="claude-3-5-sonnet", name="Claude 3.5 Sonnet", provider="anthropic"),
+                AgentModel(id="gpt-4o", name="GPT-4o", provider="openai"),
             ],
-            "gemini": [
-                AgentModel(id="gemini-1.5-pro", name="Gemini 1.5 Pro"),
-                AgentModel(id="gemini-1.5-flash", name="Gemini 1.5 Flash"),
+            # cagent
+            "cagent": [
+                AgentModel(id="auto", name="Auto", description="Automatic model selection"),
+                AgentModel(id="claude-3-5-sonnet", name="Claude 3.5 Sonnet", provider="anthropic"),
+                AgentModel(id="gpt-4o", name="GPT-4o", provider="openai"),
             ],
-            "cursor": [
-                AgentModel(id="default", name="Default"),
+            # fast-agent
+            "fast-agent": [
+                AgentModel(id="auto", name="Auto", description="Automatic model selection"),
+                AgentModel(id="claude-3-5-sonnet", name="Claude 3.5 Sonnet", provider="anthropic"),
+                AgentModel(id="gpt-4o", name="GPT-4o", provider="openai"),
             ],
-            "aider": [
-                AgentModel(id="gpt-4o", name="GPT-4o"),
-                AgentModel(id="claude-3-5-sonnet", name="Claude 3.5 Sonnet"),
+            # LLMling-Agent
+            "llmling-agent": [
+                AgentModel(id="auto", name="Auto", description="Automatic model selection"),
+                AgentModel(id="claude-3-5-sonnet", name="Claude 3.5 Sonnet", provider="anthropic"),
+                AgentModel(id="gpt-4o", name="GPT-4o", provider="openai"),
             ],
         }
 

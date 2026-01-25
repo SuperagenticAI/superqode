@@ -1,7 +1,7 @@
 # Schema defined in agent_schema.py
 # https://github.com/codeassistant/codeassistant
 
-identity = "codeassistant.ai"
+identity = "codeassistant.dev"
 name = "Code Assistant"
 short_name = "codeassistant"
 url = "https://github.com/codeassistant/codeassistant"
@@ -13,7 +13,7 @@ publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
 description = "An AI coding assistant built in Rust for autonomous code analysis and modification."
 tags = ["rust", "autonomous", "analysis"]
-run_command."*" = "code-assistant"
+run_command."*" = "code-assistant --acp"
 
 help = '''
 # Code Assistant

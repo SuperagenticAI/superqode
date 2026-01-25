@@ -1,7 +1,7 @@
 # Schema defined in agent_schema.py
 # https://github.com/llmling/llmling-agent
 
-identity = "llmlingagent.ai"
+identity = "llmlingagent.dev"
 name = "LLMling-Agent"
 short_name = "llmlingagent"
 url = "https://github.com/llmling/llmling-agent"
@@ -13,7 +13,7 @@ publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
 description = "A framework for creating and managing LLM-powered agents to provide structured interactions."
 tags = ["framework", "llm", "structured"]
-run_command."*" = "llmling-agent"
+run_command."*" = "llmling-agent --acp"
 
 help = '''
 # LLMling-Agent

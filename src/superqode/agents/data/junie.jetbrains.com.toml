@@ -1,0 +1,56 @@
+# Schema defined in agent_schema.py
+# JetBrains Junie - AI Agent for IDE Ecosystem
+identity = "junie.jetbrains.com"
+name = "JetBrains Junie"
+short_name = "junie"
+url = "https://www.jetbrains.com/junie/"
+protocol = "acp"
+author_name = "JetBrains"
+author_url = "https://www.jetbrains.com/"
+publisher_name = "SuperQode Team"
+publisher_url = "https://github.com/superagentic/superqode"
+type = "coding"
+description = "JetBrains' AI agent with ACP support across their entire IDE ecosystem."
+tags = ["jetbrains", "ide", "coding", "acp"]
+run_command."*" = "junie --acp"
+
+help = '''
+# JetBrains Junie
+
+**AI Agent for IDE Ecosystem**
+
+JetBrains' AI agent with ACP support across their entire IDE ecosystem.
+
+## Key Features
+
+- **IDE Integration**: Works seamlessly with all JetBrains IDEs
+- **Code Analysis**: Deep understanding of your codebase
+- **Refactoring**: Intelligent code refactoring capabilities
+- **ACP Native**: Full Agent Client Protocol support
+
+## Installation
+
+Install globally via npm:
+```bash
+npm install -g @jetbrains/junie
+```
+
+## Configuration
+
+Works with JetBrains account authentication (optional).
+
+## ACP Mode
+
+Run with ACP support:
+```bash
+junie --acp
+```
+
+---
+
+**Website**: https://www.jetbrains.com/junie/
+'''
+
+[actions."*".install]
+command = "npm install -g @jetbrains/junie"
+description = "Install JetBrains Junie globally via npm"

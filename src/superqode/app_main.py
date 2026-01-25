@@ -650,12 +650,34 @@ class SuperQodeApp(App):
         return self._gemini_models
 
     def _get_gemini_models(self) -> List[Dict]:
-        """Get Gemini models list."""
+        """Get Gemini models list - synced with providers/models.py."""
         return [
-            {"id": "gemini-pro", "name": "Gemini Pro", "context": 32768},
-            {"id": "gemini-pro-vision", "name": "Gemini Pro Vision", "context": 16384},
-            {"id": "gemini-1.5-flash", "name": "Gemini 1.5 Flash", "context": 1048576},
-            {"id": "gemini-1.5-pro", "name": "Gemini 1.5 Pro", "context": 2097152},
+            {
+                "id": "gemini-3-pro-preview",
+                "name": "Gemini 3 Pro Preview",
+                "context": 2000000,
+                "desc": "Latest Gemini 3 flagship - 2M context",
+                "recommended": True,
+            },
+            {
+                "id": "gemini-3-flash-preview",
+                "name": "Gemini 3 Flash Preview",
+                "context": 1000000,
+                "desc": "Fast Gemini 3 - 1M context",
+                "recommended": True,
+            },
+            {
+                "id": "gemini-2.5-pro",
+                "name": "Gemini 2.5 Pro",
+                "context": 2000000,
+                "desc": "Previous Pro with 2M context",
+            },
+            {
+                "id": "gemini-2.5-flash",
+                "name": "Gemini 2.5 Flash",
+                "context": 1000000,
+                "desc": "Previous Flash model",
+            },
         ]
 
     @property
@@ -666,11 +688,34 @@ class SuperQodeApp(App):
         return self._claude_models
 
     def _get_claude_models(self) -> List[Dict]:
-        """Get Claude models list."""
+        """Get Claude models list - synced with providers/models.py."""
         return [
-            {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet", "context": 200000},
-            {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus", "context": 200000},
-            {"id": "claude-3-haiku-20240307", "name": "Claude 3 Haiku", "context": 200000},
+            {
+                "id": "claude-opus-4-5-20251101",
+                "name": "Claude Opus 4.5",
+                "context": 200000,
+                "desc": "Most capable Claude - latest flagship",
+                "recommended": True,
+            },
+            {
+                "id": "claude-sonnet-4-5-20250929",
+                "name": "Claude Sonnet 4.5",
+                "context": 200000,
+                "desc": "Best balance of speed & intelligence",
+                "recommended": True,
+            },
+            {
+                "id": "claude-haiku-4-5-20251001",
+                "name": "Claude Haiku 4.5",
+                "context": 200000,
+                "desc": "Fastest and most cost-effective",
+            },
+            {
+                "id": "claude-sonnet-4-20250514",
+                "name": "Claude Sonnet 4",
+                "context": 200000,
+                "desc": "Previous Sonnet generation",
+            },
         ]
 
     @property
@@ -4476,31 +4521,39 @@ team:
                 log=log,
                 persona_context=None,
             )
-        elif short_name == "openhands":
-            # Check if model is selected
-            if not self.current_model:
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(
-                    log.add_error, "No model selected. Press 1-4 to select a model first."
-                )
-                return
-
-            # Use unified agent runner with openhands
-            model_name = self.current_model
-            if model_name.startswith("openhands/"):
-                model_name = model_name[10:]  # Remove "openhands/" prefix
-
-            self._run_agent_unified(
-                message=text,
-                agent_type="openhands",
-                model=model_name,
-                display_name=name,
-                log=log,
-                persona_context=None,
-            )
         else:
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(log.add_info, f"🚧 {name} integration coming soon!")
+            # Handle all other ACP-compatible agents generically
+            # This covers: junie, goose, kimi, stakpak, vtcode, auggie,
+            # code-assistant, cagent, fast-agent, llmling-agent
+            acp_agents = {
+                "junie",
+                "goose",
+                "kimi",
+                "stakpak",
+                "vtcode",
+                "auggie",
+                "code-assistant",
+                "cagent",
+                "fast-agent",
+                "llmling-agent",
+            }
+            if short_name in acp_agents:
+                model_name = self.current_model if self.current_model else "auto"
+                # Remove any prefix like "junie/" if present
+                if "/" in model_name:
+                    model_name = model_name.split("/", 1)[1]
+
+                self._run_agent_unified(
+                    message=text,
+                    agent_type=short_name,
+                    model=model_name,
+                    display_name=name,
+                    log=log,
+                    persona_context=None,
+                )
+            else:
+                self.call_from_thread(self._stop_thinking)
+                self.call_from_thread(log.add_info, f"🚧 {name} integration coming soon!")
 
     def _run_agent_unified(
         self,
@@ -4533,8 +4586,23 @@ team:
             self._current_file_context = ""  # Clear after use
 
         # Route ACP-compatible agents to the JSON-RPC ACP client
-        # OpenCode, Claude, Codex, OpenHands all support ACP protocol
-        acp_agents = ("opencode", "claude", "codex", "openhands")
+        # All 14 official ACP agents support the Agent Client Protocol
+        acp_agents = (
+            "opencode",
+            "claude",
+            "codex",
+            "gemini",
+            "junie",
+            "goose",
+            "kimi",
+            "stakpak",
+            "vtcode",
+            "auggie",
+            "code-assistant",
+            "cagent",
+            "fast-agent",
+            "llmling-agent",
+        )
         if agent_type in acp_agents:
             self._run_acp_jsonrpc_client(
                 message, agent_type, model, display_name, log, persona_context
@@ -4775,12 +4843,20 @@ team:
             self._current_file_context = ""
 
         # Choose command and model display based on agent type
-        if agent_type == "opencode":
-            command = "opencode acp"
-            model_display = f"opencode/{model}" if model else "opencode/auto"
-            # OpenCode handles its own API keys via its config
+        # All 14 official ACP agents are supported
+        if agent_type == "gemini":
+            command = "gemini --experimental-acp"
+            model_display = f"gemini/{model}" if model and model != "auto" else "gemini/auto"
+            if "GEMINI_API_KEY" not in os.environ and "GOOGLE_API_KEY" not in os.environ:
+                self.call_from_thread(self._stop_thinking)
+                self.call_from_thread(
+                    log.add_error, "❌ GEMINI_API_KEY or GOOGLE_API_KEY not set. Export it first:"
+                )
+                self.call_from_thread(log.add_info, "  export GEMINI_API_KEY=your_api_key")
+                self.call_from_thread(log.add_info, "  or export GOOGLE_API_KEY=your_api_key")
+                return
         elif agent_type == "claude":
-            command = "claude-code-acp"
+            command = "claude --acp"
             model_display = f"claude/{model}" if model else "claude/auto"
             if "ANTHROPIC_API_KEY" not in os.environ:
                 self.call_from_thread(self._stop_thinking)
@@ -4790,7 +4866,7 @@ team:
                 self.call_from_thread(log.add_info, "  export ANTHROPIC_API_KEY=sk-ant-...")
                 return
         elif agent_type == "codex":
-            command = "npx @openai/codex-acp"
+            command = "codex --acp"
             model_display = f"codex/{model}" if model else "codex/auto"
             if "OPENAI_API_KEY" not in os.environ and "CODEX_API_KEY" not in os.environ:
                 self.call_from_thread(self._stop_thinking)
@@ -4800,11 +4876,52 @@ team:
                 self.call_from_thread(log.add_info, "  export OPENAI_API_KEY=sk-...")
                 self.call_from_thread(log.add_info, "  or export CODEX_API_KEY=sk-...")
                 return
-        elif agent_type == "openhands":
-            command = "openhands acp"
-            model_display = (
-                f"openhands/{model}" if model and model != "default" else "openhands/default"
-            )
+        elif agent_type == "junie":
+            command = "junie --acp"
+            model_display = f"junie/{model}" if model else "junie/auto"
+        elif agent_type == "goose":
+            command = "goose mcp"
+            model_display = f"goose/{model}" if model else "goose/auto"
+        elif agent_type == "kimi":
+            command = "kimi --acp"
+            model_display = f"kimi/{model}" if model else "kimi/auto"
+            if "MOONSHOT_API_KEY" not in os.environ and "KIMI_API_KEY" not in os.environ:
+                self.call_from_thread(self._stop_thinking)
+                self.call_from_thread(
+                    log.add_error, "❌ MOONSHOT_API_KEY or KIMI_API_KEY not set. Export it first:"
+                )
+                self.call_from_thread(log.add_info, "  export MOONSHOT_API_KEY=your_api_key")
+                return
+        elif agent_type == "opencode":
+            command = "opencode acp"
+            model_display = f"opencode/{model}" if model else "opencode/auto"
+            # OpenCode handles its own API keys via its config
+        elif agent_type == "stakpak":
+            command = "stakpak --acp"
+            model_display = f"stakpak/{model}" if model else "stakpak/auto"
+        elif agent_type == "vtcode":
+            command = "vtcode --acp"
+            model_display = f"vtcode/{model}" if model else "vtcode/auto"
+        elif agent_type == "auggie":
+            command = "auggie --acp"
+            model_display = f"auggie/{model}" if model else "auggie/auto"
+            if "AUGMENT_API_KEY" not in os.environ:
+                self.call_from_thread(self._stop_thinking)
+                self.call_from_thread(log.add_error, "❌ AUGMENT_API_KEY not set. Export it first:")
+                self.call_from_thread(log.add_info, "  export AUGMENT_API_KEY=your_api_key")
+                return
+        elif agent_type == "code-assistant":
+            command = "code-assistant --acp"
+            model_display = f"code-assistant/{model}" if model else "code-assistant/auto"
+        elif agent_type == "cagent":
+            command = "cagent --acp"
+            model_display = f"cagent/{model}" if model else "cagent/auto"
+        elif agent_type == "fast-agent":
+            command = "fast-agent --acp"
+            model_display = f"fast-agent/{model}" if model else "fast-agent/auto"
+        elif agent_type == "llmling-agent":
+            command = "llmling-agent --acp"
+            model_display = f"llmling-agent/{model}" if model else "llmling-agent/auto"
         else:
             self.call_from_thread(self._stop_thinking)
             self.call_from_thread(log.add_error, f"Unsupported ACP agent type: {agent_type}")
@@ -15824,9 +15941,19 @@ team:
     def _do_exit(self, log: ConversationLog):
         """Show a beautiful goodbye screen and exit."""
         self._cleanup_on_exit()
-        # Run async cleanup (await ACP stop) then goodbye; avoids
-        # "Event loop is closed" from asyncio subprocess transports in __del__
-        asyncio.ensure_future(self._exit_sequence_async(log))
+        # Run async cleanup safely - wrap in try/except to prevent event loop errors
+        try:
+            loop = asyncio.get_running_loop()
+            if loop and loop.is_running():
+                asyncio.ensure_future(self._exit_sequence_async(log))
+            else:
+                # If no loop running, just exit directly
+                self._show_goodbye_sync(log)
+                self.exit()
+        except RuntimeError:
+            # Event loop is closed or not running - exit directly
+            self._show_goodbye_sync(log)
+            self.exit()
 
     async def _exit_sequence_async(self, log: ConversationLog):
         """Await ACP/subprocess cleanup, then show goodbye and exit."""
@@ -15890,6 +16017,39 @@ team:
 
         # Exit after a short delay to show the goodbye screen
         self.set_timer(0.5, lambda: self.exit())
+
+    def _show_goodbye_sync(self, log: ConversationLog):
+        """Show goodbye screen synchronously (fallback when event loop unavailable)."""
+        try:
+            log.clear()
+            term_width = shutil.get_terminal_size().columns
+            t = Text()
+            t.append("\n\n\n")
+            goodbye_art = """
+   ______                ____               __
+  / ____/___  ____  ____/ / /_  __  _____  / /
+ / / __/ __ \\/ __ \\/ __  / __ \\/ / / / _ \\/ /
+/ /_/ / /_/ / /_/ / /_/ / /_/ / /_/ /  __/_/
+\\____/\\____/\\____/\\__,_/_.___/\\__, /\\___(_)
+                             /____/
+"""
+            for i, line in enumerate(goodbye_art.strip().split("\n")):
+                color = GRADIENT[i % len(GRADIENT)]
+                padding = max(0, (term_width - len(line)) // 2)
+                t.append(" " * padding)
+                t.append(line, style=f"bold {color}")
+                t.append("\n")
+            t.append("\n\n")
+            thanks_text = "Thanks for using SuperQode!"
+            padding = max(0, (term_width - len(thanks_text) - 4) // 2)
+            t.append(" " * padding)
+            t.append("👋 Thanks for using ", style="#e4e4e7")
+            t.append("Super", style="bold #a855f7")
+            t.append("Qode", style="bold #ec4899")
+            t.append("! 👋\n\n", style="#e4e4e7")
+            log.write(t)
+        except Exception:
+            pass
 
     def _cleanup_on_exit(self):
         """Clean up all running processes and timers before exit."""

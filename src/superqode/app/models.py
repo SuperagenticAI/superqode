@@ -55,12 +55,24 @@ class AgentInfo:
 
 def check_installed(name: str) -> bool:
     """Check if an agent is installed on the system."""
+    # Map agent short names to their CLI commands
     cmd_map = {
-        "claude": "claude-code-acp",
-        "opencode": "opencode",
-        "codex": "codex",
+        # 14 Official ACP Agents
         "gemini": "gemini",
+        "claude": "claude",
+        "claude-code": "claude",
+        "codex": "codex",
+        "junie": "junie",
         "goose": "goose",
+        "kimi": "kimi",
+        "opencode": "opencode",
+        "stakpak": "stakpak",
+        "vtcode": "vtcode",
+        "auggie": "auggie",
+        "code-assistant": "code-assistant",
+        "cagent": "cagent",
+        "fast-agent": "fast-agent",
+        "llmling-agent": "llmling-agent",
     }
     return shutil.which(cmd_map.get(name, name)) is not None
 
