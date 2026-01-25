@@ -1106,7 +1106,7 @@ class ConversationLog(RichLog):
         """
         Add a chunk of response text (for streaming).
 
-        Accumulates chunks into the streaming response buffer.
+        Accumulates chunks and displays them intelligently to avoid word-per-line display.
 
         Args:
             text: The response chunk to add
@@ -1117,10 +1117,38 @@ class ConversationLog(RichLog):
         self._streaming_response += text
         self.auto_scroll = True
 
-        # For streaming, we show chunks as they come
-        chunk_text = Text()
-        chunk_text.append(text, style=THEME["text"])
-        self.write(chunk_text)
+        # Buffer chunks and only write on natural boundaries to avoid word-per-line
+        if not hasattr(self, "_chunk_buffer"):
+            self._chunk_buffer = ""
+        self._chunk_buffer += text
+
+        # Write when we have:
+        # 1. A complete sentence (ends with . ! ? : ; followed by space or newline)
+        # 2. A newline character in the text
+        # 3. Accumulated enough text (50+ chars with a space near the end)
+        buffer = self._chunk_buffer
+        should_write = (
+            (
+                buffer.rstrip().endswith((".", "!", "?", ":", ";"))
+                and (text.endswith(" ") or text.endswith("\n") or len(buffer) > 30)
+            )
+            or "\n" in text
+            or (len(buffer) > 50 and " " in buffer[-15:])
+        )
+
+        if should_write:
+            chunk_text = Text()
+            chunk_text.append(buffer, style=THEME["text"])
+            self.write(chunk_text)
+            self._chunk_buffer = ""
+
+    def flush_response_buffer(self):
+        """Flush any remaining buffered response chunks."""
+        if hasattr(self, "_chunk_buffer") and self._chunk_buffer:
+            chunk_text = Text()
+            chunk_text.append(self._chunk_buffer, style=THEME["text"])
+            self.write(chunk_text)
+            self._chunk_buffer = ""
 
     def add_tool_call(
         self,
@@ -1216,6 +1244,9 @@ class ConversationLog(RichLog):
             thinking_tokens: Number of thinking tokens used
             cost: Cost in dollars
         """
+        # Flush any remaining buffered response chunks
+        self.flush_response_buffer()
+
         # Calculate duration
         duration = 0.0
         if hasattr(self, "_session_start_time") and self._session_start_time:
