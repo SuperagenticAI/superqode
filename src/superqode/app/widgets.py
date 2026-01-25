@@ -1300,7 +1300,7 @@ class ConversationLog(RichLog):
         footer.append("\n")
 
         # Copy hint
-        footer.append("  [Ctrl+Shift+C to copy response]", style=THEME["dim"])
+        footer.append("  [Shift+Drag to select text] • [Ctrl+Shift+C to copy full response]", style=THEME["dim"])
         footer.append("\n")
 
         self.write(footer)
