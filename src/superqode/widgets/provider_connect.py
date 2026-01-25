@@ -157,7 +157,7 @@ class ProviderConnectWidget(Container):
         yield Static("◈ Connect to Provider", classes="header", id="connect-header")
         yield Input(placeholder="Search providers...", id="connect-search")
         yield OptionList(id="connect-options")
-        yield Static("↑↓ Navigate • Enter Select • Esc Cancel", classes="hint")
+        yield Static("Type number to select • Scroll with mouse • Esc Cancel", classes="hint")
 
     def on_mount(self) -> None:
         """Load providers on mount."""
@@ -617,7 +617,7 @@ def render_provider_list(
     if len(providers) > max_items:
         text.append(f"\n  ... and {len(providers) - max_items} more\n", style=SQ_COLORS.text_ghost)
 
-    text.append("\n  Type number or search: ", style=SQ_COLORS.text_dim)
+    text.append("\n  Type number to select • Scroll to see more: ", style=SQ_COLORS.text_dim)
 
     return text
 
@@ -709,7 +709,7 @@ def render_model_list(
                     style=SQ_COLORS.text_secondary if is_selected else SQ_COLORS.text_muted,
                 )
 
-    text.append("\n  Type number or model name: ", style=SQ_COLORS.text_dim)
+    text.append("\n  Type number to select • Scroll to see more: ", style=SQ_COLORS.text_dim)
 
     return text
 

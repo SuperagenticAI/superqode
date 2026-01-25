@@ -13034,7 +13034,9 @@ team:
         t = Text()
         t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
         t.append(f"{provider_def.name} Models\n", style=f"bold {THEME['text']}")
-        t.append(f"  {len(models)} model(s) available\n\n", style=THEME["dim"])
+        t.append(f"  {len(models)} model(s) available\n", style=THEME["dim"])
+        t.append(f"  💡 ", style=THEME["muted"])
+        t.append("Type number to select • Scroll with mouse to see more\n\n", style=THEME["muted"])
 
         if models:
             idx = 1
@@ -13138,10 +13140,7 @@ team:
                     )
             model_list = []
 
-        if model_list:
-            t.append(f"\n  💡 ", style=THEME["muted"])
-            t.append("Use ↑/↓ arrows to navigate, Enter to select\n", style=THEME["muted"])
-        else:
+        if not model_list:
             t.append(f"\n  💡 ", style=THEME["muted"])
             t.append(f":connect {provider_id} <model>", style=THEME["success"])
             t.append(" to connect\n", style=THEME["muted"])
@@ -13187,7 +13186,9 @@ team:
         t = Text()
         t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
         t.append(f"{provider_def.name} Models\n", style=f"bold {THEME['text']}")
-        t.append(f"  {len(models)} model(s) available\n\n", style=THEME["dim"])
+        t.append(f"  {len(models)} model(s) available\n", style=THEME["dim"])
+        t.append(f"  💡 ", style=THEME["muted"])
+        t.append("Type number to select • Scroll with mouse to see more\n\n", style=THEME["muted"])
 
         highlighted_idx = getattr(self, "_local_highlighted_model_index", 0)
 
@@ -13251,10 +13252,7 @@ team:
 
             t.append("\n", style="")
 
-        if model_list:
-            t.append(f"\n  💡 ", style=THEME["muted"])
-            t.append("Use ↑/↓ arrows to navigate, Enter to select\n", style=THEME["muted"])
-        else:
+        if not model_list:
             t.append(f"\n  💡 ", style=THEME["muted"])
             t.append(f":connect {provider_id} <model>", style=THEME["success"])
             t.append(" to connect\n", style=THEME["muted"])
