@@ -94,14 +94,14 @@ ConversationLog {
 }
 
 /* Prompt area - at TOP (below SuperQode logo), hidden when agent is thinking */
-#prompt-area { height: auto; padding: 1 1; background: #000000; margin-top: 0; border-bottom: solid #1a1a1a; }
+#prompt-area { height: auto; padding: 0 1; background: #000000; margin-top: 0; border-bottom: solid #1a1a1a; }
 #prompt-area.hidden { display: none; }
 #mode-badge { height: auto; text-align: center; margin-bottom: 0; }
 #input-box { height: 3; background: #000000; border: tall #1a1a1a; margin: 0 4; margin-top: 1; }
 #input-box:focus-within { border: tall #a855f7; }
 #prompt-symbol { width: 3; color: #ec4899; text-style: bold; padding: 0 1; }
 #prompt-input { background: transparent; border: none; }
-#hints { text-align: center; color: #52525b; height: 1; margin-top: 0; padding: 0; }
+#hints { text-align: center; color: #52525b; height: 1; margin-top: 1; padding: 0; }
 
 /* Streaming thinking indicator with changing text - shown when agent is thinking */
 #streaming-thinking { height: auto; text-align: left; padding: 0 2; margin-bottom: 1; display: none; }

@@ -667,14 +667,18 @@ def print_welcome(console: Console, team_config: Optional[TeamConfig] = None):
     # Quick commands hint
     hints = Text()
     hints.append("  Quick Start: ", style="bold white")
-    hints.append(":qe fullstack", style="bold yellow")
+    hints.append("🏠 :home", style="bold yellow")
     hints.append("  •  ", style="dim")
-    hints.append(":agents connect", style="bold yellow")
+    hints.append("🚀 :i", style="bold yellow")
     hints.append("  •  ", style="dim")
-    hints.append(":help", style="bold yellow")
+    hints.append("📚 :s", style="bold yellow")
     hints.append("  •  ", style="dim")
-    hints.append("Ctrl+C", style="bold yellow")
+    hints.append("🔌 :c", style="bold yellow")
+    hints.append("  •  ", style="dim")
+    hints.append("👋 :q", style="bold yellow")
     hints.append(" exit", style="dim")
+
+    console.print()
     console.print(Align.center(hints))
     console.print()
 
@@ -827,8 +831,17 @@ class SuperQodeCompleter(Completer):
             (":context", "Show work context"),
             (":approve", "Approve work"),
             (":help", "Show help"),
+            (":h", "Alias for :help"),
+            (":init", "Initialize SuperQode configuration"),
+            (":i", "Alias for :init"),
+            (":sidebar", "Show/hide sidebar"),
+            (":s", "Alias for :sidebar"),
+            (":connect", "Connect to an agent or provider"),
+            (":c", "Alias for :connect"),
             (":clear", "Clear screen"),
             (":exit", "Exit SuperQode"),
+            (":quit", "Exit SuperQode"),
+            (":q", "Alias for :exit"),
         ]
         self._role_commands: Optional[List[tuple]] = None
 
@@ -975,26 +988,36 @@ class EnhancedPrompt:
 
         icon, mode_text, color = self._get_mode_info()
 
-        # Print spacing
-        self.console.print()
+        # REMOVED EXTRA PRINT HERE to move badge fully up
 
-        # Mode badge (no box, just the badge)
-        self.console.print(f"[bold {color} reverse] {icon} {mode_text} [/]")
-        self.console.print()
+        # Mode badge with extra text for HOME
+        if mode_text == "HOME":
+            display_text = f"{icon} {mode_text}    [dim]ready to code[/dim]"
+        else:
+            display_text = f"{icon} {mode_text}"
+
+        self.console.print(f"[bold {color} reverse] {display_text} [/]")
 
         # Get input with simple prompt
         try:
+            # Add a small prefix to the prompt to give it some horizontal breathing room
             result = self.session.prompt("❯ ")
         except (KeyboardInterrupt, EOFError):
             self.console.print()
             raise
 
-        # Footer hints after input
+        # Footer hints after input - reduced space to match badge-prompt gap
         self.console.print()
-        self.console.print(
-            f"  [dim]Tab[/] complete  [dim]│[/]  [dim]↑↓[/] history  [dim]│[/]  [yellow]:help[/]  [dim]│[/]  [yellow]:exit[/]"
+
+        hints = (
+            f"  [bright_cyan]🏠 :home[/]  [dim]•[/]  "
+            f"[bright_yellow]❓ :h[/] [dim][:help][/]  [dim]•[/]  "
+            f"[bright_magenta]🚀 :i[/] [dim][:init][/]  [dim]•[/]  "
+            f"[bright_blue]📚 :s[/] [dim][:sidebar][/]  [dim]•[/]  "
+            f"[bright_green]🔌 :c[/] [dim][:connect][/]  [dim]•[/]  "
+            f"[bright_red]👋 :q[/] [dim][:quit][/]"
         )
-        self.console.print()
+        self.console.print(hints)
 
         return result
 
