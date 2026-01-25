@@ -582,30 +582,20 @@ class HintsBar(Static):
     def render(self) -> Text:
         t = Text()
 
+        # t.append("\n", style="")
+
         hints = [
             ("🏠 :home", THEME["cyan"]),
             ("❓ :h [:help]", THEME["purple"]),
             ("🚀 :i [:init]", THEME["success"]),
             ("📚 :s [:sidebar]", THEME["cyan"]),
             ("🔌 :c [:connect]", THEME["pink"]),
+            ("👋 :q [:quit]", THEME["orange"]),
         ]
         for i, (hint, color) in enumerate(hints):
             if i > 0:
                 t.append("  •  ", style=THEME["dim"])
             t.append(hint, style=color)
-
-        t.append("  •  ", style=THEME["dim"])
-
-        mode_icons = {"auto": "🟢", "ask": "🟡", "deny": "🔴"}
-        mode_colors = {"auto": THEME["success"], "ask": THEME["warning"], "deny": THEME["error"]}
-
-        icon = mode_icons.get(self.approval_mode, "🟡")
-        color = mode_colors.get(self.approval_mode, THEME["warning"])
-
-        t.append(f"{icon} :m [:mode]", style=color)
-
-        t.append("  •  ", style=THEME["dim"])
-        t.append("👋 :q [:quit]", style=THEME["orange"])
 
         return t
 

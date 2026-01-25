@@ -1,15 +1,15 @@
 # Schema defined in agent_schema.py
-# https://www.claude.com/product/claude-code
+# https://www.anthropic.com/claude-code
 
 identity = "claude.com"
 name = "Claude Code"
 short_name = "claude"
-url = "https://www.claude.com/product/claude-code"
+url = "https://www.anthropic.com/claude-code"
 protocol = "acp"
 author_name = "Anthropic"
 author_url = "https://www.anthropic.com/"
-publisher_name = "SuperQode Team"
-publisher_url = "https://github.com/SuperagenticAI/superqode"
+publisher_name = "Zed Industries"
+publisher_url = "https://zed.dev"
 type = "coding"
 description = "Unleash Claude's raw power directly in your terminal. Search million-line codebases instantly."
 tags = ["anthropic", "claude", "powerful"]
@@ -24,8 +24,23 @@ Built for developers. Unleash Claude's raw power directly in your terminal.
 - Turn hours-long workflows into a single command
 - Your tools. Your workflow. Your codebase, evolving at thought speed
 
+## Installation
+
+Install Claude Code ACP adapter via npm:
+
+```bash
+npm i @zed-industries/claude-code-acp
+```
+
+**Requirements:**
+- Node.js (v18 or higher)
+- npm
+- ANTHROPIC_API_KEY
+
 ---
-[ACP adapter for Claude Code](https://github.com/zed-industries/claude-code-acp) by Zed Industries.
+
+**For latest install instructions**: https://zed.dev/acp/agent/claude-code
+**ACP Adapter**: https://github.com/zed-industries/claude-code-acp
 '''
 
 welcome = '''
@@ -41,9 +56,5 @@ Just tell me what you'd like to work on!
 '''
 
 [actions."*".install]
-command = "curl -fsSL https://claude.ai/install.sh | bash && npm install -g @zed-industries/claude-code-acp"
-description = "Install Claude Code + ACP adapter"
-
-[actions."*".install_acp]
-command = "npm install -g @zed-industries/claude-code-acp"
-description = "Install ACP adapter only"
+command = "npm i @zed-industries/claude-code-acp"
+description = "Install Claude Code ACP adapter (see https://zed.dev/acp for latest)"

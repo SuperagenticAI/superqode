@@ -7,8 +7,8 @@ url = "https://opencode.ai/"
 protocol = "acp"
 author_name = "SST"
 author_url = "https://sst.dev/"
-publisher_name = "SuperQode Team"
-publisher_url = "https://github.com/your-org/superqode"
+publisher_name = "SST"
+publisher_url = "https://github.com/sst/opencode"
 type = "coding"
 description = "The AI coding agent built for the terminal with client/server architecture and ACP support via adapter."
 tags = ["open-source", "terminal-first", "github-integration"]
@@ -50,11 +50,11 @@ https://github.com/josephschmitt/opencode-acp
 
 ---
 
+**For latest install instructions**: https://zed.dev/acp/agent/opencode
 **Website**: https://opencode.ai/
 **GitHub**: https://github.com/sst/opencode
-**ACP Adapter**: https://github.com/josephschmitt/opencode-acp
 '''
 
 [actions."*".install]
 command = "npm i -g opencode-ai"
-description = "Install OpenCode (may require sudo on some systems)"
+description = "Install OpenCode (see https://zed.dev/acp for latest)"

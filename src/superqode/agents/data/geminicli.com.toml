@@ -7,8 +7,8 @@ url = "https://github.com/google-gemini/gemini-cli"
 protocol = "acp"
 author_name = "Google"
 author_url = "https://www.google.com"
-publisher_name = "SuperQode Team"
-publisher_url = "https://github.com/superagentic/superqode"
+publisher_name = "Google"
+publisher_url = "https://github.com/google-gemini/gemini-cli"
 type = "coding"
 description = "Google's reference ACP implementation. Query and edit large codebases, generate apps from images or PDFs, and automate complex workflows—all from your terminal."
 tags = ["google", "gemini", "multimodal", "acp"]
@@ -64,12 +64,13 @@ gemini --experimental-acp
 
 ---
 
+**For latest install instructions**: https://zed.dev/acp/agent/gemini-cli
 **GitHub**: https://github.com/google-gemini/gemini-cli
 '''
 
 [actions."*".install]
-command = "npm install -g @google/gemini-cli"
-description = "Install Gemini CLI globally via npm"
+command = "npm i -g @google/gemini-cli"
+description = "Install Gemini CLI globally (see https://zed.dev/acp for latest)"
 
 [actions."*".configure]
 command = "gemini --configure"

@@ -8,8 +8,8 @@ url = "https://github.com/block/goose"
 protocol = "acp"
 author_name = "Block"
 author_url = "https://www.block.xyz/"
-publisher_name = "SuperQode Team"
-publisher_url = "https://github.com/SuperagenticAI/superqode"
+publisher_name = "Block"
+publisher_url = "https://github.com/block/goose"
 type = "coding"
 description = "Goose is a developer tool that helps you write code faster by automating repetitive tasks."
 tags = ["automation", "productivity", "block"]
@@ -31,7 +31,9 @@ Goose uses AI to understand your codebase and help you write code more efficient
 Goose integrates with your existing development workflow and tools.
 
 ---
-[GitHub Repository](https://github.com/block/goose)
+
+**For latest install instructions**: https://zed.dev/acp/agent/goose
+**GitHub**: https://github.com/block/goose
 '''
 
 welcome = '''
@@ -49,4 +51,4 @@ What can I help you build today?
 
 [actions."*".install]
 command = "pipx install goose-ai"
-description = "Install Goose via pipx"
+description = "Install Goose via pipx (see https://zed.dev/acp for latest)"
