@@ -262,10 +262,7 @@ def _escape_applescript(text: str) -> str:
 def _escape_xml(text: str) -> str:
     """Escape text for XML."""
     return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     )
 
 

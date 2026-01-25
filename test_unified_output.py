@@ -86,8 +86,7 @@ class TestOutputApp(App):
                 self._log = ConversationLog(id="conversation-log")
                 yield self._log
             self._status = Static(
-                "Press 1-4 to test different modes | Ctrl+Shift+C to copy response",
-                id="status"
+                "Press 1-4 to test different modes | Ctrl+Shift+C to copy response", id="status"
             )
             yield self._status
         yield Footer()
@@ -190,7 +189,7 @@ class TestOutputApp(App):
             "2. **Updated error handling** in `utils.py`\n"
             "3. All tests passing (5/5)\n\n"
             "```python\ndef process_data(data: list) -> dict:\n    if not data:\n        return {}\n    return {item: process(item) for item in data}\n```",
-            agent="OpenCode"
+            agent="OpenCode",
         )
 
         if self._status:
@@ -245,7 +244,7 @@ class TestOutputApp(App):
             "2. Error handling in place\n"
             "3. Performance is O(n)\n\n"
             "The code looks good overall!",
-            agent="Claude"
+            agent="Claude",
         )
 
         if self._status:
@@ -286,7 +285,7 @@ class TestOutputApp(App):
             "- **Privacy** - Data stays local\n"
             "- **Speed** - No network latency\n"
             "- **Cost** - No API charges",
-            agent="Ollama"
+            agent="Ollama",
         )
 
         if self._status:

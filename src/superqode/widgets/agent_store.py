@@ -37,6 +37,7 @@ from textual.widgets.option_list import Option
 from textual.reactive import reactive
 from textual.message import Message
 from textual import events
+
 # Optional clipboard support - gracefully handle if not available
 try:
     import pyperclip
@@ -230,9 +231,7 @@ class InstallGuidancePanel(ModalScreen):
         with Container(id="install-dialog"):
             # Header
             with Container(id="install-header"):
-                yield Static(
-                    f" Install {self.agent.name}", id="install-title"
-                )
+                yield Static(f" Install {self.agent.name}", id="install-title")
                 yield Static(
                     "Run these commands in your terminal to install the agent",
                     id="install-subtitle",
@@ -280,9 +279,7 @@ class InstallGuidancePanel(ModalScreen):
             if self.agent.documentation_url or self.agent.homepage or self.agent.repository:
                 with Container(id="docs-section"):
                     doc_url = (
-                        self.agent.documentation_url
-                        or self.agent.homepage
-                        or self.agent.repository
+                        self.agent.documentation_url or self.agent.homepage or self.agent.repository
                     )
                     yield Static(
                         Text.assemble(
@@ -680,7 +677,9 @@ class AgentStoreScreen(Screen):
                 yield Static("Select an agent", id="detail-content")
                 with Horizontal(id="detail-actions"):
                     yield Button("Launch", id="btn-launch", classes="action-button launch-btn")
-                    yield Button(" Setup Guide", id="btn-install", classes="action-button install-btn")
+                    yield Button(
+                        " Setup Guide", id="btn-install", classes="action-button install-btn"
+                    )
 
         yield Footer()
 

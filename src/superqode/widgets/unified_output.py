@@ -46,6 +46,7 @@ from textual.widgets import Static
 # THEME - Consistent colors across all displays
 # ============================================================================
 
+
 class Theme:
     """SuperQode unified theme."""
 
@@ -150,6 +151,7 @@ def copy_to_clipboard(text: str) -> Tuple[bool, str]:
 
 class OutputMode(Enum):
     """Connection mode for output."""
+
     BYOK = "byok"
     ACP = "acp"
     LOCAL = "local"
@@ -157,6 +159,7 @@ class OutputMode(Enum):
 
 class OutputState(Enum):
     """State of the output display."""
+
     IDLE = "idle"
     THINKING = "thinking"
     STREAMING = "streaming"
@@ -167,6 +170,7 @@ class OutputState(Enum):
 @dataclass
 class ThinkingEntry:
     """A single thinking/reasoning entry."""
+
     text: str
     category: str = "general"
     timestamp: float = field(default_factory=monotonic)
@@ -194,6 +198,7 @@ class ThinkingEntry:
 @dataclass
 class OutputStats:
     """Statistics for the output."""
+
     mode: OutputMode = OutputMode.BYOK
     agent_name: str = ""
     model_name: str = ""

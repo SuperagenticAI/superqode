@@ -54,7 +54,7 @@ superqe init
 superqe run . --mode quick
 ```
 
-SuperQode: A TUI and coding agent harnedd for interactive exploration 
+SuperQode: A TUI and coding agent harnedd for interactive exploration
 
 ```bash
 # Install
@@ -64,7 +64,7 @@ uv tool install superqode
 cd your-project
 superqode
 ```
-Follow the TUI help commands 
+Follow the TUI help commands
 
 
 

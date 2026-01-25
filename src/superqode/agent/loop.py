@@ -757,7 +757,10 @@ class AgentLoop:
                         should_emit = (
                             thinking_buffer.rstrip().endswith((".", "?", "!", "\n"))
                             or len(thinking_buffer) > 200
-                            or (current_time - last_thinking_emit > 0.5 and len(thinking_buffer) > 20)
+                            or (
+                                current_time - last_thinking_emit > 0.5
+                                and len(thinking_buffer) > 20
+                            )
                         )
 
                         if should_emit and self.on_thinking and thinking_buffer.strip():
