@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.1.2"
+version = "0.1.3"
 description = "SuperQode: Super Quality Engineering for Agentic Coding Teams"
 readme = "README.md"
 requires-python = ">=3.12"
