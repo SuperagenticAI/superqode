@@ -4145,8 +4145,9 @@ team:
         async def on_thinking_async(text: str):
             """Handle thinking - toggleable with Ctrl+T."""
             if text and text.strip():
-                # Use _show_thinking_line which respects show_thinking_logs toggle
-                _safe_call(self._show_thinking_line, f"🧠 {text}", log)
+                # Use log.add_thinking for cleaner, categorized output with varied emojis
+                # This matches ACP style and avoids the "brain emoji" overload
+                _safe_call(log.add_thinking, text, "general")
 
         # Set callbacks on pure_mode (for both local and cloud providers)
         self._pure_mode.on_tool_call = on_tool_call
@@ -4168,18 +4169,17 @@ team:
             chunk_count = 0
             response_started = False
 
-            # Show header and start streaming animation (like ACP)
-            # For BYOK, keep thinking animation running and show thinking logs
-            # For local models, keep the scanning animation running (don't stop thinking)
-            if not is_local:
-                # BYOK: Keep thinking animation visible, start stream animation too
-                # This shows both the animated bar AND thinking logs
-                self._start_stream_animation(log)
-            else:
-                # Local: Just keep thinking animation, no stream animation
-                pass
-            self._show_agent_header_with_model(
-                f"BYOK {provider}/{model}", f"{provider}/{model}", log
+            # Stop thinking animation (spinning bar), start streaming animation (flowing line)
+            self._stop_thinking()
+            self._start_stream_animation(log)
+
+            # Use enhanced agent session header (always visible)
+            _safe_call(
+                log.start_agent_session,
+                f"BYOK {provider}",
+                model,
+                "byok" if not is_local else "local",
+                self.approval_mode,
             )
 
             # Stream the response
@@ -4191,11 +4191,6 @@ team:
 
                 async for chunk in self._pure_mode.run_streaming(text):
                     chunk_count += 1
-
-                    # For BYOK, keep thinking animation running to show animated bar
-                    # The thinking logs will appear via callbacks
-                    # For local models, keep the scanning animation running until response is complete
-                    # Don't stop thinking animation - let it run to show the animated bar
 
                     # Process chunk
                     if chunk is not None:
@@ -4210,23 +4205,37 @@ team:
                             response_started = True
 
                             # Display accumulated chunk every 100ms or when we hit a newline
-                            # Response chunks go to log.add_assistant (not _show_thinking_line)
+                            # Response chunks go to log.add_response_chunk (not add_assistant)
                             current_time = time.time()
                             if (
                                 "\n" in chunk_str
                                 or current_time - last_display_time > 0.1
                                 or len(accumulated_chunk) > 100
                             ):
-                                log.add_assistant(accumulated_chunk)
+                                _safe_call(log.add_response_chunk, accumulated_chunk)
                                 accumulated_chunk = ""
                                 last_display_time = current_time
 
             except StopAsyncIteration:
                 # Normal end of stream - display any remaining accumulated chunks
-                if accumulated_chunk.strip():
-                    log.add_assistant(accumulated_chunk)
-                # Stop thinking animation when response is complete
-                self._stop_thinking()
+                if accumulated_chunk:
+                    _safe_call(log.add_response_chunk, accumulated_chunk)
+
+                # Stop streaming animation
+                self._stop_stream_animation()
+
+                # End agent session with summary
+                # Extract stats if available from pure_mode
+                stats = getattr(self._pure_mode, "_last_stats", {})
+                _safe_call(
+                    log.end_agent_session,
+                    True,
+                    full_response,
+                    stats.get("prompt_tokens", 0),
+                    stats.get("completion_tokens", 0),
+                    stats.get("thinking_tokens", 0),
+                    stats.get("total_cost", 0.0),
+                )
                 pass
             except Exception as stream_error:
                 # Error during streaming

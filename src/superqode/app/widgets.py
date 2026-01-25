@@ -1062,6 +1062,9 @@ class ConversationLog(RichLog):
             "verifying": "✅",
             "testing": "🧪",
             "refactoring": "🔧",
+            "discovery": "🔭",
+            "thinking": "🧠",
+            "notifying": "🔔",
             "general": "💭",
         }
         icon = icons.get(category.lower(), "💭")
@@ -1069,22 +1072,28 @@ class ConversationLog(RichLog):
         # Auto-detect category from text if not specified
         if category == "general":
             text_lower = text.lower()
-            if any(w in text_lower for w in ["test", "pytest", "expect"]):
+            if any(w in text_lower for w in ["test", "pytest", "expect", "assertion"]):
                 icon = "🧪"
-            elif any(w in text_lower for w in ["run", "execute", "command"]):
+            elif any(w in text_lower for w in ["run", "execute", "command", "bash", "shell"]):
                 icon = "⚡"
-            elif any(w in text_lower for w in ["verify", "confirm", "check"]):
+            elif any(w in text_lower for w in ["verify", "confirm", "check", "validation"]):
                 icon = "✅"
-            elif any(w in text_lower for w in ["debug", "error", "fix", "bug"]):
+            elif any(w in text_lower for w in ["debug", "error", "fix", "bug", "traceback"]):
                 icon = "🐛"
-            elif any(w in text_lower for w in ["plan", "step", "approach"]):
+            elif any(w in text_lower for w in ["plan", "step", "approach", "todo"]):
                 icon = "📋"
-            elif any(w in text_lower for w in ["search", "find", "look"]):
+            elif any(w in text_lower for w in ["search", "find", "look", "grep", "glob"]):
                 icon = "🔍"
-            elif any(w in text_lower for w in ["read", "file", "content"]):
+            elif any(w in text_lower for w in ["read", "file", "content", "cat"]):
                 icon = "📖"
-            elif any(w in text_lower for w in ["write", "create", "add"]):
+            elif any(w in text_lower for w in ["write", "create", "add", "edit", "save"]):
                 icon = "✏️"
+            elif any(w in text_lower for w in ["discover", "list", "explore", "scan"]):
+                icon = "🔭"
+            elif any(w in text_lower for w in ["think", "reason", "ponder", "analyze"]):
+                icon = "🧠"
+            elif any(w in text_lower for w in ["info", "note", "alert", "notice"]):
+                icon = "🔔"
 
         # Display thinking line
         line = Text()
