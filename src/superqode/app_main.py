@@ -3531,8 +3531,8 @@ class SuperQodeApp(App):
             log.add_system("Use :init --force to overwrite")
             return
 
-        # Use the same template as CLI init command
-        template_path = Path(__file__).parent.parent.parent / "superqode-template.yaml"
+        # Use the packaged template
+        template_path = Path(__file__).parent / "data" / "superqode-template.yaml"
         if template_path.exists():
             import shutil
 

@@ -503,6 +503,10 @@ def _load_yaml_data(project_root: Path) -> Dict[str, Any]:
     if config_path is None:
         candidate = project_root / "superqode.yaml"
         if not candidate.exists():
+            # Fall back to packaged template
+            template_path = Path(__file__).parent.parent / "data" / "superqode-template.yaml"
+            if template_path.exists():
+                return load_config_from_file(template_path)
             return {}
         config_path = candidate
 

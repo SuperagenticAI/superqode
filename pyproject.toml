@@ -100,7 +100,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-superqode = ["agents/data/*.toml"]
+superqode = ["agents/data/*.toml", "data/*.yaml"]
 
 [tool.ruff]
 line-length = 100
