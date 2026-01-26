@@ -11825,7 +11825,7 @@ team:
                     "🔑 BYOK Providers",
                     THEME["success"],
                     "Bring Your Own Key - Direct provider/model connection",
-                    ":connect byok anthropic/claude-3-5-sonnet",
+                    ":connect byok anthropic/claude-4-5-sonnet",
                 ),
                 (
                     3,

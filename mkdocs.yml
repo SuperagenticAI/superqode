@@ -207,7 +207,6 @@ nav:
     - integration/index.md
     - 🔄 CI/CD Integration: integration/cicd.md
     - 📝 IDE Integration: integration/ide.md
-    - 🍺 Homebrew Releases: integration/homebrew.md
     - 🐙 GitHub Actions: integration/github-actions.md
     - 🦊 GitLab CI: integration/gitlab-ci.md
 

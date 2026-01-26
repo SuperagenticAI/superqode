@@ -6,11 +6,11 @@
 
 # **SUPERQODE**
 
-### Super Quality Engineering for Agentic Coding Teams.
+### Superior Quality-Oriented Agentic Software Development.
 
-Orchestrating coding agents as **Super Quality Engineers** using the **SuperQE methodology** - breaking code, verifying fixes, shipping with confidence.
+Orchestrating coding agents as **Super Quality Engineers** using the **SuperQE methodology**. Let agents break the code. Prove the fix. Ship with confidence.
 
-<p class="tagline">Let agents break the code. Prove the fix. Ship with confidence.</p>
+<p class="tagline">Orchestrate, Validate, and Deploy Agentic Software with Unshakable Confidence.</p>
 
 [:octicons-rocket-24: Get Started](getting-started/installation.md){ .md-button .md-button--primary }
 [:octicons-book-24: Learn Concepts](concepts/index.md){ .md-button }
@@ -21,6 +21,10 @@ Orchestrating coding agents as **Super Quality Engineers** using the **SuperQE m
 ---
 
 ## What is SuperQode and SuperQE?
+
+**SuperQE** is the quality paradigm and automation CLI: **Super Quality Engineering for Agentic AI**. It uses QE coding agents to break and validate code written by coding agents. SuperQE can spawn a team of QE agents with different testing personas in a multi-agent setup to stress your code from many angles.
+
+**SuperQode** is the agentic coding harness designed to drive the SuperQE process. It delivers a **Superior and Quality Optimized Developer Experience** as a TUI for interactive development, debugging, and exploratory QE. SuperQode can also be used as a general development harness beyond QE.
 
 ### Why SuperQode Exists
 
@@ -76,11 +80,7 @@ Agents are free to break things - your repo is always restored.
 - Evidence over opinions
 - Self-hosted and privacy-first
 
-**SuperQE** is the quality paradigm and automation CLI: **Super Quality Engineering for Agentic AI**. It uses QE coding agents to break and validate code written by coding agents. SuperQE can spawn a team of QE agents with different testing personas in a multi-agent setup to stress your code from many angles.
 
-**SuperQode** is the agentic coding harness designed to drive the SuperQE process. It delivers a **Superior and Quality Optimized Developer Experience** as a TUI for interactive development, debugging, and exploratory QE. SuperQode can also be used as a general development harness beyond QE.
-
-One install ships both entrypoints: `superqode` (TUI) and `superqe` (CLI).
 SuperQE runs cleanly in CI/CD pipelines, while SuperQode drives SuperQE for interactive workflows. You can also use each independently.
 
 What you get out of a run:
@@ -93,10 +93,12 @@ Safety model: by default, SuperQode does not modify your repo. All exploratory c
 ```bash
 # After install, in your repo:
 superqe init
-superqe run . --mode quick
 
-# Start the developer TUI (optional, for interactive workflows)
+# Start the developer TUI (recommended for interactive workflows)
 superqode
+
+# Or run automated QE CLI
+superqe run . --mode quick
 ```
 
 `superqe init` creates a comprehensive role catalog in `superqode.yaml`. Disable or delete roles you don’t need.
@@ -280,7 +282,16 @@ This enables **fearless, exhaustive testing** - agents explore freely while your
     superqe init
     ```
 
-=== "Run QE Session"
+=== "Interactive TUI"
+
+    ```bash
+    # Start the developer TUI
+    superqode
+    ```
+
+    Follow the on-screen instructions to explore, debug, and run QE sessions interactively.
+
+=== "Automated QE (CLI)"
 
     ```bash
     # Quick scan (60s timeout)
@@ -480,15 +491,15 @@ JSONL events and Python SDK
 
 As software becomes increasingly agent-written, **only agentic quality engineering can keep it safe**.
 
-**SuperQode** orchestrates coding agents as Super Quality Engineers and operationalizes SuperQE (Agentic Quality Engineering) - letting orchestrated AI agents aggressively break software, demonstrate issues, prove fixes, and validate readiness before humans approve release.
+**SuperQode** orchestrates coding agents as Super Quality Engineers and operationalizes SuperQE (Agentic Quality Engineering). Let agents break the code. Prove the fix. Ship with confidence. Validate readiness before humans approve release.
 
 ---
 
 <div class="footer-tagline" markdown>
 
-**SuperQode: Super Quality Engineering for Agentic Coding Teams.**
+**SuperQode: Superior Quality-Oriented Agentic Software Development.**
 
-*Operationalizing SuperQE (Agentic Quality Engineering) - Orchestration of coding agents as Super Quality Engineers*
+*Operationalizing SuperQE (Agentic Quality Engineering) - Let agents break the code. Prove the fix. Ship with confidence.*
 
 *Built from first principles for Agentic QE. Self-hosted. Privacy-first. Human-in-the-loop.*
 

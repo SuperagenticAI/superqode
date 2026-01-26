@@ -5,8 +5,9 @@
 <h1 align="center">SuperQode</h1>
 
 <p align="center">
-  <strong>Super Quality Engineering for Agentic Coding Teams</strong><br>
-  <em>Let agents break the code. Prove the fix. Ship with confidence.</em>
+  <strong>Superior Quality-Oriented Agentic Software Development</strong><br>
+  <em>Orchestrate, Validate, and Deploy Agentic Software with Unshakable Confidence.</em><br>
+  <strong>Let agents break the code. Prove the fix. Ship with confidence.</strong>
 </p>
 
 <p align="center">
@@ -31,16 +32,25 @@
 
 ---
 
-## What is SuperQode?
+## What is SuperQode and SuperQE?
 
-**SuperQode** is a quality-oriented harness for AI coding agents. Multiple QE agents attack and validate code in sandboxes before it ships—adversarial validation with evidence, where humans remain in control.
+**SuperQE** is the quality paradigm and automation CLI: Super Quality Engineering for Agentic AI. It uses QE coding agents to break and validate code written by coding agents. SuperQE can spawn a team of QE agents with different testing personas in a multi-agent setup to stress your code from many angles.
 
-| Component | Purpose |
-|-----------|---------|
-| **`superqe`** | Quality Engineering for Agentic Coding Teams |
-| **`superqode`** | Exploratory coding agent harness beyond QE |
+**SuperQode** is the agentic coding harness designed to drive the SuperQE process. It delivers a Superior and Quality Optimized Developer Experience as a TUI for interactive development, debugging, and exploratory QE. SuperQode can also be used as a general development harness beyond QE.
 
 ## Quick Start
+
+SuperQode: A TUI and coding agent harness for interactive exploration
+
+```bash
+# Install
+uv tool install superqode
+
+# Initialize & run
+cd your-project
+superqode
+```
+Follow the TUI help commands
 
 SuperQE : A CLI for automated QE in CI/CD
 
@@ -53,18 +63,6 @@ cd your-project
 superqe init
 superqe run . --mode quick
 ```
-
-SuperQode: A TUI and coding agent harnedd for interactive exploration
-
-```bash
-# Install
-uv tool install superqode
-
-# Initialize & run
-cd your-project
-superqode
-```
-Follow the TUI help commands
 
 
 
