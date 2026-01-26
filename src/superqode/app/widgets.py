@@ -1067,7 +1067,7 @@ class ConversationLog(RichLog):
             "notifying": ("🔔", "#facc15"),
             "general": ("💭", "#94a3b8"),
         }
-        
+
         icon, color = category_styles.get(category.lower(), category_styles["general"])
 
         # Auto-detect category from text if not specified (or is general)
@@ -1099,6 +1099,7 @@ class ConversationLog(RichLog):
                 # Randomize generic icon to avoid repetition
                 generic_icons = ["💭", "💡", "⚙️", "🧩", "🔮", "✨", "📡"]
                 import random
+
                 icon = random.choice(generic_icons)
                 # Keep neutral color for generic thoughts
 
@@ -1166,7 +1167,9 @@ class ConversationLog(RichLog):
         """Flush any remaining buffered response chunks."""
         if hasattr(self, "_chunk_buffer") and self._chunk_buffer:
             chunk_text = Text()
-            style = f"bold {THEME['cyan']}" if getattr(self, "_in_code_block", False) else THEME["text"]
+            style = (
+                f"bold {THEME['cyan']}" if getattr(self, "_in_code_block", False) else THEME["text"]
+            )
             chunk_text.append(self._chunk_buffer, style=style)
             self.write(chunk_text)
             self._chunk_buffer = ""
@@ -1203,7 +1206,7 @@ class ConversationLog(RichLog):
             # Initialize _files_modified if not exists
             if not hasattr(self, "_files_modified"):
                 self._files_modified = set()
-            
+
             # Add to set if it's a write/edit operation
             tool_lower = tool_name.lower()
             if any(op in tool_lower for op in ("write", "edit", "create", "append", "patch")):
@@ -1298,7 +1301,7 @@ class ConversationLog(RichLog):
 
         # Build rich summary panel
         summary_content = Text()
-        
+
         # 1. Header
         if success:
             summary_content.append("✅ Mission Accomplished", style=f"bold {THEME['success']}")
@@ -1311,7 +1314,7 @@ class ConversationLog(RichLog):
         for tool in getattr(self, "_tool_calls", []):
             name = tool.get("name", "Unknown")
             tool_counts[name] = tool_counts.get(name, 0) + 1
-        
+
         if tool_counts:
             summary_content.append("🛠️  Tool Usage:\n", style="bold")
             for name, count in tool_counts.items():
@@ -1330,7 +1333,7 @@ class ConversationLog(RichLog):
         # 4. Performance Stats Grid
         summary_content.append("📊 Stats:\n", style="bold")
         total_tokens = prompt_tokens + completion_tokens
-        
+
         stats_line = []
         if duration > 0:
             stats_line.append(f"⏱  {duration:.1f}s")
@@ -1338,7 +1341,7 @@ class ConversationLog(RichLog):
             stats_line.append(f"🔤 {total_tokens:,} toks")
         if cost > 0:
             stats_line.append(f"💰 ${cost:.4f}")
-            
+
         summary_content.append("  " + "  •  ".join(stats_line), style=THEME["dim"])
         summary_content.append("\n")
 
@@ -1348,15 +1351,18 @@ class ConversationLog(RichLog):
             title="[bold]Session Report[/bold]",
             border_style=THEME["success"] if success else THEME["error"],
             box=ROUNDED,
-            padding=(1, 2)
+            padding=(1, 2),
         )
-        
+
         self.write(panel)
 
         # Copy hint
         footer = Text()
         footer.append("\n")
-        footer.append("  [Shift+Drag to select text] • [Ctrl+Shift+C to copy full response]", style=THEME["dim"])
+        footer.append(
+            "  [Shift+Drag to select text] • [Ctrl+Shift+C to copy full response]",
+            style=THEME["dim"],
+        )
         footer.append("\n")
 
         self.write(footer)

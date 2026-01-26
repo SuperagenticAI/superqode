@@ -20,11 +20,14 @@ from .registry import (
 if TYPE_CHECKING:
     from .client import ACPAgentManager, SuperQodeACPClient
 
+
 def __getattr__(name):
     if name in ("ACPAgentManager", "SuperQodeACPClient"):
         from .client import ACPAgentManager, SuperQodeACPClient
+
         return locals()[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     # Client

@@ -8473,9 +8473,7 @@ team:
                 else:
                     # Truncate large lists
                     summary = f"[{len(data)} items] " + str(data[:3])[:-1] + ", ...]"
-                    self.call_from_thread(
-                        log.add_tool_call, tool_name, "success", "", "", summary
-                    )
+                    self.call_from_thread(log.add_tool_call, tool_name, "success", "", "", summary)
                 return True
             elif isinstance(data, dict):
                 if len(data) <= 6:
@@ -8483,9 +8481,7 @@ team:
                 else:
                     # Truncate large dicts
                     summary = f"{{... {len(data)} keys ...}}"
-                    self.call_from_thread(
-                        log.add_tool_call, tool_name, "success", "", "", summary
-                    )
+                    self.call_from_thread(log.add_tool_call, tool_name, "success", "", "", summary)
                 return True
 
         except (json.JSONDecodeError, TypeError, KeyError):
@@ -8494,9 +8490,7 @@ team:
         # If we got here and it's a long string that looks like data, truncate it
         if len(output_str) > 500:
             summary = output_str[:500] + "... (truncated)"
-            self.call_from_thread(
-                log.add_tool_call, tool_name, "success", "", "", summary
-            )
+            self.call_from_thread(log.add_tool_call, tool_name, "success", "", "", summary)
             return True
 
         return False
