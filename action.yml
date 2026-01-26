@@ -29,9 +29,19 @@ branding:
 
 inputs:
   mode:
-    description: 'QE mode: quick (fast, pre-commit) or deep (full, pre-release)'
+    description: 'QE mode: only "quick" is supported'
     required: false
     default: 'quick'
+
+  security-tester:
+    description: 'Enable the security tester role'
+    required: false
+    default: 'false'
+
+  run-linter:
+    description: 'Run the linter role (no model connection required)'
+    required: false
+    default: 'false'
 
   path:
     description: 'Path to analyze (relative to repository root)'
@@ -58,12 +68,12 @@ inputs:
     default: 'true'
 
   upload-artifacts:
-    description: 'Upload QE artifacts (patches, tests, QIR)'
+    description: 'Upload QE artifacts (patches, tests, QR)'
     required: false
     default: 'true'
 
   comment-on-pr:
-    description: 'Comment QIR summary on pull requests'
+    description: 'Comment QR summary on pull requests'
     required: false
     default: 'true'
 
@@ -88,9 +98,9 @@ outputs:
     description: 'Number of tests failed'
     value: ${{ steps.qe.outputs.tests_failed }}
 
-  qir-path:
-    description: 'Path to the generated QIR'
-    value: ${{ steps.qe.outputs.qir_path }}
+  qr-path:
+    description: 'Path to the generated QR'
+    value: ${{ steps.qe.outputs.qr_path }}
 
 runs:
   using: 'composite'
@@ -106,6 +116,18 @@ runs:
       run: |
         pip install superqode
 
+    - name: Show Security Tester Warning
+      if: inputs.security-tester == 'true'
+      shell: bash
+      run: |
+        echo "⚠️  Security Tester Warning"
+        echo "The security tester role requires a model connection."
+        echo "Please ensure you have one of the following configured:"
+        echo "  - ACP (Agent Communication Protocol)"
+        echo "  - BYOK (Bring Your Own Key)"
+        echo "  - A local model"
+        echo "Alternatively, you can use an enterprise license."
+
     - name: Run QE Session
       id: qe
       shell: bash
@@ -116,17 +138,22 @@ runs:
         PATH_ARG="${{ inputs.path }}"
         JUNIT="${{ inputs.junit-report }}"
         TIMEOUT_ARG=""
+        ROLES_ARG=""
 
         if [ -n "${{ inputs.timeout }}" ]; then
           TIMEOUT_ARG="--timeout ${{ inputs.timeout }}"
         fi
 
-        # Run SuperQE
-        if [ "$MODE" = "deep" ]; then
-          superqe deep "$PATH_ARG" --junit "$JUNIT" $TIMEOUT_ARG --json > qe-output.json 2>&1
-        else
-          superqe quick "$PATH_ARG" --junit "$JUNIT" $TIMEOUT_ARG --json > qe-output.json 2>&1
+        if [ "${{ inputs.security-tester }}" = "true" ]; then
+          ROLES_ARG="--role security_tester"
         fi
+
+        if [ "${{ inputs.run-linter }}" = "true" ]; then
+          ROLES_ARG="$ROLES_ARG --role lint_tester"
+        fi
+
+        # Run SuperQE
+        superqe quick "$PATH_ARG" --junit "$JUNIT" $TIMEOUT_ARG $ROLES_ARG --json > qe-output.json 2>&1
 
         EXIT_CODE=$?
 
@@ -137,14 +164,14 @@ runs:
           echo "critical_count=$(jq -r '.critical_count // 0' qe-output.json)" >> $GITHUB_OUTPUT
           echo "tests_passed=$(jq -r '.tests_passed // 0' qe-output.json)" >> $GITHUB_OUTPUT
           echo "tests_failed=$(jq -r '.tests_failed // 0' qe-output.json)" >> $GITHUB_OUTPUT
-          echo "qir_path=$(jq -r '.qir_path // ""' qe-output.json)" >> $GITHUB_OUTPUT
+          echo "qr_path=$(jq -r '.qr_path // ""' qe-output.json)" >> $GITHUB_OUTPUT
         else
           echo "success=false" >> $GITHUB_OUTPUT
           echo "findings_count=0" >> $GITHUB_OUTPUT
           echo "critical_count=0" >> $GITHUB_OUTPUT
           echo "tests_passed=0" >> $GITHUB_OUTPUT
           echo "tests_failed=0" >> $GITHUB_OUTPUT
-          echo "qir_path=" >> $GITHUB_OUTPUT
+          echo "qr_path=" >> $GITHUB_OUTPUT
         fi
 
         # Exit with original code if fail-on-findings is true
@@ -171,24 +198,24 @@ runs:
         path: ${{ inputs.junit-report }}
         if-no-files-found: ignore
 
-    - name: Comment QIR on PR
+    - name: Comment QR on PR
       if: inputs.comment-on-pr == 'true' && github.event_name == 'pull_request' && always()
       uses: actions/github-script@v7
       with:
         script: |
           const fs = require('fs');
-          const qirPath = '.superqode/qe-artifacts/reports/';
+          const qrPath = '.superqode/qe-artifacts/reports/';
 
-          // Find the latest QIR
-          let qirContent = 'No QIR generated.';
-          if (fs.existsSync(qirPath)) {
-            const files = fs.readdirSync(qirPath).filter(f => f.endsWith('.md'));
+          // Find the latest QR
+          let qrContent = 'No QR generated.';
+          if (fs.existsSync(qrPath)) {
+            const files = fs.readdirSync(qrPath).filter(f => f.endsWith('.md'));
             if (files.length > 0) {
-              const latestQir = files.sort().pop();
-              qirContent = fs.readFileSync(`${qirPath}${latestQir}`, 'utf8');
+              const latestQr = files.sort().pop();
+              qrContent = fs.readFileSync(`${qrPath}${latestQr}`, 'utf8');
               // Truncate if too long
-              if (qirContent.length > 60000) {
-                qirContent = qirContent.substring(0, 60000) + '\n\n...(truncated)';
+              if (qrContent.length > 60000) {
+                qrContent = qrContent.substring(0, 60000) + '\n\n...(truncated)';
               }
             }
           }
@@ -201,10 +228,10 @@ runs:
           });
 
           const superqodeComment = comments.find(c =>
-            c.body.includes('SuperQE Quality Investigation Report')
+            c.body.includes('SuperQE Quality Report')
           );
 
-          const body = `## 🔬 SuperQE Quality Investigation Report\n\n${qirContent}\n\n---\n*Generated by [SuperQode](https://github.com/superqode/superqode)*`;
+          const body = `## 🔬 SuperQE Quality Report\n\n${qrContent}\n\n---\n*Generated by [SuperQode](https://github.com/superqode/superqode)*`;
 
           if (superqodeComment) {
             // Update existing comment

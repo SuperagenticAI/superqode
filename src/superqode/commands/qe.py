@@ -554,10 +554,10 @@ def qe_show(artifact_id: str, path: str):
 
 @qe.command("clean")
 @click.argument("path", type=click.Path(exists=True), default=".")
-@click.option("--keep-qirs", is_flag=True, default=True, help="Keep QR files")
+@click.option("--keep-qrs", is_flag=True, default=True, help="Keep QR files")
 @click.option("--all", "clean_all", is_flag=True, help="Remove all including QRs")
 @click.confirmation_option(prompt="Are you sure you want to clean artifacts?")
-def qe_clean(path: str, keep_qirs: bool, clean_all: bool):
+def qe_clean(path: str, keep_qrs: bool, clean_all: bool):
     """Clean up QE artifacts."""
     if not _enterprise_only("QE artifact cleanup"):
         return 1
@@ -567,7 +567,7 @@ def qe_clean(path: str, keep_qirs: bool, clean_all: bool):
     manager = ArtifactManager(project_root)
     manager.initialize("cleanup")
 
-    removed = manager.cleanup(keep_qirs=keep_qirs and not clean_all)
+    removed = manager.cleanup(keep_qrs=keep_qrs and not clean_all)
 
     console.print(f"[green]✓[/green] Removed {removed} artifact(s)")
 
@@ -588,14 +588,14 @@ def qe_report(path: str, format: str, output: str):
     manager = ArtifactManager(project_root)
     manager.initialize("view")
 
-    qirs = manager.list_qirs()
-    if not qirs:
+    qrs = manager.list_qrs()
+    if not qrs:
         console.print("[dim]No QR reports found.[/dim]")
         console.print("[dim]Run 'superqe run .' to generate a report.[/dim]")
         return
 
     # Get latest QR
-    latest = qirs[-1]
+    latest = qrs[-1]
     content = manager.get_artifact_content(latest.id)
 
     if output:
@@ -970,10 +970,10 @@ def qe_feedback(
     project_root = Path(path).resolve()
     collector = FeedbackCollector(project_root)
 
-    # Find the finding in recent QIRs
-    finding_info = _find_finding_in_qirs(project_root, finding_id)
+    # Find the finding in recent QRs
+    finding_info = _find_finding_in_qrs(project_root, finding_id)
     if not finding_info:
-        console.print(f"[yellow]Warning:[/yellow] Finding '{finding_id}' not found in recent QIRs")
+        console.print(f"[yellow]Warning:[/yellow] Finding '{finding_id}' not found in recent QRs")
         console.print("[dim]Proceeding with limited information[/dim]")
         finding_info = {
             "id": finding_id,
@@ -1050,8 +1050,8 @@ def qe_feedback(
     return 0
 
 
-def _find_finding_in_qirs(project_root: Path, finding_id: str) -> Optional[Dict]:
-    """Search recent QIRs for a finding by ID."""
+def _find_finding_in_qrs(project_root: Path, finding_id: str) -> Optional[Dict]:
+    """Search recent QRs for a finding by ID."""
     qr_dir = project_root / ".superqode" / "qe-artifacts" / "qr"
     if not qr_dir.exists():
         return None

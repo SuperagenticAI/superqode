@@ -94,7 +94,7 @@ class LinterRunner:
             args = [tool, "check", ".", "--output-format", "json"]
             if config_path:
                 args.extend(["--config", str(config_path)])
-            elif config_arg:
+            if config_arg:
                 args.extend(["--config", str(config_arg)])
 
             stdout, stderr, code = await self._run_command(args)
