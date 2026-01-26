@@ -197,3 +197,4 @@ temp_setup.py
 
 # Protection layer
 src/superqode_cli/_protection.py
+release_builds/

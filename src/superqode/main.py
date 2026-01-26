@@ -1,7 +1,17 @@
 # Fix CWD before any imports that might resolve it (e.g., logfire via acp, litellm)
 # This prevents FileNotFoundError when current directory doesn't exist
 import os
+import sys
 import pathlib
+
+# CRITICAL: Set these BEFORE any other imports to prevent Pydantic/Logfire introspection crashes in PyInstaller
+if getattr(sys, "frozen", False):
+    # Running in PyInstaller bundle - disable problematic integrations
+    os.environ["LOGFIRE_DISABLE"] = "1"
+    os.environ["LOGFIRE_IGNORE_NO_CONFIG"] = "1"
+    # Prevent pydantic from trying to inspect source
+    os.environ["PYDANTIC_DISABLE_ERRORS"] = "1"
+    os.environ["PYDANTIC_SKIP_VALIDATING_CORE_SCHEMAS"] = "1"
 
 try:
     cwd = os.getcwd()
@@ -14,15 +24,6 @@ except (OSError, FileNotFoundError):
         os.chdir(os.path.expanduser("~"))
     except Exception:
         pass  # Last resort - let it fail naturally
-
-# Disable problematic integrations for PyInstaller BEFORE any other imports
-import sys
-
-if getattr(sys, "frozen", False):
-    # Running in PyInstaller bundle - disable problematic integrations
-    os.environ["LOGFIRE_DISABLE"] = "1"
-    # Prevent pydantic from trying to inspect source
-    os.environ["PYDANTIC_DISABLE_ERRORS"] = "1"
 
 import argparse
 import json

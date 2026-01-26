@@ -1,0 +1,22 @@
+# Dockerfile for building SuperQode Linux binary
+FROM python:3.12-slim
+
+# Install system dependencies
+# git: required for pip install -e . if it relies on git versioning
+# build-essential: required for building some python extensions
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up work directory
+WORKDIR /app
+
+# Copy project files
+COPY . .
+
+# Make scripts executable
+RUN chmod +x scripts/build_linux_binary.sh
+
+# Entrypoint runs the build script
+CMD ["./scripts/build_linux_binary.sh"]

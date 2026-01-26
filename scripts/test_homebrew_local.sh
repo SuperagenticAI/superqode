@@ -2,8 +2,6 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TAP_DIR="${TAP_DIR:-/tmp/homebrew-superqode}"
-FORMULA_PATH="${TAP_DIR}/Formula/superqode.rb"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "This script currently supports macOS only."
@@ -20,23 +18,13 @@ case "${ARCH}" in
     ;;
 esac
 
-if [[ ! -d "${TAP_DIR}" ]]; then
-  echo "Tap repo not found at ${TAP_DIR}."
-  echo "Clone it first, e.g.:"
-  echo "  git clone https://github.com/SuperagenticAI/homebrew-superqode ${TAP_DIR}"
-  exit 1
-fi
-
-if [[ ! -f "${FORMULA_PATH}" ]]; then
-  echo "Formula not found at ${FORMULA_PATH}."
-  exit 1
-fi
-
+# 1. Build Binary
 if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
   echo "Building binary..."
   "${ROOT_DIR}/scripts/build_binary.sh"
 fi
 
+# 2. Package
 ARCHIVE_NAME="superqode-${PLATFORM}.tar.gz"
 ARCHIVE_PATH="${ROOT_DIR}/${ARCHIVE_NAME}"
 
@@ -46,10 +34,19 @@ tar -C "${ROOT_DIR}/dist" -czf "${ARCHIVE_PATH}" superqode
 SHA256="$(shasum -a 256 "${ARCHIVE_PATH}" | awk '{print $1}')"
 ARCHIVE_URL="file://${ARCHIVE_PATH}"
 
-TMP_FORMULA="/tmp/superqode-local.rb"
-cat > "${TMP_FORMULA}" <<EOF
+# 3. Create Local Tap
+TAP_NAME="superqode-local/test"
+echo "Creating local tap ${TAP_NAME}..."
+brew tap-new "${TAP_NAME}" --no-git || true
+
+TAP_DIR="$(brew --repo "${TAP_NAME}")"
+FORMULA_PATH="${TAP_DIR}/Formula/superqode.rb"
+
+# 4. Generate Formula
+echo "Generating formula at ${FORMULA_PATH}..."
+cat > "${FORMULA_PATH}" <<EOF
 class Superqode < Formula
-  desc "SuperQode CLI"
+  desc "SuperQode CLI (Local Test)"
   homepage "https://github.com/SuperagenticAI/superqode"
   version "0.0.0-local"
   url "${ARCHIVE_URL}"
@@ -60,21 +57,33 @@ class Superqode < Formula
   end
 
   test do
-    system "\#{bin}/superqode", "--help"
+    system "\#{bin}/superqode", "--version"
   end
 end
 EOF
 
-echo "Installing from local formula..."
-brew install --formula "${TMP_FORMULA}"
+# 5. Install & Test
+echo "Installing superqode from local tap..."
+# Uninstall if exists to ensure clean install
+brew uninstall superqode || true
+brew install "${TAP_NAME}/superqode"
 
 echo "Running brew test..."
-brew test superqode
+brew test "${TAP_NAME}/superqode"
 
-echo "Checking version..."
-superqode --version || true
+echo "Verifying installation..."
+if command -v superqode >/dev/null; then
+    VERSION=$(superqode --version)
+    echo "✅ Successfully installed: ${VERSION}"
+else
+    echo "❌ Installation failed: superqode command not found"
+    exit 1
+fi
 
-echo "Uninstalling..."
+# 6. Cleanup
+echo "Cleaning up..."
 brew uninstall superqode
+brew untap "${TAP_NAME}"
+rm "${ARCHIVE_PATH}"
 
-echo "Local Homebrew test complete."
+echo "🎉 Local Homebrew test passed!"
