@@ -9,13 +9,12 @@
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
 site_description: "Super Quality Engineering for Agentic Coding Teams - Let agents break the code. Prove the fix. Ship with confidence."
-site_author: SuperQode Team
+site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode
 repo_url: https://github.com/SuperagenticAI/superqode
-edit_uri: edit/main/docs/
 
-copyright: Copyright &copy; 2024-2026 SuperQode Team
+copyright: Copyright &copy; 2024-2026 <a href="https://super-agentic.ai" target="_blank">Superagentic AI</a>
 
 theme:
   name: material
@@ -135,10 +134,8 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/SuperagenticAI/superqode
-    - icon: fontawesome/brands/twitter
-      link: https://twitter.com/superqode
-    - icon: fontawesome/brands/discord
-      link: https://discord.gg/superqode
+
+  generator: false
 
   analytics:
     provider: google

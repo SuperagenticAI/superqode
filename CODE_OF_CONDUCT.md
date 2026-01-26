@@ -20,7 +20,7 @@ Project maintainers are responsible for clarifying and enforcing this code of co
 
 ## Reporting
 
-Report issues to team@super-agentic.ai. We will review and respond as quickly as possible.
+Report issues to info@super-agentic.ai. We will review and respond as quickly as possible.
 
 ## Attribution
 

@@ -5,12 +5,10 @@ description = "SuperQode: Super Quality Engineering for Agentic Coding Teams"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
-    {name = "Shashi Jagtap", email = "shashi@super-agentic.ai"},
-    {name = "Shashi Jagtap", email = "shashikant.jagtap@icloud.com"}
+    {name = "Shashi Jagtap", email = "info@super-agentic.ai"}
 ]
 maintainers = [
-    {name = "Shashi Jagtap", email = "team@super-agentic.ai"},
-    {name = "Shashi Jagtap", email = "shashikant.jagtap@icloud.com"}
+    {name = "Shashi Jagtap", email = "info@super-agentic.ai"}
 ]
 keywords = ["ai", "coding-agents", "multi-agent", "orchestration", "sdlc", "automation", "mcp", "kubernetes", "superqode"]
 classifiers = [

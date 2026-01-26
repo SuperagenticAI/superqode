@@ -373,11 +373,13 @@ If these solutions don't resolve your issue:
    ```
 
 3. **Report issues on GitHub:**
-   - Include full error messages
-   - Describe your environment (OS, Python version, etc.)
-   - Provide steps to reproduce
+   - [GitHub Issues](https://github.com/SuperagenticAI/superqode/issues)
+   - Include full error messages and environment details
 
-4. **Community support:**
+4. **Email Support:**
+   - Reach out to us at [info@super-agentic.ai](mailto:info@super-agentic.ai)
+
+5. **Community support:**
    - Check GitHub Discussions
    - Join the SuperQode community
 

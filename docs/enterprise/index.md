@@ -29,4 +29,4 @@ Enterprise adds automation, verification, and integration features on top of the
 - Prompt packs and optimized workflows
 - ML severity model
 
-Contact the SuperQode team for access.
+Contact the Superagentic AI team at [info@super-agentic.ai](mailto:info@super-agentic.ai) for access.
