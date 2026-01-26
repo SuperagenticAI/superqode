@@ -304,19 +304,6 @@ This enables **fearless, exhaustive testing** - agents explore freely while your
     superqe run . -r security_tester -r api_tester
     ```
 
-=== "Connect to Provider"
-
-    ```bash
-    # ACP mode (OpenCode) - Recommended
-    superqode connect acp opencode
-
-    # BYOK mode (Google Gemini)
-    superqode connect byok google gemini-3-pro
-
-    # Local mode (Ollama)
-    superqode connect local ollama qwen3:8b
-    ```
-
 ---
 
 ## Three Execution Modes

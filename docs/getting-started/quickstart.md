@@ -100,70 +100,7 @@ superqe run . -r security_tester -r api_tester
 
 ---
 
-## Step 3: Connect to a Provider
-
-Choose your preferred connection mode:
-
-=== "ACP (Coding Agents)"
-
-    Connect to ACP-compatible coding agents (recommended):
-
-    ```bash
-    # Option 1: Use TUI (recommended)
-    superqode
-    # Then in TUI:
-    # Type :connect (or :c) for an interactive picker
-    # The TUI will guide you through selecting ACP and available agents
-
-    # Or connect directly:
-    :connect acp opencode
-
-    # Option 2: Use CLI (simple interactive mode)
-    superqode connect acp opencode
-    ```
-
-=== "BYOK (Cloud Providers)"
-
-    Connect to cloud AI providers using your API key:
-
-    ```bash
-    # Set API key (if not already in environment)
-    export GOOGLE_API_KEY=your-api-key-here
-
-    # In TUI: Type :connect (or :c) for an interactive picker
-    # The TUI will guide you through selecting BYOK and providers/models
-
-    # Or connect directly:
-    :connect byok google gemini-3-pro
-    ```
-
-    Or from command line:
-
-    ```bash
-    superqode connect byok google gemini-3-pro
-    ```
-
-=== "Local Models"
-
-    Connect to local/self-hosted models:
-
-    ```bash
-    # Start Ollama first
-    ollama serve
-
-    # In TUI: Type :connect (or :c) for an interactive picker
-    # The TUI will guide you through selecting Local and available providers/models
-
-    # Or connect directly:
-    :connect local ollama qwen3:8b
-
-    # From command line
-    superqode connect local ollama qwen3:8b
-    ```
-
----
-
-## 3. Run Your First QE Session
+## Step 3: Run Your First QE Session
 
 ### Quick Scan (60 seconds)
 
@@ -185,7 +122,7 @@ superqe run . --mode deep
 
 ---
 
-## 4. View Results
+## Step 4: View Results
 
 After a QE session completes, you'll see:
 
@@ -222,7 +159,7 @@ All artifacts are saved to `.superqode/qe-artifacts/`:
 
 ---
 
-## 5. Essential Commands
+## Step 5: Essential Commands
 
 ### TUI Commands (prefix with `:`)
 
@@ -244,14 +181,13 @@ All artifacts are saved to `.superqode/qe-artifacts/`:
 |---------|-------------|
 | `superqode` | Launch TUI |
 | `superqe run .` | Run QE on current directory |
-| `superqode connect byok` | Connect to BYOK provider |
 | `superqode providers list` | List available providers |
 | `superqode agents list` | List available agents |
 | `superqe init` | Initialize configuration |
 
 ---
 
-## 6. Quick Examples
+## Step 6: Quick Examples
 
 ### Example 1: Security Scan
 
@@ -286,7 +222,7 @@ superqe run . --mode quick --junit results.xml
 
 ---
 
-## 7. Understanding the Output
+## Step 7: Understanding the Output
 
 ### Finding Severity Levels
 
@@ -308,7 +244,7 @@ Each finding includes a confidence score (0.0 - 1.0):
 
 ---
 
-## 8. Keyboard Shortcuts (TUI)
+## Step 8: Keyboard Shortcuts (TUI)
 
 | Shortcut | Action |
 |----------|--------|

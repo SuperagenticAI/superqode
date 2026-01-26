@@ -160,14 +160,6 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | `superqode providers test PROVIDER` | Test provider connection |
 | `superqode providers mlx ACTION` | Manage MLX models |
 
-### Connect Commands
-
-| Command | Description |
-|---------|-------------|
-| `superqode connect byok PROVIDER MODEL` | Connect to BYOK provider |
-| `superqode connect acp AGENT` | Connect to ACP agent |
-| `superqode connect local PROVIDER MODEL` | Connect to local provider |
-
 ### Suggestion Commands
 
 | Command | Description |
