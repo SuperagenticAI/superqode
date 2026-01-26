@@ -5,6 +5,21 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-01-26
+
+### Fixed
+
+- Fixed slow binary startup time by switching to One-Dir bundle format.
+- Resolved Pydantic `OSError` in PyInstaller builds.
+- Fixed `install.sh` to work without `sudo` and handle path correctly.
+
+### Changed
+
+- Renamed QIR (Quality Investigation Report) to QR (Quality Report) for consistency.
+- Simplified GitHub Action by removing `deep` mode and adding `run-linter` option.
+- Added explicit security tester warnings in GitHub Action.
+- Updated release packaging script to bundle supporting scripts.
+
 ## [0.1.3] - 2026-01-25
 
 ### Changed
