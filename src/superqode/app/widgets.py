@@ -1114,6 +1114,7 @@ class ConversationLog(RichLog):
         Add a chunk of response text (for streaming).
 
         Accumulates chunks and displays them intelligently to avoid word-per-line display.
+        Highlights code blocks in real-time.
 
         Args:
             text: The response chunk to add
@@ -1123,6 +1124,17 @@ class ConversationLog(RichLog):
 
         self._streaming_response += text
         self.auto_scroll = True
+
+        # Check for code block state
+        if not hasattr(self, "_in_code_block"):
+            self._in_code_block = False
+
+        # Toggle code block state
+        if "```" in text:
+            # Count occurrences to toggle state correctly
+            count = text.count("```")
+            if count % 2 != 0:
+                self._in_code_block = not self._in_code_block
 
         # Buffer chunks and only write on natural boundaries to avoid word-per-line
         if not hasattr(self, "_chunk_buffer"):
@@ -1145,7 +1157,8 @@ class ConversationLog(RichLog):
 
         if should_write:
             chunk_text = Text()
-            chunk_text.append(buffer, style=THEME["text"])
+            style = f"bold {THEME['cyan']}" if self._in_code_block else THEME["text"]
+            chunk_text.append(buffer, style=style)
             self.write(chunk_text)
             self._chunk_buffer = ""
 
@@ -1153,7 +1166,8 @@ class ConversationLog(RichLog):
         """Flush any remaining buffered response chunks."""
         if hasattr(self, "_chunk_buffer") and self._chunk_buffer:
             chunk_text = Text()
-            chunk_text.append(self._chunk_buffer, style=THEME["text"])
+            style = f"bold {THEME['cyan']}" if getattr(self, "_in_code_block", False) else THEME["text"]
+            chunk_text.append(self._chunk_buffer, style=style)
             self.write(chunk_text)
             self._chunk_buffer = ""
 
@@ -1183,6 +1197,17 @@ class ConversationLog(RichLog):
                 "command": command,
             }
         )
+
+        # Track file modifications
+        if status in ("running", "success") and file_path:
+            # Initialize _files_modified if not exists
+            if not hasattr(self, "_files_modified"):
+                self._files_modified = set()
+            
+            # Add to set if it's a write/edit operation
+            tool_lower = tool_name.lower()
+            if any(op in tool_lower for op in ("write", "edit", "create", "append", "patch")):
+                self._files_modified.add(file_path)
 
         # Status icons and colors
         status_map = {
@@ -1241,7 +1266,7 @@ class ConversationLog(RichLog):
         cost: float = 0.0,
     ):
         """
-        End the agent output session with summary.
+        End the agent output session with a rich Mission Report summary.
 
         Args:
             success: Whether the session completed successfully
@@ -1271,51 +1296,66 @@ class ConversationLog(RichLog):
         elif self._streaming_response:
             self._last_response = self._streaming_response
 
-        # Build footer
-        footer = Text()
-        footer.append("\n")
-
-        # Status line
+        # Build rich summary panel
+        summary_content = Text()
+        
+        # 1. Header
         if success:
-            gradient = ["#059669", "#10b981", "#34d399", "#6ee7b7"]
-            for i, char in enumerate("─" * 60):
-                footer.append(char, style=gradient[i % len(gradient)])
-            footer.append("\n")
-            footer.append("  ✦ ", style=f"bold {THEME['success']}")
-            footer.append("Completed", style=f"bold {THEME['text']}")
+            summary_content.append("✅ Mission Accomplished", style=f"bold {THEME['success']}")
         else:
-            for i, char in enumerate("─" * 60):
-                footer.append(char, style=THEME["error"])
-            footer.append("\n")
-            footer.append("  ✕ ", style=f"bold {THEME['error']}")
-            footer.append("Failed", style=f"bold {THEME['error']}")
+            summary_content.append("❌ Mission Failed", style=f"bold {THEME['error']}")
+        summary_content.append("\n\n")
 
-        # Stats
-        stats = []
-        if duration > 0:
-            stats.append(f"⏱ {duration:.1f}s")
+        # 2. Tool Usage Stats
+        tool_counts = {}
+        for tool in getattr(self, "_tool_calls", []):
+            name = tool.get("name", "Unknown")
+            tool_counts[name] = tool_counts.get(name, 0) + 1
+        
+        if tool_counts:
+            summary_content.append("🛠️  Tool Usage:\n", style="bold")
+            for name, count in tool_counts.items():
+                summary_content.append(f"  • {name}: ", style=THEME["text"])
+                summary_content.append(f"{count}\n", style=f"bold {THEME['cyan']}")
+            summary_content.append("\n")
 
+        # 3. Modified Files
+        files_mod = getattr(self, "_files_modified", set())
+        if files_mod:
+            summary_content.append("📁 Files Impacted:\n", style="bold")
+            for f in sorted(files_mod):
+                summary_content.append(f"  • {f}\n", style=THEME["warning"])
+            summary_content.append("\n")
+
+        # 4. Performance Stats Grid
+        summary_content.append("📊 Stats:\n", style="bold")
         total_tokens = prompt_tokens + completion_tokens
+        
+        stats_line = []
+        if duration > 0:
+            stats_line.append(f"⏱  {duration:.1f}s")
         if total_tokens > 0:
-            stats.append(f"📊 {total_tokens:,} tokens")
-
-        if thinking_tokens > 0:
-            stats.append(f"💭 {thinking_tokens:,} thinking")
-
+            stats_line.append(f"🔤 {total_tokens:,} toks")
         if cost > 0:
-            stats.append(f"💰 ${cost:.4f}")
+            stats_line.append(f"💰 ${cost:.4f}")
+            
+        summary_content.append("  " + "  •  ".join(stats_line), style=THEME["dim"])
+        summary_content.append("\n")
 
-        tool_count = len(getattr(self, "_tool_calls", []))
-        if tool_count > 0:
-            stats.append(f"🔧 {tool_count} tools")
-
-        if stats:
-            footer.append("  │  ", style=THEME["dim"])
-            footer.append("  ".join(stats), style=THEME["muted"])
-
-        footer.append("\n")
+        # Create panel
+        panel = Panel(
+            summary_content,
+            title="[bold]Session Report[/bold]",
+            border_style=THEME["success"] if success else THEME["error"],
+            box=ROUNDED,
+            padding=(1, 2)
+        )
+        
+        self.write(panel)
 
         # Copy hint
+        footer = Text()
+        footer.append("\n")
         footer.append("  [Shift+Drag to select text] • [Ctrl+Shift+C to copy full response]", style=THEME["dim"])
         footer.append("\n")
 
