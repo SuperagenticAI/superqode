@@ -4,15 +4,6 @@ import os
 import sys
 import pathlib
 
-# CRITICAL: Set these BEFORE any other imports to prevent Pydantic/Logfire introspection crashes in PyInstaller
-if getattr(sys, "frozen", False):
-    # Running in PyInstaller bundle - disable problematic integrations
-    os.environ["LOGFIRE_DISABLE"] = "1"
-    os.environ["LOGFIRE_IGNORE_NO_CONFIG"] = "1"
-    # Prevent pydantic from trying to inspect source
-    os.environ["PYDANTIC_DISABLE_ERRORS"] = "1"
-    os.environ["PYDANTIC_SKIP_VALIDATING_CORE_SCHEMAS"] = "1"
-
 try:
     cwd = os.getcwd()
     if not pathlib.Path(cwd).exists():
@@ -25,41 +16,12 @@ except (OSError, FileNotFoundError):
     except Exception:
         pass  # Last resort - let it fail naturally
 
-import argparse
 import json
-import shlex
-import shutil
-import subprocess
-import sys
-import time
-import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Sequence, Iterable, List, Dict, Any
-import fnmatch
 
-import yaml
-from prompt_toolkit import PromptSession
-from prompt_toolkit.completion import Completer, Completion
-from prompt_toolkit.formatted_text import HTML, FormattedText
-from prompt_toolkit.history import InMemoryHistory
-from prompt_toolkit.styles import Style
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.keys import Keys
-from rich.console import Console, RenderableType
-
-# Global console for rich output
-_console = Console()
-
-# ASCII Art Logo
-SUPERQODE_LOGO = """
-[bold #a855f7] ____  _   _ ____  _____ ____   ___    ___  ____  _____[/bold #a855f7]
-[bold #c084fc]/ ___|| | | |  _ \\| ____|  _ \\ / _ \\  / _ \\|  _ \\| ____|[/bold #c084fc]
-[bold #ec4899]\\___ \\| | | | |_) |  _| | |_) | | | || | | | | | |  _|  [/bold #ec4899]
-[bold #f97316] ___) | |_| |  __/| |___|  _ <| |_| || |_| | |_| | |___ [/bold #f97316]
-[bold #fb923c]|____/ \\___/|_|   |_____|_| \\_\\\\__\\_\\ \\___/|____/|_____|[/bold #fb923c]
-[dim]Super Quality Engineering for Agentic Coding Teams.[/dim]
-"""
+import click
 
 # Global variables for interactive mode
 current_mode: str = "home"  # Start in neutral home state
@@ -556,7 +518,7 @@ import click
 
 
 @click.group(invoke_without_command=True)
-@click.version_option(version="0.1.0")
+@click.version_option(version="0.1.4")
 @click.option("--tui", is_flag=True, help="Launch the Textual TUI interface")
 @click.pass_context
 def cli_main(ctx, tui):
@@ -568,17 +530,16 @@ def cli_main(ctx, tui):
 
     # If no command is provided, launch Textual app (default behavior)
     if ctx.invoked_subcommand is None or tui:
+        import time
         # Show simple loading message before TUI starts
         print("🚀 Starting SuperQode...", end="", flush=True)
-        import time
-
         time.sleep(0.5)
 
         # Clear the loading message before TUI takes over
         print("\r" + " " * 50 + "\r", end="", flush=True)
 
         # Import and run the TUI
-        from superqode.app import run_textual_app
+        from superqode.app_main import main as run_textual_app
 
         run_textual_app()
         return
