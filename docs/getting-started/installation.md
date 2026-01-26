@@ -7,6 +7,12 @@ This guide covers all installation methods for SuperQode (TUI) and SuperQE (CLI)
 ## Quick Install
 
 ```bash
+uv tool install superqode
+```
+
+Or using pip:
+
+```bash
 pip install superqode
 ```
 
@@ -101,7 +107,24 @@ pip install superqode
 superqode --version
 ```
 
-### Method 3: From Source (Development)
+### Method 3: Homebrew (macOS/Linux)
+
+Install via our official tap:
+
+```bash
+brew tap SuperagenticAI/superqode
+brew install superqode
+```
+
+### Method 4: Installer Script (Experimental)
+
+Download and install the binary directly:
+
+```bash
+curl -fsSL https://super-agentic.ai/install.sh | bash
+```
+
+### Method 5: From Source (Development)
 
 For contributors or those wanting the latest features:
 

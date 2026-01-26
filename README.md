@@ -40,25 +40,39 @@
 
 ## Quick Start
 
-SuperQode: A TUI and coding agent harness for interactive exploration
+### Installation
 
+**Method 1: uv (Recommended)**
 ```bash
-# Install
 uv tool install superqode
+```
 
-# Initialize & run
+**Method 2: pip**
+```bash
+pip install superqode
+```
+
+**Method 3: Homebrew (macOS/Linux)**
+```bash
+brew tap SuperagenticAI/superqode
+brew install superqode
+```
+
+**Method 4: Installer Script (Experimental)**
+```bash
+curl -fsSL https://super-agentic.ai/install.sh | bash
+```
+
+### Run SuperQode
+
+**Interactive TUI (Explore)**
+```bash
 cd your-project
 superqode
 ```
-Follow the TUI help commands
 
-SuperQE : A CLI for automated QE in CI/CD
-
+**Automated QE (CI/CD)**
 ```bash
-# Install
-uv tool install superqode
-
-# Initialize & run
 cd your-project
 superqe init
 superqe run . --mode quick
