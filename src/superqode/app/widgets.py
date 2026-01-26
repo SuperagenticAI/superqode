@@ -1049,55 +1049,62 @@ class ConversationLog(RichLog):
         # Store for later copy
         self._thinking_lines.append(text)
 
-        # Category icons
-        icons = {
-            "planning": "📋",
-            "analyzing": "🔬",
-            "deciding": "🤔",
-            "searching": "🔍",
-            "reading": "📖",
-            "writing": "✏️",
-            "debugging": "🐛",
-            "executing": "⚡",
-            "verifying": "✅",
-            "testing": "🧪",
-            "refactoring": "🔧",
-            "discovery": "🔭",
-            "thinking": "🧠",
-            "notifying": "🔔",
-            "general": "💭",
+        # Category icons and colors
+        category_styles = {
+            "planning": ("📋", "#f472b6"),
+            "analyzing": ("🔬", "#c084fc"),
+            "deciding": ("🤔", "#fbbf24"),
+            "searching": ("🔍", "#60a5fa"),
+            "reading": ("📖", "#34d399"),
+            "writing": ("✏️", "#818cf8"),
+            "debugging": ("🐛", "#ef4444"),
+            "executing": ("⚡", "#fb923c"),
+            "verifying": ("✅", "#22c55e"),
+            "testing": ("🧪", "#a78bfa"),
+            "refactoring": ("🔧", "#9ca3af"),
+            "discovery": ("🔭", "#06b6d4"),
+            "thinking": ("🧠", "#e879f9"),
+            "notifying": ("🔔", "#facc15"),
+            "general": ("💭", "#94a3b8"),
         }
-        icon = icons.get(category.lower(), "💭")
+        
+        icon, color = category_styles.get(category.lower(), category_styles["general"])
 
-        # Auto-detect category from text if not specified
+        # Auto-detect category from text if not specified (or is general)
         if category == "general":
             text_lower = text.lower()
             if any(w in text_lower for w in ["test", "pytest", "expect", "assertion"]):
-                icon = "🧪"
+                icon, color = category_styles["testing"]
             elif any(w in text_lower for w in ["run", "execute", "command", "bash", "shell"]):
-                icon = "⚡"
+                icon, color = category_styles["executing"]
             elif any(w in text_lower for w in ["verify", "confirm", "check", "validation"]):
-                icon = "✅"
+                icon, color = category_styles["verifying"]
             elif any(w in text_lower for w in ["debug", "error", "fix", "bug", "traceback"]):
-                icon = "🐛"
+                icon, color = category_styles["debugging"]
             elif any(w in text_lower for w in ["plan", "step", "approach", "todo"]):
-                icon = "📋"
+                icon, color = category_styles["planning"]
             elif any(w in text_lower for w in ["search", "find", "look", "grep", "glob"]):
-                icon = "🔍"
+                icon, color = category_styles["searching"]
             elif any(w in text_lower for w in ["read", "file", "content", "cat"]):
-                icon = "📖"
+                icon, color = category_styles["reading"]
             elif any(w in text_lower for w in ["write", "create", "add", "edit", "save"]):
-                icon = "✏️"
+                icon, color = category_styles["writing"]
             elif any(w in text_lower for w in ["discover", "list", "explore", "scan"]):
-                icon = "🔭"
+                icon, color = category_styles["discovery"]
             elif any(w in text_lower for w in ["think", "reason", "ponder", "analyze"]):
-                icon = "🧠"
+                icon, color = category_styles["thinking"]
             elif any(w in text_lower for w in ["info", "note", "alert", "notice"]):
-                icon = "🔔"
+                icon, color = category_styles["notifying"]
+            else:
+                # Randomize generic icon to avoid repetition
+                generic_icons = ["💭", "💡", "⚙️", "🧩", "🔮", "✨", "📡"]
+                import random
+                icon = random.choice(generic_icons)
+                # Keep neutral color for generic thoughts
 
         # Display thinking line
         line = Text()
-        line.append(f"  {icon} ", style=f"bold {THEME['pink']}")
+        line.append(f"  {icon} ", style=f"bold {color}")
         line.append(text, style=f"italic {THEME['muted']}")
         line.append("\n")
         self.write(line)

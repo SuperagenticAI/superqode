@@ -7818,8 +7818,8 @@ team:
             )
             if any(pattern in command for pattern in dangerous_patterns):
                 return True
-            # Commands within project are generally safe
-            return False
+            # Even commands within project should ask for permission in ASK mode
+            return True
 
         # Read operations - auto-allow
         if tool_lower in ("read", "cat", "head", "tail", "less", "view"):
@@ -7829,9 +7829,9 @@ team:
         if tool_lower in ("search", "grep", "find", "list", "ls", "glob", "tree"):
             return False
 
-        # Write/edit within project - auto-allow (already checked file path above)
+        # Write/edit within project - ask for permission (side effects)
         if tool_lower in ("write", "edit", "patch", "create", "mkdir"):
-            return False
+            return True
 
         # Unknown tools - ask for permission to be safe
         return True
@@ -8467,15 +8467,37 @@ team:
                 return True
 
             # For other JSON, show formatted
-            if isinstance(data, list) and len(data) <= 10:
-                self._display_generic_list(data, tool_name, log)
+            if isinstance(data, list):
+                if len(data) <= 10:
+                    self._display_generic_list(data, tool_name, log)
+                else:
+                    # Truncate large lists
+                    summary = f"[{len(data)} items] " + str(data[:3])[:-1] + ", ...]"
+                    self.call_from_thread(
+                        log.add_tool_call, tool_name, "success", "", "", summary
+                    )
                 return True
-            elif isinstance(data, dict) and len(data) <= 6:
-                self._display_generic_dict(data, tool_name, log)
+            elif isinstance(data, dict):
+                if len(data) <= 6:
+                    self._display_generic_dict(data, tool_name, log)
+                else:
+                    # Truncate large dicts
+                    summary = f"{{... {len(data)} keys ...}}"
+                    self.call_from_thread(
+                        log.add_tool_call, tool_name, "success", "", "", summary
+                    )
                 return True
 
         except (json.JSONDecodeError, TypeError, KeyError):
             pass
+
+        # If we got here and it's a long string that looks like data, truncate it
+        if len(output_str) > 500:
+            summary = output_str[:500] + "... (truncated)"
+            self.call_from_thread(
+                log.add_tool_call, tool_name, "success", "", "", summary
+            )
+            return True
 
         return False
 
