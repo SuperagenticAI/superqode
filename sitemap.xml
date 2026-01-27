@@ -2,262 +2,262 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://superagenticai.github.io/superqode/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/advanced/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/advanced/architecture/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/advanced/evaluation-engine/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/advanced/execution-pipeline/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/advanced/guidance-system/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/advanced/harness-system/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/advanced/memory/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/advanced/safety-permissions/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/advanced/session-management/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/advanced/tools-system/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/advanced/tui/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/advanced/workspace-internals/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/api-reference/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/api-reference/jsonl-events/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/api-reference/python-sdk/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/cli-reference/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/cli-reference/agents-commands/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/cli-reference/auth-commands/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/cli-reference/config-commands/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/cli-reference/init-commands/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/cli-reference/provider-commands/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/cli-reference/qe-commands/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/cli-reference/roles-commands/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/cli-reference/serve-commands/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/cli-reference/suggestion-commands/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/cli-reference/superqe-commands/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/concepts/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/concepts/modes/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/concepts/qr/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/concepts/roles/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/concepts/suggestions/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/concepts/superqe/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/concepts/workspace/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/configuration/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/configuration/guidance-config/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/configuration/mcp-config/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/configuration/noise-config/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/configuration/team/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/configuration/yaml-reference/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/enterprise/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/getting-started/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/getting-started/configuration/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/getting-started/first-session/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/getting-started/installation/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/getting-started/quickstart/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/getting-started/troubleshooting/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/integration/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/integration/cicd/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/integration/github-actions/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/integration/gitlab-ci/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/integration/ide/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/providers/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/providers/acp/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/providers/byok/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/providers/local/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/providers/openresponses/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/qe-features/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/qe-features/artifacts/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/qe-features/constitution/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/qe-features/fix-verifier/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/qe-features/mcp-tools/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/qe-features/natural-language-qe/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/qe-features/noise-filtering/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/qe-features/test-generation/</loc>
-         <lastmod>2026-01-26</lastmod>
+         <lastmod>2026-01-27</lastmod>
     </url>
 </urlset>
