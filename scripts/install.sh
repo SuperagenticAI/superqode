@@ -101,23 +101,26 @@ ln -sf "${INSTALL_LIB_DIR}/${APP_NAME}" "${INSTALL_BIN_DIR}/${APP_NAME}"
 echo -e " ${GREEN}Done!${NC}"
 
 # Verify PATH
-if [[ ":$PATH:" != ".*:${INSTALL_BIN_DIR}:"* ]]; then
+if [[ ":$PATH:" != *":${INSTALL_BIN_DIR}:"* ]]; then
     echo -e ""
     echo -e "${YELLOW}⚠️  Warning: ${INSTALL_BIN_DIR} is not in your PATH.${NC}"
-    echo -e "Add it to your shell config (e.g., ~/.bashrc or ~/.zshrc):"
-    echo -e "  ${BLUE}export PATH=\"
-.local/bin:$PATH\"${NC}"
+    echo -e "Add it to your shell config (e.g., ~/.zshrc):"
+    echo -e "  ${BLUE}export PATH=\"${INSTALL_BIN_DIR}:\$PATH\"${NC}"
     echo -e ""
 fi
 
 # Verify installation
-if command -v "$APP_NAME" >/dev/null; then
-    echo -e "${GREEN}✅ Successfully installed $($APP_NAME --version)${NC}"
+# Temporarily add to path for verification
+export PATH="${INSTALL_BIN_DIR}:$PATH"
+VERSION_OUT=$($APP_NAME --version 2>/dev/null || echo "")
+
+if [ -n "$VERSION_OUT" ]; then
+    echo -e "${GREEN}✅ Successfully installed $VERSION_OUT${NC}"
     echo -e "Run '${BLUE}${APP_NAME}${NC}' to get started!"
 else
     if [ -x "${INSTALL_BIN_DIR}/${APP_NAME}" ]; then
         echo -e "${GREEN}✅ Successfully installed to ${INSTALL_BIN_DIR}/${APP_NAME}${NC}"
-        echo -e "Note: You need to add ${INSTALL_BIN_DIR} to your PATH."
+        echo -e "Note: You may need to restart your terminal or add ${INSTALL_BIN_DIR} to your PATH."
     else
         echo -e "${RED}❌ Installation failed.${NC}"
         exit 1

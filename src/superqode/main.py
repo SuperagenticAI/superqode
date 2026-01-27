@@ -17,6 +17,7 @@ except (OSError, FileNotFoundError):
         pass  # Last resort - let it fail naturally
 
 import json
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Sequence, Iterable, List, Dict, Any
@@ -539,7 +540,7 @@ def cli_main(ctx, tui):
         print("\r" + " " * 50 + "\r", end="", flush=True)
 
         # Import and run the TUI
-        from superqode.app_main import main as run_textual_app
+        from superqode.app import run_textual_app
 
         run_textual_app()
         return
