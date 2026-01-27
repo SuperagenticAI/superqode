@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
-
 # Three Execution Modes
 
 SuperQode supports three distinct execution modes for connecting to AI models and agents. Each mode has different capabilities and use cases.

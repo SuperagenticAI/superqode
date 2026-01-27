@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
-
 # GitLab CI Integration
 
 Integrate SuperQode into your GitLab CI/CD pipelines for automated quality gates.

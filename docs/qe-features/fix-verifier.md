@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
-
 # Fix Verifier
 
 Enterprise feature. Fix Verifier validates suggested fixes in a sandbox and reports whether they

@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
-
 # Core Concepts
 
 Understanding SuperQode's core concepts is essential for effective quality engineering. This section explains the fundamental ideas that power SuperQode.

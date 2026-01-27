@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode Banner" />
-
 # Python SDK Reference
 
 Programmatic API for SuperQode, enabling integration into Python applications, scripts, and CI/CD pipelines.

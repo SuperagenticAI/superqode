@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode Banner" />
-
 # Terminal User Interface (TUI)
 
 SuperQode includes a rich Terminal User Interface (TUI) for interactive QE sessions.

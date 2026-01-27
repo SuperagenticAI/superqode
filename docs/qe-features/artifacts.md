@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
-
 # QE Artifacts
 
 SuperQode generates comprehensive artifacts from QE sessions, preserved in `.superqode/qe-artifacts/`.

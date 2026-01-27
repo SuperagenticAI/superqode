@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode Banner" />
-
 # QE Commands
 
 Quality Engineering commands for running QE sessions, viewing reports, and managing artifacts.

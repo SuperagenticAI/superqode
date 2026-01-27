@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode Banner" />
-
 # Memory & Learning System
 
 SuperQode learns from your feedback to improve over time. The memory system stores project-specific learnings that persist across QE sessions.

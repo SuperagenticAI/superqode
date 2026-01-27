@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode Banner" />
-
 # Guidance System
 
 Verification-first system prompts that guide QE agents to prevent false positives and time waste.

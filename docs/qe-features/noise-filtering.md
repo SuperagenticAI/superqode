@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
-
 # Noise Filtering
 
 Reduce false positives and focus on important findings with configurable noise controls.

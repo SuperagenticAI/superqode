@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode Banner" />
-
 # Harness System
 
 Fast validation for QE-generated patches and changes before they're suggested in QRs.

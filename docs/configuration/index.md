@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
-
 # Configuration Reference
 
 This section provides comprehensive documentation for configuring SuperQode through YAML configuration files.

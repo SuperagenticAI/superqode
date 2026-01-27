@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
-
 # What is SuperQE?
 
 Understanding SuperQE (Agentic Quality Engineering) and how it relates to SuperQode.

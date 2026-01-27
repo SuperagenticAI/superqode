@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
-
 # OpenResponses Gateway
 
 OpenResponses is a unified API specification that provides a consistent interface across multiple AI providers, with advanced features like streaming, reasoning, and built-in tools.

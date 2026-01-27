@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
-
 # Constitution System
 
 Define quality principles, rules, and guardrails to enforce project-specific quality standards.

@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode Banner" />
-
 # Agents Commands
 
 Manage ACP (Agent Client Protocol) coding agents for SuperQode.

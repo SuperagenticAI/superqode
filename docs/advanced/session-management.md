@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode Banner" />
-
 # Session Management
 
 Persistent session storage, sharing, and coordination for QE sessions and conversations.

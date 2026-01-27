@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
-
 # Guidance Configuration
 
 Configure QE guidance prompts that control agent behavior, time constraints, and verification requirements.

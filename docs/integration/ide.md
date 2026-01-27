@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
-
 # IDE Integration
 
 Integrate SuperQode into your IDE for real-time quality feedback, inline diagnostics, and quick fixes directly in your editor.

@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
-
 # Ephemeral Workspace
 
 SuperQode uses ephemeral workspaces to ensure your code is never modified without consent. This page explains how workspace isolation works and why it's critical for safe QE.

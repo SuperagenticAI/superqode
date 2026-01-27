@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode Banner" />
-
 # CLI Reference
 
 SuperQE provides the automation CLI for quality engineering tasks. SuperQode focuses on the developer TUI and includes helper commands for agents, providers, and configuration. This reference documents the available commands, options, and usage patterns.

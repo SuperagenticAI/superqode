@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode Banner" />
-
 # Evaluation Engine
 
 The evaluation engine provides a framework for testing SuperQode's QE capabilities through structured scenarios and behavior verification. This is used for benchmarking, regression testing, and validating QE role effectiveness.

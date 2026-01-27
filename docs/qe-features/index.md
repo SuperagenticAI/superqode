@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
-
 # QE Features
 
 SuperQode provides comprehensive quality engineering features for AI-assisted code analysis and testing.
