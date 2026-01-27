@@ -121,4 +121,4 @@ pytest
 
 ## License
 
-[AGPL-3.0](LICENSE) — Built with ❤️ for developers who care about code quality.
+[AGPL-3.0](LICENSE) — Built by [Superagentic AI](https://super-agentic.ai/) for developers who care about code quality.

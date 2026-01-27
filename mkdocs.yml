@@ -14,7 +14,7 @@ site_author: Superagentic AI
 repo_name: SuperagenticAI/superqode
 repo_url: https://github.com/SuperagenticAI/superqode
 
-copyright: Copyright &copy; 2024-2026 <a href="https://super-agentic.ai" target="_blank">Superagentic AI</a>
+copyright: Copyright &copy; 2026 <a href="https://super-agentic.ai" target="_blank">Superagentic AI</a>
 
 theme:
   name: material
@@ -57,7 +57,6 @@ theme:
     - content.tabs.link
     - content.code.copy
     - content.code.annotate
-    - content.action.edit
     - content.action.view
     - toc.follow
 
