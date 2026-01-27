@@ -19,21 +19,28 @@ os.environ["LITELLM_DISABLE_TIKTOKEN"] = "True"
 # --- Tiktoken Ghost Patch ---
 # This prevents "ValueError: Unknown encoding cl100k_base" in frozen binaries
 
+
 class GhostEncoding:
     def __init__(self, name="ghost"):
         self.name = name
+
     def encode(self, text, *args, **kwargs):
-        return [0] * (len(text) // 3) # Dummy tokens
+        return [0] * (len(text) // 3)  # Dummy tokens
+
     def decode(self, tokens, *args, **kwargs):
         return ""
+
     def encode_batch(self, texts, *args, **kwargs):
         return [[0]] * len(texts)
+
     def encode_ordinary(self, text, *args, **kwargs):
         return [0] * (len(text) // 3)
+
 
 def apply_tiktoken_ghost_patch():
     try:
         import tiktoken
+
         tiktoken.get_encoding = lambda name: GhostEncoding(name)
         tiktoken.encoding_for_model = lambda model: GhostEncoding(model)
         # Patch the registry too if it exists
@@ -42,10 +49,12 @@ def apply_tiktoken_ghost_patch():
     except Exception:
         pass
 
+
 # --- LiteLLM Token Counter Patch ---
 def apply_litellm_patch():
     try:
         import litellm
+
         # Force disable token counting at the library level
         litellm.disable_token_counting = True
         litellm.set_verbose = False
@@ -57,6 +66,7 @@ def apply_litellm_patch():
             litellm.utils.token_counter = lambda *args, **kwargs: 0
     except Exception:
         pass
+
 
 # --- Pydantic/Inspect Patch ---
 def apply_inspect_patch():
@@ -77,6 +87,7 @@ def apply_inspect_patch():
 
     inspect.getsource = patched_getsource
     inspect.findsource = patched_findsource
+
 
 # --- Execute Patches ---
 apply_inspect_patch()

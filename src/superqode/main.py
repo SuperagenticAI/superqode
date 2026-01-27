@@ -532,6 +532,7 @@ def cli_main(ctx, tui):
     # If no command is provided, launch Textual app (default behavior)
     if ctx.invoked_subcommand is None or tui:
         import time
+
         # Show simple loading message before TUI starts
         print("🚀 Starting SuperQode...", end="", flush=True)
         time.sleep(0.5)

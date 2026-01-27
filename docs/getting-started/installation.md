@@ -69,9 +69,9 @@ If you need to install Python 3.12+:
 
 ## Installation Methods
 
-### Method 1: uv (Recommended)
+### Method 1: uv (Primary Recommendation)
 
-Use `uv` for fast installs and isolated tooling:
+**Best for performance and security.** Use `uv` for the fastest installation and perfectly isolated tooling.
 
 ```bash
 # Install uv if needed
@@ -81,23 +81,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv tool install superqode
 ```
 
-For isolated installation with a virtual environment:
+### Method 2: pip (Primary Recommendation)
 
-```bash
-# Create virtual environment
-python3 -m venv ~/.superqode-venv
-source ~/.superqode-venv/bin/activate
-
-# Install SuperQode
-uv pip install superqode
-
-# Verify installation
-superqode --version
-```
-
-### Method 2: pip
-
-Standard pip installation:
+Standard installation via PyPI.
 
 ```bash
 # Install SuperQode
@@ -107,24 +93,28 @@ pip install superqode
 superqode --version
 ```
 
-### Method 3: Homebrew (macOS/Linux)
+---
 
-Install via our official tap:
+## Alternate Installation Methods (No Python Required)
+
+These methods provide a pre-compiled binary. They are convenient for users who do not want to manage a Python environment, but may have a slightly slower startup time (~1-2 seconds) compared to the primary methods.
+
+### Method 3: Homebrew (macOS/Linux)
 
 ```bash
 brew tap SuperagenticAI/superqode
 brew install superqode
 ```
 
-### Method 4: Installer Script (Experimental)
-
-Download and install the binary directly:
+### Method 4: Installer Script
 
 ```bash
 curl -fsSL https://super-agentic.ai/install.sh | bash
 ```
 
-### Method 5: From Source (Development)
+---
+
+## Installation for Developers
 
 For contributors or those wanting the latest features:
 
@@ -133,11 +123,10 @@ For contributors or those wanting the latest features:
 git clone https://github.com/SuperagenticAI/superqode.git
 cd superqode
 
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
+# Install using uv (recommended for dev)
+uv sync
 
-# Install in editable mode with dev dependencies
+# Or standard pip install
 pip install -e ".[dev]"
 
 # Verify installation
@@ -317,7 +306,7 @@ superqe roles
 
 ```
 $ superqode --version
-SuperQode v0.1.0
+SuperQode v0.1.4
 
 $ superqode auth info
 ╭─────────────────────────────────────────────────╮

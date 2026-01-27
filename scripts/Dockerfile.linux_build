@@ -2,8 +2,6 @@
 FROM python:3.12-slim
 
 # Install system dependencies
-# git: required for pip install -e . if it relies on git versioning
-# build-essential: required for building some python extensions
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     build-essential \
@@ -12,11 +10,49 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set up work directory
 WORKDIR /app
 
-# Copy project files
+# --- OPTIMIZATION START ---
+# Copy only dependency files first to leverage Docker cache
+COPY pyproject.toml .
+# (Optional: COPY uv.lock . if you use it for installing)
+
+# Upgrade pip and install build dependencies
+RUN python -m pip install --upgrade pip
+
+# Install project dependencies + build tools.
+# We use --no-root to avoid installing the package itself yet, just dependencies.
+# Note: 'pip install .' would fail without the source code, so we install typical build deps manually first
+# or try to install from pyproject.toml if possible.
+# A simple approach for now: install the heavy hitters explicitly or rely on pyproject.toml
+# if we can trick it.
+# Better: Just install common heavy deps to pre-warm the cache.
+RUN python -m pip install \
+    pyinstaller \
+    pyinstaller-hooks-contrib \
+    toml \
+    litellm \
+    pydantic \
+    textual \
+    rich \
+    prompt_toolkit \
+    mcp \
+    anyio \
+    httpx \
+    tiktoken \
+    scipy \
+    pandas \
+    torch \
+    torchvision \
+    torchaudio \
+    --extra-index-url https://download.pytorch.org/whl/cpu
+
+# --- OPTIMIZATION END ---
+
+# Copy the rest of the project files
 COPY . .
 
 # Make scripts executable
 RUN chmod +x scripts/build_linux_binary.sh
 
 # Entrypoint runs the build script
+# The script will run 'pip install -e .' which should be fast now
 CMD ["./scripts/build_linux_binary.sh"]

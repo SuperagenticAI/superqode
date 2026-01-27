@@ -42,24 +42,21 @@
 
 ### Installation
 
-**Method 1: uv (Recommended)**
+**Primary (Recommended)**
 ```bash
+# Using uv (best performance)
 uv tool install superqode
-```
 
-**Method 2: pip**
-```bash
+# Or using pip
 pip install superqode
 ```
 
-**Method 3: Homebrew (macOS/Linux)**
+**Alternate (No Python Required)**
 ```bash
-brew tap SuperagenticAI/superqode
-brew install superqode
-```
+# Using Homebrew (macOS/Linux)
+brew install SuperagenticAI/superqode/superqode
 
-**Method 4: Installer Script (Experimental)**
-```bash
+# Using Curl script
 curl -fsSL https://super-agentic.ai/install.sh | bash
 ```
 
