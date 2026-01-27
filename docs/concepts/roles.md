@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # QE Roles
 
 SuperQode uses a role-based model where different AI agents specialize in specific types of quality engineering. This page explains each role and how they work together.

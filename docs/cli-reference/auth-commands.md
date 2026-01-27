@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # Auth Commands
 
 Show authentication and security information for SuperQode.

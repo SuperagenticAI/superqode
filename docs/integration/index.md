@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # Integration
 
 Integrate SuperQode into your development workflow, CI/CD pipelines, and toolchain.

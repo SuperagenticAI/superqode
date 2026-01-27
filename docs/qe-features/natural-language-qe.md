@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # Natural Language QE
 
 Enterprise feature. Natural language QE lets you describe testing needs in plain English and have

@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # Suggestion Commands
 
 Commands for reviewing and applying verified fix suggestions from QE sessions.

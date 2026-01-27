@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # Provider Commands
 
 Commands for managing BYOK (Bring Your Own Key) providers, testing connections, and listing available models.

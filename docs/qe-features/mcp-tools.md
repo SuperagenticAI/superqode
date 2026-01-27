@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # MCP Tools Integration
 
 Integrate Model Context Protocol (MCP) servers to extend SuperQode with external tools, resources, and prompts.

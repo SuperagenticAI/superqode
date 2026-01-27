@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # MCP Configuration
 
 Complete guide to configuring Model Context Protocol (MCP) servers in SuperQode.

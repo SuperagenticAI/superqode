@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # API Reference
 
 Programmatic access to SuperQode functionality through Python SDK and JSONL events.

@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # JSONL Events API
 
 SuperQode emits structured JSONL (JSON Lines) events during QE sessions for CI/CD integration, real-time monitoring, and programmatic access to QE results.

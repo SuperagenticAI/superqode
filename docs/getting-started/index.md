@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # Getting Started
 
 Welcome to SuperQode (TUI) and SuperQE (CLI)! This guide will help you get up and running with agentic quality engineering. Learn how to set up your project, choose your workflow, and start improving code quality with AI-powered testing.

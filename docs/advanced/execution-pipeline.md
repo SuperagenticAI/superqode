@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # Execution Pipeline
 
 This document explains how SuperQode executes QE sessions, from receiving a user request to generating the final Quality Report.

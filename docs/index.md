@@ -2,7 +2,9 @@
 
 <div class="hero-section" markdown>
 
-<img src="assets/superqode.png" alt="SuperQode Logo" style="max-height: 150px; margin-bottom: 1.5rem;" />
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" style="margin-bottom: 1.5rem;" />
+
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode-logo.png" alt="SuperQode Logo" style="max-height: 150px; margin-bottom: 1.5rem;" />
 
 # **SUPERQODE**
 

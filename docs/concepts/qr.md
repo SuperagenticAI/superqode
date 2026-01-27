@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # Quality Reports (QRs)
 
 SuperQode produces **Quality Reports (QRs)** instead of traditional bug reports. QRs are research-grade forensic artifacts that document the complete investigation process.

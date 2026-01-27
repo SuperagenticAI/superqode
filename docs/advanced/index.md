@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # Advanced Features
 
 Advanced features, architecture documentation, and systems in SuperQode for power users, developers, and custom workflows.

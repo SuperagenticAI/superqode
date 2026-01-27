@@ -1,4 +1,6 @@
-# Allow Suggestions Mode
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
+# Fix Suggestions
 
 SuperQode's **Allow Suggestions** mode enables agents to demonstrate fixes in a sandbox, verify they work, and then revert-giving you proven solutions without modifying your code.
 

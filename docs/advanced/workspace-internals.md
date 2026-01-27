@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # Workspace Internals
 
 The workspace system is the foundation of SuperQode's sandbox-first approach. This document explains how ephemeral workspaces provide safe, isolated environments for quality engineering.

@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # Tools System
 
 Comprehensive tool system providing 20+ tools for AI coding agents in SuperQode.

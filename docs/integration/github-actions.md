@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # GitHub Actions
 
 Ready-to-use GitHub Actions workflows for SuperQode integration.

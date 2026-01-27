@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # Architecture Overview
 
 This document provides a high-level overview of SuperQode's internal architecture, explaining how the various subsystems work together to deliver agentic quality engineering.

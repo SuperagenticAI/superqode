@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" />
+
 # Safety & Permissions
 
 SuperQode implements a comprehensive safety model to ensure secure operation while allowing agents to perform effective quality engineering. This document describes the security architecture, permission system, and safety guarantees.
