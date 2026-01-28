@@ -4949,7 +4949,7 @@ team:
             command = "cagent --acp"
             model_display = f"cagent/{model}" if model else "cagent/auto"
         elif agent_type == "fast-agent":
-            command = "fast-agent --acp"
+            command = "fast-agent-acp -x"
             model_display = f"fast-agent/{model}" if model else "fast-agent/auto"
         elif agent_type == "llmling-agent":
             command = "llmling-agent --acp"

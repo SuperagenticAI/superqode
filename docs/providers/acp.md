@@ -90,7 +90,7 @@ SuperQode includes registry entries for these ACP agents (availability depends o
 - **Augment Code / Auggie** (`auggie --acp`)
 - **Stakpak** (`stakpak`)
 - **VT Code** (`vtcode-acp`)
-- **fast-agent** (ACP entrypoint: `fast-agent-acp`)
+- **fast-agent** (ACP entrypoint: `fast-agent-acp -x`)
 - **LLMling-Agent** (`llmling-agent`)
 - **cagent** (`cagent`)
 - **Code Assistant** (see its agent card for the ACP command)
