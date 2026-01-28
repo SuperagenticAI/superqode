@@ -40,6 +40,15 @@ Integrate SuperQode into your development workflow, CI/CD pipelines, and toolcha
 
     [:octicons-arrow-right-24: IDE Integration](ide.md)
 
+-   **Enterprise Integrations**
+
+    ---
+
+    Self-hosted integrations with external agent platforms. Moltbot is the first supported
+    integration; more bot integrations will be added over time.
+
+    [:octicons-arrow-right-24: Moltbot Integration](moltbot.md)
+
 </div>
 
 ---

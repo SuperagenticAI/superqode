@@ -2,6 +2,8 @@
 
 This guide covers all installation methods for SuperQode (TUI) and SuperQE (CLI), including prerequisites, verification, and troubleshooting.
 
+**Safety note (OSS):** Run the open-source SuperQode/SuperQE in a safe, controlled environment (sandbox, VM, or low-risk machine). This reduces the blast radius for testing workflows and agent-driven actions.
+
 ---
 
 ## Quick Install

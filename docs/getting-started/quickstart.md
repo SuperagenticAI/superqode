@@ -2,6 +2,8 @@
 
 Get started with SuperQode in 5 minutes.
 
+**Safety note (OSS):** Run the open-source SuperQode/SuperQE in a safe, controlled environment (sandbox, VM, or low-risk machine). This reduces the blast radius for testing workflows and agent-driven actions.
+
 ---
 
 ## Install SuperQode

@@ -28,6 +28,8 @@ Orchestrating coding agents as **Super Quality Engineers** using the **SuperQE m
 
 **SuperQode** is the agentic coding harness designed to drive the SuperQE process. It delivers a **Superior and Quality Optimized Developer Experience** as a TUI for interactive development, debugging, and exploratory QE. SuperQode can also be used as a general development harness beyond QE.
 
+**Note (Enterprise):** Enterprise adds powerful automation, deep evaluation testing, and enterprise integrations (Moltbot first; more bot integrations coming).
+
 ### Why SuperQode Exists
 
 AI coding agents have changed how software is written, but quality engineering still assumes human
@@ -127,7 +129,8 @@ superqe --version
 ## Deployment Options
 
 SuperQode OSS is self-hosted. You are responsible for model/API infra costs.
-For Enterprise capabilities, see `enterprise/index.md`.
+For Enterprise capabilities (including integrations like Moltbot, with more coming), see
+`enterprise/index.md`.
 
 ---
 
