@@ -1,14 +1,14 @@
 class Superqode < Formula
   desc "Super Quality Engineering for Agentic Coding Teams"
   homepage "https://super-agentic.ai"
-  version "0.1.4"
+  version "0.1.5"
 
   if OS.mac?
-    url "https://github.com/SuperagenticAI/superqode/releases/download/v0.1.4/superqode-0.1.4-macos-arm64.tar.gz"
-    sha256 "dc436564fdf0f5aa6f7436c454a784eb5b923ea2997ebdcc28ea5fad86c8ce12"
+    url "https://github.com/SuperagenticAI/superqode/releases/download/v0.1.5/superqode-0.1.5-macos-arm64.tar.gz"
+    sha256 "f9c01fa9fd027ed41258187bba2a22d7803d7c2ec90a04576c653a4130a612cb"
   elsif OS.linux?
-    url "https://github.com/SuperagenticAI/superqode/releases/download/v0.1.4/superqode-0.1.4-linux-arm64.tar.gz"
-    sha256 "34234bc26d8842a50c16b9ac7b1827367e9c73d5bc229a043dabc6c52c57e8f0"
+    url "https://github.com/SuperagenticAI/superqode/releases/download/v0.1.5/superqode-0.1.5-linux-arm64.tar.gz"
+    sha256 "8b8e21619030b83f09eda6cd7d6b8f48267eab35777e64c3c7a97003a4816acd"
   end
 
   def install

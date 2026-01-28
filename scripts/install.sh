@@ -2,7 +2,7 @@
 set -e
 
 # Configuration
-VERSION="0.1.4"
+VERSION="0.1.5"
 APP_NAME="superqode"
 INSTALL_LIB_DIR="$HOME/.local/lib/${APP_NAME}"
 INSTALL_BIN_DIR="$HOME/.local/bin"
