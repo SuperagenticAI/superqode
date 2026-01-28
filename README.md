@@ -1,7 +1,6 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner">
+  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode TUI">
 </p>
-
 <p align="center">
   <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode-logo.png" alt="SuperQode Logo" width="200">
 </p>
@@ -36,6 +35,8 @@
 
 ---
 
+
+
 ## What is SuperQode and SuperQE?
 
 **SuperQE** is the quality paradigm and automation CLI: Super Quality Engineering for Agentic AI. It uses QE coding agents to break and validate code written by coding agents. SuperQE can spawn a team of QE agents with different testing personas in a multi-agent setup to stress your code from many angles.
@@ -43,6 +44,10 @@
 **SuperQode** is the agentic coding harness designed to drive the SuperQE process. It delivers a Superior and Quality Optimized Developer Experience as a TUI for interactive development, debugging, and exploratory QE. SuperQode can also be used as a general development harness beyond QE.
 
 **Note (Enterprise):** Enterprise adds powerful automation, deep evaluation testing, and enterprise integrations (Moltbot first; more bot integrations coming).
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner">
+</p>
 
 ## Quick Start
 
