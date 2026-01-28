@@ -3552,7 +3552,9 @@ class SuperQodeApp(App):
             log.add_info(
                 "⚡ Power QE roles: unit, integration, api, ui, accessibility, security, usability"
             )
-            log.add_info("💡 Update each role's job_description in superqode.yaml for best results.")
+            log.add_info(
+                "💡 Update each role's job_description in superqode.yaml for best results."
+            )
         else:
             # Fallback: create basic config if template not found
             default_config = """# =============================================================================
@@ -3703,7 +3705,9 @@ team:
             log.add_info(
                 "⚡ Power QE roles: unit, integration, api, ui, accessibility, security, usability"
             )
-            log.add_info("💡 Update each role's job_description in superqode.yaml for best results.")
+            log.add_info(
+                "💡 Update each role's job_description in superqode.yaml for best results."
+            )
 
         t = Text()
         t.append("\n  Quick start:\n", style=THEME["muted"])
