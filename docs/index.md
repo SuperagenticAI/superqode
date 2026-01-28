@@ -18,6 +18,8 @@ Orchestrating coding agents as **Super Quality Engineers** using the **SuperQE m
 [:octicons-book-24: Learn Concepts](concepts/index.md){ .md-button }
 [:octicons-code-24: CLI Reference](cli-reference/index.md){ .md-button }
 
+[Demo video](https://www.youtube.com/watch?v=x2V323HgXRk)
+
 </div>
 
 ---

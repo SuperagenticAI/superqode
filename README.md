@@ -45,6 +45,10 @@
 
 **Note (Enterprise):** Enterprise adds powerful automation, deep evaluation testing, and enterprise integrations (Moltbot first; more bot integrations coming).
 
+## Demo Video
+
+Watch the demo: [SuperQode Demo](https://www.youtube.com/watch?v=x2V323HgXRk)
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner">
 </p>
