@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner">
+</p>
+
+<p align="center">
   <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode-logo.png" alt="SuperQode Logo" width="200">
 </p>
 
@@ -40,10 +44,6 @@
 
 **Note (Enterprise):** Enterprise adds powerful automation, deep evaluation testing, and enterprise integrations (Moltbot first; more bot integrations coming).
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode TUI">
-</p>
-
 ## Quick Start
 
 ### Installation
@@ -74,10 +74,6 @@ curl -fsSL https://super-agentic.ai/install.sh | bash
 cd your-project
 superqode
 ```
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode TUI">
-</p>
 
 **Automated QE (CI/CD)**
 ```bash
