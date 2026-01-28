@@ -232,7 +232,7 @@ AGENTS: Dict[str, AgentDef] = {
         docs_url="https://github.com/evalstate/fast-agent",
         capabilities=["Workflows", "MCP native", "Fast setup"],
         connection_type="stdio",
-        command="fast-agent --acp",
+        command="fast-agent-acp",
     ),
     "llmling-agent": AgentDef(
         id="llmling-agent",

@@ -243,7 +243,7 @@ ACP_AGENTS_REGISTRY: dict[str, AgentMetadata] = {
         "author_name": "fast-agent",
         "author_url": "https://github.com/evalstate",
         "description": "Create and interact with sophisticated Agents and Workflows in minutes. MCP native.",
-        "run_command": "fast-agent --acp",
+        "run_command": "fast-agent-acp -x",
         "status": "available",
         "installation_command": "uv tool install fast-agent-mcp",
         "installation_instructions": "Install fast-agent via uv. Native MCP support.",
