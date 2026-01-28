@@ -561,6 +561,12 @@ def init(path: str, force: bool, minimal: bool, guided: bool):
     # Write config file
     config_file.write_text(config_content)
     console.print(f"[green]✓[/green] Created {config_file}")
+    console.print(
+        "[dim]⚡ Power QE roles: unit, integration, api, ui, accessibility, security, usability[/dim]"
+    )
+    console.print(
+        "[dim]💡 Tip: Update each role's job_description in superqode.yaml for best results[/dim]"
+    )
 
     # Create .superqode directory structure
     _create_superqode_directory(superqode_dir)
@@ -667,6 +673,12 @@ def _run_guided_setup(project_root: Path, config_file: Path, superqode_dir: Path
     # Write config file
     config_file.write_text(config_content)
     console.print(f"[green]✓[/green] Created {config_file}")
+    console.print(
+        "[dim]⚡ Power QE roles: unit, integration, api, ui, accessibility, security, usability[/dim]"
+    )
+    console.print(
+        "[dim]💡 Tip: Update each role's job_description in superqode.yaml for best results[/dim]"
+    )
 
     # Create directory structure
     _create_superqode_directory(superqode_dir)

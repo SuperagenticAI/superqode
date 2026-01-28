@@ -89,6 +89,17 @@ from superqode.app.widgets import (
 )
 from superqode.widgets.leader_key import LeaderKeyPopup
 
+# QE roles that should be highlighted as power roles in the TUI.
+POWER_QE_ROLES = {
+    "unit_tester",
+    "integration_tester",
+    "api_tester",
+    "ui_tester",
+    "accessibility_tester",
+    "security_tester",
+    "usability_tester",
+}
+
 # SuperQode modules
 from superqode.danger import (
     analyze_command,
@@ -3538,6 +3549,10 @@ class SuperQodeApp(App):
 
             shutil.copy2(template_path, config_path)
             log.add_success(f"Created {config_path} with all roles available")
+            log.add_info(
+                "⚡ Power QE roles: unit, integration, api, ui, accessibility, security, usability"
+            )
+            log.add_info("💡 Update each role's job_description in superqode.yaml for best results.")
         else:
             # Fallback: create basic config if template not found
             default_config = """# =============================================================================
@@ -3685,6 +3700,10 @@ team:
             with open(config_path, "w") as f:
                 f.write(default_config)
             log.add_success(f"Created {config_path} with basic roles available")
+            log.add_info(
+                "⚡ Power QE roles: unit, integration, api, ui, accessibility, security, usability"
+            )
+            log.add_info("💡 Update each role's job_description in superqode.yaml for best results.")
 
         t = Text()
         t.append("\n  Quick start:\n", style=THEME["muted"])
@@ -10395,6 +10414,16 @@ team:
                 self.current_mode = mode
                 self.current_role = role
                 self.current_agent = ""
+                if (
+                    mode == "qe"
+                    and role in POWER_QE_ROLES
+                    and not getattr(self, "_power_roles_hint_shown", False)
+                ):
+                    log.add_info(f"⚡ Power QE role selected: {role}")
+                    log.add_info(
+                        "💡 Tip: Update this role's job_description in superqode.yaml for best results."
+                    )
+                    self._power_roles_hint_shown = True
 
                 # Reset session for new role
                 self._is_first_message = True
@@ -15905,11 +15934,22 @@ team:
                     )
                     t.append(f":{mode} {role.role:<15}", style=color)
                     t.append(f" 📊 {role.model:<12}", style=THEME["muted"])
-                    t.append(f" {role.description}\n", style=THEME["dim"])
+                    t.append(f" {role.description}", style=THEME["dim"])
+                    if mode == "qe" and role.role in POWER_QE_ROLES:
+                        t.append(" ⚡ POWER", style=f"bold {THEME['warning']}")
+                    t.append("\n", style=THEME["dim"])
 
             total = len(config.roles)
             enabled = config.enabled_count
             t.append(f"\n  💡 {enabled}/{total} roles enabled\n", style=THEME["muted"])
+            t.append(
+                "  ⚡ Power QE roles: unit, integration, api, ui, accessibility, security, usability\n",
+                style=THEME["muted"],
+            )
+            t.append(
+                "  💡 Tip: Edit each role's job_description in superqode.yaml for better results\n",
+                style=THEME["dim"],
+            )
             self._show_command_output(log, t)
         except Exception as e:
             log.add_error(str(e))
