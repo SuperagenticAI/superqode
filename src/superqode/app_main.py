@@ -14623,6 +14623,8 @@ team:
             "geminicli": "💎",  # Gem (Gemini CLI)
             "codex": "📝",  # Memo/code
             "codex.openai.com": "📝",  # Memo/code
+            "moltbot": "🦞",  # Lobster (Moltbot)
+            "molt.bot": "🦞",  # Lobster (Moltbot)
             "goose": "🪿",  # Goose
             "goose.ai": "🪿",  # Goose
             "kimi": "🔮",  # Crystal ball (Kimi CLI)
@@ -14640,12 +14642,25 @@ team:
             "openhands": "🤲",  # Open hands
         }
 
-        # Sort function: opencode first, then alphabetically
+        priority_order = {
+            "opencode": 0,
+            "opencode.ai": 0,
+            "moltbot": 1,
+            "molt.bot": 1,
+            "claude": 2,
+            "claude.com": 2,
+            "codex": 3,
+            "codex.openai.com": 3,
+        }
+
+        # Sort function: priority agents first, then alphabetically by name
         def sort_key(item):
             agent_id, agent_data = item
-            if agent_id == "opencode" or agent_data.get("short_name") == "opencode":
-                return (0, "")  # Always first
-            return (1, agent_data["name"])
+            agent_short_name = agent_data.get("short_name", agent_id)
+            priority = priority_order.get(agent_id) or priority_order.get(agent_short_name)
+            if priority is not None:
+                return (0, priority, agent_data["name"])
+            return (1, 999, agent_data["name"])
 
         # Combine into a single numbered list (installed first, then not installed)
         # But ensure opencode is always first within each group

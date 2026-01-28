@@ -1,0 +1,49 @@
+# Moltbot
+# https://www.molt.bot/
+
+identity = "molt.bot"
+name = "Moltbot"
+short_name = "moltbot"
+url = "https://www.molt.bot/"
+protocol = "acp"
+author_name = "Moltbot"
+author_url = "https://www.molt.bot/"
+publisher_name = "Moltbot"
+publisher_url = "https://github.com/moltbot/moltbot"
+type = "coding"
+description = "Moltbot ACP bridge backed by the Moltbot Gateway (self-hosted)."
+tags = ["enterprise", "integration", "automation", "gateway"]
+run_command."*" = "moltbot acp --url ws://127.0.0.1:18789"
+
+help = '''
+# Moltbot
+
+Moltbot provides an ACP bridge that connects SuperQode to a running Moltbot Gateway.
+
+## Requirements
+
+- Moltbot Gateway must be running and reachable
+- Node.js 22+ runtime
+
+## Connect
+
+```bash
+# Start the gateway (in a separate terminal)
+moltbot gateway --port 18789 --verbose
+
+# Connect from SuperQode
+superqode connect acp moltbot
+```
+
+If your gateway requires auth, add `--token` or `--password` to the ACP command or set the
+corresponding environment variables.
+
+---
+
+**Website**: https://www.molt.bot/
+**GitHub**: https://github.com/moltbot/moltbot
+'''
+
+[actions."*".install]
+command = "npm install -g moltbot@latest"
+description = "Install Moltbot"

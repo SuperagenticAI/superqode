@@ -54,6 +54,29 @@ superqode connect acp opencode
 
 ---
 
+### Moltbot (Enterprise Integration, Experimental)
+
+[Moltbot](https://www.molt.bot/) provides an ACP bridge backed by the Moltbot Gateway. This
+integration is available in Enterprise.
+
+```bash
+# Install Moltbot
+npm install -g moltbot@latest
+
+# Start the gateway (in a separate terminal)
+moltbot gateway --port 18789 --verbose
+
+# Connect via SuperQode
+superqode connect acp moltbot
+```
+
+If your gateway requires auth, pass `--token` or `--password` in the agent command configuration.
+
+**Note:** Moltbot integration is experimental and intended for self-hosted environments with
+secure, private local models.
+
+---
+
 ### Other ACP-Compatible Agents
 
 SuperQode includes registry entries for these ACP agents (availability depends on local installation):
