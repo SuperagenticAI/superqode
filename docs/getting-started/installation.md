@@ -99,7 +99,10 @@ superqode --version
 
 ## Alternate Installation Methods (No Python Required)
 
-These methods provide a pre-compiled binary. They are convenient for users who do not want to manage a Python environment, but may have a slightly slower startup time (~1-2 seconds) compared to the primary methods.
+These methods provide a pre-compiled binary for **SuperQode (TUI) only**. SuperQE (CLI) requires
+the Python install (uv or pip). These methods are convenient for users who do not want to manage a
+Python environment, but may have a slightly slower startup time (~1-2 seconds) compared to the
+primary methods.
 
 ### Method 3: Homebrew (macOS/Linux)
 
