@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Highlight power roles in TUI role listing and selection with customization tips.
 - Show power-role customization tips after `superqode` and `superqe` init.
 
+## [0.1.6] - 2026-01-29
+- FastAgent command fix.
+- MLX model listing and timeout improvements.
+
 ## [0.1.4] - 2026-01-26
 
 ### Fixed
