@@ -143,6 +143,36 @@ class MLXClient(LocalProviderClient):
         return models
 
     @staticmethod
+    def _model_from_cache(model_info: Dict[str, Any], running: bool = False) -> LocalModel:
+        """Build a LocalModel from cached HuggingFace model metadata."""
+        model_id = model_info["id"]
+
+        format_note = ""
+        if "mlx" in model_id.lower():
+            format_note = " (MLX format)"
+        elif "4bit" in model_id.lower() or "8bit" in model_id.lower():
+            format_note = " (quantized)"
+
+        return LocalModel(
+            id=model_id,
+            name=f"{model_id.split('/')[-1]} (cached){format_note}",
+            size_bytes=model_info["size_bytes"],
+            quantization=detect_quantization(model_id),
+            context_window=4096,
+            supports_tools=likely_supports_tools(model_id),
+            supports_vision=False,
+            family=detect_model_family(model_id),
+            running=running,
+            modified_at=model_info.get("modified"),
+            details={
+                "cached_path": model_info.get("path"),
+                "source": "huggingface_cache",
+                "supported_formats": ["MLX", "safetensors"],
+                "notes": "Works with mlx_lm.convert and mlx_lm.server",
+            },
+        )
+
+    @staticmethod
     def _get_directory_size(path: str) -> int:
         """Get total size of directory in bytes."""
         total_size = 0
@@ -311,7 +341,7 @@ class MLXClient(LocalProviderClient):
     async def list_models(self) -> List[LocalModel]:
         """List available models from MLX server."""
         try:
-            response = await self._async_request("GET", "/v1/models")
+            response = await self._async_request("GET", "/v1/models", timeout=8.0)
             models = response.get("data", [])
 
             result = []

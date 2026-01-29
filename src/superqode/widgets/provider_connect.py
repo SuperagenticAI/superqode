@@ -420,7 +420,11 @@ class ProviderConnectWidget(Container):
                 return
 
             # Try getting models from the database (includes live models.dev data)
-            db_models = get_models_for_provider(provider_id)
+            # Only use DB models if we did not load local models for local providers.
+            if not self._models:
+                db_models = get_models_for_provider(provider_id)
+            else:
+                db_models = {}
 
             if db_models:
                 # Store both model IDs and their info
@@ -468,11 +472,50 @@ class ProviderConnectWidget(Container):
                 return
 
             client = client_class()
+
+            if provider_id == "mlx":
+                # MLX server can be slow to respond during model load.
+                # Try listing models directly before falling back to cache.
+                models = []
+                try:
+                    models = await client.list_models()
+                except Exception:
+                    models = []
+
+                if not models:
+                    try:
+                        models = MLXClient.get_available_models()
+                    except Exception:
+                        models = []
+
+                cached = []
+                try:
+                    cache_models = MLXClient.discover_huggingface_models()
+                    for model_info in cache_models:
+                        model_id = model_info["id"]
+                        if any(m.id == model_id for m in models):
+                            continue
+                        cached.append(MLXClient._model_from_cache(model_info, running=False))
+                except Exception:
+                    cached = []
+
+                # Running models first, then cached models
+                models = models + cached
+                models_sorted = sorted(models, key=lambda m: (not m.running, m.name))
+
+                self._models = [m.id for m in models_sorted]
+                self._local_models = {m.id: m for m in models_sorted}
+                self._model_info = {}
+                return
+
             if await client.is_available():
                 models = await client.list_models()
 
-                self._models = [m.id for m in models]
-                self._local_models = {m.id: m for m in models}
+                # Preserve order while ensuring running models appear first.
+                models_sorted = sorted(models, key=lambda m: (not m.running, m.name))
+
+                self._models = [m.id for m in models_sorted]
+                self._local_models = {m.id: m for m in models_sorted}
                 self._model_info = {}
             else:
                 self._models = []
