@@ -368,7 +368,7 @@ KNOWN_AGENTS: List[Dict[str, Any]] = [
         "command": ["fast-agent-acp", "-x"],
         "alt_commands": [
             ["fast-agent-acp"],
-            ["fast-agent", "serve","--transport","acp"],
+            ["fast-agent", "serve", "--transport", "acp"],
         ],
         "icon": "🚀",
         "color": "#14b8a6",
