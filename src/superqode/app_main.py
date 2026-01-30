@@ -14634,8 +14634,8 @@ team:
             "geminicli": "💎",  # Gem (Gemini CLI)
             "codex": "📝",  # Memo/code
             "codex.openai.com": "📝",  # Memo/code
-            "moltbot": "🦞",  # Lobster (Moltbot)
-            "molt.bot": "🦞",  # Lobster (Moltbot)
+            "moltbot": "🦞",  # Lobster (OpenClaw)
+            "molt.bot": "🦞",  # Lobster (OpenClaw)
             "goose": "🪿",  # Goose
             "goose.ai": "🪿",  # Goose
             "kimi": "🔮",  # Crystal ball (Kimi CLI)

@@ -1,16 +1,16 @@
-# Moltbot Integration (Enterprise)
+# OpenClaw Integration (Enterprise)
 
-Moltbot is the first supported Enterprise integration for SuperQode/SuperQE. It is **experimental**
-and intended for **self-hosted** deployments only. It enables lab-style automation with Moltbot
+OpenClaw is the first supported Enterprise integration for SuperQode/SuperQE. It is **experimental**
+and intended for **self-hosted** deployments only. It enables lab-style automation with OpenClaw
 clients while keeping SuperQE in control of audits and deep evaluation testing. More bot
 integrations will be added over time.
 
 ## What This Enables
 
-- Self-hosted Moltbot Gateway + clients in a controlled lab environment
+- Self-hosted OpenClaw Gateway + clients in a controlled lab environment
 - SuperQode TUI access via ACP for interactive exploration
 - SuperQE CLI automation for audits (current agent: OpenCode)
-- Enterprise reporting outputs and deep evaluation testing against the Moltbot codebase
+- Enterprise reporting outputs and deep evaluation testing against the OpenClaw codebase
 - Secure and private **local models** for lab isolation
 
 ## Install
@@ -21,7 +21,7 @@ npm install -g moltbot@latest
 
 ## Integration Model
 
-Moltbot exposes an ACP bridge (`moltbot acp`) that connects to its Gateway. SuperQode/SuperQE can
+OpenClaw exposes an ACP bridge (`moltbot acp`) that connects to its Gateway. SuperQode/SuperQE can
 treat this as an ACP agent for interactive sessions and automated runs.
 
 ## Quick Start (Enterprise)
@@ -35,6 +35,8 @@ superqode connect acp moltbot
 ```
 
 If your gateway requires auth, pass `--token` or `--password` to the ACP bridge.
+
+OpenClaw website: https://openclaw.ai/
 
 ## Scope (Enterprise)
 

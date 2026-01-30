@@ -54,13 +54,13 @@ superqode connect acp opencode
 
 ---
 
-### Moltbot (Enterprise Integration, Experimental)
+### OpenClaw (Enterprise Integration, Experimental)
 
-[Moltbot](https://www.molt.bot/) provides an ACP bridge backed by the Moltbot Gateway. This
+[OpenClaw](https://openclaw.ai/) provides an ACP bridge backed by the OpenClaw Gateway. This
 integration is available in Enterprise.
 
 ```bash
-# Install Moltbot
+# Install OpenClaw
 npm install -g moltbot@latest
 
 # Start the gateway (in a separate terminal)
@@ -72,7 +72,7 @@ superqode connect acp moltbot
 
 If your gateway requires auth, pass `--token` or `--password` in the agent command configuration.
 
-**Note:** Moltbot integration is experimental and intended for self-hosted environments with
+**Note:** OpenClaw integration is experimental and intended for self-hosted environments with
 secure, private local models.
 
 ---

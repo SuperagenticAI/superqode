@@ -1,28 +1,28 @@
-# Moltbot
-# https://www.molt.bot/
+# OpenClaw
+# https://openclaw.ai/
 
 identity = "molt.bot"
-name = "Moltbot"
+name = "OpenClaw"
 short_name = "moltbot"
-url = "https://www.molt.bot/"
+url = "https://openclaw.ai/"
 protocol = "acp"
-author_name = "Moltbot"
-author_url = "https://www.molt.bot/"
-publisher_name = "Moltbot"
+author_name = "OpenClaw"
+author_url = "https://openclaw.ai/"
+publisher_name = "OpenClaw"
 publisher_url = "https://github.com/moltbot/moltbot"
 type = "coding"
-description = "Moltbot ACP bridge backed by the Moltbot Gateway (self-hosted)."
+description = "OpenClaw ACP bridge backed by the OpenClaw Gateway (self-hosted)."
 tags = ["enterprise", "integration", "automation", "gateway"]
 run_command."*" = "moltbot acp --url ws://127.0.0.1:18789"
 
 help = '''
-# Moltbot
+# OpenClaw
 
-Moltbot provides an ACP bridge that connects SuperQode to a running Moltbot Gateway.
+OpenClaw provides an ACP bridge that connects SuperQode to a running OpenClaw Gateway.
 
 ## Requirements
 
-- Moltbot Gateway must be running and reachable
+- OpenClaw Gateway must be running and reachable
 - Node.js 22+ runtime
 
 ## Connect
@@ -40,10 +40,10 @@ corresponding environment variables.
 
 ---
 
-**Website**: https://www.molt.bot/
+**Website**: https://openclaw.ai/
 **GitHub**: https://github.com/moltbot/moltbot
 '''
 
 [actions."*".install]
 command = "npm install -g moltbot@latest"
-description = "Install Moltbot"
+description = "Install OpenClaw"

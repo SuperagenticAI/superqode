@@ -18,7 +18,7 @@ Enterprise adds powerful automation, deep evaluation testing, and integrations o
 | Natural Language QE | ❌ | ✅ |
 | ML severity model | ❌ | ✅ |
 | SuperOpt optimizer | ✅ (flagged) | ✅ (optimized) |
-| Moltbot integration | ❌ | ✅ |
+| OpenClaw integration | ❌ | ✅ |
 
 ## Included Capabilities
 
@@ -30,13 +30,13 @@ Enterprise adds powerful automation, deep evaluation testing, and integrations o
 - Natural language QE
 - Prompt packs and optimized workflows
 - ML severity model
-- Enterprise integrations (Moltbot first; more bot integrations coming)
-- Moltbot integration (experimental; self-hosted only)
+- Enterprise integrations (OpenClaw first; more bot integrations coming)
+- OpenClaw integration (experimental; self-hosted only)
 
 ## Enterprise Integrations
 
 Enterprise integrations let you connect SuperQode/SuperQE with external agent platforms in a
-self-hosted setup. Moltbot is the first supported integration (experimental); more bot integrations
+self-hosted setup. OpenClaw is the first supported integration (experimental); more bot integrations
 will be added over time.
 
 Contact the Superagentic AI team at [info@super-agentic.ai](mailto:info@super-agentic.ai) for access.

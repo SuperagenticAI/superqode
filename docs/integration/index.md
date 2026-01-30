@@ -44,10 +44,10 @@ Integrate SuperQode into your development workflow, CI/CD pipelines, and toolcha
 
     ---
 
-    Self-hosted integrations with external agent platforms. Moltbot is the first supported
+    Self-hosted integrations with external agent platforms. OpenClaw is the first supported
     integration; more bot integrations will be added over time.
 
-    [:octicons-arrow-right-24: Moltbot Integration](moltbot.md)
+    [:octicons-arrow-right-24: OpenClaw Integration](openclaw.md)
 
 </div>
 

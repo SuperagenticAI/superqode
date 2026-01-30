@@ -43,7 +43,7 @@
 
 **SuperQode** is the agentic coding harness designed to drive the SuperQE process. It delivers a Superior and Quality Optimized Developer Experience as a TUI for interactive development, debugging, and exploratory QE. SuperQode can also be used as a general development harness beyond QE.
 
-**Note (Enterprise):** Enterprise adds powerful automation, deep evaluation testing, and enterprise integrations (Moltbot first; more bot integrations coming).
+**Note (Enterprise):** Enterprise adds powerful automation, deep evaluation testing, and enterprise integrations (OpenClaw first; more bot integrations coming).
 
 ## Demo Video
 
