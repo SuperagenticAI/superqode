@@ -675,6 +675,7 @@ class ACPDiscovery:
                 AgentModel(id="claude-3-5-sonnet", name="Claude 3.5 Sonnet", is_free=True),
                 AgentModel(id="gpt-4o", name="GPT-4o", is_free=True),
                 AgentModel(id="gemini-2.5-pro", name="Gemini 2.5 Pro", is_free=True),
+                AgentModel(id="kimi-k2.5-free", name="Kimi K2.5 (Free)", is_free=True),
             ],
             # Stakpak
             "stakpak": [

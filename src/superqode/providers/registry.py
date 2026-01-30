@@ -433,6 +433,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
         example_models=[
             "glm-4.7-free",
             "grok-code",
+            "kimi-k2.5-free",
             "gpt-5-nano",
             "minimax-m2.1-free",
             "big-pickle",
@@ -440,6 +441,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
         free_models=[
             "glm-4.7-free",
             "grok-code",
+            "kimi-k2.5-free",
             "gpt-5-nano",
             "minimax-m2.1-free",
             "big-pickle",

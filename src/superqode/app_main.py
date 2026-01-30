@@ -648,6 +648,7 @@ class SuperQodeApp(App):
         return [
             {"id": "glm-4.7-free", "name": "GLM-4.7 (Free)", "context": 8192},
             {"id": "grok-code", "name": "Grok Code", "context": 4096},
+            {"id": "kimi-k2.5-free", "name": "Kimi K2.5 (Free)", "context": 8192},
             {"id": "gpt-5-nano", "name": "GPT-5 Nano", "context": 4096},
             {"id": "minimax-m2.1-free", "name": "MiniMax M2.1 (Free)", "context": 4096},
             {"id": "big-pickle", "name": "Big Pickle", "context": 2048},
@@ -822,6 +823,13 @@ class SuperQodeApp(App):
                 "free": True,
                 "recommended": True,
                 "desc": "xAI - Fast coding model",
+            },
+            {
+                "id": "opencode/kimi-k2.5-free",
+                "name": "Kimi K2.5",
+                "free": True,
+                "recommended": True,
+                "desc": "Moonshot AI - K2.5 free tier",
             },
             {
                 "id": "opencode/minimax-m2.1-free",
@@ -3999,12 +4007,6 @@ team:
             if self._handle_byok_model_selection(text, log):
                 return
 
-        # Check if user is asking about the model - intercept and answer directly
-        if self._is_model_query(text):
-            log.add_user(text)
-            self._answer_model_query(log)
-            return
-
         # Parse @file references and include file content
         file_context = ""
         if "@" in text:
@@ -5208,9 +5210,12 @@ team:
                 if getattr(client, "_process", None) is not None:
                     self._agent_process = client._process  # type: ignore[attr-defined]
 
-                # Set model for agents that support it
-                if model and agent_type in ("codex", "openhands"):
-                    await client.set_model(model)
+                # Set model for agents that support ACP model selection
+                if model and agent_type in ("codex", "openhands", "opencode"):
+                    model_id = model
+                    if agent_type == "opencode" and not model_id.startswith("opencode/"):
+                        model_id = f"opencode/{model_id}"
+                    await client.set_model(model_id)
 
                 prompt_task = asyncio.create_task(client.send_prompt(message))
 
@@ -10075,6 +10080,8 @@ team:
                     "glm-4.7": "glm-4.7-free",
                     "glm-4.7-free": "glm-4.7-free",
                     "grok-code": "grok-code",
+                    "kimi-k2.5": "kimi-k2.5-free",
+                    "kimi-k2.5-free": "kimi-k2.5-free",
                     "minimax-m2.1": "minimax-m2.1-free",
                     "minimax-m2.1-free": "minimax-m2.1-free",
                     "gpt-5-nano": "gpt-5-nano",

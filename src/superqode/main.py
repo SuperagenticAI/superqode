@@ -863,8 +863,8 @@ team:
           Ensure security, monitoring, and deployment best practices.
 
 # =============================================================================
-# Available free models: glm-4.7-free, grok-code, gpt-5-nano,
-#                        minimax-m2.1-free, big-pickle
+# Available free models: glm-4.7-free, grok-code, kimi-k2.5-free,
+#                        gpt-5-nano, minimax-m2.1-free, big-pickle
 # =============================================================================
 """
 

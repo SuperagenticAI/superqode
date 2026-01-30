@@ -1,7 +1,7 @@
 class Superqode < Formula
   desc "Super Quality Engineering for Agentic Coding Teams"
   homepage "https://super-agentic.ai"
-  version "0.1.5"
+  version "0.1.7"
 
   if OS.mac?
     url "https://github.com/SuperagenticAI/superqode/releases/download/v0.1.5/superqode-0.1.5-macos-arm64.tar.gz"

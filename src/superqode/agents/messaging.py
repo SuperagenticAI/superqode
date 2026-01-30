@@ -15,12 +15,14 @@ def map_model_to_opencode(model_name: str) -> str:
     model_mapping = {
         "glm-4.7": "glm-4.7-free",
         "grok-code": "grok-code",
+        "kimi-k2.5": "kimi-k2.5-free",
         "gpt-5-nano": "gpt-5-nano",
         "big-pickle": "big-pickle",
         "minimax-m2.1": "minimax-m2.1-free",
         # Strip provider prefix if present
         "opencode/glm-4.7-free": "glm-4.7-free",
         "opencode/grok-code": "grok-code",
+        "opencode/kimi-k2.5-free": "kimi-k2.5-free",
         "opencode/gpt-5-nano": "gpt-5-nano",
         "opencode/big-pickle": "big-pickle",
         "opencode/minimax-m2.1-free": "minimax-m2.1-free",
