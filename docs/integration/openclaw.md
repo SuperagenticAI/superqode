@@ -36,7 +36,7 @@ superqode connect acp moltbot
 
 If your gateway requires auth, pass `--token` or `--password` to the ACP bridge.
 
-OpenClaw website: https://openclaw.ai/
+OpenClaw website: [https://openclaw.ai/](https://openclaw.ai/)
 
 ## Scope (Enterprise)
 

@@ -680,6 +680,17 @@ PROVIDERS: Dict[str, ProviderDef] = {
         example_models=[],
         notes="Any OpenAI-compatible API endpoint.",
     ),
+    "huggingface-local": ProviderDef(
+        id="huggingface-local",
+        name="Hugging Face (Local Cache)",
+        tier=ProviderTier.LOCAL,
+        category=ProviderCategory.LOCAL,
+        env_vars=[],
+        litellm_prefix="huggingface/",
+        docs_url="https://huggingface.co/docs/hub/index",
+        example_models=[],
+        notes="Select locally cached HF models; routes to a local runtime (mlx/tgi/vllm/sglang).",
+    ),
 }
 
 

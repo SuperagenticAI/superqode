@@ -229,9 +229,9 @@ The `auth info` command shows the detected source for each configured variable.
 ### BYOK Providers
 
 1. Get your API key from the provider:
-   - Anthropic: https://console.anthropic.com/
-   - OpenAI: https://platform.openai.com/api-keys
-   - Google AI: https://aistudio.google.com/app/apikey
+   - Anthropic: [https://console.anthropic.com/](https://console.anthropic.com/)
+   - OpenAI: [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+   - Google AI: [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
 
 2. Set the environment variable:
 

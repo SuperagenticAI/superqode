@@ -11,6 +11,7 @@ from superqode.providers.huggingface.hub import (
     HFModel,
     GGUFFile,
     HuggingFaceHub,
+    discover_cached_models,
     get_hf_hub,
 )
 from superqode.providers.huggingface.inference import (
@@ -55,6 +56,7 @@ __all__ = [
     "LoadedModel",
     # Hub client
     "HuggingFaceHub",
+    "discover_cached_models",
     "get_hf_hub",
     # Inference client
     "HFInferenceClient",

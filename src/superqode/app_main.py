@@ -244,8 +244,21 @@ class SelectionAwareInput(Input):
         """Intercept key events for selection navigation and number selection."""
         app = self.app
 
-        # Handle number keys 1-9 during selection modes (except model selection)
+        # Handle number keys during selection modes
         if event.key in ("1", "2", "3", "4", "5", "6", "7", "8", "9"):
+            # For BYOK/local provider/model selection, buffer digits for multi-digit entry
+            if (
+                getattr(app, "_awaiting_byok_provider", False)
+                or getattr(app, "_awaiting_local_provider", False)
+                or getattr(app, "_awaiting_byok_model", False)
+                or getattr(app, "_awaiting_local_model", False)
+            ):
+                event.stop()
+                event.prevent_default()
+                if hasattr(app, "_queue_selection_digit"):
+                    app._queue_selection_digit(event.key)
+                return
+
             if self._is_in_selection_mode_for_number_keys(app):
                 # Prevent the number from being typed into input
                 event.stop()
@@ -1761,7 +1774,8 @@ class SuperQodeApp(App):
         if getattr(self, "_awaiting_local_model", False):
             self._awaiting_local_model = False
             log = self.query_one("#log", ConversationLog)
-            log.add_info("Selection cancelled. Use :connect to try again.")
+            # Return to local provider list for a clear "cancel" behavior
+            self._show_local_provider_picker(log)
             return
         if getattr(self, "_awaiting_local_provider", False):
             self._awaiting_local_provider = False
@@ -1968,6 +1982,25 @@ class SuperQodeApp(App):
         - OpenCode model selection
         """
         log = self.query_one("#log", ConversationLog)
+        # While awaiting typed selection, inject digits into prompt instead of auto-selecting
+        if (
+            getattr(self, "_awaiting_byok_model", False)
+            or getattr(self, "_awaiting_local_model", False)
+            or getattr(self, "_awaiting_byok_provider", False)
+            or getattr(self, "_awaiting_local_provider", False)
+        ):
+            try:
+                prompt_input = self.query_one("#prompt-input", Input)
+                if not prompt_input.has_focus:
+                    prompt_input.focus()
+                cursor = prompt_input.cursor_position
+                value = prompt_input.value
+                digit = str(num)
+                prompt_input.value = f"{value[:cursor]}{digit}{value[cursor:]}"
+                prompt_input.cursor_position = cursor + 1
+            except Exception:
+                pass
+            return True
 
         # 1. Handle connection type selection first
         if getattr(self, "_awaiting_connect_type", False):
@@ -2049,6 +2082,66 @@ class SuperQodeApp(App):
             return True
 
         return False
+
+    def _queue_selection_digit(self, digit: str) -> None:
+        """Queue a digit for multi-digit selection in provider/model pickers."""
+        buf = getattr(self, "_selection_digit_buffer", "")
+        buf += digit
+        self._selection_digit_buffer = buf
+
+        # Mirror buffer in prompt input for visibility
+        try:
+            prompt_input = self.query_one("#prompt-input", Input)
+            prompt_input.value = buf
+            prompt_input.cursor_position = len(buf)
+        except Exception:
+            pass
+
+        # Reset timer
+        timer = getattr(self, "_selection_digit_timer", None)
+        try:
+            if timer:
+                timer.stop()
+        except Exception:
+            pass
+        self._selection_digit_timer = self.set_timer(0.35, self._apply_selection_buffer)
+
+    def _apply_selection_buffer(self) -> None:
+        """Apply buffered numeric selection to the current picker."""
+        buf = getattr(self, "_selection_digit_buffer", "")
+        if not buf:
+            return
+
+        # Clear buffer and prompt
+        self._selection_digit_buffer = ""
+        self._selection_digit_timer = None
+        try:
+            prompt_input = self.query_one("#prompt-input", Input)
+            prompt_input.value = ""
+            prompt_input.cursor_position = 0
+        except Exception:
+            pass
+
+        log = self.query_one("#log", ConversationLog)
+
+        if getattr(self, "_awaiting_byok_provider", False):
+            self._handle_byok_provider_selection(buf, log)
+            return
+        if getattr(self, "_awaiting_local_provider", False):
+            self._handle_local_provider_selection(buf, log)
+            return
+        if getattr(self, "_awaiting_byok_model", False):
+            self._handle_byok_model_selection(buf, log)
+            return
+        if getattr(self, "_awaiting_local_model", False):
+            self._handle_local_model_selection(buf, log)
+            return
+
+        # Fallback to universal selection for other modes
+        try:
+            self._select_by_number_universal(int(buf))
+        except Exception:
+            pass
 
     def action_select_model_1(self):
         """Select item 1 in current selection mode."""
@@ -2893,6 +2986,15 @@ class SuperQodeApp(App):
             return
 
         text = event.value.strip()
+        # If a selection digit buffer is active, clear its timer to avoid double-select
+        if hasattr(self, "_selection_digit_timer") and self._selection_digit_timer:
+            try:
+                self._selection_digit_timer.stop()
+            except Exception:
+                pass
+            self._selection_digit_timer = None
+            if hasattr(self, "_selection_digit_buffer"):
+                self._selection_digit_buffer = ""
         log = self.query_one("#log", ConversationLog)
 
         # Handle Enter key (empty input) for selections
@@ -11635,6 +11737,19 @@ team:
         local providers are properly identified. Local providers are
         already handled in _connect_byok_mode() via ProviderCategory.LOCAL.
         """
+        # HuggingFace cached models need a local runtime (e.g., MLX/TGI), not HF Inference API
+        if provider == "huggingface-local":
+            model_lower = model.lower()
+            if "mlx" in model_lower or model_lower.startswith("mlx-community/"):
+                log.add_info("Routing cached MLX model to MLX local provider.")
+                provider = "mlx"
+            else:
+                log.add_error(
+                    "HuggingFace cached models require a local runtime (mlx/tgi/vllm/sglang)."
+                )
+                log.add_info("Use: :connect local <provider> <model>")
+                return
+
         # Local providers use the same connection mechanism as BYOK
         # but are identified by ProviderCategory.LOCAL
         self._connect_byok_mode(provider, model, log)
@@ -11651,6 +11766,10 @@ team:
         # Clear ALL local-related state to prevent any auto-selection
         self._awaiting_local_provider = True
         self._awaiting_local_model = False  # MUST be False - we're selecting provider, not model
+        # Clear any BYOK selection state so numeric input routes to local picker
+        self._awaiting_byok_provider = False
+        self._awaiting_byok_model = False
+        self._just_showed_byok_picker = False
 
         # Delete local selection state (but keep _local_provider_list - we'll set it later)
         for attr in ["_local_selected_provider", "_local_model_list", "_local_cached_models"]:
@@ -11679,8 +11798,8 @@ team:
         }
 
         # Add HuggingFace to local providers list (it's in MODEL_HOSTS category but available via :connect local)
-        if "huggingface" in PROVIDERS:
-            local_providers["huggingface"] = PROVIDERS["huggingface"]
+        if "huggingface-local" in PROVIDERS:
+            local_providers["huggingface-local"] = PROVIDERS["huggingface-local"]
 
         t = Text()
         t.append(f"\n", style="")
@@ -12665,44 +12784,88 @@ team:
             t.append(f"  Available models:\n", style=THEME["muted"])
             model_list = []
 
-            # Sort example models to show latest first
-            def sort_example_models(model_id: str) -> int:
-                """Sort example models - latest first."""
-                model_lower = model_id.lower()
-                # Latest models get higher priority (lower number)
-                if any(x in model_lower for x in ["4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]):
-                    return 0
-                elif any(x in model_lower for x in ["4.5", "4-plus", "4-air", "2.5"]):
-                    return 1
-                else:
-                    return 2
+            # Special case: Hugging Face BYOK should show recommended models
+            if provider_id == "huggingface":
+                try:
+                    from superqode.providers.huggingface import RECOMMENDED_MODELS
 
-            sorted_models = sorted(provider_def.example_models, key=sort_example_models)
+                    all_models = []
+                    for category_models in RECOMMENDED_MODELS.values():
+                        all_models.extend(category_models)
 
-            for idx, model in enumerate(sorted_models[:15], 1):  # Show more models
-                # Highlight current selection
-                is_highlighted = (idx - 1) == getattr(self, "_byok_highlighted_model_index", 0)
-                if is_highlighted:
-                    t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                    t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
-                    # Highlight latest models
-                    is_latest = any(
-                        x in model.lower() for x in ["4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
+                    seen = set()
+                    unique_models = []
+                    for m in all_models:
+                        if m not in seen:
+                            seen.add(m)
+                            unique_models.append(m)
+
+                    if unique_models:
+                        t.append(f"  Recommended models:\n", style=THEME["muted"])
+                        for idx, model in enumerate(unique_models[:30], 1):
+                            is_highlighted = (idx - 1) == getattr(
+                                self, "_byok_highlighted_model_index", 0
+                            )
+                            if is_highlighted:
+                                t.append(f"  ▶ ", style=f"bold {THEME['success']}")
+                                t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
+                                t.append(f"{model}", style=f"bold {THEME['success']}")
+                                t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
+                            else:
+                                t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                                t.append(f"{model}\n", style=THEME["text"])
+                            model_list.append(model)
+                except Exception:
+                    pass
+
+            if not model_list:
+                # Sort example models to show latest first
+                def sort_example_models(model_id: str) -> int:
+                    """Sort example models - latest first."""
+                    model_lower = model_id.lower()
+                    # Latest models get higher priority (lower number)
+                    if any(
+                        x in model_lower
+                        for x in ["4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
+                    ):
+                        return 0
+                    elif any(x in model_lower for x in ["4.5", "4-plus", "4-air", "2.5"]):
+                        return 1
+                    else:
+                        return 2
+
+                sorted_models = sorted(provider_def.example_models, key=sort_example_models)
+
+                for idx, model in enumerate(sorted_models[:15], 1):  # Show more models
+                    # Highlight current selection
+                    is_highlighted = (idx - 1) == getattr(
+                        self, "_byok_highlighted_model_index", 0
                     )
-                    name_style = (
-                        f"bold {THEME['success']}" if is_latest else f"bold {THEME['success']}"
-                    )
-                    t.append(f"{model}", style=name_style)
-                    t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
-                else:
-                    t.append(f"    [{idx:2}] ", style=THEME["dim"])
-                    # Highlight latest models
-                    is_latest = any(
-                        x in model.lower() for x in ["4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
-                    )
-                    name_style = f"bold {THEME['success']}" if is_latest else THEME["text"]
-                    t.append(f"{model}\n", style=name_style)
-                model_list.append(model)
+                    if is_highlighted:
+                        t.append(f"  ▶ ", style=f"bold {THEME['success']}")
+                        t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
+                        # Highlight latest models
+                        is_latest = any(
+                            x in model.lower()
+                            for x in ["4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
+                        )
+                        name_style = (
+                            f"bold {THEME['success']}"
+                            if is_latest
+                            else f"bold {THEME['success']}"
+                        )
+                        t.append(f"{model}", style=name_style)
+                        t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
+                    else:
+                        t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                        # Highlight latest models
+                        is_latest = any(
+                            x in model.lower()
+                            for x in ["4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
+                        )
+                        name_style = f"bold {THEME['success']}" if is_latest else THEME["text"]
+                        t.append(f"{model}\n", style=name_style)
+                    model_list.append(model)
 
         t.append(f"\n  💡 Quick Connect:\n", style=THEME["muted"])
         t.append(f"    Type number (1-{len(model_list)}) to select by number\n", style=THEME["dim"])
@@ -12936,6 +13099,12 @@ team:
             log.add_error(f"Unknown provider: {provider_id}")
             return
 
+        # Ensure local model selection is active, and BYOK selection is inactive
+        self._awaiting_local_provider = False
+        self._awaiting_local_model = True
+        self._awaiting_byok_provider = False
+        self._awaiting_byok_model = False
+
         # Show experimental warning for vLLM and SGLang
         if provider_id in ("vllm", "sglang"):
             t = Text()
@@ -12949,60 +13118,55 @@ team:
 
         log.add_info(f"Discovering models from {provider_def.name}...")
 
-        # Special handling for HuggingFace (uses cloud API, not local client)
-        if provider_id == "huggingface":
-            # Load recommended HuggingFace models
-            from superqode.providers.huggingface import RECOMMENDED_MODELS
+        # Special handling for HuggingFace (show locally cached models)
+        if provider_id == "huggingface-local":
+            from superqode.providers.huggingface import discover_cached_models
 
-            # Combine all recommended models
-            all_models = []
-            for category_models in RECOMMENDED_MODELS.values():
-                all_models.extend(category_models)
-
-            # Remove duplicates while preserving order
-            seen = set()
-            unique_models = []
-            for m in all_models:
-                if m not in seen:
-                    seen.add(m)
-                    unique_models.append(m)
+            cached = discover_cached_models()
+            cached_models = [m["id"] for m in cached]
 
             # Display models
             t = Text()
             t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
             t.append(f"{provider_def.name} Models\n", style=f"bold {THEME['text']}")
-            t.append(f"  {len(unique_models)} recommended model(s)\n\n", style=THEME["dim"])
+            t.append(
+                f"  {len(cached_models)} locally cached model(s)\n\n", style=THEME["dim"]
+            )
 
             # Store model list for selection
             self._local_selected_provider = provider_id
-            self._local_model_list = unique_models
+            self._local_model_list = cached_models
+            self._local_cached_models = cached_models
             self._awaiting_local_model = True
             self._awaiting_local_provider = False
 
             highlighted_idx = getattr(self, "_local_highlighted_model_index", 0)
 
-            for idx, model_id in enumerate(unique_models, 1):
-                is_highlighted = (idx - 1) == highlighted_idx
+            if cached_models:
+                for idx, model_id in enumerate(cached_models, 1):
+                    is_highlighted = (idx - 1) == highlighted_idx
 
-                if is_highlighted:
-                    t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                    t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
-                else:
-                    t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                    if is_highlighted:
+                        t.append(f"  ▶ ", style=f"bold {THEME['success']}")
+                        t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
+                    else:
+                        t.append(f"    [{idx:2}] ", style=THEME["dim"])
 
-                name_style = (
-                    f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}"
-                )
-                t.append(f"{model_id}", style=name_style)
-                if is_highlighted:
-                    t.append(f"  ← SELECTED", style=f"bold {THEME['success']}")
-                t.append(f"\n", style="")
+                    name_style = (
+                        f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}"
+                    )
+                    t.append(f"{model_id}", style=name_style)
+                    if is_highlighted:
+                        t.append(f"  ← SELECTED", style=f"bold {THEME['success']}")
+                    t.append(f"\n", style="")
+            else:
+                t.append(f"  ○ No local HuggingFace models found\n\n", style=THEME["muted"])
 
-            t.append(f"\n  💡 ", style=THEME["muted"])
+            t.append(f"  💡 ", style=THEME["muted"])
             t.append(f"Select a model number or name\n", style=THEME["text"])
             t.append(f"  Use ", style=THEME["muted"])
             t.append(f":hf search <query>", style=THEME["cyan"])
-            t.append(f" to find more models\n", style=THEME["muted"])
+            t.append(f" to find and download models\n", style=THEME["muted"])
 
             log.write(t)
             return
@@ -13241,7 +13405,54 @@ team:
         models = getattr(self, "_local_cached_models", [])
         model_list = getattr(self, "_local_model_list", [])
 
-        if not provider_id or not models:
+        if not provider_id:
+            return
+
+        # HuggingFace cached models are stored as plain IDs
+        if provider_id == "huggingface-local":
+            if not model_list:
+                return
+            provider_def = PROVIDERS.get(provider_id)
+            if not provider_def:
+                return
+
+            t = Text()
+            t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
+            t.append(f"{provider_def.name} Models\n", style=f"bold {THEME['text']}")
+            t.append(
+                f"  {len(model_list)} locally cached model(s)\n\n", style=THEME["dim"]
+            )
+
+            highlighted_idx = getattr(self, "_local_highlighted_model_index", 0)
+            for idx, model_id in enumerate(model_list, 1):
+                is_highlighted = (idx - 1) == highlighted_idx
+                if is_highlighted:
+                    t.append(f"  ▶ ", style=f"bold {THEME['success']}")
+                    t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
+                else:
+                    t.append(f"    [{idx:2}] ", style=THEME["dim"])
+
+                name_style = (
+                    f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}"
+                )
+                t.append(f"{model_id}", style=name_style)
+                if is_highlighted:
+                    t.append(f"  ← SELECTED", style=f"bold {THEME['success']}")
+                t.append(f"\n", style="")
+
+            t.append(f"\n  💡 ", style=THEME["muted"])
+            t.append("Select a model number or name\n", style=THEME["text"])
+            t.append(f"  Use ", style=THEME["muted"])
+            t.append(f":hf search <query>", style=THEME["cyan"])
+            t.append(f" to find and download models\n", style=THEME["muted"])
+
+            log.auto_scroll = False
+            log.clear()
+            log.write(t)
+            self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+            return
+
+        if not models:
             return
 
         provider_def = PROVIDERS.get(provider_id)

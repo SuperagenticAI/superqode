@@ -57,7 +57,7 @@ team:
         description: Unit testing - isolated component testing, mocking, coverage
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: glm-4.7-free
         enabled: true
         role_type: detection
         focus_areas:
@@ -103,7 +103,7 @@ team:
         description: Integration testing - component integration, service testing
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: kimi-k2.5-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -149,7 +149,7 @@ team:
         description: System testing - complete integrated system validation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: gpt-5-nano
         enabled: false
         role_type: detection
         focus_areas:
@@ -168,7 +168,7 @@ team:
         description: User Acceptance Testing (UAT) - end-user validation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: minimax-m2.1-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -187,7 +187,7 @@ team:
         description: Alpha testing - internal staff validation at developer site
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: big-pickle
         enabled: false
         role_type: detection
         focus_areas:
@@ -205,7 +205,7 @@ team:
         description: Beta testing - limited external user validation in field
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: glm-4.7-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -223,7 +223,7 @@ team:
         description: Operational Acceptance Testing (OAT) - backup/restore, maintenance, security
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: kimi-k2.5-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -245,7 +245,7 @@ team:
         description: API testing - REST/GraphQL validation, schema testing
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: gpt-5-nano
         enabled: true
         role_type: detection
         focus_areas:
@@ -291,7 +291,7 @@ team:
         description: Contract testing - consumer-driven contracts, Pact
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: minimax-m2.1-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -309,7 +309,7 @@ team:
         description: UI testing - visual regression, cross-browser testing
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: big-pickle
         enabled: false
         role_type: detection
         focus_areas:
@@ -398,7 +398,7 @@ team:
         description: Monkey/Gorilla testing - random input testing, crash detection
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: glm-4.7-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -417,7 +417,7 @@ team:
         description: Exploratory testing - session-based, charter-based testing
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: kimi-k2.5-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -436,7 +436,7 @@ team:
         description: Happy path testing - ideal user flow without errors
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: gpt-5-nano
         enabled: false
         role_type: detection
         focus_areas:
@@ -457,7 +457,7 @@ team:
         description: Performance testing - benchmarking, profiling, optimization
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: minimax-m2.1-free
         enabled: true
         role_type: detection
         focus_areas:
@@ -475,7 +475,7 @@ team:
         description: Load testing - capacity planning, concurrent user simulation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: big-pickle
         enabled: false
         role_type: detection
         focus_areas:
@@ -493,7 +493,7 @@ team:
         description: Stress testing - system limits, failure modes, recovery
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: glm-4.7-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -511,7 +511,7 @@ team:
         description: Endurance/Soak testing - long-duration load testing
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: kimi-k2.5-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -530,7 +530,7 @@ team:
         description: Spike testing - sudden massive traffic bursts
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: gpt-5-nano
         enabled: false
         role_type: detection
         focus_areas:
@@ -549,7 +549,7 @@ team:
         description: Scalability testing - horizontal/vertical scaling validation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: minimax-m2.1-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -567,7 +567,7 @@ team:
         description: Volume testing - large data volume handling
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: big-pickle
         enabled: false
         role_type: detection
         focus_areas:
@@ -585,7 +585,7 @@ team:
         description: Capacity testing - maximum capacity determination
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: glm-4.7-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -606,7 +606,7 @@ team:
         description: Security testing - vulnerability scanning, OWASP testing
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: kimi-k2.5-free
         enabled: true
         role_type: detection
         focus_areas:
@@ -650,7 +650,7 @@ team:
         description: Penetration testing - ethical hacking, exploit verification
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: gpt-5-nano
         enabled: false
         role_type: detection
         focus_areas:
@@ -668,7 +668,7 @@ team:
         description: Fuzz testing - malformed/random data injection for crash detection
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: minimax-m2.1-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -687,7 +687,7 @@ team:
         description: Compliance testing - GDPR, HIPAA, PCI-DSS, SOC 2 validation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: big-pickle
         enabled: false
         role_type: detection
         focus_areas:
@@ -707,7 +707,7 @@ team:
         description: Automated vulnerability scanning - security flaw detection
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: glm-4.7-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -728,7 +728,7 @@ team:
         description: Usability testing - user experience, heuristic evaluation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: kimi-k2.5-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -771,7 +771,7 @@ team:
         description: Accessibility testing - WCAG compliance, screen readers
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: gpt-5-nano
         enabled: false
         role_type: detection
         focus_areas:
@@ -814,7 +814,7 @@ team:
         description: Compatibility testing - cross-browser, OS, device, network compatibility
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: minimax-m2.1-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -834,7 +834,7 @@ team:
         description: Internationalization testing - Unicode, RTL, locale handling
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: big-pickle
         enabled: false
         role_type: detection
         focus_areas:
@@ -853,7 +853,7 @@ team:
         description: Localization testing - translation, cultural adaptation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: glm-4.7-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -875,7 +875,7 @@ team:
         description: Static testing - code review, requirements review, design review
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: kimi-k2.5-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -894,7 +894,7 @@ team:
         description: Mutation testing - test quality assessment via code mutations
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: gpt-5-nano
         enabled: false
         role_type: detection
         focus_areas:
@@ -912,7 +912,7 @@ team:
         description: White-box testing - statement/branch/path coverage analysis
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: minimax-m2.1-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -931,7 +931,7 @@ team:
         description: Property-based testing - invariant validation with random inputs
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: big-pickle
         enabled: false
         role_type: detection
         focus_areas:
@@ -952,7 +952,7 @@ team:
         description: AI/ML testing - bias, fairness, robustness, adversarial testing
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: glm-4.7-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -973,7 +973,7 @@ team:
         description: Chaos engineering - deliberate failure injection for resilience
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: kimi-k2.5-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -992,7 +992,7 @@ team:
         description: Cloud platform testing - AWS, GCP, Azure validation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: gpt-5-nano
         enabled: false
         role_type: detection
         focus_areas:
@@ -1011,7 +1011,7 @@ team:
         description: Blockchain testing - smart contracts, consensus, immutability
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: minimax-m2.1-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1030,7 +1030,7 @@ team:
         description: IoT testing - embedded devices, Hardware-in-the-Loop testing
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: big-pickle
         enabled: false
         role_type: detection
         focus_areas:
@@ -1049,7 +1049,7 @@ team:
         description: ETL testing - Extract, Transform, Load data warehouse validation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: glm-4.7-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1068,7 +1068,7 @@ team:
         description: Mobile testing - iOS, Android device and OS testing
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: kimi-k2.5-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1087,7 +1087,7 @@ team:
         description: Visual regression testing - snapshot/pixel-perfect UI testing
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: gpt-5-nano
         enabled: false
         role_type: detection
         focus_areas:
@@ -1108,7 +1108,7 @@ team:
         description: Reliability testing - maturity, availability, fault tolerance, recoverability
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: minimax-m2.1-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1127,7 +1127,7 @@ team:
         description: Maintainability testing - modularity, reusability, analysability, modifiability, testability
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: big-pickle
         enabled: false
         role_type: detection
         focus_areas:
@@ -1147,7 +1147,7 @@ team:
         description: Portability testing - adaptability, installability, replaceability
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: glm-4.7-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1169,7 +1169,7 @@ team:
         description: Recovery testing - system recovery after failures
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: kimi-k2.5-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1187,7 +1187,7 @@ team:
         description: Disaster recovery testing - backup/restore, disaster scenarios
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: gpt-5-nano
         enabled: false
         role_type: detection
         focus_areas:
@@ -1205,7 +1205,7 @@ team:
         description: Backup testing - backup and restore functionality validation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: minimax-m2.1-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1223,7 +1223,7 @@ team:
         description: Resilience testing - system resilience under failures
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: big-pickle
         enabled: false
         role_type: detection
         focus_areas:
@@ -1244,7 +1244,7 @@ team:
         description: Installation testing - installation/uninstallation validation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: glm-4.7-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1262,7 +1262,7 @@ team:
         description: Configuration testing - configuration management validation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: kimi-k2.5-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1280,7 +1280,7 @@ team:
         description: Deployment testing - deployment process validation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: gpt-5-nano
         enabled: false
         role_type: detection
         focus_areas:
@@ -1301,7 +1301,7 @@ team:
         description: Database testing - data integrity, migrations, performance
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: minimax-m2.1-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1319,7 +1319,7 @@ team:
         description: Data migration testing - data migration validation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: big-pickle
         enabled: false
         role_type: detection
         focus_areas:
@@ -1337,7 +1337,7 @@ team:
         description: Data quality testing - data quality and integrity validation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: glm-4.7-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1358,7 +1358,7 @@ team:
         description: Documentation testing - documentation accuracy and completeness
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: kimi-k2.5-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1376,7 +1376,7 @@ team:
         description: Standards testing - ISO, IEEE industry standards compliance
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: gpt-5-nano
         enabled: false
         role_type: detection
         focus_areas:
@@ -1394,7 +1394,7 @@ team:
         description: Interoperability testing - system interoperability validation
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: minimax-m2.1-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1415,7 +1415,7 @@ team:
         description: Test architecture - strategy, frameworks, infrastructure
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: big-pickle
         enabled: false
         role_type: detection
         focus_areas:
@@ -1433,7 +1433,7 @@ team:
         description: Test automation - framework development, CI/CD integration
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: glm-4.7-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1451,7 +1451,7 @@ team:
         description: Full-stack QE - comprehensive testing across all layers
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: kimi-k2.5-free
         enabled: true
         role_type: heuristic
         focus_areas:
@@ -1471,7 +1471,7 @@ team:
         description: End-to-end testing - complete user workflows
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: gpt-5-nano
         enabled: false
         role_type: detection
         focus_areas:
@@ -1489,7 +1489,7 @@ team:
         description: Performance testing - load, stress, scalability
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: minimax-m2.1-free
         enabled: false
         role_type: detection
         focus_areas:
@@ -1508,7 +1508,7 @@ team:
         description: E2E testing - end-to-end user journey testing
         coding_agent: opencode
         provider: xai
-        model: grok-code
+        model: big-pickle
         enabled: true
         role_type: detection
         focus_areas:

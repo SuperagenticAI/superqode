@@ -23,6 +23,59 @@ from urllib.request import Request, urlopen
 HF_API_BASE = "https://huggingface.co/api"
 
 
+def discover_cached_models(cache_dirs: Optional[List[Path]] = None) -> List[Dict[str, Any]]:
+    """Discover locally cached HuggingFace models.
+
+    Returns:
+        List of model info dicts with keys: id, path, modified
+    """
+    # Determine cache locations
+    if cache_dirs is None:
+        hf_home = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
+        hf_home_path = Path(hf_home).expanduser()
+        hf_hub_path = hf_home_path if hf_home_path.name == "hub" else hf_home_path / "hub"
+        cache_dirs = [
+            hf_hub_path,
+            Path(os.path.expanduser("~/.cache/transformers")),
+        ]
+
+    models_by_id: Dict[str, Dict[str, Any]] = {}
+
+    for cache_dir in cache_dirs:
+        try:
+            if not cache_dir.exists():
+                continue
+            for model_dir in cache_dir.glob("models--*"):
+                if not model_dir.is_dir():
+                    continue
+                model_id = model_dir.name.replace("models--", "").replace("--", "/")
+                try:
+                    modified = datetime.fromtimestamp(model_dir.stat().st_mtime)
+                except Exception:
+                    modified = None
+                existing = models_by_id.get(model_id)
+                if existing:
+                    # Keep the most recently modified entry
+                    if modified and existing.get("modified") and modified <= existing["modified"]:
+                        continue
+                models_by_id[model_id] = {
+                    "id": model_id,
+                    "path": str(model_dir),
+                    "modified": modified,
+                }
+        except Exception:
+            continue
+
+    # Sort newest first, then by id for stability (None modified goes last)
+    models = list(models_by_id.values())
+    def sort_key(m: Dict[str, Any]) -> tuple:
+        modified = m.get("modified")
+        ts = modified.timestamp() if modified else 0.0
+        return (modified is None, -ts, m["id"])
+    models.sort(key=sort_key)
+    return models
+
+
 @dataclass
 class HFModel:
     """Represents a model from the HuggingFace Hub.

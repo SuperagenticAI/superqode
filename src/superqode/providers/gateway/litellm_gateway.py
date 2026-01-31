@@ -488,11 +488,11 @@ class LiteLLMGateway(GatewayInterface):
                     f"This happens when multiple requests are sent to the MLX server simultaneously.\n"
                     f"MLX servers can only handle one request at a time to avoid memory conflicts.\n\n"
                     f"To fix:\n"
-                    f"1. [yellow]Wait for any running requests to complete[/yellow]\n"
-                    f"2. [cyan]superqode providers mlx list[/cyan] - Check server status\n"
-                    f"3. If server crashed: [cyan]superqode providers mlx server --model {model}[/cyan] - Restart server\n"
+                    f"1. Wait for any running requests to complete\n"
+                    f"2. superqode providers mlx list - Check server status\n"
+                    f"3. If server crashed: superqode providers mlx server --model {model} - Restart server\n"
                     f"4. Try your request again with only one active session\n\n"
-                    f"[dim]💡 MLX Tip: Each model needs its own server instance for concurrent use[/dim]",
+                    f"MLX Tip: Each model needs its own server instance for concurrent use",
                     provider="mlx",
                     model=model,
                 ) from e
@@ -501,8 +501,8 @@ class LiteLLMGateway(GatewayInterface):
                     f"MLX server returned invalid response.\n\n"
                     f"This usually means the MLX server crashed or is in an error state.\n\n"
                     f"To fix:\n"
-                    f"1. [cyan]superqode providers mlx list[/cyan] - Check if server is running\n"
-                    f"2. If not running: [cyan]superqode providers mlx server --model {model}[/cyan] - Start server\n"
+                    f"1. superqode providers mlx list - Check if server is running\n"
+                    f"2. If not running: superqode providers mlx server --model {model} - Start server\n"
                     f"3. Wait 1-2 minutes for large models to load\n"
                     f"4. Try again",
                     provider="mlx",
@@ -512,8 +512,8 @@ class LiteLLMGateway(GatewayInterface):
                 raise GatewayError(
                     f"Cannot connect to MLX server at http://localhost:8080.\n\n"
                     f"MLX server is not running. To fix:\n\n"
-                    f"1. [cyan]superqode providers mlx setup[/cyan] - Complete setup guide\n"
-                    f"2. [cyan]superqode providers mlx server --model {model}[/cyan] - Get server command\n"
+                    f"1. superqode providers mlx setup - Complete setup guide\n"
+                    f"2. superqode providers mlx server --model {model} - Get server command\n"
                     f"3. Run the server command in a separate terminal\n"
                     f"4. Try connecting again",
                     provider="mlx",
@@ -523,7 +523,7 @@ class LiteLLMGateway(GatewayInterface):
                 raise GatewayError(
                     f"MLX server timed out. Large MLX models (like {model}) can take 1-2 minutes for first response.\n\n"
                     f"Please wait and try again. If this persists:\n"
-                    f"1. Check server is still running: [cyan]superqode providers mlx list[/cyan]\n"
+                    f"1. Check server is still running: superqode providers mlx list\n"
                     f"2. Try a smaller model for testing\n"
                     f"3. Restart the server if needed",
                     provider="mlx",
