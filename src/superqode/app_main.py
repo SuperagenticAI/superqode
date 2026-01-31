@@ -4660,7 +4660,7 @@ team:
         else:
             # Handle all other ACP-compatible agents generically
             # This covers: junie, goose, kimi, stakpak, vtcode, auggie,
-            # code-assistant, cagent, fast-agent, llmling-agent
+            # code-assistant, cagent, fast-agent, llmling-agent, amp
             acp_agents = {
                 "junie",
                 "goose",
@@ -4672,6 +4672,7 @@ team:
                 "cagent",
                 "fast-agent",
                 "llmling-agent",
+                "amp",
             }
             if short_name in acp_agents:
                 model_name = self.current_model if self.current_model else "auto"
@@ -4722,7 +4723,7 @@ team:
             self._current_file_context = ""  # Clear after use
 
         # Route ACP-compatible agents to the JSON-RPC ACP client
-        # All 14 official ACP agents support the Agent Client Protocol
+        # All 15 official ACP agents support the Agent Client Protocol
         acp_agents = (
             "opencode",
             "claude",
@@ -4738,6 +4739,7 @@ team:
             "cagent",
             "fast-agent",
             "llmling-agent",
+            "amp",
         )
         if agent_type in acp_agents:
             self._run_acp_jsonrpc_client(
@@ -4979,7 +4981,7 @@ team:
             self._current_file_context = ""
 
         # Choose command and model display based on agent type
-        # All 14 official ACP agents are supported
+        # All 15 official ACP agents are supported
         if agent_type == "gemini":
             command = "gemini --experimental-acp"
             model_display = f"gemini/{model}" if model and model != "auto" else "gemini/auto"
@@ -5058,6 +5060,10 @@ team:
         elif agent_type == "llmling-agent":
             command = "llmling-agent --acp"
             model_display = f"llmling-agent/{model}" if model else "llmling-agent/auto"
+        elif agent_type == "amp":
+            command = "acp-amp"
+            model_display = f"amp/{model}" if model else "amp/auto"
+            # Amp handles its own authentication via `amp login`
         else:
             self.call_from_thread(self._stop_thinking)
             self.call_from_thread(log.add_error, f"Unsupported ACP agent type: {agent_type}")
@@ -14862,6 +14868,9 @@ team:
             "stakpak": "📦",  # Package
             "vtcode": "🎨",  # Paint palette
             "openhands": "🤲",  # Open hands
+            "amp": "⚡",  # Lightning (Amp)
+            "ampcode": "⚡",  # Lightning
+            "ampcode.com": "⚡",  # Lightning
         }
 
         priority_order = {

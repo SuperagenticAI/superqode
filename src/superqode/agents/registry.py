@@ -247,6 +247,19 @@ AGENTS: Dict[str, AgentDef] = {
         connection_type="stdio",
         command="llmling-agent --acp",
     ),
+    "amp": AgentDef(
+        id="amp",
+        name="Amp",
+        protocol=AgentProtocol.ACP,
+        status=AgentStatus.SUPPORTED,
+        description="AI coding agent by Ampcode with full ACP support",
+        auth_info="Managed via amp login",
+        setup_command="uv tool install acp-amp",
+        docs_url="https://ampcode.com",
+        capabilities=["File editing", "Shell commands", "MCP tools", "Multi-turn"],
+        connection_type="stdio",
+        command="acp-amp",
+    ),
 }
 
 

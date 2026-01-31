@@ -77,10 +77,41 @@ secure, private local models.
 
 ---
 
+### Amp
+
+[Amp](https://ampcode.com) is an AI coding agent by Ampcode with full ACP support:
+
+```bash
+# Install Amp CLI
+curl -fsSL https://ampcode.com/install.sh | bash
+amp login
+
+# Install ACP adapter (Python - recommended)
+uv tool install acp-amp
+
+# Alternative: Node.js
+npm install -g @superagenticai/acp-amp
+
+# Connect via SuperQode
+superqode connect acp amp
+```
+
+#### Capabilities
+
+| Capability | Description |
+|------------|-------------|
+| `file_editing` | Create, read, edit files |
+| `shell_execution` | Run shell commands |
+| `mcp_tools` | Use MCP servers |
+| `multi_turn` | Thread continuity across interactions |
+
+---
+
 ### Other ACP-Compatible Agents
 
 SuperQode includes registry entries for these ACP agents (availability depends on local installation):
 
+- **Amp** (ACP adapter: `acp-amp` via [acp-amp](https://github.com/SuperagenticAI/acp-amp))
 - **Claude Code** (ACP adapter: `claude-code-acp`)
 - **Codex** (ACP adapter: `npx @openai/codex-acp` or `codex-acp`)
 - **OpenHands** (`openhands acp`)
@@ -115,6 +146,16 @@ agents:
       - file_editing
       - shell_execution
       - mcp_tools
+
+  amp:
+    description: "Amp Code agent"
+    protocol: acp
+    command: acp-amp
+    capabilities:
+      - file_editing
+      - shell_execution
+      - mcp_tools
+      - multi_turn
 ```
 
 ### Per-Role Configuration

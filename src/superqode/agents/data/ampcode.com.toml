@@ -1,0 +1,69 @@
+# Schema defined in agent_schema.py
+# https://ampcode.com
+
+identity = "ampcode.com"
+name = "Amp"
+short_name = "amp"
+url = "https://ampcode.com"
+protocol = "acp"
+author_name = "Ampcode"
+author_url = "https://ampcode.com"
+publisher_name = "Superagentic AI"
+publisher_url = "https://super-agentic.ai"
+type = "coding"
+description = "AI coding agent by Ampcode. Works in any codebase with full ACP support via acp-amp adapter."
+tags = ["ampcode", "amp", "coding", "acp"]
+run_command."*" = "acp-amp"
+
+help = '''
+# Amp
+
+AI coding agent by Ampcode. Works in any codebase with full ACP support.
+
+- Multi-turn conversations with thread continuity
+- Full tool execution with permission modes
+- MCP server integration
+- Image support
+
+## Installation
+
+Install Amp CLI and the ACP adapter:
+
+```bash
+# Install Amp CLI
+curl -fsSL https://ampcode.com/install.sh | bash
+amp login
+
+# Install ACP adapter (Python - recommended)
+uv tool install acp-amp
+
+# Alternative: Node.js
+npm install -g @superagenticai/acp-amp
+```
+
+**Requirements:**
+- Amp CLI authenticated (`amp login`)
+- Python 3.10+ with uv (for Python version)
+- Or Node.js 18+ (for Node.js version)
+
+---
+
+**For latest install instructions**: https://superagenticai.github.io/acp-amp/
+**ACP Adapter**: https://github.com/SuperagenticAI/acp-amp
+'''
+
+welcome = '''
+Welcome to Amp! 🚀
+
+I'm Amp, an AI coding agent by Ampcode. I can help you with:
+- Code analysis and refactoring
+- Bug fixing and debugging
+- Writing new features
+- Code review and optimization
+
+Just tell me what you'd like to work on!
+'''
+
+[actions."*".install]
+command = "uv tool install acp-amp"
+description = "Install Amp ACP adapter (see https://superagenticai.github.io/acp-amp/ for latest)"
