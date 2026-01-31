@@ -5,6 +5,23 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] - 2026-01-31
+
+### Added
+
+- **Amp ACP Support**: Full integration with [Amp](https://ampcode.com) AI coding agent via [acp-amp](https://github.com/SuperagenticAI/acp-amp) adapter
+  - New agent definition: `ampcode.com.toml`
+  - TUI support: `:connect` → ACP → Amp
+  - CLI support: `superqode connect acp amp`
+  - Multi-turn conversations with thread continuity
+  - MCP server integration
+  - Install via `uv tool install acp-amp` or `npm install -g @superagenticai/acp-amp`
+
+### Changed
+
+- Updated ACP agent count from 14 to 15 official agents
+- Added Amp to agent registry, icons, and routing
+
 ## [0.1.7] - 2026-01-30
 - Add Kimi K2.5 Free model to OpenCode ACP/BYOK lists and mappings.
 - Set OpenCode ACP session model when selected (avoid default fallback).

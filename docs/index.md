@@ -413,8 +413,10 @@ SuperQode introduces **SuperQE** through orchestration of coding agents - a new 
     | Agent | Capabilities | Status |
     |-------|--------------|--------|
     | OpenCode | File editing, shell, MCP, 75+ providers | Supported |
-    | Claude Code | Native Claude integration | Coming Soon |
-    | Aider | Git-integrated pair programming | Coming Soon |
+    | Amp | File editing, shell, MCP, multi-turn | Supported |
+    | Claude Code | Native Claude integration | Supported |
+    | Codex | OpenAI code generation | Supported |
+    | Gemini CLI | Google's reference ACP implementation | Supported |
 
 === "Cloud Providers (BYOK)"
 

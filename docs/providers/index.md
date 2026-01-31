@@ -20,7 +20,7 @@ SuperQode supports multiple provider types for connecting to AI models and agent
 
     ---
 
-    Agent Client Protocol - connect to coding agents like OpenCode.
+    Agent Client Protocol - connect to coding agents like OpenCode, Amp, Claude Code, and more.
 
     [:octicons-arrow-right-24: ACP Agents](acp.md)
 
@@ -73,6 +73,9 @@ superqode connect byok anthropic claude-sonnet-4
 ```bash
 # Connect to OpenCode
 superqode connect acp opencode
+
+# Connect to Amp
+superqode connect acp amp
 ```
 
 ### Local (Self-Hosted)
