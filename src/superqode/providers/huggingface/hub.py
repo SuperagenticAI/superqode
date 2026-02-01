@@ -68,10 +68,12 @@ def discover_cached_models(cache_dirs: Optional[List[Path]] = None) -> List[Dict
 
     # Sort newest first, then by id for stability (None modified goes last)
     models = list(models_by_id.values())
+
     def sort_key(m: Dict[str, Any]) -> tuple:
         modified = m.get("modified")
         ts = modified.timestamp() if modified else 0.0
         return (modified is None, -ts, m["id"])
+
     models.sort(key=sort_key)
     return models
 

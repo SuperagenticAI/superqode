@@ -190,9 +190,7 @@ def list_behaviors():
     behaviors = list_available_behaviors()
 
     if not behaviors:
-        console.print(
-            "[yellow]SuperClaw not installed. Run: pip install superclaw[/yellow]"
-        )
+        console.print("[yellow]SuperClaw not installed. Run: pip install superclaw[/yellow]")
         return
 
     console.print("\n[bold]Available Security Behaviors:[/bold]\n")
@@ -231,9 +229,7 @@ def list_attacks():
     attacks = list_available_attacks()
 
     if not attacks:
-        console.print(
-            "[yellow]SuperClaw not installed. Run: pip install superclaw[/yellow]"
-        )
+        console.print("[yellow]SuperClaw not installed. Run: pip install superclaw[/yellow]")
         return
 
     console.print("\n[bold]Available Attack Techniques:[/bold]\n")
