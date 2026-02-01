@@ -1041,6 +1041,7 @@ from superqode.commands.qe import qe as qe_cmd
 from superqode.commands.roles import roles as roles_cmd
 from superqode.commands.suggestions import suggestions as suggestions_cmd
 from superqode.commands.serve import serve as serve_cmd
+from superqode.commands.security import security as security_cmd
 
 # Add provider commands (superqode providers list, superqode providers show, etc.)
 cli_main.add_command(providers_cmd, name="providers")
@@ -1059,6 +1060,9 @@ cli_main.add_command(suggestions_cmd, name="suggestions")
 
 # Add Server commands (superqode serve lsp, superqode serve web, etc.)
 cli_main.add_command(serve_cmd, name="serve")
+
+# Add Security commands (superqode security scan, superqode security audit, etc.)
+cli_main.add_command(security_cmd, name="security")
 
 # Note: agents command already exists, so we add the new one with a different approach
 # The existing agents command handles ACP agents, we'll enhance it

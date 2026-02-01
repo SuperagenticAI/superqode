@@ -14851,7 +14851,7 @@ team:
             "geminicli": "💎",  # Gem (Gemini CLI)
             "codex": "📝",  # Memo/code
             "codex.openai.com": "📝",  # Memo/code
-            "moltbot": "🦞",  # Lobster (OpenClaw)
+            "openclaw": "🦞",  # Lobster (OpenClaw)
             "molt.bot": "🦞",  # Lobster (OpenClaw)
             "goose": "🪿",  # Goose
             "goose.ai": "🪿",  # Goose
@@ -14876,7 +14876,7 @@ team:
         priority_order = {
             "opencode": 0,
             "opencode.ai": 0,
-            "moltbot": 1,
+            "openclaw": 1,
             "molt.bot": 1,
             "claude": 2,
             "claude.com": 2,

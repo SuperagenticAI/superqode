@@ -3,17 +3,17 @@
 
 identity = "molt.bot"
 name = "OpenClaw"
-short_name = "moltbot"
+short_name = "openclaw"
 url = "https://openclaw.ai/"
 protocol = "acp"
 author_name = "OpenClaw"
 author_url = "https://openclaw.ai/"
 publisher_name = "OpenClaw"
-publisher_url = "https://github.com/moltbot/moltbot"
+publisher_url = "https://github.com/openclaw/openclaw"
 type = "coding"
 description = "OpenClaw ACP bridge backed by the OpenClaw Gateway (self-hosted)."
 tags = ["enterprise", "integration", "automation", "gateway"]
-run_command."*" = "moltbot acp --url ws://127.0.0.1:18789"
+run_command."*" = "openclaw acp --url ws://127.0.0.1:18789"
 
 help = '''
 # OpenClaw
@@ -29,10 +29,10 @@ OpenClaw provides an ACP bridge that connects SuperQode to a running OpenClaw Ga
 
 ```bash
 # Start the gateway (in a separate terminal)
-moltbot gateway --port 18789 --verbose
+openclaw gateway --port 18789 --verbose
 
 # Connect from SuperQode
-superqode connect acp moltbot
+superqode connect acp openclaw
 ```
 
 If your gateway requires auth, add `--token` or `--password` to the ACP command or set the
@@ -41,9 +41,9 @@ corresponding environment variables.
 ---
 
 **Website**: https://openclaw.ai/
-**GitHub**: https://github.com/moltbot/moltbot
+**GitHub**: https://github.com/openclaw/openclaw
 '''
 
 [actions."*".install]
-command = "npm install -g moltbot@latest"
+command = "npm install -g openclaw@latest"
 description = "Install OpenClaw"
