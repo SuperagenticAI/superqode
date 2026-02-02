@@ -6,14 +6,119 @@ Show authentication and security information for SuperQode.
 
 ## Overview
 
-The `superqode auth` command group provides commands for inspecting authentication status, checking API key configuration, and understanding security practices. SuperQode **NEVER stores API keys** - this command shows where keys are stored and who controls them.
+The `superqode auth` command group provides commands for managing authentication, including storing API keys locally, checking configuration status, and understanding security practices.
 
 ---
 
-## Security Principle
+## Authentication Modes
 
-!!! warning "SuperQode NEVER stores API keys"
-    All credentials are read from YOUR environment at runtime. You control where and how your keys are stored.
+SuperQode supports **three authentication modes**:
+
+| Mode | Description | Key Storage |
+|------|-------------|-------------|
+| **BYOK** | Bring Your Own Key via environment variables | Your shell/env |
+| **Local** | Optional local file storage | `~/.superqode/auth.json` |
+| **ACP** | Delegated to coding agents | Agent-specific |
+
+### Resolution Order
+
+When SuperQode needs an API key, it checks in this order:
+
+1. **Environment variables** (e.g., `ANTHROPIC_API_KEY`)
+2. **Local storage** (`~/.superqode/auth.json`)
+3. Error if neither found
+
+This means environment variables always take precedence over local storage.
+
+---
+
+## auth login
+
+Store an API key for a provider in local storage.
+
+```bash
+superqode auth login PROVIDER
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `PROVIDER` | Provider ID (e.g., `anthropic`, `openai`, `google`) |
+
+### Examples
+
+```bash
+# Store Anthropic API key
+superqode auth login anthropic
+
+# Store OpenAI API key
+superqode auth login openai
+```
+
+### What Happens
+
+1. Prompts for your API key (input is hidden)
+2. Saves to `~/.superqode/auth.json` with `0600` permissions
+3. Key is now available for SuperQode to use
+
+### Example Session
+
+```
+$ superqode auth login anthropic
+
+Configure Anthropic
+Get your key at: https://console.anthropic.com/
+
+Enter API key for anthropic: ********
+✅ Saved anthropic API key to ~/.superqode/auth.json
+```
+
+---
+
+## auth logout
+
+Remove a stored API key from local storage.
+
+```bash
+superqode auth logout PROVIDER
+```
+
+### Examples
+
+```bash
+# Remove Anthropic key
+superqode auth logout anthropic
+```
+
+### Output
+
+```
+✅ Removed anthropic from local storage
+```
+
+---
+
+## auth list
+
+List all credentials stored in local storage.
+
+```bash
+superqode auth list
+```
+
+### Output
+
+```
+┌───────────┬──────┬─────────────┐
+│ Provider  │ Type │ Key Preview │
+├───────────┼──────┼─────────────┤
+│ anthropic │ api  │ sk-ant-a... │
+│ openai    │ api  │ sk-proj-... │
+└───────────┴──────┴─────────────┘
+
+Stored in: ~/.superqode/auth.json
+```
 
 ---
 
@@ -25,84 +130,31 @@ Show comprehensive authentication information for all providers and agents.
 superqode auth info
 ```
 
-### Examples
-
-```bash
-# Show all auth information
-superqode auth info
-```
-
 ### Output
 
-Displays three sections:
-
-#### 1. BYOK Mode (Direct LLM)
-
-Shows status for common providers:
-- **Provider**: Provider identifier
-- **Env Variable**: Environment variable name for API key
-- **Status**: [CORRECT] Set or [INCORRECT] Not set
-- **Source**: Where the env var is detected (e.g., `~/.zshrc`, `.env`, `environment`)
-
-#### 2. ACP Mode (Coding Agents)
-
-Shows authentication status for ACP agents:
-- **Agent**: Agent identifier
-- **Auth Location**: Where the agent stores its credentials
-- **Status**: [CORRECT] Configured or WARNING: Check agent
-
-#### 3. Data Flow
-
-Shows how data flows through the system:
-- **BYOK**: You → SuperQode → LiteLLM → Provider API
-- **ACP**: You → SuperQode → Agent (e.g., opencode) → Provider API
-
-### Example Output
+Displays authentication status showing both environment variables AND local storage:
 
 ```
-SuperQode Auth Information
+╭──────────────────────────────────────────────────────────╮
+│ 🔒 Auth Modes:                                           │
+│ 1. BYOK - Environment variables (primary)               │
+│ 2. Local - ~/.superqode/auth.json (optional)            │
+│ 3. ACP - Delegated to agents                             │
+╰──────────────────────────────────────────────────────────╯
 
-🔒 SECURITY PRINCIPLE: SuperQode NEVER stores your API keys.
+═══ PROVIDER AUTH STATUS ═══
 
-All credentials are read from YOUR environment at runtime.
-You control where and how your keys are stored.
-
-═══ BYOK MODE (Direct LLM) ═══
-
-Your API keys are read from YOUR environment variables:
-
-┌─────────────┬──────────────────┬───────────┬─────────────┐
-│ Provider    │ Env Variable     │ Status    │ Source      │
-├─────────────┼──────────────────┼───────────┼─────────────┤
-│ anthropic   │ ANTHROPIC_API_KEY│ [CORRECT] Set    │ ~/.zshrc    │
-│ openai      │ OPENAI_API_KEY   │ [INCORRECT] Not set│ -           │
-│ google      │ GOOGLE_API_KEY   │ [CORRECT] Set    │ .env        │
-│ ollama      │ (none)           │  Local  │ localhost   │
-└─────────────┴──────────────────┴───────────┴─────────────┘
-
- Keys are read at runtime, never stored by SuperQode
+┌─────────────┬──────────────────┬───────────┬──────────────────────┐
+│ Provider    │ Env Variable     │ Status    │ Source               │
+├─────────────┼──────────────────┼───────────┼──────────────────────┤
+│ anthropic   │ ANTHROPIC_API_KEY│ ✅ Set    │ ~/.superqode/auth.json│
+│ openai      │ OPENAI_API_KEY   │ ✅ Set    │ ~/.zshrc             │
+│ google      │ GOOGLE_API_KEY   │ ❌ Not set│ -                    │
+│ ollama      │ (none)           │ 🏠 Local  │ localhost:11434      │
+└─────────────┴──────────────────┴───────────┴──────────────────────┘
 
 ═══ ACP MODE (Coding Agents) ═══
-
-Agent authentication is managed by each agent, not SuperQode:
-
-┌───────────┬──────────────────────────┬───────────┐
-│ Agent     │ Auth Location            │ Status    │
-├───────────┼──────────────────────────┼───────────┤
-│ opencode  │ ~/.local/share/opencode/ │ [CORRECT] Config │
-│           │   auth.json              │           │
-└───────────┴──────────────────────────┴───────────┘
-
- Agent auth is managed by the agent itself, not SuperQode
- Run the agent directly to configure: e.g., 'opencode' → /connect
-
-═══ DATA FLOW ═══
-
-BYOK:  You → SuperQode → LiteLLM → Provider API
-ACP:   You → SuperQode → Agent (e.g., opencode) → Provider API
-
-SuperQode is a pass-through orchestrator. Your data goes directly
-to the LLM provider or agent. We don't intercept or store anything.
+...
 ```
 
 ---
@@ -115,12 +167,6 @@ Check authentication status for a specific provider or agent.
 superqode auth check PROVIDER_OR_AGENT
 ```
 
-### Arguments
-
-| Argument | Description |
-|----------|-------------|
-| `PROVIDER_OR_AGENT` | Provider ID (e.g., `anthropic`) or Agent ID (e.g., `opencode`) |
-
 ### Examples
 
 ```bash
@@ -129,272 +175,172 @@ superqode auth check anthropic
 
 # Check OpenCode agent
 superqode auth check opencode
-
-# Check OpenAI provider
-superqode auth check openai
-```
-
-### Output
-
-#### For Providers
-
-Shows:
-- Provider name and details
-- Environment variable status
-- Masked API key (first 8 and last 4 characters)
-- Source location of env var
-- Setup instructions if not configured
-
-**Example Output (Configured):**
-
-```
-Provider: Anthropic
-
-[CORRECT] ANTHROPIC_API_KEY = sk-ant-api03-...
-   Source: ~/.zshrc
-```
-
-**Example Output (Not Configured):**
-
-```
-Provider: Anthropic
-
-[INCORRECT] ANTHROPIC_API_KEY = (not set)
-
-To configure:
-  export ANTHROPIC_API_KEY="your-api-key"
-
-  Get your key at: https://console.anthropic.com/
-```
-
-#### For Agents
-
-Shows:
-- Agent name and authentication method
-- Auth file location and existence
-- Setup instructions if not configured
-
-**Example Output (Configured):**
-
-```
-Agent: SST OpenCode
-
-Auth managed by: SST OpenCode (not SuperQode)
-Auth location: Managed by OpenCode CLI (run `opencode /connect`)
-
-[CORRECT] Auth file exists: /home/user/.local/share/opencode/auth.json
-```
-
-**Example Output (Not Configured):**
-
-```
-Agent: SST OpenCode
-
-Auth managed by: SST OpenCode (not SuperQode)
-Auth location: Managed by OpenCode CLI (run `opencode /connect`)
-
-WARNING: Auth file not found: /home/user/.local/share/opencode/auth.json
-
-To configure:
-  opencode /connect
-```
-
-#### For Local Providers
-
-Shows that no API key is required:
-
-```
-Provider: Ollama
-
- Local provider - no API key required
-Default URL: http://localhost:11434
 ```
 
 ---
 
-## Understanding Auth Sources
+## Security & Transparency
 
-SuperQode detects where environment variables are set by checking:
+### Where Are Keys Stored?
 
-1. **Shell configuration files**: `~/.zshrc`, `~/.bashrc`, `~/.bash_profile`, `~/.profile`
-2. **Project `.env` file**: `.env` in current directory
-3. **Environment**: System environment (e.g., exported in current shell)
+| Source | Location | Permissions |
+|--------|----------|-------------|
+| Environment | Your shell config (`~/.zshrc`, `~/.bashrc`) | Your control |
+| Local Storage | `~/.superqode/auth.json` | `0600` (owner only) |
+| ACP Agents | Agent-specific (e.g., `~/.local/share/opencode/auth.json`) | Agent's control |
 
-The `auth info` command shows the detected source for each configured variable.
+### What SuperQode Does NOT Do
 
----
+- ❌ Send keys to any external server
+- ❌ Log or display full key values
+- ❌ Share keys between projects
+- ❌ Store keys without your explicit action
 
-## Setting Up Authentication
+### What SuperQode DOES Do
 
-### BYOK Providers
+- ✅ Read keys from environment at runtime
+- ✅ Optionally store keys locally if you use `auth login`
+- ✅ Set secure file permissions (0600) on auth.json
+- ✅ Show masked key previews (first 8 chars only)
+- ✅ Show exactly where each key is configured
 
-1. Get your API key from the provider:
-   - Anthropic: [https://console.anthropic.com/](https://console.anthropic.com/)
-   - OpenAI: [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-   - Google AI: [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+### File Format
 
-2. Set the environment variable:
+The `~/.superqode/auth.json` file format:
 
-   ```bash
-   # In shell config file (~/.zshrc, ~/.bashrc, etc.)
-   export ANTHROPIC_API_KEY="sk-ant-api03-..."
+```json
+{
+  "anthropic": {
+    "type": "api",
+    "key": "sk-ant-api03-..."
+  },
+  "openai": {
+    "type": "api",
+    "key": "sk-proj-..."
+  }
+}
+```
 
-   # Or in project .env file
-   echo 'ANTHROPIC_API_KEY=sk-ant-api03-...' >> .env
-   ```
-
-3. Verify:
-
-   ```bash
-   superqode auth check anthropic
-   ```
-
-### ACP Agents
-
-Each agent manages its own authentication:
+### Inspecting Your Auth File
 
 ```bash
-# OpenCode example
-opencode /connect
-# Follow prompts to authenticate
+# View the file (keys will be visible!)
+cat ~/.superqode/auth.json
+
+# Check permissions
+ls -la ~/.superqode/auth.json
+# Should show: -rw------- (0600)
+
+# Delete all stored keys
+rm ~/.superqode/auth.json
+```
+
+---
+
+## Choosing Between BYOK and Local Storage
+
+| Use Case | Recommended |
+|----------|-------------|
+| CI/CD pipelines | BYOK (env vars) |
+| Team shared environment | BYOK (env vars) |
+| Personal development | Either works |
+| Quick setup without shell config | Local storage |
+| Multiple keys for same provider | BYOK (env vars) |
+
+### Using Both
+
+If you have a key in both environment AND local storage:
+- **Environment variable wins** (checked first)
+- Local storage is a fallback
+
+This lets you override local storage with environment variables when needed.
+
+---
+
+## Workflow Examples
+
+### Quick Personal Setup
+
+```bash
+# Store your keys locally
+superqode auth login anthropic
+superqode auth login openai
 
 # Verify
-superqode auth check opencode
+superqode auth list
+superqode auth info
 ```
 
-### Local Providers
+### CI/CD Setup
 
-No authentication required. Just ensure the service is running:
+```yaml
+# GitHub Actions example
+env:
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+steps:
+  - run: superqode auth info  # Will show keys from env
+```
+
+### Switching Providers
 
 ```bash
-# Ollama example
-ollama serve
+# Remove old key
+superqode auth logout anthropic
+
+# Add new key
+superqode auth login anthropic
 
 # Verify
-superqode auth check ollama
+superqode auth check anthropic
 ```
-
----
-
-## Security Best Practices
-
-### 1. Never Commit API Keys
-
-```bash
-# Add to .gitignore
-echo ".env" >> .gitignore
-echo "*_api_key*" >> .gitignore
-```
-
-### 2. Use Environment Variables
-
-```bash
-# Good: Set in environment
-export ANTHROPIC_API_KEY="sk-ant-..."
-
-# Bad: Hardcode in config files
-# ANTHROPIC_API_KEY: "sk-ant-..."  # [INCORRECT] DON'T DO THIS
-```
-
-### 3. Use Different Keys for Different Environments
-
-```bash
-# Development
-export ANTHROPIC_API_KEY="sk-ant-dev-..."
-
-# Production (in CI/CD)
-export ANTHROPIC_API_KEY="${{ secrets.ANTHROPIC_API_KEY }}"
-```
-
-### 4. Rotate Keys Regularly
-
-If a key is compromised:
-1. Generate a new key from the provider dashboard
-2. Update the environment variable
-3. Revoke the old key
 
 ---
 
 ## Troubleshooting
 
-### Key Not Detected
+### Key Not Found
 
 ```
-[INCORRECT] ANTHROPIC_API_KEY = (not set)
+❌ anthropic not set
 ```
 
-**Solution**:
+**Solutions:**
+
 ```bash
-# 1. Verify key is exported
-echo $ANTHROPIC_API_KEY
+# Option 1: Set via environment
+export ANTHROPIC_API_KEY="sk-ant-..."
 
-# 2. If empty, set it
-export ANTHROPIC_API_KEY="your-key"
-
-# 3. For persistence, add to shell config
-echo 'export ANTHROPIC_API_KEY="your-key"' >> ~/.zshrc
-source ~/.zshrc
-
-# 4. Verify again
-superqode auth check anthropic
+# Option 2: Store locally
+superqode auth login anthropic
 ```
 
-### Agent Auth Not Found
+### Wrong Key Being Used
 
-```
-WARNING: Auth file not found: /home/user/.local/share/opencode/auth.json
-```
+If environment has a different key than local storage, environment wins:
 
-**Solution**:
 ```bash
-# Run the agent's authentication command
-opencode /connect
+# Check which source is active
+superqode auth info
 
-# Or follow agent-specific setup
-superqode agents show opencode  # Check setup instructions
+# To use local storage key, unset env var
+unset ANTHROPIC_API_KEY
 ```
 
-### Multiple Keys Set
+### Permission Denied on Auth File
 
-If multiple environment variables are set for the same provider, SuperQode uses the first one found in this order:
-1. Shell environment
-2. `.env` file
-3. Shell config files
-
-To use a specific key, export it explicitly:
 ```bash
-export ANTHROPIC_API_KEY="desired-key"
+# Fix permissions
+chmod 600 ~/.superqode/auth.json
+chmod 700 ~/.superqode
 ```
 
----
+### Clear All Local Keys
 
-## Data Flow and Privacy
-
-### BYOK Mode
-
+```bash
+rm ~/.superqode/auth.json
 ```
-You (API Key) → SuperQode CLI → LiteLLM Gateway → Provider API
-                   ↑
-                   No storage, pass-through only
-```
-
-- SuperQode reads keys from your environment
-- Keys are passed to LiteLLM (local process)
-- LiteLLM makes API calls to providers
-- SuperQode never writes keys to disk
-
-### ACP Mode
-
-```
-You → SuperQode CLI → Agent Process → Agent's Auth → Provider API
-                      ↑
-                      Agent manages its own auth
-```
-
-- SuperQode connects to agent subprocess
-- Agent handles its own authentication
-- Agent makes API calls using its credentials
-- SuperQode doesn't see agent credentials
 
 ---
 

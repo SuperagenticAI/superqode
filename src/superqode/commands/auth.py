@@ -2,8 +2,11 @@
 Auth CLI commands for SuperQode.
 
 Commands for showing authentication information and security details.
-SuperQode NEVER stores API keys - this shows where keys are stored
-and who controls them.
+
+SuperQode supports three auth modes:
+1. BYOK (env vars) - Primary, never stored
+2. Local storage (~/.superqode/auth.json) - Optional, secure file storage
+3. ACP - Delegated to agents
 """
 
 import os
@@ -13,9 +16,19 @@ import click
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
+from rich.prompt import Prompt, Confirm
 
 from ..providers.registry import PROVIDERS, ProviderCategory
 from ..agents.registry import AGENTS, AgentStatus
+from ..auth import (
+    get_storage,
+    get,
+    set as auth_set,
+    remove,
+    all as auth_all,
+    ApiAuth,
+    OAuthAuth,
+)
 
 
 console = Console()
@@ -23,7 +36,17 @@ console = Console()
 
 @click.group()
 def auth():
-    """Show authentication and security information."""
+    """Manage API keys and view authentication status.
+
+    SuperQode supports three auth modes:
+
+    \b
+    1. BYOK (env vars)  - Primary, set ANTHROPIC_API_KEY etc.
+    2. Local storage    - Optional, stored in ~/.superqode/auth.json
+    3. ACP (agents)     - Delegated to coding agents
+
+    Environment variables always take precedence over local storage.
+    """
     pass
 
 
@@ -34,9 +57,10 @@ def auth_info():
     # Header
     console.print(
         Panel(
-            "[bold]🔒 SECURITY PRINCIPLE:[/bold] SuperQode [bold red]NEVER[/bold red] stores your API keys.\n\n"
-            "All credentials are read from YOUR environment at runtime.\n"
-            "You control where and how your keys are stored.",
+            "[bold]🔒 Auth Modes:[/bold]\n"
+            "1. [cyan]BYOK[/cyan] - Environment variables (primary)\n"
+            "2. [cyan]Local[/cyan] - ~/.superqode/auth.json (optional)\n"
+            "3. [cyan]ACP[/cyan] - Delegated to agents",
             title="SuperQode Auth Information",
             border_style="cyan",
         )
@@ -44,10 +68,11 @@ def auth_info():
 
     console.print()
 
+    # Get local storage
+    local_creds = auth_all()
+
     # BYOK Section
-    console.print("[bold cyan]═══ BYOK MODE (Direct LLM) ═══[/bold cyan]")
-    console.print()
-    console.print("Your API keys are read from YOUR environment variables:")
+    console.print("[bold cyan]═══ PROVIDER AUTH STATUS ═══[/bold cyan]")
     console.print()
 
     # Build provider status table
@@ -86,13 +111,19 @@ def auth_info():
                 configured_var = env_var
                 break
 
+        # Check local storage too
+        has_local = provider_id in local_creds
+
         if not provider_def.env_vars:
-            # Local provider
+            # Local provider (ollama, etc)
             status = "[blue]🏠 Local[/blue]"
             source = provider_def.default_base_url or "localhost"
         elif configured:
             status = "[green]✅ Set[/green]"
             source = _detect_env_source(configured_var)
+        elif has_local:
+            status = "[green]✅ Set[/green]"
+            source = "~/.superqode/auth.json"
         else:
             status = "[red]❌ Not set[/red]"
             source = "-"
@@ -144,13 +175,23 @@ def auth_info():
     console.print()
 
     # Data Flow Section
-    console.print("[bold cyan]═══ DATA FLOW ═══[/bold cyan]")
+    console.print("[bold cyan]═══ DATA FLOW & TRANSPARENCY ═══[/bold cyan]")
     console.print()
     console.print("[bold]BYOK:[/bold]  You → SuperQode → LiteLLM → Provider API")
     console.print("[bold]ACP:[/bold]   You → SuperQode → Agent (e.g., opencode) → Provider API")
     console.print()
     console.print("[dim]SuperQode is a pass-through orchestrator. Your data goes directly[/dim]")
-    console.print("[dim]to the LLM provider or agent. We don't intercept or store anything.[/dim]")
+    console.print("[dim]to the LLM provider or agent.[/dim]")
+    console.print()
+    console.print("[bold cyan]What SuperQode does:[/bold cyan]")
+    console.print("  ✅ Reads keys from env vars or ~/.superqode/auth.json")
+    console.print("  ✅ Passes keys directly to LLM providers")
+    console.print("  ✅ Sets 0600 permissions on local auth file")
+    console.print()
+    console.print("[bold cyan]What SuperQode does NOT do:[/bold cyan]")
+    console.print("  ❌ Send keys to any external server")
+    console.print("  ❌ Log or display full key values")
+    console.print("  ❌ Store keys without explicit 'auth login' command")
 
 
 @auth.command("check")
@@ -270,6 +311,87 @@ def _check_agent_auth_detailed(agent_id: str, agent_def):
             console.print(f"  {agent_def.setup_command}")
     else:
         console.print(f"[dim]Setup: {agent_def.setup_command}[/dim]")
+
+
+@auth.command("login")
+@click.argument("provider")
+def auth_login(provider: str):
+    """
+    Store API key for a provider in local storage.
+
+    Example: superqode auth login anthropic
+    """
+    provider_def = PROVIDERS.get(provider)
+    if not provider_def:
+        console.print(f"[red]Unknown provider: {provider}[/red]")
+        console.print("Use 'superqode providers list' to see available providers.")
+        return
+
+    if not provider_def.env_vars:
+        console.print(f"[yellow]{provider} is a local provider - no API key needed[/yellow]")
+        return
+
+    # Check if already configured
+    existing = get(provider)
+    if existing:
+        if not Confirm.ask(f"[yellow]{provider} already configured. Overwrite?[/yellow]"):
+            return
+
+    # Get the key
+    console.print(f"\n[bold]Configure {provider_def.name}[/bold]")
+    if provider_def.docs_url:
+        console.print(f"[dim]Get your key at: {provider_def.docs_url}[/dim]")
+    console.print()
+
+    api_key = Prompt.ask(f"Enter API key for {provider}", password=True)
+    if not api_key:
+        console.print("[red]No key provided[/red]")
+        return
+
+    # Save it
+    auth_set(provider, ApiAuth(key=api_key))
+    console.print(f"[green]✅ Saved {provider} API key to ~/.superqode/auth.json[/green]")
+
+
+@auth.command("logout")
+@click.argument("provider")
+def auth_logout(provider: str):
+    """
+    Remove stored API key for a provider.
+
+    Example: superqode auth logout anthropic
+    """
+    if remove(provider):
+        console.print(f"[green]✅ Removed {provider} from local storage[/green]")
+    else:
+        console.print(f"[yellow]{provider} not found in local storage[/yellow]")
+
+
+@auth.command("list")
+def auth_list():
+    """List all locally stored credentials."""
+    creds = auth_all()
+    if not creds:
+        console.print("[dim]No credentials in local storage[/dim]")
+        console.print("Use 'superqode auth login <provider>' to add one.")
+        return
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Provider", style="white")
+    table.add_column("Type", style="dim")
+    table.add_column("Key Preview", style="dim")
+
+    for provider_id, info in creds.items():
+        if isinstance(info, ApiAuth):
+            key_preview = info.key[:8] + "..." if len(info.key) > 8 else "***"
+            table.add_row(provider_id, "api", key_preview)
+        elif isinstance(info, OAuthAuth):
+            table.add_row(provider_id, "oauth", f"expires: {info.expires}")
+        else:
+            table.add_row(provider_id, info.type, "-")
+
+    console.print(table)
+    console.print(f"\n[dim]Stored in: ~/.superqode/auth.json[/dim]")
 
 
 # Register with main CLI

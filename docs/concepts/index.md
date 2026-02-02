@@ -16,6 +16,14 @@ Understanding SuperQode's core concepts is essential for effective quality engin
 
     [:octicons-arrow-right-24: Explore modes](modes.md)
 
+-   **Authentication**
+
+    ---
+
+    Understand how SuperQode handles API keys with full transparency.
+
+    [:octicons-arrow-right-24: Learn about auth](authentication.md)
+
 -   **Ephemeral Workspace**
 
     ---

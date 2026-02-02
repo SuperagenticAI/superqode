@@ -17,6 +17,7 @@ from .modes import (
 )
 from ..providers.registry import PROVIDERS, ProviderDef
 from ..agents.registry import AGENTS, AgentDef, AgentStatus
+from ..auth import get as get_local_auth, exists as has_local_auth, ApiAuth
 
 
 class ExecutionResolverError(Exception):
@@ -190,7 +191,7 @@ class ExecutionResolver:
         )
 
     def _validate_provider_env(self, provider_def: ProviderDef) -> None:
-        """Validate that required environment variables are set."""
+        """Validate that required environment variables are set or local auth exists."""
         if not provider_def.env_vars:
             # No env vars required (e.g., local providers)
             return
@@ -200,12 +201,40 @@ class ExecutionResolver:
             if os.environ.get(env_var):
                 return
 
-        # None of the env vars are set
+        # Check local auth storage as fallback
+        if has_local_auth(provider_def.id):
+            return
+
+        # None of the env vars are set and no local auth
         raise MissingEnvVarError(
             provider_def.id,
             provider_def.env_vars,
             provider_def.docs_url,
         )
+
+    def get_api_key(self, provider_id: str) -> Optional[str]:
+        """Get API key for a provider from env or local storage.
+
+        Order of precedence:
+        1. Environment variable
+        2. Local auth storage (~/.superqode/auth.json)
+        """
+        provider_def = PROVIDERS.get(provider_id)
+        if not provider_def:
+            return None
+
+        # Try env vars first
+        for env_var in provider_def.env_vars:
+            value = os.environ.get(env_var)
+            if value:
+                return value
+
+        # Try local auth storage
+        local_auth = get_local_auth(provider_id)
+        if local_auth and isinstance(local_auth, ApiAuth):
+            return local_auth.key
+
+        return None
 
     def check_provider_status(self, provider_id: str) -> Dict[str, Any]:
         """Check the status of a provider (env vars, availability).
@@ -226,12 +255,19 @@ class ExecutionResolver:
         # Check env vars
         configured = False
         env_var_status = {}
+        auth_source = None
 
         for env_var in provider_def.env_vars:
             value = os.environ.get(env_var)
             env_var_status[env_var] = bool(value)
             if value:
                 configured = True
+                auth_source = "env"
+
+        # Check local auth storage if not configured via env
+        if not configured and has_local_auth(provider_id):
+            configured = True
+            auth_source = "local"
 
         # For local providers with no env vars, check base URL
         if not provider_def.env_vars:
@@ -239,6 +275,7 @@ class ExecutionResolver:
                 provider_def.base_url_env or "", provider_def.default_base_url
             )
             configured = bool(base_url)
+            auth_source = "local_provider"
 
         return {
             "provider_id": provider_id,
@@ -247,6 +284,7 @@ class ExecutionResolver:
             "tier": provider_def.tier.name,
             "category": provider_def.category.value,
             "configured": configured,
+            "auth_source": auth_source,
             "env_vars": env_var_status,
             "docs_url": provider_def.docs_url,
             "notes": provider_def.notes,
