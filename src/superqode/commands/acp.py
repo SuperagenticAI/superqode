@@ -780,136 +780,136 @@ def install_agent(agent_identifier: str) -> int:
                 )
                 return 1
 
-    # Pre-flight checks
-    _console.print(f"[bold cyan]🚀 Installing {agent['name']}[/bold cyan]")
-    _console.print(f"[dim]{agent.get('description', '')}[/dim]")
-    _console.print()
-
-    # Check system dependencies
-    deps = check_system_dependencies()
-    missing_deps = [dep for dep, available in deps.items() if not available]
-
-    if missing_deps:
-        _console.print("[yellow]⚠️ Missing system dependencies detected:[/yellow]")
-        for dep in missing_deps:
-            _console.print(f"  [red]• {dep}[/red]")
-
-        # Try to auto-install critical dependencies
-        critical_deps = ["uv"]  # Add more as needed
-        for dep in critical_deps:
-            if dep in missing_deps:
-                if not install_system_dependency(dep):
-                    _console.print(
-                        f"[red]Cannot proceed without {dep}. Please install it manually.[/red]"
-                    )
-                    return 1
-
+        # Pre-flight checks
+        _console.print(f"[bold cyan]🚀 Installing {agent['name']}[/bold cyan]")
+        _console.print(f"[dim]{agent.get('description', '')}[/dim]")
         _console.print()
 
-    # Get the install command for current OS
-    install_command = get_os_command(actions, "install")
-    if not install_command:
-        _console.print("[red]No installation command found for this agent on your OS.[/red]")
-        return 1
+        # Check system dependencies
+        deps = check_system_dependencies()
+        missing_deps = [dep for dep, available in deps.items() if not available]
 
-    # Check for bootstrap_uv flag
-    needs_uv_bootstrap = False
-    for os_actions in actions.values():
-        if isinstance(os_actions, dict) and os_actions.get("bootstrap_uv", False):
-            needs_uv_bootstrap = True
-            break
+        if missing_deps:
+            _console.print("[yellow]⚠️ Missing system dependencies detected:[/yellow]")
+            for dep in missing_deps:
+                _console.print(f"  [red]• {dep}[/red]")
 
-    # Bootstrap UV if needed
-    if needs_uv_bootstrap and not deps.get("uv", False):
-        _console.print("[cyan]Bootstrapping UV package manager...[/cyan]")
-        if not install_system_dependency("uv"):
-            _console.print("[red]UV bootstrap failed. Cannot proceed.[/red]")
+            # Try to auto-install critical dependencies
+            critical_deps = ["uv"]  # Add more as needed
+            for dep in critical_deps:
+                if dep in missing_deps:
+                    if not install_system_dependency(dep):
+                        _console.print(
+                            f"[red]Cannot proceed without {dep}. Please install it manually.[/red]"
+                        )
+                        return 1
+
+            _console.print()
+
+        # Get the install command for current OS
+        install_command = get_os_command(actions, "install")
+        if not install_command:
+            _console.print("[red]No installation command found for this agent on your OS.[/red]")
             return 1
 
-    _console.print(f"[green]Installing {agent['name']}...[/green]")
-    _console.print(f"[dim]Command: {install_command}[/dim]")
-    _console.print()
+        # Check for bootstrap_uv flag
+        needs_uv_bootstrap = False
+        for os_actions in actions.values():
+            if isinstance(os_actions, dict) and os_actions.get("bootstrap_uv", False):
+                needs_uv_bootstrap = True
+                break
 
-    # Run the installation command with progress feedback
-    try:
-        # Use a more interactive approach for long-running installs
-        process = subprocess.Popen(
-            install_command,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            universal_newlines=True,
-        )
+        # Bootstrap UV if needed
+        if needs_uv_bootstrap and not deps.get("uv", False):
+            _console.print("[cyan]Bootstrapping UV package manager...[/cyan]")
+            if not install_system_dependency("uv"):
+                _console.print("[red]UV bootstrap failed. Cannot proceed.[/red]")
+                return 1
 
-        # Show progress
-        _console.print("[cyan]Installation in progress...[/cyan]")
+        _console.print(f"[green]Installing {agent['name']}...[/green]")
+        _console.print(f"[dim]Command: {install_command}[/dim]")
+        _console.print()
 
-        # Wait for completion
-        stdout, stderr = process.communicate()
+        # Run the installation command with progress feedback
+        try:
+            # Use a more interactive approach for long-running installs
+            process = subprocess.Popen(
+                install_command,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                universal_newlines=True,
+            )
 
-        if process.returncode == 0:
-            _console.print("[green]✓ Installation completed successfully![/green]")
+            # Show progress
+            _console.print("[cyan]Installation in progress...[/cyan]")
 
-            # Verify installation
-            if check_agent_installed(agent):
-                _console.print(f"[green]✓ Agent '{agent['short_name']}' is ready to use![/green]")
-                _console.print(f"[dim]Try: superqode agents connect {agent['short_name']}[/dim]")
+            # Wait for completion
+            stdout, stderr = process.communicate()
+
+            if process.returncode == 0:
+                _console.print("[green]✓ Installation completed successfully![/green]")
+
+                # Verify installation
+                if check_agent_installed(agent):
+                    _console.print(f"[green]✓ Agent '{agent['short_name']}' is ready to use![/green]")
+                    _console.print(f"[dim]Try: superqode agents connect {agent['short_name']}[/dim]")
+                else:
+                    _console.print("[yellow]⚠️ Agent installed but verification failed[/yellow]")
+                    _console.print(
+                        "[dim]You may need to restart your shell or check the installation manually[/dim]"
+                    )
+
+                return 0
             else:
-                _console.print("[yellow]⚠️ Agent installed but verification failed[/yellow]")
+                _console.print(f"[red]✗ Installation failed (exit code {process.returncode})[/red]")
+
+                # Enhanced error analysis
+                error_msg = stderr.lower() if stderr else ""
+
+                if "eacces" in error_msg or "permission denied" in error_msg:
+                    _console.print("[yellow]💡 Permission Error:[/yellow]")
+                    _console.print("  This command requires administrator privileges.")
+                    _console.print(f"  Try: [bold]sudo {install_command}[/bold]")
+                    _console.print(
+                        "  Or use a Node version manager like nvm/fnm for user-space installation"
+                    )
+                elif "command not found" in error_msg or "npm: command not found" in error_msg:
+                    _console.print("[yellow]💡 Missing npm:[/yellow]")
+                    _console.print("  Node.js/npm is not installed. Install from:")
+                    _console.print("  https://nodejs.org/ or use your system package manager")
+                elif "uv: command not found" in error_msg:
+                    _console.print("[yellow]💡 Missing UV:[/yellow]")
+                    _console.print("  UV package manager is not installed. Install with:")
+                    _console.print("  curl -LsSf https://astral.sh/uv/install.sh | sh")
+                elif "certificate" in error_msg or "ssl" in error_msg:
+                    _console.print("[yellow]💡 SSL/Certificate Error:[/yellow]")
+                    _console.print("  There may be network or certificate issues.")
+                    _console.print("  Try updating your system's CA certificates.")
+                else:
+                    # Show the actual error output
+                    if stdout.strip():
+                        _console.print("[dim]Output:[/dim]")
+                        _console.print(stdout.strip())
+                    if stderr.strip():
+                        _console.print("[dim]Error:[/dim]")
+                        _console.print(stderr.strip())
+
                 _console.print(
-                    f"[dim]You may need to restart your shell or check the installation manually[/dim]"
+                    f"\n[dim]💡 Alternative: Try installing manually with: {install_command}[/dim]"
                 )
+                return 1
 
-            return 0
-        else:
-            _console.print(f"[red]✗ Installation failed (exit code {process.returncode})[/red]")
-
-            # Enhanced error analysis
-            error_msg = stderr.lower() if stderr else ""
-
-            if "eacces" in error_msg or "permission denied" in error_msg:
-                _console.print("[yellow]💡 Permission Error:[/yellow]")
-                _console.print("  This command requires administrator privileges.")
-                _console.print(f"  Try: [bold]sudo {install_command}[/bold]")
-                _console.print(
-                    "  Or use a Node version manager like nvm/fnm for user-space installation"
-                )
-            elif "command not found" in error_msg or "npm: command not found" in error_msg:
-                _console.print("[yellow]💡 Missing npm:[/yellow]")
-                _console.print("  Node.js/npm is not installed. Install from:")
-                _console.print("  https://nodejs.org/ or use your system package manager")
-            elif "uv: command not found" in error_msg:
-                _console.print("[yellow]💡 Missing UV:[/yellow]")
-                _console.print("  UV package manager is not installed. Install with:")
-                _console.print("  curl -LsSf https://astral.sh/uv/install.sh | sh")
-            elif "certificate" in error_msg or "ssl" in error_msg:
-                _console.print("[yellow]💡 SSL/Certificate Error:[/yellow]")
-                _console.print("  There may be network or certificate issues.")
-                _console.print("  Try updating your system's CA certificates.")
-            else:
-                # Show the actual error output
-                if stdout.strip():
-                    _console.print("[dim]Output:[/dim]")
-                    _console.print(stdout.strip())
-                if stderr.strip():
-                    _console.print("[dim]Error:[/dim]")
-                    _console.print(stderr.strip())
-
+        except FileNotFoundError:
             _console.print(
-                f"\n[dim]💡 Alternative: Try installing manually with: {install_command}[/dim]"
+                "[red]Command not found. Please ensure required dependencies are installed.[/red]"
             )
             return 1
-
-    except FileNotFoundError:
-        _console.print(
-            f"[red]Command not found. Please ensure required dependencies are installed.[/red]"
-        )
-        return 1
-    except Exception as e:
-        _console.print(f"[red]Installation error: {e}[/red]")
-        return 1
+        except Exception as e:
+            _console.print(f"[red]Installation error: {e}[/red]")
+            return 1
 
     try:
         return asyncio.run(install_agent_async())
