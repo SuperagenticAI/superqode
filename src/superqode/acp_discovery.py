@@ -599,6 +599,13 @@ class ACPDiscovery:
             # Claude Code - Anthropic's models
             "claude-code": [
                 AgentModel(
+                    id="claude-opus-4-6",
+                    name="Claude Opus 4.6",
+                    provider="anthropic",
+                    description="Latest Claude Opus model",
+                    context_window=1000000,
+                ),
+                AgentModel(
                     id="claude-sonnet-4-20250514",
                     name="Claude Sonnet 4",
                     provider="anthropic",
@@ -619,6 +626,13 @@ class ACPDiscovery:
             ],
             # Codex - OpenAI's models
             "codex": [
+                AgentModel(
+                    id="gpt-5.3-codex",
+                    name="GPT-5.3 Codex",
+                    provider="openai",
+                    description="Latest Codex model for coding",
+                    context_window=256000,
+                ),
                 AgentModel(
                     id="o3", name="O3", provider="openai", description="Latest reasoning model"
                 ),

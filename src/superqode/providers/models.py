@@ -110,6 +110,27 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
     # ANTHROPIC
     # =========================================================================
     "anthropic": {
+        "claude-opus-4-6": ModelInfo(
+            id="claude-opus-4-6",
+            name="Claude Opus 4.6",
+            provider="anthropic",
+            input_price=15.0,
+            output_price=75.0,
+            context_window=1000000,
+            max_output=32768,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.VISION,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Latest Claude Opus model (4.6)",
+            recommended_for=["complex reasoning", "research", "difficult coding"],
+            released="2026-02",
+        ),
         "claude-opus-4-5-20251101": ModelInfo(
             id="claude-opus-4-5-20251101",
             name="Claude Opus 4.5",
@@ -235,6 +256,27 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
     # OPENAI
     # =========================================================================
     "openai": {
+        "gpt-5.3-codex": ModelInfo(
+            id="gpt-5.3-codex",
+            name="GPT-5.3 Codex",
+            provider="openai",
+            input_price=5.5,
+            output_price=22.0,
+            context_window=256000,
+            max_output=32768,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.VISION,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Latest GPT Codex model (5.3) optimized for coding",
+            recommended_for=["coding", "code generation", "code review"],
+            released="2026-01",
+        ),
         "gpt-5.2": ModelInfo(
             id="gpt-5.2",
             name="GPT-5.2",

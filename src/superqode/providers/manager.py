@@ -516,10 +516,11 @@ class ProviderManager:
             ProviderInfo(
                 id="openai",
                 name="OpenAI",
-                description="Latest GPT-5.2, GPT-5.1, o1 models from models.dev",
+                description="Latest GPT-5.3 Codex, GPT-5.2, GPT-5.1, o1 models from models.dev",
                 requires_api_key=True,
                 configured=self._is_provider_configured("openai"),
                 models=[
+                    ModelInfo("gpt-5.3-codex", "GPT-5.3 Codex (Latest/New)", "openai", context_size=256000),
                     ModelInfo("gpt-5.2", "GPT-5.2 (Latest)", "openai", context_size=256000),
                     ModelInfo("gpt-5.2-pro", "GPT-5.2 Pro", "openai", context_size=256000),
                     ModelInfo("gpt-5.2-codex", "GPT-5.2 Codex", "openai", context_size=256000),
@@ -544,10 +545,16 @@ class ProviderManager:
             ProviderInfo(
                 id="anthropic",
                 name="Anthropic",
-                description="Latest Claude 4.5 models from models.dev",
+                description="Latest Claude Opus 4.6 and Claude 4.5 models from models.dev",
                 requires_api_key=True,
                 configured=self._is_provider_configured("anthropic"),
                 models=[
+                    ModelInfo(
+                        "claude-opus-4-6",
+                        "Claude Opus 4.6 (Latest/New)",
+                        "anthropic",
+                        context_size=1000000,
+                    ),
                     ModelInfo(
                         "claude-opus-4-5-20251101",
                         "Claude Opus 4.5 (Latest)",

@@ -716,6 +716,13 @@ class SuperQodeApp(App):
         """Get Claude models list - synced with providers/models.py."""
         return [
             {
+                "id": "claude-opus-4-6",
+                "name": "Claude Opus 4.6 (Latest/New)",
+                "context": 1000000,
+                "desc": "Latest Claude Opus with 1M context",
+                "recommended": True,
+            },
+            {
                 "id": "claude-opus-4-5-20251101",
                 "name": "Claude Opus 4.5",
                 "context": 200000,
@@ -753,6 +760,7 @@ class SuperQodeApp(App):
     def _get_codex_models(self) -> List[Dict]:
         """Get Codex/OpenAI models list - updated from models.dev."""
         return [
+            {"id": "gpt-5.3-codex", "name": "GPT-5.3 Codex (Latest/New)", "context": 256000},
             {"id": "gpt-5.2", "name": "GPT-5.2 (Latest)", "context": 256000},
             {"id": "gpt-5.2-pro", "name": "GPT-5.2 Pro", "context": 256000},
             {"id": "gpt-5.2-chat-latest", "name": "GPT-5.2 Chat", "context": 256000},
@@ -777,8 +785,14 @@ class SuperQodeApp(App):
     def _get_openhands_models(self) -> List[Dict]:
         """Get OpenHands models list - updated from models.dev."""
         return [
+            {"id": "gpt-5.3-codex", "name": "GPT-5.3 Codex (Latest/New)", "context": 256000},
             {"id": "gpt-5.2", "name": "GPT-5.2 (Latest)", "context": 256000},
             {"id": "gpt-5.2-pro", "name": "GPT-5.2 Pro", "context": 256000},
+            {
+                "id": "claude-opus-4-6",
+                "name": "Claude Opus 4.6 (Latest/New)",
+                "context": 1000000,
+            },
             {
                 "id": "claude-opus-4-5-20251101",
                 "name": "Claude Opus 4.5 (Latest)",
@@ -905,6 +919,13 @@ class SuperQodeApp(App):
         # Uses claude-code-acp adapter from Zed Industries
         self._claude_models = [
             {
+                "id": "claude/claude-opus-4-6",
+                "name": "Claude Opus 4.6 (Latest/New)",
+                "free": False,
+                "recommended": True,
+                "desc": "Latest Claude Opus model - 1M context",
+            },
+            {
                 "id": "claude/claude-opus-4-5-20251101",
                 "name": "Claude Opus 4.5",
                 "free": False,
@@ -941,6 +962,13 @@ class SuperQodeApp(App):
         # Codex CLI / OpenAI models - https://platform.openai.com/docs/models (updated from models.dev)
         # Uses codex-acp adapter from Zed Industries
         self._codex_models = [
+            {
+                "id": "codex/gpt-5.3-codex",
+                "name": "GPT-5.3 Codex (Latest/New)",
+                "free": False,
+                "recommended": True,
+                "desc": "Latest GPT Codex model for coding workflows",
+            },
             {
                 "id": "codex/gpt-5.2",
                 "name": "GPT-5.2 (Latest)",
@@ -12490,23 +12518,28 @@ team:
                 # Generic patterns that indicate latest models
                 latest_indicators = [
                     "latest",
+                    "new",
                     "preview",
                     "newest",
                     "current",
                     # Version patterns (highest versions)
+                    "5.3",
                     "5.2",
                     "5.1",
+                    "4.6",
                     "4.7",
                     "4.5",
                     "3.2",
                     "3.1",
                     "3.0",
                     # Specific latest model patterns by provider
+                    "gpt-5.3-codex",
                     "gpt-5.2",
                     "gpt-5.1",
                     "gemini-3",
                     "gemini 3",
                     "gemini3",
+                    "claude-opus-4-6",
                     "claude-opus-4-5",
                     "claude-sonnet-4-5",
                     "claude-haiku-4-5",
@@ -12537,12 +12570,10 @@ team:
                 ):
                     return True
 
-                # Check release date - if released in 2025, likely latest
-                if info.released and info.released.startswith("2025"):
-                    # Prioritize models from late 2025 (newer)
-                    if "-12" in info.released or "-11" in info.released:
-                        return True
-                    # Also include other 2025 models
+                # Check release date - if released in 2025+ likely latest
+                if info.released and (
+                    info.released.startswith("2025") or info.released.startswith("2026")
+                ):
                     return True
 
                 return False
@@ -12572,8 +12603,10 @@ team:
                 model_lower = model_id.lower()
                 name_lower = info.name.lower()
 
-                # Highest priority: Very latest models (2025-12, 2025-11 releases)
+                # Highest priority: Very latest models (2026+, then late 2025 releases)
                 if info.released:
+                    if info.released.startswith("2026"):
+                        return -11
                     if "-12" in info.released:
                         return -10  # Highest priority
                     elif "-11" in info.released:
@@ -12586,6 +12619,10 @@ team:
                 # High priority: Latest version indicators
                 # Priority order: -10 (highest) to -6 (medium)
                 latest_patterns = [
+                    ("gpt-5.3-codex", -11),
+                    ("5.3", -11),
+                    ("claude-opus-4-6", -11),
+                    ("4.6", -11),
                     # Latest flagship models (2025-12 releases)
                     ("gpt-5.2", -10),
                     ("5.2", -10),
@@ -12963,13 +13000,15 @@ team:
             name_lower = info.name.lower()
 
             # Check release date
-            if info.released and info.released.startswith("2025"):
-                if "-12" in info.released or "-11" in info.released:
-                    return True
+            if info.released and (
+                info.released.startswith("2025") or info.released.startswith("2026")
+            ):
                 return True
 
             # Check latest patterns
             latest_patterns = [
+                "gpt-5.3-codex",
+                "5.3",
                 "gpt-5.2",
                 "5.2",
                 "gemini-3",
@@ -12979,6 +13018,7 @@ team:
                 "glm-4-plus",
                 "deepseek-v3.2",
                 "grok-3",
+                "claude-opus-4-6",
                 "claude-opus-4-5",
                 "claude-sonnet-4-5",
                 "claude-haiku-4-5",

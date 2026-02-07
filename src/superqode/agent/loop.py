@@ -785,15 +785,64 @@ class AgentLoop:
                 # Flush thinking buffer before handling error
                 if thinking_buffer.strip() and self.on_thinking:
                     await self.on_thinking(thinking_buffer.strip())
+                # Streaming can fail for some provider/model combinations even when
+                # a non-streaming request would succeed. Retry once before failing.
+                try:
+                    if self.on_thinking:
+                        await self.on_thinking(
+                            "Streaming failed; retrying once with non-streaming completion..."
+                        )
+                    fallback = await self.gateway.chat_completion(
+                        messages=gateway_messages,
+                        model=self.config.model,
+                        provider=self.config.provider,
+                        tools=tools_to_send,
+                        temperature=self.config.temperature,
+                        max_tokens=self.config.max_tokens,
+                    )
+                    if fallback.tool_calls:
+                        tool_calls.extend(fallback.tool_calls)
+                    if fallback.content and fallback.content.strip():
+                        full_content = fallback.content
+                        yield fallback.content
+                        had_content = True
+                    elif not fallback.tool_calls:
+                        raise RuntimeError("Fallback completion returned no content")
+                except Exception:
+                    error_msg = str(e)
+                    error_type = type(e).__name__
+                    # Yield original streaming error for maximum transparency
+                    yield f"\n\n[Error: {error_type}] {error_msg}"
+                    full_content = f"[Error: {error_type}] {error_msg}"
+                    return
 
-                error_msg = str(e)
-                error_type = type(e).__name__
-                # Yield error message so it's displayed
-                yield f"\n\n[Error: {error_type}] {error_msg}"
-                # Don't return immediately - let the error be displayed
-                # But mark that we had an error so we don't continue the loop
-                full_content = f"[Error: {error_type}] {error_msg}"
-                return
+            # Some providers may return an empty stream even when the request succeeded.
+            # Retry once with non-streaming completion so users still get a response.
+            if not full_content.strip() and not tool_calls:
+                if self.on_thinking:
+                    await self.on_thinking(
+                        "No streamed text received; retrying once with non-streaming completion..."
+                    )
+                try:
+                    fallback = await self.gateway.chat_completion(
+                        messages=gateway_messages,
+                        model=self.config.model,
+                        provider=self.config.provider,
+                        tools=tools_to_send,
+                        temperature=self.config.temperature,
+                        max_tokens=self.config.max_tokens,
+                    )
+                    if fallback.tool_calls:
+                        tool_calls.extend(fallback.tool_calls)
+                    if fallback.content and fallback.content.strip():
+                        full_content = fallback.content
+                        yield fallback.content
+                        had_content = True
+                except Exception as e:
+                    error_msg = str(e)
+                    error_type = type(e).__name__
+                    yield f"\n\n[Error: {error_type}] {error_msg}"
+                    return
 
             # Handle tool calls
             if tool_calls:

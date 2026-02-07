@@ -658,13 +658,17 @@ Critique and improve code quality from development.""",
         "anthropic": ProviderConfig(
             api_key_env="ANTHROPIC_API_KEY",
             description="Anthropic Claude models via API",
-            recommended_models=["claude-sonnet-4-5", "claude-opus-4-1", "claude-haiku-4-5"],
+            recommended_models=[
+                "claude-opus-4-6",
+                "claude-sonnet-4-5-20250929",
+                "claude-haiku-4-5-20251001",
+            ],
             custom_models_allowed=True,
         ),
         "openai": ProviderConfig(
             api_key_env="OPENAI_API_KEY",
             description="OpenAI GPT models via API",
-            recommended_models=["gpt-4o", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"],
+            recommended_models=["gpt-5.3-codex", "gpt-5.2", "gpt-5.2-pro", "gpt-4o"],
             custom_models_allowed=True,
         ),
         "google": ProviderConfig(
@@ -797,13 +801,13 @@ Critique and improve code quality from development.""",
 
     # Model aliases
     config.model_aliases = {
-        "latest-sonnet": "claude-sonnet-4-5",
-        "latest-gpt": "gpt-4o",
+        "latest-sonnet": "claude-sonnet-4-5-20250929",
+        "latest-gpt": "gpt-5.3-codex",
         "latest-gemini": "gemini-3-pro-preview",
         "latest-glm": "glm-4.7",
-        "fast": "claude-haiku-4-5",
-        "balanced": "claude-sonnet-4-5",
-        "powerful": "claude-opus-4-1",
+        "fast": "claude-haiku-4-5-20251001",
+        "balanced": "claude-sonnet-4-5-20250929",
+        "powerful": "claude-opus-4-6",
         "thinking": "DeepSeek-V3.2-Exp-Think",
         "vision": "glm-4.6v",
         "coding": "codellama:34b",

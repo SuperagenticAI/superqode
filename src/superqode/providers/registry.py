@@ -72,6 +72,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
         litellm_prefix="anthropic/",
         docs_url="https://console.anthropic.com/",
         example_models=[
+            "claude-opus-4-6",
             "claude-opus-4-5-20251101",
             "claude-sonnet-4-5-20250929",
             "claude-haiku-4-5-20251001",
@@ -91,6 +92,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
         base_url_env="OPENAI_API_BASE",
         docs_url="https://platform.openai.com/",
         example_models=[
+            "gpt-5.3-codex",
             "gpt-5.2",
             "gpt-5.2-pro",
             "gpt-5.2-codex",

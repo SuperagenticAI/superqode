@@ -5,6 +5,19 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.11] - 2026-02-07
+
+### Fixed
+
+- OpenAI BYOK routing for newer Codex models (`gpt-5.3-codex`) with provider-qualified model handling.
+- OpenAI BYOK fallback behavior when account/model rollout differs (retry path to compatible Codex model IDs).
+- BYOK streaming empty-response fallback to non-streaming completion to avoid silent failures.
+
+### Changed
+
+- Updated BYOK + ACP model catalogs to include `gpt-5.3-codex` and `claude-opus-4-6` and highlight them as latest/new in picker logic.
+- Refreshed default model recommendations and aliases for OpenAI/Anthropic.
+
 ## [0.1.9] - 2026-01-31
 
 ### Added

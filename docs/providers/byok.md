@@ -25,7 +25,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 superqode providers test anthropic
 
 # 3. Connect
-superqode connect byok anthropic claude-sonnet-4
+superqode connect byok anthropic claude-opus-4-6
 ```
 
 ---
@@ -45,7 +45,7 @@ superqode connect byok anthropic claude-sonnet-4
 
 | Model | Best For |
 |-------|----------|
-| `claude-opus-4-5` | Complex analysis |
+| `claude-opus-4-6` | Complex analysis (latest/new) |
 | `claude-sonnet-4-5` | Balanced performance |
 | `claude-sonnet-4` | General use |
 | `claude-haiku-4-5` | Fast, cost-effective |
@@ -56,11 +56,12 @@ superqode connect byok anthropic claude-sonnet-4
 
 ```bash
 export OPENAI_API_KEY=sk-...
-superqode connect byok openai gpt-4o
+superqode connect byok openai gpt-5.3-codex
 ```
 
 | Model | Best For |
 |-------|----------|
+| `gpt-5.3-codex` | Coding agent workloads (latest/new) |
 | `gpt-4o` | General use |
 | `gpt-4o-mini` | Cost-effective |
 | `o1` | Complex reasoning |
@@ -184,6 +185,7 @@ providers:
     api_key_env: ANTHROPIC_API_KEY
     recommended_models:
       - claude-opus-4-5
+      - claude-opus-4-6
       - claude-sonnet-4-5
       - claude-sonnet-4
       - claude-haiku-4-5
@@ -191,6 +193,7 @@ providers:
   openai:
     api_key_env: OPENAI_API_KEY
     recommended_models:
+      - gpt-5.3-codex
       - gpt-4o
       - gpt-4o-mini
       - o1
@@ -213,12 +216,12 @@ team:
         security_tester:
           mode: byok
           provider: anthropic
-          model: claude-sonnet-4
+          model: claude-opus-4-6
 
         performance_tester:
           mode: byok
           provider: openai
-          model: gpt-4o
+          model: gpt-5.3-codex
 ```
 
 ---

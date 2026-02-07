@@ -150,17 +150,59 @@ class LiteLLMGateway(GatewayInterface):
         """
         provider_def = PROVIDERS.get(provider)
 
-        if provider_def and provider_def.litellm_prefix:
-            # Don't double-prefix
-            if model.startswith(provider_def.litellm_prefix):
-                return model
-            # Empty prefix means no prefix needed (e.g., OpenAI)
-            if provider_def.litellm_prefix == "":
-                return model
-            return f"{provider_def.litellm_prefix}{model}"
+        if provider_def:
+            # OpenAI models should always be provider-qualified for LiteLLM
+            # to avoid "LLM Provider NOT provided" on newer model IDs.
+            if provider == "openai":
+                if model.startswith("openai/"):
+                    return model
+                return f"openai/{model}"
+
+            if provider_def.litellm_prefix:
+                # Don't double-prefix
+                if model.startswith(provider_def.litellm_prefix):
+                    return model
+                return f"{provider_def.litellm_prefix}{model}"
 
         # Unknown provider - try as-is
         return model
+
+    def _get_model_candidates(self, provider: str, model: str) -> List[str]:
+        """Return model candidates to try in order for provider/model pair."""
+        primary = self.get_model_string(provider, model) if provider != "unknown" else model
+        candidates = [primary]
+
+        # Compatibility fallback: OpenAI may expose gpt-5-codex while
+        # gpt-5.3-codex is still rolling out by account/region.
+        if provider == "openai":
+            model_base = model.split("/")[-1]
+            if model_base == "gpt-5.3-codex":
+                fallback = "openai/gpt-5-codex"
+                if fallback not in candidates:
+                    candidates.append(fallback)
+
+        return candidates
+
+    @staticmethod
+    def _is_model_not_found_error(error: Exception) -> bool:
+        """Best-effort check for model-not-found style provider errors."""
+        msg = str(error).lower()
+        patterns = [
+            "modelnotfound",
+            "model not found",
+            "invalid model",
+            "does not exist",
+            "not available",
+        ]
+        return any(pattern in msg for pattern in patterns)
+
+    @staticmethod
+    def _is_retryable_provider_transport_error(error: Exception) -> bool:
+        """Detect provider transport/client errors where trying next model can recover."""
+        msg = str(error).lower()
+        # Observed with LiteLLM/OpenAI for some unreleased model aliases:
+        # "APIConnectionError ... argument of type 'NoneType' is not iterable"
+        return "noneType".lower() in msg and "not iterable" in msg
 
     def _setup_provider_env(self, provider: str) -> None:
         """Set up environment for a provider if needed."""
@@ -802,12 +844,8 @@ class LiteLLMGateway(GatewayInterface):
         # Set up provider environment
         self._setup_provider_env(provider)
 
-        # Build model string
-        model_string = self.get_model_string(provider, model) if provider != "unknown" else model
-
         # Build request
         request_kwargs = {
-            "model": model_string,
             "messages": self._convert_messages(messages),
             "timeout": self.timeout,
         }
@@ -832,7 +870,26 @@ class LiteLLMGateway(GatewayInterface):
         request_kwargs.update(kwargs)
 
         try:
-            response = await litellm.acompletion(**request_kwargs)
+            model_candidates = self._get_model_candidates(provider, model)
+            response = None
+            last_error = None
+            for i, candidate in enumerate(model_candidates):
+                request_kwargs["model"] = candidate
+                try:
+                    response = await litellm.acompletion(**request_kwargs)
+                    break
+                except Exception as e:
+                    last_error = e
+                    is_last = i == len(model_candidates) - 1
+                    retryable = self._is_model_not_found_error(
+                        e
+                    ) or self._is_retryable_provider_transport_error(e)
+                    if is_last or not retryable:
+                        raise
+                    continue
+
+            if response is None and last_error is not None:
+                raise last_error
 
             # Extract response data
             choice = response.choices[0]
@@ -990,12 +1047,8 @@ class LiteLLMGateway(GatewayInterface):
         # Set up provider environment
         self._setup_provider_env(provider)
 
-        # Build model string
-        model_string = self.get_model_string(provider, model) if provider != "unknown" else model
-
         # Build request
         request_kwargs = {
-            "model": model_string,
             "messages": self._convert_messages(messages),
             "stream": True,
             "timeout": self.timeout,
@@ -1020,7 +1073,26 @@ class LiteLLMGateway(GatewayInterface):
         request_kwargs.update(kwargs)
 
         try:
-            response = await litellm.acompletion(**request_kwargs)
+            model_candidates = self._get_model_candidates(provider, model)
+            response = None
+            last_error = None
+            for i, candidate in enumerate(model_candidates):
+                request_kwargs["model"] = candidate
+                try:
+                    response = await litellm.acompletion(**request_kwargs)
+                    break
+                except Exception as e:
+                    last_error = e
+                    is_last = i == len(model_candidates) - 1
+                    retryable = self._is_model_not_found_error(
+                        e
+                    ) or self._is_retryable_provider_transport_error(e)
+                    if is_last or not retryable:
+                        raise
+                    continue
+
+            if response is None and last_error is not None:
+                raise last_error
 
             if not response:
                 raise GatewayError(

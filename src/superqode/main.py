@@ -519,7 +519,7 @@ import click
 
 
 @click.group(invoke_without_command=True)
-@click.version_option(version="0.1.5")
+@click.version_option(version="0.1.11")
 @click.option("--tui", is_flag=True, help="Launch the Textual TUI interface")
 @click.pass_context
 def cli_main(ctx, tui):
