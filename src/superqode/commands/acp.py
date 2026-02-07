@@ -854,8 +854,12 @@ def install_agent(agent_identifier: str) -> int:
 
                 # Verify installation
                 if check_agent_installed(agent):
-                    _console.print(f"[green]✓ Agent '{agent['short_name']}' is ready to use![/green]")
-                    _console.print(f"[dim]Try: superqode agents connect {agent['short_name']}[/dim]")
+                    _console.print(
+                        f"[green]✓ Agent '{agent['short_name']}' is ready to use![/green]"
+                    )
+                    _console.print(
+                        f"[dim]Try: superqode agents connect {agent['short_name']}[/dim]"
+                    )
                 else:
                     _console.print("[yellow]⚠️ Agent installed but verification failed[/yellow]")
                     _console.print(

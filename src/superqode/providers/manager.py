@@ -520,7 +520,9 @@ class ProviderManager:
                 requires_api_key=True,
                 configured=self._is_provider_configured("openai"),
                 models=[
-                    ModelInfo("gpt-5.3-codex", "GPT-5.3 Codex (Latest/New)", "openai", context_size=256000),
+                    ModelInfo(
+                        "gpt-5.3-codex", "GPT-5.3 Codex (Latest/New)", "openai", context_size=256000
+                    ),
                     ModelInfo("gpt-5.2", "GPT-5.2 (Latest)", "openai", context_size=256000),
                     ModelInfo("gpt-5.2-pro", "GPT-5.2 Pro", "openai", context_size=256000),
                     ModelInfo("gpt-5.2-codex", "GPT-5.2 Codex", "openai", context_size=256000),

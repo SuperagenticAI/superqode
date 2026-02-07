@@ -12868,8 +12868,7 @@ team:
                     model_lower = model_id.lower()
                     # Latest models get higher priority (lower number)
                     if any(
-                        x in model_lower
-                        for x in ["4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
+                        x in model_lower for x in ["4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
                     ):
                         return 0
                     elif any(x in model_lower for x in ["4.5", "4-plus", "4-air", "2.5"]):
@@ -12881,9 +12880,7 @@ team:
 
                 for idx, model in enumerate(sorted_models[:15], 1):  # Show more models
                     # Highlight current selection
-                    is_highlighted = (idx - 1) == getattr(
-                        self, "_byok_highlighted_model_index", 0
-                    )
+                    is_highlighted = (idx - 1) == getattr(self, "_byok_highlighted_model_index", 0)
                     if is_highlighted:
                         t.append(f"  ▶ ", style=f"bold {THEME['success']}")
                         t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
@@ -12893,9 +12890,7 @@ team:
                             for x in ["4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
                         )
                         name_style = (
-                            f"bold {THEME['success']}"
-                            if is_latest
-                            else f"bold {THEME['success']}"
+                            f"bold {THEME['success']}" if is_latest else f"bold {THEME['success']}"
                         )
                         t.append(f"{model}", style=name_style)
                         t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
@@ -13175,9 +13170,7 @@ team:
             t = Text()
             t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
             t.append(f"{provider_def.name} Models\n", style=f"bold {THEME['text']}")
-            t.append(
-                f"  {len(cached_models)} locally cached model(s)\n\n", style=THEME["dim"]
-            )
+            t.append(f"  {len(cached_models)} locally cached model(s)\n\n", style=THEME["dim"])
 
             # Store model list for selection
             self._local_selected_provider = provider_id
@@ -13465,9 +13458,7 @@ team:
             t = Text()
             t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
             t.append(f"{provider_def.name} Models\n", style=f"bold {THEME['text']}")
-            t.append(
-                f"  {len(model_list)} locally cached model(s)\n\n", style=THEME["dim"]
-            )
+            t.append(f"  {len(model_list)} locally cached model(s)\n\n", style=THEME["dim"])
 
             highlighted_idx = getattr(self, "_local_highlighted_model_index", 0)
             for idx, model_id in enumerate(model_list, 1):

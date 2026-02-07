@@ -161,12 +161,14 @@ class TestParseAuthInfo:
 
     def test_parse_oauth(self):
         """Parses OAuth auth correctly."""
-        result = parse_auth_info({
-            "type": "oauth",
-            "refresh": "r",
-            "access": "a",
-            "expires": 123,
-        })
+        result = parse_auth_info(
+            {
+                "type": "oauth",
+                "refresh": "r",
+                "access": "a",
+                "expires": 123,
+            }
+        )
         assert isinstance(result, OAuthAuth)
         assert result.refresh == "r"
 
