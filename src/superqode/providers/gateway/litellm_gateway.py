@@ -172,14 +172,19 @@ class LiteLLMGateway(GatewayInterface):
         primary = self.get_model_string(provider, model) if provider != "unknown" else model
         candidates = [primary]
 
-        # Compatibility fallback: OpenAI may expose gpt-5-codex while
-        # gpt-5.3-codex is still rolling out by account/region.
+        # Compatibility fallbacks for OpenAI rollout lag by account/region.
         if provider == "openai":
             model_base = model.split("/")[-1]
-            if model_base == "gpt-5.3-codex":
-                fallback = "openai/gpt-5-codex"
-                if fallback not in candidates:
-                    candidates.append(fallback)
+            fallback_map = {
+                "gpt-5.4": "openai/gpt-5.2",
+                "gpt-5.4-pro": "openai/gpt-5.2-pro",
+                # OpenAI may expose gpt-5-codex while gpt-5.3-codex
+                # is still rolling out by account/region.
+                "gpt-5.3-codex": "openai/gpt-5-codex",
+            }
+            fallback = fallback_map.get(model_base)
+            if fallback and fallback not in candidates:
+                candidates.append(fallback)
 
         return candidates
 

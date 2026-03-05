@@ -92,6 +92,8 @@ PROVIDERS: Dict[str, ProviderDef] = {
         base_url_env="OPENAI_API_BASE",
         docs_url="https://platform.openai.com/",
         example_models=[
+            "gpt-5.4",
+            "gpt-5.4-pro",
             "gpt-5.3-codex",
             "gpt-5.2",
             "gpt-5.2-pro",
@@ -105,7 +107,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
             "o1",
             "o1-mini",
         ],
-        notes="Most popular. GPT-5.x for latest models, o1 for reasoning tasks.",
+        notes="Most popular. GPT-5.4 is the latest flagship, GPT-5.4 Pro is the highest-reasoning tier, and o1 remains useful for dedicated reasoning tasks.",
     ),
     "google": ProviderDef(
         id="google",

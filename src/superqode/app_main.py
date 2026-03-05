@@ -758,10 +758,11 @@ class SuperQodeApp(App):
         return self._codex_models
 
     def _get_codex_models(self) -> List[Dict]:
-        """Get Codex/OpenAI models list - updated from models.dev."""
+        """Get Codex/OpenAI models list."""
         return [
-            {"id": "gpt-5.3-codex", "name": "GPT-5.3 Codex (Latest/New)", "context": 256000},
-            {"id": "gpt-5.2", "name": "GPT-5.2 (Latest)", "context": 256000},
+            {"id": "gpt-5.4", "name": "GPT-5.4 (Latest)", "context": 1000000},
+            {"id": "gpt-5.3-codex", "name": "GPT-5.3 Codex", "context": 256000},
+            {"id": "gpt-5.2", "name": "GPT-5.2", "context": 256000},
             {"id": "gpt-5.2-pro", "name": "GPT-5.2 Pro", "context": 256000},
             {"id": "gpt-5.2-chat-latest", "name": "GPT-5.2 Chat", "context": 256000},
             {"id": "gpt-5.2-codex", "name": "GPT-5.2 Codex", "context": 256000},
@@ -783,10 +784,12 @@ class SuperQodeApp(App):
         return self._openhands_models
 
     def _get_openhands_models(self) -> List[Dict]:
-        """Get OpenHands models list - updated from models.dev."""
+        """Get OpenHands models list."""
         return [
-            {"id": "gpt-5.3-codex", "name": "GPT-5.3 Codex (Latest/New)", "context": 256000},
-            {"id": "gpt-5.2", "name": "GPT-5.2 (Latest)", "context": 256000},
+            {"id": "gpt-5.4", "name": "GPT-5.4 (Latest)", "context": 1000000},
+            {"id": "gpt-5.4-pro", "name": "GPT-5.4 Pro", "context": 1000000},
+            {"id": "gpt-5.3-codex", "name": "GPT-5.3 Codex", "context": 256000},
+            {"id": "gpt-5.2", "name": "GPT-5.2", "context": 256000},
             {"id": "gpt-5.2-pro", "name": "GPT-5.2 Pro", "context": 256000},
             {
                 "id": "claude-opus-4-6",
@@ -959,22 +962,29 @@ class SuperQodeApp(App):
             },
         ]
 
-        # Codex CLI / OpenAI models - https://platform.openai.com/docs/models (updated from models.dev)
+        # Codex CLI / OpenAI models - https://platform.openai.com/docs/models
         # Uses codex-acp adapter from Zed Industries
         self._codex_models = [
             {
-                "id": "codex/gpt-5.3-codex",
-                "name": "GPT-5.3 Codex (Latest/New)",
+                "id": "codex/gpt-5.4",
+                "name": "GPT-5.4 (Latest)",
                 "free": False,
                 "recommended": True,
-                "desc": "Latest GPT Codex model for coding workflows",
+                "desc": "Latest GPT flagship for coding and agentic workflows",
+            },
+            {
+                "id": "codex/gpt-5.3-codex",
+                "name": "GPT-5.3 Codex",
+                "free": False,
+                "recommended": True,
+                "desc": "Previous Codex-specialized model for coding workflows",
             },
             {
                 "id": "codex/gpt-5.2",
-                "name": "GPT-5.2 (Latest)",
+                "name": "GPT-5.2",
                 "free": False,
                 "recommended": True,
-                "desc": "Latest GPT flagship with reasoning",
+                "desc": "Prior GPT flagship with reasoning",
             },
             {
                 "id": "codex/gpt-5.2-pro",
@@ -12523,6 +12533,7 @@ team:
                     "newest",
                     "current",
                     # Version patterns (highest versions)
+                    "5.4",
                     "5.3",
                     "5.2",
                     "5.1",
@@ -12533,6 +12544,7 @@ team:
                     "3.1",
                     "3.0",
                     # Specific latest model patterns by provider
+                    "gpt-5.4",
                     "gpt-5.3-codex",
                     "gpt-5.2",
                     "gpt-5.1",
@@ -12619,6 +12631,8 @@ team:
                 # High priority: Latest version indicators
                 # Priority order: -10 (highest) to -6 (medium)
                 latest_patterns = [
+                    ("gpt-5.4-pro", -12),
+                    ("gpt-5.4", -12),
                     ("gpt-5.3-codex", -11),
                     ("5.3", -11),
                     ("claude-opus-4-6", -11),
@@ -12868,7 +12882,7 @@ team:
                     model_lower = model_id.lower()
                     # Latest models get higher priority (lower number)
                     if any(
-                        x in model_lower for x in ["4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
+                        x in model_lower for x in ["5.4", "4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
                     ):
                         return 0
                     elif any(x in model_lower for x in ["4.5", "4-plus", "4-air", "2.5"]):
@@ -12887,7 +12901,7 @@ team:
                         # Highlight latest models
                         is_latest = any(
                             x in model.lower()
-                            for x in ["4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
+                            for x in ["5.4", "4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
                         )
                         name_style = (
                             f"bold {THEME['success']}" if is_latest else f"bold {THEME['success']}"
@@ -12899,7 +12913,7 @@ team:
                         # Highlight latest models
                         is_latest = any(
                             x in model.lower()
-                            for x in ["4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
+                            for x in ["5.4", "4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
                         )
                         name_style = f"bold {THEME['success']}" if is_latest else THEME["text"]
                         t.append(f"{model}\n", style=name_style)
@@ -13002,6 +13016,7 @@ team:
 
             # Check latest patterns
             latest_patterns = [
+                "gpt-5.4",
                 "gpt-5.3-codex",
                 "5.3",
                 "gpt-5.2",

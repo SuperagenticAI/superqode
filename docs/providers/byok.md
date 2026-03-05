@@ -56,12 +56,14 @@ superqode connect byok anthropic claude-sonnet-4
 
 ```bash
 export OPENAI_API_KEY=sk-...
-superqode connect byok openai gpt-5.3-codex
+superqode connect byok openai gpt-5.4
 ```
 
 | Model | Best For |
 |-------|----------|
-| `gpt-5.3-codex` | Coding agent workloads (latest/new) |
+| `gpt-5.4` | Latest flagship for coding, agents, and research |
+| `gpt-5.4-pro` | Highest-capability reasoning and coding |
+| `gpt-5.3-codex` | Previous Codex-specialized coding model |
 | `gpt-4o` | General use |
 | `gpt-4o-mini` | Cost-effective |
 | `o1` | Complex reasoning |
@@ -193,7 +195,8 @@ providers:
   openai:
     api_key_env: OPENAI_API_KEY
     recommended_models:
-      - gpt-5.3-codex
+      - gpt-5.4
+      - gpt-5.4-pro
       - gpt-4o
       - gpt-4o-mini
       - o1
@@ -221,7 +224,7 @@ team:
         performance_tester:
           mode: byok
           provider: openai
-          model: gpt-5.3-codex
+          model: gpt-5.4
 ```
 
 ---

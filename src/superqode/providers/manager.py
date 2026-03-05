@@ -516,14 +516,20 @@ class ProviderManager:
             ProviderInfo(
                 id="openai",
                 name="OpenAI",
-                description="Latest GPT-5.3 Codex, GPT-5.2, GPT-5.1, o1 models from models.dev",
+                description="Latest GPT-5.4, GPT-5.4 Pro, GPT-5.3 Codex, GPT-5.2, GPT-5.1, and o1 models",
                 requires_api_key=True,
                 configured=self._is_provider_configured("openai"),
                 models=[
                     ModelInfo(
-                        "gpt-5.3-codex", "GPT-5.3 Codex (Latest/New)", "openai", context_size=256000
+                        "gpt-5.4", "GPT-5.4 (Latest)", "openai", context_size=1000000
                     ),
-                    ModelInfo("gpt-5.2", "GPT-5.2 (Latest)", "openai", context_size=256000),
+                    ModelInfo(
+                        "gpt-5.4-pro", "GPT-5.4 Pro", "openai", context_size=1000000
+                    ),
+                    ModelInfo(
+                        "gpt-5.3-codex", "GPT-5.3 Codex", "openai", context_size=256000
+                    ),
+                    ModelInfo("gpt-5.2", "GPT-5.2", "openai", context_size=256000),
                     ModelInfo("gpt-5.2-pro", "GPT-5.2 Pro", "openai", context_size=256000),
                     ModelInfo("gpt-5.2-codex", "GPT-5.2 Codex", "openai", context_size=256000),
                     ModelInfo("gpt-5.1", "GPT-5.1", "openai", context_size=200000),

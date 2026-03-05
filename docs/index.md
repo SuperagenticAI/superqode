@@ -424,7 +424,7 @@ SuperQode introduces **SuperQE** through orchestration of coding agents - a new 
     |----------|--------|-----------|
     | Google AI | Gemini 3 Pro, Gemini 3, Gemini 2.5 Flash | Yes |
     | Anthropic | Claude Opus 4.5, Sonnet 4.5, Haiku 4.5 | No |
-    | OpenAI | GPT-5.2, GPT-4o, o1 | No |
+    | OpenAI | GPT-5.4, GPT-4o, o1 | No |
     | Deepseek | Deepseek V3, Deepseek R1 | Yes |
     | Groq | Llama 3.3, Mixtral | Yes |
     | Together AI | 200+ open models | Limited |

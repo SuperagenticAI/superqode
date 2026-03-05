@@ -627,10 +627,17 @@ class ACPDiscovery:
             # Codex - OpenAI's models
             "codex": [
                 AgentModel(
+                    id="gpt-5.4",
+                    name="GPT-5.4",
+                    provider="openai",
+                    description="Latest Codex model for coding and agentic workflows",
+                    context_window=1000000,
+                ),
+                AgentModel(
                     id="gpt-5.3-codex",
                     name="GPT-5.3 Codex",
                     provider="openai",
-                    description="Latest Codex model for coding",
+                    description="Previous Codex-specialized model for coding",
                     context_window=256000,
                 ),
                 AgentModel(

@@ -668,7 +668,7 @@ Critique and improve code quality from development.""",
         "openai": ProviderConfig(
             api_key_env="OPENAI_API_KEY",
             description="OpenAI GPT models via API",
-            recommended_models=["gpt-5.3-codex", "gpt-5.2", "gpt-5.2-pro", "gpt-4o"],
+            recommended_models=["gpt-5.4", "gpt-5.4-pro", "gpt-5.3-codex", "gpt-4o"],
             custom_models_allowed=True,
         ),
         "google": ProviderConfig(
@@ -802,7 +802,7 @@ Critique and improve code quality from development.""",
     # Model aliases
     config.model_aliases = {
         "latest-sonnet": "claude-sonnet-4-5-20250929",
-        "latest-gpt": "gpt-5.3-codex",
+        "latest-gpt": "gpt-5.4",
         "latest-gemini": "gemini-3-pro-preview",
         "latest-glm": "glm-4.7",
         "fast": "claude-haiku-4-5-20251001",

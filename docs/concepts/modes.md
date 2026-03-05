@@ -146,7 +146,7 @@ BYOK mode allows you to use cloud AI providers by providing your own API keys. S
     |----------|--------|-----------|
     | Google AI | Gemini 3 Pro, Gemini 3, Gemini 2.5 Flash | Yes |
     | Anthropic | Claude Opus 4.5, Sonnet 4.5, Haiku 4.5 | No |
-    | OpenAI | GPT-5.2, GPT-4o, o1 | No |
+    | OpenAI | GPT-5.4, GPT-4o, o1 | No |
     | xAI | Grok 3, Grok 2 | No |
     | Mistral AI | Mistral Large, Codestral | No |
     | Groq | Llama 3.3, Mixtral | Yes |
