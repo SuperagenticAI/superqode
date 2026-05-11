@@ -291,6 +291,7 @@ class ToolRegistry:
         # A2A tools (call external A2A agents)
         try:
             from ..a2a.tools import A2ACallTool, A2ADiscoverTool
+
             registry.register(A2ACallTool())
             registry.register(A2ADiscoverTool())
         except ImportError:

@@ -28,22 +28,25 @@ from .types import (
 
 class A2AClientError(Exception):
     """Base exception for A2A client errors."""
+
     pass
 
 
 class AgentNotFoundError(A2AClientError):
     """Agent not found or not responding."""
+
     pass
 
 
 class TaskFailedError(A2AClientError):
     """Task failed on remote agent."""
+
     pass
 
 
 class A2AClient:
     """Client for communicating with A2A-compliant agents.
-    
+
     Usage:
         client = A2AClient("http://localhost:8000")
         card = await client.get_agent_card()
@@ -57,7 +60,7 @@ class A2AClient:
         timeout: float = 60.0,
     ):
         """Initialize A2A client.
-        
+
         Args:
             agent_url: URL of the A2A agent server
             http_client: Optional existing httpx client
@@ -79,10 +82,10 @@ class A2AClient:
 
     async def get_agent_card(self) -> AgentCard:
         """GET /agentCard - Discover agent capabilities.
-        
+
         Returns:
             AgentCard with agent metadata and skills
-            
+
         Raises:
             AgentNotFoundError: If agent is not available
         """
@@ -110,11 +113,13 @@ class A2AClient:
 
         skills = []
         for s in data.get("skills", []):
-            skills.append({
-                "id": s.get("id", ""),
-                "name": s.get("name", ""),
-                "description": s.get("description", ""),
-            })
+            skills.append(
+                {
+                    "id": s.get("id", ""),
+                    "name": s.get("name", ""),
+                    "description": s.get("description", ""),
+                }
+            )
 
         return AgentCard(
             name=data.get("name", "Unknown"),
@@ -135,20 +140,20 @@ class A2AClient:
         task_id: Optional[str] = None,
     ) -> Task:
         """POST /message:send - Send a message to the agent.
-        
+
         Args:
             message: Text message to send
             session_id: Optional session/context ID
             task_id: Optional task ID to continue
-            
+
         Returns:
             Task with status and results
-            
+
         Raises:
             TaskFailedError: If task fails
         """
         url = f"{self.agent_url}/message:send"
-        
+
         message_obj = {
             "role": "user",
             "parts": [{"text": {"text": message}}],
@@ -164,7 +169,7 @@ class A2AClient:
             response = await self._http.post(url, json=body)
             response.raise_for_status()
             data = response.json()
-            
+
             return self._parse_task(data)
         except httpx.HTTPStatusError as e:
             raise TaskFailedError(f"Task failed: {e}") from e
@@ -177,19 +182,19 @@ class A2AClient:
         session_id: Optional[str] = None,
     ) -> AsyncIterator[StreamResponse]:
         """POST /message:stream - Send message with streaming response.
-        
+
         Args:
             message: Text message to send
             session_id: Optional session/context ID
-            
+
         Yields:
             StreamResponse events
-            
+
         Raises:
             TaskFailedError: If task fails
         """
         url = f"{self.agent_url}/message:stream"
-        
+
         message_obj = {
             "role": "user",
             "parts": [{"text": {"text": message}}],
@@ -217,49 +222,49 @@ class A2AClient:
 
     async def get_task(self, task_id: str) -> Task:
         """GET /tasks/{id} - Get task state.
-        
+
         Args:
             task_id: ID of the task to retrieve
-            
+
         Returns:
             Task with current state
         """
         url = f"{self.agent_url}/tasks/{task_id}"
-        
+
         response = await self._http.get(url)
         response.raise_for_status()
         data = response.json()
-        
+
         return self._parse_task(data)
 
     async def cancel_task(self, task_id: str) -> Task:
         """POST /tasks/{id}:cancel - Cancel a running task.
-        
+
         Args:
             task_id: ID of the task to cancel
-            
+
         Returns:
             Task in canceled state
         """
         url = f"{self.agent_url}/tasks/{task_id}:cancel"
-        
+
         response = await self._http.post(url, json={})
         response.raise_for_status()
         data = response.json()
-        
+
         return self._parse_task(data)
 
     async def subscribe_task(self, task_id: str) -> AsyncIterator[StreamResponse]:
         """GET /tasks/{id}:subscribe - Subscribe to task updates.
-        
+
         Args:
             task_id: ID of the task to subscribe to
-            
+
         Yields:
             StreamResponse with task updates
         """
         url = f"{self.agent_url}/tasks/{task_id}:subscribe"
-        
+
         try:
             async with self._http.stream("GET", url) as response:
                 response.raise_for_status()
@@ -276,7 +281,7 @@ class A2AClient:
         """Parse JSON response into Task."""
         status_data = data.get("status", {})
         state_str = status_data.get("state", "submitted")
-        
+
         try:
             state = TaskStatusValue(state_str)
         except ValueError:
@@ -312,15 +317,15 @@ class A2AClient:
 
 class A2AClientPool:
     """Manage multiple A2A clients for orchestration.
-    
+
     Usage:
         pool = A2AClientPool()
         await pool.add("gemini", "http://localhost:8001")
         await pool.add("claude", "http://localhost:8002")
-        
+
         # Call specific agent
         result = await pool.call("gemini", "Write code")
-        
+
         # Broadcast to all
         results = await pool.broadcast("Run tests")
     """

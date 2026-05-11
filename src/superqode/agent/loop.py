@@ -295,7 +295,9 @@ class AgentLoop:
         on_tool_result: Optional[Callable[[str, ToolResult], None]] = None,
         on_thinking: Optional[Callable[[str], Awaitable[None]]] = None,
         parallel_tools: bool = True,  # Enable parallel tool execution
-        mcp_executor: Optional[Callable[[str, str, Dict], Awaitable[ToolResult]]] = None,  # (server_id, tool_name, args) -> ToolResult
+        mcp_executor: Optional[
+            Callable[[str, str, Dict], Awaitable[ToolResult]]
+        ] = None,  # (server_id, tool_name, args) -> ToolResult
         mcp_tools: Optional[List[ToolDefinition]] = None,  # MCP tool definitions to include
         include_mcp: bool = False,  # Automatically inject MCP search/execute tools
     ):
@@ -312,6 +314,7 @@ class AgentLoop:
 
         # Initialize Context Manager
         from .context_manager import ContextManager
+
         self.context_manager = ContextManager(
             max_tokens=config.max_context_tokens,
             model_name=config.model,
@@ -365,13 +368,13 @@ class AgentLoop:
                     parameters=tool.parameters,
                 )
             )
-        
+
         # Inject MCP search/execute tools if requested
         if self.include_mcp:
             try:
                 from ..tools.mcp_tools import get_mcp_tools
                 from ..mcp.client import get_mcp_manager
-                
+
                 mcp_tools = get_mcp_tools(get_mcp_manager)
                 for t in mcp_tools:
                     # Avoid duplicates
@@ -427,7 +430,9 @@ class AgentLoop:
         if not tool:
             # Check if it's an MCP tool (format: mcp_serverid_toolname)
             if self.mcp_executor and name.startswith("mcp_"):
-                parts = name.split("_", 2)  # mcp_serverid_toolname -> ["mcp", serverid", "toolname"]
+                parts = name.split(
+                    "_", 2
+                )  # mcp_serverid_toolname -> ["mcp", serverid", "toolname"]
                 if len(parts) == 3:
                     server_id = parts[1]
                     tool_name = parts[2]
@@ -435,7 +440,9 @@ class AgentLoop:
                         result = await self.mcp_executor(server_id, tool_name, arguments)
                         return result
                     except Exception as e:
-                        return ToolResult(success=False, output="", error=f"MCP tool error: {str(e)}")
+                        return ToolResult(
+                            success=False, output="", error=f"MCP tool error: {str(e)}"
+                        )
             return ToolResult(success=False, output="", error=f"Unknown tool: {name}")
 
         ctx = self._create_tool_context()
@@ -455,34 +462,38 @@ class AgentLoop:
         # 1. Convert AgentMessages to Dicts for ContextManager
         msg_dicts = []
         for m in messages:
-            msg_dicts.append({
-                "role": m.role,
-                "content": m.content,
-                "tool_calls": m.tool_calls,
-                "tool_result": m.content if m.role == "tool" else None
-            })
-            
+            msg_dicts.append(
+                {
+                    "role": m.role,
+                    "content": m.content,
+                    "tool_calls": m.tool_calls,
+                    "tool_result": m.content if m.role == "tool" else None,
+                }
+            )
+
         # 2. Estimate tokens
         token_count = self.context_manager.count_tokens(msg_dicts)
-        
+
         if token_count <= self.config.max_context_tokens:
             return messages
-            
+
         # 3. Prune or alert
         if self.on_thinking:
-            asyncio.create_task(self.on_thinking(f"Context management active ({token_count} tokens). Pruning history..."))
-            
+            asyncio.create_task(
+                self.on_thinking(
+                    f"Context management active ({token_count} tokens). Pruning history..."
+                )
+            )
+
         pruned_dicts = self.context_manager.prune_history(msg_dicts)
-        
+
         # 4. Convert back to AgentMessages
         new_messages = []
         for d in pruned_dicts:
-            new_messages.append(AgentMessage(
-                role=d["role"],
-                content=d["content"],
-                tool_calls=d.get("tool_calls")
-            ))
-            
+            new_messages.append(
+                AgentMessage(role=d["role"], content=d["content"], tool_calls=d.get("tool_calls"))
+            )
+
         return new_messages
 
     async def _execute_tools_parallel(
@@ -599,12 +610,14 @@ class AgentLoop:
             is_local_provider = provider_def and provider_def.category == ProviderCategory.LOCAL
 
             is_simple_query = _is_simple_conversational_query(user_message)
-            
+
             # Plan mode: disable tools so model only analyzes/plans without executing
             tools_to_send = None
             if not self.config.plan_mode:
                 tools_to_send = (
-                    tool_defs if (tool_defs and not is_simple_query and not is_local_provider) else None
+                    tool_defs
+                    if (tool_defs and not is_simple_query and not is_local_provider)
+                    else None
                 )
             elif self.on_thinking:
                 await self.on_thinking("Plan Mode: Analyzing without executing tools...")
@@ -724,9 +737,7 @@ class AgentLoop:
                             )
                         )
                         if self._session_manager:
-                            self._session_manager.add_tool_result(
-                                tool_name, result.to_message()
-                            )
+                            self._session_manager.add_tool_result(tool_name, result.to_message())
                 else:
                     # Sequential execution (single tool or parallel disabled)
                     for tool_call in response.tool_calls:

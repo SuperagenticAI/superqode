@@ -136,6 +136,7 @@ class SuperQodeAgent(UnifiedAgent):
                 mcp_executor = execute_mcp
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).warning(f"MCP initialization skipped: {e}")
 
         # Build job description prompt (OSS does not merge expert prompts)
@@ -159,8 +160,8 @@ class SuperQodeAgent(UnifiedAgent):
             tools_enabled=True,
             temperature=0.7,
             max_tokens=4000,
-            plan_mode=getattr(self.role_config, 'plan_mode', False),
-            enable_summarization=getattr(self.role_config, 'enable_summarization', False),
+            plan_mode=getattr(self.role_config, "plan_mode", False),
+            enable_summarization=getattr(self.role_config, "enable_summarization", False),
         )
 
         # Create agent loop (on_thinking will be set via send_message if provided)
@@ -209,7 +210,7 @@ class SuperQodeAgent(UnifiedAgent):
         use_plan_mode = kwargs.get("plan_mode")
         if use_plan_mode is None:
             use_plan_mode = self._should_use_plan_mode(message)
-        
+
         if use_plan_mode:
             self._agent_loop.config.plan_mode = True
 

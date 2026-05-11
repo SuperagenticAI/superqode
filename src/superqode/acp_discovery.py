@@ -710,16 +710,55 @@ class ACPDiscovery:
                 AgentModel(id="gpt-4o", name="GPT-4o", is_free=True),
                 AgentModel(id="gemini-2.5-pro", name="Gemini 2.5 Pro", is_free=True),
                 # OpenCode Zen free models
-                AgentModel(id="big-pickle", name="Big Pickle (Free)", is_free=True, context_window=200000),
-                AgentModel(id="minimax-m2.5-free", name="MiniMax M2.5 (Free)", is_free=True, context_window=200000),
-                AgentModel(id="nemotron-3-super-free", name="Nemotron 3 Super (Free)", is_free=True, context_window=1000000),
-                AgentModel(id="gpt-5-nano", name="GPT-5 Nano (Free)", is_free=True, context_window=400000),
-                AgentModel(id="hy3-preview-free", name="HY3 Preview (Free)", is_free=True, context_window=128000),
-                AgentModel(id="ling-2.6-flash-free", name="Ling 2.6 Flash (Free)", is_free=True, context_window=128000),
-                AgentModel(id="trinity-large-preview-free", name="Trinity Large (Free)", is_free=True, context_window=128000),
-                AgentModel(id="qwen3.6-plus-free", name="Qwen 3.6 Plus (Free)", is_free=True, context_window=128000),
+                AgentModel(
+                    id="big-pickle", name="Big Pickle (Free)", is_free=True, context_window=200000
+                ),
+                AgentModel(
+                    id="minimax-m2.5-free",
+                    name="MiniMax M2.5 (Free)",
+                    is_free=True,
+                    context_window=200000,
+                ),
+                AgentModel(
+                    id="nemotron-3-super-free",
+                    name="Nemotron 3 Super (Free)",
+                    is_free=True,
+                    context_window=1000000,
+                ),
+                AgentModel(
+                    id="gpt-5-nano", name="GPT-5 Nano (Free)", is_free=True, context_window=400000
+                ),
+                AgentModel(
+                    id="hy3-preview-free",
+                    name="HY3 Preview (Free)",
+                    is_free=True,
+                    context_window=128000,
+                ),
+                AgentModel(
+                    id="ling-2.6-flash-free",
+                    name="Ling 2.6 Flash (Free)",
+                    is_free=True,
+                    context_window=128000,
+                ),
+                AgentModel(
+                    id="trinity-large-preview-free",
+                    name="Trinity Large (Free)",
+                    is_free=True,
+                    context_window=128000,
+                ),
+                AgentModel(
+                    id="qwen3.6-plus-free",
+                    name="Qwen 3.6 Plus (Free)",
+                    is_free=True,
+                    context_window=128000,
+                ),
                 # Legacy - keep for backward compatibility but redirect
-                AgentModel(id="kimi-k2.5-free", name="Kimi K2.5 (Free) [Legacy]", is_free=True, context_window=256000),
+                AgentModel(
+                    id="kimi-k2.5-free",
+                    name="Kimi K2.5 (Free) [Legacy]",
+                    is_free=True,
+                    context_window=256000,
+                ),
             ],
             # Stakpak
             "stakpak": [

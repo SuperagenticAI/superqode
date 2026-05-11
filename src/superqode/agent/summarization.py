@@ -73,7 +73,12 @@ class ContextSummarizer:
         recent = messages[-keep_recent:]
 
         if not to_summarize:
-            return [SummarizedMessage(role=getattr(m, "role", "user"), content=getattr(m, "content", str(m))) for m in messages]
+            return [
+                SummarizedMessage(
+                    role=getattr(m, "role", "user"), content=getattr(m, "content", str(m))
+                )
+                for m in messages
+            ]
 
         conversation_text = self._build_conversation_text(to_summarize)
         summary = self._generate_summary(conversation_text)
@@ -154,9 +159,7 @@ class ContextManager:
         """Summarize if needed."""
         if self.summarizer.should_summarize(self._messages):
             summarized = self.summarizer.summarize_messages(self._messages, self._system_prompt)
-            self._messages = [
-                self._create_message(m.role, m.content) for m in summarized
-            ]
+            self._messages = [self._create_message(m.role, m.content) for m in summarized]
 
     def get_messages_for_model(self) -> List[Any]:
         """Get messages formatted for model."""

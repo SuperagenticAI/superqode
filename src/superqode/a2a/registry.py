@@ -18,6 +18,7 @@ from ..a2a.types import AgentCard
 @dataclass
 class A2AAgentEntry:
     """An entry in the A2A registry."""
+
     name: str
     url: str
     description: str = ""
@@ -28,16 +29,16 @@ class A2AAgentEntry:
 
 class A2ARegistry:
     """Registry for managing A2A agent connections.
-    
+
     Usage:
         registry = A2ARegistry()
-        
+
         # Add agent
         await registry.add("gemini", "http://localhost:8000")
-        
+
         # Discover all
         agents = await registry.discover_all()
-        
+
         # Get by skill
         testers = registry.get_by_skill("testing")
     """
@@ -48,12 +49,12 @@ class A2ARegistry:
 
     async def add(self, name: str, url: str, description: str = "") -> bool:
         """Add an agent to the registry.
-        
+
         Args:
             name: Unique name for the agent
             url: A2A server URL
             description: Optional description
-            
+
         Returns:
             True if agent is reachable, False otherwise
         """
@@ -67,7 +68,9 @@ class A2ARegistry:
                 url=url,
                 description=card.description,
                 version=card.version,
-                skills=[{"id": s.id, "name": s.name, "description": s.description} for s in card.skills],
+                skills=[
+                    {"id": s.id, "name": s.name, "description": s.description} for s in card.skills
+                ],
                 verified=True,
             )
 
@@ -148,8 +151,10 @@ class A2ARegistry:
 
         for entry in self._agents.values():
             for skill in entry.skills:
-                if (skill_name.lower() in skill.get("name", "").lower() or
-                    skill_name.lower() in skill.get("id", "").lower()):
+                if (
+                    skill_name.lower() in skill.get("name", "").lower()
+                    or skill_name.lower() in skill.get("id", "").lower()
+                ):
                     matches.append(entry)
                     break
 

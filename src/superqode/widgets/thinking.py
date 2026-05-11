@@ -19,13 +19,14 @@ from textual.css.query import NoMatches
 @dataclass
 class ThinkingChunk:
     """A chunk of thinking content."""
+
     text: str
     timestamp: float = 0.0
 
 
 class ThinkingDisplay(Widget):
     """Widget to display model thinking/reasoning in real-time.
-    
+
     Features:
     - Collapsible thinking panel (toggle with Ctrl+T)
     - Styled output with dim/italic formatting
@@ -88,22 +89,20 @@ class ThinkingDisplay(Widget):
         """Add thinking content to the display."""
         if not text:
             return
-            
+
         self._current_thinking += text
-        
+
         # Buffer overflow protection
         if len(self._current_thinking) > self.max_buffer_size:
             # Trim older thinking
-            self._current_thinking = self._current_thinking[-self.max_buffer_size:]
-        
+            self._current_thinking = self._current_thinking[-self.max_buffer_size :]
+
         self.refresh()
 
     def commit_thinking(self) -> None:
         """Commit current thinking as a completed chunk."""
         if self._current_thinking.strip():
-            self._thinking_chunks.append(
-                ThinkingChunk(text=self._current_thinking.strip())
-            )
+            self._thinking_chunks.append(ThinkingChunk(text=self._current_thinking.strip()))
             self._current_thinking = ""
             self.refresh()
 
@@ -117,22 +116,26 @@ class ThinkingDisplay(Widget):
         """Render thinking content."""
         if not self._is_visible:
             return ""
-        
+
         parts = []
-        
+
         # Show completed thinking chunks
         for chunk in self._thinking_chunks[-5:]:  # Last 5 chunks
             truncated = chunk.text[:200] + "..." if len(chunk.text) > 200 else chunk.text
             parts.append(f"[dim italic]{truncated}[/]")
-        
+
         # Show current thinking
         if self._current_thinking:
-            truncated = self._current_thinking[:200] + "..." if len(self._current_thinking) > 200 else self._current_thinking
+            truncated = (
+                self._current_thinking[:200] + "..."
+                if len(self._current_thinking) > 200
+                else self._current_thinking
+            )
             parts.append(f"[dim italic]{truncated}[/]")
-        
+
         if not parts:
             return "[dim]No thinking yet...[/dim]"
-        
+
         return "\n".join(parts)
 
     def watch_classes(self, classes: str) -> None:
@@ -142,7 +145,7 @@ class ThinkingDisplay(Widget):
 
 class ThinkingBuffer:
     """Buffer to collect thinking content from streaming responses.
-    
+
     Usage:
         buffer = ThinkingBuffer()
         buffer.add_chunk("Analyzing the codebase...")
@@ -158,11 +161,11 @@ class ThinkingBuffer:
     def add_chunk(self, text: str) -> None:
         """Add a chunk of thinking text."""
         self._chunks.append(text)
-        
+
         # Trim if exceeds max size
         total = "".join(self._chunks)
         if len(total) > self.max_size:
-            self._chunks = [total[-self.max_size:]]
+            self._chunks = [total[-self.max_size :]]
 
     def get_thinking(self) -> str:
         """Get all thinking content."""
@@ -179,29 +182,29 @@ class ThinkingBuffer:
 
 def parse_thinking_from_response(response_text: str) -> tuple[Optional[str], str]:
     """Parse thinking blocks from model response.
-    
+
     Handles formats like:
     - Anthropic: <think>thinking[/reasoning]
     - OpenAI: <thinking>...</thinking>
     - Google: @extended_thinking
-    
+
     Returns:
         tuple of (thinking_text, remaining_content)
     """
     import re
-    
+
     # Anthropic format:<think>...[/reasoning]
-    anthro_match = re.search(r'<think>(.*?)(?:[/ reasoning]|$)', response_text, re.DOTALL)
+    anthro_match = re.search(r"<think>(.*?)(?:[/ reasoning]|$)", response_text, re.DOTALL)
     if anthro_match:
         thinking = anthro_match.group(1).strip()
-        remaining = response_text[:anthro_match.start()] + response_text[anthro_match.end():]
+        remaining = response_text[: anthro_match.start()] + response_text[anthro_match.end() :]
         return thinking, remaining
-    
+
     # OpenAI format: <thinking>...</thinking>
-    openai_match = re.search(r'<thinking>(.*?)</thinking>', response_text, re.DOTALL)
+    openai_match = re.search(r"<thinking>(.*?)</thinking>", response_text, re.DOTALL)
     if openai_match:
         thinking = openai_match.group(1).strip()
-        remaining = response_text[:openai_match.start()] + response_text[openai_match.end():]
+        remaining = response_text[: openai_match.start()] + response_text[openai_match.end() :]
         return thinking, remaining
-    
+
     return None, response_text

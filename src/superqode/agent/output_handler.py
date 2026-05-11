@@ -52,7 +52,7 @@ class LargeOutputHandler:
 
     def handle_output(self, output: str) -> tuple[str, Optional[str]]:
         """Process output, saving to file if too large.
-        
+
         Returns:
             tuple of (display_message, file_path or None)
         """
@@ -87,12 +87,14 @@ class LargeOutputHandler:
             for f in sorted(self._output_dir.iterdir()):
                 if f.is_file():
                     stat = f.stat()
-                    outputs.append({
-                        "name": f.name,
-                        "path": str(f.relative_to(self.workspace)),
-                        "size": stat.st_size,
-                        "modified": stat.st_mtime,
-                    })
+                    outputs.append(
+                        {
+                            "name": f.name,
+                            "path": str(f.relative_to(self.workspace)),
+                            "size": stat.st_size,
+                            "modified": stat.st_mtime,
+                        }
+                    )
         return outputs
 
     def clear_old_outputs(self, max_age_days: int = 7) -> int:

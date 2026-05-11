@@ -157,7 +157,9 @@ def get_skills_loader(root: str | Path = ".") -> SkillsLoader:
     return _skills_loader
 
 
-def load_skills(root: str | Path = ".", skills_dir: Optional[str | Path] = None) -> Dict[str, Skill]:
+def load_skills(
+    root: str | Path = ".", skills_dir: Optional[str | Path] = None
+) -> Dict[str, Skill]:
     """Load skills from a directory."""
     loader = SkillsLoader(root)
     return loader.load(skills_dir)

@@ -23,12 +23,12 @@ class A2ACommands:
         log: Any,
     ) -> bool:
         """Handle :a2a commands.
-        
+
         Args:
             subcommand: The subcommand (connect, list, discover, call, workflow)
             args: Arguments for the command
             log: Logger for output
-            
+
         Returns:
             True if command was handled
         """
@@ -185,9 +185,13 @@ Examples:
             # Extract result
             if task.history:
                 for msg in reversed(task.history):
-                    if hasattr(msg, 'role') and msg.role.value == "agent":
-                        if hasattr(msg, 'parts') and msg.parts:
-                            result = msg.parts[0].text[:200] if hasattr(msg.parts[0], 'text') else "No text"
+                    if hasattr(msg, "role") and msg.role.value == "agent":
+                        if hasattr(msg, "parts") and msg.parts:
+                            result = (
+                                msg.parts[0].text[:200]
+                                if hasattr(msg.parts[0], "text")
+                                else "No text"
+                            )
                             log.add_info(f"Result: {result}...")
                             break
 

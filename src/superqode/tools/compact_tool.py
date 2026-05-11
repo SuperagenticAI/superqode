@@ -113,8 +113,7 @@ This creates a summary of the conversation so far."""
 
         old_messages = self._history[:-keep_recent]
         old_text = "\n".join(
-            f"{getattr(m, 'role', '?')}: {getattr(m, 'content', '')[:100]}..."
-            for m in old_messages
+            f"{getattr(m, 'role', '?')}: {getattr(m, 'content', '')[:100]}..." for m in old_messages
         )
 
         return ToolResult(

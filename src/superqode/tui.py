@@ -1138,7 +1138,10 @@ class SuperQodeUI:
                 t.append(f"  📁 Target: {target}\n", style="dim")
             self.console.print(t)
 
-            if not Prompt.ask("  [bold]Continue anyway?[/bold]", choices=["y", "n"], default="n") == "y":
+            if (
+                not Prompt.ask("  [bold]Continue anyway?[/bold]", choices=["y", "n"], default="n")
+                == "y"
+            ):
                 self.print_info("Command cancelled.")
                 return
 
@@ -1161,7 +1164,7 @@ class SuperQodeUI:
 
     def handle_input(self, text: str) -> bool:
         """Handle user input, processing commands or shell requests.
-        
+
         Returns:
             True if input was handled as a command/shell, False if it should go to agent.
         """
@@ -1175,7 +1178,7 @@ class SuperQodeUI:
             if command.name == "shell":
                 self._run_shell(args)
                 return True
-            
+
             # Execute standard slash/colon command
             if command.name == "help":
                 self.print_roles()
@@ -1187,6 +1190,7 @@ class SuperQodeUI:
             elif command.name == "fork":
                 try:
                     from .agent.session_manager import create_session_manager
+
                     sm = create_session_manager()
                     new_id = sm.fork_current_session(args.strip() or None)
                     self.print_success(f"Session forked! New session: [bold]{new_id}[/bold]")
@@ -1195,6 +1199,7 @@ class SuperQodeUI:
             elif command.name == "sessions":
                 try:
                     from .agent.session_manager import create_session_manager
+
                     sm = create_session_manager()
                     sessions = sm.list_all_sessions()
                     if not sessions:
@@ -1205,13 +1210,13 @@ class SuperQodeUI:
                         table.add_column("Model", style="green")
                         table.add_column("Msgs", justify="right")
                         table.add_column("Updated", style="dim")
-                        
+
                         for s in sessions[:10]:
                             table.add_row(
                                 s.session_id,
                                 s.model or "N/A",
                                 str(s.message_count),
-                                s.updated_at.split("T")[0]
+                                s.updated_at.split("T")[0],
                             )
                         self.console.print(table)
                 except Exception as e:
@@ -1221,7 +1226,9 @@ class SuperQodeUI:
                 # This would be handled in the agent loop if we had direct access here
                 return True
             else:
-                self.print_info(f"Command '{command.name}' recognized but not yet integrated in TUI mode.")
+                self.print_info(
+                    f"Command '{command.name}' recognized but not yet integrated in TUI mode."
+                )
             return True
 
         return False

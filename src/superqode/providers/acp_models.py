@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ACPModel:
     """An available model from an ACP agent."""
+
     id: str
     name: str
     provider: Optional[str] = None
@@ -60,16 +61,18 @@ async def get_acp_agent_models(acp_client: Any) -> List[ACPModel]:
             # Determine context window
             context = m.get("context_window", 128000)
 
-            models.append(ACPModel(
-                id=model_id,
-                name=model_name,
-                provider=m.get("provider"),
-                description=m.get("description"),
-                capabilities=m.get("capabilities"),
-                context_window=context,
-                max_output_tokens=m.get("max_output_tokens"),
-                is_free=is_free,
-            ))
+            models.append(
+                ACPModel(
+                    id=model_id,
+                    name=model_name,
+                    provider=m.get("provider"),
+                    description=m.get("description"),
+                    capabilities=m.get("capabilities"),
+                    context_window=context,
+                    max_output_tokens=m.get("max_output_tokens"),
+                    is_free=is_free,
+                )
+            )
 
         logger.info(f"Found {len(models)} models from ACP agent")
         return models

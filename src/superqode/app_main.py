@@ -662,21 +662,27 @@ class SuperQodeApp(App):
         """Get OpenCode models list - tries dynamic fetch, falls back to static."""
         try:
             from superqode.providers.opencode_models import get_opencode_models_with_fallback
-            
+
             # This runs async - for now we still use static in sync context
             # but could be used in async contexts
             import asyncio
+
             models = asyncio.run(get_opencode_models_with_fallback())
-            
+
             # Convert to our format
             return [
-                {"id": m["id"], "name": m.get("name", m["id"].split("/")[-1]), "context": m.get("context", 128000)}
-                for m in models if m.get("is_free", False)
+                {
+                    "id": m["id"],
+                    "name": m.get("name", m["id"].split("/")[-1]),
+                    "context": m.get("context", 128000),
+                }
+                for m in models
+                if m.get("is_free", False)
             ]
         except Exception:
             # Fallback to static list
             pass
-            
+
         return [
             {"id": "big-pickle", "name": "Big Pickle", "context": 200000},
             {"id": "minimax-m2.5-free", "name": "MiniMax M2.5 (Free)", "context": 200000},
@@ -1182,30 +1188,145 @@ class SuperQodeApp(App):
     def _build_palette_commands(self) -> list[PaletteCommand]:
         """Build the command palette from the real TUI command surface."""
         return [
-            PaletteCommand("connect", "Connect", "Choose ACP, BYOK, or local provider", "🔌", ":connect", "connection"),
-            PaletteCommand("connect_byok", "Connect BYOK", "Pick a cloud provider and model", "⚡", ":connect byok", "connection"),
-            PaletteCommand("connect_local", "Connect Local", "Pick Ollama, LM Studio, vLLM, or another local provider", "🦙", ":connect local", "connection"),
-            PaletteCommand("acp_agents", "ACP Agents", "List available ACP coding agents", "🤖", ":acp list", "connection"),
-            PaletteCommand("models", "Models", "Show or switch models for the current provider", "📊", ":models", "connection"),
-            PaletteCommand("health", "Provider Health", "Check configured provider connectivity", "🩺", ":health", "connection"),
-            PaletteCommand("tools", "Tools", "Show active tool profile and available tools", "🧰", ":tools", "harness"),
-            PaletteCommand("mcp", "MCP Status", "Show configured MCP servers and connected tools", "🔗", ":mcp status", "harness"),
-            PaletteCommand("sessions", "Sessions", "Browse recent local coding sessions", "📂", "/sessions", "session"),
-            PaletteCommand("resume", "Resume Session", "Resume a previous session by id or prefix", "↩", "/resume", "session"),
-            PaletteCommand("fork", "Fork Session", "Branch the current session", "⑂", "/fork", "session"),
-            PaletteCommand("compact", "Compact Context", "Compress conversation context where supported", "🗜", "/compact", "session"),
-            PaletteCommand("context", "Context", "Show current mode, role, provider, model, and cwd", "📋", ":context", "harness"),
+            PaletteCommand(
+                "connect",
+                "Connect",
+                "Choose ACP, BYOK, or local provider",
+                "🔌",
+                ":connect",
+                "connection",
+            ),
+            PaletteCommand(
+                "connect_byok",
+                "Connect BYOK",
+                "Pick a cloud provider and model",
+                "⚡",
+                ":connect byok",
+                "connection",
+            ),
+            PaletteCommand(
+                "connect_local",
+                "Connect Local",
+                "Pick Ollama, LM Studio, vLLM, or another local provider",
+                "🦙",
+                ":connect local",
+                "connection",
+            ),
+            PaletteCommand(
+                "acp_agents",
+                "ACP Agents",
+                "List available ACP coding agents",
+                "🤖",
+                ":acp list",
+                "connection",
+            ),
+            PaletteCommand(
+                "models",
+                "Models",
+                "Show or switch models for the current provider",
+                "📊",
+                ":models",
+                "connection",
+            ),
+            PaletteCommand(
+                "health",
+                "Provider Health",
+                "Check configured provider connectivity",
+                "🩺",
+                ":health",
+                "connection",
+            ),
+            PaletteCommand(
+                "tools",
+                "Tools",
+                "Show active tool profile and available tools",
+                "🧰",
+                ":tools",
+                "harness",
+            ),
+            PaletteCommand(
+                "mcp",
+                "MCP Status",
+                "Show configured MCP servers and connected tools",
+                "🔗",
+                ":mcp status",
+                "harness",
+            ),
+            PaletteCommand(
+                "sessions",
+                "Sessions",
+                "Browse recent local coding sessions",
+                "📂",
+                "/sessions",
+                "session",
+            ),
+            PaletteCommand(
+                "resume",
+                "Resume Session",
+                "Resume a previous session by id or prefix",
+                "↩",
+                "/resume",
+                "session",
+            ),
+            PaletteCommand(
+                "fork", "Fork Session", "Branch the current session", "⑂", "/fork", "session"
+            ),
+            PaletteCommand(
+                "compact",
+                "Compact Context",
+                "Compress conversation context where supported",
+                "🗜",
+                "/compact",
+                "session",
+            ),
+            PaletteCommand(
+                "context",
+                "Context",
+                "Show current mode, role, provider, model, and cwd",
+                "📋",
+                ":context",
+                "harness",
+            ),
             PaletteCommand("diff", "Diff", "Inspect file changes", "🧾", ":diff", "changes"),
-            PaletteCommand("approve", "Approve Changes", "Approve pending work", "✅", ":approve", "changes"),
-            PaletteCommand("reject", "Reject Changes", "Reject pending work", "⛔", ":reject", "changes"),
+            PaletteCommand(
+                "approve", "Approve Changes", "Approve pending work", "✅", ":approve", "changes"
+            ),
+            PaletteCommand(
+                "reject", "Reject Changes", "Reject pending work", "⛔", ":reject", "changes"
+            ),
             PaletteCommand("undo", "Undo", "Undo the last tracked change", "↶", ":undo", "changes"),
-            PaletteCommand("sidebar", "Toggle Sidebar", "Show or hide files/context panels", "▣", "Ctrl+B", "view"),
-            PaletteCommand("files", "Files", "List files in the current directory", "📁", ":files", "view"),
+            PaletteCommand(
+                "sidebar",
+                "Toggle Sidebar",
+                "Show or hide files/context panels",
+                "▣",
+                "Ctrl+B",
+                "view",
+            ),
+            PaletteCommand(
+                "files", "Files", "List files in the current directory", "📁", ":files", "view"
+            ),
             PaletteCommand("find", "Find File", "Search for files by name", "🔍", ":find", "view"),
-            PaletteCommand("search", "Search Contents", "Search text in the current workspace", "⌕", ":search", "view"),
-            PaletteCommand("mode", "Approval Mode", "Show or change tool approval mode", "🔐", ":mode", "safety"),
+            PaletteCommand(
+                "search",
+                "Search Contents",
+                "Search text in the current workspace",
+                "⌕",
+                ":search",
+                "view",
+            ),
+            PaletteCommand(
+                "mode",
+                "Approval Mode",
+                "Show or change tool approval mode",
+                "🔐",
+                ":mode",
+                "safety",
+            ),
             PaletteCommand("help", "Help", "Show command reference", "?", ":help", "system"),
-            PaletteCommand("clear", "Clear", "Clear the conversation view", "⌫", "Ctrl+L", "system"),
+            PaletteCommand(
+                "clear", "Clear", "Clear the conversation view", "⌫", "Ctrl+L", "system"
+            ),
             PaletteCommand("quit", "Quit", "Exit SuperQode", "✕", "Ctrl+C", "system"),
         ]
 
@@ -2509,12 +2630,12 @@ class SuperQodeApp(App):
         # Clear cache and refresh models
         try:
             from superqode.providers.opencode_models import clear_cache
-            
+
             clear_cache()
             # Re-fetch models
             self._opencode_models = None
             models = self.opencode_models
-            
+
             # Show updated list
             log = self.query_one("#log", ConversationLog)
             agent = getattr(self, "_opencode_agent_data", None)
@@ -2526,19 +2647,19 @@ class SuperQodeApp(App):
                         break
             if not agent:
                 agent = {"name": "OpenCode", "short_name": "opencode"}
-            
+
             # Reset highlight index to 0
             self._opencode_highlighted_model_index = 0
-            
+
             # Show message
             t = Text()
             t.append("\n  🔄 ", style=THEME["success"])
             t.append("Refreshing models from OpenCode...", style=THEME["text"])
             log.write(t)
-            
+
             # Then show the model list
             self.set_timer(0.5, lambda: self._show_opencode_models_selection(agent, log))
-            
+
         except Exception as e:
             log = self.query_one("#log", ConversationLog)
             t = Text()
@@ -2547,7 +2668,10 @@ class SuperQodeApp(App):
 
     def action_refresh_byok_models(self):
         """Refresh BYOK providers/models from models.dev API."""
-        if not (getattr(self, "_awaiting_byok_provider", False) or getattr(self, "_awaiting_byok_model", False)):
+        if not (
+            getattr(self, "_awaiting_byok_provider", False)
+            or getattr(self, "_awaiting_byok_model", False)
+        ):
             return
 
         try:
@@ -3324,7 +3448,7 @@ class SuperQodeApp(App):
             command_prefix = "/"
 
         if command_prefix:
-            cmd = text[len(command_prefix):].strip().lower()
+            cmd = text[len(command_prefix) :].strip().lower()
             # Handle navigation commands during selection
             if cmd in ("home", "back", "cancel") and (
                 getattr(self, "_awaiting_connect_type", False)
@@ -3745,10 +3869,34 @@ class SuperQodeApp(App):
         t.append(f"{len(active_tools)}\n\n", style=f"bold {THEME['text']}")
 
         categories = {
-            "File": {"read_file", "write_file", "list_directory", "edit_file", "insert_text", "patch", "multi_edit"},
-            "Search": {"grep", "glob", "code_search", "web_search", "web_fetch", "fetch", "download"},
+            "File": {
+                "read_file",
+                "write_file",
+                "list_directory",
+                "edit_file",
+                "insert_text",
+                "patch",
+                "multi_edit",
+            },
+            "Search": {
+                "grep",
+                "glob",
+                "code_search",
+                "web_search",
+                "web_fetch",
+                "fetch",
+                "download",
+            },
             "Runtime": {"bash", "diagnostics", "lsp", "batch"},
-            "Workflow": {"todo_write", "todo_read", "compact", "agent", "coordinate", "ask_user", "confirm"},
+            "Workflow": {
+                "todo_write",
+                "todo_read",
+                "compact",
+                "agent",
+                "coordinate",
+                "ask_user",
+                "confirm",
+            },
             "Skills": {"skill", "read_skill"},
         }
         remaining = set(active_tools)
@@ -3808,12 +3956,21 @@ class SuperQodeApp(App):
 
             if not configs:
                 t.append("  No MCP servers configured.\n", style=THEME["muted"])
-                t.append("  Add servers in .superqode/mcp.json or your MCP config file.\n", style=THEME["dim"])
+                t.append(
+                    "  Add servers in .superqode/mcp.json or your MCP config file.\n",
+                    style=THEME["dim"],
+                )
             else:
                 for server_id, config in configs.items():
                     state = manager.get_connection_state(server_id).value
                     server_summary = summary["servers"].get(server_id, {})
-                    status_style = THEME["success"] if state == "connected" else THEME["warning"] if state == "error" else THEME["muted"]
+                    status_style = (
+                        THEME["success"]
+                        if state == "connected"
+                        else THEME["warning"]
+                        if state == "error"
+                        else THEME["muted"]
+                    )
                     t.append(f"  {server_id:<18}", style=f"bold {THEME['cyan']}")
                     t.append(f"{state:<13}", style=status_style)
                     t.append(f"{config.name or server_id:<22}", style=THEME["text"])
@@ -3864,7 +4021,9 @@ class SuperQodeApp(App):
             t.append("\n  🧰 ", style=f"bold {THEME['cyan']}")
             t.append("MCP Tools\n\n", style=f"bold {THEME['cyan']}")
             if not tools:
-                t.append("  No MCP tools are available from connected servers.\n", style=THEME["muted"])
+                t.append(
+                    "  No MCP tools are available from connected servers.\n", style=THEME["muted"]
+                )
                 t.append("  Run ", style=THEME["muted"])
                 t.append(":mcp connect", style=THEME["cyan"])
                 t.append(" first if servers are configured.\n", style=THEME["muted"])
@@ -3883,7 +4042,10 @@ class SuperQodeApp(App):
             t.append("\n  📚 ", style=f"bold {THEME['cyan']}")
             t.append("MCP Resources\n\n", style=f"bold {THEME['cyan']}")
             if not resources:
-                t.append("  No MCP resources are available from connected servers.\n", style=THEME["muted"])
+                t.append(
+                    "  No MCP resources are available from connected servers.\n",
+                    style=THEME["muted"],
+                )
             for resource in resources:
                 t.append(f"  {resource.server_id:<16}", style=f"bold {THEME['purple']}")
                 t.append(f"{resource.name}", style=THEME["text"])
@@ -3898,7 +4060,9 @@ class SuperQodeApp(App):
             t.append("\n  💬 ", style=f"bold {THEME['cyan']}")
             t.append("MCP Prompts\n\n", style=f"bold {THEME['cyan']}")
             if not prompts:
-                t.append("  No MCP prompts are available from connected servers.\n", style=THEME["muted"])
+                t.append(
+                    "  No MCP prompts are available from connected servers.\n", style=THEME["muted"]
+                )
             for prompt in prompts:
                 t.append(f"  {prompt.server_id:<16}", style=f"bold {THEME['purple']}")
                 t.append(prompt.name, style=THEME["text"])
@@ -3908,7 +4072,9 @@ class SuperQodeApp(App):
             self._show_command_output(log, t)
             return
 
-        log.add_info("Usage: :mcp status|connect [server]|disconnect [server]|tools|resources|prompts")
+        log.add_info(
+            "Usage: :mcp status|connect [server]|disconnect [server]|tools|resources|prompts"
+        )
 
     def _get_session_manager(self):
         """Get a local JSONL session manager."""
@@ -4750,7 +4916,9 @@ team:
                 log.add_info("No sessions found.")
             else:
                 for s in sessions:
-                    log.add_info(f"  {s['session_id']} | {s['model'] or 'N/A'} | {s['message_count']} msgs")
+                    log.add_info(
+                        f"  {s['session_id']} | {s['model'] or 'N/A'} | {s['message_count']} msgs"
+                    )
             return
         elif text.strip().startswith("/resume"):
             parts = text.strip().split()
@@ -13465,7 +13633,8 @@ team:
                     model_lower = model_id.lower()
                     # Latest models get higher priority (lower number)
                     if any(
-                        x in model_lower for x in ["5.4", "4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
+                        x in model_lower
+                        for x in ["5.4", "4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
                     ):
                         return 0
                     elif any(x in model_lower for x in ["4.5", "4-plus", "4-air", "2.5"]):
@@ -16474,6 +16643,7 @@ team:
         if not hasattr(self, "_a2a_commands"):
             try:
                 from .commands.a2a import create_a2a_commands
+
                 self._a2a_commands = create_a2a_commands()
             except ImportError:
                 log.add_error("A2A not installed. Run: pip install superqode[a2a]")

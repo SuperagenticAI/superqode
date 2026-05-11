@@ -254,6 +254,7 @@ Useful for finding documentation, examples, recent information, etc."""
             elif provider == "auto":
                 # Check for EXA API key
                 import os
+
                 use_exa = bool(os.environ.get("EXA_API_KEY") or os.environ.get("EXA_KEY"))
 
             # Try EXA first if enabled (neural search is more powerful)
@@ -286,9 +287,7 @@ Useful for finding documentation, examples, recent information, etc."""
             output_lines.append(f"   URL: {result.url}")
             if result.snippet:
                 snippet = (
-                    result.snippet[:200] + "..."
-                    if len(result.snippet) > 200
-                    else result.snippet
+                    result.snippet[:200] + "..." if len(result.snippet) > 200 else result.snippet
                 )
                 output_lines.append(f"   {snippet}")
             output_lines.append("")
@@ -432,7 +431,7 @@ Useful for finding documentation, examples, recent information, etc."""
                 # EXA returns highlighted snippets with <mark> tags
                 snippet = r.highlights[0] if r.highlights else (r.text or "")[:200]
                 # Clean EXA highlight tags
-                snippet = re.sub(r'<[^>]+>', '', snippet)
+                snippet = re.sub(r"<[^>]+>", "", snippet)
                 results.append(
                     SearchResult(
                         title=r.title or "",

@@ -176,26 +176,27 @@ class SessionStore:
 
     def fork_session(self, session_id: str, new_session_id: str) -> SessionMetadata:
         """Fork an existing session into a new one.
-        
+
         Args:
             session_id: The ID of the session to fork from
             new_session_id: The ID for the new session
-            
+
         Returns:
             The new session metadata
         """
         old_path = self._session_path(session_id)
         old_meta_path = self.base_dir / f"{session_id}.meta.json"
-        
+
         new_path = self._session_path(new_session_id)
         new_meta_path = self.base_dir / f"{new_session_id}.meta.json"
-        
+
         if not old_path.exists():
             raise FileNotFoundError(f"Session {session_id} not found")
-            
+
         import shutil
+
         shutil.copy2(old_path, new_path)
-        
+
         # Load and update metadata
         metadata = self.get_metadata(session_id)
         if metadata:
@@ -238,6 +239,7 @@ class SessionManager:
 
         # Create new session
         import uuid
+
         new_id = session_id or str(uuid.uuid4())[:8]
         self.store.create_session(new_id, provider, model)
         self._current_session_id = new_id
@@ -289,17 +291,18 @@ class SessionManager:
 
     def fork_current_session(self, new_session_id: Optional[str] = None) -> str:
         """Fork the current session into a new one.
-        
+
         Args:
             new_session_id: Optional ID for the new session
-            
+
         Returns:
             The new session ID
         """
         if not self._current_session_id:
             raise RuntimeError("No active session to fork")
-            
+
         import uuid
+
         fork_id = new_session_id or f"{self._current_session_id}-fork-{str(uuid.uuid4())[:4]}"
         self.store.fork_session(self._current_session_id, fork_id)
         self._current_session_id = fork_id
@@ -312,7 +315,7 @@ class SessionManager:
             return 0
 
         deleted = 0
-        for session in sessions[self.max_sessions:]:
+        for session in sessions[self.max_sessions :]:
             self.store.delete_session(session.session_id)
             deleted += 1
         return deleted

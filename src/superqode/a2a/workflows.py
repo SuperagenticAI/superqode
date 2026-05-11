@@ -17,15 +17,17 @@ from .types import Task, AgentCard
 
 class WorkflowPattern(str, Enum):
     """Workflow orchestration patterns."""
-    SEQUENTIAL = "sequential"      # A → B → C
-    PARALLEL = "parallel"          # A || B || C
-    SUPERVISOR = "supervisor"      # Supervisor delegates to sub-agents
+
+    SEQUENTIAL = "sequential"  # A → B → C
+    PARALLEL = "parallel"  # A || B || C
+    SUPERVISOR = "supervisor"  # Supervisor delegates to sub-agents
     FAN_OUT_FAN_IN = "fan_out_fan_in"  # Dispatch, collect, aggregate
 
 
 @dataclass
 class WorkflowStep:
     """A single step in a workflow."""
+
     name: str
     agent_url: str
     prompt_template: Optional[str] = None  # Template with {previous_result}
@@ -35,6 +37,7 @@ class WorkflowStep:
 @dataclass
 class WorkflowResult:
     """Result of a workflow execution."""
+
     pattern: WorkflowPattern
     steps: List[Dict[str, Any]]
     final_result: Optional[str] = None
@@ -45,17 +48,17 @@ class WorkflowResult:
 
 class A2AWorkflowEngine:
     """Multi-agent workflow orchestration engine.
-    
+
     Usage:
         engine = A2AWorkflowEngine()
-        
+
         # Sequential: A → B → C
         result = await engine.sequential([
             {"url": "http://agent-a:8000", "prompt": "Write code"},
             {"url": "http://agent-b:8000", "prompt": "Test code"},
             {"url": "http://agent-c:8000", "prompt": "Deploy"},
         ])
-        
+
         # Parallel: A || B || C
         result = await engine.parallel([
             {"url": "http://test-agent:8000", "prompt": "Run unit tests"},
@@ -85,46 +88,51 @@ class A2AWorkflowEngine:
         initial_message: str,
     ) -> WorkflowResult:
         """Execute steps sequentially (A → B → C).
-        
+
         Args:
             steps: List of workflow steps
             initial_message: Starting message
-            
+
         Returns:
             WorkflowResult with all step results
         """
         import time
+
         start_time = time.time()
-        
+
         results = []
         current_message = initial_message
-        
+
         for step in steps:
             try:
                 client = A2AClient(step.agent_url)
                 task = await client.send_message(
-                    step.prompt_template.format(previous_result=current_message) 
-                    if step.prompt_template 
+                    step.prompt_template.format(previous_result=current_message)
+                    if step.prompt_template
                     else current_message
                 )
-                
+
                 result_text = self._extract_result(task)
-                results.append({
-                    "step": step.name,
-                    "status": task.status.state.value,
-                    "result": result_text,
-                })
-                
+                results.append(
+                    {
+                        "step": step.name,
+                        "status": task.status.state.value,
+                        "result": result_text,
+                    }
+                )
+
                 current_message = result_text
                 await client.close()
-                
+
             except Exception as e:
-                results.append({
-                    "step": step.name,
-                    "status": "failed",
-                    "error": str(e),
-                })
-                
+                results.append(
+                    {
+                        "step": step.name,
+                        "status": "failed",
+                        "error": str(e),
+                    }
+                )
+
                 if step.on_error == "abort":
                     break
                 elif step.on_error == "continue":
@@ -144,19 +152,20 @@ class A2AWorkflowEngine:
         message: str,
     ) -> WorkflowResult:
         """Execute steps in parallel (A || B || C).
-        
+
         Args:
             steps: List of workflow steps
             message: Same message to all agents
-            
+
         Returns:
             WorkflowResult with all results
         """
         import time
+
         start_time = time.time()
-        
+
         results = []
-        
+
         async def run_step(step: WorkflowStep) -> Dict[str, Any]:
             try:
                 client = A2AClient(step.agent_url)
@@ -194,29 +203,28 @@ class A2AWorkflowEngine:
         task: str,
     ) -> WorkflowResult:
         """Execute supervisor pattern - supervisor delegates to sub-agents.
-        
+
         The supervisor analyzes the task and delegates to appropriate sub-agents,
         then aggregates results.
-        
+
         Args:
             supervisor_url: URL of supervisor agent
             sub_agents: Available sub-agents
             task: Task for supervisor to analyze
-            
+
         Returns:
             WorkflowResult from supervisor execution
         """
         import time
+
         start_time = time.time()
-        
+
         # First, ask supervisor to decompose task
         supervisor = A2AClient(supervisor_url)
-        
+
         # Build context about available sub-agents
-        agent_context = "\n".join([
-            f"- {s.name}: {s.agent_url}" for s in sub_agents
-        ])
-        
+        agent_context = "\n".join([f"- {s.name}: {s.agent_url}" for s in sub_agents])
+
         decomposition_prompt = f"""Analyze this task and delegate to appropriate agents.
 
 Available agents:
@@ -225,21 +233,23 @@ Available agents:
 Task: {task}
 
 Return a JSON dict mapping agent names to their specific tasks."""
-        
+
         try:
             # Get decomposition from supervisor
             decompose_task = await supervisor.send_message(decomposition_prompt)
             await supervisor.close()
-            
+
             # Execute delegated tasks in parallel
             results = []
             for sub in sub_agents:
-                results.append({
-                    "step": sub.name,
-                    "status": "delegated",
-                    "result": f"Delegated to {sub.name}",
-                })
-            
+                results.append(
+                    {
+                        "step": sub.name,
+                        "status": "delegated",
+                        "result": f"Delegated to {sub.name}",
+                    }
+                )
+
             return WorkflowResult(
                 pattern=WorkflowPattern.SUPERVISOR,
                 steps=results,
@@ -247,7 +257,7 @@ Return a JSON dict mapping agent names to their specific tasks."""
                 success=decompose_task.status.state.value == "completed",
                 total_time=time.time() - start_time,
             )
-            
+
         except Exception as e:
             return WorkflowResult(
                 pattern=WorkflowPattern.SUPERVISOR,
@@ -264,22 +274,23 @@ Return a JSON dict mapping agent names to their specific tasks."""
         task: str,
     ) -> WorkflowResult:
         """Execute fan-out/fan-in pattern.
-        
+
         Dispatch task to multiple workers, wait for all results, then aggregate.
-        
+
         Args:
             dispatcher_url: URL of dispatcher agent
             worker_urls: URLs of worker agents
             task: Task to process
-            
+
         Returns:
             WorkflowResult with aggregated results
         """
         import time
+
         start_time = time.time()
-        
+
         results = []
-        
+
         async def run_worker(url: str, worker_id: int) -> Dict[str, Any]:
             try:
                 client = A2AClient(url)
@@ -298,14 +309,14 @@ Return a JSON dict mapping agent names to their specific tasks."""
                 }
 
         # Fan-out: dispatch to all workers
-        worker_results = await asyncio.gather(*[
-            run_worker(url, i) for i, url in enumerate(worker_urls)
-        ])
+        worker_results = await asyncio.gather(
+            *[run_worker(url, i) for i, url in enumerate(worker_urls)]
+        )
         results = list(worker_results)
-        
+
         # Fan-in: aggregate results
         aggregated = self._aggregate_results(results)
-        
+
         return WorkflowResult(
             pattern=WorkflowPattern.FAN_OUT_FAN_IN,
             steps=results,
@@ -318,13 +329,13 @@ Return a JSON dict mapping agent names to their specific tasks."""
         """Extract text result from task."""
         if not task.history:
             return ""
-        
+
         # Get last agent message
         for msg in reversed(task.history):
             if msg.role == MessageRole.AGENT:
                 if msg.parts and msg.parts[0].text:
                     return msg.parts[0].text
-        
+
         return ""
 
     def _aggregate_results(self, results: List[Dict[str, Any]]) -> str:
@@ -334,7 +345,7 @@ Return a JSON dict mapping agent names to their specific tasks."""
             status = r.get("status", "unknown")
             result = r.get("result", r.get("error", ""))
             lines.append(f"[{r.get('step', r.get('worker', 'unknown'))}] {status}: {result[:100]}")
-        
+
         return "\n".join(lines)
 
     async def close(self):
@@ -344,7 +355,7 @@ Return a JSON dict mapping agent names to their specific tasks."""
 
 class A2ATool:
     """A2A client as a SuperQode tool - call external A2A agents from within SuperQode.
-    
+
     Usage in SuperQode:
         // Call external A2A agent for security testing
         Use the a2a_call tool to invoke external agents for specialized tasks.
@@ -373,14 +384,14 @@ Arguments:
     ) -> Dict[str, Any]:
         """Execute A2A call to external agent."""
         client = A2AClient(agent_url, timeout=timeout)
-        
+
         try:
             # Get agent card first
             card = await client.get_agent_card()
-            
+
             # Send message
             task = await client.send_message(message)
-            
+
             return {
                 "success": True,
                 "agent_name": card.name,

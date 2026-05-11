@@ -299,7 +299,9 @@ class PureMode:
             return {"success": False, "message": "No active provider session to compact."}
 
         self._agent.config.enable_summarization = True
-        messages = self._agent._session_manager.get_messages() if self._agent._session_manager else []
+        messages = (
+            self._agent._session_manager.get_messages() if self._agent._session_manager else []
+        )
         return {
             "success": True,
             "message": "Context compaction is enabled for subsequent turns.",

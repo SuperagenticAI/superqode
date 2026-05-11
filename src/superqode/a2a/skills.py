@@ -68,6 +68,7 @@ ROLE_SKILL_MAPPING = {
 @dataclass
 class RoleMapping:
     """Mapping from A2A skill to SuperQode role."""
+
     skill_keyword: str
     superqode_role: str
     description: str
@@ -76,13 +77,13 @@ class RoleMapping:
 
 class SkillMapper:
     """Map A2A agent skills to SuperQode roles.
-    
+
     Usage:
         mapper = SkillMapper()
-        
+
         # Map skills from agent card
         roles = mapper.map_skills(agent_card.skills)
-        
+
         # Get role for specific skill
         role = mapper.get_role_for_skill("security scanning")
     """
@@ -92,10 +93,10 @@ class SkillMapper:
 
     def map_skills(self, skills: List[Dict[str, str]]) -> List[RoleMapping]:
         """Map a list of A2A skills to SuperQode roles.
-        
+
         Args:
             skills: List of {"id": "...", "name": "...", "description": "..."}
-            
+
         Returns:
             List of RoleMapping with matched roles
         """
@@ -144,10 +145,10 @@ class SkillMapper:
 
     def get_role_for_skill(self, skill_text: str) -> Optional[str]:
         """Get SuperQode role for a skill description.
-        
+
         Args:
             skill_text: Skill name or description
-            
+
         Returns:
             SuperQode role name or None
         """
@@ -173,10 +174,10 @@ class SkillMapper:
 
     def suggest_agents_for_role(self, role: str) -> List[str]:
         """Suggest keywords to search for agents that can fulfill a role.
-        
+
         Args:
             role: SuperQode role (e.g., "qe_security")
-            
+
         Returns:
             List of search keywords
         """

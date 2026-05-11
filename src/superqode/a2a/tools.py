@@ -14,7 +14,7 @@ from .client import A2AClient, A2AClientPool
 
 class A2ACallTool(Tool):
     """Tool to call external A2A-compliant agents.
-    
+
     Usage:
         a2a_call(agent_url="http://localhost:8000", message="Write tests")
     """
@@ -123,20 +123,20 @@ Arguments:
 
     def _extract_result(self, task) -> str:
         """Extract text result from task."""
-        if not hasattr(task, 'history') or not task.history:
+        if not hasattr(task, "history") or not task.history:
             return "No response"
-        
+
         for msg in reversed(task.history):
-            if hasattr(msg, 'role') and msg.role.value == "agent":
-                if hasattr(msg, 'parts') and msg.parts:
-                    if hasattr(msg.parts[0], 'text') and msg.parts[0].text:
+            if hasattr(msg, "role") and msg.role.value == "agent":
+                if hasattr(msg, "parts") and msg.parts:
+                    if hasattr(msg.parts[0], "text") and msg.parts[0].text:
                         return msg.parts[0].text[:500]  # Truncate long results
         return "No result"
 
 
 class A2ADiscoverTool(Tool):
     """Tool to discover and list available A2A agents.
-    
+
     Usage:
         a2a_discover(registry_url="https://agents.example.com")
     """
@@ -190,13 +190,15 @@ Arguments:
                 card = await client.get_agent_card()
                 await client.close()
 
-                discovered.append({
-                    "name": card.name,
-                    "url": registry_url,
-                    "description": card.description,
-                    "version": card.version,
-                    "skills": [{"id": s.id, "name": s.name} for s in card.skills],
-                })
+                discovered.append(
+                    {
+                        "name": card.name,
+                        "url": registry_url,
+                        "description": card.description,
+                        "version": card.version,
+                        "skills": [{"id": s.id, "name": s.name} for s in card.skills],
+                    }
+                )
             except Exception as e:
                 return ToolResult(
                     success=False,
@@ -218,12 +220,14 @@ Arguments:
                     card = await client.get_agent_card()
                     await client.close()
 
-                    discovered.append({
-                        "name": card.name,
-                        "url": url,
-                        "description": card.description,
-                        "skills": [{"id": s.id, "name": s.name} for s in card.skills],
-                    })
+                    discovered.append(
+                        {
+                            "name": card.name,
+                            "url": url,
+                            "description": card.description,
+                            "skills": [{"id": s.id, "name": s.name} for s in card.skills],
+                        }
+                    )
                 except Exception:
                     pass  # Skip unavailable agents
 
@@ -240,8 +244,8 @@ Arguments:
         for agent in discovered:
             output += f"• {agent['name']} ({agent['url']})\n"
             output += f"  {agent['description'][:80]}...\n"
-            if agent.get('skills'):
-                skills = ", ".join([s["name"] for s in agent['skills'][:3]])
+            if agent.get("skills"):
+                skills = ", ".join([s["name"] for s in agent["skills"][:3]])
                 output += f"  Skills: {skills}\n"
             output += "\n"
 

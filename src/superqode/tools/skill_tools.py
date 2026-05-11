@@ -75,11 +75,15 @@ Example:
             return await self._list_skills(loader)
         elif action == "info":
             if not name:
-                return ToolResult(success=False, output="", error="Skill name required for info action")
+                return ToolResult(
+                    success=False, output="", error="Skill name required for info action"
+                )
             return await self._skill_info(loader, name)
         elif action == "invoke":
             if not name:
-                return ToolResult(success=False, output="", error="Skill name required for invoke action")
+                return ToolResult(
+                    success=False, output="", error="Skill name required for invoke action"
+                )
             return await self._invoke_skill(loader, name, context, ctx)
         else:
             return ToolResult(success=False, output="", error=f"Unknown action: {action}")
@@ -127,7 +131,9 @@ Example:
             f"Path: {skill.path}",
             "",
             "Instructions:",
-            skill.instructions[:500] + "..." if len(skill.instructions) > 500 else skill.instructions,
+            skill.instructions[:500] + "..."
+            if len(skill.instructions) > 500
+            else skill.instructions,
         ]
 
         return ToolResult(success=True, output="\n".join(lines))
@@ -152,16 +158,20 @@ Example:
         ]
 
         if context:
-            output_lines.extend([
-                "",
-                f"## Context",
-                context,
-            ])
+            output_lines.extend(
+                [
+                    "",
+                    f"## Context",
+                    context,
+                ]
+            )
 
-        output_lines.extend([
-            "",
-            f"_(Use these instructions to complete the task)_",
-        ])
+        output_lines.extend(
+            [
+                "",
+                f"_(Use these instructions to complete the task)_",
+            ]
+        )
 
         return ToolResult(
             success=True,

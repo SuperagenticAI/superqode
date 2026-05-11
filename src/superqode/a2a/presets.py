@@ -15,6 +15,7 @@ from .workflows import A2AWorkflowEngine, WorkflowStep, WorkflowResult, Workflow
 @dataclass
 class WorkflowPreset:
     """A pre-configured workflow preset."""
+
     name: str
     description: str
     agents: List[Dict[str, str]]  # [{"url": "...", "prompt": "..."}]
@@ -28,13 +29,20 @@ QE_PRESETS = {
         description="Run complete quality engineering: unit, integration, security, lint",
         agents=[
             {"url": "", "prompt": "Run unit tests and report results", "name": "unit_tests"},
-            {"url": "", "prompt": "Run integration tests and report results", "name": "integration_tests"},
-            {"url": "", "prompt": "Run security analysis and find vulnerabilities", "name": "security_scan"},
+            {
+                "url": "",
+                "prompt": "Run integration tests and report results",
+                "name": "integration_tests",
+            },
+            {
+                "url": "",
+                "prompt": "Run security analysis and find vulnerabilities",
+                "name": "security_scan",
+            },
             {"url": "", "prompt": "Run linting and code quality checks", "name": "lint_check"},
         ],
         pattern="parallel",
     ),
-    
     "pre_commit": WorkflowPreset(
         name="Pre-commit",
         description="Quick checks before commit: lint, format, unit tests",
@@ -45,7 +53,6 @@ QE_PRESETS = {
         ],
         pattern="parallel",
     ),
-    
     "ci_pipeline": WorkflowPreset(
         name="CI Pipeline",
         description="Full CI pipeline: build, test, security, deploy check",
@@ -57,7 +64,6 @@ QE_PRESETS = {
         ],
         pattern="sequential",
     ),
-    
     "review_cycle": WorkflowPreset(
         name="Code Review",
         description="Automated code review: lint, security, style, best practices",
@@ -84,7 +90,6 @@ DEVOPS_PRESETS = {
         ],
         pattern="sequential",
     ),
-    
     "infra_check": WorkflowPreset(
         name="Infrastructure Check",
         description="Check infrastructure: security, compliance, cost",
@@ -100,14 +105,14 @@ DEVOPS_PRESETS = {
 
 class A2APresets:
     """Manage and run workflow presets.
-    
+
     Usage:
         presets = A2APresets()
-        
+
         # List available presets
         for name in presets.list_presets("qe"):
             print(name)
-        
+
         # Run a preset
         result = await presets.run("qe", "full_qe", agent_urls)
     """
@@ -117,10 +122,10 @@ class A2APresets:
 
     def list_presets(self, category: Optional[str] = None) -> List[str]:
         """List available presets.
-        
+
         Args:
             category: Filter by category ("qe" or "devops")
-            
+
         Returns:
             List of preset names
         """
@@ -145,11 +150,11 @@ class A2APresets:
         agent_configs: List[Dict[str, str]],
     ) -> WorkflowResult:
         """Run a preset with provided agent configurations.
-        
+
         Args:
             preset_name: Name of preset to run
             agent_configs: List of {"url": "...", "prompt": "..."} for each step
-            
+
         Returns:
             WorkflowResult from execution
         """
@@ -204,7 +209,7 @@ class A2APresets:
         ]
 
         for i, agent in enumerate(preset.agents):
-            lines.append(f"  {i+1}. {agent.get('name', 'unnamed')}")
+            lines.append(f"  {i + 1}. {agent.get('name', 'unnamed')}")
 
         return "\n".join(lines)
 
