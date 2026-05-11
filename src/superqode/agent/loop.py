@@ -36,6 +36,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 from ..tools.base import Tool, ToolContext, ToolRegistry, ToolResult
 from ..providers.gateway.base import GatewayInterface, Message, ToolDefinition
 from .system_prompts import SystemPromptLevel, get_system_prompt, get_job_description_prompt
+from .session_manager import SessionManager, SessionMessage
 
 
 # Module-level cache for system prompts
@@ -232,6 +233,18 @@ class AgentConfig:
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
 
+    # Plan mode - analyze without executing tools
+    plan_mode: bool = False
+
+    # Auto summarization settings
+    enable_summarization: bool = False
+    max_context_tokens: int = 8000
+
+    # Session persistence (JSONL)
+    enable_session_storage: bool = False
+    session_storage_dir: str = ".superqode/sessions"
+    session_id: Optional[str] = None
+
 
 @dataclass
 class AgentMessage:
@@ -282,6 +295,9 @@ class AgentLoop:
         on_tool_result: Optional[Callable[[str, ToolResult], None]] = None,
         on_thinking: Optional[Callable[[str], Awaitable[None]]] = None,
         parallel_tools: bool = True,  # Enable parallel tool execution
+        mcp_executor: Optional[Callable[[str, str, Dict], Awaitable[ToolResult]]] = None,  # (server_id, tool_name, args) -> ToolResult
+        mcp_tools: Optional[List[ToolDefinition]] = None,  # MCP tool definitions to include
+        include_mcp: bool = False,  # Automatically inject MCP search/execute tools
     ):
         self.gateway = gateway
         self.tools = tools
@@ -290,12 +306,32 @@ class AgentLoop:
         self.on_tool_result = on_tool_result
         self.on_thinking = on_thinking
         self.parallel_tools = parallel_tools
+        self.mcp_executor = mcp_executor
+        self._mcp_tools = mcp_tools or []
+        self.include_mcp = include_mcp
+
+        # Initialize Context Manager
+        from .context_manager import ContextManager
+        self.context_manager = ContextManager(
+            max_tokens=config.max_context_tokens,
+            model_name=config.model,
+        )
 
         # Build system prompt (cached via module-level function)
         self.system_prompt = self._build_system_prompt()
 
         # Session ID for tool context
-        self.session_id = str(uuid.uuid4())
+        self.session_id = config.session_id or str(uuid.uuid4())
+
+        # Session storage (JSONL) if enabled
+        self._session_manager: Optional[SessionManager] = None
+        if config.enable_session_storage:
+            self._session_manager = SessionManager(storage_dir=config.session_storage_dir)
+            self._session_manager.start_session(
+                session_id=self.session_id,
+                provider=config.provider,
+                model=config.model,
+            )
 
         # PERFORMANCE: Cache tool definitions at init (compute once)
         self._cached_tool_defs: List[ToolDefinition] = self._compute_tool_definitions()
@@ -329,6 +365,29 @@ class AgentLoop:
                     parameters=tool.parameters,
                 )
             )
+        
+        # Inject MCP search/execute tools if requested
+        if self.include_mcp:
+            try:
+                from ..tools.mcp_tools import get_mcp_tools
+                from ..mcp.client import get_mcp_manager
+                
+                mcp_tools = get_mcp_tools(get_mcp_manager)
+                for t in mcp_tools:
+                    # Avoid duplicates
+                    if not any(d.name == t.name for d in definitions):
+                        definitions.append(
+                            ToolDefinition(
+                                name=t.name,
+                                description=t.description,
+                                parameters=t.parameters,
+                            )
+                        )
+            except ImportError:
+                pass
+
+        # Add explicitly passed MCP tools if available
+        definitions.extend(self._mcp_tools)
         return definitions
 
     def _get_tool_definitions(self) -> List[ToolDefinition]:
@@ -366,6 +425,17 @@ class AgentLoop:
         tool = self.tools.get(name)
 
         if not tool:
+            # Check if it's an MCP tool (format: mcp_serverid_toolname)
+            if self.mcp_executor and name.startswith("mcp_"):
+                parts = name.split("_", 2)  # mcp_serverid_toolname -> ["mcp", serverid", "toolname"]
+                if len(parts) == 3:
+                    server_id = parts[1]
+                    tool_name = parts[2]
+                    try:
+                        result = await self.mcp_executor(server_id, tool_name, arguments)
+                        return result
+                    except Exception as e:
+                        return ToolResult(success=False, output="", error=f"MCP tool error: {str(e)}")
             return ToolResult(success=False, output="", error=f"Unknown tool: {name}")
 
         ctx = self._create_tool_context()
@@ -375,6 +445,45 @@ class AgentLoop:
             return result
         except Exception as e:
             return ToolResult(success=False, output="", error=f"Tool execution error: {str(e)}")
+
+    def _maybe_summarize(self, messages: List["AgentMessage"]) -> List["AgentMessage"]:
+        """Auto-summarize or prune messages if context exceeds token limit."""
+        if not self.config.enable_summarization:
+            return messages
+
+        # Use ContextManager for pruning
+        # 1. Convert AgentMessages to Dicts for ContextManager
+        msg_dicts = []
+        for m in messages:
+            msg_dicts.append({
+                "role": m.role,
+                "content": m.content,
+                "tool_calls": m.tool_calls,
+                "tool_result": m.content if m.role == "tool" else None
+            })
+            
+        # 2. Estimate tokens
+        token_count = self.context_manager.count_tokens(msg_dicts)
+        
+        if token_count <= self.config.max_context_tokens:
+            return messages
+            
+        # 3. Prune or alert
+        if self.on_thinking:
+            asyncio.create_task(self.on_thinking(f"Context management active ({token_count} tokens). Pruning history..."))
+            
+        pruned_dicts = self.context_manager.prune_history(msg_dicts)
+        
+        # 4. Convert back to AgentMessages
+        new_messages = []
+        for d in pruned_dicts:
+            new_messages.append(AgentMessage(
+                role=d["role"],
+                content=d["content"],
+                tool_calls=d.get("tool_calls")
+            ))
+            
+        return new_messages
 
     async def _execute_tools_parallel(
         self,
@@ -453,6 +562,10 @@ class AgentLoop:
         # Add user message
         messages.append(AgentMessage(role="user", content=user_message))
 
+        # Save to session storage if enabled
+        if self._session_manager:
+            self._session_manager.add_user_message(user_message)
+
         tool_calls_made = 0
         iterations = 0
 
@@ -486,9 +599,15 @@ class AgentLoop:
             is_local_provider = provider_def and provider_def.category == ProviderCategory.LOCAL
 
             is_simple_query = _is_simple_conversational_query(user_message)
-            tools_to_send = (
-                tool_defs if (tool_defs and not is_simple_query and not is_local_provider) else None
-            )
+            
+            # Plan mode: disable tools so model only analyzes/plans without executing
+            tools_to_send = None
+            if not self.config.plan_mode:
+                tools_to_send = (
+                    tool_defs if (tool_defs and not is_simple_query and not is_local_provider) else None
+                )
+            elif self.on_thinking:
+                await self.on_thinking("Plan Mode: Analyzing without executing tools...")
 
             # Call the model
             try:
@@ -577,6 +696,12 @@ class AgentLoop:
                     )
                 )
 
+                # Save to session storage
+                if self._session_manager:
+                    self._session_manager.add_assistant_message(
+                        response_content, response.tool_calls
+                    )
+
                 # Emit tool execution log
                 if self.on_thinking:
                     tool_count = len(response.tool_calls)
@@ -598,6 +723,10 @@ class AgentLoop:
                                 name=tool_name,
                             )
                         )
+                        if self._session_manager:
+                            self._session_manager.add_tool_result(
+                                tool_name, result.to_message()
+                            )
                 else:
                     # Sequential execution (single tool or parallel disabled)
                     for tool_call in response.tool_calls:
@@ -635,6 +764,11 @@ class AgentLoop:
                 # Emit iteration complete log
                 if self.on_thinking:
                     await self.on_thinking(f"Iteration {iterations} complete")
+
+                # Auto-summarize if enabled and context is too large
+                if self.config.enable_summarization:
+                    messages = self._maybe_summarize(messages)
+
             else:
                 # No tool calls - return the response content
                 if self.on_thinking:

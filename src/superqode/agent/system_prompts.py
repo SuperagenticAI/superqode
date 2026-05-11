@@ -66,6 +66,10 @@ SEARCH:
 - grep: Search for patterns in files
 - glob: Find files matching patterns
 - code_search: Semantic code search for symbols, definitions, and references
+- web_search: Search the web (uses EXA neural search if EXA_API_KEY env var set, otherwise DuckDuckGo)
+
+WEB:
+- web_fetch: Fetch and summarize web pages (convert HTML to markdown)
 
 CODEBASE ACCESS:
 You have access to the ENTIRE codebase. The project files are your context - explore them using tools instead of asking for code snippets.
@@ -117,6 +121,24 @@ When editing files:
 ### Network
 - `fetch(url, format?, timeout?)` - Fetch content from URLs. Supports HTML text extraction, JSON parsing.
 - `download(url, path, timeout?)` - Download files from URLs.
+- `web_search(query, num_results?, provider?)` - Search the web. Uses EXA neural search if EXA_API_KEY env var set, otherwise DuckDuckGo.
+- `web_fetch(url, format?)` - Fetch and summarize web pages. Converts HTML to markdown, extracts key information.
+
+### Agent Tools
+- `sub_agent(task, agent_type?, model?, provider?)` - Spawn a sub-agent to handle subtasks in parallel.
+- `task_coordinator(tasks[], strategy?)` - Coordinate multiple parallel tasks with different strategies (parallel, sequential, pipeline).
+
+### MCP Tools (if SUPERQODE_MCP_SEARCH=1)
+- `mcp_search(query, limit?, use_bm25?, server?)` - Search available MCP tools by relevance (BM25 ranking). Use to discover tools before executing.
+- `mcp_execute(server, tool, arguments)` - Execute a specific MCP tool on a specific server. Use mcp_search first to find tool names.
+
+### Plan Mode
+- When user asks to "plan", "design", or "create a plan", respond with a detailed execution plan WITHOUT executing tools
+- Structure plans with: Goal, Numbered Steps, Files to Examine, Potential Risks, Success Criteria
+
+### Interactive
+- `question(question, options?)` - Ask the user a question during execution. Use for clarification.
+- `confirm(action, details?)` - Get user confirmation before proceeding with destructive actions.
 
 ## CODEBASE ACCESS
 

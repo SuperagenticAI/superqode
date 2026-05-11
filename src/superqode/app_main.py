@@ -657,14 +657,33 @@ class SuperQodeApp(App):
             ]
 
     def _get_opencode_models(self) -> List[Dict]:
-        """Get OpenCode models list."""
+        """Get OpenCode models list - tries dynamic fetch, falls back to static."""
+        try:
+            from superqode.providers.opencode_models import get_opencode_models_with_fallback
+            
+            # This runs async - for now we still use static in sync context
+            # but could be used in async contexts
+            import asyncio
+            models = asyncio.run(get_opencode_models_with_fallback())
+            
+            # Convert to our format
+            return [
+                {"id": m["id"], "name": m.get("name", m["id"].split("/")[-1]), "context": m.get("context", 128000)}
+                for m in models if m.get("is_free", False)
+            ]
+        except Exception:
+            # Fallback to static list
+            pass
+            
         return [
-            {"id": "glm-4.7-free", "name": "GLM-4.7 (Free)", "context": 8192},
-            {"id": "grok-code", "name": "Grok Code", "context": 4096},
-            {"id": "kimi-k2.5-free", "name": "Kimi K2.5 (Free)", "context": 8192},
-            {"id": "gpt-5-nano", "name": "GPT-5 Nano", "context": 4096},
-            {"id": "minimax-m2.1-free", "name": "MiniMax M2.1 (Free)", "context": 4096},
-            {"id": "big-pickle", "name": "Big Pickle", "context": 2048},
+            {"id": "big-pickle", "name": "Big Pickle", "context": 200000},
+            {"id": "minimax-m2.5-free", "name": "MiniMax M2.5 (Free)", "context": 200000},
+            {"id": "nemotron-3-super-free", "name": "Nemotron 3 Super (Free)", "context": 1000000},
+            {"id": "gpt-5-nano", "name": "GPT-5 Nano", "context": 400000},
+            {"id": "hy3-preview-free", "name": "HY3 Preview (Free)", "context": 128000},
+            {"id": "ling-2.6-flash-free", "name": "Ling 2.6 Flash (Free)", "context": 128000},
+            {"id": "trinity-large-preview-free", "name": "Trinity Large (Free)", "context": 128000},
+            {"id": "qwen3.6-plus-free", "name": "Qwen 3.6 Plus (Free)", "context": 128000},
         ]
 
     @property
@@ -841,32 +860,31 @@ class SuperQodeApp(App):
         # OpenCode free models from `opencode models` command
         self._opencode_models = [
             {
-                "id": "opencode/glm-4.7-free",
-                "name": "GLM 4.7",
+                "id": "opencode/big-pickle",
+                "name": "Big Pickle",
                 "free": True,
                 "recommended": True,
-                "desc": "Zhipu AI - Great for coding",
+                "desc": "OpenCode Zen - Best overall coding",
             },
             {
-                "id": "opencode/grok-code",
-                "name": "Grok Code",
+                "id": "opencode/minimax-m2.5-free",
+                "name": "MiniMax M2.5",
                 "free": True,
                 "recommended": True,
-                "desc": "xAI - Fast coding model",
+                "desc": "MiniMax - Powerful free model",
+            },
+            {
+                "id": "opencode/nemotron-3-super-free",
+                "name": "Nemotron 3 Super",
+                "free": True,
+                "recommended": True,
+                "desc": "NVIDIA - 1M context window",
             },
             {
                 "id": "opencode/kimi-k2.5-free",
                 "name": "Kimi K2.5",
                 "free": True,
-                "recommended": True,
                 "desc": "Moonshot AI - K2.5 free tier",
-            },
-            {
-                "id": "opencode/minimax-m2.1-free",
-                "name": "MiniMax M2.1",
-                "free": True,
-                "recommended": True,
-                "desc": "MiniMax - Powerful free model",
             },
             {
                 "id": "opencode/gpt-5-nano",
@@ -875,10 +893,22 @@ class SuperQodeApp(App):
                 "desc": "OpenAI - Lightweight model",
             },
             {
-                "id": "opencode/big-pickle",
-                "name": "Big Pickle",
+                "id": "opencode/qwen3.6-plus-free",
+                "name": "Qwen 3.6 Plus",
                 "free": True,
-                "desc": "OpenCode - Experimental",
+                "desc": "Alibaba - Great multilingual",
+            },
+            {
+                "id": "opencode/hy3-preview-free",
+                "name": "HY3 Preview",
+                "free": True,
+                "desc": "New coding model",
+            },
+            {
+                "id": "opencode/trinity-large-preview-free",
+                "name": "Trinity Large",
+                "free": True,
+                "desc": "New reasoning model",
             },
         ]
 
@@ -1631,6 +1661,9 @@ class SuperQodeApp(App):
             elif getattr(self, "_awaiting_byok_model", False):
                 # Keyboard navigation disabled for BYOK model selection
                 # Users must enter a number to select a model
+                # Allow R to refresh
+                if event.key == "r":
+                    self.action_refresh_byok_models()
                 pass
 
             elif getattr(self, "_awaiting_byok_provider", False):
@@ -1642,6 +1675,8 @@ class SuperQodeApp(App):
                     self.action_navigate_provider_down()
                 elif event.key == "enter":
                     self.action_select_highlighted_provider()
+                elif event.key == "r":
+                    self.action_refresh_byok_models()
 
             elif getattr(self, "_awaiting_connect_type", False):
                 event.stop()
@@ -1682,6 +1717,8 @@ class SuperQodeApp(App):
                     self.action_navigate_opencode_model_down()
                 elif event.key == "enter":
                     self.action_select_highlighted_opencode_model()
+                elif event.key == "r":
+                    self.action_refresh_opencode_models()
 
             if handled:
                 # Ensure input stays focused after navigation
@@ -2368,6 +2405,101 @@ class SuperQodeApp(App):
             # _connect_agent is decorated with @work, so calling it directly
             # returns a Worker that will run the async method
             self._connect_agent("opencode", model_id)
+
+    def action_refresh_opencode_models(self):
+        """Refresh OpenCode models from CLI."""
+        if not getattr(self, "_awaiting_model_selection", False):
+            return
+
+        if self.current_agent != "opencode":
+            return
+
+        # Clear cache and refresh models
+        try:
+            from superqode.providers.opencode_models import clear_cache
+            
+            clear_cache()
+            # Re-fetch models
+            self._opencode_models = None
+            models = self.opencode_models
+            
+            # Show updated list
+            log = self.query_one("#log", ConversationLog)
+            agent = getattr(self, "_opencode_agent_data", None)
+            if not agent:
+                agent_list = getattr(self, "_acp_agent_list", [])
+                for agent_id, agent_data in agent_list:
+                    if agent_id == "opencode":
+                        agent = agent_data
+                        break
+            if not agent:
+                agent = {"name": "OpenCode", "short_name": "opencode"}
+            
+            # Reset highlight index to 0
+            self._opencode_highlighted_model_index = 0
+            
+            # Show message
+            t = Text()
+            t.append("\n  🔄 ", style=THEME["success"])
+            t.append("Refreshing models from OpenCode...", style=THEME["text"])
+            log.write(t)
+            
+            # Then show the model list
+            self.set_timer(0.5, lambda: self._show_opencode_models_selection(agent, log))
+            
+        except Exception as e:
+            log = self.query_one("#log", ConversationLog)
+            t = Text()
+            t.append(f"\n  ⚠️  Error refreshing: {str(e)}", style=THEME["error"])
+            log.write(t)
+
+    def action_refresh_byok_models(self):
+        """Refresh BYOK providers/models from models.dev API."""
+        if not (getattr(self, "_awaiting_byok_provider", False) or getattr(self, "_awaiting_byok_model", False)):
+            return
+
+        try:
+            from superqode.providers.models_dev import get_models_dev
+
+            client = get_models_dev()
+
+            t = Text()
+            t.append("\n  🔄 ", style=THEME["success"])
+            t.append("Refreshing models from models.dev...", style=THEME["text"])
+
+            log = self.query_one("#log", ConversationLog)
+            log.write(t)
+
+            def on_refresh_complete(success: bool):
+                log = self.query_one("#log", ConversationLog)
+                if success:
+                    t = Text()
+                    t.append("  ✓ ", style=THEME["success"])
+                    t.append("Models refreshed successfully!", style=THEME["text"])
+                    log.write(t)
+                else:
+                    t = Text()
+                    t.append("  ⚠️ ", style=THEME["error"])
+                    t.append("Failed to refresh. Using cached models.", style=THEME["muted"])
+                    log.write(t)
+
+                # Re-show the provider picker
+                self.set_timer(0.3, lambda: self._show_connect_picker(log, clear_log=True))
+
+            # Trigger async refresh - it will call on_refresh_complete when done
+            import asyncio
+
+            async def do_refresh():
+                success = await client.load(force=True)
+                self.call_later(lambda: on_refresh_complete(success))
+
+            asyncio.create_task(do_refresh())
+
+        except Exception as e:
+            log = self.query_one("#log", ConversationLog)
+            t = Text()
+            t.append(f"\n  ⚠️  Error refreshing: {str(e)}", style=THEME["error"])
+            log.write(t)
 
     def _scroll_to_highlighted_item(
         self, log: ConversationLog, highlighted_idx: int, total_items: int
@@ -3092,8 +3224,15 @@ class SuperQodeApp(App):
         log = self.query_one("#log", ConversationLog)
 
         # Check for commands FIRST (before selection handlers) so :home, :back, :cancel work
+        # Supports both : (vim-style) and / prefix
+        command_prefix = None
         if text.startswith(":"):
-            cmd = text[1:].strip().lower()
+            command_prefix = ":"
+        elif text.startswith("/"):
+            command_prefix = "/"
+
+        if command_prefix:
+            cmd = text[len(command_prefix):].strip().lower()
             # Handle navigation commands during selection
             if cmd in ("home", "back", "cancel") and (
                 getattr(self, "_awaiting_connect_type", False)
@@ -3136,7 +3275,7 @@ class SuperQodeApp(App):
             return
 
         # Shell command
-        if text.startswith(">"):
+        if text.startswith(">") or text.startswith("!"):
             cmd = text[1:].strip()
             if cmd:
                 self._run_shell(cmd, log)
@@ -3361,6 +3500,8 @@ class SuperQodeApp(App):
             self._handle_superqe_command(args, log)
         elif c == "handoff":
             self._handoff(args, log)
+        elif c == "a2a":
+            await self._a2a_cmd(args, log)
         elif c == "context":
             self._show_context(log)
         elif c == "files":
@@ -3723,7 +3864,7 @@ default:
   agent: "opencode"
   agent_config:
     provider: "opencode"
-    model: "glm-4.7-free"
+    model: "minimax-m2.5-free"
 
 # =============================================================================
 # TEAM ROLES - Enable the ones you need
@@ -3739,7 +3880,7 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "glm-4.7-free"
+          model: "minimax-m2.5-free"
         enabled: false  # Set to true to enable
         job_description: |
           You are a Senior Full-Stack Developer with expertise in modern web technologies.
@@ -3762,7 +3903,7 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "grok-code"
+          model: "nemotron-3-super-free"
         enabled: false  # Set to true to enable
         job_description: |
           You are a Senior Frontend Developer specializing in modern web UIs.
@@ -3779,7 +3920,7 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "minimax-m2.1-free"
+          model: "minimax-m2.5-free"
         enabled: false  # Set to true to enable
         job_description: |
           You are a Senior Backend Developer specializing in APIs and services.
@@ -3800,7 +3941,7 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "grok-code"
+          model: "nemotron-3-super-free"
         enabled: false  # Set to true to enable
         job_description: |
           You are a Senior QA Engineer with expertise in all testing types.
@@ -4199,6 +4340,38 @@ team:
         """Send message to provider session with streaming output."""
         from time import monotonic
         import traceback
+
+        # Handle session commands
+        if text.strip().startswith("/sessions"):
+            sessions = self._pure_mode.list_sessions() if hasattr(self, "_pure_mode") else []
+            if not sessions:
+                log.add_info("No sessions found.")
+            else:
+                for s in sessions:
+                    log.add_info(f"  {s['session_id']} | {s['model'] or 'N/A'} | {s['message_count']} msgs")
+            return
+        elif text.strip().startswith("/resume"):
+            parts = text.strip().split()
+            if len(parts) < 2:
+                log.add_info("Usage: /resume <session_id>")
+                return
+            session_id = parts[1]
+            if hasattr(self, "_pure_mode"):
+                messages = self._pure_mode.resume_session(session_id)
+                if messages:
+                    log.add_info(f"Resumed session {session_id[:8]}")
+                    for m in messages:
+                        role = m.get("role", "?").upper()
+                        content = m.get("content", "")[:100]
+                        log.add_info(f"[{role}] {content}...")
+                else:
+                    log.add_info(f"Session {session_id} not found.")
+            return
+        elif text.strip().startswith("/compact"):
+            if hasattr(self, "_pure_mode") and hasattr(self._pure_mode, "compact"):
+                self._pure_mode.compact()
+                log.add_info("Context compacted.")
+            return
 
         # Prepend file context if available (from @file references)
         file_context = getattr(self, "_current_file_context", "")
@@ -10219,19 +10392,24 @@ team:
                 elif resolved.model:
                     model_name = resolved.model
                 else:
-                    model_name = "glm-4.7-free"
+                    model_name = "minimax-m2.5-free"
 
                 # Map model names
                 model_mapping = {
-                    "glm-4.7": "glm-4.7-free",
-                    "glm-4.7-free": "glm-4.7-free",
-                    "grok-code": "grok-code",
+                    "glm-4.7": "minimax-m2.5-free",
+                    "glm-4.7-free": "minimax-m2.5-free",
+                    "grok-code": "minimax-m2.5-free",
                     "kimi-k2.5": "kimi-k2.5-free",
                     "kimi-k2.5-free": "kimi-k2.5-free",
-                    "minimax-m2.1": "minimax-m2.1-free",
-                    "minimax-m2.1-free": "minimax-m2.1-free",
+                    "minimax-m2.1": "minimax-m2.5-free",
+                    "minimax-m2.1-free": "minimax-m2.5-free",
+                    "minimax-m2.5": "minimax-m2.5-free",
+                    "minimax-m2.5-free": "minimax-m2.5-free",
                     "gpt-5-nano": "gpt-5-nano",
                     "big-pickle": "big-pickle",
+                    "nemotron-3-super-free": "nemotron-3-super-free",
+                    "trinity-large-preview-free": "trinity-large-preview-free",
+                    "qwen3.6-plus-free": "qwen3.6-plus-free",
                 }
                 model_name = model_mapping.get(model_name, model_name)
 
@@ -12352,6 +12530,9 @@ team:
         t.append(f"    Or: ", style=THEME["dim"])
         t.append(f":connect byok <provider>/<model>", style=THEME["success"])
         t.append(" for direct connect\n", style=THEME["text"])
+        t.append(f"    ", style=THEME["dim"])
+        t.append(f"R", style=f"bold {THEME['success']}")
+        t.append(" to refresh models from API\n", style=THEME["dim"])
         t.append(f"    Use ", style=THEME["dim"])
         t.append(f":back", style=THEME["cyan"])
         t.append(" or ", style=THEME["dim"])
@@ -15244,10 +15425,12 @@ team:
         # Show how to select - ARROW KEYS OR TYPE NUMBER
         t.append(f"  │  ⌨️  ", style=color)
         t.append("↑↓", style=f"bold {THEME['cyan']}")
-        t.append(" Arrow keys to navigate  ", style=THEME["muted"])
+        t.append(" Navigate  ", style=THEME["muted"])
         t.append("Enter", style=f"bold {THEME['cyan']}")
-        t.append(" to select", style=THEME["muted"])
-        t.append(f"{'':>8}│\n", style=color)
+        t.append(" select  ", style=THEME["muted"])
+        t.append("R", style=f"bold {THEME['cyan']}")
+        t.append(" refresh", style=THEME["muted"])
+        t.append(f"{'':>16}│\n", style=color)
         t.append(f"  │      Or type ", style=color)
         t.append("1", style=f"bold {THEME['cyan']}")
         t.append("-", style=THEME["muted"])
@@ -15878,6 +16061,23 @@ team:
 
         mode, role = target.split(".", 1)
         self._set_role(mode, role, log)
+
+    async def _a2a_cmd(self, args: str, log: ConversationLog):
+        """Handle :a2a commands."""
+        parts = args.split(maxsplit=1)
+        subcommand = parts[0] if parts else ""
+        subargs = parts[1] if len(parts) > 1 else ""
+
+        # Lazy load A2A commands
+        if not hasattr(self, "_a2a_commands"):
+            try:
+                from .commands.a2a import create_a2a_commands
+                self._a2a_commands = create_a2a_commands()
+            except ImportError:
+                log.add_error("A2A not installed. Run: pip install superqode[a2a]")
+                return
+
+        await self._a2a_commands.handle_command(subcommand, subargs, log)
 
     def _show_context(self, log: ConversationLog):
         t = Text()

@@ -17,6 +17,7 @@ from rich.text import Text
 
 from .agent.loop import AgentLoop, AgentConfig, AgentResponse
 from .agent.system_prompts import SystemPromptLevel
+from .agent.session_manager import SessionManager, SessionMetadata
 from .tools.base import ToolRegistry, ToolResult
 from .providers.gateway.litellm_gateway import LiteLLMGateway
 from .providers.registry import PROVIDERS, ProviderTier, ProviderCategory
@@ -44,8 +45,9 @@ class PureMode:
     def __init__(self):
         self.session = PureSession()
         self.gateway = LiteLLMGateway()
-        self.tools = ToolRegistry.default()
+        self.tools = ToolRegistry.full()
         self._agent: Optional[AgentLoop] = None
+        self._session_manager: Optional[SessionManager] = None
 
         # Callbacks for UI updates
         self.on_tool_call: Optional[Callable[[str, Dict], None]] = None
@@ -121,7 +123,12 @@ class PureMode:
             system_prompt_level=system_level,
             working_directory=self.session.working_directory,
             job_description=job_description,
+            enable_session_storage=True,
+            session_storage_dir=".superqode/sessions",
         )
+
+        # Initialize session manager
+        self._session_manager = SessionManager(storage_dir=".superqode/sessions")
 
         self._agent = AgentLoop(
             gateway=self.gateway,
@@ -201,6 +208,60 @@ class PureMode:
             },
             "tools": [t.name for t in self.tools.list()],
         }
+
+    # Session management methods
+    def list_sessions(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """List recent sessions."""
+        if not self._session_manager:
+            self._session_manager = SessionManager(storage_dir=".superqode/sessions")
+        sessions = self._session_manager.list_all_sessions()
+        return [
+            {
+                "session_id": s.session_id[:8],
+                "provider": s.provider,
+                "model": s.model,
+                "message_count": s.message_count,
+                "updated_at": s.updated_at,
+            }
+            for s in sessions[:limit]
+        ]
+
+    def resume_session(self, session_id: str) -> Optional[List[Dict[str, Any]]]:
+        """Resume a session by ID."""
+        if not self._session_manager:
+            self._session_manager = SessionManager(storage_dir=".superqode/sessions")
+
+        metadata = self._session_manager.get_session_info(session_id)
+        if not metadata:
+            return None
+
+        # Start session and get messages
+        self._session_manager.start_session(session_id=session_id)
+        messages = self._session_manager.get_messages()
+
+        # Reconnect with same settings
+        self.connect(
+            provider=metadata.provider,
+            model=metadata.model,
+            system_level=self.session.system_level,
+            working_directory=self.session.working_directory,
+        )
+
+        # Return messages for display
+        return [
+            {
+                "role": m.role,
+                "content": m.content,
+                "tool_name": getattr(m, "tool_name", None),
+            }
+            for m in messages
+        ]
+
+    def get_current_session_id(self) -> Optional[str]:
+        """Get current session ID."""
+        if self._agent:
+            return self._agent.session_id
+        return None
 
 
 def render_provider_picker(console: Console) -> tuple[str, str]:

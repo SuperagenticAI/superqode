@@ -6,6 +6,7 @@ __pycache__/
 # Root dotfiles and dot-directories (except .github)
 .claude/
 .cursor/
+.agents/
 .cursorrules
 CLAUDE.md
 AGENTS.md
@@ -198,3 +199,5 @@ temp_setup.py
 # Protection layer
 src/superqode_cli/_protection.py
 release_builds/
+
+reference/

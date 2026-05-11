@@ -228,6 +228,11 @@ Useful for finding documentation, examples, recent information, etc."""
                     "enum": ["auto", "fast", "deep"],
                     "description": "Search type: fast (quick results), deep (more comprehensive)",
                 },
+                "provider": {
+                    "type": "string",
+                    "enum": ["auto", "exa", "duckduckgo"],
+                    "description": "Search provider: auto (EXA if key available, else DuckDuckGo), exa (neural search), duckduckgo (fallback)",
+                },
             },
             "required": ["query"],
         }
@@ -236,12 +241,28 @@ Useful for finding documentation, examples, recent information, etc."""
         query = args.get("query", "")
         num_results = min(args.get("num_results", 5), self.MAX_RESULTS)
         search_type = args.get("search_type", "auto")
+        provider = args.get("provider", "auto")
 
         if not query:
             return ToolResult(success=False, output="", error="Search query is required")
 
         try:
-            # Try DuckDuckGo first (no API key needed)
+            # Determine which provider to use
+            use_exa = False
+            if provider == "exa":
+                use_exa = True
+            elif provider == "auto":
+                # Check for EXA API key
+                import os
+                use_exa = bool(os.environ.get("EXA_API_KEY") or os.environ.get("EXA_KEY"))
+
+            # Try EXA first if enabled (neural search is more powerful)
+            if use_exa:
+                results = await self._search_exa(query, num_results)
+                if results:
+                    return self._format_results(query, results, "exa")
+
+            # Fall back to DuckDuckGo
             results = await self._search_duckduckgo(query, num_results)
 
             if not results:
@@ -251,30 +272,32 @@ Useful for finding documentation, examples, recent information, etc."""
                     metadata={"query": query, "count": 0},
                 )
 
-            # Format results
-            output_lines = [f"Search results for: {query}\n"]
-
-            for i, result in enumerate(results, 1):
-                output_lines.append(f"{i}. {result.title}")
-                output_lines.append(f"   URL: {result.url}")
-                if result.snippet:
-                    # Truncate long snippets
-                    snippet = (
-                        result.snippet[:200] + "..."
-                        if len(result.snippet) > 200
-                        else result.snippet
-                    )
-                    output_lines.append(f"   {snippet}")
-                output_lines.append("")
-
-            return ToolResult(
-                success=True,
-                output="\n".join(output_lines),
-                metadata={"query": query, "count": len(results), "search_type": search_type},
-            )
+            return self._format_results(query, results, "duckduckgo")
 
         except Exception as e:
             return ToolResult(success=False, output="", error=f"Search failed: {str(e)}")
+
+    def _format_results(self, query: str, results: List[SearchResult], provider: str) -> ToolResult:
+        """Format search results into output string."""
+        output_lines = [f"Search results for: {query} (via {provider})\n"]
+
+        for i, result in enumerate(results, 1):
+            output_lines.append(f"{i}. {result.title}")
+            output_lines.append(f"   URL: {result.url}")
+            if result.snippet:
+                snippet = (
+                    result.snippet[:200] + "..."
+                    if len(result.snippet) > 200
+                    else result.snippet
+                )
+                output_lines.append(f"   {snippet}")
+            output_lines.append("")
+
+        return ToolResult(
+            success=True,
+            output="\n".join(output_lines),
+            metadata={"query": query, "count": len(results), "provider": provider},
+        )
 
     async def _search_duckduckgo(self, query: str, num_results: int) -> List[SearchResult]:
         """Search using DuckDuckGo HTML."""
@@ -381,6 +404,42 @@ Useful for finding documentation, examples, recent information, etc."""
                 )
 
         return results
+
+    async def _search_exa(self, query: str, num_results: int) -> List[SearchResult]:
+        """Search using EXA neural search API."""
+        import os
+
+        api_key = os.environ.get("EXA_API_KEY") or os.environ.get("EXA_KEY")
+        if not api_key:
+            return []
+
+        try:
+            # Try to import exa-py
+            try:
+                from exa import Exa
+            except ImportError:
+                return []
+
+            exa = Exa(api_key=api_key)
+            search = exa.search(query, num_results=num_results, highlights=True)
+
+            results = []
+            for r in search.results:
+                # EXA returns highlighted snippets with <mark> tags
+                snippet = r.highlights[0] if r.highlights else (r.text or "")[:200]
+                # Clean EXA highlight tags
+                snippet = re.sub(r'<[^>]+>', '', snippet)
+                results.append(
+                    SearchResult(
+                        title=r.title or "",
+                        url=r.url,
+                        snippet=snippet,
+                    )
+                )
+            return results
+
+        except Exception:
+            return []
 
     def _clean_html_entities(self, text: str) -> str:
         """Clean HTML entities from text."""

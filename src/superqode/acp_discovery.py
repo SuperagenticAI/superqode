@@ -4,21 +4,34 @@ SuperQode ACP Agent Discovery - Auto-Discover Available Agents.
 Automatically discovers ACP-compatible agents installed on the system
 and provides a unified interface for connecting to them.
 
-Supported Agents (14 Official ACP Agents):
+Supported Agents (27+ ACP Agents from Registry):
+- OpenCode (opencode) - Open-source coding agent
 - Gemini CLI (gemini) - Google's reference ACP implementation
-- Claude Code (claude-code-acp) - Anthropic's Claude via Zed SDK adapter
-- Codex (codex-acp) - OpenAI's code generation agent
+- Claude Code (claude) - Anthropic's official CLI coding agent
+- Codex (codex) - OpenAI's code generation agent
 - JetBrains Junie (junie) - JetBrains' AI agent for IDE ecosystem
-- Goose (goose acp) - Square's open-source agent
-- Kimi CLI (kimi) - CLI AI agent with ACP support
-- OpenCode (opencode acp) - Open-source coding agent
+- Goose (goose) - Block's developer agent with MCP support
+- Kimi CLI (kimi) - Moonshot AI's CLI agent
 - Stakpak (stakpak) - ACP-compatible code assistance agent
 - VT Code (vtcode) - Versatile coding agent
-- Augment Code (auggie) - Agentic capabilities for code analysis
+- Augment Code (auggie) - AI-powered coding with deep codebase understanding
 - Code Assistant (code-assistant) - AI coding assistant in Rust
 - cagent (cagent) - Multi-agent runtime orchestration
 - fast-agent (fast-agent) - Sophisticated agent workflows
 - LLMling-Agent (llmling-agent) - LLM-powered agent framework
+- Amp (amp) - AI coding agent by Ampcode
+- Cline (cline) - Autonomous coding agent CLI
+- Cursor (cursor) - Cursor's AI coding agent
+- Factory Droid (factory) - AI coding agent powered by Factory AI
+- Dirac (dirac) - Cost-optimized coding with parallel edits
+- DeepAgents (deepagents) - LangChain-powered agent
+- Codebuddy (codebuddy) - Tencent Cloud's intelligent coding tool
+- Cortex Code (cortex) - Snowflake's Cortex Code
+- Agoragentic (agoragentic) - Agent marketplace with 174+ AI capabilities
+- Autohand Code (autohand) - AI coding agent
+- Corust (corust) - Rust partner agent
+- crow-cli (crow) - Minimal ACP Native Coding Agent
+- DimCode (dimcode) - Leading models at your command
 
 Features:
 - Auto-detection of installed agents
@@ -696,7 +709,17 @@ class ACPDiscovery:
                 AgentModel(id="claude-3-5-sonnet", name="Claude 3.5 Sonnet", is_free=True),
                 AgentModel(id="gpt-4o", name="GPT-4o", is_free=True),
                 AgentModel(id="gemini-2.5-pro", name="Gemini 2.5 Pro", is_free=True),
-                AgentModel(id="kimi-k2.5-free", name="Kimi K2.5 (Free)", is_free=True),
+                # OpenCode Zen free models
+                AgentModel(id="big-pickle", name="Big Pickle (Free)", is_free=True, context_window=200000),
+                AgentModel(id="minimax-m2.5-free", name="MiniMax M2.5 (Free)", is_free=True, context_window=200000),
+                AgentModel(id="nemotron-3-super-free", name="Nemotron 3 Super (Free)", is_free=True, context_window=1000000),
+                AgentModel(id="gpt-5-nano", name="GPT-5 Nano (Free)", is_free=True, context_window=400000),
+                AgentModel(id="hy3-preview-free", name="HY3 Preview (Free)", is_free=True, context_window=128000),
+                AgentModel(id="ling-2.6-flash-free", name="Ling 2.6 Flash (Free)", is_free=True, context_window=128000),
+                AgentModel(id="trinity-large-preview-free", name="Trinity Large (Free)", is_free=True, context_window=128000),
+                AgentModel(id="qwen3.6-plus-free", name="Qwen 3.6 Plus (Free)", is_free=True, context_window=128000),
+                # Legacy - keep for backward compatibility but redirect
+                AgentModel(id="kimi-k2.5-free", name="Kimi K2.5 (Free) [Legacy]", is_free=True, context_window=256000),
             ],
             # Stakpak
             "stakpak": [

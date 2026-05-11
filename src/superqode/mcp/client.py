@@ -666,7 +666,7 @@ class MCPClientManager:
                     return (server_id, tool)
         return None
 
-    async def call_tool(
+    async def execute_tool(
         self,
         server_id: str,
         tool_name: str,
@@ -718,9 +718,17 @@ class MCPClientManager:
                 else:
                     content.append({"type": "unknown", "data": str(item)})
 
+            is_error = getattr(result, "isError", False) or getattr(result, "is_error", False)
+            
+            # Check if content contains error messages
+            if not is_error and content:
+                first_text = content[0].get("text", "") if isinstance(content[0], dict) else ""
+                if "Access denied" in first_text or "Error" in first_text:
+                    is_error = True
+                    
             return MCPToolResult(
                 content=content,
-                is_error=getattr(result, "isError", False),
+                is_error=is_error,
                 structured_content=getattr(result, "structuredContent", None),
             )
         except Exception as e:

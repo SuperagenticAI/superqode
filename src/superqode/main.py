@@ -805,7 +805,7 @@ default:
   agent: "opencode"
   agent_config:
     provider: "opencode"
-    model: "glm-4.7-free"
+    model: "minimax-m2.5-free"
 
 # =============================================================================
 # TEAM ROLES - All enabled by default
@@ -821,7 +821,7 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "glm-4.7-free"
+          model: "minimax-m2.5-free"
         enabled: false
         job_description: |
           You are a Senior Full-Stack Developer.
@@ -838,7 +838,7 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "grok-code"
+          model: "nemotron-3-super-free"
         enabled: false
         job_description: |
           You are a Senior QE Engineer.
@@ -863,8 +863,9 @@ team:
           Ensure security, monitoring, and deployment best practices.
 
 # =============================================================================
-# Available free models: glm-4.7-free, grok-code, kimi-k2.5-free,
-#                        gpt-5-nano, minimax-m2.1-free, big-pickle
+# Available free models: big-pickle, minimax-m2.5-free, nemotron-3-super-free,
+#                        gpt-5-nano, hy3-preview-free, ling-2.6-flash-free,
+#                        trinity-large-preview-free, qwen3.6-plus-free
 # =============================================================================
 """
 

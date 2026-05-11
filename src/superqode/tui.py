@@ -20,9 +20,13 @@ import random
 import shutil
 import textwrap
 import threading
+import subprocess
 from pathlib import Path
 from typing import Optional, Callable, List, Dict, Any
 from dataclasses import dataclass
+
+from .widgets.slash_commands import get_command_handler, SlashCommand
+from .danger import analyze_command, DangerLevel, DANGER_STYLES
 
 from rich.console import Console, Group
 from rich.panel import Panel
@@ -153,7 +157,7 @@ def load_team_config() -> TeamConfig:
                         agent_config = getattr(role_config, "agent_config", None)
                         if agent_config:
                             if not model:
-                                model = getattr(agent_config, "model", "glm-4.7")
+                                model = getattr(agent_config, "model", "minimax-m2.5-free")
                             if not provider:
                                 provider = getattr(agent_config, "provider", "")
 
@@ -162,7 +166,7 @@ def load_team_config() -> TeamConfig:
                                 mode=mode_name,
                                 role=role_name,
                                 description=getattr(role_config, "description", ""),
-                                model=model or "glm-4.7",
+                                model=model or "minimax-m2.5-free",
                                 provider=provider or "opencode",
                                 coding_agent=coding_agent,
                                 enabled=enabled,
@@ -183,7 +187,7 @@ def load_team_config() -> TeamConfig:
                     "dev",
                     "fullstack",
                     "Full-stack development",
-                    "glm-4.7",
+                    "minimax-m2.5-free",
                     "opencode",
                     "opencode",
                     True,
@@ -195,7 +199,7 @@ def load_team_config() -> TeamConfig:
                     "qe",
                     "fullstack",
                     "Full-stack QE",
-                    "grok-code",
+                    "nemotron-3-super-free",
                     "opencode",
                     "opencode",
                     True,
@@ -207,7 +211,7 @@ def load_team_config() -> TeamConfig:
                     "devops",
                     "fullstack",
                     "Full-stack DevOps",
-                    "glm-4.7",
+                    "minimax-m2.5-free",
                     "opencode",
                     "opencode",
                     True,
@@ -1118,6 +1122,109 @@ class SuperQodeUI:
     def clear(self):
         """Clear the console."""
         self.console.clear()
+
+    def _run_shell(self, cmd: str):
+        """Run a shell command with danger analysis."""
+        project_dir = str(Path.cwd())
+        level, reason, target = analyze_command(project_dir, project_dir, cmd)
+
+        if level >= DangerLevel.DANGEROUS:
+            style = DANGER_STYLES[level]
+            t = Text()
+            t.append(f"\n  {style['icon']} ", style=f"bold {style['color']}")
+            t.append(f"{style['label']}: ", style=f"bold {style['color']}")
+            t.append(f"{reason}\n", style=style["color"])
+            if target:
+                t.append(f"  📁 Target: {target}\n", style="dim")
+            self.console.print(t)
+
+            if not Prompt.ask("  [bold]Continue anyway?[/bold]", choices=["y", "n"], default="n") == "y":
+                self.print_info("Command cancelled.")
+                return
+
+        with self.show_thinking(f"Running: {cmd}"):
+            try:
+                result = subprocess.run(
+                    cmd, shell=True, capture_output=True, text=True, cwd=os.getcwd(), timeout=60
+                )
+                output = (result.stdout + result.stderr).strip()
+                if output:
+                    self.console.print(Panel(output, title="Shell Output", border_style="dim"))
+                if result.returncode != 0:
+                    self.print_error(f"Command failed with exit code {result.returncode}")
+                else:
+                    self.print_success("Command completed.")
+            except subprocess.TimeoutExpired:
+                self.print_error("Command timed out after 60s")
+            except Exception as e:
+                self.print_error(f"Error: {str(e)}")
+
+    def handle_input(self, text: str) -> bool:
+        """Handle user input, processing commands or shell requests.
+        
+        Returns:
+            True if input was handled as a command/shell, False if it should go to agent.
+        """
+        if not text:
+            return True
+
+        handler = get_command_handler()
+        command, args = handler.parse_input(text)
+
+        if command:
+            if command.name == "shell":
+                self._run_shell(args)
+                return True
+            
+            # Execute standard slash/colon command
+            if command.name == "help":
+                self.print_roles()
+            elif command.name in ("exit", "quit", "q"):
+                self.print_exit()
+                sys.exit(0)
+            elif command.name == "clear":
+                self.clear()
+            elif command.name == "fork":
+                try:
+                    from .agent.session_manager import create_session_manager
+                    sm = create_session_manager()
+                    new_id = sm.fork_current_session(args.strip() or None)
+                    self.print_success(f"Session forked! New session: [bold]{new_id}[/bold]")
+                except Exception as e:
+                    self.print_error(f"Fork failed: {str(e)}")
+            elif command.name == "sessions":
+                try:
+                    from .agent.session_manager import create_session_manager
+                    sm = create_session_manager()
+                    sessions = sm.list_all_sessions()
+                    if not sessions:
+                        self.print_info("No sessions found.")
+                    else:
+                        table = Table(title="Recent Sessions", border_style="dim")
+                        table.add_column("ID", style="cyan")
+                        table.add_column("Model", style="green")
+                        table.add_column("Msgs", justify="right")
+                        table.add_column("Updated", style="dim")
+                        
+                        for s in sessions[:10]:
+                            table.add_row(
+                                s.session_id,
+                                s.model or "N/A",
+                                str(s.message_count),
+                                s.updated_at.split("T")[0]
+                            )
+                        self.console.print(table)
+                except Exception as e:
+                    self.print_error(f"Failed to list sessions: {str(e)}")
+            elif command.name == "compact":
+                self.print_info("Context compaction (summarization) enabled for next turn.")
+                # This would be handled in the agent loop if we had direct access here
+                return True
+            else:
+                self.print_info(f"Command '{command.name}' recognized but not yet integrated in TUI mode.")
+            return True
+
+        return False
 
     def rule(self, title: str = "", style: str = "dim"):
         """Print a horizontal rule."""

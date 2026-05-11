@@ -268,6 +268,34 @@ class ToolRegistry:
         registry.register(QuestionTool())
         registry.register(ConfirmTool())
 
+        # MCP tools (opt-in via SUPERQODE_MCP_SEARCH env var)
+        import os
+
+        if os.environ.get("SUPERQODE_MCP_SEARCH", "").lower() in ("1", "true", "yes"):
+            from .mcp_tools import MCPSearchTool, MCPExecuteTool
+
+            registry.register(MCPSearchTool())
+            registry.register(MCPExecuteTool())
+
+        # Skill tools (always available, loads from .agents/skills/)
+        from .skill_tools import SkillTool, ReadSkillTool
+
+        registry.register(SkillTool())
+        registry.register(ReadSkillTool())
+
+        # Compact tool (manual context compression)
+        from .compact_tool import CompactTool
+
+        registry.register(CompactTool())
+
+        # A2A tools (call external A2A agents)
+        try:
+            from ..a2a.tools import A2ACallTool, A2ADiscoverTool
+            registry.register(A2ACallTool())
+            registry.register(A2ADiscoverTool())
+        except ImportError:
+            pass  # A2A extras not installed
+
         return registry
 
     @classmethod
