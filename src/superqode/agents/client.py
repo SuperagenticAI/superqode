@@ -44,7 +44,7 @@ from acp.schema import (
     EnvVariable,
     ImageContentBlock,
     Implementation,
-    KillTerminalCommandResponse,
+    KillTerminalResponse,
     PermissionOption,
     ReadTextFileResponse,
     ReleaseTerminalResponse,
@@ -120,7 +120,7 @@ class SuperQodeACPClient(Client):
 
     async def kill_terminal(
         self, session_id: str, signal: int | None = None, **kwargs: Any
-    ) -> KillTerminalCommandResponse:
+    ) -> KillTerminalResponse:
         """Handle terminal kill requests."""
         raise RequestError.method_not_found("terminal/kill")
 

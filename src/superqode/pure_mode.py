@@ -17,6 +17,7 @@ from rich.text import Text
 
 from .agent.loop import AgentLoop, AgentConfig, AgentResponse
 from .agent.system_prompts import SystemPromptLevel
+from .agent.session_manager import SessionManager, SessionMetadata
 from .tools.base import ToolRegistry, ToolResult
 from .providers.gateway.litellm_gateway import LiteLLMGateway
 from .providers.registry import PROVIDERS, ProviderTier, ProviderCategory
@@ -44,8 +45,9 @@ class PureMode:
     def __init__(self):
         self.session = PureSession()
         self.gateway = LiteLLMGateway()
-        self.tools = ToolRegistry.default()
+        self.tools = ToolRegistry.full()
         self._agent: Optional[AgentLoop] = None
+        self._session_manager: Optional[SessionManager] = None
 
         # Callbacks for UI updates
         self.on_tool_call: Optional[Callable[[str, Dict], None]] = None
@@ -97,6 +99,7 @@ class PureMode:
         working_directory: Optional[Path] = None,
         job_description: Optional[str] = None,
         role_config: Optional[Any] = None,
+        session_id: Optional[str] = None,
     ) -> bool:
         """Connect to a provider in Pure Mode.
 
@@ -121,6 +124,9 @@ class PureMode:
             system_prompt_level=system_level,
             working_directory=self.session.working_directory,
             job_description=job_description,
+            enable_session_storage=True,
+            session_storage_dir=".superqode/sessions",
+            session_id=session_id,
         )
 
         self._agent = AgentLoop(
@@ -137,6 +143,7 @@ class PureMode:
             self._agent.on_tool_call = self.on_tool_call
             self._agent.on_tool_result = self.on_tool_result
             self._agent.on_thinking = self.on_thinking
+            self._session_manager = self._agent._session_manager
 
         return True
 
@@ -200,6 +207,107 @@ class PureMode:
                 "total_iterations": self.session.total_iterations,
             },
             "tools": [t.name for t in self.tools.list()],
+            "tool_profile": "full",
+        }
+
+    # Session management methods
+    def list_sessions(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """List recent sessions."""
+        if not self._session_manager:
+            self._session_manager = SessionManager(storage_dir=".superqode/sessions")
+        sessions = self._session_manager.list_all_sessions()
+        return [
+            {
+                "session_id": s.session_id,
+                "display_id": s.session_id[:8],
+                "provider": s.provider,
+                "model": s.model,
+                "message_count": s.message_count,
+                "updated_at": s.updated_at,
+            }
+            for s in sessions[:limit]
+        ]
+
+    def resolve_session_id(self, session_id_or_prefix: str) -> Optional[str]:
+        """Resolve a full session id from an exact id or unique prefix."""
+        if not self._session_manager:
+            self._session_manager = SessionManager(storage_dir=".superqode/sessions")
+
+        sessions = self._session_manager.list_all_sessions()
+        exact = [s.session_id for s in sessions if s.session_id == session_id_or_prefix]
+        if exact:
+            return exact[0]
+
+        matches = [s.session_id for s in sessions if s.session_id.startswith(session_id_or_prefix)]
+        return matches[0] if len(matches) == 1 else None
+
+    def resume_session(self, session_id: str) -> Optional[List[Dict[str, Any]]]:
+        """Resume a session by ID."""
+        if not self._session_manager:
+            self._session_manager = SessionManager(storage_dir=".superqode/sessions")
+
+        resolved_session_id = self.resolve_session_id(session_id)
+        if not resolved_session_id:
+            return None
+
+        metadata = self._session_manager.get_session_info(resolved_session_id)
+        if not metadata:
+            return None
+
+        # Start session and get messages
+        self._session_manager.start_session(session_id=resolved_session_id)
+        messages = self._session_manager.get_messages()
+
+        # Reconnect with same settings
+        self.connect(
+            provider=metadata.provider,
+            model=metadata.model,
+            system_level=self.session.system_level,
+            working_directory=self.session.working_directory,
+            session_id=resolved_session_id,
+        )
+
+        # Return messages for display
+        return [
+            {
+                "role": m.role,
+                "content": m.content,
+                "tool_name": getattr(m, "tool_name", None),
+            }
+            for m in messages
+        ]
+
+    def get_current_session_id(self) -> Optional[str]:
+        """Get current session ID."""
+        if self._agent:
+            return self._agent.session_id
+        return None
+
+    def fork_current_session(self, new_session_id: Optional[str] = None) -> str:
+        """Fork the current session into a new session branch."""
+        if not self._session_manager:
+            self._session_manager = SessionManager(storage_dir=".superqode/sessions")
+        fork_id = self._session_manager.fork_current_session(new_session_id)
+        if self._agent:
+            self._agent.session_id = fork_id
+            self._agent.config.session_id = fork_id
+        return fork_id
+
+    def compact(self) -> Dict[str, Any]:
+        """Enable context compaction for the active agent and report current state."""
+        if not self._agent:
+            return {"success": False, "message": "No active provider session to compact."}
+
+        self._agent.config.enable_summarization = True
+        messages = (
+            self._agent._session_manager.get_messages() if self._agent._session_manager else []
+        )
+        return {
+            "success": True,
+            "message": "Context compaction is enabled for subsequent turns.",
+            "session_id": self._agent.session_id,
+            "message_count": len(messages),
+            "max_context_tokens": self._agent.config.max_context_tokens,
         }
 
 

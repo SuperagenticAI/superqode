@@ -83,13 +83,61 @@ class SuperQodeAgent(UnifiedAgent):
         from ..agent.loop import AgentLoop, AgentConfig
         from ..agent.system_prompts import SystemPromptLevel, get_job_description_prompt
         from ..tools.base import ToolRegistry
+        from ..tools.base import ToolResult
         from ..providers.gateway.litellm_gateway import LiteLLMGateway
+        from ..providers.gateway.base import ToolDefinition
+        from ..mcp.integration import get_mcp_manager
 
         # Initialize gateway
         gateway = LiteLLMGateway()
 
-        # Initialize tools
-        tools = ToolRegistry.default()
+        # Initialize tools - use full registry for all capabilities
+        tools = ToolRegistry.full()
+
+        # Get MCP tools and setup executor
+        mcp_executor = None
+        mcp_tool_defs = []
+        try:
+            mcp_manager = await get_mcp_manager()
+            mcp_tools = mcp_manager.list_all_tools()
+
+            if mcp_tools:
+                # Convert MCP tools to ToolDefinition format
+                for mcp_tool in mcp_tools:
+                    mcp_tool_defs.append(
+                        ToolDefinition(
+                            name=f"mcp_{mcp_tool.server_id}_{mcp_tool.name}",
+                            description=f"[MCP:{mcp_tool.server_id}] {mcp_tool.description}",
+                            parameters=mcp_tool.input_schema,
+                        )
+                    )
+
+                async def execute_mcp(server_id: str, tool_name: str, args: dict) -> ToolResult:
+                    result = await mcp_manager.execute_tool(server_id, tool_name, args)
+                    # Convert MCP result to ToolResult
+                    if result.is_error:
+                        return ToolResult(
+                            success=False,
+                            output="",
+                            error=result.error_message or "MCP tool error",
+                        )
+                    # Format content
+                    output_parts = []
+                    for item in result.content:
+                        if isinstance(item, dict):
+                            output_parts.append(item.get("text", str(item)))
+                        else:
+                            output_parts.append(str(item))
+                    return ToolResult(
+                        success=True,
+                        output="\n".join(output_parts),
+                    )
+
+                mcp_executor = execute_mcp
+        except Exception as e:
+            import logging
+
+            logging.getLogger(__name__).warning(f"MCP initialization skipped: {e}")
 
         # Build job description prompt (OSS does not merge expert prompts)
         # Get base job description from role config
@@ -98,20 +146,22 @@ class SuperQodeAgent(UnifiedAgent):
             base_job_description, role_config=self.role_config
         )
 
-        # Determine system prompt level (OSS uses standard guidance)
-        system_level = SystemPromptLevel.STANDARD
+        # Determine system prompt level - use FULL to match full() tool registry
+        system_level = SystemPromptLevel.FULL
 
         # Create agent config with merged job description
         config = AgentConfig(
             provider=self.provider,
             model=self.model,
             system_prompt_level=system_level,
-            custom_system_prompt=None,  # Job description is added via config
+            custom_system_prompt=None,
             job_description=merged_job_description,
             working_directory=self._working_directory,
             tools_enabled=True,
             temperature=0.7,
             max_tokens=4000,
+            plan_mode=getattr(self.role_config, "plan_mode", False),
+            enable_summarization=getattr(self.role_config, "enable_summarization", False),
         )
 
         # Create agent loop (on_thinking will be set via send_message if provided)
@@ -120,10 +170,31 @@ class SuperQodeAgent(UnifiedAgent):
             tools=tools,
             config=config,
             parallel_tools=True,
+            mcp_executor=mcp_executor,
+            mcp_tools=mcp_tool_defs,
         )
 
         self._initialized = True
         return True
+
+    def _should_use_plan_mode(self, message: str) -> bool:
+        """Check if message should trigger plan mode."""
+        plan_keywords = [
+            "plan",
+            "how would you",
+            "what's the approach",
+            "create a plan",
+            "design",
+            "architect",
+            "strategy",
+            "steps to",
+            "break down",
+            "analyze the",
+            "design a",
+            "how to approach",
+        ]
+        message_lower = message.lower()
+        return any(keyword in message_lower for keyword in plan_keywords)
 
     async def send_message(self, message: str, **kwargs) -> AgentResponse:
         """Send message to SuperQode model using AgentLoop with tools."""
@@ -134,6 +205,14 @@ class SuperQodeAgent(UnifiedAgent):
         on_thinking = kwargs.get("on_thinking")
         if on_thinking:
             self._agent_loop.on_thinking = on_thinking
+
+        # Auto-detect plan mode based on message content
+        use_plan_mode = kwargs.get("plan_mode")
+        if use_plan_mode is None:
+            use_plan_mode = self._should_use_plan_mode(message)
+
+        if use_plan_mode:
+            self._agent_loop.config.plan_mode = True
 
         try:
             # Use AgentLoop to run with tools

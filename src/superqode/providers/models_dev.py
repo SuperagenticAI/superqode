@@ -51,22 +51,54 @@ logger = logging.getLogger(__name__)
 
 MODELS_DEV_API_URL = "https://models.dev/api.json"
 CACHE_FILE = Path.home() / ".superqode" / "models_cache.json"
-DEFAULT_CACHE_TTL = timedelta(hours=24)
+DEFAULT_CACHE_TTL = timedelta(hours=1)
 
-# Providers we actively support (others available via OpenRouter)
+# All supported providers including China labs
 SUPPORTED_PROVIDERS = {
+    # US Labs
     "anthropic",
     "openai",
     "google",
-    "deepseek",
-    "groq",
-    "openrouter",
     "xai",
+    "nvidia",
+    # Other Labs
     "mistral",
     "cohere",
+    # China Labs
+    "deepseek",
+    "zhipu",
+    "alibaba",
+    "minimax",
+    "moonshot",
+    "baidu",
+    "doubao",
+    # Model Hosts / Aggregators
+    "groq",
+    "openrouter",
     "together",
     "fireworks",
     "perplexity",
+    "huggingface",
+    "cerebras",
+    "opencode",
+    # Cloud Platforms
+    "amazon-bedrock",
+    "azure",
+    "vertex",
+    "cloudflare",
+    # Local
+    "ollama",
+    "lmstudio",
+    "mlx",
+    "vllm",
+    "sglang",
+    "tgi",
+    "llamacpp",
+    "openai-compatible",
+    "huggingface-local",
+    # Additional providers
+    "siliconflow",
+    "github-copilot",
 }
 
 # Provider ID mappings (models.dev ID -> our ID)
@@ -75,6 +107,15 @@ PROVIDER_ID_MAP = {
     "google-vertex": "google",
     "google-vertex-anthropic": "google-vertex-anthropic",
     "x-ai": "xai",
+    "moonshot": "moonshot",
+    "kimi": "moonshot",
+    "qianfan": "baidu",
+    "dashscope": "alibaba",
+    "qwen": "alibaba",
+    "zhipuai": "zhipu",
+    "glm": "zhipu",
+    "volcengine": "doubao",
+    "silicon-flow": "siliconflow",
 }
 
 

@@ -8,24 +8,36 @@ from typing import Tuple, Optional, Dict, Any
 def map_model_to_opencode(model_name: str) -> str:
     """Map user-friendly model names to OpenCode model identifiers.
 
-    OpenCode expects just the model name (e.g., "glm-4.7-free"),
+    OpenCode expects just the model name (e.g., "minimax-m2.5-free"),
     NOT the provider/model format.
     """
     # Map user-friendly names to OpenCode model names
     model_mapping = {
-        "glm-4.7": "glm-4.7-free",
-        "grok-code": "grok-code",
+        "glm-4.7": "minimax-m2.5-free",
+        "glm-4.7-free": "minimax-m2.5-free",
+        "grok-code": "minimax-m2.5-free",
         "kimi-k2.5": "kimi-k2.5-free",
+        "kimi-k2.5-free": "kimi-k2.5-free",
         "gpt-5-nano": "gpt-5-nano",
         "big-pickle": "big-pickle",
-        "minimax-m2.1": "minimax-m2.1-free",
+        "minimax-m2.1": "minimax-m2.5-free",
+        "minimax-m2.1-free": "minimax-m2.5-free",
+        "minimax-m2.5": "minimax-m2.5-free",
+        "minimax-m2.5-free": "minimax-m2.5-free",
+        "nemotron-3-super-free": "nemotron-3-super-free",
+        "trinity-large-preview-free": "trinity-large-preview-free",
+        "qwen3.6-plus-free": "qwen3.6-plus-free",
         # Strip provider prefix if present
-        "opencode/glm-4.7-free": "glm-4.7-free",
-        "opencode/grok-code": "grok-code",
+        "opencode/glm-4.7-free": "minimax-m2.5-free",
+        "opencode/grok-code": "minimax-m2.5-free",
         "opencode/kimi-k2.5-free": "kimi-k2.5-free",
         "opencode/gpt-5-nano": "gpt-5-nano",
         "opencode/big-pickle": "big-pickle",
-        "opencode/minimax-m2.1-free": "minimax-m2.1-free",
+        "opencode/minimax-m2.1-free": "minimax-m2.5-free",
+        "opencode/minimax-m2.5-free": "minimax-m2.5-free",
+        "opencode/nemotron-3-super-free": "nemotron-3-super-free",
+        "opencode/trinity-large-preview-free": "trinity-large-preview-free",
+        "opencode/qwen3.6-plus-free": "qwen3.6-plus-free",
     }
 
     mapped = model_mapping.get(model_name, model_name)

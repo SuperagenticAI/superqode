@@ -297,6 +297,14 @@ COMMANDS = [
     ":view",
     ":view info",
     ":search",
+    ":tools",
+    ":tools minimal",
+    ":tools standard",
+    ":tools full",
+    "/sessions",
+    "/resume",
+    "/fork",
+    "/compact",
     # Copy/Open commands
     ":copy",
     ":open",
@@ -304,6 +312,8 @@ COMMANDS = [
     ":mcp list",
     ":mcp status",
     ":mcp tools",
+    ":mcp resources",
+    ":mcp prompts",
     ":mcp connect",
     ":mcp disconnect",
     # Approval mode commands

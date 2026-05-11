@@ -713,6 +713,95 @@ class QEOrchestrator:
             cleaned = cleaned[len("description:") :].strip()
         return (cleaned[: max_len - 1] + "…") if len(cleaned) > max_len else cleaned
 
+    async def run_a2a_qe(
+        self,
+        agent_urls: list[str],
+        task: str = "Run full QE analysis",
+    ) -> Dict[str, Any]:
+        """Run QE using external A2A agents.
+
+        Uses A2A protocol to call external agents for quality engineering.
+
+        Args:
+            agent_urls: List of A2A agent URLs to coordinate
+            task: Task description for the agents
+
+        Returns:
+            Dict with results from all A2A agents
+        """
+        try:
+            from ..a2a.workflows import A2AWorkflowEngine
+
+            engine = A2AWorkflowEngine()
+
+            # Build QE-specific prompts for each agent
+            qe_prompts = {
+                "unit_test": "Run unit tests and identify failing tests",
+                "integration_test": "Run integration tests and identify issues",
+                "security_scan": "Run security analysis and find vulnerabilities",
+                "code_review": "Review code for quality and best practices",
+            }
+
+            results = {}
+
+            # Run multiple QE agents in parallel
+            for url in agent_urls:
+                try:
+                    from ..a2a.client import A2AClient
+
+                    client = A2AClient(url)
+
+                    # Get agent capabilities
+                    try:
+                        card = await client.get_agent_card()
+                        agent_name = card.name
+                    except Exception:
+                        agent_name = url
+
+                    # Run QE task
+                    task_result = await client.send_message(task)
+
+                    results[agent_name] = {
+                        "status": task_result.status.state.value,
+                        "result": self._extract_a2a_result(task_result),
+                        "success": task_result.status.state.value == "completed",
+                    }
+
+                    await client.close()
+
+                except Exception as e:
+                    results[url] = {
+                        "status": "failed",
+                        "error": str(e),
+                        "success": False,
+                    }
+
+            await engine.close()
+
+            return {
+                "success": all(r.get("success", False) for r in results.values()),
+                "agents": results,
+                "summary": f"Ran QE with {len(agent_urls)} A2A agents",
+            }
+
+        except ImportError:
+            return {
+                "success": False,
+                "error": "A2A not installed. Run: pip install superqode[a2a]",
+            }
+
+    def _extract_a2a_result(self, task) -> str:
+        """Extract result text from A2A task."""
+        if not hasattr(task, "history") or not task.history:
+            return "No response"
+
+        for msg in reversed(task.history):
+            if hasattr(msg, "role") and msg.role.value == "agent":
+                if hasattr(msg, "parts") and msg.parts:
+                    if hasattr(msg.parts[0], "text") and msg.parts[0].text:
+                        return msg.parts[0].text[:500]
+        return "No result"
+
     def export_junit(self, result: QESessionResult) -> str:
         """Export result as JUnit XML for CI integration."""
         lines = [

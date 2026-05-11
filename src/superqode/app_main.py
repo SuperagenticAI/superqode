@@ -88,6 +88,7 @@ from superqode.app.widgets import (
     DangerWarning,
 )
 from superqode.widgets.leader_key import LeaderKeyPopup
+from superqode.widgets.command_palette import CommandPalette, PaletteCommand
 
 # QE roles that should be highlighted as power roles in the TUI.
 POWER_QE_ROLES = {
@@ -460,6 +461,7 @@ class SuperQodeApp(App):
         Binding("ctrl+l", "clear_screen", "Clear", show=True),
         Binding("ctrl+b", "toggle_sidebar", "Sidebar", show=True),
         Binding("ctrl+t", "toggle_thinking", "Toggle Logs", show=True),
+        Binding("ctrl+k", "command_palette", "Commands", show=True),
         Binding("escape", "smart_cancel", "Cancel", show=True),
         Binding("ctrl+x", "cancel_agent", "Cancel Agent", show=False),
         Binding("ctrl+d", "toggle_thinking", "Hide Logs", show=False),
@@ -657,14 +659,39 @@ class SuperQodeApp(App):
             ]
 
     def _get_opencode_models(self) -> List[Dict]:
-        """Get OpenCode models list."""
+        """Get OpenCode models list - tries dynamic fetch, falls back to static."""
+        try:
+            from superqode.providers.opencode_models import get_opencode_models_with_fallback
+
+            # This runs async - for now we still use static in sync context
+            # but could be used in async contexts
+            import asyncio
+
+            models = asyncio.run(get_opencode_models_with_fallback())
+
+            # Convert to our format
+            return [
+                {
+                    "id": m["id"],
+                    "name": m.get("name", m["id"].split("/")[-1]),
+                    "context": m.get("context", 128000),
+                }
+                for m in models
+                if m.get("is_free", False)
+            ]
+        except Exception:
+            # Fallback to static list
+            pass
+
         return [
-            {"id": "glm-4.7-free", "name": "GLM-4.7 (Free)", "context": 8192},
-            {"id": "grok-code", "name": "Grok Code", "context": 4096},
-            {"id": "kimi-k2.5-free", "name": "Kimi K2.5 (Free)", "context": 8192},
-            {"id": "gpt-5-nano", "name": "GPT-5 Nano", "context": 4096},
-            {"id": "minimax-m2.1-free", "name": "MiniMax M2.1 (Free)", "context": 4096},
-            {"id": "big-pickle", "name": "Big Pickle", "context": 2048},
+            {"id": "big-pickle", "name": "Big Pickle", "context": 200000},
+            {"id": "minimax-m2.5-free", "name": "MiniMax M2.5 (Free)", "context": 200000},
+            {"id": "nemotron-3-super-free", "name": "Nemotron 3 Super (Free)", "context": 1000000},
+            {"id": "gpt-5-nano", "name": "GPT-5 Nano", "context": 400000},
+            {"id": "hy3-preview-free", "name": "HY3 Preview (Free)", "context": 128000},
+            {"id": "ling-2.6-flash-free", "name": "Ling 2.6 Flash (Free)", "context": 128000},
+            {"id": "trinity-large-preview-free", "name": "Trinity Large (Free)", "context": 128000},
+            {"id": "qwen3.6-plus-free", "name": "Qwen 3.6 Plus (Free)", "context": 128000},
         ]
 
     @property
@@ -841,32 +868,31 @@ class SuperQodeApp(App):
         # OpenCode free models from `opencode models` command
         self._opencode_models = [
             {
-                "id": "opencode/glm-4.7-free",
-                "name": "GLM 4.7",
+                "id": "opencode/big-pickle",
+                "name": "Big Pickle",
                 "free": True,
                 "recommended": True,
-                "desc": "Zhipu AI - Great for coding",
+                "desc": "OpenCode Zen - Best overall coding",
             },
             {
-                "id": "opencode/grok-code",
-                "name": "Grok Code",
+                "id": "opencode/minimax-m2.5-free",
+                "name": "MiniMax M2.5",
                 "free": True,
                 "recommended": True,
-                "desc": "xAI - Fast coding model",
+                "desc": "MiniMax - Powerful free model",
+            },
+            {
+                "id": "opencode/nemotron-3-super-free",
+                "name": "Nemotron 3 Super",
+                "free": True,
+                "recommended": True,
+                "desc": "NVIDIA - 1M context window",
             },
             {
                 "id": "opencode/kimi-k2.5-free",
                 "name": "Kimi K2.5",
                 "free": True,
-                "recommended": True,
                 "desc": "Moonshot AI - K2.5 free tier",
-            },
-            {
-                "id": "opencode/minimax-m2.1-free",
-                "name": "MiniMax M2.1",
-                "free": True,
-                "recommended": True,
-                "desc": "MiniMax - Powerful free model",
             },
             {
                 "id": "opencode/gpt-5-nano",
@@ -875,10 +901,22 @@ class SuperQodeApp(App):
                 "desc": "OpenAI - Lightweight model",
             },
             {
-                "id": "opencode/big-pickle",
-                "name": "Big Pickle",
+                "id": "opencode/qwen3.6-plus-free",
+                "name": "Qwen 3.6 Plus",
                 "free": True,
-                "desc": "OpenCode - Experimental",
+                "desc": "Alibaba - Great multilingual",
+            },
+            {
+                "id": "opencode/hy3-preview-free",
+                "name": "HY3 Preview",
+                "free": True,
+                "desc": "New coding model",
+            },
+            {
+                "id": "opencode/trinity-large-preview-free",
+                "name": "Trinity Large",
+                "free": True,
+                "desc": "New reasoning model",
             },
         ]
 
@@ -1128,6 +1166,8 @@ class SuperQodeApp(App):
                 # Scanning line animation at BOTTOM (shown when agent is thinking)
                 yield BottomScanningLine(id="thinking-wave-bottom")
 
+        yield CommandPalette(commands=self._build_palette_commands(), id="command-palette")
+
     def on_mount(self):
         # Focus input after a short delay to ensure widgets are fully ready
         self.set_timer(0.1, self._focus_input_on_ready)
@@ -1144,6 +1184,151 @@ class SuperQodeApp(App):
         self._init_sidebar_resize()
         # Run provider health check in background
         self._run_startup_health_check()
+
+    def _build_palette_commands(self) -> list[PaletteCommand]:
+        """Build the command palette from the real TUI command surface."""
+        return [
+            PaletteCommand(
+                "connect",
+                "Connect",
+                "Choose ACP, BYOK, or local provider",
+                "🔌",
+                ":connect",
+                "connection",
+            ),
+            PaletteCommand(
+                "connect_byok",
+                "Connect BYOK",
+                "Pick a cloud provider and model",
+                "⚡",
+                ":connect byok",
+                "connection",
+            ),
+            PaletteCommand(
+                "connect_local",
+                "Connect Local",
+                "Pick Ollama, LM Studio, vLLM, or another local provider",
+                "🦙",
+                ":connect local",
+                "connection",
+            ),
+            PaletteCommand(
+                "acp_agents",
+                "ACP Agents",
+                "List available ACP coding agents",
+                "🤖",
+                ":acp list",
+                "connection",
+            ),
+            PaletteCommand(
+                "models",
+                "Models",
+                "Show or switch models for the current provider",
+                "📊",
+                ":models",
+                "connection",
+            ),
+            PaletteCommand(
+                "health",
+                "Provider Health",
+                "Check configured provider connectivity",
+                "🩺",
+                ":health",
+                "connection",
+            ),
+            PaletteCommand(
+                "tools",
+                "Tools",
+                "Show active tool profile and available tools",
+                "🧰",
+                ":tools",
+                "harness",
+            ),
+            PaletteCommand(
+                "mcp",
+                "MCP Status",
+                "Show configured MCP servers and connected tools",
+                "🔗",
+                ":mcp status",
+                "harness",
+            ),
+            PaletteCommand(
+                "sessions",
+                "Sessions",
+                "Browse recent local coding sessions",
+                "📂",
+                "/sessions",
+                "session",
+            ),
+            PaletteCommand(
+                "resume",
+                "Resume Session",
+                "Resume a previous session by id or prefix",
+                "↩",
+                "/resume",
+                "session",
+            ),
+            PaletteCommand(
+                "fork", "Fork Session", "Branch the current session", "⑂", "/fork", "session"
+            ),
+            PaletteCommand(
+                "compact",
+                "Compact Context",
+                "Compress conversation context where supported",
+                "🗜",
+                "/compact",
+                "session",
+            ),
+            PaletteCommand(
+                "context",
+                "Context",
+                "Show current mode, role, provider, model, and cwd",
+                "📋",
+                ":context",
+                "harness",
+            ),
+            PaletteCommand("diff", "Diff", "Inspect file changes", "🧾", ":diff", "changes"),
+            PaletteCommand(
+                "approve", "Approve Changes", "Approve pending work", "✅", ":approve", "changes"
+            ),
+            PaletteCommand(
+                "reject", "Reject Changes", "Reject pending work", "⛔", ":reject", "changes"
+            ),
+            PaletteCommand("undo", "Undo", "Undo the last tracked change", "↶", ":undo", "changes"),
+            PaletteCommand(
+                "sidebar",
+                "Toggle Sidebar",
+                "Show or hide files/context panels",
+                "▣",
+                "Ctrl+B",
+                "view",
+            ),
+            PaletteCommand(
+                "files", "Files", "List files in the current directory", "📁", ":files", "view"
+            ),
+            PaletteCommand("find", "Find File", "Search for files by name", "🔍", ":find", "view"),
+            PaletteCommand(
+                "search",
+                "Search Contents",
+                "Search text in the current workspace",
+                "⌕",
+                ":search",
+                "view",
+            ),
+            PaletteCommand(
+                "mode",
+                "Approval Mode",
+                "Show or change tool approval mode",
+                "🔐",
+                ":mode",
+                "safety",
+            ),
+            PaletteCommand("help", "Help", "Show command reference", "?", ":help", "system"),
+            PaletteCommand(
+                "clear", "Clear", "Clear the conversation view", "⌫", "Ctrl+L", "system"
+            ),
+            PaletteCommand("quit", "Quit", "Exit SuperQode", "✕", "Ctrl+C", "system"),
+        ]
 
     def _focus_input_on_ready(self):
         """Focus the input box once widgets are ready."""
@@ -1550,6 +1735,64 @@ class SuperQodeApp(App):
             self._leader_popup.show()
             self._leader_mode = True
 
+    def action_command_palette(self):
+        """Open the command palette (Ctrl+K)."""
+        try:
+            palette = self.query_one("#command-palette", CommandPalette)
+            palette.toggle()
+        except Exception:
+            self._ensure_input_focus()
+
+    @on(CommandPalette.CommandSelected)
+    def on_command_palette_selected(self, event: CommandPalette.CommandSelected) -> None:
+        """Route command palette selections through the existing command dispatcher."""
+        log = self.query_one("#log", ConversationLog)
+        command_map = {
+            "connect": ":connect",
+            "connect_byok": ":connect byok",
+            "connect_local": ":connect local",
+            "acp_agents": ":acp list",
+            "models": ":models",
+            "health": ":health",
+            "tools": ":tools",
+            "mcp": ":mcp status",
+            "sessions": "/sessions",
+            "compact": "/compact",
+            "context": ":context",
+            "diff": ":diff",
+            "approve": ":approve",
+            "reject": ":reject",
+            "undo": ":undo",
+            "files": ":files",
+            "mode": ":mode",
+            "help": ":help",
+            "clear": ":clear",
+            "quit": ":quit",
+        }
+        prompt_commands = {
+            "resume": "/resume ",
+            "fork": "/fork ",
+            "find": ":find ",
+            "search": ":search ",
+        }
+
+        if event.command.id == "sidebar":
+            self.action_toggle_sidebar()
+            return
+
+        if event.command.id in prompt_commands:
+            input_widget = self.query_one("#prompt-input", Input)
+            input_widget.value = prompt_commands[event.command.id]
+            input_widget.cursor_position = len(input_widget.value)
+            input_widget.focus()
+            return
+
+        command = command_map.get(event.command.id)
+        if command:
+            self._handle_command(command, log)
+        else:
+            log.add_error(f"No handler for palette command: {event.command.label}")
+
     @on(events.TextSelected)
     async def on_text_selected(self) -> None:
         """Automatically copy selected text to clipboard when user selects with mouse.
@@ -1631,6 +1874,9 @@ class SuperQodeApp(App):
             elif getattr(self, "_awaiting_byok_model", False):
                 # Keyboard navigation disabled for BYOK model selection
                 # Users must enter a number to select a model
+                # Allow R to refresh
+                if event.key == "r":
+                    self.action_refresh_byok_models()
                 pass
 
             elif getattr(self, "_awaiting_byok_provider", False):
@@ -1642,6 +1888,8 @@ class SuperQodeApp(App):
                     self.action_navigate_provider_down()
                 elif event.key == "enter":
                     self.action_select_highlighted_provider()
+                elif event.key == "r":
+                    self.action_refresh_byok_models()
 
             elif getattr(self, "_awaiting_connect_type", False):
                 event.stop()
@@ -1682,6 +1930,8 @@ class SuperQodeApp(App):
                     self.action_navigate_opencode_model_down()
                 elif event.key == "enter":
                     self.action_select_highlighted_opencode_model()
+                elif event.key == "r":
+                    self.action_refresh_opencode_models()
 
             if handled:
                 # Ensure input stays focused after navigation
@@ -2368,6 +2618,104 @@ class SuperQodeApp(App):
             # _connect_agent is decorated with @work, so calling it directly
             # returns a Worker that will run the async method
             self._connect_agent("opencode", model_id)
+
+    def action_refresh_opencode_models(self):
+        """Refresh OpenCode models from CLI."""
+        if not getattr(self, "_awaiting_model_selection", False):
+            return
+
+        if self.current_agent != "opencode":
+            return
+
+        # Clear cache and refresh models
+        try:
+            from superqode.providers.opencode_models import clear_cache
+
+            clear_cache()
+            # Re-fetch models
+            self._opencode_models = None
+            models = self.opencode_models
+
+            # Show updated list
+            log = self.query_one("#log", ConversationLog)
+            agent = getattr(self, "_opencode_agent_data", None)
+            if not agent:
+                agent_list = getattr(self, "_acp_agent_list", [])
+                for agent_id, agent_data in agent_list:
+                    if agent_id == "opencode":
+                        agent = agent_data
+                        break
+            if not agent:
+                agent = {"name": "OpenCode", "short_name": "opencode"}
+
+            # Reset highlight index to 0
+            self._opencode_highlighted_model_index = 0
+
+            # Show message
+            t = Text()
+            t.append("\n  🔄 ", style=THEME["success"])
+            t.append("Refreshing models from OpenCode...", style=THEME["text"])
+            log.write(t)
+
+            # Then show the model list
+            self.set_timer(0.5, lambda: self._show_opencode_models_selection(agent, log))
+
+        except Exception as e:
+            log = self.query_one("#log", ConversationLog)
+            t = Text()
+            t.append(f"\n  ⚠️  Error refreshing: {str(e)}", style=THEME["error"])
+            log.write(t)
+
+    def action_refresh_byok_models(self):
+        """Refresh BYOK providers/models from models.dev API."""
+        if not (
+            getattr(self, "_awaiting_byok_provider", False)
+            or getattr(self, "_awaiting_byok_model", False)
+        ):
+            return
+
+        try:
+            from superqode.providers.models_dev import get_models_dev
+
+            client = get_models_dev()
+
+            t = Text()
+            t.append("\n  🔄 ", style=THEME["success"])
+            t.append("Refreshing models from models.dev...", style=THEME["text"])
+
+            log = self.query_one("#log", ConversationLog)
+            log.write(t)
+
+            def on_refresh_complete(success: bool):
+                log = self.query_one("#log", ConversationLog)
+                if success:
+                    t = Text()
+                    t.append("  ✓ ", style=THEME["success"])
+                    t.append("Models refreshed successfully!", style=THEME["text"])
+                    log.write(t)
+                else:
+                    t = Text()
+                    t.append("  ⚠️ ", style=THEME["error"])
+                    t.append("Failed to refresh. Using cached models.", style=THEME["muted"])
+                    log.write(t)
+
+                # Re-show the provider picker
+                self.set_timer(0.3, lambda: self._show_connect_picker(log, clear_log=True))
+
+            # Trigger async refresh - it will call on_refresh_complete when done
+            import asyncio
+
+            async def do_refresh():
+                success = await client.load(force=True)
+                self.call_later(lambda: on_refresh_complete(success))
+
+            asyncio.create_task(do_refresh())
+
+        except Exception as e:
+            log = self.query_one("#log", ConversationLog)
+            t = Text()
+            t.append(f"\n  ⚠️  Error refreshing: {str(e)}", style=THEME["error"])
+            log.write(t)
 
     def _scroll_to_highlighted_item(
         self, log: ConversationLog, highlighted_idx: int, total_items: int
@@ -3092,8 +3440,15 @@ class SuperQodeApp(App):
         log = self.query_one("#log", ConversationLog)
 
         # Check for commands FIRST (before selection handlers) so :home, :back, :cancel work
+        # Supports both : (vim-style) and / prefix
+        command_prefix = None
         if text.startswith(":"):
-            cmd = text[1:].strip().lower()
+            command_prefix = ":"
+        elif text.startswith("/"):
+            command_prefix = "/"
+
+        if command_prefix:
+            cmd = text[len(command_prefix) :].strip().lower()
             # Handle navigation commands during selection
             if cmd in ("home", "back", "cancel") and (
                 getattr(self, "_awaiting_connect_type", False)
@@ -3136,7 +3491,7 @@ class SuperQodeApp(App):
             return
 
         # Shell command
-        if text.startswith(">"):
+        if text.startswith(">") or text.startswith("!"):
             cmd = text[1:].strip()
             if cmd:
                 self._run_shell(cmd, log)
@@ -3361,6 +3716,10 @@ class SuperQodeApp(App):
             self._handle_superqe_command(args, log)
         elif c == "handoff":
             self._handoff(args, log)
+        elif c == "a2a":
+            self.run_worker(self._a2a_cmd(args, log))
+        elif c == "mcp":
+            self.run_worker(self._mcp_cmd(args, log))
         elif c == "context":
             self._show_context(log)
         elif c == "files":
@@ -3402,6 +3761,16 @@ class SuperQodeApp(App):
             self._handle_view(args, log)
         elif c == "search":
             self._handle_search(args, log)
+        elif c == "tools":
+            self._show_tools(args, log)
+        elif c == "sessions":
+            self._show_sessions(log)
+        elif c == "resume":
+            self._handle_resume_session(args, log)
+        elif c in ("fork", "clone"):
+            self._handle_fork_session(args, log)
+        elif c == "compact":
+            self._handle_compact(log)
         elif c == "connect":
             # Parse subcommand: :connect [acp|byok|local] [args...]
             if not args:
@@ -3468,6 +3837,346 @@ class SuperQodeApp(App):
         # Always return focus to input after command completes
         # Use a small delay to ensure command output is displayed first
         self.set_timer(0.1, self._ensure_input_focus)
+
+    def _show_tools(self, args: str, log: ConversationLog):
+        """Show the active tool profile and available tools."""
+        from superqode.tools.base import ToolRegistry
+
+        active_tools = []
+        active_profile = "unknown"
+        if hasattr(self, "_pure_mode") and self._pure_mode.session.connected:
+            status = self._pure_mode.get_status()
+            active_tools = status.get("tools", [])
+            active_profile = status.get("tool_profile", "full")
+        else:
+            profile = (args or "full").strip().lower()
+            if profile == "minimal":
+                registry = ToolRegistry.default()
+            elif profile == "standard":
+                registry = ToolRegistry.standard()
+            else:
+                registry = ToolRegistry.full()
+                profile = "full"
+            active_tools = [tool.name for tool in registry.list()]
+            active_profile = profile
+
+        t = Text()
+        t.append("\n  🧰 ", style=f"bold {THEME['cyan']}")
+        t.append("Tool Profile\n\n", style=f"bold {THEME['cyan']}")
+        t.append("  Active profile: ", style=THEME["muted"])
+        t.append(f"{active_profile}\n", style=f"bold {THEME['success']}")
+        t.append("  Tool count: ", style=THEME["muted"])
+        t.append(f"{len(active_tools)}\n\n", style=f"bold {THEME['text']}")
+
+        categories = {
+            "File": {
+                "read_file",
+                "write_file",
+                "list_directory",
+                "edit_file",
+                "insert_text",
+                "patch",
+                "multi_edit",
+            },
+            "Search": {
+                "grep",
+                "glob",
+                "code_search",
+                "web_search",
+                "web_fetch",
+                "fetch",
+                "download",
+            },
+            "Runtime": {"bash", "diagnostics", "lsp", "batch"},
+            "Workflow": {
+                "todo_write",
+                "todo_read",
+                "compact",
+                "agent",
+                "coordinate",
+                "ask_user",
+                "confirm",
+            },
+            "Skills": {"skill", "read_skill"},
+        }
+        remaining = set(active_tools)
+        for title, names in categories.items():
+            tools = sorted(name for name in active_tools if name in names)
+            if not tools:
+                continue
+            remaining.difference_update(tools)
+            t.append(f"  {title}\n", style=f"bold {THEME['gold']}")
+            t.append(f"    {', '.join(tools)}\n", style=THEME["muted"])
+
+        if remaining:
+            t.append("  Other\n", style=f"bold {THEME['gold']}")
+            t.append(f"    {', '.join(sorted(remaining))}\n", style=THEME["muted"])
+
+        t.append("\n  Commands: ", style=THEME["muted"])
+        t.append("/tools", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append("/mode", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":mcp tools", style=THEME["cyan"])
+        t.append("\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    async def _mcp_cmd(self, args: str, log: ConversationLog):
+        """Handle MCP status and inventory commands."""
+        try:
+            from superqode.mcp.integration import get_mcp_manager
+        except ImportError as exc:
+            log.add_error(f"MCP support is not installed: {exc}")
+            return
+
+        parts = args.split(maxsplit=1)
+        subcommand = parts[0].lower() if parts else "status"
+        subargs = parts[1].strip() if len(parts) > 1 else ""
+        if subcommand == "list":
+            subcommand = "status"
+
+        manager = await get_mcp_manager()
+
+        if subcommand in ("", "status"):
+            configs = manager.get_server_configs()
+            summary = manager.get_status_summary()
+            t = Text()
+            t.append("\n  🔗 ", style=f"bold {THEME['cyan']}")
+            t.append("MCP Servers\n\n", style=f"bold {THEME['cyan']}")
+            t.append("  Configured: ", style=THEME["muted"])
+            t.append(f"{summary['total_servers']}  ", style=f"bold {THEME['text']}")
+            t.append("Connected: ", style=THEME["muted"])
+            t.append(f"{summary['connected']}  ", style=f"bold {THEME['success']}")
+            t.append("Tools: ", style=THEME["muted"])
+            t.append(f"{summary['total_tools']}  ", style=f"bold {THEME['text']}")
+            t.append("Resources: ", style=THEME["muted"])
+            t.append(f"{summary['total_resources']}  ", style=f"bold {THEME['text']}")
+            t.append("Prompts: ", style=THEME["muted"])
+            t.append(f"{summary['total_prompts']}\n\n", style=f"bold {THEME['text']}")
+
+            if not configs:
+                t.append("  No MCP servers configured.\n", style=THEME["muted"])
+                t.append(
+                    "  Add servers in .superqode/mcp.json or your MCP config file.\n",
+                    style=THEME["dim"],
+                )
+            else:
+                for server_id, config in configs.items():
+                    state = manager.get_connection_state(server_id).value
+                    server_summary = summary["servers"].get(server_id, {})
+                    status_style = (
+                        THEME["success"]
+                        if state == "connected"
+                        else THEME["warning"]
+                        if state == "error"
+                        else THEME["muted"]
+                    )
+                    t.append(f"  {server_id:<18}", style=f"bold {THEME['cyan']}")
+                    t.append(f"{state:<13}", style=status_style)
+                    t.append(f"{config.name or server_id:<22}", style=THEME["text"])
+                    t.append(
+                        f"{server_summary.get('tools', 0)} tools  {server_summary.get('resources', 0)} resources  {server_summary.get('prompts', 0)} prompts",
+                        style=THEME["muted"],
+                    )
+                    error = server_summary.get("error")
+                    if error:
+                        t.append(f"  {error}", style=THEME["warning"])
+                    t.append("\n")
+
+            t.append("\n  Commands: ", style=THEME["muted"])
+            t.append(":mcp connect [server]", style=THEME["cyan"])
+            t.append(", ", style=THEME["muted"])
+            t.append(":mcp disconnect [server]", style=THEME["cyan"])
+            t.append(", ", style=THEME["muted"])
+            t.append(":mcp tools", style=THEME["cyan"])
+            t.append("\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+
+        if subcommand == "connect":
+            if subargs:
+                ok = await manager.connect(subargs)
+                log.add_info(f"MCP server {subargs}: {'connected' if ok else 'failed to connect'}")
+            else:
+                results = await manager.connect_all()
+                if not results:
+                    log.add_info("No enabled MCP servers configured.")
+                else:
+                    connected = sum(1 for ok in results.values() if ok)
+                    log.add_info(f"Connected {connected}/{len(results)} MCP servers.")
+            return
+
+        if subcommand == "disconnect":
+            if subargs:
+                await manager.disconnect(subargs)
+                log.add_info(f"MCP server {subargs}: disconnected")
+            else:
+                await manager.disconnect_all()
+                log.add_info("Disconnected all MCP servers.")
+            return
+
+        if subcommand == "tools":
+            tools = manager.list_all_tools()
+            t = Text()
+            t.append("\n  🧰 ", style=f"bold {THEME['cyan']}")
+            t.append("MCP Tools\n\n", style=f"bold {THEME['cyan']}")
+            if not tools:
+                t.append(
+                    "  No MCP tools are available from connected servers.\n", style=THEME["muted"]
+                )
+                t.append("  Run ", style=THEME["muted"])
+                t.append(":mcp connect", style=THEME["cyan"])
+                t.append(" first if servers are configured.\n", style=THEME["muted"])
+            for tool in tools:
+                t.append(f"  {tool.server_id:<16}", style=f"bold {THEME['purple']}")
+                t.append(f"{tool.name}", style=THEME["text"])
+                if tool.description:
+                    t.append(f" - {tool.description[:120]}", style=THEME["muted"])
+                t.append("\n")
+            self._show_command_output(log, t)
+            return
+
+        if subcommand == "resources":
+            resources = manager.list_all_resources()
+            t = Text()
+            t.append("\n  📚 ", style=f"bold {THEME['cyan']}")
+            t.append("MCP Resources\n\n", style=f"bold {THEME['cyan']}")
+            if not resources:
+                t.append(
+                    "  No MCP resources are available from connected servers.\n",
+                    style=THEME["muted"],
+                )
+            for resource in resources:
+                t.append(f"  {resource.server_id:<16}", style=f"bold {THEME['purple']}")
+                t.append(f"{resource.name}", style=THEME["text"])
+                t.append(f"  {resource.uri}", style=THEME["muted"])
+                t.append("\n")
+            self._show_command_output(log, t)
+            return
+
+        if subcommand == "prompts":
+            prompts = manager.list_all_prompts()
+            t = Text()
+            t.append("\n  💬 ", style=f"bold {THEME['cyan']}")
+            t.append("MCP Prompts\n\n", style=f"bold {THEME['cyan']}")
+            if not prompts:
+                t.append(
+                    "  No MCP prompts are available from connected servers.\n", style=THEME["muted"]
+                )
+            for prompt in prompts:
+                t.append(f"  {prompt.server_id:<16}", style=f"bold {THEME['purple']}")
+                t.append(prompt.name, style=THEME["text"])
+                if prompt.description:
+                    t.append(f" - {prompt.description[:120]}", style=THEME["muted"])
+                t.append("\n")
+            self._show_command_output(log, t)
+            return
+
+        log.add_info(
+            "Usage: :mcp status|connect [server]|disconnect [server]|tools|resources|prompts"
+        )
+
+    def _get_session_manager(self):
+        """Get a local JSONL session manager."""
+        from superqode.agent.session_manager import SessionManager
+
+        return SessionManager(storage_dir=".superqode/sessions")
+
+    def _show_sessions(self, log: ConversationLog):
+        """Show recent local coding sessions."""
+        manager = self._get_session_manager()
+        sessions = manager.list_all_sessions()
+
+        t = Text()
+        t.append("\n  📂 ", style=f"bold {THEME['purple']}")
+        t.append("Recent Sessions\n\n", style=f"bold {THEME['purple']}")
+
+        if not sessions:
+            t.append("  No sessions found yet.\n", style=THEME["muted"])
+            t.append("  Connect with ", style=THEME["muted"])
+            t.append(":connect byok", style=THEME["cyan"])
+            t.append(" or ", style=THEME["muted"])
+            t.append(":connect local", style=THEME["cyan"])
+            t.append(" and send a message to create one.\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+
+        for session in sessions[:12]:
+            display_id = session.session_id[:8]
+            model = session.model or "unknown"
+            provider = session.provider or "-"
+            t.append(f"  {display_id:<10}", style=f"bold {THEME['cyan']}")
+            t.append(f"{provider:<14}", style=THEME["success"])
+            t.append(f"{model:<28}", style=THEME["text"])
+            t.append(f"{session.message_count:>3} msgs  ", style=THEME["muted"])
+            t.append(f"{session.updated_at[:19]}\n", style=THEME["dim"])
+
+        t.append("\n  Use ", style=THEME["muted"])
+        t.append("/resume <id>", style=THEME["cyan"])
+        t.append(" to continue or ", style=THEME["muted"])
+        t.append("/fork <optional-new-id>", style=THEME["cyan"])
+        t.append(" to branch the active session.\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _ensure_pure_mode(self):
+        """Ensure the PureMode object exists for session operations."""
+        if not hasattr(self, "_pure_mode"):
+            from superqode.pure_mode import PureMode
+
+            self._pure_mode = PureMode()
+        return self._pure_mode
+
+    def _handle_resume_session(self, args: str, log: ConversationLog):
+        """Resume a previous local provider session."""
+        session_id = args.strip()
+        if not session_id:
+            self._show_sessions(log)
+            return
+
+        pure_mode = self._ensure_pure_mode()
+        messages = pure_mode.resume_session(session_id)
+        if not messages:
+            log.add_error(f"Session not found or prefix is ambiguous: {session_id}")
+            log.add_info("Use /sessions to view recent session ids.")
+            return
+
+        resolved_id = pure_mode.get_current_session_id() or session_id
+        log.add_info(f"Resumed session {resolved_id[:8]} with {len(messages)} messages.")
+        for message in messages[-6:]:
+            role = str(message.get("role", "?")).upper()
+            content = str(message.get("content", "")).replace("\n", " ")[:120]
+            log.add_info(f"[{role}] {content}")
+
+    def _handle_fork_session(self, args: str, log: ConversationLog):
+        """Fork the active local provider session."""
+        if not hasattr(self, "_pure_mode") or not self._pure_mode.get_current_session_id():
+            log.add_error("No active local provider session to fork.")
+            log.add_info("Use /resume <id> or connect with :connect byok/:connect local first.")
+            return
+
+        new_id = args.strip() or None
+        try:
+            fork_id = self._pure_mode.fork_current_session(new_id)
+        except Exception as exc:
+            log.add_error(f"Could not fork session: {exc}")
+            return
+        log.add_info(f"Forked current session to {fork_id}.")
+
+    def _handle_compact(self, log: ConversationLog):
+        """Compact or enable compaction for the active local provider session."""
+        if not hasattr(self, "_pure_mode") or not self._pure_mode.session.connected:
+            log.add_error("No active local provider session to compact.")
+            log.add_info("Use :connect byok or :connect local first.")
+            return
+
+        result = self._pure_mode.compact()
+        if result.get("success"):
+            log.add_info(result["message"])
+            log.add_info(
+                f"Session {result.get('session_id', '')[:8]}: {result.get('message_count', 0)} stored messages, max context {result.get('max_context_tokens')} tokens."
+            )
+        else:
+            log.add_error(result.get("message", "Compaction is not available."))
 
     def _show_superqode_demo(self, log: ConversationLog):
         """Show a demo of SuperQode's unique design system."""
@@ -3723,7 +4432,7 @@ default:
   agent: "opencode"
   agent_config:
     provider: "opencode"
-    model: "glm-4.7-free"
+    model: "minimax-m2.5-free"
 
 # =============================================================================
 # TEAM ROLES - Enable the ones you need
@@ -3739,7 +4448,7 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "glm-4.7-free"
+          model: "minimax-m2.5-free"
         enabled: false  # Set to true to enable
         job_description: |
           You are a Senior Full-Stack Developer with expertise in modern web technologies.
@@ -3762,7 +4471,7 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "grok-code"
+          model: "nemotron-3-super-free"
         enabled: false  # Set to true to enable
         job_description: |
           You are a Senior Frontend Developer specializing in modern web UIs.
@@ -3779,7 +4488,7 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "minimax-m2.1-free"
+          model: "minimax-m2.5-free"
         enabled: false  # Set to true to enable
         job_description: |
           You are a Senior Backend Developer specializing in APIs and services.
@@ -3800,7 +4509,7 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "grok-code"
+          model: "nemotron-3-super-free"
         enabled: false  # Set to true to enable
         job_description: |
           You are a Senior QA Engineer with expertise in all testing types.
@@ -4199,6 +4908,40 @@ team:
         """Send message to provider session with streaming output."""
         from time import monotonic
         import traceback
+
+        # Handle session commands
+        if text.strip().startswith("/sessions"):
+            sessions = self._pure_mode.list_sessions() if hasattr(self, "_pure_mode") else []
+            if not sessions:
+                log.add_info("No sessions found.")
+            else:
+                for s in sessions:
+                    log.add_info(
+                        f"  {s['session_id']} | {s['model'] or 'N/A'} | {s['message_count']} msgs"
+                    )
+            return
+        elif text.strip().startswith("/resume"):
+            parts = text.strip().split()
+            if len(parts) < 2:
+                log.add_info("Usage: /resume <session_id>")
+                return
+            session_id = parts[1]
+            if hasattr(self, "_pure_mode"):
+                messages = self._pure_mode.resume_session(session_id)
+                if messages:
+                    log.add_info(f"Resumed session {session_id[:8]}")
+                    for m in messages:
+                        role = m.get("role", "?").upper()
+                        content = m.get("content", "")[:100]
+                        log.add_info(f"[{role}] {content}...")
+                else:
+                    log.add_info(f"Session {session_id} not found.")
+            return
+        elif text.strip().startswith("/compact"):
+            if hasattr(self, "_pure_mode") and hasattr(self._pure_mode, "compact"):
+                self._pure_mode.compact()
+                log.add_info("Context compacted.")
+            return
 
         # Prepend file context if available (from @file references)
         file_context = getattr(self, "_current_file_context", "")
@@ -10219,19 +10962,24 @@ team:
                 elif resolved.model:
                     model_name = resolved.model
                 else:
-                    model_name = "glm-4.7-free"
+                    model_name = "minimax-m2.5-free"
 
                 # Map model names
                 model_mapping = {
-                    "glm-4.7": "glm-4.7-free",
-                    "glm-4.7-free": "glm-4.7-free",
-                    "grok-code": "grok-code",
+                    "glm-4.7": "minimax-m2.5-free",
+                    "glm-4.7-free": "minimax-m2.5-free",
+                    "grok-code": "minimax-m2.5-free",
                     "kimi-k2.5": "kimi-k2.5-free",
                     "kimi-k2.5-free": "kimi-k2.5-free",
-                    "minimax-m2.1": "minimax-m2.1-free",
-                    "minimax-m2.1-free": "minimax-m2.1-free",
+                    "minimax-m2.1": "minimax-m2.5-free",
+                    "minimax-m2.1-free": "minimax-m2.5-free",
+                    "minimax-m2.5": "minimax-m2.5-free",
+                    "minimax-m2.5-free": "minimax-m2.5-free",
                     "gpt-5-nano": "gpt-5-nano",
                     "big-pickle": "big-pickle",
+                    "nemotron-3-super-free": "nemotron-3-super-free",
+                    "trinity-large-preview-free": "trinity-large-preview-free",
+                    "qwen3.6-plus-free": "qwen3.6-plus-free",
                 }
                 model_name = model_mapping.get(model_name, model_name)
 
@@ -12352,6 +13100,9 @@ team:
         t.append(f"    Or: ", style=THEME["dim"])
         t.append(f":connect byok <provider>/<model>", style=THEME["success"])
         t.append(" for direct connect\n", style=THEME["text"])
+        t.append(f"    ", style=THEME["dim"])
+        t.append(f"R", style=f"bold {THEME['success']}")
+        t.append(" to refresh models from API\n", style=THEME["dim"])
         t.append(f"    Use ", style=THEME["dim"])
         t.append(f":back", style=THEME["cyan"])
         t.append(" or ", style=THEME["dim"])
@@ -12882,7 +13633,8 @@ team:
                     model_lower = model_id.lower()
                     # Latest models get higher priority (lower number)
                     if any(
-                        x in model_lower for x in ["5.4", "4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
+                        x in model_lower
+                        for x in ["5.4", "4.7", "5.2", "5.1", "3.2", "3.3", "k2", "6.5"]
                     ):
                         return 0
                     elif any(x in model_lower for x in ["4.5", "4-plus", "4-air", "2.5"]):
@@ -15244,10 +15996,12 @@ team:
         # Show how to select - ARROW KEYS OR TYPE NUMBER
         t.append(f"  │  ⌨️  ", style=color)
         t.append("↑↓", style=f"bold {THEME['cyan']}")
-        t.append(" Arrow keys to navigate  ", style=THEME["muted"])
+        t.append(" Navigate  ", style=THEME["muted"])
         t.append("Enter", style=f"bold {THEME['cyan']}")
-        t.append(" to select", style=THEME["muted"])
-        t.append(f"{'':>8}│\n", style=color)
+        t.append(" select  ", style=THEME["muted"])
+        t.append("R", style=f"bold {THEME['cyan']}")
+        t.append(" refresh", style=THEME["muted"])
+        t.append(f"{'':>16}│\n", style=color)
         t.append(f"  │      Or type ", style=color)
         t.append("1", style=f"bold {THEME['cyan']}")
         t.append("-", style=THEME["muted"])
@@ -15879,6 +16633,24 @@ team:
         mode, role = target.split(".", 1)
         self._set_role(mode, role, log)
 
+    async def _a2a_cmd(self, args: str, log: ConversationLog):
+        """Handle :a2a commands."""
+        parts = args.split(maxsplit=1)
+        subcommand = parts[0] if parts else ""
+        subargs = parts[1] if len(parts) > 1 else ""
+
+        # Lazy load A2A commands
+        if not hasattr(self, "_a2a_commands"):
+            try:
+                from .commands.a2a import create_a2a_commands
+
+                self._a2a_commands = create_a2a_commands()
+            except ImportError:
+                log.add_error("A2A not installed. Run: pip install superqode[a2a]")
+                return
+
+        await self._a2a_commands.handle_command(subcommand, subargs, log)
+
     def _show_context(self, log: ConversationLog):
         t = Text()
         t.append(f"\n  📎 ", style=f"bold {THEME['cyan']}")
@@ -16070,6 +16842,19 @@ team:
                 ],
             ),
             (
+                "🧰 Harness & MCP",
+                THEME["teal"],
+                [
+                    (":tools [profile]", "Show tool profile and available built-in tools"),
+                    (":mcp status", "Show configured MCP servers"),
+                    (":mcp connect [server]", "Connect one or all MCP servers"),
+                    (":mcp disconnect [server]", "Disconnect one or all MCP servers"),
+                    (":mcp tools", "List tools exposed by connected MCP servers"),
+                    (":mcp resources", "List resources exposed by connected MCP servers"),
+                    (":mcp prompts", "List prompts exposed by connected MCP servers"),
+                ],
+            ),
+            (
                 "✅ Approval & Changes",
                 THEME["warning"],
                 [
@@ -16090,6 +16875,10 @@ team:
                     (":history", "Show command history"),
                     (":history clear", "Clear command history"),
                     (":checkpoints", "Show undo/redo checkpoints"),
+                    ("/sessions", "Browse saved local provider sessions"),
+                    ("/resume <id>", "Resume a session by full id or unique prefix"),
+                    ("/fork [id]", "Branch the active local provider session"),
+                    ("/compact", "Enable context compaction for the active session"),
                 ],
             ),
             (
@@ -16150,6 +16939,7 @@ team:
                 "⌨️ Keyboard Shortcuts",
                 THEME["gold"],
                 [
+                    ("Ctrl+K", "Open command palette"),
                     ("Ctrl+B", "Toggle sidebar"),
                     ("Ctrl+E", "Open external editor"),
                     ("Ctrl+L", "Clear screen"),
