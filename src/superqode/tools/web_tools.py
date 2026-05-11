@@ -414,14 +414,18 @@ Useful for finding documentation, examples, recent information, etc."""
             return []
 
         try:
-            # Try to import exa-py
+            # Try to import the official exa-py SDK.
             try:
-                from exa import Exa
+                from exa_py import Exa
             except ImportError:
                 return []
 
             exa = Exa(api_key=api_key)
-            search = exa.search(query, num_results=num_results, highlights=True)
+            try:
+                search = exa.search(query, num_results=num_results, contents={"highlights": True})
+            except TypeError:
+                # Older exa-py releases accepted highlights as a direct keyword.
+                search = exa.search(query, num_results=num_results, highlights=True)
 
             results = []
             for r in search.results:

@@ -739,6 +739,20 @@ class MCPClientManager:
                 error_message=str(e),
             )
 
+    async def call_tool(
+        self,
+        server_id: str,
+        tool_name: str,
+        arguments: dict[str, Any],
+        timeout: float | None = None,
+    ) -> MCPToolResult:
+        """Call a tool on an MCP server.
+
+        Backward-compatible alias for ``execute_tool`` used by the public MCP
+        integration helpers and existing tests.
+        """
+        return await self.execute_tool(server_id, tool_name, arguments, timeout=timeout)
+
     # Resource operations
 
     def list_all_resources(self) -> list[MCPResource]:

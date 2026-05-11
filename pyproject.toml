@@ -3,7 +3,7 @@ name = "superqode"
 version = "0.1.12"
 description = "SuperQode: Super Quality Engineering for Agentic Coding Teams"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.14"
 authors = [
     {name = "Shashi Jagtap", email = "info@super-agentic.ai"}
 ]
@@ -44,7 +44,7 @@ mlx = [
     "mlx-lm>=0.28.3,<0.30.0; python_version < '3.14'",
 ]
 extras = [
-    "exa>=1.0.0",
+    "exa-py>=1.0.0",
 ]
 a2a = [
     "fastapi>=0.115.0",
@@ -72,7 +72,7 @@ linters = [
     "pylint>=3.3.0",
     "flake8>=7.1.0",
     "safety>=3.0.0",
-    "pip-audit>=3.0.0",
+    "pip-audit>=2.10.0",
 ]
 ui-testing = [
     "selenium>=4.27.0",

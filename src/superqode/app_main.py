@@ -88,6 +88,7 @@ from superqode.app.widgets import (
     DangerWarning,
 )
 from superqode.widgets.leader_key import LeaderKeyPopup
+from superqode.widgets.command_palette import CommandPalette, PaletteCommand
 
 # QE roles that should be highlighted as power roles in the TUI.
 POWER_QE_ROLES = {
@@ -460,6 +461,7 @@ class SuperQodeApp(App):
         Binding("ctrl+l", "clear_screen", "Clear", show=True),
         Binding("ctrl+b", "toggle_sidebar", "Sidebar", show=True),
         Binding("ctrl+t", "toggle_thinking", "Toggle Logs", show=True),
+        Binding("ctrl+k", "command_palette", "Commands", show=True),
         Binding("escape", "smart_cancel", "Cancel", show=True),
         Binding("ctrl+x", "cancel_agent", "Cancel Agent", show=False),
         Binding("ctrl+d", "toggle_thinking", "Hide Logs", show=False),
@@ -1158,6 +1160,8 @@ class SuperQodeApp(App):
                 # Scanning line animation at BOTTOM (shown when agent is thinking)
                 yield BottomScanningLine(id="thinking-wave-bottom")
 
+        yield CommandPalette(commands=self._build_palette_commands(), id="command-palette")
+
     def on_mount(self):
         # Focus input after a short delay to ensure widgets are fully ready
         self.set_timer(0.1, self._focus_input_on_ready)
@@ -1174,6 +1178,36 @@ class SuperQodeApp(App):
         self._init_sidebar_resize()
         # Run provider health check in background
         self._run_startup_health_check()
+
+    def _build_palette_commands(self) -> list[PaletteCommand]:
+        """Build the command palette from the real TUI command surface."""
+        return [
+            PaletteCommand("connect", "Connect", "Choose ACP, BYOK, or local provider", "🔌", ":connect", "connection"),
+            PaletteCommand("connect_byok", "Connect BYOK", "Pick a cloud provider and model", "⚡", ":connect byok", "connection"),
+            PaletteCommand("connect_local", "Connect Local", "Pick Ollama, LM Studio, vLLM, or another local provider", "🦙", ":connect local", "connection"),
+            PaletteCommand("acp_agents", "ACP Agents", "List available ACP coding agents", "🤖", ":acp list", "connection"),
+            PaletteCommand("models", "Models", "Show or switch models for the current provider", "📊", ":models", "connection"),
+            PaletteCommand("health", "Provider Health", "Check configured provider connectivity", "🩺", ":health", "connection"),
+            PaletteCommand("tools", "Tools", "Show active tool profile and available tools", "🧰", ":tools", "harness"),
+            PaletteCommand("mcp", "MCP Status", "Show configured MCP servers and connected tools", "🔗", ":mcp status", "harness"),
+            PaletteCommand("sessions", "Sessions", "Browse recent local coding sessions", "📂", "/sessions", "session"),
+            PaletteCommand("resume", "Resume Session", "Resume a previous session by id or prefix", "↩", "/resume", "session"),
+            PaletteCommand("fork", "Fork Session", "Branch the current session", "⑂", "/fork", "session"),
+            PaletteCommand("compact", "Compact Context", "Compress conversation context where supported", "🗜", "/compact", "session"),
+            PaletteCommand("context", "Context", "Show current mode, role, provider, model, and cwd", "📋", ":context", "harness"),
+            PaletteCommand("diff", "Diff", "Inspect file changes", "🧾", ":diff", "changes"),
+            PaletteCommand("approve", "Approve Changes", "Approve pending work", "✅", ":approve", "changes"),
+            PaletteCommand("reject", "Reject Changes", "Reject pending work", "⛔", ":reject", "changes"),
+            PaletteCommand("undo", "Undo", "Undo the last tracked change", "↶", ":undo", "changes"),
+            PaletteCommand("sidebar", "Toggle Sidebar", "Show or hide files/context panels", "▣", "Ctrl+B", "view"),
+            PaletteCommand("files", "Files", "List files in the current directory", "📁", ":files", "view"),
+            PaletteCommand("find", "Find File", "Search for files by name", "🔍", ":find", "view"),
+            PaletteCommand("search", "Search Contents", "Search text in the current workspace", "⌕", ":search", "view"),
+            PaletteCommand("mode", "Approval Mode", "Show or change tool approval mode", "🔐", ":mode", "safety"),
+            PaletteCommand("help", "Help", "Show command reference", "?", ":help", "system"),
+            PaletteCommand("clear", "Clear", "Clear the conversation view", "⌫", "Ctrl+L", "system"),
+            PaletteCommand("quit", "Quit", "Exit SuperQode", "✕", "Ctrl+C", "system"),
+        ]
 
     def _focus_input_on_ready(self):
         """Focus the input box once widgets are ready."""
@@ -1579,6 +1613,64 @@ class SuperQodeApp(App):
         if self._leader_popup:
             self._leader_popup.show()
             self._leader_mode = True
+
+    def action_command_palette(self):
+        """Open the command palette (Ctrl+K)."""
+        try:
+            palette = self.query_one("#command-palette", CommandPalette)
+            palette.toggle()
+        except Exception:
+            self._ensure_input_focus()
+
+    @on(CommandPalette.CommandSelected)
+    def on_command_palette_selected(self, event: CommandPalette.CommandSelected) -> None:
+        """Route command palette selections through the existing command dispatcher."""
+        log = self.query_one("#log", ConversationLog)
+        command_map = {
+            "connect": ":connect",
+            "connect_byok": ":connect byok",
+            "connect_local": ":connect local",
+            "acp_agents": ":acp list",
+            "models": ":models",
+            "health": ":health",
+            "tools": ":tools",
+            "mcp": ":mcp status",
+            "sessions": "/sessions",
+            "compact": "/compact",
+            "context": ":context",
+            "diff": ":diff",
+            "approve": ":approve",
+            "reject": ":reject",
+            "undo": ":undo",
+            "files": ":files",
+            "mode": ":mode",
+            "help": ":help",
+            "clear": ":clear",
+            "quit": ":quit",
+        }
+        prompt_commands = {
+            "resume": "/resume ",
+            "fork": "/fork ",
+            "find": ":find ",
+            "search": ":search ",
+        }
+
+        if event.command.id == "sidebar":
+            self.action_toggle_sidebar()
+            return
+
+        if event.command.id in prompt_commands:
+            input_widget = self.query_one("#prompt-input", Input)
+            input_widget.value = prompt_commands[event.command.id]
+            input_widget.cursor_position = len(input_widget.value)
+            input_widget.focus()
+            return
+
+        command = command_map.get(event.command.id)
+        if command:
+            self._handle_command(command, log)
+        else:
+            log.add_error(f"No handler for palette command: {event.command.label}")
 
     @on(events.TextSelected)
     async def on_text_selected(self) -> None:
@@ -3501,7 +3593,9 @@ class SuperQodeApp(App):
         elif c == "handoff":
             self._handoff(args, log)
         elif c == "a2a":
-            await self._a2a_cmd(args, log)
+            self.run_worker(self._a2a_cmd(args, log))
+        elif c == "mcp":
+            self.run_worker(self._mcp_cmd(args, log))
         elif c == "context":
             self._show_context(log)
         elif c == "files":
@@ -3543,6 +3637,16 @@ class SuperQodeApp(App):
             self._handle_view(args, log)
         elif c == "search":
             self._handle_search(args, log)
+        elif c == "tools":
+            self._show_tools(args, log)
+        elif c == "sessions":
+            self._show_sessions(log)
+        elif c == "resume":
+            self._handle_resume_session(args, log)
+        elif c in ("fork", "clone"):
+            self._handle_fork_session(args, log)
+        elif c == "compact":
+            self._handle_compact(log)
         elif c == "connect":
             # Parse subcommand: :connect [acp|byok|local] [args...]
             if not args:
@@ -3609,6 +3713,304 @@ class SuperQodeApp(App):
         # Always return focus to input after command completes
         # Use a small delay to ensure command output is displayed first
         self.set_timer(0.1, self._ensure_input_focus)
+
+    def _show_tools(self, args: str, log: ConversationLog):
+        """Show the active tool profile and available tools."""
+        from superqode.tools.base import ToolRegistry
+
+        active_tools = []
+        active_profile = "unknown"
+        if hasattr(self, "_pure_mode") and self._pure_mode.session.connected:
+            status = self._pure_mode.get_status()
+            active_tools = status.get("tools", [])
+            active_profile = status.get("tool_profile", "full")
+        else:
+            profile = (args or "full").strip().lower()
+            if profile == "minimal":
+                registry = ToolRegistry.default()
+            elif profile == "standard":
+                registry = ToolRegistry.standard()
+            else:
+                registry = ToolRegistry.full()
+                profile = "full"
+            active_tools = [tool.name for tool in registry.list()]
+            active_profile = profile
+
+        t = Text()
+        t.append("\n  🧰 ", style=f"bold {THEME['cyan']}")
+        t.append("Tool Profile\n\n", style=f"bold {THEME['cyan']}")
+        t.append("  Active profile: ", style=THEME["muted"])
+        t.append(f"{active_profile}\n", style=f"bold {THEME['success']}")
+        t.append("  Tool count: ", style=THEME["muted"])
+        t.append(f"{len(active_tools)}\n\n", style=f"bold {THEME['text']}")
+
+        categories = {
+            "File": {"read_file", "write_file", "list_directory", "edit_file", "insert_text", "patch", "multi_edit"},
+            "Search": {"grep", "glob", "code_search", "web_search", "web_fetch", "fetch", "download"},
+            "Runtime": {"bash", "diagnostics", "lsp", "batch"},
+            "Workflow": {"todo_write", "todo_read", "compact", "agent", "coordinate", "ask_user", "confirm"},
+            "Skills": {"skill", "read_skill"},
+        }
+        remaining = set(active_tools)
+        for title, names in categories.items():
+            tools = sorted(name for name in active_tools if name in names)
+            if not tools:
+                continue
+            remaining.difference_update(tools)
+            t.append(f"  {title}\n", style=f"bold {THEME['gold']}")
+            t.append(f"    {', '.join(tools)}\n", style=THEME["muted"])
+
+        if remaining:
+            t.append("  Other\n", style=f"bold {THEME['gold']}")
+            t.append(f"    {', '.join(sorted(remaining))}\n", style=THEME["muted"])
+
+        t.append("\n  Commands: ", style=THEME["muted"])
+        t.append("/tools", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append("/mode", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":mcp tools", style=THEME["cyan"])
+        t.append("\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    async def _mcp_cmd(self, args: str, log: ConversationLog):
+        """Handle MCP status and inventory commands."""
+        try:
+            from superqode.mcp.integration import get_mcp_manager
+        except ImportError as exc:
+            log.add_error(f"MCP support is not installed: {exc}")
+            return
+
+        parts = args.split(maxsplit=1)
+        subcommand = parts[0].lower() if parts else "status"
+        subargs = parts[1].strip() if len(parts) > 1 else ""
+        if subcommand == "list":
+            subcommand = "status"
+
+        manager = await get_mcp_manager()
+
+        if subcommand in ("", "status"):
+            configs = manager.get_server_configs()
+            summary = manager.get_status_summary()
+            t = Text()
+            t.append("\n  🔗 ", style=f"bold {THEME['cyan']}")
+            t.append("MCP Servers\n\n", style=f"bold {THEME['cyan']}")
+            t.append("  Configured: ", style=THEME["muted"])
+            t.append(f"{summary['total_servers']}  ", style=f"bold {THEME['text']}")
+            t.append("Connected: ", style=THEME["muted"])
+            t.append(f"{summary['connected']}  ", style=f"bold {THEME['success']}")
+            t.append("Tools: ", style=THEME["muted"])
+            t.append(f"{summary['total_tools']}  ", style=f"bold {THEME['text']}")
+            t.append("Resources: ", style=THEME["muted"])
+            t.append(f"{summary['total_resources']}  ", style=f"bold {THEME['text']}")
+            t.append("Prompts: ", style=THEME["muted"])
+            t.append(f"{summary['total_prompts']}\n\n", style=f"bold {THEME['text']}")
+
+            if not configs:
+                t.append("  No MCP servers configured.\n", style=THEME["muted"])
+                t.append("  Add servers in .superqode/mcp.json or your MCP config file.\n", style=THEME["dim"])
+            else:
+                for server_id, config in configs.items():
+                    state = manager.get_connection_state(server_id).value
+                    server_summary = summary["servers"].get(server_id, {})
+                    status_style = THEME["success"] if state == "connected" else THEME["warning"] if state == "error" else THEME["muted"]
+                    t.append(f"  {server_id:<18}", style=f"bold {THEME['cyan']}")
+                    t.append(f"{state:<13}", style=status_style)
+                    t.append(f"{config.name or server_id:<22}", style=THEME["text"])
+                    t.append(
+                        f"{server_summary.get('tools', 0)} tools  {server_summary.get('resources', 0)} resources  {server_summary.get('prompts', 0)} prompts",
+                        style=THEME["muted"],
+                    )
+                    error = server_summary.get("error")
+                    if error:
+                        t.append(f"  {error}", style=THEME["warning"])
+                    t.append("\n")
+
+            t.append("\n  Commands: ", style=THEME["muted"])
+            t.append(":mcp connect [server]", style=THEME["cyan"])
+            t.append(", ", style=THEME["muted"])
+            t.append(":mcp disconnect [server]", style=THEME["cyan"])
+            t.append(", ", style=THEME["muted"])
+            t.append(":mcp tools", style=THEME["cyan"])
+            t.append("\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+
+        if subcommand == "connect":
+            if subargs:
+                ok = await manager.connect(subargs)
+                log.add_info(f"MCP server {subargs}: {'connected' if ok else 'failed to connect'}")
+            else:
+                results = await manager.connect_all()
+                if not results:
+                    log.add_info("No enabled MCP servers configured.")
+                else:
+                    connected = sum(1 for ok in results.values() if ok)
+                    log.add_info(f"Connected {connected}/{len(results)} MCP servers.")
+            return
+
+        if subcommand == "disconnect":
+            if subargs:
+                await manager.disconnect(subargs)
+                log.add_info(f"MCP server {subargs}: disconnected")
+            else:
+                await manager.disconnect_all()
+                log.add_info("Disconnected all MCP servers.")
+            return
+
+        if subcommand == "tools":
+            tools = manager.list_all_tools()
+            t = Text()
+            t.append("\n  🧰 ", style=f"bold {THEME['cyan']}")
+            t.append("MCP Tools\n\n", style=f"bold {THEME['cyan']}")
+            if not tools:
+                t.append("  No MCP tools are available from connected servers.\n", style=THEME["muted"])
+                t.append("  Run ", style=THEME["muted"])
+                t.append(":mcp connect", style=THEME["cyan"])
+                t.append(" first if servers are configured.\n", style=THEME["muted"])
+            for tool in tools:
+                t.append(f"  {tool.server_id:<16}", style=f"bold {THEME['purple']}")
+                t.append(f"{tool.name}", style=THEME["text"])
+                if tool.description:
+                    t.append(f" - {tool.description[:120]}", style=THEME["muted"])
+                t.append("\n")
+            self._show_command_output(log, t)
+            return
+
+        if subcommand == "resources":
+            resources = manager.list_all_resources()
+            t = Text()
+            t.append("\n  📚 ", style=f"bold {THEME['cyan']}")
+            t.append("MCP Resources\n\n", style=f"bold {THEME['cyan']}")
+            if not resources:
+                t.append("  No MCP resources are available from connected servers.\n", style=THEME["muted"])
+            for resource in resources:
+                t.append(f"  {resource.server_id:<16}", style=f"bold {THEME['purple']}")
+                t.append(f"{resource.name}", style=THEME["text"])
+                t.append(f"  {resource.uri}", style=THEME["muted"])
+                t.append("\n")
+            self._show_command_output(log, t)
+            return
+
+        if subcommand == "prompts":
+            prompts = manager.list_all_prompts()
+            t = Text()
+            t.append("\n  💬 ", style=f"bold {THEME['cyan']}")
+            t.append("MCP Prompts\n\n", style=f"bold {THEME['cyan']}")
+            if not prompts:
+                t.append("  No MCP prompts are available from connected servers.\n", style=THEME["muted"])
+            for prompt in prompts:
+                t.append(f"  {prompt.server_id:<16}", style=f"bold {THEME['purple']}")
+                t.append(prompt.name, style=THEME["text"])
+                if prompt.description:
+                    t.append(f" - {prompt.description[:120]}", style=THEME["muted"])
+                t.append("\n")
+            self._show_command_output(log, t)
+            return
+
+        log.add_info("Usage: :mcp status|connect [server]|disconnect [server]|tools|resources|prompts")
+
+    def _get_session_manager(self):
+        """Get a local JSONL session manager."""
+        from superqode.agent.session_manager import SessionManager
+
+        return SessionManager(storage_dir=".superqode/sessions")
+
+    def _show_sessions(self, log: ConversationLog):
+        """Show recent local coding sessions."""
+        manager = self._get_session_manager()
+        sessions = manager.list_all_sessions()
+
+        t = Text()
+        t.append("\n  📂 ", style=f"bold {THEME['purple']}")
+        t.append("Recent Sessions\n\n", style=f"bold {THEME['purple']}")
+
+        if not sessions:
+            t.append("  No sessions found yet.\n", style=THEME["muted"])
+            t.append("  Connect with ", style=THEME["muted"])
+            t.append(":connect byok", style=THEME["cyan"])
+            t.append(" or ", style=THEME["muted"])
+            t.append(":connect local", style=THEME["cyan"])
+            t.append(" and send a message to create one.\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+
+        for session in sessions[:12]:
+            display_id = session.session_id[:8]
+            model = session.model or "unknown"
+            provider = session.provider or "-"
+            t.append(f"  {display_id:<10}", style=f"bold {THEME['cyan']}")
+            t.append(f"{provider:<14}", style=THEME["success"])
+            t.append(f"{model:<28}", style=THEME["text"])
+            t.append(f"{session.message_count:>3} msgs  ", style=THEME["muted"])
+            t.append(f"{session.updated_at[:19]}\n", style=THEME["dim"])
+
+        t.append("\n  Use ", style=THEME["muted"])
+        t.append("/resume <id>", style=THEME["cyan"])
+        t.append(" to continue or ", style=THEME["muted"])
+        t.append("/fork <optional-new-id>", style=THEME["cyan"])
+        t.append(" to branch the active session.\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _ensure_pure_mode(self):
+        """Ensure the PureMode object exists for session operations."""
+        if not hasattr(self, "_pure_mode"):
+            from superqode.pure_mode import PureMode
+
+            self._pure_mode = PureMode()
+        return self._pure_mode
+
+    def _handle_resume_session(self, args: str, log: ConversationLog):
+        """Resume a previous local provider session."""
+        session_id = args.strip()
+        if not session_id:
+            self._show_sessions(log)
+            return
+
+        pure_mode = self._ensure_pure_mode()
+        messages = pure_mode.resume_session(session_id)
+        if not messages:
+            log.add_error(f"Session not found or prefix is ambiguous: {session_id}")
+            log.add_info("Use /sessions to view recent session ids.")
+            return
+
+        resolved_id = pure_mode.get_current_session_id() or session_id
+        log.add_info(f"Resumed session {resolved_id[:8]} with {len(messages)} messages.")
+        for message in messages[-6:]:
+            role = str(message.get("role", "?")).upper()
+            content = str(message.get("content", "")).replace("\n", " ")[:120]
+            log.add_info(f"[{role}] {content}")
+
+    def _handle_fork_session(self, args: str, log: ConversationLog):
+        """Fork the active local provider session."""
+        if not hasattr(self, "_pure_mode") or not self._pure_mode.get_current_session_id():
+            log.add_error("No active local provider session to fork.")
+            log.add_info("Use /resume <id> or connect with :connect byok/:connect local first.")
+            return
+
+        new_id = args.strip() or None
+        try:
+            fork_id = self._pure_mode.fork_current_session(new_id)
+        except Exception as exc:
+            log.add_error(f"Could not fork session: {exc}")
+            return
+        log.add_info(f"Forked current session to {fork_id}.")
+
+    def _handle_compact(self, log: ConversationLog):
+        """Compact or enable compaction for the active local provider session."""
+        if not hasattr(self, "_pure_mode") or not self._pure_mode.session.connected:
+            log.add_error("No active local provider session to compact.")
+            log.add_info("Use :connect byok or :connect local first.")
+            return
+
+        result = self._pure_mode.compact()
+        if result.get("success"):
+            log.add_info(result["message"])
+            log.add_info(
+                f"Session {result.get('session_id', '')[:8]}: {result.get('message_count', 0)} stored messages, max context {result.get('max_context_tokens')} tokens."
+            )
+        else:
+            log.add_error(result.get("message", "Compaction is not available."))
 
     def _show_superqode_demo(self, log: ConversationLog):
         """Show a demo of SuperQode's unique design system."""
@@ -16270,6 +16672,19 @@ team:
                 ],
             ),
             (
+                "🧰 Harness & MCP",
+                THEME["teal"],
+                [
+                    (":tools [profile]", "Show tool profile and available built-in tools"),
+                    (":mcp status", "Show configured MCP servers"),
+                    (":mcp connect [server]", "Connect one or all MCP servers"),
+                    (":mcp disconnect [server]", "Disconnect one or all MCP servers"),
+                    (":mcp tools", "List tools exposed by connected MCP servers"),
+                    (":mcp resources", "List resources exposed by connected MCP servers"),
+                    (":mcp prompts", "List prompts exposed by connected MCP servers"),
+                ],
+            ),
+            (
                 "✅ Approval & Changes",
                 THEME["warning"],
                 [
@@ -16290,6 +16705,10 @@ team:
                     (":history", "Show command history"),
                     (":history clear", "Clear command history"),
                     (":checkpoints", "Show undo/redo checkpoints"),
+                    ("/sessions", "Browse saved local provider sessions"),
+                    ("/resume <id>", "Resume a session by full id or unique prefix"),
+                    ("/fork [id]", "Branch the active local provider session"),
+                    ("/compact", "Enable context compaction for the active session"),
                 ],
             ),
             (
@@ -16350,6 +16769,7 @@ team:
                 "⌨️ Keyboard Shortcuts",
                 THEME["gold"],
                 [
+                    ("Ctrl+K", "Open command palette"),
                     ("Ctrl+B", "Toggle sidebar"),
                     ("Ctrl+E", "Open external editor"),
                     ("Ctrl+L", "Clear screen"),

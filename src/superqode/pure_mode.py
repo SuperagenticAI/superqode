@@ -99,6 +99,7 @@ class PureMode:
         working_directory: Optional[Path] = None,
         job_description: Optional[str] = None,
         role_config: Optional[Any] = None,
+        session_id: Optional[str] = None,
     ) -> bool:
         """Connect to a provider in Pure Mode.
 
@@ -125,10 +126,8 @@ class PureMode:
             job_description=job_description,
             enable_session_storage=True,
             session_storage_dir=".superqode/sessions",
+            session_id=session_id,
         )
-
-        # Initialize session manager
-        self._session_manager = SessionManager(storage_dir=".superqode/sessions")
 
         self._agent = AgentLoop(
             gateway=self.gateway,
@@ -144,6 +143,7 @@ class PureMode:
             self._agent.on_tool_call = self.on_tool_call
             self._agent.on_tool_result = self.on_tool_result
             self._agent.on_thinking = self.on_thinking
+            self._session_manager = self._agent._session_manager
 
         return True
 
@@ -207,6 +207,7 @@ class PureMode:
                 "total_iterations": self.session.total_iterations,
             },
             "tools": [t.name for t in self.tools.list()],
+            "tool_profile": "full",
         }
 
     # Session management methods
@@ -217,7 +218,8 @@ class PureMode:
         sessions = self._session_manager.list_all_sessions()
         return [
             {
-                "session_id": s.session_id[:8],
+                "session_id": s.session_id,
+                "display_id": s.session_id[:8],
                 "provider": s.provider,
                 "model": s.model,
                 "message_count": s.message_count,
@@ -226,17 +228,34 @@ class PureMode:
             for s in sessions[:limit]
         ]
 
+    def resolve_session_id(self, session_id_or_prefix: str) -> Optional[str]:
+        """Resolve a full session id from an exact id or unique prefix."""
+        if not self._session_manager:
+            self._session_manager = SessionManager(storage_dir=".superqode/sessions")
+
+        sessions = self._session_manager.list_all_sessions()
+        exact = [s.session_id for s in sessions if s.session_id == session_id_or_prefix]
+        if exact:
+            return exact[0]
+
+        matches = [s.session_id for s in sessions if s.session_id.startswith(session_id_or_prefix)]
+        return matches[0] if len(matches) == 1 else None
+
     def resume_session(self, session_id: str) -> Optional[List[Dict[str, Any]]]:
         """Resume a session by ID."""
         if not self._session_manager:
             self._session_manager = SessionManager(storage_dir=".superqode/sessions")
 
-        metadata = self._session_manager.get_session_info(session_id)
+        resolved_session_id = self.resolve_session_id(session_id)
+        if not resolved_session_id:
+            return None
+
+        metadata = self._session_manager.get_session_info(resolved_session_id)
         if not metadata:
             return None
 
         # Start session and get messages
-        self._session_manager.start_session(session_id=session_id)
+        self._session_manager.start_session(session_id=resolved_session_id)
         messages = self._session_manager.get_messages()
 
         # Reconnect with same settings
@@ -245,6 +264,7 @@ class PureMode:
             model=metadata.model,
             system_level=self.session.system_level,
             working_directory=self.session.working_directory,
+            session_id=resolved_session_id,
         )
 
         # Return messages for display
@@ -262,6 +282,31 @@ class PureMode:
         if self._agent:
             return self._agent.session_id
         return None
+
+    def fork_current_session(self, new_session_id: Optional[str] = None) -> str:
+        """Fork the current session into a new session branch."""
+        if not self._session_manager:
+            self._session_manager = SessionManager(storage_dir=".superqode/sessions")
+        fork_id = self._session_manager.fork_current_session(new_session_id)
+        if self._agent:
+            self._agent.session_id = fork_id
+            self._agent.config.session_id = fork_id
+        return fork_id
+
+    def compact(self) -> Dict[str, Any]:
+        """Enable context compaction for the active agent and report current state."""
+        if not self._agent:
+            return {"success": False, "message": "No active provider session to compact."}
+
+        self._agent.config.enable_summarization = True
+        messages = self._agent._session_manager.get_messages() if self._agent._session_manager else []
+        return {
+            "success": True,
+            "message": "Context compaction is enabled for subsequent turns.",
+            "session_id": self._agent.session_id,
+            "message_count": len(messages),
+            "max_context_tokens": self._agent.config.max_context_tokens,
+        }
 
 
 def render_provider_picker(console: Console) -> tuple[str, str]:
