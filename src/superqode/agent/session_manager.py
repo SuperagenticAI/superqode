@@ -26,6 +26,8 @@ class SessionMetadata:
     model: str = ""
     message_count: int = 0
     total_tokens: int = 0
+    parent_session_id: Optional[str] = None
+    title: str = ""
 
 
 @dataclass
@@ -56,6 +58,8 @@ class SessionStore:
         session_id: str,
         provider: str = "",
         model: str = "",
+        parent_session_id: Optional[str] = None,
+        title: str = "",
     ) -> SessionMetadata:
         """Create a new session."""
         now = datetime.now().isoformat()
@@ -65,6 +69,8 @@ class SessionStore:
             updated_at=now,
             provider=provider,
             model=model,
+            parent_session_id=parent_session_id,
+            title=title,
         )
         self._save_metadata(metadata)
         return metadata
@@ -82,6 +88,8 @@ class SessionStore:
                     "model": metadata.model,
                     "message_count": metadata.message_count,
                     "total_tokens": metadata.total_tokens,
+                    "parent_session_id": metadata.parent_session_id,
+                    "title": metadata.title,
                 },
                 indent=2,
             )
@@ -200,14 +208,17 @@ class SessionStore:
         # Load and update metadata
         metadata = self.get_metadata(session_id)
         if metadata:
+            parent_session_id = metadata.session_id
             metadata.session_id = new_session_id
             metadata.created_at = datetime.now().isoformat()
             metadata.updated_at = metadata.created_at
+            metadata.parent_session_id = parent_session_id
+            metadata.title = metadata.title or f"Fork of {parent_session_id}"
             self._save_metadata(metadata)
             return metadata
         else:
             # Create minimal metadata if missing
-            return self.create_session(new_session_id)
+            return self.create_session(new_session_id, parent_session_id=session_id)
 
 
 class SessionManager:

@@ -153,10 +153,14 @@ line-ending = "auto"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+markers = [
+    "integration: tests that require external agents, services, or credentials",
+]
 
 [tool.bandit]
 exclude_dirs = ["tests", "examples", "docs", "scripts", "reference_code", "site"]

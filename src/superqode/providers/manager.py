@@ -71,8 +71,9 @@ class ProviderManager:
     # Provider priority for sorting (lower number = higher priority)
     PROVIDER_PRIORITY = {
         "ollama": 1,
+        "ds4": 2,
         "vllm": 2,
-        "sglang": 2,
+        "sglang": 3,
         "openai": 3,
         "anthropic": 4,
         "google": 5,
@@ -146,7 +147,7 @@ class ProviderManager:
 
     def _is_provider_configured(self, provider_id: str) -> bool:
         """Check if a provider has API keys configured."""
-        if provider_id in ("ollama", "mlx", "vllm", "sglang"):
+        if provider_id in ("ollama", "mlx", "vllm", "ds4", "sglang", "llamacpp"):
             # Local providers don't need API keys
             return True
 
@@ -455,6 +456,53 @@ class ProviderManager:
         else:  # KB
             return f"{size_bytes / 1024:.1f}KB"
 
+    def _get_ds4_models(self) -> List[ModelInfo]:
+        """Get models from a local ds4-server, with registry fallback."""
+        import os
+
+        host = os.getenv("DS4_HOST", "http://127.0.0.1:8000/v1").rstrip("/")
+        models: List[ModelInfo] = []
+        try:
+            import requests
+
+            response = requests.get(f"{host}/models", timeout=2)
+            if response.status_code == 200:
+                data = response.json()
+                for model_data in data.get("data", []):
+                    model_id = model_data.get("id", "")
+                    if model_id:
+                        models.append(
+                            ModelInfo(
+                                id=model_id,
+                                name=model_id,
+                                provider_id="ds4",
+                                description="Model served by local ds4-server",
+                                context_size=1000000,
+                            )
+                        )
+        except Exception:
+            pass
+
+        if models:
+            return models
+
+        return [
+            ModelInfo(
+                "deepseek-v4-flash",
+                "DeepSeek V4 Flash (ds4 local)",
+                "ds4",
+                description="DS4 local OpenAI-compatible server",
+                context_size=1000000,
+            ),
+            ModelInfo(
+                "deepseek-chat",
+                "DeepSeek V4 Flash non-thinking alias",
+                "ds4",
+                description="DS4 local non-thinking alias",
+                context_size=1000000,
+            ),
+        ]
+
     def list_providers(self) -> List[ProviderInfo]:
         """List available LLM providers with latest models."""
         providers = []
@@ -482,6 +530,19 @@ class ProviderManager:
                 requires_api_key=False,
                 configured=self._is_provider_configured("mlx"),
                 models=mlx_models,
+            )
+        )
+
+        # DS4 / DeepSeek V4 Flash local server
+        ds4_models = self._get_ds4_models()
+        providers.append(
+            ProviderInfo(
+                id="ds4",
+                name="DwarfStar 4",
+                description="Local DeepSeek V4 Flash via ds4-server (OpenAI-compatible)",
+                requires_api_key=False,
+                configured=self._is_provider_configured("ds4"),
+                models=ds4_models,
             )
         )
 

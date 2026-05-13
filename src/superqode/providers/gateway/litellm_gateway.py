@@ -258,6 +258,13 @@ class LiteLLMGateway(GatewayInterface):
                     "OPENAI_API_KEY", "sk-local-vllm-dummy"
                 )
 
+            # DS4 server exposes an OpenAI-compatible API at /v1
+            if provider == "ds4" and base_url:
+                clean_url = base_url.rstrip("/")
+                os.environ["OPENAI_API_BASE"] = clean_url
+                os.environ["DS4_HOST"] = clean_url
+                os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "dsv4-local")
+
             # For SGLang - configure for OpenAI-compatible API
             if provider == "sglang" and base_url:
                 # SGLang uses OpenAI-compatible API at /v1
@@ -695,6 +702,107 @@ class LiteLLMGateway(GatewayInterface):
                 model=model,
             ) from e
 
+    async def _ds4_chat_completion(
+        self,
+        messages: List[Message],
+        model: str,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        tools: Optional[List[ToolDefinition]] = None,
+        tool_choice: Optional[str] = None,
+        **kwargs,
+    ) -> GatewayResponse:
+        """Handle DS4 directly through its OpenAI-compatible endpoint.
+
+        DS4 is a local server; using LiteLLM's generic OpenAI adapter can add or
+        transform parameters that strict local parsers reject. Keep the request
+        payload small and explicit.
+        """
+        import aiohttp
+
+        provider_def = PROVIDERS.get("ds4")
+        base_url = provider_def.default_base_url if provider_def else "http://127.0.0.1:8000/v1"
+        if provider_def and provider_def.base_url_env:
+            base_url = os.environ.get(provider_def.base_url_env, base_url)
+
+        url = f"{base_url.rstrip('/')}/chat/completions"
+
+        request_data = {
+            "model": model,
+            "messages": self._convert_messages(messages),
+        }
+        if temperature is not None:
+            request_data["temperature"] = temperature
+        if max_tokens is not None:
+            request_data["max_tokens"] = max_tokens
+        if tools:
+            request_data["tools"] = self._convert_tools(tools)
+        if tool_choice:
+            request_data["tool_choice"] = tool_choice
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY', 'sk-local-ds4-dummy')}",
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    json=request_data,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=self.timeout),
+                ) as response:
+                    response_text = await response.text()
+                    if response.status >= 400:
+                        raise GatewayError(
+                            f"DS4 request failed with HTTP {response.status}.\n\n"
+                            f"Endpoint: {url}\n"
+                            f"Response: {response_text}",
+                            provider="ds4",
+                            model=model,
+                        )
+                    try:
+                        response_data = json.loads(response_text)
+                    except json.JSONDecodeError as e:
+                        raise GatewayError(
+                            f"DS4 returned non-JSON response from {url}:\n{response_text}",
+                            provider="ds4",
+                            model=model,
+                        ) from e
+
+            choice = response_data["choices"][0]
+            message = choice["message"]
+            usage_data = response_data.get("usage", {})
+            usage = None
+            if usage_data:
+                usage = Usage(
+                    prompt_tokens=usage_data.get("prompt_tokens", 0),
+                    completion_tokens=usage_data.get("completion_tokens", 0),
+                    total_tokens=usage_data.get("total_tokens", 0),
+                )
+
+            return GatewayResponse(
+                content=message.get("content", "") or "",
+                role=message.get("role", "assistant"),
+                finish_reason=choice.get("finish_reason"),
+                usage=usage,
+                model=response_data.get("model", model),
+                provider="ds4",
+                tool_calls=message.get("tool_calls"),
+                raw_response=response_data,
+            )
+
+        except aiohttp.ClientError as e:
+            raise GatewayError(
+                f"Cannot connect to DS4 server at {base_url}.\n\n"
+                f"Start ds4-server, then retry:\n"
+                f"./ds4-server --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192\n\n"
+                f"If DS4 is running somewhere else, set DS4_HOST.",
+                provider="ds4",
+                model=model,
+            ) from e
+
     async def _mlx_stream_completion(
         self,
         messages: List[Message],
@@ -841,6 +949,12 @@ class LiteLLMGateway(GatewayInterface):
         # Special handling for LM Studio - use direct client to avoid cloud API
         if provider == "lmstudio":
             return await self._lmstudio_chat_completion(
+                messages, model, temperature, max_tokens, tools, tool_choice, **kwargs
+            )
+
+        # Special handling for DS4 - use direct OpenAI-compatible local endpoint.
+        if provider == "ds4":
+            return await self._ds4_chat_completion(
                 messages, model, temperature, max_tokens, tools, tool_choice, **kwargs
             )
 

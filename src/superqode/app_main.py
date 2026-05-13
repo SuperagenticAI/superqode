@@ -352,29 +352,16 @@ def render_welcome(agents: List[AgentInfo], team_name: str = "Development Team")
     items.append(Text("\n", style=""))
 
     # ═══════════════════════════════════════════════════════════════════════
-    # DESCRIPTION SECTION - Compelling description about SuperQode
+    # DESCRIPTION SECTION - Position SuperQode as a coding agent harness first.
     # ═══════════════════════════════════════════════════════════════════════
     desc_text = Text()
-    desc_text.append(
-        "SuperQode = Superior Quality Oriented Development Engine\n", style="bold #ffffff"
-    )
+    desc_text.append("SuperQode = Multi-agent coding harness\n", style="bold #ffffff")
     desc_text.append("\n", style="")
-
-    # Use muted colors for most text, only highlight SuperQode and SuperQE with gradient
-    desc_text.append("Agentic Code needs ", style=THEME["muted"])
-    desc_text.append("Super Quality Engineering (", style=THEME["muted"])
-    # Single green color for "SuperQE" in brackets
-    desc_text.append("SuperQE", style=f"bold {THEME['success']}")
-    desc_text.append(")", style=THEME["muted"])
-    desc_text.append(". ", style=THEME["muted"])
     desc_text.append("SuperQode", style=f"bold {THEME['purple']}")
-    desc_text.append(" operationalizes ", style=THEME["muted"])
-    desc_text.append("SuperQE", style=THEME["muted"])
-    desc_text.append(" Agentic Quality Engineering - ", style=THEME["muted"])
-    desc_text.append("a multi-agentic team of coding agents", style=THEME["muted"])
-    desc_text.append(" that ", style=THEME["muted"])
-    desc_text.append("break, validate, and harden code", style=THEME["muted"])
-    desc_text.append(" before it reaches production.\n", style=THEME["muted"])
+    desc_text.append(
+        " connects coding agents, models, sessions, and project tools", style=THEME["muted"]
+    )
+    desc_text.append(" into one developer workflow.\n", style=THEME["muted"])
     items.append(Align.center(desc_text))
 
     # ═══════════════════════════════════════════════════════════════════════
@@ -402,17 +389,13 @@ def render_welcome(agents: List[AgentInfo], team_name: str = "Development Team")
     commands_text.append("BYOK", style=f"bold {THEME['pink']}")
     commands_text.append(" agents\n", style=THEME["muted"])
 
-    # :init command - compact
-    commands_text.append("🚀 ", style="bold")
-    commands_text.append(":init", style=f"bold {THEME['success']}")
-    commands_text.append("  → Prepare your Quality Engineering team\n", style=THEME["muted"])
+    commands_text.append("◆ ", style="bold")
+    commands_text.append(":recommend coding", style=f"bold {THEME['success']}")
+    commands_text.append("  → Pick a good coding model\n", style=THEME["muted"])
 
-    # :qe command - compact
-    commands_text.append("👥 ", style="bold")
-    commands_text.append(":qe", style=f"bold {THEME['orange']}")
-    commands_text.append(" <role>  → Connect to role (e.g., ", style=THEME["muted"])
-    commands_text.append(":qe security_tester", style=f"bold {THEME['orange']}")
-    commands_text.append(")\n", style=THEME["muted"])
+    commands_text.append("📂 ", style="bold")
+    commands_text.append("/sessions", style=f"bold {THEME['orange']}")
+    commands_text.append("  → Resume or fork previous work\n", style=THEME["muted"])
 
     # :help command - compact
     commands_text.append("❓ ", style="bold")
@@ -514,11 +497,11 @@ class SuperQodeApp(App):
         # Sidebar resize bindings
         Binding("ctrl+[", "shrink_sidebar", "Shrink", show=False),
         Binding("ctrl+]", "expand_sidebar", "Expand", show=False),
-        # Sidebar panel bindings (Ctrl+1 through Ctrl+6)
-        Binding("ctrl+1", "sidebar_files", "Files", show=False),
-        Binding("ctrl+2", "sidebar_agent", "Agent", show=False),
-        Binding("ctrl+3", "sidebar_context", "Context", show=False),
-        Binding("ctrl+4", "sidebar_terminal", "Terminal", show=False),
+        # Sidebar panel bindings
+        Binding("ctrl+1", "sidebar_harness", "Harness", show=False),
+        Binding("ctrl+2", "sidebar_files", "Files", show=False),
+        Binding("ctrl+3", "sidebar_agent", "Agent", show=False),
+        Binding("ctrl+4", "sidebar_context", "Context", show=False),
         Binding("ctrl+5", "sidebar_diff", "Diff", show=False),
         Binding("ctrl+6", "sidebar_history", "History", show=False),
         # Copy functionality
@@ -1189,11 +1172,35 @@ class SuperQodeApp(App):
         """Build the command palette from the real TUI command surface."""
         return [
             PaletteCommand(
-                "connect",
-                "Connect",
-                "Choose ACP, BYOK, or local provider",
+                "start_coding",
+                "Start Coding",
+                "Connect an agent/model and begin implementation work",
                 "🔌",
                 ":connect",
+                "connection",
+            ),
+            PaletteCommand(
+                "resume",
+                "Resume Session",
+                "Continue a previous coding session by id or prefix",
+                "↩",
+                "/resume",
+                "session",
+            ),
+            PaletteCommand(
+                "harness_status",
+                "Status",
+                "Show provider, model, session, branch, and approval mode",
+                "▣",
+                ":status",
+                "harness",
+            ),
+            PaletteCommand(
+                "recommend",
+                "Recommend Model",
+                "Pick a model for coding, review, testing, budget, or large context",
+                "◆",
+                ":recommend coding",
                 "connection",
             ),
             PaletteCommand(
@@ -1237,6 +1244,22 @@ class SuperQodeApp(App):
                 "connection",
             ),
             PaletteCommand(
+                "provider_guide",
+                "Provider Setup",
+                "Show setup, cost, context, and tool-support labels",
+                "☁",
+                ":providers",
+                "connection",
+            ),
+            PaletteCommand(
+                "review_diff",
+                "Review Diff",
+                "Inspect current workspace changes",
+                "🧾",
+                ":diff",
+                "changes",
+            ),
+            PaletteCommand(
                 "tools",
                 "Tools",
                 "Show active tool profile and available tools",
@@ -1253,19 +1276,19 @@ class SuperQodeApp(App):
                 "harness",
             ),
             PaletteCommand(
-                "sessions",
-                "Sessions",
-                "Browse recent local coding sessions",
-                "📂",
-                "/sessions",
-                "session",
+                "connect",
+                "Connect",
+                "Choose ACP, BYOK, or local provider",
+                "🔌",
+                ":connect",
+                "connection",
             ),
             PaletteCommand(
-                "resume",
-                "Resume Session",
-                "Resume a previous session by id or prefix",
-                "↩",
-                "/resume",
+                "sessions",
+                "Sessions",
+                "Browse recent coding sessions",
+                "📂",
+                "/sessions",
                 "session",
             ),
             PaletteCommand(
@@ -1295,6 +1318,30 @@ class SuperQodeApp(App):
                 "reject", "Reject Changes", "Reject pending work", "⛔", ":reject", "changes"
             ),
             PaletteCommand("undo", "Undo", "Undo the last tracked change", "↶", ":undo", "changes"),
+            PaletteCommand(
+                "sandbox_status",
+                "Sandbox Status",
+                "Show sandbox readiness",
+                "▣",
+                ":sandbox",
+                "advanced",
+            ),
+            PaletteCommand(
+                "plugins",
+                "Plugins",
+                "Show discovered plugin manifests",
+                "◇",
+                ":plugins",
+                "advanced",
+            ),
+            PaletteCommand(
+                "benchmark",
+                "Benchmark Harness",
+                "Show benchmark targets and task-file usage",
+                "▤",
+                ":benchmark",
+                "advanced",
+            ),
             PaletteCommand(
                 "sidebar",
                 "Toggle Sidebar",
@@ -1668,6 +1715,13 @@ class SuperQodeApp(App):
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
 
+    def action_sidebar_harness(self):
+        """Switch sidebar to harness overview."""
+        sidebar = self.query_one("#sidebar", CollapsibleSidebar)
+        sidebar.current_view = "harness"
+        if not self.sidebar_visible:
+            self.action_toggle_sidebar()
+
     def action_sidebar_agent(self):
         """Switch sidebar to agent panel."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
@@ -1748,12 +1802,20 @@ class SuperQodeApp(App):
         """Route command palette selections through the existing command dispatcher."""
         log = self.query_one("#log", ConversationLog)
         command_map = {
+            "start_coding": ":connect",
+            "harness_status": ":status",
+            "review_diff": ":diff",
             "connect": ":connect",
             "connect_byok": ":connect byok",
             "connect_local": ":connect local",
             "acp_agents": ":acp list",
             "models": ":models",
             "health": ":health",
+            "provider_guide": ":providers",
+            "recommend": ":recommend coding",
+            "sandbox_status": ":sandbox",
+            "plugins": ":plugins",
+            "benchmark": ":benchmark",
             "tools": ":tools",
             "mcp": ":mcp status",
             "sessions": "/sessions",
@@ -3722,6 +3784,8 @@ class SuperQodeApp(App):
             self.run_worker(self._mcp_cmd(args, log))
         elif c == "context":
             self._show_context(log)
+        elif c in ("status", "harness"):
+            self._show_harness_status(log)
         elif c == "files":
             self._show_files(log)
         elif c == "find":
@@ -3807,6 +3871,16 @@ class SuperQodeApp(App):
                         self._connect_byok_cmd(args, log)
         elif c == "models":
             self._models_cmd(args, log)
+        elif c in ("providers", "provider"):
+            self._providers_cmd(args, log)
+        elif c in ("recommend", "model-guide"):
+            self._recommend_cmd(args, log)
+        elif c == "sandbox":
+            self._sandbox_cmd(args, log)
+        elif c in ("plugins", "plugin"):
+            self._plugins_cmd(args, log)
+        elif c in ("benchmark", "benchmarks"):
+            self._benchmark_cmd(args, log)
         elif c == "usage":
             self._usage_cmd(args, log)
         elif c == "health":
@@ -4658,6 +4732,8 @@ team:
             current_verbosity = "normal"
             if hasattr(self, "_current_tui_logger") and self._current_tui_logger:
                 current_verbosity = self._current_tui_logger.logger.config.verbosity.value
+            current_log = self.query_one("#log", ConversationLog)
+            current_verbosity = getattr(current_log, "tool_output_mode", current_verbosity)
 
             levels = [
                 ("minimal", "◇", THEME["muted"], "Status only - no content"),
@@ -4725,6 +4801,7 @@ team:
                 if level in ("full", "debug")
                 else level
             )
+            log.tool_output_mode = display_level
 
             log.add_success(
                 f"{icons.get(display_level, '◆')} Log verbosity: {display_level.upper()}"
@@ -5019,6 +5096,14 @@ team:
             """Handle tool call - ALWAYS visible."""
             file_path = args.get("path", args.get("file_path", args.get("filePath", "")))
             command = args.get("command", "")
+            if not file_path and not command:
+                command = (
+                    args.get("query")
+                    or args.get("pattern")
+                    or args.get("old_text")
+                    or args.get("task")
+                    or ""
+                )
             _safe_call(log.add_tool_call, name, "running", file_path, command, "")
 
         def on_tool_result(name: str, result):
@@ -12258,6 +12343,16 @@ team:
                 )
                 log.add_info("✅ [green]Models:[/green] Any GGUF model loaded in LM Studio")
                 log.add_info("💡 [yellow]Tip:[/yellow] Test your model in LM Studio's chat first")
+            elif provider == "ds4":
+                import os
+
+                ds4_host = os.getenv("DS4_HOST", "http://127.0.0.1:8000/v1")
+                log.add_info(f"DS4 host: {ds4_host}")
+                log.add_info("💡 Make sure ds4-server is running:")
+                log.add_info(
+                    "   ./ds4-server --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192"
+                )
+                log.add_info("   Models: deepseek-v4-flash, deepseek-chat")
 
             log.add_info("Testing connection...")
             log.add_info("(This runs in background - you can start chatting)")
@@ -12278,10 +12373,13 @@ team:
             model_string = gateway.get_model_string(provider, model)
             log.add_info(f"Testing: {model_string}")
 
-            # Check base URL for Ollama
+            # Check base URL for local servers.
             if provider == "ollama":
                 ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
                 log.add_info(f"Ollama host: {ollama_host}")
+            elif provider == "ds4":
+                ds4_host = os.getenv("DS4_HOST", "http://127.0.0.1:8000/v1")
+                log.add_info(f"DS4 host: {ds4_host}")
 
             # Make a simple test request
             test_messages = [Message(role="user", content="Say 'test'")]
@@ -12331,6 +12429,11 @@ team:
                 log.add_info("   1. Open LM Studio application")
                 log.add_info("   2. Load a model in LM Studio")
                 log.add_info("   3. Start the local server (usually on port 1234)")
+            elif provider == "ds4":
+                log.add_info("💡 Troubleshooting:")
+                log.add_info("   1. Start ds4-server")
+                log.add_info("   2. Test manually: curl http://127.0.0.1:8000/v1/models")
+                log.add_info("   3. Set DS4_HOST if using a different URL")
             elif provider in ("vllm", "sglang", "mlx", "tgi"):
                 log.add_info(f"💡 Make sure {provider} server is running and accessible")
                 log.add_info(f"   Check the base URL in environment or provider config")
@@ -12455,7 +12558,7 @@ team:
                 self._connect_local_mode(provider, model, log)
             else:
                 # Show models for this local provider
-                self._show_local_provider_models(provider, log)
+                self.run_worker(self._show_local_provider_models(provider, log))
             return
 
         # :connect local (show interactive local provider picker)
@@ -12607,15 +12710,16 @@ team:
         if not local_providers:
             t.append("  ⚠️  No local providers configured\n", style=THEME["warning"])
             t.append(
-                "  Local providers include: ollama, lmstudio, mlx, vllm, etc.\n", style=THEME["dim"]
+                "  Local providers include: ds4, ollama, lmstudio, mlx, vllm, etc.\n",
+                style=THEME["dim"],
             )
             if clear_log:
                 log.clear()
             log.write(t)
             return
 
-        # Sort providers: prioritize main ones (Ollama, MLX, LM Studio, vLLM, SGLang) first
-        priority_order = ["ollama", "mlx", "lmstudio", "vllm", "sglang"]
+        # Sort providers: prioritize main local coding flows first.
+        priority_order = ["ds4", "ollama", "mlx", "lmstudio", "vllm", "sglang"]
 
         def sort_key(item):
             provider_id, _ = item
@@ -12644,6 +12748,7 @@ team:
 
         # Provider-specific emojis
         provider_emojis = {
+            "ds4": "◆",
             "ollama": "🐼",  # Panda
             "lmstudio": "🎨",  # Paint palette (GUI application)
             "mlx": "🍏",  # Green Apple (Apple Silicon)
@@ -12689,7 +12794,7 @@ team:
         t.append(f"\n  💡 Alternative: ", style=THEME["muted"])
         t.append(f":connect local <provider>/<model>\n", style=THEME["cyan"])
         t.append(f"    Example: ", style=THEME["dim"])
-        t.append(f":connect local ollama/llama3.2\n", style=THEME["cyan"])
+        t.append(f":connect local ds4/deepseek-v4-flash\n", style=THEME["cyan"])
 
         if clear_log:
             log.clear()
@@ -13893,6 +13998,7 @@ team:
         """Show models for a local provider by discovering them."""
         from superqode.providers.registry import PROVIDERS
         from superqode.providers.local import (
+            DS4Client,
             OllamaClient,
             LMStudioClient,
             VLLMClient,
@@ -13979,6 +14085,7 @@ team:
 
         # Map provider ID to client class
         client_map = {
+            "ds4": DS4Client,
             "ollama": OllamaClient,
             "lmstudio": LMStudioClient,
             "vllm": VLLMClient,
@@ -13996,14 +14103,31 @@ team:
         client = client_class()
         server_running = await client.is_available()
 
-        # For MLX and LM Studio, try to discover models even if server check fails
+        # For DS4, MLX and LM Studio, try to discover models even if server check fails
         # Sometimes the server is running but the availability check fails
-        if provider_id in ("mlx", "lmstudio") and not server_running:
+        if provider_id in ("ds4", "mlx", "lmstudio") and not server_running:
             # Try anyway - the list_models() call will handle errors gracefully
             pass
 
         # Always show guidance for providers that need manual setup
-        if provider_id == "mlx":
+        if provider_id == "ds4":
+            t = Text()
+            if server_running:
+                t.append(f"\n  🟢 ", style=THEME["success"])
+                t.append(f"DS4 server is running\n", style=THEME["text"])
+            else:
+                t.append(f"\n  ⚠️  ", style=THEME["warning"])
+                t.append(f"DS4 server was not reachable\n", style=THEME["text"])
+                t.append(f"  Start ds4-server, then select a model again:\n", style=THEME["muted"])
+                t.append(
+                    f"    ./ds4-server --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192\n",
+                    style=THEME["cyan"],
+                )
+                t.append(f"  Override URL with DS4_HOST if needed.\n", style=THEME["dim"])
+
+            t.append(f"\n  DS4 models are local, free, and tool-capable.\n", style=THEME["muted"])
+            log.write(t)
+        elif provider_id == "mlx":
             t = Text()
             if server_running:
                 t.append(f"\n  🟢 ", style=THEME["success"])
@@ -14386,6 +14510,202 @@ team:
             self._show_provider_models(provider, log)
         else:
             log.add_info("No provider selected")
+
+    def _providers_cmd(self, args: str, log: ConversationLog):
+        """Show provider setup, labels, and representative models."""
+        from superqode.providers.recommendations import provider_doctor_cards
+        from superqode.providers.registry import PROVIDERS
+
+        args = args.strip()
+        provider_id = args or None
+        if provider_id and provider_id not in PROVIDERS:
+            log.add_error(f"Provider not found: {provider_id}")
+            log.add_info("Use :providers to list providers or :recommend coding for suggestions.")
+            return
+
+        cards = provider_doctor_cards([provider_id] if provider_id else None)
+        t = Text()
+        t.append("\n  ☁ ", style=f"bold {THEME['cyan']}")
+        t.append("Provider Guide\n\n", style=f"bold {THEME['text']}")
+        t.append(
+            "  Labels show setup readiness, cost/context, and tool support.\n\n",
+            style=THEME["muted"],
+        )
+
+        for card in cards[:12]:
+            status_style = THEME["success"] if card["configured"] else THEME["warning"]
+            status = "ready" if card["configured"] else "missing"
+            labels = ", ".join(card["labels"]) or "-"
+            t.append(f"  {card['provider']:<16}", style=f"bold {THEME['cyan']}")
+            t.append(f"{status:<8}", style=status_style)
+            t.append(f"{card['name']}  ", style=THEME["text"])
+            t.append(f"[{labels}]\n", style=THEME["dim"])
+            t.append(f"    setup: {card['setup_hint']}\n", style=THEME["muted"])
+            for model in card["models"][:3]:
+                t.append(f"    - {model['model']:<28}", style=THEME["text"])
+                t.append(f"{model['price']:<13}", style=THEME["gold"])
+                t.append(f"{model['context']} ctx  ", style=THEME["cyan"])
+                t.append(f"tools={model['tool_support']}\n", style=THEME["muted"])
+            t.append("\n")
+
+        t.append("  Commands: ", style=THEME["muted"])
+        t.append(":providers <provider>", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(
+            ":recommend coding|review|testing|budget|speed|large-context|reasoning",
+            style=THEME["cyan"],
+        )
+        t.append("\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _recommend_cmd(self, args: str, log: ConversationLog):
+        """Recommend providers/models for a task."""
+        from superqode.providers.recommendations import normalize_task, recommend_models
+
+        task = normalize_task(args.strip() or "coding")
+        recommendations = recommend_models(task, limit=8)
+        t = Text()
+        t.append("\n  ◆ ", style=f"bold {THEME['purple']}")
+        t.append("Model Recommendations\n\n", style=f"bold {THEME['text']}")
+        t.append("  Task: ", style=THEME["muted"])
+        t.append(f"{task}\n\n", style=f"bold {THEME['cyan']}")
+
+        if not recommendations:
+            t.append("  No recommendations available.\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+
+        for index, item in enumerate(recommendations, 1):
+            setup_style = THEME["success"] if item.setup.configured else THEME["warning"]
+            setup = "ready" if item.setup.configured else item.setup.setup_hint
+            labels = ", ".join(item.labels[:6])
+            t.append(f"  [{index}] ", style=THEME["dim"])
+            t.append(f"{item.provider}/{item.model}\n", style=f"bold {THEME['text']}")
+            t.append("      score ", style=THEME["muted"])
+            t.append(f"{item.score:<3}", style=THEME["success"])
+            t.append(" price ", style=THEME["muted"])
+            t.append(f"{item.price:<13}", style=THEME["gold"])
+            t.append(" context ", style=THEME["muted"])
+            t.append(f"{item.context:<6}", style=THEME["cyan"])
+            t.append(" tools ", style=THEME["muted"])
+            t.append(
+                f"{item.tool_support:<3}",
+                style=THEME["success"] if item.tool_support == "yes" else THEME["dim"],
+            )
+            t.append(" setup ", style=THEME["muted"])
+            t.append(f"{setup}\n", style=setup_style)
+            t.append(f"      {item.reason}\n", style=THEME["muted"])
+            if labels:
+                t.append(f"      {labels}\n", style=THEME["dim"])
+            t.append("\n")
+
+        t.append("  Connect with ", style=THEME["muted"])
+        t.append(":connect <provider>/<model>", style=THEME["cyan"])
+        t.append(" after setup is ready.\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _sandbox_cmd(self, args: str, log: ConversationLog):
+        """Show sandbox provider readiness in the TUI."""
+        from superqode.sandbox import get_sandbox_capabilities, sandbox_provider_status
+
+        requested = args.strip()
+        backends = (
+            [requested]
+            if requested
+            else [
+                "docker",
+                "e2b",
+                "daytona",
+                "modal",
+                "vercel",
+                "runloop",
+                "agentcore",
+                "langsmith",
+            ]
+        )
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['cyan']}")
+        t.append("Sandbox Backends\n\n", style=f"bold {THEME['text']}")
+
+        for backend in backends:
+            status = sandbox_provider_status(backend)
+            style = THEME["success"] if status.available else THEME["warning"]
+            t.append(f"  {status.backend:<12}", style=f"bold {THEME['cyan']}")
+            t.append(("ready" if status.available else "missing").ljust(9), style=style)
+            t.append(f"{status.detail}\n", style=THEME["text"])
+            try:
+                caps = get_sandbox_capabilities(backend)
+                t.append(
+                    f"    read={caps.can_read} write={caps.can_write} shell={caps.can_shell} network={caps.can_network}\n",
+                    style=THEME["muted"],
+                )
+            except ValueError:
+                pass
+            if status.required_env:
+                t.append(f"    env: {', '.join(status.required_env)}\n", style=THEME["dim"])
+            if status.optional_dependency:
+                t.append(f"    install: {status.optional_dependency}\n", style=THEME["dim"])
+
+        t.append("\n  Commands: ", style=THEME["muted"])
+        t.append(":sandbox <backend>", style=THEME["cyan"])
+        t.append(", CLI ", style=THEME["muted"])
+        t.append("superqode sandbox run docker -- pytest -q", style=THEME["cyan"])
+        t.append("\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _plugins_cmd(self, args: str, log: ConversationLog):
+        """Show discovered plugin manifests."""
+        from superqode.plugins import load_plugins
+
+        plugins = load_plugins(Path.cwd())
+        t = Text()
+        t.append("\n  ◇ ", style=f"bold {THEME['purple']}")
+        t.append("Plugins\n\n", style=f"bold {THEME['text']}")
+        if not plugins:
+            t.append("  No plugins found.\n", style=THEME["muted"])
+            t.append(
+                "  Expected manifests under .superqode/plugins/*/plugin.json.\n", style=THEME["dim"]
+            )
+            self._show_command_output(log, t)
+            return
+
+        for plugin in plugins:
+            t.append(f"  {plugin.id:<24}", style=f"bold {THEME['cyan']}")
+            t.append(f"{plugin.version:<10}", style=THEME["success"])
+            t.append(f"{plugin.name}\n", style=THEME["text"])
+            if plugin.description:
+                t.append(f"    {plugin.description}\n", style=THEME["muted"])
+            if plugin.commands:
+                t.append(f"    commands: {', '.join(plugin.commands.keys())}\n", style=THEME["dim"])
+            if plugin.tools:
+                t.append(f"    tools: {', '.join(plugin.tools.keys())}\n", style=THEME["dim"])
+        self._show_command_output(log, t)
+
+    def _benchmark_cmd(self, args: str, log: ConversationLog):
+        """Show benchmark harness status and optional task-file guidance."""
+        from superqode.benchmarks import DEFAULT_TARGETS, is_target_available
+
+        t = Text()
+        t.append("\n  ▤ ", style=f"bold {THEME['gold']}")
+        t.append("Benchmark Harness\n\n", style=f"bold {THEME['text']}")
+        for name, target in DEFAULT_TARGETS.items():
+            available = is_target_available(target)
+            style = THEME["success"] if available else THEME["warning"]
+            t.append(f"  {name:<12}", style=f"bold {THEME['cyan']}")
+            t.append(("available" if available else "missing").ljust(11), style=style)
+            t.append(f"{' '.join(target.command)}\n", style=THEME["muted"])
+
+        t.append("\n  CLI run:\n", style=THEME["muted"])
+        t.append(
+            "    superqode benchmark run tasks.json --target superqode --target opencode --target pi --target deepagents\n",
+            style=THEME["cyan"],
+        )
+        if args.strip():
+            t.append(
+                "\n  TUI note: benchmark execution is CLI-backed for reproducible logs.\n",
+                style=THEME["dim"],
+            )
+        self._show_command_output(log, t)
 
     def _models_update_cmd(self, log: ConversationLog):
         """Handle :models update - Refresh model data from models.dev."""
@@ -16681,6 +17001,76 @@ team:
 
         log.write(t)
 
+    def _show_harness_status(self, log: ConversationLog):
+        """Show coding harness active state in one compact view."""
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Harness Status\n\n", style=f"bold {THEME['text']}")
+
+        session_id = "-"
+        if hasattr(self, "_pure_mode"):
+            try:
+                session_id = self._pure_mode.get_current_session_id() or "-"
+            except Exception:
+                session_id = "-"
+
+        git_branch = "-"
+        git_dirty = "-"
+        try:
+            branch = subprocess.run(
+                ["git", "branch", "--show-current"],
+                cwd=Path.cwd(),
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=2,
+            )
+            git_branch = branch.stdout.strip() or "-"
+            status = subprocess.run(
+                ["git", "status", "--short"],
+                cwd=Path.cwd(),
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=2,
+            )
+            git_dirty = "dirty" if status.stdout.strip() else "clean"
+        except Exception:
+            pass
+
+        fields = [
+            ("Mode", self.current_mode or "home", THEME["purple"]),
+            ("Provider", self.current_provider or "-", THEME["success"]),
+            ("Model", self.current_model or "-", THEME["cyan"]),
+            ("Agent", self.current_agent or "-", THEME["orange"]),
+            ("Session", session_id[:12] if session_id != "-" else "-", THEME["text"]),
+            ("Approval", self.approval_mode, THEME["warning"]),
+            ("Branch", git_branch, THEME["text"]),
+            ("Git", git_dirty, THEME["success"] if git_dirty == "clean" else THEME["warning"]),
+            ("CWD", str(Path.cwd()), THEME["dim"]),
+        ]
+        for label, value, style in fields:
+            t.append(f"  {label:<10}", style=THEME["muted"])
+            t.append(f"{value}\n", style=style)
+
+        t.append("\n  Panels: ", style=THEME["muted"])
+        t.append("Ctrl+B", style=THEME["cyan"])
+        t.append(" toggle sidebar, ", style=THEME["muted"])
+        t.append("Ctrl+1", style=THEME["cyan"])
+        t.append(" harness, ", style=THEME["muted"])
+        t.append("Ctrl+K", style=THEME["cyan"])
+        t.append(" commands\n", style=THEME["muted"])
+
+        try:
+            sidebar = self.query_one("#sidebar", CollapsibleSidebar)
+            sidebar.current_view = "harness"
+            if not self.sidebar_visible:
+                self.action_toggle_sidebar()
+        except Exception:
+            pass
+
+        self._show_command_output(log, t)
+
     def _show_team(self, log: ConversationLog):
         try:
             from superqode.tui import load_team_config
@@ -16799,6 +17189,8 @@ team:
                     (":models search <q>", "Search all available models"),
                     (":models update", "Refresh models database from models.dev"),
                     (":models info", "Show model database information"),
+                    (":providers [provider]", "Show provider setup and quality labels"),
+                    (":recommend <task>", "Recommend models for coding/review/testing/budget"),
                     (":usage", "Show session token usage and cost"),
                     (":usage reset", "Reset usage statistics"),
                     (":health", "Check provider connectivity status"),
@@ -16846,12 +17238,17 @@ team:
                 THEME["teal"],
                 [
                     (":tools [profile]", "Show tool profile and available built-in tools"),
+                    (":status", "Show active provider, model, sandbox/session, branch, approval"),
+                    (":harness", "Open the harness overview and show active state"),
                     (":mcp status", "Show configured MCP servers"),
                     (":mcp connect [server]", "Connect one or all MCP servers"),
                     (":mcp disconnect [server]", "Disconnect one or all MCP servers"),
                     (":mcp tools", "List tools exposed by connected MCP servers"),
                     (":mcp resources", "List resources exposed by connected MCP servers"),
                     (":mcp prompts", "List prompts exposed by connected MCP servers"),
+                    (":sandbox [backend]", "Show Docker and remote sandbox readiness"),
+                    (":plugins", "Show discovered plugin manifests"),
+                    (":benchmark", "Show benchmark target readiness and CLI usage"),
                 ],
             ),
             (
@@ -17323,16 +17720,19 @@ team:
             log.add_info("💡 Use :open to view and select text")
 
     def _handle_open(self, log: ConversationLog):
-        """Handle :open command - open last response in external viewer for text selection."""
-        if not self._last_response:
-            log.add_info("No response to open yet")
+        """Handle :open command - open last response/error in external viewer for text selection."""
+        last_error = log.get_last_error()
+        content = last_error or self._last_response or log.get_last_response()
+        content_type = "error" if last_error else "response"
+        if not content:
+            log.add_info("No response or error to open yet")
             return
 
         # Strip markdown for clean view
-        clean_response = self._strip_markdown(self._last_response)
+        clean_response = self._strip_markdown(content)
 
         # Save to file
-        output_file = Path.home() / ".superqode" / "last_response.txt"
+        output_file = Path.home() / ".superqode" / f"last_{content_type}.txt"
         output_file.parent.mkdir(parents=True, exist_ok=True)
         output_file.write_text(clean_response)
 
@@ -17343,17 +17743,17 @@ team:
             if sys.platform == "darwin":
                 # macOS - open in default text editor
                 subprocess.Popen(["open", str(output_file)])
-                log.add_success(f"✅ Opened in default editor - select and copy text there")
+                log.add_success(f"✅ Opened {content_type} in default editor")
             elif sys.platform.startswith("linux"):
                 # Linux - try xdg-open
                 subprocess.Popen(["xdg-open", str(output_file)])
-                log.add_success(f"✅ Opened in default editor - select and copy text there")
+                log.add_success(f"✅ Opened {content_type} in default editor")
             else:
                 # Windows
                 subprocess.Popen(["notepad", str(output_file)])
-                log.add_success(f"✅ Opened in Notepad - select and copy text there")
+                log.add_success(f"✅ Opened {content_type} in Notepad")
         except Exception as e:
-            log.add_info(f"📄 Response saved to: {output_file}")
+            log.add_info(f"📄 {content_type.title()} saved to: {output_file}")
             log.add_info("Open this file manually to select and copy text")
 
     def _handle_theme(self, args: str, log: ConversationLog):
@@ -17553,9 +17953,12 @@ team:
                 pass
 
     def _handle_select(self, log: ConversationLog):
-        """Handle :select command - show response in a selectable text screen."""
-        if not self._last_response:
-            log.add_info("No response to select yet")
+        """Handle :select command - show response/error in a selectable text screen."""
+        last_error = log.get_last_error()
+        content = last_error or self._last_response or log.get_last_response()
+        content_type = "Error" if last_error else "Response"
+        if not content:
+            log.add_info("No response or error to select yet")
             return
 
         # Push a screen with TextArea for selection
@@ -17614,13 +18017,14 @@ team:
             }
             """
 
-            def __init__(self, content: str):
+            def __init__(self, content: str, title: str):
                 super().__init__()
                 self._content = content
+                self._title = title
 
             def compose(self):
                 with Vertical():
-                    yield Static("📋 Select & Copy Response", classes="title")
+                    yield Static(f"📋 Select & Copy {self._title}", classes="title")
                     yield TextArea(self._content, id="text-area", read_only=True)
                     yield Static(
                         "Select text with mouse • Ctrl+C to copy • Escape to close", classes="hints"
@@ -17651,7 +18055,7 @@ team:
             def _copy_all(self):
                 """Copy all text to clipboard."""
                 self._copy_to_clipboard(self._content)
-                self.notify("Response copied to clipboard!", severity="information")
+                self.notify(f"{self._title} copied to clipboard!", severity="information")
 
             def _copy_to_clipboard(self, text: str):
                 """Copy text to system clipboard."""
@@ -17681,13 +18085,13 @@ team:
                 self.dismiss()
 
         # Clean up the response for selection
-        clean_response = self._strip_markdown(self._last_response)
+        clean_response = self._strip_markdown(content)
 
         def on_screen_dismissed(_):
             # Return focus to input after screen is dismissed
             self.set_timer(0.1, self._ensure_input_focus)
 
-        screen = SelectableScreen(clean_response)
+        screen = SelectableScreen(clean_response, content_type)
         self.push_screen(screen, callback=on_screen_dismissed)
 
     def _handle_approve(self, args: str, log: ConversationLog):

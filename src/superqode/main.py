@@ -24,6 +24,8 @@ from typing import Optional, Sequence, Iterable, List, Dict, Any
 
 import click
 
+from superqode import __version__
+
 # Global variables for interactive mode
 current_mode: str = "home"  # Start in neutral home state
 interactive_modes: dict[str, dict[str, object]] = {}
@@ -518,19 +520,173 @@ session = SessionState()
 import click
 
 
-@click.group(invoke_without_command=True)
-@click.version_option(version="0.1.12")
-@click.option("--tui", is_flag=True, help="Launch the Textual TUI interface")
-@click.pass_context
-def cli_main(ctx, tui):
-    """SuperQode - Developer TUI for multi-agent coding and exploration.
+class SuperQodeGroup(click.Group):
+    """Click group that allows headless prompts where subcommands normally go."""
 
-    Interactive interface for orchestrating coding agents across dev, QE, and DevOps.
-    For automation and CI, use the `superqe` CLI.
+    def resolve_command(self, ctx, args):
+        try:
+            return super().resolve_command(ctx, args)
+        except click.UsageError:
+            if args and (ctx.params.get("print_mode") or ctx.params.get("output_mode") == "json"):
+                ctx.params["_headless_messages"] = tuple(args)
+                return "__headless__", click.Command("__headless__", hidden=True), []
+            raise
+
+
+@click.group(
+    cls=SuperQodeGroup,
+    invoke_without_command=True,
+    context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+)
+@click.version_option(version=__version__)
+@click.option("--tui", is_flag=True, help="Launch the Textual TUI interface")
+@click.option("--print", "print_mode", "-p", is_flag=True, help="Run once and print response")
+@click.option(
+    "--mode",
+    "output_mode",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Headless output mode",
+)
+@click.option("--profile", default="build", help="Harness profile: build, plan, review, qe")
+@click.option("--provider", envvar="SUPERQODE_PROVIDER", default="openai", help="Model provider")
+@click.option(
+    "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-5.4", help="Model name"
+)
+@click.option("--resume", help="Resume a stored session by id or unique prefix")
+@click.option("--fork", "fork_from", help="Fork a stored session by id or unique prefix")
+@click.option(
+    "--sandbox",
+    "sandbox_backend",
+    default="local",
+    type=click.Choice(
+        [
+            "local",
+            "read-only",
+            "no-shell",
+            "git-worktree",
+            "docker",
+            "e2b",
+            "daytona",
+            "modal",
+            "vercel",
+            "runloop",
+            "agentcore",
+            "langsmith",
+            "remote",
+        ]
+    ),
+    help="Sandbox backend capability profile",
+)
+@click.option(
+    "--changes",
+    type=click.Choice(["summary", "files", "diff", "none"]),
+    default="summary",
+    show_default=True,
+    help="How to show workspace changes after headless coding tasks",
+)
+@click.pass_context
+def cli_main(
+    ctx,
+    tui,
+    print_mode,
+    output_mode,
+    profile,
+    provider,
+    model_name,
+    resume,
+    fork_from,
+    sandbox_backend,
+    changes,
+    _headless_messages=None,
+):
+    """SuperQode - coding agent harness for developer workflows.
+
+    Use the TUI for interactive coding work or headless mode for one-shot tasks.
     """
 
+    messages = tuple(_headless_messages or ()) or tuple(ctx.args)
+    headless_requested = (
+        print_mode or output_mode == "json" or bool(messages) or resume or fork_from
+    )
+
     # If no command is provided, launch Textual app (default behavior)
-    if ctx.invoked_subcommand is None or tui:
+    if ctx.invoked_subcommand is None or tui or messages:
+        if headless_requested and not tui:
+            import asyncio
+            import sys
+
+            from superqode.headless import response_to_json, run_headless
+            from superqode.workspace.change_summary import (
+                capture_workspace_changes,
+                render_change_summary,
+                summarize_workspace_changes,
+            )
+
+            prompt_parts = [" ".join(messages).strip()]
+            if not sys.stdin.isatty():
+                stdin_text = sys.stdin.read().strip()
+                if stdin_text:
+                    prompt_parts.insert(0, stdin_text)
+
+            prompt = "\n\n".join(part for part in prompt_parts if part)
+            if not prompt:
+                raise click.UsageError("Headless mode requires a prompt or piped stdin.")
+
+            change_baseline = capture_workspace_changes(Path.cwd())
+            try:
+                response = asyncio.run(
+                    run_headless(
+                        prompt=prompt,
+                        provider=provider,
+                        model=model_name,
+                        profile_name=profile,
+                        session_id=resume,
+                        fork_from=fork_from,
+                        sandbox_backend=sandbox_backend,
+                    )
+                )
+            except Exception as e:
+                if output_mode == "json":
+                    click.echo(
+                        json.dumps(
+                            {
+                                "type": "superqode.error",
+                                "profile": profile,
+                                "provider": provider,
+                                "model": model_name,
+                                "error": str(e),
+                                "success": False,
+                            }
+                        )
+                    )
+                else:
+                    click.echo(f"Error: {e}", err=True)
+                ctx.exit(1)
+
+            change_summary = summarize_workspace_changes(
+                Path.cwd(),
+                before=change_baseline,
+                include_diff=changes == "diff",
+            )
+            if output_mode == "json":
+                click.echo(
+                    response_to_json(
+                        response,
+                        provider,
+                        model_name,
+                        profile,
+                        change_summary=change_summary.to_dict(),
+                    )
+                )
+            else:
+                click.echo(response.content)
+                rendered_changes = render_change_summary(change_summary, changes)
+                if rendered_changes:
+                    click.echo()
+                    click.echo(rendered_changes)
+            ctx.exit(0 if response.stopped_reason == "complete" and not response.error else 1)
+
         import time
 
         # Show simple loading message before TUI starts
@@ -547,11 +703,409 @@ def cli_main(ctx, tui):
         return
 
 
+@cli_main.command("doctor")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def doctor(json_output):
+    """Check basic SuperQode developer setup."""
+    from superqode.headless import list_sessions
+    from superqode.providers.recommendations import provider_doctor_cards, recommend_models
+
+    provider_cards = provider_doctor_cards(["ds4", "ollama", "openai", "anthropic", "google"])
+    ready_providers = [card["provider"] for card in provider_cards if card["configured"]]
+    sessions = list_sessions(limit=5)
+    recommendations = recommend_models("coding", limit=3)
+    payload = {
+        "version": __version__,
+        "cwd": str(Path.cwd()),
+        "ready": bool(ready_providers),
+        "ready_providers": ready_providers,
+        "providers": provider_cards,
+        "recent_sessions": [
+            {
+                "session_id": session.session_id,
+                "provider": session.provider,
+                "model": session.model,
+                "message_count": session.message_count,
+                "updated_at": session.updated_at,
+            }
+            for session in sessions
+        ],
+        "recommended_models": [item.to_dict() for item in recommendations],
+        "next_steps": [
+            "superqode",
+            "superqode providers recommend coding",
+            "superqode -p 'summarize this repo'",
+        ],
+    }
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    click.echo(f"SuperQode {__version__}")
+    click.echo(f"CWD: {payload['cwd']}")
+    if ready_providers:
+        click.echo(f"Ready providers: {', '.join(ready_providers)}")
+    else:
+        click.echo("Ready providers: none")
+        missing = [
+            f"{card['provider']} ({card['setup_hint']})"
+            for card in provider_cards
+            if not card["configured"]
+        ]
+        if missing:
+            click.echo(f"Setup: {', '.join(missing[:3])}")
+    if recommendations:
+        top = recommendations[0]
+        click.echo(f"Suggested coding model: {top.provider}/{top.model}")
+    click.echo("Next: run `superqode` for the TUI or `superqode -p 'summarize this repo'`.")
+
+
 # Configuration management commands - defined before main() for proper registration
 @cli_main.group()
 def config():
     """Manage SuperQode configuration."""
     pass
+
+
+@cli_main.group()
+def sessions():
+    """Manage stored SuperQode coding sessions."""
+    pass
+
+
+@sessions.command("list")
+@click.option("--limit", default=20, type=int, help="Maximum sessions to show")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def sessions_list(limit, json_output):
+    """List stored sessions."""
+    from superqode.headless import list_sessions
+
+    items = list_sessions(limit=limit)
+    if json_output:
+        click.echo(
+            json.dumps(
+                [
+                    {
+                        "session_id": item.session_id,
+                        "created_at": item.created_at,
+                        "updated_at": item.updated_at,
+                        "provider": item.provider,
+                        "model": item.model,
+                        "message_count": item.message_count,
+                    }
+                    for item in items
+                ]
+            )
+        )
+        return
+
+    if not items:
+        click.echo("No sessions found.")
+        return
+
+    for item in items:
+        click.echo(
+            f"{item.session_id}  {item.provider or '-'}  {item.model or '-'}  "
+            f"{item.message_count} messages  {item.updated_at}"
+        )
+
+
+@sessions.command("tree")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def sessions_tree(json_output):
+    """Show session fork lineage."""
+    from superqode.headless import session_tree
+
+    tree = session_tree()
+    if json_output:
+        click.echo(json.dumps(tree, indent=2))
+        return
+
+    def print_node(node, indent=0):
+        click.echo(
+            "  " * indent
+            + f"{node['session_id']}  {node['model'] or '-'}  {node['message_count']} messages"
+        )
+        for child in node["children"]:
+            print_node(child, indent + 1)
+
+    if not tree:
+        click.echo("No sessions found.")
+        return
+    for node in tree:
+        print_node(node)
+
+
+@sessions.command("show")
+@click.argument("session_id")
+@click.option("--format", "fmt", type=click.Choice(["markdown", "json"]), default="markdown")
+def sessions_show(session_id, fmt):
+    """Show a stored session."""
+    from superqode.headless import export_session
+
+    click.echo(export_session(session_id, fmt=fmt), nl=False)
+
+
+@sessions.command("export")
+@click.argument("session_id")
+@click.option("--format", "fmt", type=click.Choice(["markdown", "json"]), default="markdown")
+@click.option("--output", "-o", type=click.Path(), help="Write export to file")
+def sessions_export(session_id, fmt, output):
+    """Export a stored session."""
+    from pathlib import Path
+    from superqode.headless import export_session
+
+    content = export_session(session_id, fmt=fmt)
+    if output:
+        Path(output).write_text(content, encoding="utf-8")
+        click.echo(f"Exported session to {output}")
+    else:
+        click.echo(content, nl=False)
+
+
+@sessions.command("delete")
+@click.argument("session_id")
+def sessions_delete(session_id):
+    """Delete a stored session."""
+    from superqode.headless import resolve_session_id
+    from superqode.agent.session_manager import SessionManager
+
+    resolved = resolve_session_id(session_id)
+    SessionManager(storage_dir=".superqode/sessions").delete_session(resolved)
+    click.echo(f"Deleted session {resolved}")
+
+
+@cli_main.group()
+def plugins():
+    """Inspect SuperQode plugin manifests."""
+    pass
+
+
+@plugins.command("list")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def plugins_list(json_output):
+    """List discoverable plugins."""
+    from superqode.plugins import load_plugins
+
+    loaded = load_plugins(Path.cwd())
+    if json_output:
+        click.echo(json.dumps([plugin.to_dict() for plugin in loaded]))
+        return
+
+    if not loaded:
+        click.echo("No plugins found.")
+        return
+
+    for plugin in loaded:
+        click.echo(f"{plugin.id}  {plugin.version}  {plugin.name}")
+
+
+@plugins.command("show")
+@click.argument("plugin_id")
+def plugins_show(plugin_id):
+    """Show one plugin manifest."""
+    from superqode.plugins import load_plugins
+
+    for plugin in load_plugins(Path.cwd()):
+        if plugin.id == plugin_id or plugin.name == plugin_id:
+            click.echo(json.dumps(plugin.to_dict(), indent=2))
+            return
+    raise click.ClickException(f"Plugin not found: {plugin_id}")
+
+
+@plugins.command("validate")
+@click.argument("path", type=click.Path(exists=True))
+def plugins_validate(path):
+    """Validate a plugin manifest file."""
+    from superqode.plugins import validate_plugin_manifest
+
+    issues = validate_plugin_manifest(path)
+    if issues:
+        for issue in issues:
+            click.echo(f"Error: {issue}")
+        raise click.ClickException("Plugin manifest is invalid")
+    click.echo("Plugin manifest is valid.")
+
+
+@cli_main.group()
+def sandbox():
+    """Inspect and run sandbox execution backends."""
+    pass
+
+
+@sandbox.command("doctor")
+@click.argument("backend", required=False)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def sandbox_doctor(backend, json_output):
+    """Show setup status for sandbox providers."""
+    from superqode.sandbox import get_sandbox_capabilities, sandbox_provider_status
+
+    backends = (
+        [backend]
+        if backend
+        else [
+            "docker",
+            "e2b",
+            "daytona",
+            "modal",
+            "vercel",
+            "runloop",
+            "agentcore",
+            "langsmith",
+        ]
+    )
+    payload = []
+    for name in backends:
+        status = sandbox_provider_status(name).to_dict()
+        try:
+            caps = get_sandbox_capabilities(name)
+            status["capabilities"] = {
+                "can_read": caps.can_read,
+                "can_write": caps.can_write,
+                "can_shell": caps.can_shell,
+                "can_network": caps.can_network,
+                "description": caps.description,
+            }
+        except ValueError:
+            status["capabilities"] = None
+        payload.append(status)
+
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    for item in payload:
+        marker = "ready" if item["available"] else "missing"
+        click.echo(f"{item['backend']}  {marker}  {item['detail']}")
+
+
+@sandbox.command("run", context_settings={"ignore_unknown_options": True})
+@click.argument(
+    "backend",
+    type=click.Choice(
+        ["docker", "e2b", "daytona", "modal", "vercel", "runloop", "agentcore", "langsmith"]
+    ),
+)
+@click.argument("command", nargs=-1, required=True)
+@click.option("--cwd", type=click.Path(file_okay=False, path_type=Path), default=Path.cwd)
+@click.option("--timeout", type=int, default=300, show_default=True)
+@click.option("--image", default="python:3.12-slim", show_default=True)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def sandbox_run(backend, command, cwd, timeout, image, json_output):
+    """Run a command in Docker or a remote sandbox provider."""
+    from superqode.sandbox import run_in_sandbox
+
+    shell_command = " ".join(command).strip()
+    if not shell_command:
+        raise click.UsageError("sandbox run requires a command")
+
+    try:
+        result = run_in_sandbox(backend, shell_command, cwd, timeout=timeout, image=image)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if json_output:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+        raise SystemExit(result.exit_code)
+
+    if result.stdout:
+        click.echo(result.stdout, nl=not result.stdout.endswith("\n"))
+    if result.stderr:
+        click.echo(result.stderr, err=True, nl=not result.stderr.endswith("\n"))
+    raise SystemExit(result.exit_code)
+
+
+@cli_main.group()
+def benchmark():
+    """Run coding harness benchmarks."""
+    pass
+
+
+@benchmark.command("run")
+@click.argument("tasks_file", type=click.Path(exists=True))
+@click.option(
+    "--target",
+    "targets",
+    multiple=True,
+    help="Target to run: superqode, opencode, pi, deepagents",
+)
+def benchmark_run(tasks_file, targets):
+    """Run benchmark tasks against harness CLIs."""
+    from superqode.benchmarks import DEFAULT_TARGETS, load_tasks, run_benchmark_suite
+
+    selected = [DEFAULT_TARGETS[name] for name in targets] if targets else None
+    results = run_benchmark_suite(load_tasks(tasks_file), selected)
+    click.echo(json.dumps({"results": results}, indent=2))
+
+
+@cli_main.group()
+def profiles():
+    """List built-in SuperQode harness profiles."""
+    pass
+
+
+@profiles.command("list")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def profiles_list(json_output):
+    """List harness profiles."""
+    from superqode.headless import get_harness_profiles
+
+    items = get_harness_profiles()
+    payload = [
+        {
+            "name": profile.name,
+            "description": profile.description,
+            "system_level": profile.system_level.value,
+            "tools": profile.tools,
+        }
+        for profile in items.values()
+    ]
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    for item in payload:
+        click.echo(f"{item['name']}  {item['system_level']}  {item['description']}")
+
+
+@cli_main.group()
+def tools():
+    """Inspect coding harness tools."""
+    pass
+
+
+@tools.command("list")
+@click.option("--profile", default="build", help="Harness profile to inspect")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def tools_list(profile, json_output):
+    """List tools available to a harness profile."""
+    from superqode.headless import create_tool_registry, get_harness_profiles
+    from superqode.tools.permissions import TOOL_GROUPS
+
+    profiles_map = get_harness_profiles()
+    if profile not in profiles_map:
+        raise click.ClickException(f"Unknown profile: {profile}")
+
+    harness_profile = profiles_map[profile]
+    registry = create_tool_registry(harness_profile)
+    payload = []
+    for tool in sorted(registry.list(), key=lambda item: item.name):
+        group = TOOL_GROUPS.get(tool.name)
+        permission = harness_profile.permissions.get_permission(tool.name).value
+        payload.append(
+            {
+                "name": tool.name,
+                "group": group.value if group else "other",
+                "permission": permission,
+                "description": tool.description,
+            }
+        )
+
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    for item in payload:
+        click.echo(f"{item['name']}  {item['group']}  {item['permission']}  {item['description']}")
 
 
 @config.command("list-modes")
@@ -1017,7 +1571,6 @@ from rich.table import Table
 from rich.markup import escape
 import rich.box
 
-from superqode import __version__
 from superqode.providers import ProviderManager
 from superqode.dialogs import ProviderDialog, ModelDialog, ConnectDialog
 from superqode.tui import (
@@ -1042,6 +1595,121 @@ from superqode.commands.qe import qe as qe_cmd
 from superqode.commands.roles import roles as roles_cmd
 from superqode.commands.suggestions import suggestions as suggestions_cmd
 from superqode.commands.serve import serve as serve_cmd
+
+
+@providers_cmd.command("models")
+@click.argument("provider_id")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def providers_models(provider_id, json_output):
+    """List example models for a provider."""
+    from superqode.providers.registry import PROVIDERS
+
+    provider_def = PROVIDERS.get(provider_id)
+    if not provider_def:
+        raise click.ClickException(f"Provider not found: {provider_id}")
+
+    payload = {
+        "provider": provider_id,
+        "name": provider_def.name,
+        "models": provider_def.example_models,
+        "recommended_models": getattr(provider_def, "recommended_models", []),
+        "env_vars": provider_def.env_vars,
+    }
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    click.echo(f"{provider_def.name} ({provider_id})")
+    for model in provider_def.example_models:
+        click.echo(f"  {model}")
+
+
+@providers_cmd.command("doctor")
+@click.argument("provider_id", required=False)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def providers_doctor(provider_id, json_output):
+    """Show provider configuration status and setup hints."""
+    import os
+    from superqode.providers.registry import PROVIDERS
+
+    selected = {provider_id: PROVIDERS[provider_id]} if provider_id else PROVIDERS
+    if provider_id and provider_id not in PROVIDERS:
+        raise click.ClickException(f"Provider not found: {provider_id}")
+
+    results = []
+    for pid, provider_def in selected.items():
+        configured_vars = [var for var in provider_def.env_vars if os.environ.get(var)]
+        results.append(
+            {
+                "provider": pid,
+                "name": provider_def.name,
+                "configured": bool(configured_vars) or not provider_def.env_vars,
+                "configured_env_vars": configured_vars,
+                "required_env_vars": provider_def.env_vars,
+                "base_url_env": provider_def.base_url_env,
+                "example_models": provider_def.example_models[:5],
+                "docs_url": provider_def.docs_url,
+            }
+        )
+
+    if json_output:
+        click.echo(json.dumps(results, indent=2))
+        return
+
+    for result in results:
+        status = "ok" if result["configured"] else "missing"
+        click.echo(f"{result['provider']} ({result['name']}): {status}")
+        if not result["configured"] and result["required_env_vars"]:
+            click.echo(f"  set one of: {', '.join(result['required_env_vars'])}")
+        if result["example_models"]:
+            click.echo(f"  models: {', '.join(result['example_models'])}")
+
+
+@providers_cmd.command("recommend")
+@click.argument("task", required=False, default="coding")
+@click.option("--limit", default=8, type=int, help="Maximum recommendations")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def providers_recommend(task, limit, json_output):
+    """Recommend models by task with cost/context/tool labels."""
+    from superqode.providers.recommendations import recommend_models
+
+    recommendations = recommend_models(task, limit=limit)
+    if json_output:
+        click.echo(json.dumps([item.to_dict() for item in recommendations], indent=2))
+        return
+    for item in recommendations:
+        setup = "ready" if item.setup.configured else item.setup.setup_hint
+        click.echo(
+            f"{item.provider}/{item.model}  score={item.score}  "
+            f"price={item.price}  ctx={item.context}  tools={item.tool_support}  {setup}"
+        )
+        click.echo(f"  {item.reason}")
+
+
+@providers_cmd.command("guide")
+@click.argument("provider_id", required=False)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def providers_guide(provider_id, json_output):
+    """Show provider setup and model quality labels."""
+    from superqode.providers.recommendations import provider_doctor_cards
+    from superqode.providers.registry import PROVIDERS
+
+    if provider_id and provider_id not in PROVIDERS:
+        raise click.ClickException(f"Provider not found: {provider_id}")
+    cards = provider_doctor_cards([provider_id] if provider_id else None)
+    if json_output:
+        click.echo(json.dumps(cards, indent=2))
+        return
+    for card in cards:
+        status = "ready" if card["configured"] else "missing"
+        labels = ", ".join(card["labels"]) or "-"
+        click.echo(f"{card['provider']} ({card['name']}): {status}  [{labels}]")
+        click.echo(f"  setup: {card['setup_hint']}")
+        for model in card["models"][:3]:
+            click.echo(
+                f"  - {model['model']}  price={model['price']}  "
+                f"ctx={model['context']}  tools={model['tool_support']}"
+            )
+
 
 # Add provider commands (superqode providers list, superqode providers show, etc.)
 cli_main.add_command(providers_cmd, name="providers")

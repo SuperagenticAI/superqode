@@ -166,18 +166,40 @@ def load_skills(
 
 
 def load_project_instructions(root: str | Path = ".") -> str:
-    """Load project-level instructions (AGENTS.md, CLAUDE.md)."""
+    """Load project-level instructions from global, parent, and local files."""
     base = Path(root).expanduser().resolve()
     parts: List[str] = []
 
-    for filename in ["AGENTS.md", "CLAUDE.md"]:
-        path = base / filename
-        if path.exists():
+    candidate_dirs: List[Path] = []
+
+    for global_dir in [Path.home() / ".superqode", Path.home() / ".config" / "superqode"]:
+        candidate_dirs.append(global_dir)
+
+    candidate_dirs.extend(reversed([base, *base.parents]))
+
+    seen: set[Path] = set()
+    for directory in candidate_dirs:
+        if directory in seen:
+            continue
+        seen.add(directory)
+
+        for filename in ["AGENTS.md", "CLAUDE.md"]:
+            path = directory / filename
+            if not path.exists():
+                continue
+
             try:
                 content = path.read_text(encoding="utf-8").strip()
-                if content:
-                    parts.append(content)
             except Exception:
-                pass
+                continue
+
+            if not content:
+                continue
+
+            try:
+                label = path.relative_to(base)
+            except ValueError:
+                label = path
+            parts.append(f"## Instructions from {label}\n\n{content}")
 
     return "\n\n".join(parts)

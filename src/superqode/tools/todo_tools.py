@@ -5,12 +5,45 @@ Helps models plan and track multi-step tasks with status updates.
 """
 
 import json
+import re
 from typing import Any, Dict, List
 
 from .base import Tool, ToolResult, ToolContext
 
 # Session-based in-memory storage: session_id -> list of todo items
 _todo_store: Dict[str, List[Dict[str, Any]]] = {}
+
+
+def _todo_path(ctx: ToolContext):
+    safe_session_id = re.sub(r"[^A-Za-z0-9_.:-]+", "_", getattr(ctx, "session_id", "") or "default")
+    return ctx.working_directory / ".superqode" / "todos" / f"{safe_session_id}.json"
+
+
+def _load_todos(ctx: ToolContext) -> List[Dict[str, Any]]:
+    session_id = getattr(ctx, "session_id", None) or ""
+    if session_id in _todo_store:
+        return _todo_store[session_id]
+
+    path = _todo_path(ctx)
+    if not path.exists():
+        return []
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(loaded, list):
+        return []
+    todos = [item for item in loaded if isinstance(item, dict)]
+    _todo_store[session_id] = todos
+    return todos
+
+
+def _save_todos(ctx: ToolContext, todos: List[Dict[str, Any]]) -> None:
+    session_id = getattr(ctx, "session_id", None) or ""
+    _todo_store[session_id] = todos
+    path = _todo_path(ctx)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(todos, indent=2), encoding="utf-8")
 
 
 class TodoWriteTool(Tool):
@@ -68,7 +101,6 @@ class TodoWriteTool(Tool):
 
     async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
         todos = args.get("todos", [])
-        session_id = getattr(ctx, "session_id", None) or ""
         # Normalize: ensure each item has id, content, status; optional priority
         normalized = []
         for t in todos:
@@ -83,12 +115,12 @@ class TodoWriteTool(Tool):
             if item["priority"] not in ("high", "medium", "low"):
                 item["priority"] = "medium"
             normalized.append(item)
-        _todo_store[session_id] = normalized
+        _save_todos(ctx, normalized)
         pending = sum(1 for t in normalized if t["status"] not in ("completed", "cancelled"))
         return ToolResult(
             success=True,
             output=f"Todo list updated. {len(normalized)} items, {pending} pending.",
-            metadata={"todos": normalized, "count": len(normalized)},
+            metadata={"todos": normalized, "count": len(normalized), "persisted": True},
         )
 
 
@@ -112,10 +144,9 @@ class TodoReadTool(Tool):
         return {"type": "object", "properties": {}, "required": []}
 
     async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
-        session_id = getattr(ctx, "session_id", None) or ""
-        todos = _todo_store.get(session_id, [])
+        todos = _load_todos(ctx)
         return ToolResult(
             success=True,
             output=json.dumps(todos, indent=2),
-            metadata={"todos": todos, "count": len(todos)},
+            metadata={"todos": todos, "count": len(todos), "persisted": True},
         )

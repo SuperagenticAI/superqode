@@ -50,6 +50,8 @@ class ToolContext:
     tool_registry: Optional["ToolRegistry"] = None
     # Delegation depth for SubAgentTool (0=top, incremented for child sessions; max 3)
     delegation_depth: int = 0
+    # Optional runner provided by AgentLoop for real child-agent execution.
+    sub_agent_runner: Optional[Callable[[str, Dict[str, Any]], Awaitable[str]]] = None
 
     async def emit_output(self, text: str) -> None:
         """Emit output to the callback if set."""
@@ -170,6 +172,15 @@ class ToolRegistry:
         """List all registered tools."""
         return list(self._tools.values())
 
+    def filtered(self, allowed_tools: List[str]) -> "ToolRegistry":
+        """Create a registry containing only the named tools that exist."""
+        registry = ToolRegistry()
+        allowed = set(allowed_tools)
+        for name, tool in self._tools.items():
+            if name in allowed:
+                registry.register(tool)
+        return registry
+
     def to_openai_format(self) -> List[Dict[str, Any]]:
         """Get all tools in OpenAI format."""
         return [tool.to_openai_format() for tool in self._tools.values()]
@@ -180,7 +191,7 @@ class ToolRegistry:
         from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
         from .edit_tools import EditFileTool, InsertTextTool
         from .shell_tools import BashTool
-        from .search_tools import GrepTool, GlobTool
+        from .search_tools import GrepTool, GlobTool, RepoSearchTool
 
         registry = cls()
 
@@ -199,6 +210,7 @@ class ToolRegistry:
         # Search
         registry.register(GrepTool())
         registry.register(GlobTool())
+        registry.register(RepoSearchTool())
 
         return registry
 
@@ -208,7 +220,7 @@ class ToolRegistry:
         from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
         from .edit_tools import EditFileTool, InsertTextTool, PatchTool, MultiEditTool
         from .shell_tools import BashTool
-        from .search_tools import GrepTool, GlobTool, CodeSearchTool
+        from .search_tools import GrepTool, GlobTool, CodeSearchTool, RepoSearchTool
         from .diagnostics import DiagnosticsTool
         from .network_tools import FetchTool, DownloadTool
         from .agent_tools import SubAgentTool, TaskCoordinatorTool
@@ -244,6 +256,7 @@ class ToolRegistry:
         # Search (basic + semantic)
         registry.register(GrepTool())
         registry.register(GlobTool())
+        registry.register(RepoSearchTool())
         registry.register(CodeSearchTool())
 
         # Diagnostics
@@ -305,7 +318,7 @@ class ToolRegistry:
         from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
         from .edit_tools import EditFileTool, InsertTextTool, PatchTool, MultiEditTool
         from .shell_tools import BashTool
-        from .search_tools import GrepTool, GlobTool, CodeSearchTool
+        from .search_tools import GrepTool, GlobTool, CodeSearchTool, RepoSearchTool
         from .diagnostics import DiagnosticsTool
         from .lsp_tools import LSPTool
         from .question_tool import QuestionTool, ConfirmTool
@@ -338,6 +351,7 @@ class ToolRegistry:
         # Search
         registry.register(GrepTool())
         registry.register(GlobTool())
+        registry.register(RepoSearchTool())
         registry.register(CodeSearchTool())
 
         # Diagnostics

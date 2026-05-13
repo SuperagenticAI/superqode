@@ -1915,6 +1915,7 @@ class SidebarTabs(Container):
 
     # All available tabs with SuperQode icons - Colorful symbols
     TABS = {
+        "harness": "▣",  # Harness overview
         "files": "📁",  # Files
         "code": "◇",  # Code preview
         "changes": "⟳",  # Git changes
@@ -1927,6 +1928,7 @@ class SidebarTabs(Container):
 
     # Tab hints for hover
     TAB_HINTS = {
+        "harness": "Harness Overview",
         "files": "Project Files",
         "code": "Code Preview",
         "changes": "Git Changes",
@@ -1949,6 +1951,7 @@ class SidebarTabs(Container):
     def compose(self) -> ComposeResult:
         """Compose tab bar with all tabs."""
         # Primary tabs (always shown) - Colorful symbols with hints
+        yield Static(self.TABS["harness"], id="tab-harness", classes="tab")
         yield Static(self.TABS["files"], id="tab-files", classes="tab active")
         yield Static(self.TABS["code"], id="tab-code", classes="tab")
         yield Static(self.TABS["changes"], id="tab-changes", classes="tab")
@@ -2446,6 +2449,17 @@ class CollapsibleSidebar(Container):
         background: #000000;
     }
 
+    CollapsibleSidebar #harness-view {
+        height: 100%;
+        width: 100%;
+        background: #000000;
+        display: none;
+    }
+
+    CollapsibleSidebar #harness-view.visible {
+        display: block;
+    }
+
     CollapsibleSidebar #files-view.-hidden {
         display: none;
     }
@@ -2618,6 +2632,7 @@ class CollapsibleSidebar(Container):
         Binding("g", "show_changes", "Changes", show=False),
         Binding("s", "show_search", "Search", show=False),
         Binding("r", "refresh_changes", "Refresh", show=False),
+        Binding("o", "show_harness", "Harness", show=False),
         Binding("a", "show_agent", "Agent", show=False),
         Binding("x", "show_context", "Context", show=False),
         Binding("d", "show_diff", "Diff", show=False),
@@ -2627,7 +2642,17 @@ class CollapsibleSidebar(Container):
     current_view: reactive[str] = reactive("files")
 
     # All available views
-    VIEWS = ["files", "code", "changes", "search", "agent", "context", "diff", "history"]
+    VIEWS = [
+        "harness",
+        "files",
+        "code",
+        "changes",
+        "search",
+        "agent",
+        "context",
+        "diff",
+        "history",
+    ]
 
     class FileOpened(Message):
         """Message sent when a file should be opened/viewed."""
@@ -2661,6 +2686,7 @@ class CollapsibleSidebar(Container):
             TerminalPanel,
             DiffPanel,
             HistoryPanel,
+            HarnessPanel,
         )
 
         # Header with title
@@ -2676,6 +2702,10 @@ class CollapsibleSidebar(Container):
 
         # Content area
         with Container(id="sidebar-content"):
+            # Harness overview
+            with Container(id="harness-view"):
+                yield HarnessPanel(id="harness-panel")
+
             # Files view (default)
             with Container(id="files-view"):
                 yield ColorfulDirectoryTree(self.root_path, id="file-tree")
@@ -2731,6 +2761,7 @@ class CollapsibleSidebar(Container):
             # Hide all views first
             all_views = [
                 "files-view",
+                "harness-view",
                 "code-view",
                 "changes-view",
                 "search-view",
@@ -2773,6 +2804,13 @@ class CollapsibleSidebar(Container):
                     ).focus()
                 except Exception:
                     pass
+            elif view == "harness":
+                try:
+                    from superqode.widgets.sidebar_panels import HarnessPanel
+
+                    self.query_one("#harness-panel", HarnessPanel).refresh_summary()
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -2798,6 +2836,10 @@ class CollapsibleSidebar(Container):
     def action_show_files(self) -> None:
         """Show files view."""
         self.current_view = "files"
+
+    def action_show_harness(self) -> None:
+        """Show harness overview."""
+        self.current_view = "harness"
 
     def action_show_code(self) -> None:
         """Show code view."""
@@ -2878,6 +2920,15 @@ class CollapsibleSidebar(Container):
             from superqode.widgets.sidebar_panels import HistoryPanel
 
             return self.query_one("#history-panel", HistoryPanel)
+        except Exception:
+            return None
+
+    def get_harness_panel(self):
+        """Get the harness panel widget."""
+        try:
+            from superqode.widgets.sidebar_panels import HarnessPanel
+
+            return self.query_one("#harness-panel", HarnessPanel)
         except Exception:
             return None
 

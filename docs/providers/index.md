@@ -28,7 +28,7 @@ SuperQode supports multiple provider types for connecting to AI models and agent
 
     ---
 
-    Run models locally with Ollama, LM Studio, MLX, or vLLM.
+    Run models locally with DS4, Ollama, LM Studio, MLX, or vLLM.
 
     [:octicons-arrow-right-24: Local Providers](local.md)
 
@@ -81,7 +81,8 @@ superqode connect acp amp
 ### Local (Self-Hosted)
 
 ```bash
-# Start Ollama
+# Start a local OpenAI-compatible server.
+# Example: Ollama
 ollama serve
 
 # Connect
@@ -118,6 +119,7 @@ Self-hosted options:
 
 | Provider | Description |
 |----------|-------------|
+| DS4 | DeepSeek V4 Flash through a local OpenAI-compatible server |
 | Ollama | Easy local deployment |
 | LM Studio | GUI-based local models |
 | MLX | Apple Silicon optimized |

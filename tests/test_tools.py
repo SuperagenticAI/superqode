@@ -9,7 +9,7 @@ from pathlib import Path
 from superqode.tools.base import ToolRegistry, ToolContext
 from superqode.tools.file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
 from superqode.tools.edit_tools import EditFileTool
-from superqode.tools.search_tools import GlobTool
+from superqode.tools.search_tools import GlobTool, RepoSearchTool
 
 
 @pytest.fixture
@@ -206,6 +206,29 @@ class TestGlobTool:
         assert "file1.py" in result.output
         assert "file2.py" in result.output
         assert "file3.txt" not in result.output
+
+
+class TestRepoSearchTool:
+    """Test the high-level repository search tool."""
+
+    @pytest.mark.asyncio
+    async def test_repo_search_returns_files_content_and_symbols(self, temp_dir, tool_context):
+        """Test combined file/content/symbol search."""
+        src = temp_dir / "src"
+        src.mkdir()
+        (src / "provider_manager.py").write_text(
+            "class ProviderManager:\n    def list_models(self):\n        return ['model']\n",
+            encoding="utf-8",
+        )
+
+        tool = RepoSearchTool()
+        result = await tool.execute({"query": "ProviderManager"}, tool_context)
+
+        assert result.success
+        assert "Files:" in result.output
+        assert "Content:" in result.output
+        assert "Symbols:" in result.output
+        assert "src/provider_manager.py" in result.output
 
 
 class TestListDirectoryTool:

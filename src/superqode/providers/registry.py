@@ -633,6 +633,23 @@ PROVIDERS: Dict[str, ProviderDef] = {
         ],
         notes="High-throughput serving. PagedAttention.",
     ),
+    "ds4": ProviderDef(
+        id="ds4",
+        name="DwarfStar 4 (DeepSeek V4 Flash)",
+        tier=ProviderTier.LOCAL,
+        category=ProviderCategory.LOCAL,
+        env_vars=[],
+        base_url_env="DS4_HOST",
+        default_base_url="http://127.0.0.1:8000/v1",
+        litellm_prefix="openai/",
+        docs_url="https://github.com/antirez/ds4",
+        example_models=[
+            "deepseek-v4-flash",
+            "deepseek-chat",
+        ],
+        notes="Local DS4 server for DeepSeek V4 Flash. Run ds4-server with an OpenAI-compatible endpoint, for example: ./ds4-server --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192",
+        deployment_mode="local",
+    ),
     "sglang": ProviderDef(
         id="sglang",
         name="SGLang",

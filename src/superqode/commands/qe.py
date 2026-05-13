@@ -120,8 +120,8 @@ def qe_run(
 
         superqe run . --allow-suggestions # Let agents suggest and verify fixes
     """
-    if jsonl_stream or junit or generate or allow_suggestions:
-        if not _enterprise_only("Advanced QE automation"):
+    if generate or allow_suggestions:
+        if not _enterprise_only("Fix generation and suggestion mode"):
             return 1
 
     from superqode.superqe import QEOrchestrator, QEEventEmitter, set_event_emitter

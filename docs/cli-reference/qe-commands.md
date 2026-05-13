@@ -16,12 +16,13 @@ superqe COMMAND [OPTIONS] [ARGS]
 
 ## OSS vs Enterprise
 
-**OSS supports:** `run`, `roles`, `quick`, `deep`.
+**OSS supports:** `run`, `roles`, `quick`, `deep`, JSON output, JSONL event
+streaming, and JUnit export.
 
 **Enterprise commands:** `status`, `artifacts`, `show`, `clean`, `report`, `logs`,
 `dashboard`, `feedback`, `suppressions`.
 
-**Enterprise options:** `--generate`, `--allow-suggestions`, `--jsonl`, `--junit`.
+**Enterprise options:** `--generate`, `--allow-suggestions`.
 
 ---
 
@@ -49,8 +50,8 @@ superqe run [PATH] [OPTIONS]
 | `--no-revert` | Don't revert changes (for debugging) |
 | `--output`, `-o` | Output directory for artifacts |
 | `--json` | Output results as JSON |
-| `--jsonl` | Stream events as JSONL (Enterprise) |
-| `--junit PATH` | Export JUnit XML to file (Enterprise) |
+| `--jsonl` | Stream events as JSONL |
+| `--junit PATH` | Export JUnit XML to file |
 | `--worktree` | Use git worktree isolation (writes `.git/worktrees`) |
 | `--generate`, `-g` | Generate tests for detected issues (Enterprise) |
 | `--allow-suggestions` | Enable suggestion mode (Enterprise) |

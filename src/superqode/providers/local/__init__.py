@@ -7,6 +7,7 @@ This module provides clients for self-hosted LLM servers including:
 - SGLang
 - MLX-LM
 - TGI (Text Generation Inference)
+- DS4 / DwarfStar 4
 - llama.cpp server
 - Generic OpenAI-compatible servers
 """
@@ -31,6 +32,7 @@ from superqode.providers.local.sglang import SGLangClient, get_sglang_client
 from superqode.providers.local.mlx import MLXClient, get_mlx_client
 from superqode.providers.local.tgi import TGIClient, get_tgi_client
 from superqode.providers.local.lmstudio import LMStudioClient, get_lmstudio_client
+from superqode.providers.local.ds4 import DS4Client, get_ds4_client
 from superqode.providers.local.discovery import (
     DiscoveredProvider,
     LocalProviderDiscovery,
@@ -75,6 +77,8 @@ __all__ = [
     "get_tgi_client",
     "LMStudioClient",
     "get_lmstudio_client",
+    "DS4Client",
+    "get_ds4_client",
     # Discovery
     "LocalProviderDiscovery",
     "get_discovery_service",

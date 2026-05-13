@@ -29,6 +29,66 @@ from .constants import (
 )
 
 
+def summarize_tool_output(tool_name: str, status: str, output: str, mode: str = "normal") -> str:
+    """Summarize tool output for clear, collapsed-by-default TUI logs."""
+    if not output:
+        return ""
+    output = str(output).strip()
+    if not output:
+        return ""
+
+    if mode == "verbose":
+        return output
+
+    lines = [line for line in output.splitlines() if line.strip()]
+    if mode == "minimal" and status != "error":
+        return ""
+
+    tool_lower = tool_name.lower()
+    if status == "error":
+        return _clip_single_line(lines[0] if lines else output, 240)
+    if "repo_search" in tool_lower:
+        return _summarize_repo_search(lines)
+    if any(name in tool_lower for name in ("grep", "search", "find")):
+        if output.lower().startswith("no "):
+            return output
+        return f"{len(lines)} match{'es' if len(lines) != 1 else ''}"
+    if "glob" in tool_lower or "list" in tool_lower:
+        if output.lower().startswith("no "):
+            return output
+        return f"{len(lines)} item{'s' if len(lines) != 1 else ''}"
+    if "read" in tool_lower:
+        return f"read {len(lines)} line{'s' if len(lines) != 1 else ''}"
+    if any(name in tool_lower for name in ("write", "edit", "patch", "insert", "multi_edit")):
+        return _clip_single_line(lines[0] if lines else "updated", 160)
+    if "bash" in tool_lower or "shell" in tool_lower:
+        if not lines:
+            return "completed"
+        return f"{len(lines)} output line{'s' if len(lines) != 1 else ''}: {_clip_single_line(lines[-1], 120)}"
+    return _clip_single_line(lines[0] if lines else output, 160)
+
+
+def _summarize_repo_search(lines: list[str]) -> str:
+    sections = {"Files": 0, "Content": 0, "Symbols": 0}
+    current = ""
+    for line in lines:
+        label = line.rstrip(":")
+        if label in sections:
+            current = label
+            continue
+        if current:
+            sections[current] += 1
+    parts = [f"{name.lower()} {count}" for name, count in sections.items() if count]
+    return ", ".join(parts) if parts else "no matches"
+
+
+def _clip_single_line(text: str, limit: int) -> str:
+    text = " ".join(str(text).split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
+
+
 class GradientLogo(Static):
     """ASCII logo with purple→pink→orange gradient - BIG display."""
 
@@ -69,11 +129,7 @@ class ColorfulStatusBar(Static):
             result.append(char, style=f"bold {color}")
         result.append(" ✨", style="bold #fbbf24")
         result.append(" ", style="")
-        # "Multi-Agentic" in normal text color (no gradient)
-        result.append("Multi-Agentic", style="")
-        result.append(" Orchestration of ", style=THEME["muted"])
-        # "Coding Agents" in normal text color (no gradient)
-        result.append("Coding Agents", style="")
+        result.append("Multi-agent coding harness", style="")
 
         # BYOK status (if connected)
         if self.byok_provider:
@@ -680,6 +736,7 @@ class ConversationLog(RichLog):
         self._thinking_lines: list[str] = []
         self._tool_calls: list[dict] = []
         self._streaming_response: str = ""
+        self.tool_output_mode: str = "normal"
         # Force console width to None (unlimited) immediately after init
         self._force_unlimited_width = True
 
@@ -1253,8 +1310,14 @@ class ConversationLog(RichLog):
             line.append(f"  $ {cmd_short}", style=THEME["dim"])
 
         if output and status in ("success", "error"):
-            # Show full output - no truncation, let the widget handle wrapping
-            line.append(f"\n    → {output}", style=THEME["muted"])
+            summary = summarize_tool_output(
+                tool_name,
+                status,
+                output,
+                getattr(self, "tool_output_mode", "normal"),
+            )
+            if summary:
+                line.append(f"\n    → {summary}", style=THEME["muted"])
 
         line.append("\n")
         self.write(line)
@@ -1325,9 +1388,18 @@ class ConversationLog(RichLog):
         # 3. Modified Files
         files_mod = getattr(self, "_files_modified", set())
         if files_mod:
-            summary_content.append("📁 Files Impacted:\n", style="bold")
-            for f in sorted(files_mod):
-                summary_content.append(f"  • {f}\n", style=THEME["warning"])
+            file_count = len(files_mod)
+            summary_content.append("📁 Changes:\n", style="bold")
+            summary_content.append(
+                f"  {file_count} file{'s' if file_count != 1 else ''} changed",
+                style=THEME["warning"],
+            )
+            if getattr(self, "tool_output_mode", "normal") == "verbose":
+                summary_content.append("\n", style="")
+                for f in sorted(files_mod):
+                    summary_content.append(f"  • {f}\n", style=THEME["warning"])
+            else:
+                summary_content.append("  (:log verbose shows file names)\n", style=THEME["dim"])
             summary_content.append("\n")
 
         # 4. Performance Stats Grid

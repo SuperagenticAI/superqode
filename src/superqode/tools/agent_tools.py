@@ -160,6 +160,8 @@ class SubAgentTool(Tool):
         additional_context["delegation_depth"] = child_depth
         if allowed_tools is not None:
             additional_context["allowed_tools"] = list(allowed_tools)
+        if ctx.sub_agent_runner:
+            additional_context["_sub_agent_runner"] = ctx.sub_agent_runner
 
         # Create task
         task_id = f"subtask-{uuid.uuid4().hex[:8]}"
@@ -230,22 +232,16 @@ class SubAgentTool(Tool):
         """
         Run the sub-agent.
 
-        This is a simplified implementation that simulates sub-agent execution.
-        In a full implementation, this would create a new AgentLoop instance
-        with its own message history but shared tools.
+        AgentLoop injects a runner into ToolContext so sub-agents execute with
+        isolated message history while inheriting the parent model and tool
+        gateway. Older/non-AgentLoop callers still get a clear unsupported
+        result instead of a fake success.
         """
-        # For now, we provide a simplified execution model
-        # In a full implementation, this would spawn a real agent loop
+        runner = sub_ctx.shared_memory.get("_sub_agent_runner")
+        if not runner:
+            raise RuntimeError("Sub-agent execution is unavailable outside AgentLoop")
 
-        # Simulate some processing time
-        await asyncio.sleep(0.1)
-
-        # Return a placeholder result
-        # A full implementation would actually run the agent
-        return (
-            f"Sub-agent completed task: {task_description}\n\n"
-            f"[Note: Full sub-agent execution requires integration with AgentLoop]"
-        )
+        return await runner(task_description, sub_ctx.shared_memory)
 
     def _get_status(self, args: Dict[str, Any]) -> ToolResult:
         """Get status of a sub-task."""

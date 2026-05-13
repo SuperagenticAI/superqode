@@ -1161,6 +1161,128 @@ class HistoryPanel(Container):
         self._refresh()
 
 
+class HarnessPanel(Container):
+    """Coding harness overview panel for sessions, providers, sandboxes, and plugins."""
+
+    DEFAULT_CSS = (
+        PANEL_CSS
+        + """
+    HarnessPanel {
+        height: 100%;
+        background: #000000;
+    }
+
+    HarnessPanel #harness-summary {
+        height: 1fr;
+        padding: 1;
+        background: #000000;
+    }
+    """
+    )
+
+    def compose(self):
+        """Compose the harness overview panel."""
+        yield Static(self._render_header(), id="panel-header", classes="panel-header")
+        with ScrollableContainer(id="harness-summary", classes="panel-content"):
+            yield Static(self._render_summary(), id="harness-content")
+
+    def on_mount(self) -> None:
+        """Refresh after mount so filesystem/provider state is current."""
+        self.refresh_summary()
+
+    def _render_header(self) -> Text:
+        text = Text()
+        text.append("▣ ", style=f"bold {SQ_COLORS.primary}")
+        text.append("Harness", style=f"bold {SQ_COLORS.text_secondary}")
+        return text
+
+    def _render_summary(self) -> Text:
+        text = Text()
+        text.append("Coding Harness\n\n", style=f"bold {SQ_COLORS.text_primary}")
+
+        try:
+            from superqode.headless import list_sessions
+
+            sessions = list_sessions(limit=5)
+        except Exception:
+            sessions = []
+
+        text.append("Sessions\n", style=f"bold {SQ_COLORS.primary_light}")
+        if sessions:
+            for session in sessions[:5]:
+                text.append(f"  {session.session_id[:8]} ", style=SQ_COLORS.info)
+                text.append(f"{session.provider or '-'} ", style=SQ_COLORS.success)
+                text.append(f"{session.model or '-'} ", style=SQ_COLORS.text_secondary)
+                text.append(f"{session.message_count} msgs\n", style=SQ_COLORS.text_dim)
+        else:
+            text.append("  No stored sessions yet.\n", style=SQ_COLORS.text_dim)
+
+        text.append("\nProviders\n", style=f"bold {SQ_COLORS.primary_light}")
+        try:
+            from superqode.providers.recommendations import provider_doctor_cards
+
+            cards = provider_doctor_cards(["ds4", "ollama", "openai", "anthropic", "google"])
+            for card in cards:
+                status = "ready" if card["configured"] else "missing"
+                style = SQ_COLORS.success if card["configured"] else SQ_COLORS.warning
+                text.append(f"  {card['provider']:<10}", style=SQ_COLORS.info)
+                text.append(f"{status:<8}", style=style)
+                text.append(f"{card['setup_hint']}\n", style=SQ_COLORS.text_dim)
+        except Exception as exc:
+            text.append(f"  Provider status unavailable: {exc}\n", style=SQ_COLORS.text_dim)
+
+        text.append("\nSandboxes\n", style=f"bold {SQ_COLORS.primary_light}")
+        try:
+            from superqode.sandbox import sandbox_provider_status
+
+            for backend in ("docker", "e2b", "daytona", "modal", "vercel"):
+                status = sandbox_provider_status(backend)
+                style = SQ_COLORS.success if status.available else SQ_COLORS.warning
+                text.append(f"  {backend:<10}", style=SQ_COLORS.info)
+                text.append(f"{'ready' if status.available else 'missing':<8}", style=style)
+                text.append(f"{status.detail}\n", style=SQ_COLORS.text_dim)
+        except Exception as exc:
+            text.append(f"  Sandbox status unavailable: {exc}\n", style=SQ_COLORS.text_dim)
+
+        text.append("\nPlugins\n", style=f"bold {SQ_COLORS.primary_light}")
+        try:
+            from superqode.plugins import load_plugins
+
+            plugins = load_plugins(Path.cwd())
+            if plugins:
+                for plugin in plugins[:5]:
+                    text.append(f"  {plugin.id:<18}", style=SQ_COLORS.info)
+                    text.append(f"{plugin.version}\n", style=SQ_COLORS.text_dim)
+            else:
+                text.append("  No plugin manifests found.\n", style=SQ_COLORS.text_dim)
+        except Exception as exc:
+            text.append(f"  Plugin status unavailable: {exc}\n", style=SQ_COLORS.text_dim)
+
+        text.append("\nBenchmarks\n", style=f"bold {SQ_COLORS.primary_light}")
+        try:
+            from superqode.benchmarks import DEFAULT_TARGETS, is_target_available
+
+            for name, target in DEFAULT_TARGETS.items():
+                available = is_target_available(target)
+                style = SQ_COLORS.success if available else SQ_COLORS.warning
+                text.append(f"  {name:<10}", style=SQ_COLORS.info)
+                text.append(f"{'available' if available else 'missing'}\n", style=style)
+        except Exception as exc:
+            text.append(f"  Benchmark status unavailable: {exc}\n", style=SQ_COLORS.text_dim)
+
+        text.append("\nCommands\n", style=f"bold {SQ_COLORS.primary_light}")
+        text.append("  :connect    :providers    :sandbox\n", style=SQ_COLORS.text_dim)
+        text.append("  :plugins    :benchmark    /sessions\n", style=SQ_COLORS.text_dim)
+        return text
+
+    def refresh_summary(self) -> None:
+        """Refresh panel content."""
+        try:
+            self.query_one("#harness-content", Static).update(self._render_summary())
+        except Exception:
+            pass
+
+
 # ============================================================================
 # EXPORTS
 # ============================================================================
@@ -1177,4 +1299,5 @@ __all__ = [
     "TerminalPanel",
     "DiffPanel",
     "HistoryPanel",
+    "HarnessPanel",
 ]

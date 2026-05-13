@@ -19,10 +19,96 @@ Local providers offer:
 
 | Provider | Best For | Setup Complexity |
 |----------|----------|------------------|
+| **DS4** | Local DeepSeek V4 Flash, coding, long-context work | Medium |
 | **Ollama** | Easy setup, many models | Easy |
 | **LM Studio** | GUI interface, beginners | Easy |
 | **MLX** | Apple Silicon, performance | Medium |
 | **vLLM** | Production, high throughput | Advanced |
+
+---
+
+## DS4 / DwarfStar 4
+
+DS4 runs DeepSeek V4 Flash locally and exposes OpenAI-compatible endpoints. SuperQode treats it as a local provider named `ds4`, so it can be used from the CLI, TUI, provider doctor, and model recommendation flow.
+
+### Prerequisites
+
+- A working DS4 checkout or release directory.
+- The `ds4-server` binary available in that directory or on `PATH`.
+- A compatible model file available to DS4, commonly `ds4flash.gguf`.
+
+See the upstream project for installation and model details: [antirez/ds4](https://github.com/antirez/ds4).
+
+### Start DS4
+
+From the directory that contains `ds4-server` and the model file:
+
+```bash
+./ds4-server --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192
+```
+
+By default, SuperQode expects DS4 at:
+
+```bash
+http://127.0.0.1:8000/v1
+```
+
+If your DS4 server runs somewhere else, set:
+
+```bash
+export DS4_HOST=http://127.0.0.1:8000/v1
+```
+
+### Check SuperQode Connectivity
+
+```bash
+superqode providers guide ds4
+superqode providers models ds4
+superqode providers recommend local
+superqode doctor
+```
+
+`providers guide ds4` checks whether the local server is reachable. If DS4 is not running, SuperQode will show a setup hint instead of treating the provider as ready.
+
+### Run a Headless Coding Task
+
+```bash
+superqode -p --provider ds4 --model deepseek-v4-flash "summarize this repository"
+```
+
+Use `deepseek-chat` when you want the DS4 non-thinking/direct alias:
+
+```bash
+superqode -p --provider ds4 --model deepseek-chat "review the current git diff"
+```
+
+### Connect From The TUI
+
+In the SuperQode TUI command input, open the local provider picker and select DS4 by number:
+
+```text
+:connect local
+```
+
+You can also jump straight to the DS4 model list:
+
+```text
+:connect local ds4
+```
+
+Direct model selection is still supported:
+
+```text
+:connect local ds4/deepseek-v4-flash
+```
+
+### Notes
+
+- DS4 is local, so no API key is required.
+- SuperQode uses a dummy OpenAI API key internally for OpenAI-compatible client libraries that require one.
+- DS4 receives SuperQode tool definitions in coding profiles, so it can use file, search, edit, shell, todo, and agent tools subject to the selected harness profile permissions.
+- `deepseek-v4-flash` is the recommended default for coding and long-context local work.
+- `deepseek-chat` is useful when you want the non-thinking mode exposed by DS4-compatible clients.
 
 ---
 

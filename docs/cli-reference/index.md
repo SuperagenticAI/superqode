@@ -19,6 +19,114 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | `--version` | superqe, superqode | Show version and exit |
 | `--help` | superqe, superqode | Show help message and exit |
 | `--tui` | superqode | Force the Textual TUI (default) |
+| `-p`, `--print` | superqode | Run one headless coding task and print the response |
+| `--mode json` | superqode | Run one headless task and emit structured JSON |
+| `--profile` | superqode | Select harness profile: `build`, `plan`, `review`, or `qe` |
+| `--provider` | superqode | Override provider for headless mode |
+| `--model` | superqode | Override model for headless mode |
+| `--changes` | superqode | Control post-run change output: `summary`, `files`, `diff`, or `none` |
+
+### Headless SuperQode
+
+Use `superqode` directly for one-shot coding harness tasks:
+
+```bash
+superqode doctor
+superqode -p "summarize this repository"
+superqode -p --changes files "make the small docs fix"
+superqode -p --changes none "answer without a change footer"
+superqode --mode json --profile plan "plan the auth refactor"
+cat failing.log | superqode -p --profile qe "find the likely regression"
+superqode -p --resume abc123 "continue from the last turn"
+superqode -p --fork abc123 "try a safer implementation"
+```
+
+Profiles:
+
+| Profile | Purpose |
+|---------|---------|
+| `build` | Full-access implementation work |
+| `plan` | Read-only planning; shell requires approval and is denied in headless mode |
+| `review` | Read-only code review |
+| `qe` | Quality-engineering/adversarial validation; shell and network require approval |
+
+Inspect the tools and permissions for a profile:
+
+```bash
+superqode profiles list
+superqode tools list --profile build
+superqode tools list --profile plan --json
+```
+
+`repo_search` is available in coding profiles for broad codebase exploration. It combines ranked file matches, literal content matches, and symbol matches into one compact tool result.
+
+Headless runs keep output clean by default. SuperQode prints the model response and then a compact change footer like `Changes: 2 files (+18 -3)` when the agent modified the workspace. Use `--changes files` to show the file list, `--changes diff` to show the patch, or `--changes none` to hide the footer.
+
+Session commands:
+
+```bash
+superqode sessions list
+superqode sessions tree
+superqode sessions show abc123
+superqode sessions export abc123 --format markdown --output session.md
+```
+
+Plugin manifests:
+
+```bash
+superqode plugins list
+superqode plugins show my-plugin
+superqode plugins validate .superqode/plugins/my-plugin/plugin.json
+```
+
+Provider and model guidance:
+
+```bash
+superqode providers doctor openai --json
+superqode providers guide openai
+superqode providers guide ds4
+superqode providers recommend coding
+superqode providers recommend local
+superqode providers recommend large-context --json
+superqode -p --provider ds4 --model deepseek-v4-flash "summarize this repo"
+```
+
+For DS4, start `ds4-server` separately and point SuperQode at its OpenAI-compatible endpoint with `DS4_HOST` if it is not running on `http://127.0.0.1:8000/v1`.
+
+In the TUI, use `Ctrl+K` for the command palette or type `:status`, `:harness`, `:providers`, `:recommend coding`, `:sandbox`, `:plugins`, and `:benchmark`. Use `Ctrl+1` to open the persistent Harness sidebar tab.
+
+Benchmark harness:
+
+```bash
+superqode benchmark run tasks.json --target superqode --target opencode --target pi --target deepagents
+```
+
+Sandbox capability profiles:
+
+```bash
+superqode -p --sandbox read-only "review this repository"
+superqode -p --sandbox no-shell "make a small docs edit"
+superqode -p --sandbox git-worktree "try an isolated implementation"
+superqode -p --sandbox docker "run tests in a container-isolated profile"
+superqode -p --sandbox e2b "validate this patch in a remote sandbox profile"
+superqode -p --sandbox daytona "prototype this change remotely"
+superqode -p --sandbox modal "run a cloud sandbox validation"
+superqode -p --sandbox vercel "run in a Vercel Sandbox profile"
+superqode -p --sandbox runloop "validate in a Runloop devbox profile"
+superqode -p --sandbox agentcore "validate in an AgentCore Code Interpreter profile"
+superqode -p --sandbox langsmith "validate in a LangSmith sandbox profile"
+```
+
+Sandbox execution providers:
+
+```bash
+superqode sandbox doctor
+superqode sandbox doctor e2b --json
+superqode sandbox run docker --image python:3.12 -- pytest -q
+superqode sandbox run e2b -- "pytest -q"
+```
+
+`docker` uses the local Docker CLI. `e2b`, `daytona`, `modal`, `runloop`, `agentcore`, and `langsmith` use optional Python SDKs when installed and authenticated. `vercel` uses the Vercel Sandbox CLI and token/OIDC authentication.
 
 ---
 

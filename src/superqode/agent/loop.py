@@ -28,12 +28,13 @@ import asyncio
 import json
 import re
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from ..tools.base import Tool, ToolContext, ToolRegistry, ToolResult
+from ..tools.permissions import Permission, PermissionConfig, PermissionManager
 from ..providers.gateway.base import GatewayInterface, Message, ToolDefinition
 from .system_prompts import SystemPromptLevel, get_system_prompt, get_job_description_prompt
 from .session_manager import SessionManager, SessionMessage
@@ -49,6 +50,14 @@ def _cached_system_prompt(
 ) -> str:
     """Cached system prompt builder."""
     prompt = get_system_prompt(level=level, working_directory=Path(working_directory))
+    try:
+        from ..skills import load_project_instructions
+
+        project_instructions = load_project_instructions(working_directory)
+        if project_instructions:
+            prompt += "\n\n# Project Instructions\n\n" + project_instructions
+    except Exception:
+        pass
     if custom_prompt:
         prompt += f"\n\n{custom_prompt}"
     if job_description:
@@ -199,6 +208,34 @@ def _is_malformed_tool_call_response(response_content: str, tool_calls: List[Dic
     return False
 
 
+def _model_supports_tools(provider: str, model: str) -> bool:
+    """Return whether a provider/model should receive tool definitions."""
+    if provider == "ds4":
+        return True
+
+    try:
+        from ..providers.models import MODEL_REGISTRY
+
+        model_info = MODEL_REGISTRY.get(provider, {}).get(model)
+        return bool(model_info and model_info.supports_tools)
+    except Exception:
+        return False
+
+
+def _should_send_tools(provider: str, model: str, user_message: str, tool_defs: List[Any]) -> bool:
+    """Decide whether to pass tools to the model for this turn."""
+    if not tool_defs or _is_simple_conversational_query(user_message):
+        return False
+
+    from ..providers.registry import PROVIDERS, ProviderCategory
+
+    provider_def = PROVIDERS.get(provider)
+    is_local_provider = provider_def and provider_def.category == ProviderCategory.LOCAL
+    if is_local_provider:
+        return _model_supports_tools(provider, model)
+    return True
+
+
 @dataclass
 class AgentConfig:
     """Configuration for the agent loop.
@@ -300,6 +337,7 @@ class AgentLoop:
         ] = None,  # (server_id, tool_name, args) -> ToolResult
         mcp_tools: Optional[List[ToolDefinition]] = None,  # MCP tool definitions to include
         include_mcp: bool = False,  # Automatically inject MCP search/execute tools
+        permission_manager: Optional[PermissionManager] = None,
     ):
         self.gateway = gateway
         self.tools = tools
@@ -311,6 +349,13 @@ class AgentLoop:
         self.mcp_executor = mcp_executor
         self._mcp_tools = mcp_tools or []
         self.include_mcp = include_mcp
+        if permission_manager:
+            self.permission_manager = permission_manager
+        elif config.require_confirmation:
+            self.permission_manager = PermissionManager()
+        else:
+            # Still run dangerous-command checks, but allow normal tools by default.
+            self.permission_manager = PermissionManager(PermissionConfig(default=Permission.ALLOW))
 
         # Initialize Context Manager
         from .context_manager import ContextManager
@@ -414,6 +459,23 @@ class AgentLoop:
         """Convert messages to gateway format with caching."""
         return [self._convert_message(m) for m in messages]
 
+    def _load_stored_messages(self) -> List[AgentMessage]:
+        """Load stored conversation messages for resumed sessions."""
+        if not self._session_manager:
+            return []
+
+        restored: List[AgentMessage] = []
+        for message in self._session_manager.get_messages():
+            restored.append(
+                AgentMessage(
+                    role=message.role,
+                    content=message.content,
+                    tool_calls=message.tool_calls,
+                    name=message.tool_name,
+                )
+            )
+        return restored
+
     def _create_tool_context(self) -> ToolContext:
         """Create context for tool execution."""
         return ToolContext(
@@ -421,6 +483,82 @@ class AgentLoop:
             working_directory=self.config.working_directory,
             require_confirmation=self.config.require_confirmation,
             tool_registry=self.tools,
+            sub_agent_runner=self._run_sub_agent,
+        )
+
+    async def _run_sub_agent(self, task_description: str, metadata: Dict[str, Any]) -> str:
+        """Run a delegated task in an isolated child AgentLoop."""
+        child_depth = int(metadata.get("delegation_depth", 1))
+        allowed_tools = metadata.get("allowed_tools")
+
+        child_tools = self.tools
+        if allowed_tools is not None:
+            child_tools = self.tools.filtered(list(allowed_tools))
+
+        child_config = replace(
+            self.config,
+            session_id=f"{self.session_id}:sub:{uuid.uuid4().hex[:8]}",
+            enable_session_storage=False,
+        )
+
+        child_loop = AgentLoop(
+            gateway=self.gateway,
+            tools=child_tools,
+            config=child_config,
+            on_tool_call=self.on_tool_call,
+            on_tool_result=self.on_tool_result,
+            on_thinking=self.on_thinking,
+            parallel_tools=self.parallel_tools,
+            mcp_executor=self.mcp_executor,
+            mcp_tools=self._mcp_tools,
+            include_mcp=self.include_mcp,
+            permission_manager=self.permission_manager,
+        )
+        child_loop.session_id = child_config.session_id or child_loop.session_id
+
+        original_create_context = child_loop._create_tool_context
+
+        def create_child_context() -> ToolContext:
+            ctx = original_create_context()
+            ctx.delegation_depth = child_depth
+            return ctx
+
+        child_loop._create_tool_context = create_child_context  # type: ignore[method-assign]
+        result = await child_loop.run(task_description)
+
+        if result.stopped_reason == "complete":
+            return result.content
+        if result.error:
+            raise RuntimeError(result.error)
+        raise RuntimeError(f"Sub-agent stopped: {result.stopped_reason}")
+
+    async def _check_tool_permission(
+        self, name: str, arguments: Dict[str, Any]
+    ) -> Optional[ToolResult]:
+        """Apply central permission checks before any local tool executes."""
+        permission = self.permission_manager.check_permission(name, arguments)
+        if permission == Permission.ALLOW:
+            return None
+        if permission == Permission.DENY:
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"Permission denied for tool: {name}",
+                metadata={"permission": "deny", "tool": name},
+            )
+
+        approved = await self.permission_manager.request_permission(
+            name,
+            arguments,
+            description=f"Agent requested tool `{name}`",
+        )
+        if approved:
+            return None
+        return ToolResult(
+            success=False,
+            output="",
+            error=f"Permission required for tool: {name}",
+            metadata={"permission": "ask_denied", "tool": name},
         )
 
     async def _execute_tool(self, name: str, arguments: Dict[str, Any]) -> ToolResult:
@@ -430,6 +568,9 @@ class AgentLoop:
         if not tool:
             # Check if it's an MCP tool (format: mcp_serverid_toolname)
             if self.mcp_executor and name.startswith("mcp_"):
+                denied = await self._check_tool_permission(name, arguments)
+                if denied:
+                    return denied
                 parts = name.split(
                     "_", 2
                 )  # mcp_serverid_toolname -> ["mcp", serverid", "toolname"]
@@ -444,6 +585,10 @@ class AgentLoop:
                             success=False, output="", error=f"MCP tool error: {str(e)}"
                         )
             return ToolResult(success=False, output="", error=f"Unknown tool: {name}")
+
+        denied = await self._check_tool_permission(name, arguments)
+        if denied:
+            return denied
 
         ctx = self._create_tool_context()
 
@@ -570,6 +715,8 @@ class AgentLoop:
         if self.system_prompt:
             messages.append(AgentMessage(role="system", content=self.system_prompt))
 
+        messages.extend(self._load_stored_messages())
+
         # Add user message
         messages.append(AgentMessage(role="user", content=user_message))
 
@@ -601,22 +748,17 @@ class AgentLoop:
             # PERFORMANCE: Use cached message conversion
             gateway_messages = self._convert_messages(messages)
 
-            # Check if this is a simple conversational query that doesn't need tools
-            # Some models (especially local ones) don't handle tools well for simple questions
-            # Local providers generally don't support tools well
-            from ..providers.registry import PROVIDERS, ProviderCategory
-
-            provider_def = PROVIDERS.get(self.config.provider)
-            is_local_provider = provider_def and provider_def.category == ProviderCategory.LOCAL
-
-            is_simple_query = _is_simple_conversational_query(user_message)
-
             # Plan mode: disable tools so model only analyzes/plans without executing
             tools_to_send = None
             if not self.config.plan_mode:
                 tools_to_send = (
                     tool_defs
-                    if (tool_defs and not is_simple_query and not is_local_provider)
+                    if _should_send_tools(
+                        self.config.provider,
+                        self.config.model,
+                        user_message,
+                        tool_defs,
+                    )
                     else None
                 )
             elif self.on_thinking:
@@ -820,6 +962,8 @@ class AgentLoop:
         if self.system_prompt:
             messages.append(AgentMessage(role="system", content=self.system_prompt))
 
+        messages.extend(self._load_stored_messages())
+
         messages.append(AgentMessage(role="user", content=user_message))
 
         iterations = 0
@@ -850,17 +994,15 @@ class AgentLoop:
             # PERFORMANCE: Use cached message conversion
             gateway_messages = self._convert_messages(messages)
 
-            # Check if this is a simple conversational query that doesn't need tools
-            # Some models (especially local ones) don't handle tools well for simple questions
-            # Local providers generally don't support tools well
-            from ..providers.registry import PROVIDERS, ProviderCategory
-
-            provider_def = PROVIDERS.get(self.config.provider)
-            is_local_provider = provider_def and provider_def.category == ProviderCategory.LOCAL
-
-            is_simple_query = _is_simple_conversational_query(user_message)
             tools_to_send = (
-                tool_defs if (tool_defs and not is_simple_query and not is_local_provider) else None
+                tool_defs
+                if _should_send_tools(
+                    self.config.provider,
+                    self.config.model,
+                    user_message,
+                    tool_defs,
+                )
+                else None
             )
 
             # Stream response

@@ -596,3 +596,199 @@ class CodeSearchTool(Tool):
             output += f"\n\n[Showing first {self.MAX_RESULTS} results]"
 
         return ToolResult(success=True, output=output, metadata={"count": len(results)})
+
+
+class RepoSearchTool(Tool):
+    """High-level repository search for files, content, and symbols."""
+
+    MAX_FILES = 20
+    MAX_CONTENT_MATCHES = 40
+    MAX_SYMBOL_LINES = 20
+
+    @property
+    def name(self) -> str:
+        return "repo_search"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Search the repository in one compact pass. Returns ranked file path matches, "
+            "content matches, and code symbol matches. Prefer this for broad codebase exploration."
+        )
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Text, symbol, or filename to search for",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Directory or file to search from (default: repository root)",
+                },
+                "include": {
+                    "type": "string",
+                    "description": "Optional file glob to include, for example '*.py' or 'src/**/*.ts'",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results per section (default: 20)",
+                },
+            },
+            "required": ["query"],
+        }
+
+    async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        query = str(args.get("query", "")).strip()
+        path = args.get("path", ".")
+        include = args.get("include")
+        limit = int(args.get("limit") or self.MAX_FILES)
+        limit = max(1, min(limit, 100))
+
+        if not query:
+            return ToolResult(success=False, output="", error="Query is required")
+
+        try:
+            search_path = validate_path_in_working_directory(path, ctx.working_directory)
+        except ValueError as e:
+            return ToolResult(success=False, output="", error=str(e))
+
+        file_matches = await self._search_files(query, search_path, ctx, include, limit)
+        content_matches = await self._search_content(query, search_path, ctx, include, limit)
+        symbol_result = await CodeSearchTool().execute(
+            {"query": query, "kind": "symbol", "path": str(search_path)}, ctx
+        )
+
+        output_sections = []
+        if file_matches:
+            output_sections.append("Files:\n" + "\n".join(file_matches))
+        if content_matches:
+            output_sections.append("Content:\n" + "\n".join(content_matches))
+        if symbol_result.success and symbol_result.metadata.get("count", 0):
+            symbol_lines = symbol_result.output.splitlines()[: min(limit, self.MAX_SYMBOL_LINES)]
+            output_sections.append("Symbols:\n" + "\n".join(symbol_lines))
+
+        if not output_sections:
+            return ToolResult(
+                success=True,
+                output=f"No repository matches found for '{query}'",
+                metadata={"files": 0, "content": 0, "symbols": 0},
+            )
+
+        return ToolResult(
+            success=True,
+            output="\n\n".join(output_sections),
+            metadata={
+                "files": len(file_matches),
+                "content": len(content_matches),
+                "symbols": symbol_result.metadata.get("count", 0) if symbol_result.success else 0,
+            },
+        )
+
+    async def _search_files(
+        self,
+        query: str,
+        path: Path,
+        ctx: ToolContext,
+        include: Optional[str],
+        limit: int,
+    ) -> List[str]:
+        rg_path = shutil.which("rg")
+        files: List[str] = []
+        if rg_path:
+            command = [rg_path, "--files", str(path)]
+            if include:
+                command.extend(["-g", include])
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(ctx.working_directory),
+            )
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20)
+            files = stdout.decode("utf-8", errors="replace").splitlines()
+        else:
+            glob_pattern = include or "**/*"
+            files = [str(item) for item in path.glob(glob_pattern) if item.is_file()]
+
+        ranked = []
+        for file_name in files:
+            display = self._relative_display(file_name, ctx.working_directory)
+            score = self._path_score(query, display)
+            if score > 0:
+                ranked.append((score, display))
+        ranked.sort(key=lambda item: (-item[0], item[1]))
+        return [file_name for _, file_name in ranked[:limit]]
+
+    async def _search_content(
+        self,
+        query: str,
+        path: Path,
+        ctx: ToolContext,
+        include: Optional[str],
+        limit: int,
+    ) -> List[str]:
+        rg_path = shutil.which("rg")
+        if not rg_path:
+            return []
+
+        command = [
+            rg_path,
+            "--line-number",
+            "--no-heading",
+            "--color",
+            "never",
+            "-i",
+            "-F",
+            query,
+            str(path),
+        ]
+        if include:
+            command[1:1] = ["-g", include]
+
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=str(ctx.working_directory),
+        )
+        stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20)
+        lines = stdout.decode("utf-8", errors="replace").splitlines()
+        return [self._relative_match_line(line, ctx.working_directory) for line in lines[:limit]]
+
+    def _path_score(self, query: str, path: str) -> int:
+        query_lower = query.lower()
+        path_lower = path.lower()
+        basename = Path(path_lower).name
+        if query_lower in basename:
+            return 100 + len(query_lower)
+        if query_lower in path_lower:
+            return 50 + len(query_lower)
+
+        cursor = 0
+        score = 0
+        for char in query_lower:
+            found = path_lower.find(char, cursor)
+            if found == -1:
+                return 0
+            score += 1
+            cursor = found + 1
+        return score
+
+    def _relative_display(self, file_name: str, root: Path) -> str:
+        path = Path(file_name)
+        try:
+            if path.is_absolute():
+                return str(path.relative_to(root))
+        except ValueError:
+            pass
+        return file_name
+
+    def _relative_match_line(self, line: str, root: Path) -> str:
+        file_name, separator, rest = line.partition(":")
+        if not separator:
+            return line
+        return f"{self._relative_display(file_name, root)}:{rest}"

@@ -1,11 +1,12 @@
 # Terminal User Interface (TUI)
 
-SuperQode includes a rich Terminal User Interface (TUI) for interactive QE sessions.
+SuperQode includes a rich Terminal User Interface (TUI) for interactive coding-agent sessions.
 
 ## Features
 
 - **Rich Output**: Colored, formatted terminal output
 - **Progress Tracking**: Real-time progress indicators
+- **Compact Tool Activity**: Search, read, edit, and shell tools are summarized by default
 - **Interactive Prompts**: User input with completion
 - **File Browser**: Navigate project files
 - **Agent Switcher**: Switch between QE roles
@@ -66,9 +67,15 @@ superqode --role qe.security_tester
 Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 
 - `:connect` - Connect to provider/agent
+- `:log` - Show current output verbosity
+- `:log minimal` - Show status-only tool activity
+- `:log normal` - Show compact tool summaries
+- `:log verbose` - Show full tool outputs and changed file names
 - `:qe <role>` - Switch to QE role mode (e.g., `:qe security_tester`)
 - `:view <file>` - View file content
 - `:help` - Show all available commands
+
+Tool and file-change output is collapsed by default so normal coding sessions stay readable. Use `:log verbose` before a task when you want full search output, command output, and file names in the session report.
 
 Note: QE analysis sessions are run via CLI, not TUI commands. Use `superqe run .` in your terminal to start QE sessions.
 

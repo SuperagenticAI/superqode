@@ -888,6 +888,46 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
             recommended_for=["local coding", "complex tasks"],
         ),
     },
+    # =========================================================================
+    # DS4 / DEEPSEEK V4 FLASH (Local - Free)
+    # =========================================================================
+    "ds4": {
+        "deepseek-v4-flash": ModelInfo(
+            id="deepseek-v4-flash",
+            name="DeepSeek V4 Flash",
+            provider="ds4",
+            input_price=0.0,
+            output_price=0.0,
+            context_window=1000000,
+            max_output=384000,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.STREAMING,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="DeepSeek V4 Flash served locally by antirez/ds4.",
+            recommended_for=["coding", "large-context", "local coding", "agentic tasks"],
+        ),
+        "deepseek-chat": ModelInfo(
+            id="deepseek-chat",
+            name="DeepSeek V4 Flash (no thinking)",
+            provider="ds4",
+            input_price=0.0,
+            output_price=0.0,
+            context_window=1000000,
+            max_output=384000,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.STREAMING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="DS4 non-thinking model alias for direct replies.",
+            recommended_for=["coding", "quick local tasks", "local coding"],
+        ),
+    },
 }
 
 
