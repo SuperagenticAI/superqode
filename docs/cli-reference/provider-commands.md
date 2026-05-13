@@ -157,6 +157,132 @@ Testing Anthropic with model claude-sonnet-4...
 
 ---
 
+## providers doctor
+
+Show provider configuration status and setup hints.
+
+```bash
+superqode providers doctor [PROVIDER_ID] [OPTIONS]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--live` | Run live local-provider health checks |
+| `--json` | Emit JSON output |
+
+### Examples
+
+```bash
+# Show all provider status
+superqode providers doctor
+
+# Show DS4 status with live health checks
+superqode providers doctor ds4 --live
+```
+
+---
+
+## providers guide
+
+Show setup guidance and model quality labels for one provider or all providers.
+
+```bash
+superqode providers guide [PROVIDER_ID] [OPTIONS]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Emit JSON output |
+
+### Examples
+
+```bash
+superqode providers guide
+superqode providers guide ds4
+superqode providers guide anthropic
+```
+
+---
+
+## providers models
+
+List example models for a provider.
+
+```bash
+superqode providers models PROVIDER_ID [OPTIONS]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Emit JSON output |
+
+### Examples
+
+```bash
+superqode providers models ds4
+superqode providers models anthropic
+```
+
+---
+
+## providers recommend
+
+Recommend models for a task with cost, context, and tool-support labels.
+
+```bash
+superqode providers recommend [TASK] [OPTIONS]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--limit` | Maximum recommendations |
+| `--json` | Emit JSON output |
+
+### Examples
+
+```bash
+superqode providers recommend coding
+superqode providers recommend local --limit 5
+superqode providers recommend reasoning --json
+```
+
+---
+
+## providers smoke
+
+Run an opt-in local provider smoke check.
+
+```bash
+superqode providers smoke PROVIDER_ID [OPTIONS]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--model` | Model to check |
+| `--run` | Run a real local completion |
+| `--prompt` | Prompt for `--run` |
+| `--no-tool-test` | Skip the provider-specific tool-calling probe |
+| `--json` | Emit JSON output |
+
+### Examples
+
+```bash
+superqode providers smoke ds4
+superqode providers smoke ds4 --model deepseek-v4-flash --run
+```
+
+---
+
 ## providers mlx
 
 Manage MLX (Apple Silicon) models and servers.
@@ -201,6 +327,46 @@ superqode providers mlx setup
 | `--model`, `-m` | Model for server command |
 | `--host` | Server host (default: localhost) |
 | `--port` | Server port (default: 8080) |
+
+---
+
+## providers monty
+
+Manage optional Monty sandboxed Python REPL support.
+
+```bash
+superqode providers monty ACTION
+```
+
+### Actions
+
+| Action | Description |
+|--------|-------------|
+| `check` | Check whether `pydantic-monty` is installed |
+| `smoke` | Run a small `python_repl` smoke test |
+| `setup` | Show install and behavior guidance |
+
+### Examples
+
+```bash
+# Check installation
+superqode providers monty check
+
+# Run smoke test
+superqode providers monty smoke
+
+# Show setup guide
+superqode providers monty setup
+```
+
+Monty registers the `python_repl` tool when the optional dependency is installed:
+
+```bash
+uv sync --extra monty
+```
+
+See [Monty Python REPL](../advanced/monty-python-repl.md) for tool behavior and
+filesystem mount details.
 
 ---
 

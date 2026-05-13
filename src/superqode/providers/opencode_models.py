@@ -62,6 +62,10 @@ async def get_opencode_models(force_refresh: bool = False) -> List[Dict]:
 
 def _parse_opencode_models(output: str) -> List[Dict]:
     """Parse OpenCode models output."""
+    json_models = _parse_json_models(output)
+    if json_models:
+        return json_models
+
     models = []
     blocks = output.split("opencode/")
 
@@ -83,12 +87,15 @@ def _parse_opencode_models(output: str) -> List[Dict]:
             data = json.loads(json_text[:2000])
 
             is_free = False
-            if "cost" in data:
-                is_free = data["cost"].get("input", 0) == 0 and data["cost"].get("output", 0) == 0
+            is_free = _model_has_free_pricing(data, model_id=model_id)
 
             context = 128000
             if "limit" in data and "context" in data["limit"]:
                 context = data["limit"]["context"]
+            elif "context" in data:
+                context = data["context"]
+            elif "context_window" in data:
+                context = data["context_window"]
 
             name = data.get("name", model_id.replace("-", " ").replace("_", " ").title())
 
@@ -118,6 +125,78 @@ def _parse_opencode_models(output: str) -> List[Dict]:
     return models
 
 
+def _parse_json_models(output: str) -> List[Dict]:
+    """Parse JSON output if the OpenCode CLI emits structured models."""
+    text = output.strip()
+    if not text:
+        return []
+
+    try:
+        data = json.loads(text)
+    except Exception:
+        return []
+
+    if isinstance(data, dict):
+        raw_models = data.get("models") or data.get("data") or []
+    elif isinstance(data, list):
+        raw_models = data
+    else:
+        return []
+
+    models = []
+    for item in raw_models:
+        if not isinstance(item, dict):
+            continue
+        raw_id = item.get("id") or item.get("model") or item.get("name") or ""
+        if not raw_id:
+            continue
+        model_id = raw_id if str(raw_id).startswith("opencode/") else f"opencode/{raw_id}"
+        models.append(
+            {
+                "id": model_id,
+                "name": item.get("name") or str(raw_id).split("/")[-1],
+                "provider": item.get("provider", "opencode"),
+                "is_free": _model_has_free_pricing(item, model_id=str(raw_id)),
+                "context": item.get("context")
+                or item.get("context_window")
+                or item.get("limit", {}).get("context", 128000),
+                "source": "opencode",
+            }
+        )
+
+    return models
+
+
+def _model_has_free_pricing(data: Dict, model_id: str = "", model_name: str = "") -> bool:
+    """Return True when model metadata or naming indicates zero-cost use."""
+    lower_id = model_id.lower()
+    lower_name = model_name.lower()
+    if any(
+        pattern in lower_id or pattern in lower_name
+        for pattern in ("free", "zero-cost", "no-cost", "gratis")
+    ):
+        return True
+
+    cost = data.get("cost") or data.get("pricing") or data.get("price")
+    if isinstance(cost, dict):
+        input_cost = cost.get("input", cost.get("prompt", cost.get("input_cost")))
+        output_cost = cost.get("output", cost.get("completion", cost.get("output_cost")))
+        if input_cost is not None and output_cost is not None:
+            return _is_zero_price(input_cost) and _is_zero_price(output_cost)
+
+    if data.get("free") is True or data.get("is_free") is True:
+        return True
+
+    return False
+
+
+def _is_zero_price(value) -> bool:
+    try:
+        return float(value) == 0
+    except (TypeError, ValueError):
+        return str(value).strip().lower() in {"free", "$0", "$0.00", "0"}
+
+
 def _estimate_context(model_id: str) -> int:
     """Estimate context window based on model name."""
     model_lower = model_id.lower()
@@ -137,57 +216,15 @@ def _estimate_context(model_id: str) -> int:
     return 128000
 
 
-async def get_free_opencode_models() -> List[Dict]:
+async def get_free_opencode_models(force_refresh: bool = False) -> List[Dict]:
     """Get only free models from OpenCode."""
-    all_models = await get_opencode_models()
+    all_models = await get_opencode_models(force_refresh=force_refresh)
     return [m for m in all_models if m.get("is_free", False)]
 
 
 async def is_opencode_available() -> bool:
     """Check if OpenCode is installed and available."""
     return shutil.which("opencode") is not None
-
-
-FALLBACK_OPENCODE_MODELS = [
-    {"id": "opencode/big-pickle", "name": "Big Pickle", "is_free": True, "context": 200000},
-    {
-        "id": "opencode/minimax-m2.5-free",
-        "name": "MiniMax M2.5 (Free)",
-        "is_free": True,
-        "context": 200000,
-    },
-    {
-        "id": "opencode/nemotron-3-super-free",
-        "name": "Nemotron 3 Super (Free)",
-        "is_free": True,
-        "context": 1000000,
-    },
-    {"id": "opencode/gpt-5-nano", "name": "GPT-5 Nano", "is_free": True, "context": 400000},
-    {
-        "id": "opencode/hy3-preview-free",
-        "name": "HY3 Preview (Free)",
-        "is_free": True,
-        "context": 128000,
-    },
-    {
-        "id": "opencode/ling-2.6-flash-free",
-        "name": "Ling 2.6 Flash (Free)",
-        "is_free": True,
-        "context": 128000,
-    },
-    {
-        "id": "opencode/trinity-large-preview-free",
-        "name": "Trinity Large (Free)",
-        "is_free": True,
-        "context": 128000,
-    },
-    {
-        "id": "opencode/qwen3.6-plus-free",
-        "name": "Qwen 3.6 Plus (Free)",
-        "is_free": True,
-        "context": 128000,
-    },
-]
 
 
 def clear_cache():
@@ -197,12 +234,10 @@ def clear_cache():
     _cache_time = None
 
 
-async def get_opencode_models_with_fallback() -> List[Dict]:
-    """Get OpenCode models with fallback to static list."""
-    models = await get_opencode_models()
+async def get_opencode_models_with_fallback(force_refresh: bool = False) -> List[Dict]:
+    """Get OpenCode models dynamically.
 
-    if not models:
-        logger.info("Using fallback static OpenCode models")
-        return FALLBACK_OPENCODE_MODELS
-
-    return models
+    Kept for compatibility with older callers; it no longer falls back to a
+    static model list because OpenCode's catalog changes independently.
+    """
+    return await get_opencode_models(force_refresh=force_refresh)

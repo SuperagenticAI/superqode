@@ -10,7 +10,7 @@ author_url = "https://www.google.com"
 publisher_name = "Google"
 publisher_url = "https://github.com/google-gemini/gemini-cli"
 type = "coding"
-description = "Google's reference ACP implementation. Query and edit large codebases, generate apps from images or PDFs, and automate complex workflows—all from your terminal."
+description = "Google's reference ACP implementation. Query and edit large codebases, generate apps from images or PDFs, and automate complex workflows, all from your terminal."
 tags = ["google", "gemini", "multimodal", "acp"]
 run_command."*" = "gemini --experimental-acp"
 
@@ -22,7 +22,7 @@ help = '''
 
 **Google's Reference ACP Implementation**
 
-Query and edit large codebases, generate apps from images or PDFs, and automate complex workflows—all from your terminal.
+Query and edit large codebases, generate apps from images or PDFs, and automate complex workflows, all from your terminal.
 
 ## Key Features
 

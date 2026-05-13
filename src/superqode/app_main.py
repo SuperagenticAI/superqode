@@ -632,12 +632,10 @@ class SuperQodeApp(App):
             ]
 
     def _get_opencode_models(self) -> List[Dict]:
-        """Get OpenCode models list - tries dynamic fetch, falls back to static."""
+        """Get OpenCode models from the live CLI catalog."""
         try:
             from superqode.providers.opencode_models import get_opencode_models_with_fallback
 
-            # This runs async - for now we still use static in sync context
-            # but could be used in async contexts
             import asyncio
 
             models = asyncio.run(get_opencode_models_with_fallback())
@@ -648,24 +646,17 @@ class SuperQodeApp(App):
                     "id": m["id"],
                     "name": m.get("name", m["id"].split("/")[-1]),
                     "context": m.get("context", 128000),
+                    "free": True,
+                    "recommended": bool(m.get("recommended", False)),
+                    "desc": m.get("description") or m.get("source", "OpenCode"),
                 }
                 for m in models
                 if m.get("is_free", False)
             ]
         except Exception:
-            # Fallback to static list
-            pass
+            return []
 
-        return [
-            {"id": "big-pickle", "name": "Big Pickle", "context": 200000},
-            {"id": "minimax-m2.5-free", "name": "MiniMax M2.5 (Free)", "context": 200000},
-            {"id": "nemotron-3-super-free", "name": "Nemotron 3 Super (Free)", "context": 1000000},
-            {"id": "gpt-5-nano", "name": "GPT-5 Nano", "context": 400000},
-            {"id": "hy3-preview-free", "name": "HY3 Preview (Free)", "context": 128000},
-            {"id": "ling-2.6-flash-free", "name": "Ling 2.6 Flash (Free)", "context": 128000},
-            {"id": "trinity-large-preview-free", "name": "Trinity Large (Free)", "context": 128000},
-            {"id": "qwen3.6-plus-free", "name": "Qwen 3.6 Plus (Free)", "context": 128000},
-        ]
+        return []
 
     @property
     def gemini_models(self) -> List[Dict]:
@@ -813,280 +804,6 @@ class SuperQodeApp(App):
             },
             {"id": "gpt-4o", "name": "GPT-4o", "context": 128000},
             {"id": "claude-sonnet-4-5-20250929", "name": "Claude Sonnet 4.5", "context": 200000},
-        ]
-        self._permission_pending = False  # Track if permission is pending
-        self._permission_response: Optional[str] = None  # Store permission response
-        self._permission_pulse_timer: Optional[Timer] = None  # Timer for permission pulse animation
-        self._permission_pulse_frame = 0  # Frame counter for pulse animation
-        self._pending_tool_id: Optional[str] = None  # Track which tool is pending permission
-        self._pending_tool_name: Optional[str] = None  # Track pending tool name for approval
-        self._pending_tool_input: Optional[dict] = None  # Track pending tool input for approval
-        self._approved_tools: set = set()  # Track already approved tool IDs to prevent duplicates
-        self._tool_id_map: Dict[str, dict] = {}  # Map tool_id to tool info for detailed logging
-
-        # New feature managers
-        self._approval_manager: Optional[ApprovalManager] = None
-        self._plan_manager = PlanManager()
-        self._tool_manager = ToolCallManager()
-        self._file_manager = AtomicFileManager()
-        self._history_manager = HistoryManager()
-        self._diff_viewer: Optional[DiffViewer] = None
-        self._file_viewer: Optional[FileViewer] = None
-
-        # ACP client for agent communication
-        self._acp_client = None
-        self._acp_message_buffer = ""  # Buffer for streaming messages
-
-        # Available models for agents - specific to each coding agent
-        # OpenCode free models from `opencode models` command
-        self._opencode_models = [
-            {
-                "id": "opencode/big-pickle",
-                "name": "Big Pickle",
-                "free": True,
-                "recommended": True,
-                "desc": "OpenCode Zen - Best overall coding",
-            },
-            {
-                "id": "opencode/minimax-m2.5-free",
-                "name": "MiniMax M2.5",
-                "free": True,
-                "recommended": True,
-                "desc": "MiniMax - Powerful free model",
-            },
-            {
-                "id": "opencode/nemotron-3-super-free",
-                "name": "Nemotron 3 Super",
-                "free": True,
-                "recommended": True,
-                "desc": "NVIDIA - 1M context window",
-            },
-            {
-                "id": "opencode/kimi-k2.5-free",
-                "name": "Kimi K2.5",
-                "free": True,
-                "desc": "Moonshot AI - K2.5 free tier",
-            },
-            {
-                "id": "opencode/gpt-5-nano",
-                "name": "GPT-5 Nano",
-                "free": True,
-                "desc": "OpenAI - Lightweight model",
-            },
-            {
-                "id": "opencode/qwen3.6-plus-free",
-                "name": "Qwen 3.6 Plus",
-                "free": True,
-                "desc": "Alibaba - Great multilingual",
-            },
-            {
-                "id": "opencode/hy3-preview-free",
-                "name": "HY3 Preview",
-                "free": True,
-                "desc": "New coding model",
-            },
-            {
-                "id": "opencode/trinity-large-preview-free",
-                "name": "Trinity Large",
-                "free": True,
-                "desc": "New reasoning model",
-            },
-        ]
-
-        # Gemini models - https://ai.google.dev/gemini-api/docs/models (updated from models.dev)
-        self._gemini_models = [
-            {
-                "id": "gemini/gemini-3-pro-preview",
-                "name": "Gemini 3 Pro Preview (Latest)",
-                "free": False,
-                "recommended": True,
-                "desc": "Latest Gemini flagship - 2M context",
-            },
-            {
-                "id": "gemini/gemini-3-flash-preview",
-                "name": "Gemini 3 Flash Preview (Latest)",
-                "free": False,
-                "recommended": True,
-                "desc": "Fast Gemini 3 model - 1M context",
-            },
-            {
-                "id": "gemini/gemini-2.5-pro",
-                "name": "Gemini 2.5 Pro",
-                "free": False,
-                "desc": "2M context window",
-            },
-            {
-                "id": "gemini/gemini-2.5-flash",
-                "name": "Gemini 2.5 Flash",
-                "free": False,
-                "desc": "Fast & versatile",
-            },
-            {
-                "id": "gemini/gemini-flash-latest",
-                "name": "Gemini Flash Latest",
-                "free": False,
-                "desc": "Latest Flash variant",
-            },
-        ]
-
-        # Claude Code models - https://docs.anthropic.com/en/docs/about-claude/models (updated from models.dev)
-        # Uses claude-code-acp adapter from Zed Industries
-        self._claude_models = [
-            {
-                "id": "claude/claude-opus-4-6",
-                "name": "Claude Opus 4.6 (Latest/New)",
-                "free": False,
-                "recommended": True,
-                "desc": "Latest Claude Opus model - 1M context",
-            },
-            {
-                "id": "claude/claude-opus-4-5-20251101",
-                "name": "Claude Opus 4.5",
-                "free": False,
-                "recommended": True,
-                "desc": "Most capable Claude model",
-            },
-            {
-                "id": "claude/claude-sonnet-4-5-20250929",
-                "name": "Claude Sonnet 4.5",
-                "free": False,
-                "recommended": True,
-                "desc": "Best balance of speed & intelligence",
-            },
-            {
-                "id": "claude/claude-haiku-4-5-20251001",
-                "name": "Claude Haiku 4.5",
-                "free": False,
-                "desc": "Fast & efficient",
-            },
-            {
-                "id": "claude/claude-sonnet-4-20250514",
-                "name": "Claude Sonnet 4",
-                "free": False,
-                "desc": "Previous Sonnet",
-            },
-            {
-                "id": "claude/claude-opus-4-20250514",
-                "name": "Claude Opus 4",
-                "free": False,
-                "desc": "Previous Opus",
-            },
-        ]
-
-        # Codex CLI / OpenAI models - https://platform.openai.com/docs/models
-        # Uses codex-acp adapter from Zed Industries
-        self._codex_models = [
-            {
-                "id": "codex/gpt-5.4",
-                "name": "GPT-5.4 (Latest)",
-                "free": False,
-                "recommended": True,
-                "desc": "Latest GPT flagship for coding and agentic workflows",
-            },
-            {
-                "id": "codex/gpt-5.3-codex",
-                "name": "GPT-5.3 Codex",
-                "free": False,
-                "recommended": True,
-                "desc": "Previous Codex-specialized model for coding workflows",
-            },
-            {
-                "id": "codex/gpt-5.2",
-                "name": "GPT-5.2",
-                "free": False,
-                "recommended": True,
-                "desc": "Prior GPT flagship with reasoning",
-            },
-            {
-                "id": "codex/gpt-5.2-pro",
-                "name": "GPT-5.2 Pro",
-                "free": False,
-                "recommended": True,
-                "desc": "GPT-5.2 Pro variant",
-            },
-            {
-                "id": "codex/gpt-5.2-chat-latest",
-                "name": "GPT-5.2 Chat",
-                "free": False,
-                "recommended": True,
-                "desc": "GPT-5.2 Chat variant",
-            },
-            {
-                "id": "codex/gpt-5.2-codex",
-                "name": "GPT-5.2 Codex",
-                "free": False,
-                "recommended": True,
-                "desc": "GPT-5.2 Codex variant",
-            },
-            {
-                "id": "codex/gpt-5.1",
-                "name": "GPT-5.1",
-                "free": False,
-                "recommended": True,
-                "desc": "GPT-5 series model",
-            },
-            {
-                "id": "codex/gpt-5.1-codex",
-                "name": "GPT-5.1 Codex",
-                "free": False,
-                "desc": "GPT-5.1 Codex variant",
-            },
-            {
-                "id": "codex/gpt-5.1-codex-mini",
-                "name": "GPT-5.1 Codex Mini",
-                "free": False,
-                "desc": "GPT-5.1 Codex Mini variant",
-            },
-            {"id": "codex/gpt-4o", "name": "GPT-4o", "free": False, "desc": "GPT-4 Omni model"},
-            {
-                "id": "codex/gpt-4o-mini",
-                "name": "GPT-4o Mini",
-                "free": False,
-                "desc": "Efficient GPT-4o model",
-            },
-            {"id": "codex/o1", "name": "o1", "free": False, "desc": "Advanced reasoning model"},
-            {
-                "id": "codex/o1-mini",
-                "name": "o1-mini",
-                "free": False,
-                "desc": "Fast reasoning model",
-            },
-        ]
-
-        # OpenHands models - model-agnostic, uses configured LLM
-        # https://openhands.dev/
-        self._openhands_models = [
-            {
-                "id": "openhands/default",
-                "name": "Default",
-                "free": False,
-                "recommended": True,
-                "desc": "Use configured model",
-            },
-            {
-                "id": "openhands/ollama",
-                "name": "Ollama (Local)",
-                "free": True,
-                "desc": "Local Ollama models",
-            },
-            {
-                "id": "openhands/claude",
-                "name": "Claude",
-                "free": False,
-                "desc": "Anthropic Claude models",
-            },
-            {
-                "id": "openhands/gpt-4",
-                "name": "GPT-4",
-                "free": False,
-                "desc": "OpenAI GPT-4 models",
-            },
-            {
-                "id": "openhands/gemini",
-                "name": "Gemini",
-                "free": False,
-                "desc": "Google Gemini models",
-            },
         ]
 
     def compose(self) -> ComposeResult:
@@ -2266,8 +1983,8 @@ class SuperQodeApp(App):
 
         # Handle based on current agent
         if self.current_agent == "opencode":
-            if 1 <= num <= len(self._opencode_models):
-                model = self._opencode_models[num - 1]
+            if 1 <= num <= len(self.opencode_models):
+                model = self.opencode_models[num - 1]
                 model_id = model.get("id", "")
                 model_name = model.get("name", "")
 
@@ -2290,7 +2007,7 @@ class SuperQodeApp(App):
                 t.append(f"  🆓 This is a FREE model! Ready to chat.\n", style=THEME["success"])
                 log.write(t)
             else:
-                log.add_error(f"Invalid selection. Choose 1-{len(self._opencode_models)}")
+                log.add_error(f"Invalid selection. Choose 1-{len(self.opencode_models)}")
 
         elif self.current_agent == "gemini":
             if 1 <= num <= len(self._gemini_models):
@@ -4547,9 +4264,9 @@ class SuperQodeApp(App):
             t.append(f"  ✨ ", style=THEME["purple"])
             t.append(f"Ready as ", style=THEME["muted"])
             t.append(context, style=f"bold {THEME['cyan']}")
-            t.append(f" — What would you like to build?\n", style=THEME["muted"])
+            t.append(" - What would you like to build?\n", style=THEME["muted"])
         else:
-            t.append(f"  ✨ Ready — What would you like to build?\n", style=THEME["muted"])
+            t.append("  ✨ Ready - What would you like to build?\n", style=THEME["muted"])
         t.append("\n")
         log.write(t)
 
@@ -4598,7 +4315,6 @@ default:
   agent: "opencode"
   agent_config:
     provider: "opencode"
-    model: "minimax-m2.5-free"
 
 # =============================================================================
 # TEAM ROLES - Enable the ones you need
@@ -4614,7 +4330,6 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "minimax-m2.5-free"
         enabled: false  # Set to true to enable
         job_description: |
           You are a Senior Full-Stack Developer with expertise in modern web technologies.
@@ -4637,7 +4352,6 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "nemotron-3-super-free"
         enabled: false  # Set to true to enable
         job_description: |
           You are a Senior Frontend Developer specializing in modern web UIs.
@@ -4654,7 +4368,6 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "minimax-m2.5-free"
         enabled: false  # Set to true to enable
         job_description: |
           You are a Senior Backend Developer specializing in APIs and services.
@@ -4675,7 +4388,6 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "nemotron-3-super-free"
         enabled: false  # Set to true to enable
         job_description: |
           You are a Senior QA Engineer with expertise in all testing types.
@@ -4699,7 +4411,6 @@ team:
         agent: "opencode"
         agent_config:
           provider: "opencode"
-          model: "gpt-5-nano"
         enabled: false  # Set to true to enable
         job_description: |
           You are a Senior DevOps Engineer with full-stack infrastructure expertise.
@@ -4773,7 +4484,7 @@ team:
                 current = " ◀ current" if self.approval_mode == m else ""
                 t.append(f"    {icon} ", style=color)
                 t.append(f":mode {m:<6}", style=f"bold {color}")
-                t.append(f" — {desc}", style=THEME["muted"])
+                t.append(f" - {desc}", style=THEME["muted"])
                 if current:
                     t.append(current, style=f"bold {color}")
                 t.append("\n", style="")
@@ -4837,7 +4548,7 @@ team:
                 current = " ◀ current" if current_verbosity == lvl else ""
                 t.append(f"    {icon} ", style=color)
                 t.append(f":log {lvl:<10}", style=f"bold {color}")
-                t.append(f" — {desc}", style=THEME["muted"])
+                t.append(f" - {desc}", style=THEME["muted"])
                 if current:
                     t.append(current, style=f"bold {color}")
                 t.append("\n", style="")
@@ -5309,7 +5020,7 @@ team:
                     or args.get("task")
                     or ""
                 )
-            _safe_call(log.add_tool_call, name, "running", file_path, command, "")
+            _safe_call(log.add_tool_call, name, "running", file_path, command, "", args)
 
         def on_tool_result(name: str, result):
             """Handle tool result - ALWAYS visible with JSON parsing."""
@@ -11100,26 +10811,7 @@ team:
                 elif resolved.model:
                     model_name = resolved.model
                 else:
-                    model_name = "minimax-m2.5-free"
-
-                # Map model names
-                model_mapping = {
-                    "glm-4.7": "minimax-m2.5-free",
-                    "glm-4.7-free": "minimax-m2.5-free",
-                    "grok-code": "minimax-m2.5-free",
-                    "kimi-k2.5": "kimi-k2.5-free",
-                    "kimi-k2.5-free": "kimi-k2.5-free",
-                    "minimax-m2.1": "minimax-m2.5-free",
-                    "minimax-m2.1-free": "minimax-m2.5-free",
-                    "minimax-m2.5": "minimax-m2.5-free",
-                    "minimax-m2.5-free": "minimax-m2.5-free",
-                    "gpt-5-nano": "gpt-5-nano",
-                    "big-pickle": "big-pickle",
-                    "nemotron-3-super-free": "nemotron-3-super-free",
-                    "trinity-large-preview-free": "trinity-large-preview-free",
-                    "qwen3.6-plus-free": "qwen3.6-plus-free",
-                }
-                model_name = model_mapping.get(model_name, model_name)
+                    model_name = None
 
                 # Use unified OpenCode runner (same code path as :acp connect opencode)
                 self._run_opencode_unified(
@@ -13401,7 +13093,11 @@ team:
             self.run_worker(self._show_local_provider_models(provider_id, log))
             return
 
-        t.append(f"  📊 Source: {get_data_source()}\n\n", style=THEME["dim"])
+        t.append(f"  📊 Source: {get_data_source()}\n", style=THEME["dim"])
+        t.append(
+            "  Labels: 🔧 tools  👁️ vision  🧠 reasoning  💻 coding  ctx=context  price=$/1M\n\n",
+            style=THEME["dim"],
+        )
 
         # Get models from database
         db_models = get_models_for_provider(provider_id)
@@ -16167,14 +15863,14 @@ team:
             # Check if it's a number (1-5) for quick selection
             if model_name.isdigit():
                 idx = int(model_name) - 1
-                if 0 <= idx < len(self._opencode_models):
-                    model_name = self._opencode_models[idx]["id"]
+                if 0 <= idx < len(self.opencode_models):
+                    model_name = self.opencode_models[idx]["id"]
                 else:
-                    log.add_error(f"Invalid selection. Choose 1-{len(self._opencode_models)}")
+                    log.add_error(f"Invalid selection. Choose 1-{len(self.opencode_models)}")
                     return
 
             # Check if it's a valid opencode model
-            valid_ids = [m["id"] for m in self._opencode_models]
+            valid_ids = [m["id"] for m in self.opencode_models]
 
             # Allow short names too (e.g., "glm-4.7-free" -> "opencode/glm-4.7-free")
             if not model_name.startswith("opencode/"):
@@ -16190,7 +15886,7 @@ team:
                 return
 
             # Find model info
-            model_info = next((m for m in self._opencode_models if m["id"] == model_name), None)
+            model_info = next((m for m in self.opencode_models if m["id"] == model_name), None)
             model_display = model_info["name"] if model_info else model_name
         else:
             model_display = model_name
@@ -16496,7 +16192,7 @@ team:
 
         # Try to find a matching model
         matched_model = None
-        for model in self._opencode_models:
+        for model in self.opencode_models:
             model_id = model.get("id", "").lower()
             model_name = model.get("name", "").lower()
 
@@ -16564,11 +16260,20 @@ team:
 
         # Show available FREE models
         t.append(f"  │  🆓 ", style=color)
-        t.append("SELECT A FREE MODEL", style=f"bold {THEME['success']}")
+        t.append("SELECT A DYNAMIC FREE MODEL", style=f"bold {THEME['success']}")
         t.append(f"{'':>34}│\n", style=color)
         t.append(f"  ├{'─' * 58}┤\n", style=color)
 
-        for i, model in enumerate(self.opencode_models):
+        models = self.opencode_models
+        if not models:
+            t.append(f"  │  ", style=color)
+            t.append("No free models discovered from OpenCode CLI", style=THEME["warning"])
+            t.append(f"{'':>10}│\n", style=color)
+            t.append(f"  │  ", style=color)
+            t.append("Press R to refresh or configure OpenCode", style=THEME["muted"])
+            t.append(f"{'':>18}│\n", style=color)
+
+        for i, model in enumerate(models):
             model_id = model.get("id", "")
             model_name = model.get("name", "")
             desc = model.get("desc", "")
@@ -16618,7 +16323,7 @@ team:
         t.append(f"  │      Or type ", style=color)
         t.append("1", style=f"bold {THEME['cyan']}")
         t.append("-", style=THEME["muted"])
-        t.append(f"{len(self.opencode_models)}", style=f"bold {THEME['cyan']}")
+        t.append(f"{len(models)}", style=f"bold {THEME['cyan']}")
         t.append(" in prompt and press Enter", style=THEME["muted"])
         t.append(f"{'':>10}│\n", style=color)
 
@@ -17713,7 +17418,7 @@ team:
 
             t = Text()
             t.append(f"\n  👥 ", style=f"bold {THEME['purple']}")
-            t.append(f"{config.team_name} — Roles\n", style=f"bold {THEME['purple']}")
+            t.append(f"{config.team_name} - Roles\n", style=f"bold {THEME['purple']}")
 
             for mode in ["dev", "qe", "devops"]:
                 roles = config.get_roles_by_mode(mode)

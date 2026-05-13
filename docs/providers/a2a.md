@@ -312,6 +312,6 @@ pip install superqode[a2a]
 
 ## See Also
 
-- [ACP Agents](providers/acp.md) - Alternative protocol for external agents
-- [MCP Tools](configuration/mcp-config.md) - Tool integration via Model Context Protocol
-- [Session Management](advanced/session-management.md) - Persistent conversation storage
+- [ACP Agents](acp.md) - Alternative protocol for external agents
+- [MCP Tools](../configuration/mcp-config.md) - Tool integration via Model Context Protocol
+- [Session Management](../advanced/session-management.md) - Persistent conversation storage

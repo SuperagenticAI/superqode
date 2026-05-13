@@ -20,7 +20,7 @@ Advanced features, architecture documentation, and systems in SuperQode for powe
 
     ---
 
-    How QE sessions run from request to report generation.
+How coding and QE sessions run from request to result.
 
     [:octicons-arrow-right-24: Execution Pipeline](execution-pipeline.md)
 
@@ -76,7 +76,7 @@ Advanced features, architecture documentation, and systems in SuperQode for powe
 
     ---
 
-    Verification-first system prompts that guide QE agents.
+Verification-first system prompts that guide coding and QE agents.
 
     [:octicons-arrow-right-24: Guidance System](guidance-system.md)
 
@@ -84,7 +84,7 @@ Advanced features, architecture documentation, and systems in SuperQode for powe
 
     ---
 
-    Fast validation for QE-generated patches before inclusion in QRs, including BYOH custom steps.
+Fast validation for generated patches before inclusion in reports, including BYOH custom steps.
 
     [:octicons-arrow-right-24: Harness System](harness-system.md)
 
@@ -110,7 +110,7 @@ Advanced features, architecture documentation, and systems in SuperQode for powe
 
 ## System Architecture
 
-These advanced features work together to provide a complete QE platform:
+These advanced features work together to provide a complete coding-agent harness:
 
 - **Memory & Learning**: Learns from feedback
 - **Guidance System**: Guides agent behavior
@@ -130,12 +130,12 @@ superqode:
     # Guidance
     guidance:
       enabled: true
-      ...
+      enabled: true
 
     # Harness
     harness:
       enabled: true
-      ...
+      steps: []
 
     # Memory (automatic)
     # ML (automatic)

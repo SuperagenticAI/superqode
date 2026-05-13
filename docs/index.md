@@ -6,13 +6,13 @@
 
 <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode-logo.png" alt="SuperQode Logo" style="max-height: 150px; margin-bottom: 1.5rem;" />
 
-# **SUPERQODE**
+# **SuperQode**
 
-### Superior Quality-Oriented Agentic Software Development.
+### Multi-agent coding harness for local, BYOK, and ACP workflows.
 
-Orchestrating coding agents as **Super Quality Engineers** using the **SuperQE methodology**. Let agents break the code. Prove the fix. Ship with confidence.
+Connect coding agents and models, run repository tools, inspect changes, and keep interactive coding sessions readable. SuperQE remains available for teams that want agent-driven quality engineering and release validation.
 
-<p class="tagline">Orchestrate, Validate, and Deploy Agentic Software with Unshakable Confidence.</p>
+<p class="tagline">Build with agents. Validate with evidence. Ship with confidence.</p>
 
 [:octicons-rocket-24: Get Started](getting-started/installation.md){ .md-button .md-button--primary }
 [:octicons-book-24: Learn Concepts](concepts/index.md){ .md-button }
@@ -24,26 +24,25 @@ Orchestrating coding agents as **Super Quality Engineers** using the **SuperQE m
 
 ---
 
-## What is SuperQode and SuperQE?
+## What is SuperQode?
 
-**SuperQE** is the quality paradigm and automation CLI: **Super Quality Engineering for Agentic AI**. It uses QE coding agents to break and validate code written by coding agents. SuperQE can spawn a team of QE agents with different testing personas in a multi-agent setup to stress your code from many angles.
+**SuperQode** is a coding agent harness for interactive development, headless coding tasks, local model workflows, BYOK providers, and ACP coding agents. It gives developers one place to connect models, execute file/search/edit/shell tools, review concise summaries, and continue work without noisy output.
 
-**SuperQode** is the agentic coding harness designed to drive the SuperQE process. It delivers a **Superior and Quality Optimized Developer Experience** as a TUI for interactive development, debugging, and exploratory QE. SuperQode can also be used as a general development harness beyond QE.
+**SuperQE** is the quality engineering workflow included with SuperQode. Use it when you want coding agents to stress, validate, and report on code before release. QE is a supported workflow, not the only purpose of SuperQode.
 
-**Note (Enterprise):** Enterprise adds powerful automation, deep evaluation testing, and enterprise integrations (OpenClaw first; more bot integrations coming).
+**Note (Enterprise):** Enterprise adds deeper automation, evaluation testing, and enterprise integrations.
 
 ### Why SuperQode Exists
 
-AI coding agents have changed how software is written, but quality engineering still assumes human
-authorship, deterministic behavior, and slow change. That mismatch creates a new risk surface:
+AI coding agents have changed how software is written, but the developer experience around them is still fragmented. Teams often need one tool for local models, another for cloud APIs, another for ACP agents, and another set of scripts for validation. SuperQode brings those workflows into a single harness.
 
-- PR review catches syntax but not emergent behavior
-- Static analysis misses runtime failure modes
-- Human QA cannot keep pace with agent velocity
-- "Looks correct" is no longer evidence of safety
+- Use local, BYOK, and ACP providers from one interface
+- Keep tool calls compact by default, with verbose output when needed
+- See provider setup hints and model capabilities before connecting
+- Run coding sessions interactively or headlessly
+- Use SuperQE when release validation needs stronger evidence
 
-SuperQode closes this gap by letting agents fight agents in safe sandboxes and turning the results into
-evidence-based decisions.
+SuperQode is designed to be practical first: connect quickly, let the agent use tools, see what happened, and keep control of your repository.
 
 ### What Is SuperQE?
 
@@ -57,14 +56,15 @@ SuperQE (Super Quality Engineering) is a quality methodology for agentic softwar
 
 SuperQE is not test generation. It is adversarial validation with reproducible evidence.
 
-### What Is SuperQode?
+### What SuperQode Provides
 
-SuperQode is the execution harness for SuperQE:
-
-- A CLI (`superqe`) for automation and CI/CD runs
-- A TUI (`superqode`) for interactive, exploratory QE
-- A sandboxed workspace model that snapshots, tests, and reverts safely
-- A role-based agent system for coverage across security, API, regression, full-stack, and chaos testing
+- A TUI (`superqode`) for interactive coding-agent sessions
+- A headless CLI for coding tasks and provider checks
+- ACP, BYOK, and Local provider modes
+- Dynamic OpenCode free model discovery instead of hardcoded free model lists
+- Optional Monty-backed `python_repl` tool for controlled interpreter-style work
+- Compact TUI tool display for search, file, shell, edit, and Python REPL calls
+- SuperQE workflows for sandboxed validation, reports, and release checks
 
 One install ships both entrypoints. You can use them together or independently.
 
@@ -87,7 +87,7 @@ Agents are free to break things - your repo is always restored.
 - Self-hosted and privacy-first
 
 
-SuperQE runs cleanly in CI/CD pipelines, while SuperQode drives SuperQE for interactive workflows. You can also use each independently.
+SuperQode runs interactive and headless coding workflows. SuperQE runs cleanly in CI/CD pipelines when you need release validation.
 
 What you get out of a run:
 
@@ -100,14 +100,14 @@ Safety model: by default, SuperQode does not modify your repo. All exploratory c
 # After install, in your repo:
 superqe init
 
-# Start the developer TUI (recommended for interactive workflows)
+# Start the developer TUI
 superqode
 
 # Or run automated QE CLI
 superqe run . --mode quick
 ```
 
-`superqe init` creates a comprehensive role catalog in `superqode.yaml`. Disable or delete roles you don’t need.
+`superqe init` creates a comprehensive role catalog in `superqode.yaml`. Disable or delete roles you do not need.
 
 ---
 
@@ -182,23 +182,23 @@ This enables **fearless, exhaustive testing** - agents explore freely while your
 
     ---
 
-    CI/CD maturity but need quality assurance without QE headcount. Super Quality Engineers replace or augment human QA teams.
+    Need a practical coding harness for agent-assisted development, provider experimentation, and release checks.
 
-    *Fast-moving teams scaling quality engineering with AI agents*
+    *Fast-moving teams standardizing agentic development workflows*
 
 -   **SMEs**
 
     ---
 
-    Limited or no dedicated QE team. SuperQE methodology provides add-on-grade quality engineering without add-on costs.
+    Need local, BYOK, and cloud model access without building a custom harness.
 
-    *Growing companies needing quality validation without hiring QE teams*
+    *Growing companies using agents while keeping infrastructure flexible*
 
 -   **Teams Using AI Coding Agents**
 
     ---
 
-    Need quality validation for AI-generated code. Orchestration of coding agents ensures agent-written code meets production standards.
+    Need a stronger coding loop than a single chat box: tool execution, readable summaries, provider selection, and optional validation.
 
     *Teams using GitHub Copilot, Cursor, or other AI coding tools*
 
@@ -206,7 +206,7 @@ This enables **fearless, exhaustive testing** - agents explore freely while your
 
     ---
 
-    Want to scale QA with code velocity. SuperQE transforms reactive QA into proactive, agentic quality engineering.
+    Want one developer-facing interface for coding sessions, provider checks, local models, and SuperQE release validation.
 
     *Engineering teams adopting Agentic Quality Engineering methodology*
 
@@ -370,39 +370,39 @@ When `allow_suggestions` is enabled, SuperQode follows a strict workflow:
 
 ### The Problem
 
-1. **AI Coding Has Outpaced QA** - Code is now written faster than humans can meaningfully test. Traditional QA processes cannot keep up with the velocity, scale, and complexity of agent-generated software.
+1. **Agentic Coding Is Fragmented** - Developers often switch between local model servers, cloud APIs, ACP agents, shell scripts, and separate validation tools.
 
-2. **Existing Tools Stop at Code Review** - Most incumbent tools focus on PR comments, static analysis, or surface-level reviews. They do not actively break code, perform destructive testing, validate fixes in sandbox environments, or prove production readiness with evidence.
+2. **Tool Output Gets Noisy** - Raw file reads, search output, shell output, and tool traces can bury the useful summary of what the agent actually changed.
 
-3. **QE Is Treated as Reporting, Not Problem Solving** - Traditional QA workflows optimize for tickets and findings, not for validated fixes, benchmarks, or proof of improvement.
+3. **Provider Setup Is Hard to Trust** - Model availability, free tier status, tool support, context windows, and API key setup change over time.
 
-4. **Incumbent QA + "Agentic AI" Falls Short** - Many existing testing platforms attempt to "add agents" to legacy QA systems. This approach fails structurally due to systems not being agent-native by design, mismatch between deterministic QA and probabilistic agents, and single-agent or same-model bias.
+4. **Release Validation Still Matters** - AI-assisted code still needs evidence before humans approve production changes.
 
-### The Solution: SuperQE
+### The Solution: SuperQode
 
-SuperQode introduces **SuperQE** through orchestration of coding agents - a new quality paradigm where:
+SuperQode provides a practical coding-agent harness where:
 
-- Coding agents are orchestrated as Super Quality Engineers aggressively attacking code in sandbox
-- Multiple agents with different perspectives challenge each other
-- Orchestrated agents can inject test code, run experiments, and break things
-- All changes are tracked and demonstrated in reports
-- Original code is always preserved
-- Humans review outcomes and approve/reject fixes
+- Developers can connect ACP agents, BYOK providers, and local models
+- The TUI shows compact tool activity by default and can expand when needed
+- Provider doctor and model pickers show setup status and capability labels
+- Dynamic provider discovery avoids stale hardcoded free model lists
+- Optional tools such as Monty add controlled interpreter-style execution
+- SuperQE remains available for sandboxed quality engineering and release checks
 
-**Let agents fight agents. Humans decide.**
+**Build with agents. Validate with evidence. Keep control.**
 
 ---
 
 ## Key Differentiators
 
-1. **Quality-first, not code-first** - Focus on breaking, not building
-2. **QRs instead of bug reports** - Research-grade findings with evidence
-3. **Sandbox freedom with safety** - Agents explore freely; original preserved
-4. **Multi-agent, cross-model** - Diverse perspectives, fewer blind spots
-5. **User-defined harness and roles** - No opinionated workflows
-6. **Human-in-the-loop by design** - Findings and suggestions, not auto-apply
-7. **Self-hosted, privacy-first** - Your code stays in your environment
-8. **Prove-then-revert model** - Demonstrate fixes work, then restore original
+1. **Harness-first** - Coding sessions, provider access, and tools are the primary workflow
+2. **Provider-flexible** - ACP agents, BYOK providers, and local models use one interface
+3. **Readable by default** - Tool calls and file activity stay compact unless verbose output is requested
+4. **Dynamic model discovery** - Free model lists and provider metadata can refresh from source systems
+5. **Tool-rich** - File, search, edit, shell, MCP, todo, and optional Monty tools are available
+6. **Human-controlled** - Changes and suggestions remain visible for review
+7. **Self-hosted and privacy-first** - Your code stays in your environment
+8. **QE-ready** - SuperQE workflows add deeper validation when needed
 
 ---
 
@@ -436,6 +436,7 @@ SuperQode introduces **SuperQE** through orchestration of coding agents - a new 
     | Ollama | Easy local model deployment |
     | LM Studio | GUI-based local models |
     | vLLM | High-performance inference |
+    | DS4 | Local DeepSeek V4 Flash |
     | llama.cpp | C++ inference engine |
 
 [:octicons-arrow-right-24: See all providers](providers/index.md)
@@ -447,7 +448,7 @@ SuperQode introduces **SuperQE** through orchestration of coding agents - a new 
 <div class="grid" markdown>
 
 **[Getting Started](getting-started/index.md)**
-Installation, quick start, and first QE session
+Installation, quick start, and first coding session
 
 **[Concepts](concepts/index.md)**
 Core concepts: modes, workspace, roles, QRs
@@ -485,18 +486,18 @@ JSONL events and Python SDK
 
 ## Vision
 
-As software becomes increasingly agent-written, **only agentic quality engineering can keep it safe**.
+As software becomes increasingly agent-written, developers need a harness that can connect models, run tools, summarize work clearly, and validate changes when it matters.
 
-**SuperQode** orchestrates coding agents as Super Quality Engineers and operationalizes SuperQE (Agentic Quality Engineering). Let agents break the code. Prove the fix. Ship with confidence. Validate readiness before humans approve release.
+**SuperQode** is that harness. It supports daily coding workflows first, then adds SuperQE for teams that need agent-driven quality engineering and release evidence.
 
 ---
 
 <div class="footer-tagline" markdown>
 
-**SuperQode: Superior Quality-Oriented Agentic Software Development.**
+**SuperQode: Multi-agent coding harness.**
 
-*Operationalizing SuperQE (Agentic Quality Engineering) - Let agents break the code. Prove the fix. Ship with confidence.*
+*Build with agents. Validate with evidence. Ship with confidence.*
 
-*Built from first principles for Agentic QE. Self-hosted. Privacy-first. Human-in-the-loop.*
+*Built for agentic development. Self-hosted. Privacy-first. Human-controlled.*
 
 </div>

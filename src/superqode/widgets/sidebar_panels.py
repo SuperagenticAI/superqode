@@ -141,7 +141,7 @@ class AgentInfo:
     @property
     def duration_str(self) -> str:
         if not self.connected_at:
-            return "—"
+            return "-"
         delta = datetime.now() - self.connected_at
         mins = int(delta.total_seconds() // 60)
         secs = int(delta.total_seconds() % 60)

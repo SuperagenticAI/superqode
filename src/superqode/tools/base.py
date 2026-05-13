@@ -229,6 +229,7 @@ class ToolRegistry:
         from .question_tool import QuestionTool, ConfirmTool
         from .todo_tools import TodoWriteTool, TodoReadTool
         from .batch_tool import BatchTool
+        from .monty_tool import MontyPythonReplTool, is_monty_available
 
         registry = cls()
 
@@ -261,6 +262,10 @@ class ToolRegistry:
 
         # Diagnostics
         registry.register(DiagnosticsTool())
+
+        # Sandboxed Python interpreter (optional pydantic-monty extra)
+        if is_monty_available():
+            registry.register(MontyPythonReplTool())
 
         # Network
         registry.register(FetchTool())
@@ -324,6 +329,7 @@ class ToolRegistry:
         from .question_tool import QuestionTool, ConfirmTool
         from .todo_tools import TodoWriteTool, TodoReadTool
         from .batch_tool import BatchTool
+        from .monty_tool import MontyPythonReplTool, is_monty_available
 
         registry = cls()
 
@@ -356,6 +362,10 @@ class ToolRegistry:
 
         # Diagnostics
         registry.register(DiagnosticsTool())
+
+        # Sandboxed Python interpreter (optional pydantic-monty extra)
+        if is_monty_available():
+            registry.register(MontyPythonReplTool())
 
         # LSP tools
         registry.register(LSPTool())

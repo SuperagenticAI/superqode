@@ -155,6 +155,7 @@ extra_javascript:
 
 nav:
   - 🏠 Home: index.md
+  - ✅ Release Readiness: release-readiness.md
 
   - 🚀 Getting Started:
     - getting-started/index.md
@@ -172,6 +173,7 @@ nav:
     - 👥 QE Roles: concepts/roles.md
     - 📊 Quality Reports: concepts/qr.md
     - 💡 Allow Suggestions: concepts/suggestions.md
+    - 🔐 Authentication: concepts/authentication.md
 
 
   - ⚙️ Configuration:
@@ -196,6 +198,7 @@ nav:
     - providers/index.md
     - 🔑 BYOK Providers: providers/byok.md
     - 🤖 ACP Agents: providers/acp.md
+    - 🔁 A2A Providers: providers/a2a.md
     - 💻 Local Models: providers/local.md
     - 🌐 OpenResponses: providers/openresponses.md
 
@@ -205,6 +208,7 @@ nav:
     - 📝 IDE Integration: integration/ide.md
     - 🐙 GitHub Actions: integration/github-actions.md
     - 🦊 GitLab CI: integration/gitlab-ci.md
+    - 🧩 OpenClaw: integration/openclaw.md
 
   - 🔬 Advanced:
     - advanced/index.md
@@ -215,6 +219,7 @@ nav:
     - 🧪 Evaluation Engine: advanced/evaluation-engine.md
     - 🧠 Memory & Learning: advanced/memory.md
     - 🔧 Tools System: advanced/tools-system.md
+    - 🐍 Monty Python REPL: advanced/monty-python-repl.md
     - 📖 Guidance System: advanced/guidance-system.md
     - ⚓ Harness System: advanced/harness-system.md
     - 📋 Session Management: advanced/session-management.md

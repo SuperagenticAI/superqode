@@ -6,6 +6,7 @@ Commands for listing, showing, and testing BYOK providers.
 
 import asyncio
 import os
+from pathlib import Path
 from typing import Optional
 
 import click
@@ -615,6 +616,64 @@ def mlx_command(action: str, model: Optional[str], host: str, port: int):
         console.print("  • [cyan]superqode providers mlx list[/cyan] - See available models")
         console.print("  • [cyan]superqode providers mlx check[/cyan] - Verify installation")
         console.print("  • [cyan]superqode providers mlx models[/cyan] - See all suggestions")
+
+
+@providers.command("monty")
+@click.argument("action", type=click.Choice(["check", "smoke", "setup"]))
+def monty_command(action: str):
+    """Manage optional Monty sandboxed Python REPL support."""
+    from ..tools.base import ToolContext
+    from ..tools.monty_tool import MontyPythonReplTool, is_monty_available, monty_version
+
+    if action == "check":
+        if is_monty_available():
+            console.print(f"[green]✅ pydantic-monty is installed[/green] ({monty_version()})")
+            console.print(
+                "[dim]The python_repl tool is available in standard/full tool profiles.[/dim]"
+            )
+        else:
+            console.print("[red]❌ pydantic-monty is not installed[/red]")
+            console.print("Install with:")
+            console.print("  [cyan]uv sync --extra monty[/cyan]")
+            console.print("  [cyan]pip install 'superqode\\[monty]'[/cyan]")
+        return
+
+    if action == "setup":
+        console.print("[bold]Monty Setup[/bold]")
+        console.print("Monty enables a safe, fast Python REPL tool for agent-written snippets.")
+        console.print()
+        console.print("[bold]Install optional dependency:[/bold]")
+        console.print("  [cyan]uv sync --extra monty[/cyan]")
+        console.print("  [cyan]# or: pip install 'superqode\\[monty]'[/cyan]")
+        console.print()
+        console.print("[bold]Verify:[/bold]")
+        console.print("  [cyan]superqode providers monty check[/cyan]")
+        console.print("  [cyan]superqode providers monty smoke[/cyan]")
+        console.print()
+        console.print("[bold]Behavior:[/bold]")
+        console.print("  • Tool name: [cyan]python_repl[/cyan]")
+        console.print("  • State persists per SuperQode session")
+        console.print("  • Filesystem is blocked unless the tool mounts /workspace explicitly")
+        console.print("  • Default resource limits cap duration, memory, and recursion depth")
+        return
+
+    if not is_monty_available():
+        console.print("[red]❌ pydantic-monty is not installed[/red]")
+        console.print("Run: [cyan]uv sync --extra monty[/cyan]")
+        return
+
+    async def smoke():
+        tool = MontyPythonReplTool()
+        ctx = ToolContext(session_id="monty-smoke", working_directory=Path.cwd())
+        return await tool.execute({"code": "x = 40\nx + 2", "reset": True}, ctx)
+
+    result = asyncio.run(smoke())
+    if result.success and result.output.strip().endswith("42"):
+        console.print("[green]✅ Monty smoke test passed[/green]")
+        console.print(f"[dim]Output: {result.output.strip()}[/dim]")
+    else:
+        console.print("[red]❌ Monty smoke test failed[/red]")
+        console.print(result.error or result.output)
 
 
 def connect_provider(provider: Optional[str] = None, model: Optional[str] = None) -> int:

@@ -43,6 +43,9 @@ dependencies = [
 mlx = [
     "mlx-lm>=0.28.3,<0.30.0; python_version < '3.14'",
 ]
+monty = [
+    "pydantic-monty>=0.0.17",
+]
 extras = [
     "exa-py>=1.0.0",
 ]

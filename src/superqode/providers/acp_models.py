@@ -55,8 +55,10 @@ async def get_acp_agent_models(acp_client: Any) -> List[ACPModel]:
             model_id = m.get("id", "")
             model_name = m.get("name", model_id)
 
-            # Determine if model is free
-            is_free = _is_free_model(model_id, model_name, m.get("provider"))
+            # Determine if model is free. Prefer dynamic pricing/capability metadata
+            # when the ACP agent exposes it, then fall back to conservative naming
+            # patterns for agents that only return ids/names.
+            is_free = _is_free_model(model_id, model_name, m.get("provider"), m)
 
             # Determine context window
             context = m.get("context_window", 128000)
@@ -82,16 +84,31 @@ async def get_acp_agent_models(acp_client: Any) -> List[ACPModel]:
         return []
 
 
-def _is_free_model(model_id: str, model_name: str, provider: Optional[str]) -> bool:
+def _is_free_model(
+    model_id: str,
+    model_name: str,
+    provider: Optional[str],
+    metadata: Optional[Dict[str, Any]] = None,
+) -> bool:
     """
     Determine if a model is free based on its name/ID.
 
-    Checks for common free model patterns:
-    - Contains "free" in the name
-    - Known free model IDs
+    Checks dynamic model metadata first and only falls back to generic
+    naming patterns such as "free" when pricing is not exposed.
     """
     lower_id = model_id.lower()
     lower_name = model_name.lower()
+    metadata = metadata or {}
+
+    if metadata.get("free") is True or metadata.get("is_free") is True:
+        return True
+
+    cost = metadata.get("cost") or metadata.get("pricing") or metadata.get("price")
+    if isinstance(cost, dict):
+        input_cost = cost.get("input", cost.get("prompt", cost.get("input_cost")))
+        output_cost = cost.get("output", cost.get("completion", cost.get("output_cost")))
+        if input_cost is not None and output_cost is not None:
+            return _is_zero_price(input_cost) and _is_zero_price(output_cost)
 
     # Free model patterns
     free_patterns = [
@@ -105,25 +122,14 @@ def _is_free_model(model_id: str, model_name: str, provider: Optional[str]) -> b
         if pattern in lower_id or pattern in lower_name:
             return True
 
-    # Known free models
-    known_free = [
-        "big-pickle",
-        "minimax-m2.5-free",
-        "nemotron-3-super-free",
-        "gpt-5-nano",
-        "hy3-preview-free",
-        "ling-2.6-flash-free",
-        "trinity-large-preview-free",
-        "qwen3.6-plus-free",
-        "mimo-v2-flash-free",
-        "trinity-mini-preview-free",
-    ]
-
-    for free_model in known_free:
-        if free_model in lower_id:
-            return True
-
     return False
+
+
+def _is_zero_price(value: Any) -> bool:
+    try:
+        return float(value) == 0
+    except (TypeError, ValueError):
+        return str(value).strip().lower() in {"free", "$0", "$0.00", "0"}
 
 
 async def get_free_acp_models(acp_client: Any) -> List[ACPModel]:

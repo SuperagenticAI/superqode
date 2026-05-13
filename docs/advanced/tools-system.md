@@ -64,6 +64,16 @@ SuperQode provides a complete tool system for AI agents:
 |------|-------------|
 | `diagnostics` | LSP diagnostics (linting errors) |
 
+### Interpreter
+
+| Tool | Description |
+|------|-------------|
+| `python_repl` | Optional Monty-backed sandboxed Python REPL |
+
+`python_repl` is registered only when `pydantic-monty` is installed. See
+[Monty Python REPL](monty-python-repl.md) for setup, limits, and filesystem
+mount behavior.
+
 ### LSP
 
 | Tool | Description |

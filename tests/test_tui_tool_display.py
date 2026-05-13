@@ -1,6 +1,7 @@
 """Tests for compact TUI tool display helpers."""
 
 from superqode.app.widgets import summarize_tool_output
+from superqode.tools.display import format_tool_call_compact
 
 
 def test_repo_search_output_is_summarized():
@@ -34,3 +35,35 @@ def test_normal_read_output_hides_file_body():
 
 def test_minimal_success_output_is_hidden():
     assert summarize_tool_output("grep", "success", "a\nb", "minimal") == ""
+
+
+def test_compact_display_formats_file_tool():
+    label = format_tool_call_compact("read_file", {"path": "/repo/src/superqode/app_main.py"})
+
+    assert label == "read_file(.../src/superqode/app_main.py)"
+
+
+def test_compact_display_formats_search_tool():
+    label = format_tool_call_compact("grep", {"pattern": "add_tool_call", "path": "src"})
+
+    assert label == 'grep("add_tool_call", src)'
+
+
+def test_compact_display_formats_shell_tool_with_timeout():
+    label = format_tool_call_compact("bash", {"command": "uv run pytest tests", "timeout": 120})
+
+    assert label == 'bash("uv run pytest tests", timeout=120)'
+
+
+def test_compact_display_formats_python_repl_multiline():
+    label = format_tool_call_compact("python_repl", {"code": "x = 1\nx + 1"})
+
+    assert label == 'python_repl(2 lines: "x = 1")'
+
+
+def test_compact_display_truncates_long_values():
+    label = format_tool_call_compact("repo_search", {"query": "x" * 200}, max_length=40)
+
+    assert label.startswith('repo_search("')
+    assert label.endswith("...")
+    assert len(label) == 40

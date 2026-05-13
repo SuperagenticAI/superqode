@@ -176,7 +176,7 @@ Never finish tool execution without providing your analysis. Users expect a comp
 4. Only ONE `in_progress` at a time. Mark `completed` immediately when done.
 
 ### Preamble Messages
-Before running tools, you may give a brief 1–2 sentence update (e.g., "Checking tests in src/", "Applying the fix to utils.py"). Keep preambles short; avoid long explanations before the tool call.
+Before running tools, you may give a brief 1-2 sentence update (e.g., "Checking tests in src/", "Applying the fix to utils.py"). Keep preambles short; avoid long explanations before the tool call.
 
 ### Structured Planning
 1. **Understand**: Use read_file, grep, code_search to scope the work.
@@ -192,7 +192,7 @@ Example: `src/utils.py:42` or `src/main.py:10:5`. This format is unambiguous for
 ## FINAL ANSWER FORMAT
 
 When concluding a task:
-1. **Summary**: 1–2 sentences on what was done.
+1. **Summary**: 1-2 sentences on what was done.
 2. **Changes**: List files/locations changed (use `path:line` format).
 3. **Validation**: Note tests run, diagnostics, or checks performed.
 4. **Next steps** (if any): Follow-up work or caveats.

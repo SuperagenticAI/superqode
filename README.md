@@ -8,9 +8,9 @@
 <h1 align="center">SuperQode</h1>
 
 <p align="center">
-  <strong>Superior Quality-Oriented Agentic Software Development</strong><br>
-  <em>Orchestrate, Validate, and Deploy Agentic Software with Unshakable Confidence.</em><br>
-  <strong>Let agents break the code. Prove the fix. Ship with confidence.</strong>
+  <strong>Multi-agent coding harness for local, BYOK, and ACP workflows</strong><br>
+  <em>Connect models, run tools, inspect changes, and keep coding sessions readable.</em><br>
+  <strong>Build with agents. Validate with evidence. Ship with confidence.</strong>
 </p>
 
 <p align="center">
@@ -37,13 +37,13 @@
 
 
 
-## What is SuperQode and SuperQE?
+## What is SuperQode?
 
-**SuperQE** is the quality paradigm and automation CLI: Super Quality Engineering for Agentic AI. It uses QE coding agents to break and validate code written by coding agents. SuperQE can spawn a team of QE agents with different testing personas in a multi-agent setup to stress your code from many angles.
+**SuperQode** is a coding agent harness for interactive development, local model workflows, BYOK providers, ACP coding agents, and tool-based repository work. It provides a TUI and CLI so developers can connect to the model or agent they prefer, run file/search/edit/shell tools, and get concise summaries of what changed.
 
-**SuperQode** is the agentic coding harness designed to drive the SuperQE process. It delivers a Superior and Quality Optimized Developer Experience as a TUI for interactive development, debugging, and exploratory QE. SuperQode can also be used as a general development harness beyond QE.
+**SuperQE** is the quality engineering workflow included with SuperQode. Use it when you want agents to stress, validate, and report on code before release. QE is an important workflow, but SuperQode is first a general coding harness.
 
-**Note (Enterprise):** Enterprise adds powerful automation, deep evaluation testing, and enterprise integrations (OpenClaw first; more bot integrations coming).
+**Note (Enterprise):** Enterprise adds deeper automation, evaluation testing, and enterprise integrations.
 
 ## Demo Video
 
@@ -97,12 +97,12 @@ superqe run . --mode quick
 
 | Feature | Description |
 |---------|-------------|
-| 🎯 **Quality-First** | Breaks and validates code, not generates it |
-| 🛡️ **Sandbox Execution** | Destructive testing without production risk |
-| 🤖 **Multi-Agent QE** | Cross-validation from multiple AI perspectives |
-| 📋 **Quality Reports** | Forensic artifacts documenting findings |
-| 👥 **Human-in-the-Loop** | All fixes are suggestions for human review |
-| 🏠 **Self-Hosted** | BYOK, privacy-first, no SaaS dependency |
+| **Multi-agent harness** | Use ACP agents, BYOK providers, and local models from one interface |
+| **Developer TUI** | Interactive sessions with compact tool activity and readable change summaries |
+| **Headless CLI** | Run coding tasks and provider checks from scripts or terminals |
+| **Tool system** | File, search, edit, shell, todo, MCP, and optional Monty Python REPL tools |
+| **Provider UX** | Provider doctor, model listing, guided local provider selection, and dynamic OpenCode free model discovery |
+| **QE workflows** | Optional SuperQE roles, sandboxes, reports, and release validation |
 
 ## How It Works
 
@@ -137,4 +137,4 @@ pytest
 
 ## License
 
-[AGPL-3.0](LICENSE) — Built by [Superagentic AI](https://super-agentic.ai/) for developers who care about code quality.
+[AGPL-3.0](LICENSE) - Built by [Superagentic AI](https://super-agentic.ai/) for developers who care about code quality.

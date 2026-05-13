@@ -7,6 +7,9 @@ SuperQode includes a rich Terminal User Interface (TUI) for interactive coding-a
 - **Rich Output**: Colored, formatted terminal output
 - **Progress Tracking**: Real-time progress indicators
 - **Compact Tool Activity**: Search, read, edit, and shell tools are summarized by default
+- **Provider Selection**: ACP, BYOK, and Local provider pickers with setup hints
+- **Model Labels**: Tool support, vision, reasoning, coding, context, and price labels where available
+- **Local DS4 Support**: DS4 appears in the local provider picker when configured
 - **Interactive Prompts**: User input with completion
 - **File Browser**: Navigate project files
 - **Agent Switcher**: Switch between QE roles
@@ -67,6 +70,8 @@ superqode --role qe.security_tester
 Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 
 - `:connect` - Connect to provider/agent
+- `:connect local` - Open the local provider picker
+- `:connect byok` - Open the BYOK provider picker
 - `:log` - Show current output verbosity
 - `:log minimal` - Show status-only tool activity
 - `:log normal` - Show compact tool summaries
@@ -76,6 +81,42 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:help` - Show all available commands
 
 Tool and file-change output is collapsed by default so normal coding sessions stay readable. Use `:log verbose` before a task when you want full search output, command output, and file names in the session report.
+
+## Tool Activity Display
+
+The TUI shows compact tool rows by default. Examples:
+
+```text
+read_file(pyproject.toml)
+grep("provider", src)
+bash("uv run pytest tests")
+python_repl(2 lines: "x = 1")
+```
+
+This keeps the main response readable while still showing what the agent did. Errors remain visible in normal mode. Use `:log verbose` when you need full successful tool output.
+
+## Provider and Model Selection
+
+Use `:connect` to choose between ACP agents, BYOK providers, and local model servers.
+
+```text
+:connect
+:connect byok
+:connect local
+```
+
+The BYOK model view includes capability labels:
+
+| Label | Meaning |
+|-------|---------|
+| tools | Model supports tool calling |
+| vision | Model can accept image inputs |
+| reasoning | Model exposes reasoning capability |
+| coding | Model is marked as code-optimized |
+| ctx | Context window |
+| price | Price per 1M tokens where known |
+
+Local providers include DS4, Ollama, LM Studio, MLX, vLLM, and SGLang when supported by the current installation.
 
 Note: QE analysis sessions are run via CLI, not TUI commands. Use `superqe run .` in your terminal to start QE sessions.
 

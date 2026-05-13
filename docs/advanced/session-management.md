@@ -234,5 +234,5 @@ messages = pm.resume_session("abc12345")
 
 ## See Also
 
-- [Advanced Tools](advanced/tools-system.md) - Tool registry and permissions
-- [A2A Protocol](providers/a2a.md) - Multi-agent communication
+- [Advanced Tools](tools-system.md) - Tool registry and permissions
+- [A2A Protocol](../providers/a2a.md) - Multi-agent communication

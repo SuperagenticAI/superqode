@@ -1,6 +1,6 @@
 # Getting Started
 
-Welcome to SuperQode (TUI) and SuperQE (CLI)! This guide will help you get up and running with agentic quality engineering. Learn how to set up your project, choose your workflow, and start improving code quality with AI-powered testing.
+Welcome to SuperQode. This guide helps you get started with the coding-agent TUI, headless CLI, provider setup, local models, and optional SuperQE release validation workflows.
 
 ---
 
@@ -28,7 +28,7 @@ Welcome to SuperQode (TUI) and SuperQE (CLI)! This guide will help you get up an
 
     ---
 
-    Interactive Terminal UI for exploratory testing and real-time quality engineering.
+    Interactive Terminal UI for coding-agent sessions, provider selection, tool use, and exploratory validation.
 
     [:octicons-arrow-right-24: TUI guide](#tui-workflow-recommended-for-exploratory-testing)
 

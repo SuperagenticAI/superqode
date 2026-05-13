@@ -17,6 +17,8 @@ from rich.markdown import Markdown
 from rich.console import Group
 from rich.box import ROUNDED, HEAVY
 
+from superqode.tools.display import format_tool_call_compact
+
 from .constants import (
     ASCII_LOGO,
     TAGLINE_PART1,
@@ -1229,6 +1231,7 @@ class ConversationLog(RichLog):
         file_path: str = "",
         command: str = "",
         output: str = "",
+        arguments: dict[str, Any] | None = None,
     ):
         """
         Add a tool call display.
@@ -1239,13 +1242,23 @@ class ConversationLog(RichLog):
             file_path: File path if applicable
             command: Command if it's a shell tool
             output: Tool output/result
+            arguments: Original tool arguments for compact display
         """
+        display_args = dict(arguments or {})
+        if file_path and not any(
+            key in display_args for key in ("path", "file_path", "filePath", "target_file")
+        ):
+            display_args["path"] = file_path
+        if command and "command" not in display_args:
+            display_args["command"] = command
+
         self._tool_calls.append(
             {
                 "name": tool_name,
                 "status": status,
                 "path": file_path,
                 "command": command,
+                "arguments": display_args,
             }
         )
 
@@ -1279,6 +1292,7 @@ class ConversationLog(RichLog):
             "search": "⌕",
             "glob": "⋮",
             "grep": "⌕",
+            "python": "λ",
         }
         tool_icon = "•"
         for key, icon in tool_icons.items():
@@ -1291,14 +1305,14 @@ class ConversationLog(RichLog):
         line = Text()
         line.append(f"  {status_icon} ", style=f"bold {status_color}")
         line.append(f"{tool_icon} ", style=THEME["dim"])
-        line.append(self._format_tool_name(tool_name), style=THEME["text"])
-
-        if file_path:
-            line.append(f"  {file_path}", style=THEME["dim"])
-        elif command:
-            limit = 120 if getattr(self, "tool_output_mode", "normal") == "verbose" else 72
-            cmd_short = command[:limit] + "..." if len(command) > limit else command
-            line.append(f"  $ {cmd_short}", style=THEME["dim"])
+        line.append(
+            format_tool_call_compact(
+                tool_name,
+                display_args,
+                max_length=132 if getattr(self, "tool_output_mode", "normal") == "verbose" else 88,
+            ),
+            style=THEME["text"],
+        )
 
         if output and status == "error":
             summary = summarize_tool_output(

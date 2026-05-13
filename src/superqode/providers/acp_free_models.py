@@ -9,7 +9,6 @@ This module discovers which ACP agents support free models by:
 This is dynamic - not a hardcoded list!
 """
 
-import asyncio
 import logging
 import shutil
 from typing import Dict, List, Optional, Set
@@ -40,29 +39,13 @@ class AgentFreeModels:
     error: Optional[str] = None
 
 
-# Known free model patterns
+# Generic free model patterns. Specific model ids are intentionally excluded
+# because agent catalogs change independently.
 FREE_MODEL_PATTERNS = [
     "free",
     "zero-cost",
     "no-cost",
     "gratis",
-    # Specific known free models from OpenCode
-    "big-pickle",
-    "minimax-m2.5-free",
-    "nemotron-3-super-free",
-    "gpt-5-nano",
-    "hy3-preview-free",
-    "ling-2.6-flash-free",
-    "trinity-large-preview-free",
-    "qwen3.6-plus-free",
-    "mimo-v2-flash-free",
-    "trinity-mini-preview-free",
-    # DeepSeek free models
-    "deepseek-chat-free",
-    "deepseek-coder-free",
-    # Cline built-in free models (no API key needed!)
-    "minimax-m2.5",
-    "kimi-k2.5",
 ]
 
 
@@ -113,7 +96,11 @@ async def check_pi_free_models() -> AgentFreeModels:
 
 
 async def check_cline_free_models() -> AgentFreeModels:
-    """Check Cline for available free models (built-in, no API key needed)."""
+    """Check Cline for available free models.
+
+    Cline's available/free model catalog is not exposed through a stable CLI
+    discovery command here, so SuperQode does not synthesize a static list.
+    """
     try:
         if not shutil.which("cline"):
             return AgentFreeModels(
@@ -124,30 +111,12 @@ async def check_cline_free_models() -> AgentFreeModels:
                 error="Cline not installed",
             )
 
-        # Cline has built-in free models (MiniMax M2.5, Kimi K2.5)
-        # These are temporarily free with no API key required
-        free_models = [
-            FreeModelInfo(
-                agent_id="cline",
-                agent_name="Cline",
-                model_id="minimax-m2.5",
-                model_name="MiniMax M2.5 (Free)",
-                context_window=200000,
-            ),
-            FreeModelInfo(
-                agent_id="cline",
-                agent_name="Cline",
-                model_id="kimi-k2.5",
-                model_name="Kimi K2.5 (Free)",
-                context_window=200000,
-            ),
-        ]
-
         return AgentFreeModels(
             agent_id="cline",
             agent_name="Cline",
-            models=free_models,
+            models=[],
             is_available=True,
+            error="Cline free model catalog is not dynamically discoverable",
         )
 
     except Exception as e:
@@ -173,27 +142,19 @@ async def check_opencode_free_models() -> AgentFreeModels:
                 error="OpenCode not installed",
             )
 
-        # Run opencode models command
-        proc = await asyncio.create_subprocess_exec(
-            "opencode",
-            "models",
-            "--verbose",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
+        from superqode.providers.opencode_models import get_free_opencode_models
 
-        if proc.returncode != 0:
-            return AgentFreeModels(
+        dynamic_models = await get_free_opencode_models(force_refresh=True)
+        models = [
+            FreeModelInfo(
                 agent_id="opencode",
                 agent_name="OpenCode",
-                models=[],
-                is_available=False,
-                error=f"Failed: {stderr.decode()[:100]}",
+                model_id=model["id"],
+                model_name=model.get("name", model["id"].split("/")[-1]),
+                context_window=model.get("context", 128000),
             )
-
-        # Parse output to find free models
-        models = _parse_opencode_models_for_free(stdout.decode())
+            for model in dynamic_models
+        ]
 
         return AgentFreeModels(
             agent_id="opencode",
@@ -214,61 +175,19 @@ async def check_opencode_free_models() -> AgentFreeModels:
 
 def _parse_opencode_models_for_free(output: str) -> List[FreeModelInfo]:
     """Parse OpenCode models output and extract free models."""
-    import json
+    from superqode.providers.opencode_models import _parse_opencode_models
 
-    models = []
-    blocks = output.split("opencode/")
-
-    for block in blocks:
-        if not block.strip():
-            continue
-
-        lines = block.strip().split("\n")
-        if not lines:
-            continue
-
-        model_id = lines[0].strip().replace("opencode/", "").strip()
-        if not model_id:
-            continue
-
-        # Check if free
-        is_free = _is_free_model(model_id, "")
-
-        if not is_free and len(lines) > 1:
-            # Try to parse JSON for cost info
-            try:
-                json_text = "\n".join(lines[1:200])
-                data = json.loads(json_text[:2000])
-                if "cost" in data:
-                    is_free = (
-                        data["cost"].get("input", 0) == 0 and data["cost"].get("output", 0) == 0
-                    )
-            except Exception:
-                pass
-
-        if is_free:
-            # Estimate context
-            context = 128000
-            if "200k" in model_id.lower():
-                context = 200000
-            elif "1m" in model_id.lower():
-                context = 1000000
-            elif "512k" in model_id.lower():
-                context = 512000
-            elif "256k" in model_id.lower():
-                context = 256000
-
-            models.append(
-                FreeModelInfo(
-                    agent_id="opencode",
-                    agent_name="OpenCode",
-                    model_id=f"opencode/{model_id}",
-                    model_name=model_id.replace("-", " ").replace("_", " ").title(),
-                    context_window=context,
-                )
-            )
-
-    return models
+    return [
+        FreeModelInfo(
+            agent_id="opencode",
+            agent_name="OpenCode",
+            model_id=model["id"],
+            model_name=model.get("name", model["id"].split("/")[-1]),
+            context_window=model.get("context", 128000),
+        )
+        for model in _parse_opencode_models(output)
+        if model.get("is_free", False)
+    ]
 
 
 async def discover_agents_with_free_models() -> List[AgentFreeModels]:
@@ -276,9 +195,8 @@ async def discover_agents_with_free_models() -> List[AgentFreeModels]:
     Discover which ACP agents have free models available.
 
     This queries multiple sources:
-    1. OpenCode CLI - has known free models
-    2. Cline - has built-in free models (no API key needed!)
-    3. Other ACP agents (future: query via ACP protocol)
+    1. OpenCode CLI - dynamic model catalog and pricing metadata
+    2. Other ACP agents (future: query via ACP protocol)
 
     Returns:
         List of AgentFreeModels, sorted by number of free models
@@ -290,7 +208,7 @@ async def discover_agents_with_free_models() -> List[AgentFreeModels]:
     if opencode_result.models:
         results.append(opencode_result)
 
-    # Check Cline
+    # Check Cline only if it exposes a dynamic free-model source in the future.
     cline_result = await check_cline_free_models()
     if cline_result.models:
         results.append(cline_result)
@@ -425,15 +343,15 @@ async def get_discoverable_agents() -> List[Dict]:
             }
         )
 
-    # Cline - has built-in free models (no API key needed!)
+    # Cline - installed, but no dynamic free-model catalog available here
     if shutil.which("cline"):
         agents.append(
             {
                 "id": "cline",
                 "name": "Cline",
-                "method": "builtin",
-                "models": ["minimax-m2.5", "kimi-k2.5"],
-                "has_free_models": True,
+                "method": "unavailable",
+                "has_free_models": False,
+                "note": "Free model catalog is not dynamically discoverable",
             }
         )
 
