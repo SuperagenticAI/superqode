@@ -1,7 +1,7 @@
 [project]
 name = "superqode"
-version = "0.1.14"
-description = "SuperQode: Super Quality Engineering for Agentic Coding Teams"
+version = "0.1.15"
+description = "SuperQode: Multi-Agent Coding Agent Harness"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 authors = [
