@@ -211,6 +211,58 @@ async def test_simple_ds4_query_skips_tools():
 
 
 @pytest.mark.asyncio
+async def test_ds4_project_question_receives_tools():
+    gateway = ScriptedGateway([GatewayResponse(content="done")])
+    loop = AgentLoop(
+        gateway=gateway,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(
+            provider="ds4",
+            model="deepseek-v4-flash",
+        ),
+    )
+
+    result = await loop.run("what is this project about?")
+
+    assert result.content == "done"
+    assert gateway.tools_seen[0]
+
+
+@pytest.mark.asyncio
+async def test_agent_retries_when_model_narrates_tool_use_without_call():
+    gateway = ScriptedGateway(
+        [
+            GatewayResponse(
+                content=(
+                    "I can help understand this project. "
+                    "Let me start by listing the files in the repository."
+                )
+            ),
+            GatewayResponse(
+                content="",
+                tool_calls=[_tool_call("list_directory", '{"path": "."}')],
+            ),
+            GatewayResponse(content="This project is SuperQode."),
+        ]
+    )
+    loop = AgentLoop(
+        gateway=gateway,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(
+            provider="ds4",
+            model="deepseek-v4-flash",
+        ),
+        parallel_tools=False,
+    )
+
+    result = await loop.run("what is this project about?")
+
+    assert result.content == "This project is SuperQode."
+    assert result.tool_calls_made == 1
+    assert len(gateway.calls) == 3
+
+
+@pytest.mark.asyncio
 async def test_generic_local_provider_stays_conservative_with_tools():
     gateway = ScriptedGateway([GatewayResponse(content="done")])
     loop = AgentLoop(

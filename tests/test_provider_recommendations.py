@@ -10,6 +10,7 @@ from superqode.providers.recommendations import (
 
 def test_normalize_task_aliases():
     assert normalize_task("build") == "coding"
+    assert normalize_task("debug") == "debugging"
     assert normalize_task("large") == "large-context"
     assert normalize_task(None) == "coding"
 
@@ -70,3 +71,4 @@ def test_local_recommendations_include_ds4():
     recommendations = recommend_models("local", limit=5)
 
     assert any(item.provider == "ds4" for item in recommendations)
+    assert recommendations[0].provider == "ds4"

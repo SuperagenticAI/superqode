@@ -151,7 +151,20 @@ def _is_simple_conversational_query(message: str) -> bool:
     for pattern in simple_patterns:
         if re.match(pattern, message_lower):
             # Double-check: no code keywords
-            code_keywords = ["file", "code", "function", "class", "read", "write", "edit"]
+            code_keywords = [
+                "file",
+                "code",
+                "function",
+                "class",
+                "read",
+                "write",
+                "edit",
+                "project",
+                "repo",
+                "repository",
+                "readme",
+                "codebase",
+            ]
             if not any(keyword in message_lower for keyword in code_keywords):
                 return True
 
@@ -234,6 +247,44 @@ def _should_send_tools(provider: str, model: str, user_message: str, tool_defs: 
     if is_local_provider:
         return _model_supports_tools(provider, model)
     return True
+
+
+def _looks_like_unexecuted_tool_intent(content: str) -> bool:
+    """Detect narration where a model says it will inspect files but emits no tool call."""
+    if not content:
+        return False
+
+    text = content.lower()
+    intent_markers = [
+        "let me start by",
+        "let me list",
+        "i'll list",
+        "i will list",
+        "i'll read",
+        "i will read",
+        "i'll inspect",
+        "i will inspect",
+        "i'll examine",
+        "i will examine",
+        "let me inspect",
+        "let me examine",
+        "start by listing",
+        "start by reading",
+    ]
+    tool_targets = [
+        "file",
+        "files",
+        "directory",
+        "directories",
+        "repo",
+        "repository",
+        "readme",
+        "codebase",
+        "project",
+    ]
+    return any(marker in text for marker in intent_markers) and any(
+        target in text for target in tool_targets
+    )
 
 
 @dataclass
@@ -924,6 +975,22 @@ class AgentLoop:
 
             else:
                 # No tool calls - return the response content
+                if tools_to_send and _looks_like_unexecuted_tool_intent(response_content):
+                    messages.append(AgentMessage(role="assistant", content=response_content))
+                    messages.append(
+                        AgentMessage(
+                            role="user",
+                            content=(
+                                "You described using tools, but no tool call was emitted. "
+                                "Call the appropriate tool now. Do not narrate the tool use."
+                            ),
+                        )
+                    )
+                    if self.on_thinking:
+                        await self.on_thinking(
+                            "Model described tool use without calling a tool; retrying."
+                        )
+                    continue
                 if self.on_thinking:
                     await self.on_thinking("Response complete")
                 return AgentResponse(

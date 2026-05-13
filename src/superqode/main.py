@@ -1472,6 +1472,48 @@ def agents_show(agent):
     show_agent(agent)
 
 
+@agents.command("doctor")
+@click.argument("agent", metavar="AGENT", required=False)
+@click.option("--live", is_flag=True, help="Start the ACP agent and check protocol support")
+@click.option("--timeout", default=10.0, type=float, help="Live protocol check timeout")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def agents_doctor(agent, live, timeout, json_output):
+    """Check ACP agent install, setup, and optional protocol health."""
+    import asyncio
+
+    from superqode.acp.doctor import acp_doctor
+
+    results = asyncio.run(acp_doctor(agent, live=live, timeout=timeout))
+    if agent and not results:
+        raise click.ClickException(f"ACP agent not found: {agent}")
+
+    if json_output:
+        click.echo(json.dumps(results, indent=2))
+        return
+
+    for result in results:
+        status = "installed" if result["installed"] else "missing"
+        click.echo(f"{result['short_name']} ({result['name']}): {status}")
+        if result.get("command"):
+            click.echo(f"  command: {result['command']}")
+        if result.get("missing_env_vars"):
+            click.echo(f"  env: set one of {', '.join(result['missing_env_vars'])}")
+        if not result["installed"] and result.get("install_command"):
+            click.echo(f"  install: {result['install_command']}")
+        live_result = result.get("live")
+        if live_result:
+            started = "yes" if live_result.get("started") else "no"
+            click.echo(f"  protocol started: {started}")
+            if live_result.get("session"):
+                click.echo("  session: yes")
+            if live_result.get("models"):
+                click.echo(f"  models: {len(live_result['models'])}")
+            if live_result.get("modes"):
+                click.echo(f"  modes: {len(live_result['modes'])}")
+            if live_result.get("error"):
+                click.echo(f"  error: {live_result['error']}")
+
+
 @agents.command("connect")
 @click.argument("agent", metavar="AGENT")
 @click.option("--project-dir", "-d", metavar="DIR", help="Project directory to work in")
@@ -1625,31 +1667,42 @@ def providers_models(provider_id, json_output):
 
 @providers_cmd.command("doctor")
 @click.argument("provider_id", required=False)
+@click.option("--live", is_flag=True, help="Run live local-provider health checks")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
-def providers_doctor(provider_id, json_output):
+def providers_doctor(provider_id, live, json_output):
     """Show provider configuration status and setup hints."""
+    import asyncio
     import os
-    from superqode.providers.registry import PROVIDERS
+    from superqode.providers.registry import PROVIDERS, ProviderCategory
 
     selected = {provider_id: PROVIDERS[provider_id]} if provider_id else PROVIDERS
     if provider_id and provider_id not in PROVIDERS:
         raise click.ClickException(f"Provider not found: {provider_id}")
+    if live and not provider_id:
+        raise click.ClickException(
+            "Use --live with a specific local provider, e.g. providers doctor ollama --live"
+        )
 
     results = []
     for pid, provider_def in selected.items():
         configured_vars = [var for var in provider_def.env_vars if os.environ.get(var)]
-        results.append(
-            {
-                "provider": pid,
-                "name": provider_def.name,
-                "configured": bool(configured_vars) or not provider_def.env_vars,
-                "configured_env_vars": configured_vars,
-                "required_env_vars": provider_def.env_vars,
-                "base_url_env": provider_def.base_url_env,
-                "example_models": provider_def.example_models[:5],
-                "docs_url": provider_def.docs_url,
-            }
-        )
+        item = {
+            "provider": pid,
+            "name": provider_def.name,
+            "configured": bool(configured_vars) or not provider_def.env_vars,
+            "configured_env_vars": configured_vars,
+            "required_env_vars": provider_def.env_vars,
+            "base_url_env": provider_def.base_url_env,
+            "example_models": provider_def.example_models[:5],
+            "docs_url": provider_def.docs_url,
+        }
+        if live:
+            if provider_def.category != ProviderCategory.LOCAL:
+                raise click.ClickException("--live is only supported for local providers")
+            from superqode.providers.local.smoke import smoke_local_provider
+
+            item["live"] = asyncio.run(smoke_local_provider(pid, tool_test=False))
+        results.append(item)
 
     if json_output:
         click.echo(json.dumps(results, indent=2))
@@ -1662,6 +1715,12 @@ def providers_doctor(provider_id, json_output):
             click.echo(f"  set one of: {', '.join(result['required_env_vars'])}")
         if result["example_models"]:
             click.echo(f"  models: {', '.join(result['example_models'])}")
+        if live and result.get("live"):
+            live_result = result["live"]
+            click.echo(f"  server: {'reachable' if live_result['available'] else 'not reachable'}")
+            click.echo(f"  smoke client: {'yes' if live_result.get('supported') else 'no'}")
+            if live_result.get("host"):
+                click.echo(f"  host: {live_result['host']}")
 
 
 @providers_cmd.command("recommend")
@@ -1709,6 +1768,85 @@ def providers_guide(provider_id, json_output):
                 f"  - {model['model']}  price={model['price']}  "
                 f"ctx={model['context']}  tools={model['tool_support']}"
             )
+
+
+@providers_cmd.command("smoke")
+@click.argument("provider_id")
+@click.option("--model", help="Model to check")
+@click.option("--run", "run_prompt", is_flag=True, help="Run a real local completion")
+@click.option("--prompt", default="Reply with: ok", help="Prompt for --run")
+@click.option(
+    "--no-tool-test",
+    is_flag=True,
+    help="Skip the provider-specific tool-calling probe",
+)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def providers_smoke(provider_id, model, run_prompt, prompt, no_tool_test, json_output):
+    """Run an opt-in local provider smoke check."""
+    import asyncio
+
+    from superqode.providers.local.smoke import (
+        all_local_provider_ids,
+        smoke_local_provider,
+        supported_local_smoke_providers,
+    )
+
+    if provider_id not in all_local_provider_ids():
+        supported = ", ".join(all_local_provider_ids())
+        raise click.ClickException(
+            f"Local provider not found: {provider_id}. Choose one of: {supported}"
+        )
+
+    payload = asyncio.run(
+        smoke_local_provider(
+            provider_id,
+            model,
+            run_prompt=run_prompt,
+            prompt=prompt,
+            tool_test=not no_tool_test,
+        )
+    )
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    click.echo(f"{payload['name']} ({payload['provider']})")
+    if payload.get("host"):
+        click.echo(f"  host: {payload['host']}")
+    click.echo(f"  registered: {'yes' if payload['registered'] else 'no'}")
+    click.echo(f"  smoke client: {'yes' if payload.get('supported') else 'no'}")
+    if not payload.get("supported"):
+        supported = ", ".join(supported_local_smoke_providers())
+        click.echo(f"  supported smoke providers: {supported}")
+        if payload.get("setup_hint"):
+            click.echo(f"  setup: {payload['setup_hint']}")
+        if payload.get("error"):
+            click.echo(f"  error: {payload['error']}")
+        return
+    click.echo(f"  server: {'reachable' if payload['available'] else 'not reachable'}")
+    click.echo(f"  model: {payload['model'] or '-'}")
+    click.echo(f"  models: {', '.join(payload['models']) or '-'}")
+    if payload.get("running_models"):
+        click.echo(f"  running: {', '.join(payload['running_models'])}")
+    click.echo(f"  tools: {'yes' if payload['tool_support'] else 'no'}")
+    tool_result = payload.get("tool_result") or {}
+    if tool_result.get("notes"):
+        click.echo(f"  tool notes: {tool_result['notes']}")
+    if tool_result.get("error"):
+        click.echo(f"  tool error: {tool_result['error']}")
+    if payload["completion_ran"]:
+        status = "ok" if payload["completion_ok"] else "failed"
+        click.echo(f"  completion: {status}")
+        if payload.get("response_preview"):
+            click.echo(f"  response: {payload['response_preview']}")
+    if payload.get("error"):
+        click.echo(f"  error: {payload['error']}")
+    if payload.get("status_error") and not payload.get("available"):
+        click.echo(f"  status: {payload['status_error']}")
+    if not run_prompt:
+        click.echo(
+            f"  run a real local completion with: superqode providers smoke {provider_id} --run"
+        )
 
 
 # Add provider commands (superqode providers list, superqode providers show, etc.)

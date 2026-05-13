@@ -1161,6 +1161,24 @@ class LiteLLMGateway(GatewayInterface):
                 yield chunk
             return
 
+        # DS4 should never go through LiteLLM, including streaming. Use a
+        # direct completion and yield it as one stream chunk so the agent loop
+        # still handles tool calls normally.
+        if provider == "ds4":
+            response = await self._ds4_chat_completion(
+                messages, model, temperature, max_tokens, tools, tool_choice, **kwargs
+            )
+            yield StreamChunk(
+                content=response.content,
+                role=response.role,
+                finish_reason=response.finish_reason,
+                tool_calls=response.tool_calls,
+                usage=response.usage,
+                cost=response.cost,
+                thinking_content=response.thinking_content,
+            )
+            return
+
         litellm = self._get_litellm()
 
         # Set up provider environment

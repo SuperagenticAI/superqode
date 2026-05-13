@@ -85,6 +85,68 @@ class TestAgentsCommand:
         # Should handle gracefully
         assert "not found" in result.output.lower() or result.exit_code != 0
 
+    def test_agents_doctor_json(self, runner, monkeypatch):
+        """ACP doctor should report install and setup state."""
+        import superqode.agents.registry as registry
+
+        async def fake_get_all_acp_agents():
+            return {
+                "test.agent": {
+                    "identity": "test.agent",
+                    "name": "Test Agent",
+                    "short_name": "testagent",
+                    "protocol": "acp",
+                    "type": "coding",
+                    "run_command": {"*": "testagent acp"},
+                    "actions": {
+                        "*": {
+                            "install": {
+                                "command": "npm install -g testagent",
+                            }
+                        }
+                    },
+                }
+            }
+
+        monkeypatch.setattr(registry, "get_all_acp_agents", fake_get_all_acp_agents)
+        monkeypatch.setattr("superqode.acp.doctor.shutil.which", lambda name: "/bin/testagent")
+
+        result = runner.invoke(cli_main, ["agents", "doctor", "testagent", "--json"])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload[0]["short_name"] == "testagent"
+        assert payload[0]["installed"] is True
+        assert payload[0]["command"] == "testagent acp"
+
+    def test_agents_doctor_live_missing_command_json(self, runner, monkeypatch):
+        """ACP live doctor should fail clearly before protocol startup when missing."""
+        import superqode.agents.registry as registry
+
+        async def fake_get_all_acp_agents():
+            return {
+                "missing.agent": {
+                    "identity": "missing.agent",
+                    "name": "Missing Agent",
+                    "short_name": "missingagent",
+                    "protocol": "acp",
+                    "type": "coding",
+                    "run_command": {"*": "missingagent acp"},
+                    "actions": {},
+                }
+            }
+
+        monkeypatch.setattr(registry, "get_all_acp_agents", fake_get_all_acp_agents)
+        monkeypatch.setattr("superqode.acp.doctor.shutil.which", lambda name: None)
+
+        result = runner.invoke(cli_main, ["agents", "doctor", "missingagent", "--live", "--json"])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload[0]["installed"] is False
+        assert payload[0]["live"]["started"] is False
+        assert "Command not found" in payload[0]["live"]["error"]
+
 
 class TestProvidersCommand:
     """Tests for providers commands."""
@@ -137,6 +199,37 @@ class TestProvidersCommand:
         assert payload[0]["configured"] is False
         assert "OPENAI_API_KEY" in payload[0]["required_env_vars"]
 
+    def test_provider_doctor_live_local_json(self, runner, monkeypatch):
+        """Live provider doctor should reuse the local smoke health payload."""
+        from superqode.providers.local.base import LocalProviderType, ProviderStatus
+        from superqode.providers.local.ollama import OllamaClient
+
+        async def fake_is_available(self):
+            return False
+
+        async def fake_get_status(self):
+            return ProviderStatus(
+                available=False,
+                provider_type=LocalProviderType.OLLAMA,
+                host=self.host,
+                error="offline",
+            )
+
+        async def fake_list_models(self):
+            return []
+
+        monkeypatch.setattr(OllamaClient, "is_available", fake_is_available)
+        monkeypatch.setattr(OllamaClient, "get_status", fake_get_status)
+        monkeypatch.setattr(OllamaClient, "list_models", fake_list_models)
+
+        result = runner.invoke(cli_main, ["providers", "doctor", "ollama", "--live", "--json"])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload[0]["provider"] == "ollama"
+        assert payload[0]["live"]["provider"] == "ollama"
+        assert payload[0]["live"]["available"] is False
+
     def test_provider_recommend_json(self, runner):
         """Provider recommendations should include model quality labels."""
         result = runner.invoke(cli_main, ["providers", "recommend", "coding", "--json"])
@@ -149,6 +242,16 @@ class TestProvidersCommand:
         assert payload[0]["context"]
         assert payload[0]["tool_support"] in {"yes", "no"}
         assert payload[0]["setup"]["setup_hint"]
+
+    def test_provider_recommend_local_json_prefers_ds4(self, runner):
+        """Local recommendations should make DS4 easy to discover."""
+        result = runner.invoke(cli_main, ["providers", "recommend", "local", "--json"])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload
+        assert payload[0]["provider"] == "ds4"
+        assert payload[0]["model"] == "deepseek-v4-flash"
 
     def test_provider_guide_json(self, runner):
         """Provider guide should expose setup and representative model cards."""
@@ -168,6 +271,119 @@ class TestProvidersCommand:
         payload = json.loads(result.output)
         assert payload["provider"] == "ds4"
         assert "deepseek-v4-flash" in payload["models"]
+
+    def test_ds4_smoke_json_without_running_completion(self, runner, monkeypatch):
+        """DS4 smoke should be available without requiring a local server in CI."""
+        from superqode.providers.local.base import LocalProviderType, ProviderStatus
+        from superqode.providers.local.base import ToolTestResult
+        from superqode.providers.local.ds4 import DS4Client
+
+        async def fake_is_available(self):
+            return False
+
+        async def fake_get_status(self):
+            return ProviderStatus(
+                available=False,
+                provider_type=LocalProviderType.OPENAI_COMPAT,
+                host=self.host,
+                error="offline",
+            )
+
+        async def fake_list_models(self):
+            return self._fallback_models()
+
+        async def fake_test_tool_calling(self, model_id):
+            return ToolTestResult(
+                model_id=model_id,
+                supports_tools=True,
+                parallel_tools=False,
+                tool_choice=["auto"],
+                notes="test",
+            )
+
+        monkeypatch.setattr(DS4Client, "is_available", fake_is_available)
+        monkeypatch.setattr(DS4Client, "get_status", fake_get_status)
+        monkeypatch.setattr(DS4Client, "list_models", fake_list_models)
+        monkeypatch.setattr(DS4Client, "test_tool_calling", fake_test_tool_calling)
+
+        result = runner.invoke(cli_main, ["providers", "smoke", "ds4", "--json"])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["provider"] == "ds4"
+        assert payload["registered"] is True
+        assert payload["available"] is False
+        assert payload["tool_support"] is True
+        assert payload["completion_ran"] is False
+
+    def test_ollama_smoke_json_without_running_completion(self, runner, monkeypatch):
+        """Local smoke should work for non-DS4 providers too."""
+        from superqode.providers.local.base import (
+            LocalModel,
+            LocalProviderType,
+            ProviderStatus,
+            ToolTestResult,
+        )
+        from superqode.providers.local.ollama import OllamaClient
+
+        async def fake_is_available(self):
+            return True
+
+        async def fake_get_status(self):
+            return ProviderStatus(
+                available=True,
+                provider_type=LocalProviderType.OLLAMA,
+                host=self.host,
+                models_count=1,
+                running_models=1,
+            )
+
+        async def fake_list_models(self):
+            return [
+                LocalModel(
+                    id="qwen2.5-coder:7b",
+                    name="qwen2.5-coder:7b",
+                    supports_tools=True,
+                    running=True,
+                    family="qwen",
+                )
+            ]
+
+        async def fake_test_tool_calling(self, model_id):
+            return ToolTestResult(
+                model_id=model_id,
+                supports_tools=True,
+                parallel_tools=True,
+                tool_choice=["auto"],
+                notes="verified",
+            )
+
+        monkeypatch.setattr(OllamaClient, "is_available", fake_is_available)
+        monkeypatch.setattr(OllamaClient, "get_status", fake_get_status)
+        monkeypatch.setattr(OllamaClient, "list_models", fake_list_models)
+        monkeypatch.setattr(OllamaClient, "test_tool_calling", fake_test_tool_calling)
+
+        result = runner.invoke(cli_main, ["providers", "smoke", "ollama", "--json"])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["provider"] == "ollama"
+        assert payload["supported"] is True
+        assert payload["available"] is True
+        assert payload["model"] == "qwen2.5-coder:7b"
+        assert payload["running_models"] == ["qwen2.5-coder:7b"]
+        assert payload["tool_support"] is True
+
+    def test_local_smoke_reports_registered_unsupported_provider(self, runner):
+        """Local registry providers without a client should fail gracefully."""
+        result = runner.invoke(cli_main, ["providers", "smoke", "llamacpp", "--json"])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["provider"] == "llamacpp"
+        assert payload["registered"] is True
+        assert payload["supported"] is False
+        assert "No local smoke client" in payload["error"]
 
 
 class TestSandboxCommand:

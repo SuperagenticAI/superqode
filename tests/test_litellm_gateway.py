@@ -63,3 +63,39 @@ async def test_ds4_uses_direct_local_gateway(monkeypatch):
 
     assert response.content == "ok"
     assert seen["model"] == "deepseek-v4-flash"
+
+
+@pytest.mark.asyncio
+async def test_ds4_streaming_uses_direct_local_gateway(monkeypatch):
+    """DS4 streaming should also bypass LiteLLM."""
+    gateway = LiteLLMGateway()
+
+    async def fake_ds4_chat_completion(
+        messages, model, temperature=None, max_tokens=None, tools=None, tool_choice=None, **kwargs
+    ):
+        return GatewayResponse(
+            content="streamed ok",
+            role="assistant",
+            provider="ds4",
+            model=model,
+            tool_calls=[{"id": "call-1", "function": {"name": "read_file", "arguments": "{}"}}],
+        )
+
+    def fail_litellm():
+        raise AssertionError("DS4 streaming should not load LiteLLM")
+
+    monkeypatch.setattr(gateway, "_ds4_chat_completion", fake_ds4_chat_completion)
+    monkeypatch.setattr(gateway, "_get_litellm", fail_litellm)
+
+    chunks = [
+        chunk
+        async for chunk in gateway.stream_completion(
+            messages=[Message(role="user", content="what is in pyproject.toml")],
+            model="deepseek-v4-flash",
+            provider="ds4",
+        )
+    ]
+
+    assert len(chunks) == 1
+    assert chunks[0].content == "streamed ok"
+    assert chunks[0].tool_calls

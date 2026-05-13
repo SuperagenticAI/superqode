@@ -15,6 +15,8 @@ TASK_ALIASES = {
     "build": "coding",
     "code": "coding",
     "coding": "coding",
+    "debug": "debugging",
+    "debugging": "debugging",
     "implement": "coding",
     "review": "review",
     "qe": "testing",
@@ -35,6 +37,7 @@ TASK_ALIASES = {
 
 TASK_REQUIREMENTS = {
     "coding": {"code": True, "tools": True},
+    "debugging": {"code": True, "tools": True, "reasoning": True},
     "review": {"code": True, "long_context": True},
     "testing": {"code": True, "tools": True},
     "budget": {"low_cost": True, "tools": True},
@@ -210,6 +213,10 @@ def _score_model(model: ModelInfo, task: str) -> int:
             score += 20
     if requirements.get("local") and model.input_price == 0 and model.output_price == 0:
         score += 30
+        if model.provider == "ds4":
+            score += 20
+    if task == "debugging" and "coding" in model.recommended_for:
+        score += 15
     if task in model.recommended_for:
         score += 20
     if "coding" in model.recommended_for and task in ("coding", "testing", "review"):
@@ -227,6 +234,8 @@ def _reason_for(model: ModelInfo, task: str) -> str:
         return f"{model.context_display} context for large repositories or long traces."
     if task == "local":
         return "Local/offline coding model with no API billing."
+    if task == "debugging":
+        return "Tool-capable coding model with stronger reasoning labels for debugging."
     if task == "reasoning":
         return "Strong reasoning and coding labels for harder implementation work."
     if "code" in labels and "tools" in labels:

@@ -51,6 +51,11 @@ from superqode.providers.local.tool_support import (
     get_recommended_coding_models,
     estimate_tool_support,
 )
+from superqode.providers.local.smoke import (
+    all_local_provider_ids,
+    smoke_local_provider,
+    supported_local_smoke_providers,
+)
 
 __all__ = [
     # Enums
@@ -101,4 +106,7 @@ __all__ = [
     "test_tool_calling",
     "get_recommended_coding_models",
     "estimate_tool_support",
+    "all_local_provider_ids",
+    "smoke_local_provider",
+    "supported_local_smoke_providers",
 ]

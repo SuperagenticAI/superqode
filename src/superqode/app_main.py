@@ -364,43 +364,31 @@ def render_welcome(agents: List[AgentInfo], team_name: str = "Development Team")
     desc_text.append(" into one developer workflow.\n", style=THEME["muted"])
     items.append(Align.center(desc_text))
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # KEYBOARD SHORTCUTS GUIDE
-    # ═══════════════════════════════════════════════════════════════════════
-    shortcuts_text = Text()
-    shortcuts_text.append("💡 ", style=f"bold {THEME['cyan']}")
-    shortcuts_text.append("Tab", style=f"bold {THEME['cyan']}")
-    shortcuts_text.append(" to change section  •  ", style=THEME["muted"])
-    shortcuts_text.append("→", style=f"bold {THEME['cyan']}")
-    shortcuts_text.append(" for auto-complete\n", style=THEME["muted"])
-    items.append(Align.center(shortcuts_text))
-
-    # ═══════════════════════════════════════════════════════════════════════
-    # GETTING STARTED COMMANDS - Compact separate display
-    # ═══════════════════════════════════════════════════════════════════════
     commands_text = Text()
 
-    # :connect command - compact
-    commands_text.append("🔌 ", style="bold")
+    commands_text.append("Start:\n", style=f"bold {THEME['text']}")
+    commands_text.append("  [1] ", style=THEME["dim"])
+    commands_text.append(":connect local", style=f"bold {THEME['cyan']}")
+    commands_text.append("       local models, DS4, Ollama, MLX\n", style=THEME["muted"])
+    commands_text.append("  [2] ", style=THEME["dim"])
+    commands_text.append(":connect byok", style=f"bold {THEME['success']}")
+    commands_text.append("        direct provider/model connection\n", style=THEME["muted"])
+    commands_text.append("  [3] ", style=THEME["dim"])
     commands_text.append(":connect", style=f"bold {THEME['purple']}")
-    commands_text.append("  → Connect to ", style=THEME["muted"])
-    commands_text.append("ACP", style=f"bold {THEME['cyan']}")
-    commands_text.append(" or ", style=THEME["muted"])
-    commands_text.append("BYOK", style=f"bold {THEME['pink']}")
-    commands_text.append(" agents\n", style=THEME["muted"])
-
-    commands_text.append("◆ ", style="bold")
+    commands_text.append("             choose ACP, BYOK, or local\n", style=THEME["muted"])
+    commands_text.append("  [4] ", style=THEME["dim"])
     commands_text.append(":recommend coding", style=f"bold {THEME['success']}")
-    commands_text.append("  → Pick a good coding model\n", style=THEME["muted"])
-
-    commands_text.append("📂 ", style="bold")
+    commands_text.append("    model recommendations\n", style=THEME["muted"])
+    commands_text.append("  [5] ", style=THEME["dim"])
     commands_text.append("/sessions", style=f"bold {THEME['orange']}")
-    commands_text.append("  → Resume or fork previous work\n", style=THEME["muted"])
-
-    # :help command - compact
-    commands_text.append("❓ ", style="bold")
+    commands_text.append("             resume previous work\n\n", style=THEME["muted"])
+    commands_text.append("Keys: ", style=THEME["muted"])
+    commands_text.append("Ctrl+K", style=f"bold {THEME['cyan']}")
+    commands_text.append(" commands  •  ", style=THEME["muted"])
+    commands_text.append("Ctrl+B", style=f"bold {THEME['cyan']}")
+    commands_text.append(" sidebar  •  ", style=THEME["muted"])
     commands_text.append(":help", style=f"bold {THEME['cyan']}")
-    commands_text.append("  → Get help with commands and features\n", style=THEME["muted"])
+    commands_text.append(" reference\n", style=THEME["muted"])
 
     items.append(Align.center(commands_text))
 
@@ -550,6 +538,8 @@ class SuperQodeApp(App):
     _awaiting_permission = False  # Track if waiting for permission response
     _available_models: Dict[str, List[str]] = {}  # Available models per agent
     _last_response: str = ""  # Store last agent response for :copy command
+    _last_user_message: str = ""  # Store last user prompt for :retry
+    _last_run_summary: dict = {}  # Store compact work summary for :work
     _opencode_session_id: str = ""  # Track opencode session for conversation continuity
     _claude_session_id: str = ""  # Track Claude ACP session for multi-turn
     _claude_process = None  # Keep Claude ACP process alive for multi-turn
@@ -1196,6 +1186,30 @@ class SuperQodeApp(App):
                 "harness",
             ),
             PaletteCommand(
+                "retry",
+                "Retry Last Prompt",
+                "Run the previous user prompt again",
+                "↻",
+                ":retry",
+                "harness",
+            ),
+            PaletteCommand(
+                "work_summary",
+                "Last Work Summary",
+                "Show tools, files, and commands from the last run",
+                "▤",
+                ":work",
+                "harness",
+            ),
+            PaletteCommand(
+                "doctor_current",
+                "Doctor Current Provider",
+                "Check active provider/model readiness",
+                "🩺",
+                ":doctor current",
+                "connection",
+            ),
+            PaletteCommand(
                 "recommend",
                 "Recommend Model",
                 "Pick a model for coding, review, testing, budget, or large context",
@@ -1289,6 +1303,14 @@ class SuperQodeApp(App):
                 "Browse recent coding sessions",
                 "📂",
                 "/sessions",
+                "session",
+            ),
+            PaletteCommand(
+                "session_current",
+                "Current Session",
+                "Show active session status",
+                "▣",
+                ":session current",
                 "session",
             ),
             PaletteCommand(
@@ -1626,7 +1648,7 @@ class SuperQodeApp(App):
             team_name = load_team_config().team_name
         except Exception:
             team_name = "Development Team"
-        self.call_from_thread(self._show_welcome, team_name)
+        self._call_ui(self._show_welcome, team_name)
 
     def _show_welcome(self, team_name: str):
         log = self.query_one("#log", ConversationLog)
@@ -1762,6 +1784,52 @@ class SuperQodeApp(App):
         log = self.query_one("#log", ConversationLog)
         self._handle_copy(log)
 
+    def _call_ui(self, func, *args):
+        """Run a UI callback from either worker threads or the app thread."""
+        try:
+            return self.call_from_thread(func, *args)
+        except RuntimeError as e:
+            message = str(e).lower()
+            if "different thread" in message or "app thread" in message:
+                return func(*args)
+            raise
+
+    def _show_error_card(
+        self,
+        log: ConversationLog,
+        title: str,
+        message: str,
+        *,
+        provider: str = "",
+        model: str = "",
+        hint: str = "",
+    ):
+        """Render a compact, copyable error with recovery actions."""
+        t = Text()
+        t.append("\n  ✕ ", style=f"bold {THEME['error']}")
+        t.append(f"{title}\n\n", style=f"bold {THEME['error']}")
+        if provider or model:
+            t.append("  Target      ", style=THEME["muted"])
+            t.append(f"{provider or '-'}", style=THEME["cyan"])
+            if model:
+                t.append("/", style=THEME["dim"])
+                t.append(model, style=THEME["cyan"])
+            t.append("\n")
+        t.append("  Cause       ", style=THEME["muted"])
+        t.append(f"{message}\n", style=THEME["text"])
+        if hint:
+            t.append("  Hint        ", style=THEME["muted"])
+            t.append(f"{hint}\n", style=THEME["warning"])
+        t.append("\n  Actions     ", style=THEME["muted"])
+        t.append(":retry", style=THEME["cyan"])
+        t.append("  ", style=THEME["muted"])
+        t.append(":copy error", style=THEME["cyan"])
+        t.append("  ", style=THEME["muted"])
+        t.append(":doctor current", style=THEME["cyan"])
+        t.append("\n", style=THEME["muted"])
+        log.write(t)
+        log._last_error = f"{title}: {message}"
+
     def action_open_editor(self):
         """Open external editor for composing message (Ctrl+E)."""
         log = self.query_one("#log", ConversationLog)
@@ -1804,6 +1872,10 @@ class SuperQodeApp(App):
         command_map = {
             "start_coding": ":connect",
             "harness_status": ":status",
+            "retry": ":retry",
+            "work_summary": ":work",
+            "doctor_current": ":doctor current",
+            "session_current": ":session current",
             "review_diff": ":diff",
             "connect": ":connect",
             "connect_byok": ":connect byok",
@@ -2157,6 +2229,11 @@ class SuperQodeApp(App):
             log = self.query_one("#log", ConversationLog)
             log.add_info("Selection cancelled. Use :connect to try again.")
             return
+        if getattr(self, "_awaiting_recommendation_selection", False):
+            self._awaiting_recommendation_selection = False
+            log = self.query_one("#log", ConversationLog)
+            log.add_info("Recommendation selection cancelled.")
+            return
 
         # Then check if agent is running (ACP or BYOK)
         log = self.query_one("#log", ConversationLog)
@@ -2164,7 +2241,11 @@ class SuperQodeApp(App):
         # Check for BYOK/local operation
         if hasattr(self, "_pure_mode") and self._pure_mode and self._pure_mode._agent:
             # Cancel BYOK operation
+            self._cancel_requested = True
             self._pure_mode.cancel()
+            self._stop_thinking()
+            self._stop_stream_animation()
+            self.is_busy = False
             log.add_info("🛑 Agent operation cancelled")
             return
 
@@ -2338,6 +2419,7 @@ class SuperQodeApp(App):
             or getattr(self, "_awaiting_local_model", False)
             or getattr(self, "_awaiting_byok_provider", False)
             or getattr(self, "_awaiting_local_provider", False)
+            or getattr(self, "_awaiting_recommendation_selection", False)
         ):
             try:
                 prompt_input = self.query_one("#prompt-input", Input)
@@ -3696,9 +3778,9 @@ class SuperQodeApp(App):
                     )
                 log.write(t)
 
-            self.call_from_thread(show_warning)
+            self._call_ui(show_warning)
 
-        self.call_from_thread(lambda: setattr(self, "is_busy", True))
+        self._call_ui(lambda: setattr(self, "is_busy", True))
 
         try:
             result = subprocess.run(
@@ -3706,17 +3788,17 @@ class SuperQodeApp(App):
             )
             output = (result.stdout + result.stderr).strip()
             ok = result.returncode == 0
-            self.call_from_thread(log.add_shell, cmd, output, ok)
+            self._call_ui(log.add_shell, cmd, output, ok)
 
             # Record in history
             self._history_manager.append_sync(f">{cmd}", success=ok)
 
         except subprocess.TimeoutExpired:
-            self.call_from_thread(log.add_shell, cmd, "⏰ Timed out", False)
+            self._call_ui(log.add_shell, cmd, "⏰ Timed out", False)
         except Exception as e:
-            self.call_from_thread(log.add_error, str(e))
+            self._call_ui(log.add_error, str(e))
         finally:
-            self.call_from_thread(lambda: setattr(self, "is_busy", False))
+            self._call_ui(lambda: setattr(self, "is_busy", False))
 
     # ========================================================================
     # Command Handling
@@ -3772,6 +3854,8 @@ class SuperQodeApp(App):
             self._show_roles(log)
         elif c == "acp":
             self._acp_cmd(args, log)
+        elif c in ("agents", "agent"):
+            self._agents_cmd(args, log)
         elif c == "team":
             self._show_team(log)
         elif c == "superqe":
@@ -3786,6 +3870,14 @@ class SuperQodeApp(App):
             self._show_context(log)
         elif c in ("status", "harness"):
             self._show_harness_status(log)
+        elif c == "retry":
+            self._retry_last_message(log)
+        elif c in ("doctor", "doctor-current"):
+            self._doctor_cmd(args, log)
+        elif c in ("session", "sessions-current"):
+            self._session_cmd(args, log)
+        elif c in ("work", "summary"):
+            self._work_cmd(args, log)
         elif c == "files":
             self._show_files(log)
         elif c == "find":
@@ -3797,11 +3889,11 @@ class SuperQodeApp(App):
             self.action_toggle_thinking()
         # Copy/Open/Edit commands
         elif c == "copy":
-            self._handle_copy(log)
+            self._handle_copy(log, args)
         elif c == "open":
             self._handle_open(log)
         elif c == "select":
-            self._handle_select(log)
+            self._handle_select(log, args)
         elif c == "edit":
             self._handle_edit(log)
         elif c == "diagnostics":
@@ -4933,6 +5025,16 @@ team:
             if self._handle_byok_model_selection(text, log):
                 return
 
+        if getattr(self, "_awaiting_recommendation_selection", False):
+            if self._handle_recommendation_selection(text, log):
+                return
+
+        if getattr(self, "is_busy", False):
+            log.add_info(
+                "Agent is already running. Use Esc/Ctrl+X to cancel, or wait for it to finish."
+            )
+            return
+
         # Parse @file references and include file content
         file_context = ""
         if "@" in text:
@@ -4961,20 +5063,27 @@ team:
         log.auto_scroll = True
 
         log.add_user(text)
+        self._last_user_message = text
 
         # Store file context for the message
         self._current_file_context = file_context
 
         # Check if in provider mode
         if hasattr(self, "_pure_mode") and self._pure_mode.session.connected:
+            self.is_busy = True
+            self._cancel_requested = False
             self._send_to_pure_mode(text, log)
         elif session.is_connected_to_agent():
+            self.is_busy = True
+            self._cancel_requested = False
             agent = session.connected_agent
             # Get the actual agent name from the connected agent, not from old session state
             name = agent.get("short_name", agent.get("name", "agent")) if agent else "agent"
             # Use standard subprocess approach (ACP requires separate adapter)
             self._send_to_agent(text, name, log)
         elif mode != "home" and "." in mode:
+            self.is_busy = True
+            self._cancel_requested = False
             m, r = mode.split(".", 1)
             self._send_to_role(text, m, r, log)
         else:
@@ -5059,16 +5168,19 @@ team:
         if not hasattr(self, "_pure_mode"):
             log.add_error("Not connected to a model. Use :connect byok to select a provider/model.")
             log.add_system("Example: :connect byok ollama/llama3.2")
+            self.is_busy = False
             return
 
         if not self._pure_mode.session.connected:
             log.add_error("Connection not established. Please reconnect using :connect byok")
             log.add_system("Example: :connect byok ollama/llama3.2")
+            self.is_busy = False
             return
 
         if not self._pure_mode._agent:
             log.add_error("Agent not initialized. Please reconnect using :connect byok")
             log.add_system("Example: :connect byok ollama/llama3.2")
+            self.is_busy = False
             return
 
         provider = self._pure_mode.session.provider
@@ -5081,19 +5193,112 @@ team:
 
         provider_def = PROVIDERS.get(provider)
         is_local = provider_def and provider_def.category == ProviderCategory.LOCAL
+        tool_actions: list[dict] = []
+        files_read: list[str] = []
+        files_modified: list[str] = []
+        commands_run: list[str] = []
+        pre_existing_modified: set[str] = set()
+        try:
+            root_path = Path(os.getcwd())
+            pre_existing_modified = {
+                change.path for change in get_git_changes(root_path) if change.status in ("M", "A")
+            }
+        except Exception:
+            pre_existing_modified = set()
+
+        def _append_unique(items: list[str], value: str):
+            if value and value not in items:
+                items.append(value)
+
+        def _record_tool_activity(name: str, args: dict):
+            tool_lower = name.lower()
+            file_path = args.get("path") or args.get("file_path") or args.get("filePath") or ""
+            command = args.get("command", "")
+            query = args.get("query") or args.get("pattern") or args.get("include") or ""
+            started_at = monotonic()
+            kind = "tool"
+            if command:
+                kind = "command"
+            elif file_path and any(
+                marker in tool_lower
+                for marker in ("write", "edit", "insert", "patch", "multi_edit", "delete")
+            ):
+                kind = "write"
+            elif file_path or tool_lower in (
+                "grep",
+                "glob",
+                "repo_search",
+                "code_search",
+                "list_directory",
+            ):
+                kind = "read"
+
+            tool_actions.append(
+                {
+                    "name": name,
+                    "kind": kind,
+                    "path": file_path,
+                    "command": command,
+                    "query": query,
+                    "status": "running",
+                    "started_at": started_at,
+                    "duration": 0.0,
+                }
+            )
+
+            if command:
+                _append_unique(commands_run, command)
+
+            if file_path:
+                if any(
+                    marker in tool_lower
+                    for marker in ("write", "edit", "insert", "patch", "multi_edit", "delete")
+                ):
+                    _append_unique(files_modified, file_path)
+                elif any(
+                    marker in tool_lower for marker in ("read", "list", "grep", "glob", "search")
+                ):
+                    _append_unique(files_read, file_path)
+            elif tool_lower in ("grep", "glob", "repo_search", "code_search", "list_directory"):
+                search_root = args.get("path") or args.get("directory") or "."
+                _append_unique(files_read, str(search_root))
+
+        def _complete_tool_activity(name: str, status: str):
+            completed_at = monotonic()
+            for action in reversed(tool_actions):
+                if action.get("name") == name and action.get("status") == "running":
+                    action["status"] = status
+                    action["duration"] = max(
+                        0.0, completed_at - action.get("started_at", completed_at)
+                    )
+                    return
+            tool_actions.append(
+                {
+                    "name": name,
+                    "kind": "tool",
+                    "path": "",
+                    "command": "",
+                    "query": "",
+                    "status": status,
+                    "started_at": completed_at,
+                    "duration": 0.0,
+                }
+            )
 
         def _safe_call(func, *args):
             """Call function safely - handles threading correctly."""
             try:
-                self.call_from_thread(func, *args)
+                self._call_ui(func, *args)
             except RuntimeError as e:
-                if "different thread" in str(e).lower():
+                message = str(e).lower()
+                if "different thread" in message or "app thread" in message:
                     func(*args)
                 else:
                     raise
 
         def on_tool_call(name: str, args: dict):
             """Handle tool call - ALWAYS visible."""
+            _record_tool_activity(name, args)
             file_path = args.get("path", args.get("file_path", args.get("filePath", "")))
             command = args.get("command", "")
             if not file_path and not command:
@@ -5112,6 +5317,7 @@ team:
 
             if isinstance(result, ToolResult):
                 status = "success" if result.success else "error"
+                _complete_tool_activity(name, status)
                 output = result.output if result.output else result.error
                 output_str = str(output) if output else ""
 
@@ -5124,6 +5330,7 @@ team:
                 # Fallback - show full output, no truncation
                 _safe_call(log.add_tool_call, name, status, "", "", output_str)
             else:
+                _complete_tool_activity(name, "success")
                 output_str = str(result) if result else ""
 
                 # Try JSON parsing first
@@ -5239,7 +5446,14 @@ team:
                 if is_local:
                     self._stop_thinking()
                 self._stop_stream_animation()
-                log.add_error(f"❌ Error ({error_type}): {error_msg}")
+                self._show_error_card(
+                    log,
+                    f"{error_type} while running agent",
+                    error_msg,
+                    provider=provider,
+                    model=model,
+                    hint="Use :retry after fixing the provider or model issue.",
+                )
 
                 # Show detailed error info
                 import traceback
@@ -5313,18 +5527,20 @@ team:
 
                     # Get stats for display
                     stats = self._pure_mode.get_status()["stats"]
-                    tool_count = stats.get("total_tool_calls", 0)
+                    tool_count = max(stats.get("total_tool_calls", 0), len(tool_actions))
 
-                    # Compute file diffs using git (BYOK doesn't track files during execution,
-                    # but we can detect changes via git diff after the fact)
-                    files_modified = []  # We'll detect via git
+                    # Merge tool-tracked writes with git changes detected after the run.
                     try:
-                        # Get git changes to detect modified files
                         root_path = Path(os.getcwd())
                         git_changes = get_git_changes(root_path)
-                        files_modified = [
-                            change.path for change in git_changes if change.status in ("M", "A")
+                        git_files_modified = [
+                            change.path
+                            for change in git_changes
+                            if change.status in ("M", "A")
+                            and change.path not in pre_existing_modified
                         ]
+                        for changed_path in git_files_modified:
+                            _append_unique(files_modified, changed_path)
                     except Exception:
                         pass
 
@@ -5339,11 +5555,31 @@ team:
                             "tool_count": tool_count,
                             "duration": elapsed,
                             "files_modified": files_modified,
-                            "files_read": [],  # BYOK doesn't track file reads during execution
+                            "files_read": files_read,
                             "file_diffs": file_diffs,  # NEW: Store diff data
+                            "tools": tool_actions,
+                            "commands_run": commands_run,
+                            "provider": provider,
+                            "model": model,
+                            "prompt": text,
+                            "skip_git_fallback": True,
                         },
                         log,
                     )
+                    self._last_run_summary = {
+                        "tool_count": tool_count,
+                        "duration": elapsed,
+                        "files_modified": files_modified,
+                        "files_read": files_read,
+                        "file_diffs": file_diffs,
+                        "tools": tool_actions,
+                        "commands_run": commands_run,
+                        "provider": provider,
+                        "model": model,
+                        "prompt": text,
+                        "response": response_text,
+                        "skip_git_fallback": True,
+                    }
 
                     # Track usage
                     self._track_byok_usage(text, response_text, tool_count)
@@ -5356,18 +5592,22 @@ team:
                 log.add_info("Model may have returned tool calls only or whitespace-only response.")
                 # Check if there were tool calls
                 stats = self._pure_mode.get_status()["stats"]
-                tool_count = stats.get("total_tool_calls", 0)
+                tool_count = max(stats.get("total_tool_calls", 0), len(tool_actions))
                 if tool_count > 0:
                     log.add_info(f"Note: {tool_count} tool calls were executed.")
 
-                    # Compute file diffs even when no text response
-                    files_modified = []
+                    # Compute file diffs even when no text response.
                     try:
                         root_path = Path(os.getcwd())
                         git_changes = get_git_changes(root_path)
-                        files_modified = [
-                            change.path for change in git_changes if change.status in ("M", "A")
+                        git_files_modified = [
+                            change.path
+                            for change in git_changes
+                            if change.status in ("M", "A")
+                            and change.path not in pre_existing_modified
                         ]
+                        for changed_path in git_files_modified:
+                            _append_unique(files_modified, changed_path)
                     except Exception:
                         pass
 
@@ -5380,11 +5620,31 @@ team:
                             "tool_count": tool_count,
                             "duration": elapsed,
                             "files_modified": files_modified,
-                            "files_read": [],
+                            "files_read": files_read,
                             "file_diffs": file_diffs,
+                            "tools": tool_actions,
+                            "commands_run": commands_run,
+                            "provider": provider,
+                            "model": model,
+                            "prompt": text,
+                            "skip_git_fallback": True,
                         },
                         log,
                     )
+                    self._last_run_summary = {
+                        "tool_count": tool_count,
+                        "duration": elapsed,
+                        "files_modified": files_modified,
+                        "files_read": files_read,
+                        "file_diffs": file_diffs,
+                        "tools": tool_actions,
+                        "commands_run": commands_run,
+                        "provider": provider,
+                        "model": model,
+                        "prompt": text,
+                        "response": "",
+                        "skip_git_fallback": True,
+                    }
                 else:
                     log.add_warning(
                         "⚠️ No tool calls and no text response. The model may not be responding correctly."
@@ -5399,11 +5659,20 @@ team:
 
         except Exception as e:
             self._stop_thinking()
+            self._stop_stream_animation()
+            self.is_busy = False
             error_msg = str(e)
             error_trace = traceback.format_exc()
 
             # Show user-friendly error
-            log.add_error(f"Error communicating with {provider}/{model}: {error_msg}")
+            self._show_error_card(
+                log,
+                "Provider communication failed",
+                error_msg,
+                provider=provider,
+                model=model,
+                hint="Check provider readiness with :doctor current, then use :retry.",
+            )
 
             # For local providers, add helpful hints
             if provider in ("ollama", "lmstudio", "vllm", "sglang", "mlx", "tgi"):
@@ -5439,15 +5708,15 @@ team:
         # Reset cancellation flag
         self._cancel_requested = False
 
-        self.call_from_thread(self._start_thinking, f"🤖 Connecting to {name}...")
+        self._call_ui(self._start_thinking, f"🤖 Connecting to {name}...")
 
         short_name = agent.get("short_name", "") if agent else ""
 
         if short_name == "opencode":
             # Check if model is selected
             if not self.current_model:
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(
+                self._call_ui(self._stop_thinking)
+                self._call_ui(
                     log.add_error, "No model selected. Press 1-5 to select a model first."
                 )
                 return
@@ -5482,8 +5751,8 @@ team:
         elif short_name == "claude":
             # Check if model is selected
             if not self.current_model:
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(
+                self._call_ui(self._stop_thinking)
+                self._call_ui(
                     log.add_error, "No model selected. Press 1-4 to select a model first."
                 )
                 return
@@ -5504,8 +5773,8 @@ team:
         elif short_name == "codex":
             # Check if model is selected
             if not self.current_model:
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(
+                self._call_ui(self._stop_thinking)
+                self._call_ui(
                     log.add_error, "No model selected. Press 1-4 to select a model first."
                 )
                 return
@@ -5555,8 +5824,8 @@ team:
                     persona_context=None,
                 )
             else:
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(log.add_info, f"🚧 {name} integration coming soon!")
+                self._call_ui(self._stop_thinking)
+                self._call_ui(log.add_info, f"🚧 {name} integration coming soon!")
 
     def _run_agent_unified(
         self,
@@ -5656,26 +5925,20 @@ team:
                 self.approval_mode, "🟡 ASK"
             )
             session_type = "new session" if self._is_first_message else "continuing session"
-            self.call_from_thread(
+            self._call_ui(
                 log.add_info, f"Using model: {model_display} | Mode: {mode_label} ({session_type})"
             )
 
             # Show persona info if available
             if persona_context and persona_context.is_valid:
-                self.call_from_thread(
-                    log.add_info, f"🎭 Persona active: {persona_context.role_name}"
-                )
+                self._call_ui(log.add_info, f"🎭 Persona active: {persona_context.role_name}")
 
             # Show mode-specific info on first message
             if self._is_first_message:
                 if self.approval_mode == "deny":
-                    self.call_from_thread(
-                        log.add_info, "🔴 DENY mode: ALL tool calls will be blocked"
-                    )
+                    self._call_ui(log.add_info, "🔴 DENY mode: ALL tool calls will be blocked")
                 elif self.approval_mode == "ask":
-                    self.call_from_thread(
-                        log.add_info, "ASK mode: prompts for external tools (y/n/a)"
-                    )
+                    self._call_ui(log.add_info, "ASK mode: prompts for external tools (y/n/a)")
 
             # Build environment
             env = {
@@ -5699,13 +5962,11 @@ team:
             self._agent_process = process
 
             # Stop thinking, start streaming animation
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._start_stream_animation, log)
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._start_stream_animation, log)
 
             # Show header
-            self.call_from_thread(
-                self._show_agent_header_with_model, display_name, model_display, log
-            )
+            self._call_ui(self._show_agent_header_with_model, display_name, model_display, log)
 
             # Collect output
             text_parts = []
@@ -5717,7 +5978,7 @@ team:
             while True:
                 if self._cancel_requested:
                     process.terminate()
-                    self.call_from_thread(log.add_info, "🛑 Agent operation cancelled")
+                    self._call_ui(log.add_info, "🛑 Agent operation cancelled")
                     break
 
                 line = process.stdout.readline()
@@ -5760,15 +6021,13 @@ team:
                                     ord(c) > 127 for c in line[:2]
                                 ):  # Check if first 2 chars have emoji
                                     emoji = "📋"  # Default console output emoji
-                                    self.call_from_thread(
-                                        self._show_thinking_line, f"{emoji} {line}", log
-                                    )
+                                    self._call_ui(self._show_thinking_line, f"{emoji} {line}", log)
                                 else:
-                                    self.call_from_thread(self._show_thinking_line, line, log)
+                                    self._call_ui(self._show_thinking_line, line, log)
 
             # Cleanup
             self._agent_process = None
-            self.call_from_thread(self._stop_stream_animation)
+            self._call_ui(self._stop_stream_animation)
 
             process.wait()
             duration = monotonic() - start_time
@@ -5790,31 +6049,25 @@ team:
             if text_parts:
                 response_text = "".join(text_parts)
                 if response_text.strip():
-                    self.call_from_thread(
+                    self._call_ui(
                         self._show_final_outcome, response_text, display_name, action_summary, log
                     )
                 else:
-                    self.call_from_thread(
-                        self._show_completion_summary, display_name, action_summary, log
-                    )
+                    self._call_ui(self._show_completion_summary, display_name, action_summary, log)
             elif not self._cancel_requested:
-                self.call_from_thread(
-                    self._show_completion_summary, display_name, action_summary, log
-                )
+                self._call_ui(self._show_completion_summary, display_name, action_summary, log)
 
         except FileNotFoundError:
             self._agent_process = None
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._stop_stream_animation)
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._stop_stream_animation)
             agent_name = "gemini" if agent_type == "gemini" else "opencode"
-            self.call_from_thread(
-                log.add_error, f"❌ {agent_name} CLI not found. Install it first."
-            )
+            self._call_ui(log.add_error, f"❌ {agent_name} CLI not found. Install it first.")
         except Exception as e:
             self._agent_process = None
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._stop_stream_animation)
-            self.call_from_thread(log.add_error, f"❌ Error: {str(e)}")
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._stop_stream_animation)
+            self._call_ui(log.add_error, f"❌ Error: {str(e)}")
 
     def _use_jsonrpc_acp_client(self) -> bool:
         """Return True when the custom JSON-RPC ACP client is enabled."""
@@ -5852,33 +6105,31 @@ team:
             command = "gemini --experimental-acp"
             model_display = f"gemini/{model}" if model and model != "auto" else "gemini/auto"
             if "GEMINI_API_KEY" not in os.environ and "GOOGLE_API_KEY" not in os.environ:
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(
+                self._call_ui(self._stop_thinking)
+                self._call_ui(
                     log.add_error, "❌ GEMINI_API_KEY or GOOGLE_API_KEY not set. Export it first:"
                 )
-                self.call_from_thread(log.add_info, "  export GEMINI_API_KEY=your_api_key")
-                self.call_from_thread(log.add_info, "  or export GOOGLE_API_KEY=your_api_key")
+                self._call_ui(log.add_info, "  export GEMINI_API_KEY=your_api_key")
+                self._call_ui(log.add_info, "  or export GOOGLE_API_KEY=your_api_key")
                 return
         elif agent_type == "claude":
             command = "claude --acp"
             model_display = f"claude/{model}" if model else "claude/auto"
             if "ANTHROPIC_API_KEY" not in os.environ:
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(
-                    log.add_error, "❌ ANTHROPIC_API_KEY not set. Export it first:"
-                )
-                self.call_from_thread(log.add_info, "  export ANTHROPIC_API_KEY=sk-ant-...")
+                self._call_ui(self._stop_thinking)
+                self._call_ui(log.add_error, "❌ ANTHROPIC_API_KEY not set. Export it first:")
+                self._call_ui(log.add_info, "  export ANTHROPIC_API_KEY=sk-ant-...")
                 return
         elif agent_type == "codex":
             command = "codex --acp"
             model_display = f"codex/{model}" if model else "codex/auto"
             if "OPENAI_API_KEY" not in os.environ and "CODEX_API_KEY" not in os.environ:
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(
+                self._call_ui(self._stop_thinking)
+                self._call_ui(
                     log.add_error, "❌ OPENAI_API_KEY or CODEX_API_KEY not set. Export one first:"
                 )
-                self.call_from_thread(log.add_info, "  export OPENAI_API_KEY=sk-...")
-                self.call_from_thread(log.add_info, "  or export CODEX_API_KEY=sk-...")
+                self._call_ui(log.add_info, "  export OPENAI_API_KEY=sk-...")
+                self._call_ui(log.add_info, "  or export CODEX_API_KEY=sk-...")
                 return
         elif agent_type == "junie":
             command = "junie --acp"
@@ -5890,11 +6141,11 @@ team:
             command = "kimi --acp"
             model_display = f"kimi/{model}" if model else "kimi/auto"
             if "MOONSHOT_API_KEY" not in os.environ and "KIMI_API_KEY" not in os.environ:
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(
+                self._call_ui(self._stop_thinking)
+                self._call_ui(
                     log.add_error, "❌ MOONSHOT_API_KEY or KIMI_API_KEY not set. Export it first:"
                 )
-                self.call_from_thread(log.add_info, "  export MOONSHOT_API_KEY=your_api_key")
+                self._call_ui(log.add_info, "  export MOONSHOT_API_KEY=your_api_key")
                 return
         elif agent_type == "opencode":
             command = "opencode acp"
@@ -5910,9 +6161,9 @@ team:
             command = "auggie --acp"
             model_display = f"auggie/{model}" if model else "auggie/auto"
             if "AUGMENT_API_KEY" not in os.environ:
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(log.add_error, "❌ AUGMENT_API_KEY not set. Export it first:")
-                self.call_from_thread(log.add_info, "  export AUGMENT_API_KEY=your_api_key")
+                self._call_ui(self._stop_thinking)
+                self._call_ui(log.add_error, "❌ AUGMENT_API_KEY not set. Export it first:")
+                self._call_ui(log.add_info, "  export AUGMENT_API_KEY=your_api_key")
                 return
         elif agent_type == "code-assistant":
             command = "code-assistant --acp"
@@ -5931,27 +6182,27 @@ team:
             model_display = f"amp/{model}" if model else "amp/auto"
             # Amp handles its own authentication via `amp login`
         else:
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(log.add_error, f"Unsupported ACP agent type: {agent_type}")
+            self._call_ui(self._stop_thinking)
+            self._call_ui(log.add_error, f"Unsupported ACP agent type: {agent_type}")
             return
 
         mode_label = {"auto": "🟢 AUTO", "ask": "🟡 ASK", "deny": "🔴 DENY"}.get(
             self.approval_mode, "🟡 ASK"
         )
         session_type = "new session"
-        self.call_from_thread(
+        self._call_ui(
             log.add_info, f"Using model: {model_display} | Mode: {mode_label} ({session_type})"
         )
 
         if persona_context and persona_context.is_valid:
-            self.call_from_thread(log.add_info, f"🎭 Persona active: {persona_context.role_name}")
+            self._call_ui(log.add_info, f"🎭 Persona active: {persona_context.role_name}")
 
         # Stop thinking, start streaming animation
-        self.call_from_thread(self._stop_thinking)
-        self.call_from_thread(self._start_stream_animation, log)
+        self._call_ui(self._stop_thinking)
+        self._call_ui(self._start_stream_animation, log)
 
         # Use enhanced agent session header (always visible)
-        self.call_from_thread(
+        self._call_ui(
             log.start_agent_session,
             display_name,
             model_display,
@@ -5973,7 +6224,7 @@ team:
             if thinking_buffer:
                 full_text = "".join(thinking_buffer).strip()
                 if full_text:
-                    self.call_from_thread(self._show_thinking_line, f"💭 {full_text}", log)
+                    self._call_ui(self._show_thinking_line, f"💭 {full_text}", log)
                 thinking_buffer.clear()
 
         def _pick_option(options: list[dict], preferred_kinds: list[str]) -> str:
@@ -5993,7 +6244,7 @@ team:
 
                 text_parts.append(text)
                 # Stream response chunks directly - always visible
-                self.call_from_thread(log.add_response_chunk, text)
+                self._call_ui(log.add_response_chunk, text)
 
         async def on_thinking(text: str) -> None:
             """Handle agent thinking/session logs - toggleable with Ctrl+T."""
@@ -6008,14 +6259,14 @@ team:
                 # Only show in verbose mode (`:log verbose`)
                 if self.show_verbose_agent_logs:
                     clean_text = text[8:]  # Remove "[agent] " prefix
-                    self.call_from_thread(self._show_thinking_line, f"📡 {clean_text}", log)
+                    self._call_ui(self._show_thinking_line, f"📡 {clean_text}", log)
                 return
 
             # Filter out other verbose prefixes
             if text.startswith("[error]") or text.startswith("[startup"):
                 # Show errors but in a cleaner format
                 clean_text = text.replace("[error] ", "").replace("[startup error] ", "")
-                self.call_from_thread(log.add_error, clean_text)
+                self._call_ui(log.add_error, clean_text)
                 return
 
             # Buffer thinking chunks and display as complete thoughts
@@ -6076,7 +6327,7 @@ team:
 
             # ALWAYS show tool calls - this is the agent's actual work
             command = raw_input.get("command", "")
-            self.call_from_thread(
+            self._call_ui(
                 log.add_tool_call,
                 title,
                 "running",
@@ -6096,7 +6347,7 @@ team:
                 if not formatted:
                     # Fallback to simple display - show full output, no truncation
                     output_str = str(output) if output else ""
-                    self.call_from_thread(
+                    self._call_ui(
                         log.add_tool_call,
                         tool_title,
                         "success",
@@ -6106,7 +6357,7 @@ team:
                     )
             elif status == "failed":
                 error_msg = str(output) if output else "failed"
-                self.call_from_thread(
+                self._call_ui(
                     log.add_tool_call,
                     tool_title,
                     "error",
@@ -6119,29 +6370,23 @@ team:
             """Handle plan updates - ALWAYS visible."""
             if entries:
                 # Plans are important - always show
-                self.call_from_thread(
-                    log.add_thinking, f"📋 Plan: {len(entries)} tasks", "planning"
-                )
+                self._call_ui(log.add_thinking, f"📋 Plan: {len(entries)} tasks", "planning")
 
         async def on_permission_request(options: list[dict], tool_call: dict) -> str:
             tool_name = tool_call.get("title", "unknown")
             tool_input = tool_call.get("rawInput", {})
 
             if self.approval_mode == "deny":
-                self.call_from_thread(
-                    self._show_thinking_line, f"🔴 BLOCKED: {tool_name} (DENY mode)", log
-                )
+                self._call_ui(self._show_thinking_line, f"🔴 BLOCKED: {tool_name} (DENY mode)", log)
                 return _pick_option(options, ["reject_once", "reject_always"])
 
             if self.approval_mode == "auto":
-                self.call_from_thread(
-                    self._show_thinking_line, f"✅ Auto-allowed: {tool_name}", log
-                )
+                self._call_ui(self._show_thinking_line, f"✅ Auto-allowed: {tool_name}", log)
                 return _pick_option(options, ["allow_once", "allow_always"])
 
             needs_permission = self._tool_needs_permission(tool_name, tool_input)
             if needs_permission:
-                self.call_from_thread(self._show_permission_prompt, tool_name, tool_input, log)
+                self._call_ui(self._show_permission_prompt, tool_name, tool_input, log)
                 self._permission_pending = True
                 self._permission_response = None
 
@@ -6157,10 +6402,10 @@ team:
                     return _pick_option(options, ["allow_once", "allow_always"])
                 if self._permission_response == "allow_all":
                     self.approval_mode = "auto"
-                    self.call_from_thread(self._sync_approval_mode)
+                    self._call_ui(self._sync_approval_mode)
                     return _pick_option(options, ["allow_always", "allow_once"])
 
-                self.call_from_thread(log.add_info, f"Denied: {tool_name}")
+                self._call_ui(log.add_info, f"Denied: {tool_name}")
                 return _pick_option(options, ["reject_once", "reject_always"])
 
             return _pick_option(options, ["allow_once", "allow_always"])
@@ -6208,13 +6453,13 @@ team:
             stop_reason, stats = asyncio.run(run_prompt())
             self._acp_client = None
             self._agent_process = None
-            self.call_from_thread(self._stop_stream_animation)
+            self._call_ui(self._stop_stream_animation)
 
             # Get response text
             response_text = "".join(text_parts) if text_parts else ""
 
             # Use enhanced end_agent_session for consistent output
-            self.call_from_thread(
+            self._call_ui(
                 log.end_agent_session,
                 True,  # success
                 response_text,
@@ -6235,16 +6480,16 @@ team:
                         stats.get("files_modified", files_modified)
                     ),
                 }
-                self.call_from_thread(
+                self._call_ui(
                     self._show_final_outcome, response_text, display_name, action_summary, log
                 )
 
         except FileNotFoundError:
             self._agent_process = None
             self._acp_client = None
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._stop_stream_animation)
-            self.call_from_thread(
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._stop_stream_animation)
+            self._call_ui(
                 log.end_agent_session,
                 False,  # failed
                 f"❌ {command} not found. Install it first.",
@@ -6252,9 +6497,9 @@ team:
         except Exception as e:
             self._agent_process = None
             self._acp_client = None
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._stop_stream_animation)
-            self.call_from_thread(
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._stop_stream_animation)
+            self._call_ui(
                 log.end_agent_session,
                 False,  # failed
                 f"❌ Error: {str(e)}",
@@ -6344,9 +6589,7 @@ team:
             # Session initialized
             session_id = event.get("session_id", "")
             model = event.get("model", "auto")
-            self.call_from_thread(
-                self._show_thinking_line, f"🚀 Session started (model: {model})", log
-            )
+            self._call_ui(self._show_thinking_line, f"🚀 Session started (model: {model})", log)
 
         elif event_type == "message":
             role = event.get("role", "")
@@ -6357,7 +6600,7 @@ team:
                 text_parts.append(content)
                 if is_delta:
                     # Show full content, no truncation
-                    self.call_from_thread(self._show_thinking_line, f"💬 {content}", log)
+                    self._call_ui(self._show_thinking_line, f"💬 {content}", log)
 
         elif event_type == "tool_use":
             tool_name = event.get("tool_name", "unknown")
@@ -6386,19 +6629,17 @@ team:
 
             # Skip if this tool was already approved (prevent duplicates)
             if tool_id and tool_id in approved_tools:
-                self.call_from_thread(self._show_thinking_line, msg, log)
+                self._call_ui(self._show_thinking_line, msg, log)
             # Handle approval modes
             elif self.approval_mode == "deny":
-                self.call_from_thread(
-                    self._show_thinking_line, f"🔴 BLOCKED: {tool_name} (DENY mode)", log
-                )
-                self.call_from_thread(log.add_error, f"🛑 Tool blocked: {tool_name}")
+                self._call_ui(self._show_thinking_line, f"🔴 BLOCKED: {tool_name} (DENY mode)", log)
+                self._call_ui(log.add_error, f"🛑 Tool blocked: {tool_name}")
                 process.terminate()
             elif self.approval_mode == "ask":
                 needs_permission = self._tool_needs_permission(tool_name, parameters)
                 if needs_permission:
                     self._pending_tool_id = tool_id  # Track which tool is pending
-                    self.call_from_thread(self._show_permission_prompt, tool_name, parameters, log)
+                    self._call_ui(self._show_permission_prompt, tool_name, parameters, log)
                     self._permission_pending = True
                     self._permission_response = None
 
@@ -6408,31 +6649,27 @@ team:
                         if self._cancel_requested:
                             self._permission_pending = False
                             process.terminate()
-                            self.call_from_thread(log.add_info, "🛑 Cancelled")
+                            self._call_ui(log.add_info, "🛑 Cancelled")
                             break
                         time.sleep(0.1)
 
                     if self._permission_response == "deny" or self._permission_response is None:
-                        self.call_from_thread(log.add_info, f"Denied: {tool_name}")
+                        self._call_ui(log.add_info, f"Denied: {tool_name}")
                         process.terminate()
                     elif self._permission_response == "allow":
                         # Add to approved tools to prevent duplicate prompts
                         approved_tools = self._ensure_approved_tools()
                         if self._pending_tool_id:
                             approved_tools.add(self._pending_tool_id)
-                        self.call_from_thread(
-                            self._show_thinking_line, f"✅ Allowed: {tool_name}", log
-                        )
+                        self._call_ui(self._show_thinking_line, f"✅ Allowed: {tool_name}", log)
                     elif self._permission_response == "allow_all":
                         self.approval_mode = "auto"
-                        self.call_from_thread(self._sync_approval_mode)
-                        self.call_from_thread(
-                            self._show_thinking_line, f"✅ Allowed all: {tool_name}", log
-                        )
+                        self._call_ui(self._sync_approval_mode)
+                        self._call_ui(self._show_thinking_line, f"✅ Allowed all: {tool_name}", log)
                 else:
-                    self.call_from_thread(self._show_thinking_line, msg, log)
+                    self._call_ui(self._show_thinking_line, msg, log)
             else:
-                self.call_from_thread(self._show_thinking_line, msg, log)
+                self._call_ui(self._show_thinking_line, msg, log)
 
         elif event_type == "tool_result":
             tool_id = event.get("tool_id", "")
@@ -6465,33 +6702,29 @@ team:
 
                             summary = ", ".join(summary_parts) if summary_parts else "empty"
 
-                            self.call_from_thread(
+                            self._call_ui(
                                 self._show_thinking_line, f"📋 Task List ({summary}):", log
                             )
                             for todo_line in formatted_todos:
-                                self.call_from_thread(
-                                    self._show_thinking_line, f"  {todo_line}", log
-                                )
+                                self._call_ui(self._show_thinking_line, f"  {todo_line}", log)
                         else:
-                            self.call_from_thread(
+                            self._call_ui(
                                 self._show_thinking_line, f"📋 No tasks in todo list", log
                             )
                     except (json.JSONDecodeError, KeyError):
                         # Fallback to normal display if JSON parsing fails
                         output_str = str(output)
-                        self.call_from_thread(
-                            self._show_thinking_line, f"✅ Result: {output_str}", log
-                        )
+                        self._call_ui(self._show_thinking_line, f"✅ Result: {output_str}", log)
                 elif output:
                     output_str = str(output)
                     # Show full output, no truncation
-                    self.call_from_thread(self._show_thinking_line, f"✅ Result: {output_str}", log)
+                    self._call_ui(self._show_thinking_line, f"✅ Result: {output_str}", log)
                 else:
-                    self.call_from_thread(self._show_thinking_line, f"✅ Tool completed", log)
+                    self._call_ui(self._show_thinking_line, f"✅ Tool completed", log)
             else:
                 # Show full error message, no truncation
                 error_msg = str(output) if output else "failed"
-                self.call_from_thread(self._show_thinking_line, f"❌ Tool failed: {error_msg}", log)
+                self._call_ui(self._show_thinking_line, f"❌ Tool failed: {error_msg}", log)
 
         elif event_type == "result":
             # Final result with stats
@@ -6500,7 +6733,7 @@ team:
             tool_calls = stats.get("tool_calls", 0)
             duration_ms = stats.get("duration_ms", 0)
             if total_tokens > 0:
-                self.call_from_thread(
+                self._call_ui(
                     self._show_thinking_line,
                     f"⚡ Done ({total_tokens} tokens, {tool_calls} tools)",
                     log,
@@ -6548,7 +6781,7 @@ team:
                     return
                 text_parts.append(text_content)
                 # Show full content, no truncation
-                self.call_from_thread(self._show_thinking_line, f"💬 {text_content}", log)
+                self._call_ui(self._show_thinking_line, f"💬 {text_content}", log)
 
         elif event_type == "tool_use":
             tool_name = part.get("tool", "unknown")
@@ -6575,16 +6808,14 @@ team:
 
             # Handle approval modes
             if self.approval_mode == "deny":
-                self.call_from_thread(
-                    self._show_thinking_line, f"🔴 BLOCKED: {tool_name} (DENY mode)", log
-                )
-                self.call_from_thread(log.add_error, f"🛑 Tool blocked: {tool_name}")
-                self.call_from_thread(log.add_info, "💡 Use :mode auto or :mode ask to allow tools")
+                self._call_ui(self._show_thinking_line, f"🔴 BLOCKED: {tool_name} (DENY mode)", log)
+                self._call_ui(log.add_error, f"🛑 Tool blocked: {tool_name}")
+                self._call_ui(log.add_info, "💡 Use :mode auto or :mode ask to allow tools")
                 process.terminate()
             elif self.approval_mode == "ask":
                 needs_permission = self._tool_needs_permission(tool_name, tool_input)
                 if needs_permission:
-                    self.call_from_thread(self._show_permission_prompt, tool_name, tool_input, log)
+                    self._call_ui(self._show_permission_prompt, tool_name, tool_input, log)
                     self._permission_pending = True
                     self._permission_response = None
 
@@ -6594,27 +6825,23 @@ team:
                         if self._cancel_requested:
                             self._permission_pending = False
                             process.terminate()
-                            self.call_from_thread(log.add_info, "🛑 Cancelled")
+                            self._call_ui(log.add_info, "🛑 Cancelled")
                             break
                         time.sleep(0.1)
 
                     if self._permission_response == "deny" or self._permission_response is None:
-                        self.call_from_thread(log.add_info, f"Denied: {tool_name}")
+                        self._call_ui(log.add_info, f"Denied: {tool_name}")
                         process.terminate()
                     elif self._permission_response == "allow":
-                        self.call_from_thread(
-                            self._show_thinking_line, f"✅ Allowed: {tool_name}", log
-                        )
+                        self._call_ui(self._show_thinking_line, f"✅ Allowed: {tool_name}", log)
                     elif self._permission_response == "allow_all":
                         self.approval_mode = "auto"
-                        self.call_from_thread(self._sync_approval_mode)
-                        self.call_from_thread(
-                            self._show_thinking_line, f"✅ Allowed all: {tool_name}", log
-                        )
+                        self._call_ui(self._sync_approval_mode)
+                        self._call_ui(self._show_thinking_line, f"✅ Allowed all: {tool_name}", log)
                 else:
-                    self.call_from_thread(self._show_thinking_line, msg, log)
+                    self._call_ui(self._show_thinking_line, msg, log)
             else:
-                self.call_from_thread(self._show_thinking_line, msg, log)
+                self._call_ui(self._show_thinking_line, msg, log)
 
         elif event_type == "step_start":
             pass  # Skip
@@ -6623,7 +6850,7 @@ team:
             thinking_text = part.get("text", part.get("content", ""))
             if thinking_text:
                 # Show full thinking text, no truncation
-                self.call_from_thread(self._show_thinking_line, f"🧠 {thinking_text}", log)
+                self._call_ui(self._show_thinking_line, f"🧠 {thinking_text}", log)
 
         elif event_type == "tool_result":
             tool_name = part.get("tool", "")
@@ -6654,39 +6881,31 @@ team:
 
                             summary = ", ".join(summary_parts) if summary_parts else "empty"
 
-                            self.call_from_thread(
+                            self._call_ui(
                                 self._show_thinking_line, f"📋 Task List ({summary}):", log
                             )
                             for todo_line in formatted_todos:
-                                self.call_from_thread(
-                                    self._show_thinking_line, f"  {todo_line}", log
-                                )
+                                self._call_ui(self._show_thinking_line, f"  {todo_line}", log)
                         else:
-                            self.call_from_thread(
+                            self._call_ui(
                                 self._show_thinking_line, f"📋 No tasks in todo list", log
                             )
                     except (json.JSONDecodeError, KeyError):
                         # Fallback to normal display if JSON parsing fails
                         result_str = str(result_content)
-                        self.call_from_thread(
+                        self._call_ui(
                             self._show_thinking_line, f"✅ {tool_name}: {result_str}", log
                         )
                 elif result_content:
                     result_str = str(result_content)
                     # Show full result, no truncation
-                    self.call_from_thread(
-                        self._show_thinking_line, f"✅ {tool_name}: {result_str}", log
-                    )
+                    self._call_ui(self._show_thinking_line, f"✅ {tool_name}: {result_str}", log)
                 else:
-                    self.call_from_thread(
-                        self._show_thinking_line, f"✅ {tool_name} completed", log
-                    )
+                    self._call_ui(self._show_thinking_line, f"✅ {tool_name} completed", log)
             else:
                 # Show full error message, no truncation
                 error_msg = str(result_content) if result_content else "failed"
-                self.call_from_thread(
-                    self._show_thinking_line, f"❌ {tool_name} failed: {error_msg}", log
-                )
+                self._call_ui(self._show_thinking_line, f"❌ {tool_name} failed: {error_msg}", log)
 
         elif event_type == "step_finish":
             reason = part.get("reason", "")
@@ -6696,13 +6915,13 @@ team:
                 cache = tokens.get("cache", {})
                 cache_read = cache.get("read", 0)
                 if cache_read > 0:
-                    self.call_from_thread(
+                    self._call_ui(
                         self._show_thinking_line,
                         f"⚡ Step done ({output_tokens} tokens, {cache_read} cached)",
                         log,
                     )
                 elif output_tokens > 0:
-                    self.call_from_thread(
+                    self._call_ui(
                         self._show_thinking_line, f"⚡ Step done ({output_tokens} tokens)", log
                     )
         else:
@@ -6710,7 +6929,7 @@ team:
                 content = part.get("text", part.get("content", part.get("message", "")))
                 if content:
                     # Show full content, no truncation
-                    self.call_from_thread(self._show_thinking_line, f"📋 {content}", log)
+                    self._call_ui(self._show_thinking_line, f"📋 {content}", log)
 
     def _handle_terminal_method(
         self,
@@ -6754,7 +6973,7 @@ team:
                 if isinstance(var, dict):
                     term_env[var.get("name", "")] = var.get("value", "")
 
-            self.call_from_thread(self._show_thinking_line, f"🖥️ Running: {full_command}", log)
+            self._call_ui(self._show_thinking_line, f"🖥️ Running: {full_command}", log)
 
             try:
                 term_process = subprocess.Popen(
@@ -6776,7 +6995,7 @@ team:
 
                 return {"terminalId": terminal_id}, True
             except Exception as e:
-                self.call_from_thread(self._show_thinking_line, f"⚠️ Terminal error: {e}", log)
+                self._call_ui(self._show_thinking_line, f"⚠️ Terminal error: {e}", log)
                 return {"terminalId": terminal_id}, True
 
         elif method == "terminal/output":
@@ -6829,9 +7048,7 @@ team:
                         # Show full terminal output, no truncation
                         output_preview = terminal["output"].strip()
                         if output_preview:
-                            self.call_from_thread(
-                                self._show_thinking_line, f"📋 {output_preview}", log
-                            )
+                            self._call_ui(self._show_thinking_line, f"📋 {output_preview}", log)
 
                     return {"exitCode": terminal["exit_code"], "signal": None}, True
                 except subprocess.TimeoutExpired:
@@ -6945,15 +7162,13 @@ team:
                 self.approval_mode, "🟡 ASK"
             )
             session_type = "new session" if self._is_first_message else "continuing session"
-            self.call_from_thread(
+            self._call_ui(
                 log.add_info, f"Using model: {model_display} | Mode: {mode_label} ({session_type})"
             )
 
             # Show persona info if available
             if persona_context and persona_context.is_valid:
-                self.call_from_thread(
-                    log.add_info, f"🎭 Persona active: {persona_context.role_name}"
-                )
+                self._call_ui(log.add_info, f"🎭 Persona active: {persona_context.role_name}")
 
             # Build environment - need ANTHROPIC_API_KEY
             env = {
@@ -6963,11 +7178,9 @@ team:
 
             # Check for API key
             if "ANTHROPIC_API_KEY" not in env:
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(
-                    log.add_error, "❌ ANTHROPIC_API_KEY not set. Export it first:"
-                )
-                self.call_from_thread(log.add_info, "  export ANTHROPIC_API_KEY=sk-ant-...")
+                self._call_ui(self._stop_thinking)
+                self._call_ui(log.add_error, "❌ ANTHROPIC_API_KEY not set. Export it first:")
+                self._call_ui(log.add_info, "  export ANTHROPIC_API_KEY=sk-ant-...")
                 return
 
             # Check if we can reuse existing process and session
@@ -6982,9 +7195,7 @@ team:
                 # Process is still running and we have a session - reuse it
                 process = self._claude_process
                 reuse_session = True
-                self.call_from_thread(
-                    self._show_thinking_line, "🔄 Continuing conversation...", log
-                )
+                self._call_ui(self._show_thinking_line, "🔄 Continuing conversation...", log)
             else:
                 # Start new process
                 cmd = ["claude-code-acp"]
@@ -7005,13 +7216,11 @@ team:
             self._agent_process = process
 
             # Stop thinking, start streaming animation
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._start_stream_animation, log)
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._start_stream_animation, log)
 
             # Show header
-            self.call_from_thread(
-                self._show_agent_header_with_model, display_name, model_display, log
-            )
+            self._call_ui(self._show_agent_header_with_model, display_name, model_display, log)
 
             # Collect output
             text_parts = []
@@ -7042,7 +7251,7 @@ team:
                     process.stdin.write(json.dumps(request) + "\n")
                     process.stdin.flush()
                 except Exception as e:
-                    self.call_from_thread(self._show_thinking_line, f"⚠️ Send error: {e}", log)
+                    self._call_ui(self._show_thinking_line, f"⚠️ Send error: {e}", log)
                 return request_id
 
             def send_response(req_id: int, result: dict):
@@ -7059,7 +7268,7 @@ team:
                     pass
 
             # Step 1: Initialize the protocol
-            self.call_from_thread(self._show_thinking_line, "🔌 Initializing ACP protocol...", log)
+            self._call_ui(self._show_thinking_line, "🔌 Initializing ACP protocol...", log)
             send_request(
                 "initialize",
                 {
@@ -7085,7 +7294,7 @@ team:
             while True:
                 if self._cancel_requested:
                     process.terminate()
-                    self.call_from_thread(log.add_info, "🛑 Agent operation cancelled")
+                    self._call_ui(log.add_info, "🛑 Agent operation cancelled")
                     break
 
                 # Read a line from stdout
@@ -7106,7 +7315,7 @@ team:
                     except json.JSONDecodeError:
                         # Not JSON - might be debug output
                         if line and not line.startswith("Loaded"):
-                            self.call_from_thread(self._show_thinking_line, f"📋 {line}", log)
+                            self._call_ui(self._show_thinking_line, f"📋 {line}", log)
                         continue
 
                     # Handle response to our request
@@ -7116,7 +7325,7 @@ team:
                         if "error" in msg:
                             error = msg["error"]
                             error_msg = error.get("message", "Unknown error")
-                            self.call_from_thread(log.add_error, f"❌ ACP Error: {error_msg}")
+                            self._call_ui(log.add_error, f"❌ ACP Error: {error_msg}")
                             break
 
                         result = msg.get("result", {})
@@ -7126,7 +7335,7 @@ team:
                             initialized = True
                             agent_info = result.get("agentInfo", {})
                             agent_name = agent_info.get("title", "Claude Code")
-                            self.call_from_thread(
+                            self._call_ui(
                                 self._show_thinking_line, f"✅ Connected to {agent_name}", log
                             )
 
@@ -7153,15 +7362,13 @@ team:
                                     m.get("name", m.get("modelId", ""))
                                     for m in available_models[:3]
                                 ]
-                                self.call_from_thread(
+                                self._call_ui(
                                     self._show_thinking_line,
                                     f"📊 Models: {', '.join(model_names)}",
                                     log,
                                 )
 
-                            self.call_from_thread(
-                                self._show_thinking_line, f"🚀 Session started", log
-                            )
+                            self._call_ui(self._show_thinking_line, f"🚀 Session started", log)
 
                             # Step 3: Send the prompt
                             send_request(
@@ -7177,7 +7384,7 @@ team:
                         # Handle prompt response (completion)
                         if prompt_sent:
                             stop_reason = result.get("stopReason", "end_turn")
-                            self.call_from_thread(
+                            self._call_ui(
                                 self._show_thinking_line, f"✅ Completed ({stop_reason})", log
                             )
                             break
@@ -7199,18 +7406,14 @@ team:
                                 if text:
                                     text_parts.append(text)
                                     # Show full text, no truncation
-                                    self.call_from_thread(
-                                        self._show_thinking_line, f"💬 {text}", log
-                                    )
+                                    self._call_ui(self._show_thinking_line, f"💬 {text}", log)
 
                             elif update_type == "agent_thought_chunk":
                                 content = update.get("content", {})
                                 text = content.get("text", "")
                                 if text:
                                     # Show full thinking text, no truncation
-                                    self.call_from_thread(
-                                        self._show_thinking_line, f"🧠 {text}", log
-                                    )
+                                    self._call_ui(self._show_thinking_line, f"🧠 {text}", log)
 
                             elif update_type == "tool_call":
                                 tool_id = update.get("toolCallId", "")
@@ -7237,7 +7440,7 @@ team:
                                             files_read.append(file_path)
 
                                 msg_text = self._format_tool_message_rich(title, raw_input)
-                                self.call_from_thread(self._show_thinking_line, msg_text, log)
+                                self._call_ui(self._show_thinking_line, msg_text, log)
 
                             elif update_type == "tool_call_update":
                                 tool_id = update.get("toolCallId", "")
@@ -7250,13 +7453,13 @@ team:
                                     if output:
                                         output_str = str(output)
                                         # Show full output, no truncation
-                                        self.call_from_thread(
+                                        self._call_ui(
                                             self._show_thinking_line,
                                             f"✅ {tool_title}: {output_str}",
                                             log,
                                         )
                                     else:
-                                        self.call_from_thread(
+                                        self._call_ui(
                                             self._show_thinking_line,
                                             f"✅ {tool_title} completed",
                                             log,
@@ -7264,7 +7467,7 @@ team:
                                 elif status == "failed":
                                     # Show full error message, no truncation
                                     error_msg = str(output) if output else "failed"
-                                    self.call_from_thread(
+                                    self._call_ui(
                                         self._show_thinking_line,
                                         f"❌ {tool_title} failed: {error_msg}",
                                         log,
@@ -7273,7 +7476,7 @@ team:
                             elif update_type == "plan":
                                 entries = update.get("entries", [])
                                 if entries:
-                                    self.call_from_thread(
+                                    self._call_ui(
                                         self._show_thinking_line,
                                         f"📋 Plan: {len(entries)} tasks",
                                         log,
@@ -7289,7 +7492,7 @@ team:
                             # Handle based on approval mode
                             if self.approval_mode == "deny":
                                 # Reject
-                                self.call_from_thread(
+                                self._call_ui(
                                     self._show_thinking_line,
                                     f"🔴 BLOCKED: {tool_name} (DENY mode)",
                                     log,
@@ -7322,7 +7525,7 @@ team:
                                         }
                                     },
                                 )
-                                self.call_from_thread(
+                                self._call_ui(
                                     self._show_thinking_line, f"✅ Auto-allowed: {tool_name}", log
                                 )
                             else:
@@ -7331,7 +7534,7 @@ team:
                                     tool_name, tool_input
                                 )
                                 if needs_permission:
-                                    self.call_from_thread(
+                                    self._call_ui(
                                         self._show_permission_prompt, tool_name, tool_input, log
                                     )
                                     self._permission_pending = True
@@ -7365,7 +7568,7 @@ team:
                                                 }
                                             },
                                         )
-                                        self.call_from_thread(log.add_info, f"Denied: {tool_name}")
+                                        self._call_ui(log.add_info, f"Denied: {tool_name}")
                                     else:
                                         allow_option = next(
                                             (o for o in options if o.get("kind") == "allow_once"),
@@ -7380,14 +7583,14 @@ team:
                                                 }
                                             },
                                         )
-                                        self.call_from_thread(
+                                        self._call_ui(
                                             self._show_thinking_line,
                                             f"✅ Allowed: {tool_name}",
                                             log,
                                         )
                                         if self._permission_response == "allow_all":
                                             self.approval_mode = "auto"
-                                            self.call_from_thread(self._sync_approval_mode)
+                                            self._call_ui(self._sync_approval_mode)
                                 else:
                                     # Auto-allow safe operations
                                     allow_option = next(
@@ -7452,14 +7655,14 @@ team:
                                 send_response(req_id, {})
 
                 except Exception as e:
-                    self.call_from_thread(self._show_thinking_line, f"⚠️ Read error: {e}", log)
+                    self._call_ui(self._show_thinking_line, f"⚠️ Read error: {e}", log)
                     break
 
             # Cleanup terminals
             self._cleanup_terminals(terminals)
 
             self._agent_process = None
-            self.call_from_thread(self._stop_stream_animation)
+            self._call_ui(self._stop_stream_animation)
 
             process.terminate()
             try:
@@ -7486,29 +7689,25 @@ team:
             if text_parts:
                 response_text = "".join(text_parts)
                 if response_text.strip():
-                    self.call_from_thread(
+                    self._call_ui(
                         self._show_final_outcome, response_text, display_name, action_summary, log
                     )
                 else:
-                    self.call_from_thread(
-                        self._show_completion_summary, display_name, action_summary, log
-                    )
+                    self._call_ui(self._show_completion_summary, display_name, action_summary, log)
             elif not self._cancel_requested:
-                self.call_from_thread(
-                    self._show_completion_summary, display_name, action_summary, log
-                )
+                self._call_ui(self._show_completion_summary, display_name, action_summary, log)
 
         except FileNotFoundError:
             self._agent_process = None
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._stop_stream_animation)
-            self.call_from_thread(log.add_error, "❌ claude-code-acp not found. Install it first:")
-            self.call_from_thread(log.add_info, "  npm install -g @zed-industries/claude-code-acp")
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._stop_stream_animation)
+            self._call_ui(log.add_error, "❌ claude-code-acp not found. Install it first:")
+            self._call_ui(log.add_info, "  npm install -g @zed-industries/claude-code-acp")
         except Exception as e:
             self._agent_process = None
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._stop_stream_animation)
-            self.call_from_thread(log.add_error, f"❌ Error: {str(e)}")
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._stop_stream_animation)
+            self._call_ui(log.add_error, f"❌ Error: {str(e)}")
 
     def _run_codex_acp(
         self,
@@ -7542,15 +7741,13 @@ team:
                 self.approval_mode, "🟡 ASK"
             )
             session_type = "new session" if self._is_first_message else "continuing session"
-            self.call_from_thread(
+            self._call_ui(
                 log.add_info, f"Using model: {model_display} | Mode: {mode_label} ({session_type})"
             )
 
             # Show persona info if available
             if persona_context and persona_context.is_valid:
-                self.call_from_thread(
-                    log.add_info, f"🎭 Persona active: {persona_context.role_name}"
-                )
+                self._call_ui(log.add_info, f"🎭 Persona active: {persona_context.role_name}")
 
             # Build environment - need OPENAI_API_KEY or CODEX_API_KEY
             env = {
@@ -7560,12 +7757,12 @@ team:
 
             # Check for API key
             if "OPENAI_API_KEY" not in env and "CODEX_API_KEY" not in env:
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(
+                self._call_ui(self._stop_thinking)
+                self._call_ui(
                     log.add_error, "❌ OPENAI_API_KEY or CODEX_API_KEY not set. Export one first:"
                 )
-                self.call_from_thread(log.add_info, "  export OPENAI_API_KEY=sk-...")
-                self.call_from_thread(log.add_info, "  or export CODEX_API_KEY=sk-...")
+                self._call_ui(log.add_info, "  export OPENAI_API_KEY=sk-...")
+                self._call_ui(log.add_info, "  or export CODEX_API_KEY=sk-...")
                 return
 
             # Start process with bidirectional communication
@@ -7584,13 +7781,11 @@ team:
             self._agent_process = process
 
             # Stop thinking, start streaming animation
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._start_stream_animation, log)
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._start_stream_animation, log)
 
             # Show header
-            self.call_from_thread(
-                self._show_agent_header_with_model, display_name, model_display, log
-            )
+            self._call_ui(self._show_agent_header_with_model, display_name, model_display, log)
 
             # Collect output
             text_parts = []
@@ -7620,7 +7815,7 @@ team:
                     process.stdin.write(json.dumps(request) + "\n")
                     process.stdin.flush()
                 except Exception as e:
-                    self.call_from_thread(self._show_thinking_line, f"⚠️ Send error: {e}", log)
+                    self._call_ui(self._show_thinking_line, f"⚠️ Send error: {e}", log)
                 return request_id
 
             def send_response(req_id: int, result: dict):
@@ -7637,7 +7832,7 @@ team:
                     pass
 
             # Step 1: Initialize the protocol
-            self.call_from_thread(self._show_thinking_line, "🔌 Initializing ACP protocol...", log)
+            self._call_ui(self._show_thinking_line, "🔌 Initializing ACP protocol...", log)
             send_request(
                 "initialize",
                 {
@@ -7663,7 +7858,7 @@ team:
             while True:
                 if self._cancel_requested:
                     process.terminate()
-                    self.call_from_thread(log.add_info, "🛑 Agent operation cancelled")
+                    self._call_ui(log.add_info, "🛑 Agent operation cancelled")
                     break
 
                 # Read a line from stdout
@@ -7684,7 +7879,7 @@ team:
                     except json.JSONDecodeError:
                         # Not JSON - might be debug output
                         if line and not line.startswith("Loaded"):
-                            self.call_from_thread(self._show_thinking_line, f"📋 {line}", log)
+                            self._call_ui(self._show_thinking_line, f"📋 {line}", log)
                         continue
 
                     # Handle response to our request
@@ -7694,7 +7889,7 @@ team:
                         if "error" in msg:
                             error = msg["error"]
                             error_msg = error.get("message", "Unknown error")
-                            self.call_from_thread(log.add_error, f"❌ ACP Error: {error_msg}")
+                            self._call_ui(log.add_error, f"❌ ACP Error: {error_msg}")
                             break
 
                         result = msg.get("result", {})
@@ -7704,7 +7899,7 @@ team:
                             initialized = True
                             agent_info = result.get("agentInfo", {})
                             agent_name = agent_info.get("title", "Codex CLI")
-                            self.call_from_thread(
+                            self._call_ui(
                                 self._show_thinking_line, f"✅ Connected to {agent_name}", log
                             )
 
@@ -7731,7 +7926,7 @@ team:
                                     m.get("name", m.get("modelId", ""))
                                     for m in available_models[:3]
                                 ]
-                                self.call_from_thread(
+                                self._call_ui(
                                     self._show_thinking_line,
                                     f"📊 Models: {', '.join(model_names)}",
                                     log,
@@ -7752,13 +7947,11 @@ team:
                                         "modelId": model_id,
                                     },
                                 )
-                                self.call_from_thread(
+                                self._call_ui(
                                     self._show_thinking_line, f"🎯 Setting model: {model_id}", log
                                 )
 
-                            self.call_from_thread(
-                                self._show_thinking_line, f"🚀 Session started", log
-                            )
+                            self._call_ui(self._show_thinking_line, f"🚀 Session started", log)
 
                             # Step 3: Send the prompt
                             send_request(
@@ -7774,7 +7967,7 @@ team:
                         # Handle prompt response (completion)
                         if prompt_sent:
                             stop_reason = result.get("stopReason", "end_turn")
-                            self.call_from_thread(
+                            self._call_ui(
                                 self._show_thinking_line, f"✅ Completed ({stop_reason})", log
                             )
                             break
@@ -7796,18 +7989,14 @@ team:
                                 if text:
                                     text_parts.append(text)
                                     # Show full text, no truncation
-                                    self.call_from_thread(
-                                        self._show_thinking_line, f"💬 {text}", log
-                                    )
+                                    self._call_ui(self._show_thinking_line, f"💬 {text}", log)
 
                             elif update_type == "agent_thought_chunk":
                                 content = update.get("content", {})
                                 text = content.get("text", "")
                                 if text:
                                     # Show full thinking text, no truncation
-                                    self.call_from_thread(
-                                        self._show_thinking_line, f"🧠 {text}", log
-                                    )
+                                    self._call_ui(self._show_thinking_line, f"🧠 {text}", log)
 
                             elif update_type == "tool_call":
                                 tool_id = update.get("toolCallId", "")
@@ -7834,7 +8023,7 @@ team:
                                             files_read.append(file_path)
 
                                 msg_text = self._format_tool_message_rich(title, raw_input)
-                                self.call_from_thread(self._show_thinking_line, msg_text, log)
+                                self._call_ui(self._show_thinking_line, msg_text, log)
 
                             elif update_type == "tool_call_update":
                                 tool_id = update.get("toolCallId", "")
@@ -7847,13 +8036,13 @@ team:
                                     if output:
                                         output_str = str(output)
                                         # Show full output, no truncation
-                                        self.call_from_thread(
+                                        self._call_ui(
                                             self._show_thinking_line,
                                             f"✅ {tool_title}: {output_str}",
                                             log,
                                         )
                                     else:
-                                        self.call_from_thread(
+                                        self._call_ui(
                                             self._show_thinking_line,
                                             f"✅ {tool_title} completed",
                                             log,
@@ -7861,7 +8050,7 @@ team:
                                 elif status == "failed":
                                     # Show full error message, no truncation
                                     error_msg = str(output) if output else "failed"
-                                    self.call_from_thread(
+                                    self._call_ui(
                                         self._show_thinking_line,
                                         f"❌ {tool_title} failed: {error_msg}",
                                         log,
@@ -7870,7 +8059,7 @@ team:
                             elif update_type == "plan":
                                 entries = update.get("entries", [])
                                 if entries:
-                                    self.call_from_thread(
+                                    self._call_ui(
                                         self._show_thinking_line,
                                         f"📋 Plan: {len(entries)} tasks",
                                         log,
@@ -7886,7 +8075,7 @@ team:
                             # Handle based on approval mode
                             if self.approval_mode == "deny":
                                 # Reject
-                                self.call_from_thread(
+                                self._call_ui(
                                     self._show_thinking_line,
                                     f"🔴 BLOCKED: {tool_name} (DENY mode)",
                                     log,
@@ -7919,7 +8108,7 @@ team:
                                         }
                                     },
                                 )
-                                self.call_from_thread(
+                                self._call_ui(
                                     self._show_thinking_line, f"✅ Auto-allowed: {tool_name}", log
                                 )
                             else:
@@ -7928,7 +8117,7 @@ team:
                                     tool_name, tool_input
                                 )
                                 if needs_permission:
-                                    self.call_from_thread(
+                                    self._call_ui(
                                         self._show_permission_prompt, tool_name, tool_input, log
                                     )
                                     self._permission_pending = True
@@ -7962,7 +8151,7 @@ team:
                                                 }
                                             },
                                         )
-                                        self.call_from_thread(log.add_info, f"Denied: {tool_name}")
+                                        self._call_ui(log.add_info, f"Denied: {tool_name}")
                                     else:
                                         allow_option = next(
                                             (o for o in options if o.get("kind") == "allow_once"),
@@ -7977,14 +8166,14 @@ team:
                                                 }
                                             },
                                         )
-                                        self.call_from_thread(
+                                        self._call_ui(
                                             self._show_thinking_line,
                                             f"✅ Allowed: {tool_name}",
                                             log,
                                         )
                                         if self._permission_response == "allow_all":
                                             self.approval_mode = "auto"
-                                            self.call_from_thread(self._sync_approval_mode)
+                                            self._call_ui(self._sync_approval_mode)
                                 else:
                                     # Auto-allow safe operations
                                     allow_option = next(
@@ -8049,14 +8238,14 @@ team:
                                 send_response(req_id, {})
 
                 except Exception as e:
-                    self.call_from_thread(self._show_thinking_line, f"⚠️ Read error: {e}", log)
+                    self._call_ui(self._show_thinking_line, f"⚠️ Read error: {e}", log)
                     break
 
             # Cleanup terminals
             self._cleanup_terminals(terminals)
 
             self._agent_process = None
-            self.call_from_thread(self._stop_stream_animation)
+            self._call_ui(self._stop_stream_animation)
 
             process.terminate()
             try:
@@ -8083,30 +8272,26 @@ team:
             if text_parts:
                 response_text = "".join(text_parts)
                 if response_text.strip():
-                    self.call_from_thread(
+                    self._call_ui(
                         self._show_final_outcome, response_text, display_name, action_summary, log
                     )
                 else:
-                    self.call_from_thread(
-                        self._show_completion_summary, display_name, action_summary, log
-                    )
+                    self._call_ui(self._show_completion_summary, display_name, action_summary, log)
             elif not self._cancel_requested:
-                self.call_from_thread(
-                    self._show_completion_summary, display_name, action_summary, log
-                )
+                self._call_ui(self._show_completion_summary, display_name, action_summary, log)
 
         except FileNotFoundError:
             self._agent_process = None
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._stop_stream_animation)
-            self.call_from_thread(log.add_error, "❌ codex-acp not found. Install it first:")
-            self.call_from_thread(log.add_info, "  npm install -g @openai/codex")
-            self.call_from_thread(log.add_info, "  or npx @openai/codex-acp")
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._stop_stream_animation)
+            self._call_ui(log.add_error, "❌ codex-acp not found. Install it first:")
+            self._call_ui(log.add_info, "  npm install -g @openai/codex")
+            self._call_ui(log.add_info, "  or npx @openai/codex-acp")
         except Exception as e:
             self._agent_process = None
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._stop_stream_animation)
-            self.call_from_thread(log.add_error, f"❌ Error: {str(e)}")
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._stop_stream_animation)
+            self._call_ui(log.add_error, f"❌ Error: {str(e)}")
 
     def _run_openhands_acp(
         self,
@@ -8140,15 +8325,13 @@ team:
                 self.approval_mode, "🟡 ASK"
             )
             session_type = "new session" if self._is_first_message else "continuing session"
-            self.call_from_thread(
+            self._call_ui(
                 log.add_info, f"Using model: {model_display} | Mode: {mode_label} ({session_type})"
             )
 
             # Show persona info if available
             if persona_context and persona_context.is_valid:
-                self.call_from_thread(
-                    log.add_info, f"🎭 Persona active: {persona_context.role_name}"
-                )
+                self._call_ui(log.add_info, f"🎭 Persona active: {persona_context.role_name}")
 
             # Build environment
             env = {
@@ -8172,13 +8355,11 @@ team:
             self._agent_process = process
 
             # Stop thinking, start streaming animation
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._start_stream_animation, log)
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._start_stream_animation, log)
 
             # Show header
-            self.call_from_thread(
-                self._show_agent_header_with_model, display_name, model_display, log
-            )
+            self._call_ui(self._show_agent_header_with_model, display_name, model_display, log)
 
             # Collect output
             text_parts = []
@@ -8208,7 +8389,7 @@ team:
                     process.stdin.write(json.dumps(request) + "\n")
                     process.stdin.flush()
                 except Exception as e:
-                    self.call_from_thread(self._show_thinking_line, f"⚠️ Send error: {e}", log)
+                    self._call_ui(self._show_thinking_line, f"⚠️ Send error: {e}", log)
                 return request_id
 
             def send_response(req_id: int, result: dict):
@@ -8225,7 +8406,7 @@ team:
                     pass
 
             # Step 1: Initialize the protocol
-            self.call_from_thread(self._show_thinking_line, "🔌 Initializing ACP protocol...", log)
+            self._call_ui(self._show_thinking_line, "🔌 Initializing ACP protocol...", log)
             send_request(
                 "initialize",
                 {
@@ -8251,7 +8432,7 @@ team:
             while True:
                 if self._cancel_requested:
                     process.terminate()
-                    self.call_from_thread(log.add_info, "🛑 Agent operation cancelled")
+                    self._call_ui(log.add_info, "🛑 Agent operation cancelled")
                     break
 
                 # Read a line from stdout
@@ -8272,7 +8453,7 @@ team:
                     except json.JSONDecodeError:
                         # Not JSON - might be debug output
                         if line and not line.startswith("Loaded"):
-                            self.call_from_thread(self._show_thinking_line, f"📋 {line}", log)
+                            self._call_ui(self._show_thinking_line, f"📋 {line}", log)
                         continue
 
                     # Handle response to our request
@@ -8282,7 +8463,7 @@ team:
                         if "error" in msg:
                             error = msg["error"]
                             error_msg = error.get("message", "Unknown error")
-                            self.call_from_thread(log.add_error, f"❌ ACP Error: {error_msg}")
+                            self._call_ui(log.add_error, f"❌ ACP Error: {error_msg}")
                             break
 
                         result = msg.get("result", {})
@@ -8292,7 +8473,7 @@ team:
                             initialized = True
                             agent_info = result.get("agentInfo", {})
                             agent_name = agent_info.get("title", "OpenHands")
-                            self.call_from_thread(
+                            self._call_ui(
                                 self._show_thinking_line, f"✅ Connected to {agent_name}", log
                             )
 
@@ -8319,15 +8500,13 @@ team:
                                     m.get("name", m.get("modelId", ""))
                                     for m in available_models[:3]
                                 ]
-                                self.call_from_thread(
+                                self._call_ui(
                                     self._show_thinking_line,
                                     f"📊 Models: {', '.join(model_names)}",
                                     log,
                                 )
 
-                            self.call_from_thread(
-                                self._show_thinking_line, f"🚀 Session started", log
-                            )
+                            self._call_ui(self._show_thinking_line, f"🚀 Session started", log)
 
                             # Step 3: Send the prompt
                             send_request(
@@ -8343,7 +8522,7 @@ team:
                         # Handle prompt response (completion)
                         if prompt_sent:
                             stop_reason = result.get("stopReason", "end_turn")
-                            self.call_from_thread(
+                            self._call_ui(
                                 self._show_thinking_line, f"✅ Completed ({stop_reason})", log
                             )
                             break
@@ -8361,7 +8540,7 @@ team:
                             if oh_metrics := field_meta.get("openhands.dev/metrics"):
                                 status_line = oh_metrics.get("status_line", "")
                                 if status_line:
-                                    self.call_from_thread(
+                                    self._call_ui(
                                         self._show_thinking_line, f"📊 {status_line}", log
                                     )
 
@@ -8376,18 +8555,14 @@ team:
                                 if text:
                                     text_parts.append(text)
                                     # Show full text, no truncation
-                                    self.call_from_thread(
-                                        self._show_thinking_line, f"💬 {text}", log
-                                    )
+                                    self._call_ui(self._show_thinking_line, f"💬 {text}", log)
 
                             elif update_type == "agent_thought_chunk":
                                 content = update.get("content", {})
                                 text = content.get("text", "")
                                 if text:
                                     # Show full thinking text, no truncation
-                                    self.call_from_thread(
-                                        self._show_thinking_line, f"🧠 {text}", log
-                                    )
+                                    self._call_ui(self._show_thinking_line, f"🧠 {text}", log)
 
                             elif update_type == "tool_call":
                                 tool_id = update.get("toolCallId", "")
@@ -8414,7 +8589,7 @@ team:
                                             files_read.append(file_path)
 
                                 msg_text = self._format_tool_message_rich(title, raw_input)
-                                self.call_from_thread(self._show_thinking_line, msg_text, log)
+                                self._call_ui(self._show_thinking_line, msg_text, log)
 
                             elif update_type == "tool_call_update":
                                 tool_id = update.get("toolCallId", "")
@@ -8427,13 +8602,13 @@ team:
                                     if output:
                                         output_str = str(output)
                                         # Show full output, no truncation
-                                        self.call_from_thread(
+                                        self._call_ui(
                                             self._show_thinking_line,
                                             f"✅ {tool_title}: {output_str}",
                                             log,
                                         )
                                     else:
-                                        self.call_from_thread(
+                                        self._call_ui(
                                             self._show_thinking_line,
                                             f"✅ {tool_title} completed",
                                             log,
@@ -8441,7 +8616,7 @@ team:
                                 elif status == "failed":
                                     # Show full error message, no truncation
                                     error_msg = str(output) if output else "failed"
-                                    self.call_from_thread(
+                                    self._call_ui(
                                         self._show_thinking_line,
                                         f"❌ {tool_title} failed: {error_msg}",
                                         log,
@@ -8450,7 +8625,7 @@ team:
                             elif update_type == "plan":
                                 entries = update.get("entries", [])
                                 if entries:
-                                    self.call_from_thread(
+                                    self._call_ui(
                                         self._show_thinking_line,
                                         f"📋 Plan: {len(entries)} tasks",
                                         log,
@@ -8466,7 +8641,7 @@ team:
                             # Handle based on approval mode
                             if self.approval_mode == "deny":
                                 # Reject
-                                self.call_from_thread(
+                                self._call_ui(
                                     self._show_thinking_line,
                                     f"🔴 BLOCKED: {tool_name} (DENY mode)",
                                     log,
@@ -8499,7 +8674,7 @@ team:
                                         }
                                     },
                                 )
-                                self.call_from_thread(
+                                self._call_ui(
                                     self._show_thinking_line, f"✅ Auto-allowed: {tool_name}", log
                                 )
                             else:
@@ -8508,7 +8683,7 @@ team:
                                     tool_name, tool_input
                                 )
                                 if needs_permission:
-                                    self.call_from_thread(
+                                    self._call_ui(
                                         self._show_permission_prompt, tool_name, tool_input, log
                                     )
                                     self._permission_pending = True
@@ -8542,7 +8717,7 @@ team:
                                                 }
                                             },
                                         )
-                                        self.call_from_thread(log.add_info, f"Denied: {tool_name}")
+                                        self._call_ui(log.add_info, f"Denied: {tool_name}")
                                     else:
                                         allow_option = next(
                                             (o for o in options if o.get("kind") == "allow_once"),
@@ -8557,14 +8732,14 @@ team:
                                                 }
                                             },
                                         )
-                                        self.call_from_thread(
+                                        self._call_ui(
                                             self._show_thinking_line,
                                             f"✅ Allowed: {tool_name}",
                                             log,
                                         )
                                         if self._permission_response == "allow_all":
                                             self.approval_mode = "auto"
-                                            self.call_from_thread(self._sync_approval_mode)
+                                            self._call_ui(self._sync_approval_mode)
                                 else:
                                     # Auto-allow safe operations
                                     allow_option = next(
@@ -8629,14 +8804,14 @@ team:
                                 send_response(req_id, {})
 
                 except Exception as e:
-                    self.call_from_thread(self._show_thinking_line, f"⚠️ Read error: {e}", log)
+                    self._call_ui(self._show_thinking_line, f"⚠️ Read error: {e}", log)
                     break
 
             # Cleanup terminals
             self._cleanup_terminals(terminals)
 
             self._agent_process = None
-            self.call_from_thread(self._stop_stream_animation)
+            self._call_ui(self._stop_stream_animation)
 
             process.terminate()
             try:
@@ -8663,30 +8838,26 @@ team:
             if text_parts:
                 response_text = "".join(text_parts)
                 if response_text.strip():
-                    self.call_from_thread(
+                    self._call_ui(
                         self._show_final_outcome, response_text, display_name, action_summary, log
                     )
                 else:
-                    self.call_from_thread(
-                        self._show_completion_summary, display_name, action_summary, log
-                    )
+                    self._call_ui(self._show_completion_summary, display_name, action_summary, log)
             elif not self._cancel_requested:
-                self.call_from_thread(
-                    self._show_completion_summary, display_name, action_summary, log
-                )
+                self._call_ui(self._show_completion_summary, display_name, action_summary, log)
 
         except FileNotFoundError:
             self._agent_process = None
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._stop_stream_animation)
-            self.call_from_thread(log.add_error, "❌ openhands not found. Install it first:")
-            self.call_from_thread(log.add_info, "  uv tool install openhands -U --python 3.12")
-            self.call_from_thread(log.add_info, "  openhands login")
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._stop_stream_animation)
+            self._call_ui(log.add_error, "❌ openhands not found. Install it first:")
+            self._call_ui(log.add_info, "  uv tool install openhands -U --python 3.12")
+            self._call_ui(log.add_info, "  openhands login")
         except Exception as e:
             self._agent_process = None
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._stop_stream_animation)
-            self.call_from_thread(log.add_error, f"❌ Error: {str(e)}")
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._stop_stream_animation)
+            self._call_ui(log.add_error, f"❌ Error: {str(e)}")
 
     # ========================================================================
     # Permission Handling
@@ -9475,7 +9646,7 @@ team:
                 else:
                     # Truncate large lists
                     summary = f"[{len(data)} items] " + str(data[:3])[:-1] + ", ...]"
-                    self.call_from_thread(log.add_tool_call, tool_name, "success", "", "", summary)
+                    self._call_ui(log.add_tool_call, tool_name, "success", "", "", summary)
                 return True
             elif isinstance(data, dict):
                 if len(data) <= 6:
@@ -9483,7 +9654,7 @@ team:
                 else:
                     # Truncate large dicts
                     summary = f"{{... {len(data)} keys ...}}"
-                    self.call_from_thread(log.add_tool_call, tool_name, "success", "", "", summary)
+                    self._call_ui(log.add_tool_call, tool_name, "success", "", "", summary)
                 return True
 
         except (json.JSONDecodeError, TypeError, KeyError):
@@ -9492,7 +9663,7 @@ team:
         # If we got here and it's a long string that looks like data, truncate it
         if len(output_str) > 500:
             summary = output_str[:500] + "... (truncated)"
-            self.call_from_thread(log.add_tool_call, tool_name, "success", "", "", summary)
+            self._call_ui(log.add_tool_call, tool_name, "success", "", "", summary)
             return True
 
         return False
@@ -9517,7 +9688,7 @@ team:
             return
 
         if not data:
-            self.call_from_thread(log.write, Text("  📋 No tasks", style="#71717a"))
+            self._call_ui(log.write, Text("  📋 No tasks", style="#71717a"))
             return
 
         # Count statuses
@@ -9543,7 +9714,7 @@ team:
         header = Text()
         header.append("  📋 ", style="#06b6d4")
         header.append(f"Tasks: {' · '.join(parts) if parts else 'none'}\n", style="#e4e4e7")
-        self.call_from_thread(log.write, header)
+        self._call_ui(log.write, header)
 
         # Task items (limit to 8)
         for item in data[:8]:
@@ -9577,12 +9748,12 @@ team:
             line = Text()
             line.append(f"    {icon} ", style=color)
             line.append(f"{str(title)}\n", style=title_style)
-            self.call_from_thread(log.write, line)
+            self._call_ui(log.write, line)
 
         if len(data) > 8:
             more = Text()
             more.append(f"    ... and {len(data) - 8} more\n", style="#71717a")
-            self.call_from_thread(log.write, more)
+            self._call_ui(log.write, more)
 
     def _display_file_results(self, data: Any, tool_name: str, log: ConversationLog) -> None:
         """Display file search results."""
@@ -9597,14 +9768,14 @@ team:
                 return
 
         if not files:
-            self.call_from_thread(log.write, Text("  🔍 No matches found\n", style="#71717a"))
+            self._call_ui(log.write, Text("  🔍 No matches found\n", style="#71717a"))
             return
 
         # Header
         header = Text()
         header.append("  🔍 ", style="#06b6d4")
         header.append(f"Found {len(files)} file{'s' if len(files) != 1 else ''}\n", style="#e4e4e7")
-        self.call_from_thread(log.write, header)
+        self._call_ui(log.write, header)
 
         # File list (limit to 6)
         for f in files[:6]:
@@ -9628,12 +9799,12 @@ team:
             line = Text()
             line.append(f"    {icon} ", style="#52525b")
             line.append(f"{path_str}\n", style="#06b6d4")
-            self.call_from_thread(log.write, line)
+            self._call_ui(log.write, line)
 
         if len(files) > 6:
             more = Text()
             more.append(f"    ... and {len(files) - 6} more\n", style="#71717a")
-            self.call_from_thread(log.write, more)
+            self._call_ui(log.write, more)
 
     def _display_task_list(self, data: list, log: ConversationLog) -> None:
         """Display Claude Code style task list."""
@@ -9642,7 +9813,7 @@ team:
         header = Text()
         header.append("  📝 ", style="#a855f7")
         header.append(f"{len(data)} task{'s' if len(data) != 1 else ''}\n", style="#e4e4e7")
-        self.call_from_thread(log.write, header)
+        self._call_ui(log.write, header)
 
         for task in data[:5]:
             if not isinstance(task, dict):
@@ -9666,7 +9837,7 @@ team:
             line.append(
                 f"{str(subject)}\n", style="#e4e4e7" if status != "completed" else "#71717a"
             )
-            self.call_from_thread(log.write, line)
+            self._call_ui(log.write, line)
 
     def _display_error_result(self, data: dict, log: ConversationLog) -> None:
         """Display error result."""
@@ -9677,14 +9848,14 @@ team:
         header = Text()
         header.append("  ⚠️ ", style="#ef4444")
         header.append(f"{len(errors)} error{'s' if len(errors) != 1 else ''}\n", style="#ef4444")
-        self.call_from_thread(log.write, header)
+        self._call_ui(log.write, header)
 
         for err in errors[:3]:
             msg = err.get("message", str(err)) if isinstance(err, dict) else str(err)
             line = Text()
             line.append("    ✕ ", style="#ef4444")
             line.append(f"{str(msg)}\n", style="#ef4444")
-            self.call_from_thread(log.write, line)
+            self._call_ui(log.write, line)
 
     def _display_plan(self, data: list, log: ConversationLog) -> None:
         """Display plan steps."""
@@ -9693,7 +9864,7 @@ team:
         header = Text()
         header.append("  📋 ", style="#a855f7")
         header.append("Plan:\n", style="#e4e4e7")
-        self.call_from_thread(log.write, header)
+        self._call_ui(log.write, header)
 
         for i, step in enumerate(data[:5], 1):
             if not isinstance(step, dict):
@@ -9708,7 +9879,7 @@ team:
             line = Text()
             line.append(f"    {icon}. ", style=color)
             line.append(f"{str(desc)}\n", style="#e4e4e7")
-            self.call_from_thread(log.write, line)
+            self._call_ui(log.write, line)
 
     def _display_success_result(self, data: dict, tool_name: str, log: ConversationLog) -> None:
         """Display success/result dict."""
@@ -9728,7 +9899,7 @@ team:
             line.append("  ✕ ", style="#ef4444")
             error = data.get("error", data.get("message", "Failed"))
             line.append(f"{str(error)}\n", style="#ef4444")
-        self.call_from_thread(log.write, line)
+        self._call_ui(log.write, line)
 
     def _display_generic_list(self, data: list, tool_name: str, log: ConversationLog) -> None:
         """Display a generic list."""
@@ -9737,7 +9908,7 @@ team:
         header = Text()
         header.append(f"  ✦ {tool_name}: ", style="#a855f7")
         header.append(f"{len(data)} items\n", style="#e4e4e7")
-        self.call_from_thread(log.write, header)
+        self._call_ui(log.write, header)
 
         for item in data[:5]:
             line = Text()
@@ -9754,12 +9925,12 @@ team:
                 line.append(f"{str(display)}\n", style="#e4e4e7")
             else:
                 line.append(f"{str(item)}\n", style="#e4e4e7")
-            self.call_from_thread(log.write, line)
+            self._call_ui(log.write, line)
 
         if len(data) > 5:
             more = Text()
             more.append(f"    ... and {len(data) - 5} more\n", style="#71717a")
-            self.call_from_thread(log.write, more)
+            self._call_ui(log.write, more)
 
     def _display_generic_dict(self, data: dict, tool_name: str, log: ConversationLog) -> None:
         """Display a generic dict."""
@@ -9772,12 +9943,12 @@ team:
             if len(val_str) > 50:
                 val_str = val_str[:47] + "..."
             line.append(f"{val_str}\n", style="#e4e4e7")
-            self.call_from_thread(log.write, line)
+            self._call_ui(log.write, line)
 
         if len(data) > 4:
             more = Text()
             more.append(f"  ... +{len(data) - 4} more fields\n", style="#71717a")
-            self.call_from_thread(log.write, more)
+            self._call_ui(log.write, more)
 
     def _strip_ansi(self, text: str) -> str:
         """Remove ANSI escape codes from text."""
@@ -10353,7 +10524,7 @@ team:
 
         def save_code_block(match):
             code_blocks.append(match.group(0))
-            return f"__CODE_BLOCK_{len(code_blocks) - 1}__"
+            return f"@@SUPERQODE_CODE_BLOCK_{len(code_blocks) - 1}@@"
 
         text = re.sub(r"```[\w]*\n.*?```", save_code_block, text, flags=re.DOTALL)
 
@@ -10385,7 +10556,7 @@ team:
 
         # Restore code blocks
         for i, block in enumerate(code_blocks):
-            text = text.replace(f"__CODE_BLOCK_{i}__", block)
+            text = text.replace(f"@@SUPERQODE_CODE_BLOCK_{i}@@", block)
 
         return text
 
@@ -10682,15 +10853,8 @@ team:
     def _show_final_outcome(
         self, response_text: str, name: str, summary: dict, log: ConversationLog
     ):
-        """Show final outcome with SuperQode quantum design.
-
-        Clean, minimal, professional - no emoji celebration.
-        Uses crystalline borders and quantum-inspired icons.
-        Now includes file changes section with visual indicators.
-        """
-        from rich.panel import Panel
+        """Show a compact final outcome with the answer first."""
         import re
-        from superqode.widgets.response_changes import render_file_changes_section
 
         # Store the response for :copy command
         log._last_response = response_text
@@ -10703,7 +10867,7 @@ team:
 
         # FALLBACK: Always check git for file changes if files_modified is empty
         # This ensures file changes are detected even if agent tracking missed them
-        if not files_modified:
+        if not files_modified and not summary.get("skip_git_fallback"):
             try:
                 root_path = Path(os.getcwd())
                 git_changes = get_git_changes(root_path)
@@ -10716,137 +10880,35 @@ team:
             except Exception:
                 pass  # If git check fails, continue with empty lists
 
-        # Disable auto-scroll while we write content
         log.auto_scroll = False
-
-        # Clear thinking logs and show fresh outcome
         log.clear()
 
-        # Create enhanced header - SuperQode style with more visual appeal
         header = Text()
         header.append("\n")
+        header.append("  Done", style=f"bold {SQ_COLORS.success}")
+        header.append("  •  ", style=SQ_COLORS.text_muted)
+        header.append(name, style=f"bold {SQ_COLORS.text_primary}")
 
-        # Top decorative border - animated gradient
-        top_border = "═" * 70
-        success_gradient = [
-            SQ_COLORS.success,
-            "#16a34a",
-            "#14b8a6",
-            "#06b6d4",
-            "#0ea5e9",
-            "#3b82f6",
-        ]
-        for i, char in enumerate(top_border):
-            header.append(char, style=success_gradient[i % len(success_gradient)])
-        header.append("\n")
-
-        # Main title section with enhanced styling
-        header.append("  ", style="")
-        header.append("✦ ", style=f"bold {SQ_COLORS.success}")
-        header.append("SUCCESS", style=f"bold {SQ_COLORS.success}")
-        header.append("  │  ", style=SQ_COLORS.border_subtle)
-        header.append(f"{name.upper()}", style=f"bold {SQ_COLORS.text_primary}")
-        header.append(" completed", style=SQ_COLORS.text_muted)
-        header.append("\n\n")
-
-        # Enhanced stats panel with better visual hierarchy
-        stats = Text()
-
-        # Calculate totals for better presentation
         total_additions = sum(d.get("additions", 0) for d in file_diffs.values())
         total_deletions = sum(d.get("deletions", 0) for d in file_diffs.values())
-        net_changes = total_additions - total_deletions
 
-        # Stats header
-        stats.append("  ", style="")
-        stats.append("┌─ ", style=SQ_COLORS.border_subtle)
-        stats.append("Execution Summary", style=f"bold {SQ_COLORS.text_primary}")
-        stats.append(" ─┐\n", style=SQ_COLORS.border_subtle)
-
-        # Performance metrics
-        stats.append("  │ ", style=SQ_COLORS.border_subtle)
-        stats.append("⚡ Performance", style=f"bold {SQ_COLORS.primary_light}")
-        stats.append("  ", style="")
-        if duration < 5:
-            duration_style = SQ_COLORS.success
-            duration_icon = "⚡"
-        elif duration < 15:
-            duration_style = "#fbbf24"
-            duration_icon = "⏱"
-        else:
-            duration_style = "#f97316"
-            duration_icon = "⏳"
-        stats.append(f"{duration_icon} {duration:.2f}s", style=f"bold {duration_style}")
-        stats.append("\n", style="")
-
-        # Tools executed
+        facts = [f"{duration:.1f}s"]
         if tool_count > 0:
-            stats.append("  │ ", style=SQ_COLORS.border_subtle)
-            stats.append("🔧 Tools", style=f"bold {SQ_COLORS.primary_light}")
-            stats.append("  ", style="")
-            stats.append(f"◈ {tool_count} executed", style=SQ_COLORS.text_secondary)
-            if tool_count > 10:
-                stats.append(" (high activity)", style=SQ_COLORS.text_muted)
-            stats.append("\n", style="")
-
-        # Files modified - enhanced
-        if files_modified:
-            stats.append("  │ ", style=SQ_COLORS.border_subtle)
-            stats.append("📝 Files Modified", style=f"bold {SQ_COLORS.success}")
-            stats.append("  ", style="")
-            stats.append(f"↲ {len(files_modified)}", style=f"bold {SQ_COLORS.success}")
-            if total_additions > 0 or total_deletions > 0:
-                stats.append("  (", style=SQ_COLORS.text_muted)
-                if total_additions > 0:
-                    stats.append(f"+{total_additions}", style=f"bold {SQ_COLORS.success}")
-                if total_deletions > 0:
-                    if total_additions > 0:
-                        stats.append(" / ", style=SQ_COLORS.text_muted)
-                    stats.append(f"-{total_deletions}", style=f"bold #ef4444")
-                stats.append(" lines)", style=SQ_COLORS.text_muted)
-            stats.append("\n", style="")
-
-        # Files read
+            facts.append(f"{tool_count} tools")
         if files_read:
-            stats.append("  │ ", style=SQ_COLORS.border_subtle)
-            stats.append("📖 Files Analyzed", style=f"bold {SQ_COLORS.info}")
-            stats.append("  ", style="")
-            stats.append(f"↳ {len(files_read)}", style=f"bold {SQ_COLORS.info}")
-            stats.append("\n", style="")
-
-        # Net impact indicator
-        if files_modified and (total_additions > 0 or total_deletions > 0):
-            stats.append("  │ ", style=SQ_COLORS.border_subtle)
-            stats.append("📊 Net Impact", style=f"bold {SQ_COLORS.primary_light}")
-            stats.append("  ", style="")
-            if net_changes > 0:
-                stats.append(f"+{net_changes} lines added", style=f"bold {SQ_COLORS.success}")
-            elif net_changes < 0:
-                stats.append(f"{net_changes} lines removed", style=f"bold #ef4444")
-            else:
-                stats.append("balanced changes", style=SQ_COLORS.text_muted)
-            stats.append("\n", style="")
-
-        # Close stats panel
-        stats.append("  └", style=SQ_COLORS.border_subtle)
-        stats.append("─" * 65, style=SQ_COLORS.border_subtle)
-        stats.append("┘\n\n", style=SQ_COLORS.border_subtle)
+            facts.append(f"{len(files_read)} read")
+        if files_modified:
+            change_label = f"{len(files_modified)} changed"
+            if total_additions > 0 or total_deletions > 0:
+                change_label += f" (+{total_additions}/-{total_deletions})"
+            facts.append(change_label)
+        header.append("  •  ", style=SQ_COLORS.text_muted)
+        header.append("  •  ".join(facts), style=SQ_COLORS.text_muted)
+        header.append("\n\n")
 
         log.write(header)
-        log.write(stats)
 
-        # Enhanced response section with better visual design
         if response_text.strip():
-            response_header = Text()
-            response_header.append("  ", style="")
-            response_header.append("┌─ ", style=SQ_COLORS.border_subtle)
-            response_header.append("🤖 Agent Response", style=f"bold {SQ_COLORS.text_primary}")
-            response_header.append(" ─", style=SQ_COLORS.border_subtle)
-            response_header.append("─" * 50, style=SQ_COLORS.border_subtle)
-            response_header.append("┐\n", style=SQ_COLORS.border_subtle)
-            log.write(response_header)
-
-            # Clean and render the response
             clean_text = self._strip_markdown(response_text.strip())
             clean_text = re.sub(r"\n{3,}", "\n\n", clean_text)
 
@@ -10854,71 +10916,49 @@ team:
                 self._render_with_code_blocks(response_text.strip(), log)
             else:
                 self._render_plain_text(clean_text, log)
+            log.write(Text("\n"))
 
-            # Close response panel
-            response_footer = Text()
-            response_footer.append("  └", style=SQ_COLORS.border_subtle)
-            response_footer.append("─" * 65, style=SQ_COLORS.border_subtle)
-            response_footer.append("┘\n\n", style=SQ_COLORS.border_subtle)
-            log.write(response_footer)
+        verbose_changes = getattr(log, "tool_output_mode", "normal") == "verbose"
 
-        # NEW: File Changes Section with visual indicators
+        # File Changes Section with visual indicators. Keep normal output compact;
+        # detailed diffs are still available through :diff or :work verbose.
         if files_modified:
-            from superqode.widgets.response_changes import render_file_changes_section
-            from rich.console import Console
-            from io import StringIO
+            if verbose_changes:
+                from superqode.widgets.response_changes import render_file_changes_section
+                from rich.console import Console
+                from io import StringIO
 
-            changes_section = render_file_changes_section(files_modified, file_diffs, max_files=10)
+                changes_section = render_file_changes_section(
+                    files_modified, file_diffs, max_files=10
+                )
 
-            # Render Rich Group to string and write to log
-            console = Console(file=StringIO(), width=120, legacy_windows=False)
-            console.print(changes_section)
-            rendered_text = console.file.getvalue()
-            log.write(rendered_text)
+                # Render Rich Group to string and write to log
+                console = Console(file=StringIO(), width=120, legacy_windows=False)
+                console.print(changes_section)
+                rendered_text = console.file.getvalue()
+                log.write(rendered_text)
+            else:
+                compact = Text()
+                compact.append("  File details hidden. Use ", style=SQ_COLORS.text_muted)
+                compact.append(":work verbose", style=f"bold {SQ_COLORS.info}")
+                compact.append(" or ", style=SQ_COLORS.text_muted)
+                compact.append(":diff", style=f"bold {SQ_COLORS.info}")
+                compact.append(" to inspect changes.\n\n", style=SQ_COLORS.text_muted)
+                log.write(compact)
 
-        # Enhanced footer with better command presentation
         footer = Text()
-        footer.append("\n  ", style="")
-        footer.append("┌─ ", style=SQ_COLORS.border_subtle)
-        footer.append("⚡ Quick Actions", style=f"bold {SQ_COLORS.text_primary}")
-        footer.append(" ─", style=SQ_COLORS.border_subtle)
-        footer.append("─" * 50, style=SQ_COLORS.border_subtle)
-        footer.append("┐\n", style=SQ_COLORS.border_subtle)
-
-        footer.append("  │ ", style=SQ_COLORS.border_subtle)
-        footer.append("📋 ", style=SQ_COLORS.info)
-        footer.append(":sidebar", style=f"bold {SQ_COLORS.info}")
-        footer.append("  ", style="")
-        footer.append("View changes in sidebar", style=SQ_COLORS.text_muted)
-        footer.append("\n", style="")
-
+        footer.append("  Actions: ", style=SQ_COLORS.text_muted)
+        footer.append(":work", style=f"bold {SQ_COLORS.info}")
+        footer.append(" summary", style=SQ_COLORS.text_muted)
         if files_modified:
-            footer.append("  │ ", style=SQ_COLORS.border_subtle)
-            footer.append("🔍 ", style=SQ_COLORS.info)
+            footer.append("  •  ", style=SQ_COLORS.text_muted)
             footer.append(":diff", style=f"bold {SQ_COLORS.info}")
-            footer.append("  ", style="")
-            footer.append("View detailed diffs", style=SQ_COLORS.text_muted)
-            footer.append("\n", style="")
-
-        footer.append("  │ ", style=SQ_COLORS.border_subtle)
-        footer.append("↶ ", style=SQ_COLORS.info)
-        footer.append(":undo", style=f"bold {SQ_COLORS.info}")
-        footer.append("  ", style="")
-        footer.append("or ", style=SQ_COLORS.text_muted)
-        footer.append("[Ctrl+Z]", style=f"bold {SQ_COLORS.primary_light}")
-        footer.append("  ", style="")
-        footer.append("Revert changes", style=SQ_COLORS.text_muted)
-        footer.append("\n", style="")
-
-        footer.append("  └", style=SQ_COLORS.border_subtle)
-        footer.append("─" * 65, style=SQ_COLORS.border_subtle)
-        footer.append("┘\n", style=SQ_COLORS.border_subtle)
-
-        # Bottom decorative border
-        bottom_border = "═" * 70
-        for i, char in enumerate(bottom_border):
-            footer.append(char, style=success_gradient[i % len(success_gradient)])
-        footer.append("\n\n", style="")
+            footer.append(" changes", style=SQ_COLORS.text_muted)
+            footer.append("  •  ", style=SQ_COLORS.text_muted)
+            footer.append(":undo", style=f"bold {SQ_COLORS.info}")
+        footer.append("  •  ", style=SQ_COLORS.text_muted)
+        footer.append(":select response", style=f"bold {SQ_COLORS.info}")
+        footer.append("\n", style=SQ_COLORS.text_muted)
         log.write(footer)
 
         # NEW: Trigger sidebar auto-navigation if files were modified
@@ -10944,7 +10984,7 @@ team:
 
         # FALLBACK: Always check git for file changes if files_modified is empty
         # This ensures file changes are detected even if agent tracking missed them
-        if not files_modified:
+        if not files_modified and not summary.get("skip_git_fallback"):
             try:
                 root_path = Path(os.getcwd())
                 git_changes = get_git_changes(root_path)
@@ -10995,18 +11035,31 @@ team:
         t.append("\n", style="")
         log.write(t)
 
-        # NEW: Show full file changes section if files were modified
+        verbose_changes = getattr(log, "tool_output_mode", "normal") == "verbose"
+
+        # Show full file changes section only in verbose mode.
         if files_modified:
-            from rich.console import Console
-            from io import StringIO
+            if verbose_changes:
+                from rich.console import Console
+                from io import StringIO
 
-            changes_section = render_file_changes_section(files_modified, file_diffs, max_files=10)
+                changes_section = render_file_changes_section(
+                    files_modified, file_diffs, max_files=10
+                )
 
-            # Render Rich Group to string and write to log
-            console = Console(file=StringIO(), width=120, legacy_windows=False)
-            console.print(changes_section)
-            rendered_text = console.file.getvalue()
-            log.write(rendered_text)
+                # Render Rich Group to string and write to log
+                console = Console(file=StringIO(), width=120, legacy_windows=False)
+                console.print(changes_section)
+                rendered_text = console.file.getvalue()
+                log.write(rendered_text)
+            else:
+                compact = Text()
+                compact.append("  File details hidden. Use ", style=SQ_COLORS.text_muted)
+                compact.append(":work verbose", style=f"bold {SQ_COLORS.info}")
+                compact.append(" or ", style=SQ_COLORS.text_muted)
+                compact.append(":diff", style=f"bold {SQ_COLORS.info}")
+                compact.append(" to inspect changes.\n", style=SQ_COLORS.text_muted)
+                log.write(compact)
 
         # NEW: Trigger sidebar auto-navigation if files were modified
         if files_modified:
@@ -11019,7 +11072,7 @@ team:
     def _send_to_role(self, text: str, mode: str, role: str, log: ConversationLog):
         """Send message to role - supports both ACP agents (opencode) and SuperQode agents (with tools)."""
         self._cancel_requested = False
-        self.call_from_thread(self._start_thinking, f"⚡ Running {mode}.{role}...")
+        self._call_ui(self._start_thinking, f"⚡ Running {mode}.{role}...")
 
         try:
             from superqode.config import load_config, resolve_role
@@ -11029,8 +11082,8 @@ team:
             resolved = resolve_role(mode, role, load_config())
 
             if not resolved:
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(log.add_error, f"Role {mode}.{role} not found")
+                self._call_ui(self._stop_thinking)
+                self._call_ui(log.add_error, f"Role {mode}.{role} not found")
                 return
 
             # Handle ACP agents (like opencode)
@@ -11089,11 +11142,11 @@ team:
                     self._send_to_pure_mode(text, log)
                 else:
                     # Not connected yet, try to connect
-                    self.call_from_thread(self._stop_thinking)
-                    self.call_from_thread(
+                    self._call_ui(self._stop_thinking)
+                    self._call_ui(
                         log.add_error, f"Not connected to {resolved.provider}/{resolved.model}"
                     )
-                    self.call_from_thread(
+                    self._call_ui(
                         log.add_info, f"Connecting to {resolved.provider}/{resolved.model}..."
                     )
                     # Store resolved role for persona injection
@@ -11111,16 +11164,16 @@ team:
                     message=text, mode=mode, role=role, resolved=resolved, log=log
                 )
             else:
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(
+                self._call_ui(self._stop_thinking)
+                self._call_ui(
                     log.add_info,
                     f"🚧 Agent for {mode}.{role} not supported yet (agent_type: {resolved.agent_type}, coding_agent: {resolved.coding_agent})",
                 )
         except Exception as e:
             self._agent_process = None
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._stop_stream_animation)
-            self.call_from_thread(log.add_error, str(e))
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._stop_stream_animation)
+            self._call_ui(log.add_error, str(e))
 
     @work(exclusive=True, thread=True)
     async def _run_superqode_agent(
@@ -11133,17 +11186,15 @@ team:
             # Create and initialize agent
             agent = create_unified_agent(resolved)
             if not await agent.initialize():
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(log.add_error, f"Failed to initialize {mode}.{role} agent")
+                self._call_ui(self._stop_thinking)
+                self._call_ui(log.add_error, f"Failed to initialize {mode}.{role} agent")
                 return
 
-            self.call_from_thread(self._stop_thinking)
+            self._call_ui(self._stop_thinking)
 
             # Show agent info
             model_display = f"{resolved.provider}/{resolved.model}"
-            self.call_from_thread(
-                log.add_info, f"🤖 Using {model_display} with full codebase access"
-            )
+            self._call_ui(log.add_info, f"🤖 Using {model_display} with full codebase access")
 
             # Track tool usage for summary
             tool_stats = {"tools_called": 0, "files_analyzed": set(), "tool_names": []}
@@ -11165,22 +11216,20 @@ team:
 
                     # Show progress
                     file_count = len(tool_stats["files_analyzed"])
-                    self.call_from_thread(
+                    self._call_ui(
                         log.add_info,
                         f"🔍 Analyzing... ({tool_stats['tools_called']} tools, {file_count} files)",
                     )
 
                 def on_tool_result(tool_name: str, result):
                     if not result.success:
-                        self.call_from_thread(
-                            log.add_info, f"⚠️  {tool_name} completed with warnings"
-                        )
+                        self._call_ui(log.add_info, f"⚠️  {tool_name} completed with warnings")
 
                 async def on_thinking(text: str):
                     """Handle thinking logs from BYOK models."""
                     # Display thinking logs in the conversation log
                     # Format similar to ACP thinking logs
-                    self.call_from_thread(log.add_info, f"💭 {text}")
+                    self._call_ui(log.add_info, f"💭 {text}")
 
                 agent._agent_loop.on_tool_call = on_tool_call
                 agent._agent_loop.on_tool_result = on_tool_result
@@ -11201,7 +11250,7 @@ team:
                                 nonlocal had_content
                                 had_content = True
                                 full_response += chunk
-                                self.call_from_thread(log.add_assistant, chunk)
+                                self._call_ui(log.add_assistant, chunk)
 
                     await asyncio.wait_for(stream_with_timeout(), timeout=120.0)
                 except asyncio.TimeoutError:
@@ -11209,18 +11258,18 @@ team:
                     error_msg = (
                         f"⏰ Streaming timed out for {agent.provider}/{agent.model} after 2 minutes"
                     )
-                    self.call_from_thread(log.add_error, error_msg)
+                    self._call_ui(log.add_error, error_msg)
 
                 # If no content was streamed but tools were used, prompt for summary
                 # (only if not timed out)
                 if not had_content and not streaming_timed_out and tool_stats["tools_called"] > 0:
-                    self.call_from_thread(log.add_info, "💭 Generating analysis summary...")
+                    self._call_ui(log.add_info, "💭 Generating analysis summary...")
                     # The agent should continue and provide a summary
                     # Wait a bit and check if we get more content
                     await asyncio.sleep(0.5)
 
                 # Show completion summary
-                self.call_from_thread(self._stop_stream_animation)
+                self._call_ui(self._stop_stream_animation)
 
                 if tool_stats["tools_called"] > 0 and not streaming_timed_out:
                     files_count = len(tool_stats["files_analyzed"])
@@ -11229,21 +11278,21 @@ team:
                         f"{tool_stats['tools_called']} tools executed, "
                         f"{files_count} files analyzed"
                     )
-                    self.call_from_thread(log.add_info, summary)
+                    self._call_ui(log.add_info, summary)
 
                 if (
                     not full_response.strip()
                     and tool_stats["tools_called"] > 0
                     and not streaming_timed_out
                 ):
-                    self.call_from_thread(
+                    self._call_ui(
                         log.add_error,
                         "⚠️  Agent executed tools but did not provide a summary. "
                         "Please review the tool outputs above.",
                     )
 
                 # Reset mode badge to HOME after QE testing completes
-                self.call_from_thread(self._reset_mode_badge_after_qe)
+                self._call_ui(self._reset_mode_badge_after_qe)
             else:
                 # Fallback to non-streaming with timeout to prevent hanging
                 try:
@@ -11257,20 +11306,20 @@ team:
                 except asyncio.TimeoutError:
                     response = None
                     error_msg = f"⏰ Model {agent.provider}/{agent.model} timed out after 2 minutes"
-                    self.call_from_thread(log.add_error, error_msg)
+                    self._call_ui(log.add_error, error_msg)
 
-                self.call_from_thread(self._stop_thinking)
-                self.call_from_thread(self._stop_stream_animation)
+                self._call_ui(self._stop_thinking)
+                self._call_ui(self._stop_stream_animation)
 
                 if response and response.content and response.content.strip():
-                    self.call_from_thread(log.add_assistant, response.content)
+                    self._call_ui(log.add_assistant, response.content)
 
                     # Show stats from metadata
                     if response.metadata:
                         tool_calls = response.metadata.get("tool_calls_made", 0)
                         if tool_calls > 0:
                             summary = f"\n✅ Analysis Complete: {tool_calls} tools executed"
-                            self.call_from_thread(log.add_info, summary)
+                            self._call_ui(log.add_info, summary)
                 elif response is None:
                     # Already handled timeout error above
                     pass
@@ -11283,10 +11332,10 @@ team:
                         error_msg = "Agent returned empty response (whitespace only)"
                     else:
                         error_msg = "No response from agent"
-                    self.call_from_thread(log.add_error, error_msg)
+                    self._call_ui(log.add_error, error_msg)
 
                 # Reset mode badge to HOME after QE testing completes
-                self.call_from_thread(self._reset_mode_badge_after_qe)
+                self._call_ui(self._reset_mode_badge_after_qe)
 
             # Cleanup
             await agent.cleanup()
@@ -11294,10 +11343,10 @@ team:
         except Exception as e:
             import traceback
 
-            self.call_from_thread(self._stop_thinking)
-            self.call_from_thread(self._stop_stream_animation)
-            self.call_from_thread(log.add_error, f"Error: {str(e)}")
-            self.call_from_thread(log.add_info, traceback.format_exc())
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._stop_stream_animation)
+            self._call_ui(log.add_error, f"Error: {str(e)}")
+            self._call_ui(log.add_info, traceback.format_exc())
 
     # ========================================================================
     # Role & Agent Management
@@ -11558,10 +11607,10 @@ team:
 
         # Set up callbacks for tool calls
         def on_tool_call(name: str, args: dict):
-            self.call_from_thread(self._show_pure_tool_call, name, args, log)
+            self._call_ui(self._show_pure_tool_call, name, args, log)
 
         def on_tool_result(name: str, result: ToolResult):
-            self.call_from_thread(self._show_pure_tool_result, name, result, log)
+            self._call_ui(self._show_pure_tool_result, name, result, log)
 
         self._pure_mode.on_tool_call = on_tool_call
         self._pure_mode.on_tool_result = on_tool_result
@@ -11778,7 +11827,7 @@ team:
         """
         # Use call_from_thread, but catch the error if we're already in UI thread
         try:
-            self.call_from_thread(self._show_thinking_line, text, log)
+            self._call_ui(self._show_thinking_line, text, log)
         except RuntimeError as e:
             # If we get "must run in a different thread" error, we're already in UI thread
             # Call directly
@@ -12207,9 +12256,10 @@ team:
         from pathlib import Path
 
         system_level = (
-            SystemPromptLevel.MINIMAL
-            if provider_def and provider_def.category == ProviderCategory.LOCAL
-            else SystemPromptLevel.STANDARD
+            SystemPromptLevel.STANDARD
+            if provider == "ds4"
+            or not (provider_def and provider_def.category == ProviderCategory.LOCAL)
+            else SystemPromptLevel.MINIMAL
         )
 
         # Determine project root (where superqode.yaml is located)
@@ -12697,15 +12747,11 @@ team:
             local_providers["huggingface-local"] = PROVIDERS["huggingface-local"]
 
         t = Text()
-        t.append(f"\n", style="")
-        t.append("  " + "=" * 60 + "\n", style=THEME["muted"])
         t.append(f"  ◈ ", style=f"bold {THEME['purple']}")
-        t.append("SELECT LOCAL PROVIDER", style=f"bold {THEME['purple']}")
+        t.append("Local Providers\n", style=f"bold {THEME['text']}")
         t.append(
-            f" - Choose from {len(local_providers)} providers\n", style=f"bold {THEME['text']}"
+            "  Select a local/self-hosted runtime. No API key required.\n\n", style=THEME["muted"]
         )
-        t.append("  " + "=" * 60 + "\n", style=THEME["muted"])
-        t.append("  💻 Local/self-hosted models - No API key required\n\n", style=THEME["muted"])
 
         if not local_providers:
             t.append("  ⚠️  No local providers configured\n", style=THEME["warning"])
@@ -12739,12 +12785,8 @@ team:
             log.write(t)
             return
 
-        # Display all providers - ensure we show the complete list
         provider_count = len(local_providers_list)
-        t.append(f"  Available Local Providers ({provider_count}):\n\n", style=THEME["text"])
-
-        # Debug: Log all provider IDs to verify they're all included
-        provider_ids = [pid for pid, _ in local_providers_list]
+        t.append(f"  Available ({provider_count})\n", style=f"bold {THEME['text']}")
 
         # Provider-specific emojis
         provider_emojis = {
@@ -12759,41 +12801,31 @@ team:
             "openai-compatible": "🔌",  # Plug (generic connection)
         }
 
-        # Iterate through ALL providers - no filtering, no limits
-        # Make display more compact to show all providers
         for idx, (provider_id, provider_def) in enumerate(local_providers_list, 1):
-            # Get provider-specific emoji or fallback to default
             status_icon = provider_emojis.get(provider_id, "🟢")
+            labels = ["local"]
+            if provider_id == "ds4":
+                labels.extend(["recommended", "tools", "1M ctx"])
+            elif provider_id in ("ollama", "mlx", "lmstudio"):
+                labels.extend(["popular", "tools"])
+            elif provider_id in ("vllm", "sglang", "tgi"):
+                labels.extend(["server", "advanced"])
 
-            # Show all providers uniformly without highlighting/arrow indicators
             t.append(f"    [{idx}] ", style=THEME["dim"])
             t.append(f"{status_icon} ", style=THEME["success"])
             t.append(f"{provider_def.name}", style=f"bold {THEME['cyan']}")
             if provider_id in ("vllm", "sglang"):
                 t.append(" [EXPERIMENTAL]", style=f"bold {THEME['warning']}")
             t.append(f" ({provider_id})", style=THEME["muted"])
-
-            # Show notes on same line if short, otherwise new line
-            if provider_def.notes and len(provider_def.notes) < 60:
-                t.append(f" - {provider_def.notes}", style=THEME["dim"])
+            t.append("  ", style=THEME["dim"])
+            t.append(" • ".join(labels), style=THEME["dim"])
             t.append("\n", style="")
 
-        # Show summary of all providers at the end
-        t.append(f"\n  📋 All {provider_count} Local Providers: ", style=THEME["muted"])
-        provider_names = ", ".join([pdef.name for _, pdef in local_providers_list])
-        t.append(f"{provider_names}\n", style=THEME["dim"])
-
-        t.append("\n", style="")
-        t.append("  " + "=" * 60 + "\n", style=THEME["muted"])
-        t.append(f"\n  ⌨️  ", style=f"bold {THEME['success']}")
-        t.append(f"ENTER A NUMBER (1-{provider_count})", style=f"bold {THEME['success']}")
-        t.append(f" to select a provider\n\n", style=f"bold {THEME['text']}")
-        t.append(f"    Example: Type ", style=THEME["dim"])
-        t.append(f"1", style=f"bold {THEME['cyan']}")
-        t.append(f" then press Enter for {local_providers_list[0][1].name}\n", style=THEME["dim"])
-        t.append(f"\n  💡 Alternative: ", style=THEME["muted"])
+        t.append("\n  Type a number or use ", style=THEME["muted"])
+        t.append("↑↓ Enter", style=f"bold {THEME['cyan']}")
+        t.append(". Direct connect: ", style=THEME["muted"])
         t.append(f":connect local <provider>/<model>\n", style=THEME["cyan"])
-        t.append(f"    Example: ", style=THEME["dim"])
+        t.append(f"  Example: ", style=THEME["dim"])
         t.append(f":connect local ds4/deepseek-v4-flash\n", style=THEME["cyan"])
 
         if clear_log:
@@ -14193,9 +14225,14 @@ team:
         t = Text()
         t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
         t.append(f"{provider_def.name} Models\n", style=f"bold {THEME['text']}")
-        t.append(f"  {len(models)} model(s) available\n", style=THEME["dim"])
-        t.append(f"  💡 ", style=THEME["muted"])
-        t.append("Type number to select • Scroll with mouse to see more\n\n", style=THEME["muted"])
+        t.append(f"  {len(models)} available", style=THEME["dim"])
+        if provider_id == "ds4":
+            t.append("  •  recommended for local coding", style=THEME["success"])
+        t.append("\n", style=THEME["dim"])
+        t.append(
+            "  Type a number or use ↑↓ Enter. Labels: tools, context, size.\n\n",
+            style=THEME["muted"],
+        )
 
         if models:
             idx = 1
@@ -14221,6 +14258,8 @@ team:
                     f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}"
                 )
                 t.append(f"{model.name}", style=name_style)
+                if provider_id == "ds4" or "deepseek" in model.id.lower():
+                    t.append("  recommended", style=THEME["success"])
                 if is_highlighted:
                     t.append(f"  ← SELECTED", style=f"bold {THEME['success']}")
                 t.append(f"\n", style="")
@@ -14242,24 +14281,24 @@ team:
                     t.append(" • ".join(details), style=THEME["dim"])
                     t.append("\n", style="")
 
-                # Tool support
                 tool_level = estimate_tool_support(model)
+                label_parts = []
                 if tool_level == "excellent":
-                    t.append(f"       ", style="")
-                    t.append("🔧🔧 Excellent tool support", style=THEME["success"])
-                    t.append("\n", style="")
+                    label_parts.append(("excellent tools", THEME["success"]))
                 elif tool_level == "good":
-                    t.append(f"       ", style="")
-                    t.append("🔧 Good tool support", style=THEME["cyan"])
-                    t.append("\n", style="")
+                    label_parts.append(("good tools", THEME["cyan"]))
                 elif tool_level == "none":
-                    t.append(f"       ", style="")
-                    t.append("No tool support", style=THEME["dim"])
-                    t.append("\n", style="")
+                    label_parts.append(("no tools", THEME["dim"]))
 
                 if model.supports_vision:
+                    label_parts.append(("vision", THEME["cyan"]))
+
+                if label_parts:
                     t.append(f"       ", style="")
-                    t.append("👁️ Vision support", style=THEME["cyan"])
+                    for part_idx, (label, style) in enumerate(label_parts):
+                        if part_idx:
+                            t.append(" • ", style=THEME["dim"])
+                        t.append(label, style=style)
                     t.append("\n", style="")
 
                 t.append("\n", style="")
@@ -14517,6 +14556,18 @@ team:
         from superqode.providers.registry import PROVIDERS
 
         args = args.strip()
+        parts = args.split(maxsplit=1) if args else []
+        sub = parts[0].lower() if parts else ""
+        subargs = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub in ("doctor", "check"):
+            self._doctor_cmd(subargs, log)
+            return
+
+        if sub in ("smoke", "test"):
+            self.run_worker(self._providers_smoke_cmd(subargs, log))
+            return
+
         provider_id = args or None
         if provider_id and provider_id not in PROVIDERS:
             log.add_error(f"Provider not found: {provider_id}")
@@ -14558,12 +14609,126 @@ team:
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
 
+    async def _providers_smoke_cmd(self, args: str, log: ConversationLog):
+        """Run a local provider smoke check from the TUI."""
+        from superqode.providers.local.smoke import all_local_provider_ids, smoke_local_provider
+
+        tokens = (args or "").split()
+        if not tokens:
+            log.add_info("Usage: :providers smoke <local-provider> [model] [--run]")
+            log.add_info("Example: :providers smoke ollama")
+            return
+
+        provider = tokens[0]
+        run_prompt = "--run" in tokens
+        no_tool_test = "--no-tool-test" in tokens
+        model_parts = [token for token in tokens[1:] if token not in ("--run", "--no-tool-test")]
+        model = " ".join(model_parts).strip() or None
+
+        if provider not in all_local_provider_ids():
+            log.add_error(f"Local provider not found: {provider}")
+            log.add_info(f"Available: {', '.join(all_local_provider_ids())}")
+            return
+
+        log.add_info(f"Checking {provider}...")
+        payload = await smoke_local_provider(
+            provider,
+            model,
+            run_prompt=run_prompt,
+            tool_test=not no_tool_test,
+        )
+        self._show_command_output(log, self._format_local_smoke_result(payload))
+
+    def _format_local_smoke_result(self, payload: dict) -> Text:
+        """Render local provider smoke result for TUI."""
+        t = Text()
+        t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        t.append("Local Provider Check\n\n", style=f"bold {THEME['text']}")
+
+        name = payload.get("name") or payload.get("provider") or "-"
+        provider = payload.get("provider") or "-"
+        t.append("  Provider     ", style=THEME["muted"])
+        t.append(f"{name} ({provider})\n", style=f"bold {THEME['cyan']}")
+
+        supported = bool(payload.get("supported"))
+        support_style = THEME["success"] if supported else THEME["warning"]
+        t.append("  Smoke client ", style=THEME["muted"])
+        t.append(("available" if supported else "missing") + "\n", style=support_style)
+
+        if payload.get("host"):
+            t.append("  Host         ", style=THEME["muted"])
+            t.append(f"{payload['host']}\n", style=THEME["text"])
+
+        if not supported:
+            if payload.get("setup_hint"):
+                t.append("  Setup        ", style=THEME["muted"])
+                t.append(f"{payload['setup_hint']}\n", style=THEME["text"])
+            if payload.get("error"):
+                t.append("  Error        ", style=THEME["muted"])
+                t.append(f"{payload['error']}\n", style=THEME["error"])
+            return t
+
+        available = bool(payload.get("available"))
+        t.append("  Server       ", style=THEME["muted"])
+        t.append(
+            "reachable\n" if available else "not reachable\n",
+            style=THEME["success"] if available else THEME["warning"],
+        )
+
+        model = payload.get("model") or "-"
+        t.append("  Model        ", style=THEME["muted"])
+        t.append(f"{model}\n", style=f"bold {THEME['text']}")
+
+        models = payload.get("models") or []
+        running = payload.get("running_models") or []
+        t.append("  Models       ", style=THEME["muted"])
+        t.append(f"{len(models)} discovered", style=THEME["text"])
+        if running:
+            t.append(f"  ({len(running)} running)", style=THEME["success"])
+        t.append("\n")
+
+        tools = "yes" if payload.get("tool_support") else "no"
+        t.append("  Tools        ", style=THEME["muted"])
+        t.append(
+            f"{tools}\n", style=THEME["success"] if payload.get("tool_support") else THEME["dim"]
+        )
+        tool_result = payload.get("tool_result") or {}
+        if tool_result.get("notes"):
+            t.append("  Tool notes   ", style=THEME["muted"])
+            t.append(f"{tool_result['notes']}\n", style=THEME["dim"])
+        if tool_result.get("error"):
+            t.append("  Tool error   ", style=THEME["muted"])
+            t.append(f"{tool_result['error']}\n", style=THEME["error"])
+
+        if payload.get("completion_ran"):
+            status = "ok" if payload.get("completion_ok") else "failed"
+            t.append("  Completion   ", style=THEME["muted"])
+            t.append(
+                f"{status}\n",
+                style=THEME["success"] if payload.get("completion_ok") else THEME["warning"],
+            )
+            if payload.get("response_preview"):
+                t.append("  Response     ", style=THEME["muted"])
+                t.append(f"{payload['response_preview']}\n", style=THEME["text"])
+
+        if payload.get("error"):
+            t.append("  Error        ", style=THEME["muted"])
+            t.append(f"{payload['error']}\n", style=THEME["error"])
+        elif not payload.get("completion_ran"):
+            t.append("\n  Action: ", style=THEME["muted"])
+            t.append(f":providers smoke {provider} --run", style=THEME["cyan"])
+            t.append(" to run a real completion\n", style=THEME["muted"])
+
+        return t
+
     def _recommend_cmd(self, args: str, log: ConversationLog):
         """Recommend providers/models for a task."""
         from superqode.providers.recommendations import normalize_task, recommend_models
 
         task = normalize_task(args.strip() or "coding")
         recommendations = recommend_models(task, limit=8)
+        self._recommendation_list = recommendations
+        self._awaiting_recommendation_selection = bool(recommendations)
         t = Text()
         t.append("\n  ◆ ", style=f"bold {THEME['purple']}")
         t.append("Model Recommendations\n\n", style=f"bold {THEME['text']}")
@@ -14571,6 +14736,7 @@ team:
         t.append(f"{task}\n\n", style=f"bold {THEME['cyan']}")
 
         if not recommendations:
+            self._awaiting_recommendation_selection = False
             t.append("  No recommendations available.\n", style=THEME["muted"])
             self._show_command_output(log, t)
             return
@@ -14599,10 +14765,36 @@ team:
                 t.append(f"      {labels}\n", style=THEME["dim"])
             t.append("\n")
 
-        t.append("  Connect with ", style=THEME["muted"])
+        t.append("  Type a number to connect, or use ", style=THEME["muted"])
         t.append(":connect <provider>/<model>", style=THEME["cyan"])
-        t.append(" after setup is ready.\n", style=THEME["muted"])
+        t.append(".\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
+    def _handle_recommendation_selection(self, selection: str, log: ConversationLog) -> bool:
+        """Connect to a provider/model from the last :recommend list."""
+        selection = (selection or "").strip()
+        recommendations = getattr(self, "_recommendation_list", []) or []
+        if not selection:
+            return False
+        if selection.lower() in ("back", "cancel", "q"):
+            self._awaiting_recommendation_selection = False
+            log.add_info("Recommendation selection cancelled.")
+            return True
+        if not selection.isdigit():
+            return False
+        index = int(selection) - 1
+        if index < 0 or index >= len(recommendations):
+            log.add_error(f"Invalid recommendation. Choose 1-{len(recommendations)}")
+            return True
+
+        item = recommendations[index]
+        self._awaiting_recommendation_selection = False
+        log.add_info(f"Connecting to {item.provider}/{item.model}...")
+        if item.provider in ("ds4", "ollama", "lmstudio", "mlx", "vllm", "sglang", "tgi"):
+            self._connect_local_mode(item.provider, item.model, log)
+        else:
+            self._connect_byok_mode(item.provider, item.model, log)
+        return True
 
     def _sandbox_cmd(self, args: str, log: ConversationLog):
         """Show sandbox provider readiness in the TUI."""
@@ -15074,7 +15266,7 @@ team:
         t.append(":connect <provider>", style=THEME["success"])
         t.append(" to connect to a ready provider\n", style=THEME["muted"])
 
-        self.call_from_thread(log.write, t)
+        self._call_ui(log.write, t)
 
     # ========================================================================
     # Local Provider Commands
@@ -15668,7 +15860,7 @@ team:
             if not progress.completed:
                 msg = f"Downloading: {progress.progress_percent:.1f}% ({progress.speed_mbps:.1f} MB/s)"
                 # This callback runs in executor thread, so we need call_from_thread
-                self.call_from_thread(log.add_system, msg)
+                self._call_ui(log.add_system, msg)
 
         result = await downloader.download_for_ollama(
             model_id, quantization=quantization, progress_callback=progress_callback
@@ -15836,7 +16028,7 @@ team:
         self._connect_agent(agent_name, model_hint)
 
     def _acp_cmd(self, args: str, log: ConversationLog):
-        """Handle :acp command with subcommands (list, install, model)."""
+        """Handle :acp command with subcommands (list, install, model, doctor)."""
         parts = args.split(maxsplit=1) if args else []
         sub = parts[0].lower() if parts else "list"
         subargs = parts[1] if len(parts) > 1 else ""
@@ -15858,8 +16050,109 @@ team:
                 self._set_model(subargs, log)
             else:
                 log.add_info("Usage: :acp model <model_id>")
+        elif sub in ("doctor", "check"):
+            self.run_worker(self._acp_doctor_cmd(subargs, log))
         else:
-            log.add_info(f"Unknown: {sub}. Try: list, connect, install, model")
+            log.add_info(f"Unknown: {sub}. Try: list, connect, install, model, doctor")
+
+    def _agents_cmd(self, args: str, log: ConversationLog):
+        """Handle :agents as an alias for ACP agent management."""
+        parts = args.split(maxsplit=1) if args else []
+        sub = parts[0].lower() if parts else "list"
+        subargs = parts[1] if len(parts) > 1 else ""
+
+        if sub in ("list", ""):
+            self._show_agents(log)
+        elif sub in ("doctor", "check"):
+            self.run_worker(self._acp_doctor_cmd(subargs, log))
+        elif sub == "install":
+            if subargs:
+                self._install_agent(subargs, log)
+            else:
+                log.add_info("Usage: :agents install <name>")
+        elif sub == "connect":
+            self._connect_acp_cmd(subargs, log)
+        else:
+            self.run_worker(self._acp_doctor_cmd(args, log))
+
+    async def _acp_doctor_cmd(self, args: str, log: ConversationLog):
+        """Run ACP agent diagnostics from the TUI."""
+        from superqode.acp.doctor import acp_doctor
+
+        tokens = (args or "").split()
+        live = any(token in ("--live", "live") for token in tokens)
+        agent_parts = [token for token in tokens if token not in ("--live", "live")]
+        agent = " ".join(agent_parts).strip() or None
+
+        if agent:
+            log.add_info(f"Checking ACP agent {agent}...")
+        else:
+            log.add_info("Checking ACP agents...")
+
+        results = await acp_doctor(agent, live=live)
+        if agent and not results:
+            log.add_error(f"ACP agent not found: {agent}")
+            return
+
+        self._show_command_output(log, self._format_acp_doctor_results(results, live=live))
+
+    def _format_acp_doctor_results(self, results: list[dict], live: bool = False) -> Text:
+        """Render ACP diagnostics for TUI."""
+        t = Text()
+        t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        t.append("ACP Agent Doctor\n\n", style=f"bold {THEME['text']}")
+
+        if not results:
+            t.append("  No ACP agents found.\n", style=THEME["muted"])
+            return t
+
+        for result in results[:20]:
+            installed = bool(result.get("installed"))
+            status_style = THEME["success"] if installed else THEME["warning"]
+            status = "installed" if installed else "missing"
+            t.append(f"  {result.get('short_name', '-'):<16}", style=f"bold {THEME['cyan']}")
+            t.append(f"{status:<10}", style=status_style)
+            t.append(f"{result.get('name', '-')}\n", style=THEME["text"])
+
+            if result.get("command"):
+                t.append("    command: ", style=THEME["muted"])
+                t.append(f"{result['command']}\n", style=THEME["dim"])
+            if result.get("missing_env_vars"):
+                t.append("    env:     ", style=THEME["muted"])
+                t.append(
+                    f"set one of {', '.join(result['missing_env_vars'])}\n",
+                    style=THEME["warning"],
+                )
+            if not installed and result.get("install_command"):
+                t.append("    install: ", style=THEME["muted"])
+                t.append(f"{result['install_command']}\n", style=THEME["cyan"])
+
+            live_result = result.get("live")
+            if live_result:
+                started = bool(live_result.get("started"))
+                t.append("    protocol:", style=THEME["muted"])
+                t.append(
+                    " started" if started else " not started",
+                    style=THEME["success"] if started else THEME["warning"],
+                )
+                if live_result.get("session"):
+                    t.append("  session", style=THEME["success"])
+                if live_result.get("models"):
+                    t.append(f"  models={len(live_result['models'])}", style=THEME["cyan"])
+                if live_result.get("modes"):
+                    t.append(f"  modes={len(live_result['modes'])}", style=THEME["cyan"])
+                t.append("\n")
+                if live_result.get("error"):
+                    t.append("    error:   ", style=THEME["muted"])
+                    t.append(f"{live_result['error']}\n", style=THEME["error"])
+            t.append("\n")
+
+        if not live:
+            t.append("  Action: ", style=THEME["muted"])
+            t.append(":acp doctor <agent> live", style=THEME["cyan"])
+            t.append(" to run protocol startup check\n", style=THEME["muted"])
+
+        return t
 
     def _set_model(self, model_name: str, log: ConversationLog):
         """Set the model for the current agent."""
@@ -17053,6 +17346,25 @@ team:
             t.append(f"  {label:<10}", style=THEME["muted"])
             t.append(f"{value}\n", style=style)
 
+        if self.current_provider:
+            try:
+                from superqode.providers.recommendations import provider_doctor_cards
+
+                card = provider_doctor_cards([self.current_provider])[0]
+                labels = ", ".join(card["labels"][:6]) or "-"
+                status = "ready" if card["configured"] else "needs setup"
+                t.append("  Readiness ", style=THEME["muted"])
+                t.append(
+                    f"{status}",
+                    style=THEME["success"] if card["configured"] else THEME["warning"],
+                )
+                t.append(f"  [{labels}]\n", style=THEME["dim"])
+                if card["setup_hint"]:
+                    t.append("  Setup     ", style=THEME["muted"])
+                    t.append(f"{card['setup_hint']}\n", style=THEME["text"])
+            except Exception:
+                pass
+
         t.append("\n  Panels: ", style=THEME["muted"])
         t.append("Ctrl+B", style=THEME["cyan"])
         t.append(" toggle sidebar, ", style=THEME["muted"])
@@ -17060,6 +17372,12 @@ team:
         t.append(" harness, ", style=THEME["muted"])
         t.append("Ctrl+K", style=THEME["cyan"])
         t.append(" commands\n", style=THEME["muted"])
+        t.append("  Recovery: ", style=THEME["muted"])
+        t.append(":retry", style=THEME["cyan"])
+        t.append("  ", style=THEME["muted"])
+        t.append(":doctor current", style=THEME["cyan"])
+        t.append("  ", style=THEME["muted"])
+        t.append(":copy error\n", style=THEME["cyan"])
 
         try:
             sidebar = self.query_one("#sidebar", CollapsibleSidebar)
@@ -17190,6 +17508,7 @@ team:
                     (":models update", "Refresh models database from models.dev"),
                     (":models info", "Show model database information"),
                     (":providers [provider]", "Show provider setup and quality labels"),
+                    (":doctor current", "Check active provider/model readiness"),
                     (":recommend <task>", "Recommend models for coding/review/testing/budget"),
                     (":usage", "Show session token usage and cost"),
                     (":usage reset", "Reset usage statistics"),
@@ -17240,6 +17559,11 @@ team:
                     (":tools [profile]", "Show tool profile and available built-in tools"),
                     (":status", "Show active provider, model, sandbox/session, branch, approval"),
                     (":harness", "Open the harness overview and show active state"),
+                    (":retry", "Retry the last user prompt"),
+                    (":work [verbose]", "Show last run tools, files, and commands"),
+                    (":copy error", "Copy the latest error to clipboard"),
+                    (":session current", "Show active session status"),
+                    (":session list", "Show recent local/BYOK sessions"),
                     (":mcp status", "Show configured MCP servers"),
                     (":mcp connect [server]", "Connect one or all MCP servers"),
                     (":mcp disconnect [server]", "Disconnect one or all MCP servers"),
@@ -17656,20 +17980,35 @@ team:
     # Coding Agent Features: Approval, Diff, Plan, History, File Viewer
     # ========================================================================
 
-    def _handle_copy(self, log: ConversationLog):
-        """Handle :copy command - copy last response or error to clipboard or view it."""
-        # Check for error first, then response (check both app and log for response)
+    def _handle_copy(self, log: ConversationLog, args: str = ""):
+        """Handle :copy command - copy last response, error, prompt, or transcript."""
+        target = (args or "").strip().lower()
         last_error = log.get_last_error()
-        if last_error:
-            # Copy error
+
+        if target in ("error", "err"):
+            content_to_copy = last_error
+            content_type = "error"
+        elif target in ("response", "answer", "last"):
+            content_to_copy = self._last_response or log.get_last_response()
+            content_type = "response"
+        elif target in ("prompt", "request", "user"):
+            content_to_copy = self._last_user_message or log.get_last_message("user")
+            content_type = "prompt"
+        elif target in ("all", "transcript", "log"):
+            content_to_copy = log.get_all_text()
+            content_type = "transcript"
+        elif last_error:
             content_to_copy = last_error
             content_type = "error"
         elif self._last_response or log.get_last_response():
-            # Copy response - prefer app's _last_response, fallback to log's
             content_to_copy = self._last_response or log.get_last_response()
             content_type = "response"
         else:
-            log.add_info("No response or error to copy yet")
+            content_to_copy = ""
+            content_type = target or "response"
+
+        if not content_to_copy:
+            log.add_info(f"No {content_type} to copy yet")
             return
 
         # Strip markdown for clean copy
@@ -17804,6 +18143,202 @@ team:
             themes = [name for name, _ in list_themes()]
             log.add_error(f"Unknown theme: {theme_name}")
             log.add_info(f"Available: {', '.join(themes)}")
+
+    def _retry_last_message(self, log: ConversationLog):
+        """Retry the last user prompt in the current session."""
+        if not self._last_user_message:
+            log.add_info("No previous prompt to retry")
+            return
+        if getattr(self, "is_busy", False):
+            log.add_info("Agent is still running. Cancel or wait before retrying.")
+            return
+
+        prompt = self._last_user_message
+        t = Text()
+        t.append("\n  ↻ ", style=f"bold {THEME['cyan']}")
+        t.append("Retrying last prompt\n", style=f"bold {THEME['text']}")
+        preview = prompt.replace("\n", " ")
+        if len(preview) > 120:
+            preview = preview[:117] + "..."
+        t.append(f"  {preview}\n", style=THEME["muted"])
+        log.write(t)
+        self._handle_message(prompt, log)
+
+    def _doctor_cmd(self, args: str, log: ConversationLog):
+        """Show readiness for the current or requested provider."""
+        from superqode.providers.recommendations import provider_doctor_cards
+        from superqode.providers.registry import PROVIDERS
+
+        tokens = (args or "").split()
+        live = any(token in ("--live", "live", "smoke") for token in tokens)
+        provider = " ".join(
+            token for token in tokens if token not in ("--live", "live", "smoke")
+        ).strip()
+        if provider in ("", "current", "."):
+            pure = getattr(self, "_pure_mode", None)
+            pure_session = getattr(pure, "session", None)
+            provider = self.current_provider or getattr(pure_session, "provider", "")
+
+        if not provider:
+            log.add_info("No provider selected. Use :connect first or run :doctor <provider>.")
+            return
+
+        if provider not in PROVIDERS:
+            log.add_error(f"Unknown provider: {provider}")
+            return
+
+        if live:
+            self.run_worker(self._providers_smoke_cmd(provider, log))
+            return
+
+        card = provider_doctor_cards([provider])[0]
+        t = Text()
+        t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        t.append("Provider Doctor\n\n", style=f"bold {THEME['text']}")
+
+        configured = "ready" if card["configured"] else "needs setup"
+        status_style = THEME["success"] if card["configured"] else THEME["warning"]
+        t.append(f"  Provider     ", style=THEME["muted"])
+        t.append(f"{card['name']} ({card['provider']})\n", style=f"bold {THEME['cyan']}")
+        t.append(f"  Status       ", style=THEME["muted"])
+        t.append(f"{configured}\n", style=status_style)
+        t.append(f"  Setup        ", style=THEME["muted"])
+        t.append(f"{card['setup_hint']}\n", style=THEME["text"])
+        labels = ", ".join(card["labels"]) or "-"
+        t.append(f"  Labels       ", style=THEME["muted"])
+        t.append(f"{labels}\n\n", style=THEME["dim"])
+
+        for model in card["models"][:5]:
+            t.append(f"  - {model['model']}", style=THEME["text"])
+            t.append(f"  {model['price']}", style=THEME["gold"])
+            t.append(f"  {model['context']} ctx", style=THEME["cyan"])
+            t.append(f"  tools={model['tool_support']}\n", style=THEME["muted"])
+
+        t.append("\n  Actions: ", style=THEME["muted"])
+        t.append(":retry", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":copy error", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":providers ", style=THEME["cyan"])
+        t.append(provider, style=THEME["cyan"])
+        t.append("\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _work_cmd(self, args: str, log: ConversationLog):
+        """Show the tools, files, and commands from the last completed run."""
+        summary = getattr(self, "_last_run_summary", {}) or {}
+        if not summary:
+            log.add_info("No completed agent work yet.")
+            return
+
+        mode = (args or "").strip().lower()
+        verbose = mode in ("verbose", "full", "details")
+        files_read = summary.get("files_read", []) or []
+        files_modified = summary.get("files_modified", []) or []
+        tools = summary.get("tools", []) or []
+        commands_run = summary.get("commands_run", []) or []
+        provider = summary.get("provider") or self.current_provider or "-"
+        model = summary.get("model") or self.current_model or "-"
+
+        t = Text()
+        t.append("\n  ▤ ", style=f"bold {THEME['purple']}")
+        t.append("Last Work Summary\n\n", style=f"bold {THEME['text']}")
+        t.append("  Target      ", style=THEME["muted"])
+        t.append(f"{provider}/{model}\n", style=f"bold {THEME['cyan']}")
+        t.append("  Duration    ", style=THEME["muted"])
+        t.append(f"{summary.get('duration', 0):.1f}s\n", style=THEME["text"])
+        t.append("  Tools       ", style=THEME["muted"])
+        t.append(f"{summary.get('tool_count', len(tools))}\n", style=THEME["text"])
+
+        if files_read:
+            t.append("  Files read  ", style=THEME["muted"])
+            t.append(f"{len(files_read)}\n", style=THEME["cyan"])
+        if files_modified:
+            t.append("  Changed     ", style=THEME["muted"])
+            t.append(f"{len(files_modified)}\n", style=THEME["success"])
+        if commands_run:
+            t.append("  Commands    ", style=THEME["muted"])
+            t.append(f"{len(commands_run)}\n", style=THEME["orange"])
+
+        def _append_items(title: str, items: list[str], style: str, limit: int = 5):
+            if not items:
+                return
+            visible_items = items if verbose else items[:limit]
+            t.append(f"\n  {title}\n", style=f"bold {THEME['text']}")
+            for item in visible_items:
+                t.append("  - ", style=THEME["dim"])
+                t.append(f"{item}\n", style=style)
+            hidden = len(items) - len(visible_items)
+            if hidden > 0:
+                t.append(f"  ... {hidden} more. Use :work verbose.\n", style=THEME["muted"])
+
+        _append_items("Files Read", files_read, THEME["cyan"])
+        _append_items("Files Changed", files_modified, THEME["success"])
+        _append_items("Commands", commands_run, THEME["orange"])
+
+        if tools:
+            visible_tools = tools if verbose else tools[:8]
+            t.append("\n  Tools\n", style=f"bold {THEME['text']}")
+            for tool in visible_tools:
+                name = tool.get("name", "tool")
+                detail = tool.get("path") or tool.get("command") or tool.get("query") or ""
+                status = tool.get("status", "")
+                duration = tool.get("duration", 0.0) or 0.0
+                kind = tool.get("kind", "")
+                t.append("  - ", style=THEME["dim"])
+                t.append(name, style=f"bold {THEME['purple']}")
+                if kind:
+                    t.append(f" [{kind}]", style=THEME["dim"])
+                if status:
+                    status_style = THEME["success"] if status == "success" else THEME["error"]
+                    if status == "running":
+                        status_style = THEME["warning"]
+                    t.append(" ", style=THEME["dim"])
+                    t.append(status, style=status_style)
+                if duration:
+                    t.append(f" {duration:.2f}s", style=THEME["muted"])
+                if detail:
+                    t.append("  ", style=THEME["dim"])
+                    t.append(str(detail), style=THEME["muted"])
+                t.append("\n")
+            hidden = len(tools) - len(visible_tools)
+            if hidden > 0:
+                t.append(f"  ... {hidden} more. Use :work verbose.\n", style=THEME["muted"])
+
+        t.append("\n  Actions: ", style=THEME["muted"])
+        t.append(":diff", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":copy response", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":retry", style=THEME["cyan"])
+        t.append("\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _session_cmd(self, args: str, log: ConversationLog):
+        """Show the current coding session or recent sessions."""
+        sub = (args or "").strip().lower()
+        if sub in ("", "current", "."):
+            self._show_harness_status(log)
+            return
+
+        if sub in ("list", "recent"):
+            if not hasattr(self, "_pure_mode"):
+                log.add_info("No local/BYOK session manager is active yet.")
+                return
+            sessions = self._pure_mode.list_sessions()
+            t = Text()
+            t.append("\n  📂 ", style=f"bold {THEME['orange']}")
+            t.append("Recent Sessions\n\n", style=f"bold {THEME['text']}")
+            if not sessions:
+                t.append("  No sessions found.\n", style=THEME["muted"])
+            for item in sessions:
+                t.append(f"  {item['display_id']}  ", style=f"bold {THEME['cyan']}")
+                t.append(f"{item['provider']}/{item['model']}  ", style=THEME["text"])
+                t.append(f"{item['message_count']} messages\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+
+        log.add_info("Usage: :session current or :session list")
 
     def _handle_diagnostics(self, args: str, log: ConversationLog):
         """Handle :diagnostics command - show code diagnostics."""
@@ -17952,13 +18487,27 @@ team:
             except Exception:
                 pass
 
-    def _handle_select(self, log: ConversationLog):
-        """Handle :select command - show response/error in a selectable text screen."""
+    def _handle_select(self, log: ConversationLog, args: str = ""):
+        """Handle :select command - show response/error/transcript in a selectable screen."""
+        target = (args or "").strip().lower()
         last_error = log.get_last_error()
-        content = last_error or self._last_response or log.get_last_response()
-        content_type = "Error" if last_error else "Response"
+        if target in ("error", "err"):
+            content = last_error
+            content_type = "Error"
+        elif target in ("response", "answer", "last"):
+            content = self._last_response or log.get_last_response()
+            content_type = "Response"
+        elif target in ("all", "transcript", "log"):
+            content = log.get_all_text()
+            content_type = "Transcript"
+        elif target in ("prompt", "request", "user"):
+            content = self._last_user_message or log.get_last_message("user")
+            content_type = "Prompt"
+        else:
+            content = last_error or self._last_response or log.get_last_response()
+            content_type = "Error" if last_error else "Response"
         if not content:
-            log.add_info("No response or error to select yet")
+            log.add_info(f"No {content_type.lower()} to select yet")
             return
 
         # Push a screen with TextArea for selection

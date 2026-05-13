@@ -1059,28 +1059,19 @@ class ConversationLog(RichLog):
 
         # Build header
         header = Text()
-        header.append("\n")
-
-        # Gradient line
-        gradient = ["#6d28d9", "#7c3aed", "#8b5cf6", "#a855f7", "#c084fc"]
-        line = "─" * 60
-        for i, char in enumerate(line):
-            header.append(char, style=gradient[i % len(gradient)])
-        header.append("\n")
-
-        # Agent name
         agent_color = AGENT_COLORS.get(agent_name.lower(), THEME["purple"])
         agent_icon = AGENT_ICONS.get(agent_name.lower(), "🤖")
-        header.append(f"  {agent_icon} ", style=f"bold {agent_color}")
-        header.append(agent_name.upper(), style=f"bold {THEME['text']}")
-        header.append(" is working\n", style=THEME["muted"])
-
-        # Model and mode info
-        header.append("  Model: ", style=THEME["dim"])
+        header.append("\n  ", style="")
+        header.append(f"{agent_icon} ", style=f"bold {agent_color}")
+        header.append(agent_name, style=f"bold {THEME['text']}")
+        header.append(" running", style=THEME["muted"])
+        header.append("  •  ", style=THEME["dim"])
         header.append(model_name or "auto", style=f"bold {THEME['cyan']}")
-        header.append(f"  │  {mode_icon} ", style=mode_color)
+        header.append("  •  ", style=THEME["dim"])
+        header.append(f"{mode_icon} ", style=mode_color)
         header.append(mode_label, style=f"bold {mode_color}")
-        header.append(f"  │  {app_icon} ", style=app_color)
+        header.append("  •  ", style=THEME["dim"])
+        header.append(f"{app_icon} ", style=app_color)
         header.append(app_label, style=f"bold {app_color}")
         header.append("\n")
 
@@ -1295,21 +1286,34 @@ class ConversationLog(RichLog):
                 tool_icon = icon
                 break
 
-        # Build display
+        # Build a compact, scannable display. Normal mode shows only action rows;
+        # verbose mode includes summarized successful output.
         line = Text()
         line.append(f"  {status_icon} ", style=f"bold {status_color}")
         line.append(f"{tool_icon} ", style=THEME["dim"])
-        line.append(tool_name, style=THEME["text"])
+        line.append(self._format_tool_name(tool_name), style=THEME["text"])
 
         if file_path:
-            # Show full file path - let widget handle wrapping
             line.append(f"  {file_path}", style=THEME["dim"])
         elif command:
-            # Show more of the command - 100 chars instead of 40
-            cmd_short = command[:100] + "..." if len(command) > 100 else command
+            limit = 120 if getattr(self, "tool_output_mode", "normal") == "verbose" else 72
+            cmd_short = command[:limit] + "..." if len(command) > limit else command
             line.append(f"  $ {cmd_short}", style=THEME["dim"])
 
-        if output and status in ("success", "error"):
+        if output and status == "error":
+            summary = summarize_tool_output(
+                tool_name,
+                status,
+                output,
+                getattr(self, "tool_output_mode", "normal"),
+            )
+            if summary:
+                line.append(f"\n    → {summary}", style=THEME["error"])
+        elif (
+            output
+            and status == "success"
+            and getattr(self, "tool_output_mode", "normal") == "verbose"
+        ):
             summary = summarize_tool_output(
                 tool_name,
                 status,
@@ -1321,6 +1325,22 @@ class ConversationLog(RichLog):
 
         line.append("\n")
         self.write(line)
+
+    def _format_tool_name(self, tool_name: str) -> str:
+        """Make common tool names read like concise actions."""
+        name = tool_name.replace("_", " ").replace("-", " ").strip()
+        aliases = {
+            "read": "read",
+            "write": "write",
+            "edit": "edit",
+            "multi edit": "edit",
+            "bash": "run",
+            "shell": "run",
+            "grep": "search",
+            "glob": "find",
+            "list directory": "list",
+        }
+        return aliases.get(name.lower(), name)
 
     def end_agent_session(
         self,
@@ -1362,81 +1382,58 @@ class ConversationLog(RichLog):
         elif self._streaming_response:
             self._last_response = self._streaming_response
 
-        # Build rich summary panel
         summary_content = Text()
-
-        # 1. Header
         if success:
-            summary_content.append("✅ Mission Accomplished", style=f"bold {THEME['success']}")
+            summary_content.append("Done", style=f"bold {THEME['success']}")
         else:
-            summary_content.append("❌ Mission Failed", style=f"bold {THEME['error']}")
-        summary_content.append("\n\n")
+            summary_content.append("Failed", style=f"bold {THEME['error']}")
 
-        # 2. Tool Usage Stats
         tool_counts = {}
         for tool in getattr(self, "_tool_calls", []):
             name = tool.get("name", "Unknown")
             tool_counts[name] = tool_counts.get(name, 0) + 1
 
-        if tool_counts:
-            summary_content.append("🛠️  Tool Usage:\n", style="bold")
-            for name, count in tool_counts.items():
-                summary_content.append(f"  • {name}: ", style=THEME["text"])
-                summary_content.append(f"{count}\n", style=f"bold {THEME['cyan']}")
-            summary_content.append("\n")
-
-        # 3. Modified Files
         files_mod = getattr(self, "_files_modified", set())
-        if files_mod:
-            file_count = len(files_mod)
-            summary_content.append("📁 Changes:\n", style="bold")
-            summary_content.append(
-                f"  {file_count} file{'s' if file_count != 1 else ''} changed",
-                style=THEME["warning"],
-            )
-            if getattr(self, "tool_output_mode", "normal") == "verbose":
-                summary_content.append("\n", style="")
-                for f in sorted(files_mod):
-                    summary_content.append(f"  • {f}\n", style=THEME["warning"])
-            else:
-                summary_content.append("  (:log verbose shows file names)\n", style=THEME["dim"])
-            summary_content.append("\n")
-
-        # 4. Performance Stats Grid
-        summary_content.append("📊 Stats:\n", style="bold")
         total_tokens = prompt_tokens + completion_tokens
 
         stats_line = []
         if duration > 0:
-            stats_line.append(f"⏱  {duration:.1f}s")
+            stats_line.append(f"{duration:.1f}s")
+        if tool_counts:
+            stats_line.append(f"{sum(tool_counts.values())} tools")
+        if files_mod:
+            stats_line.append(f"{len(files_mod)} changed")
         if total_tokens > 0:
-            stats_line.append(f"🔤 {total_tokens:,} toks")
+            stats_line.append(f"{total_tokens:,} toks")
         if cost > 0:
-            stats_line.append(f"💰 ${cost:.4f}")
+            stats_line.append(f"${cost:.4f}")
 
-        summary_content.append("  " + "  •  ".join(stats_line), style=THEME["dim"])
-        summary_content.append("\n")
+        if stats_line:
+            summary_content.append("  •  ", style=THEME["dim"])
+            summary_content.append("  •  ".join(stats_line), style=THEME["dim"])
 
-        # Create panel
+        if files_mod and getattr(self, "tool_output_mode", "normal") == "verbose":
+            summary_content.append("\n")
+            for f in sorted(files_mod):
+                summary_content.append(f"  {f}\n", style=THEME["warning"])
+
         panel = Panel(
             summary_content,
-            title="[bold]Session Report[/bold]",
+            title="[bold]Run Summary[/bold]",
             border_style=THEME["success"] if success else THEME["error"],
             box=ROUNDED,
-            padding=(1, 2),
+            padding=(0, 1),
         )
 
         self.write(panel)
 
-        # Copy hint
         footer = Text()
-        footer.append("\n")
-        footer.append(
-            "  [Shift+Drag to select text] • [Ctrl+Shift+C to copy full response]",
-            style=THEME["dim"],
-        )
-        footer.append("\n")
-
+        footer.append("  :work", style=THEME["cyan"])
+        footer.append(" summary  •  ", style=THEME["dim"])
+        footer.append(":work verbose", style=THEME["cyan"])
+        footer.append(" details  •  ", style=THEME["dim"])
+        footer.append(":select response", style=THEME["cyan"])
+        footer.append(" copyable view\n", style=THEME["dim"])
         self.write(footer)
 
     def get_thinking_text(self) -> str:
