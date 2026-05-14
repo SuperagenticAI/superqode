@@ -24,6 +24,7 @@ import time
 import math
 import random
 import concurrent.futures
+import threading
 from pathlib import Path
 from typing import Any
 from dataclasses import dataclass, field
@@ -208,6 +209,42 @@ from superqode.safety import (
 
 # Constants, models, CSS, widgets are imported from superqode.app package
 # See imports above for what's available
+
+
+class _AsyncLoopThread:
+    """Dedicated asyncio loop for long-lived subprocess protocol clients."""
+
+    def __init__(self) -> None:
+        self._ready = threading.Event()
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread = threading.Thread(target=self._run, name="superqode-acp-loop", daemon=True)
+        self._thread.start()
+        self._ready.wait(timeout=5.0)
+
+    def _run(self) -> None:
+        loop = asyncio.new_event_loop()
+        self._loop = loop
+        asyncio.set_event_loop(loop)
+        self._ready.set()
+        loop.run_forever()
+        pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
+        for task in pending:
+            task.cancel()
+        if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+        loop.close()
+
+    def run(self, coro):
+        if self._loop is None:
+            raise RuntimeError("ACP event loop is not ready")
+        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return future.result()
+
+    def close(self) -> None:
+        if self._loop is not None and self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        if self._thread.is_alive():
+            self._thread.join(timeout=2.0)
 
 
 # ============================================================================
@@ -536,6 +573,7 @@ class SuperQodeApp(App):
         False  # Flag to prevent immediate provider selection after showing picker
     )
     _awaiting_permission = False  # Track if waiting for permission response
+    _awaiting_agent_question = False  # Track if an agent is waiting for user input
     _available_models: Dict[str, List[str]] = {}  # Available models per agent
     _last_response: str = ""  # Store last agent response for :copy command
     _last_user_message: str = ""  # Store last user prompt for :retry
@@ -545,6 +583,12 @@ class SuperQodeApp(App):
     _claude_process = None  # Keep Claude ACP process alive for multi-turn
     _is_first_message: bool = True  # Track if this is the first message in session
     _acp_client = None  # ACP client for agent communication
+    _acp_client_key = None  # Current reusable ACP session key
+    _acp_loop_runner = None  # Dedicated loop for persistent ACP clients
+    _plan_mode_enabled: bool = False  # Keep native BYOK/local prompts in plan-only mode
+    _force_plan_once: bool = False  # Run the next native prompt as plan-only
+    _force_execute_once: bool = False  # Run the next prompt even if plan mode is enabled
+    _pending_plan_request: str = ""  # Last planned request available for approval/execution
 
     def __init__(self):
         super().__init__()
@@ -568,8 +612,8 @@ class SuperQodeApp(App):
         # PERFORMANCE: Animation manager for throttled animations
         self._animation_manager = None
 
-        # PERFORMANCE: Prewarm LiteLLM in background for faster first LLM call
-        self._prewarm_litellm()
+        # LiteLLM prewarm is delayed until after the first screen paints so
+        # background imports do not compete with TUI startup.
 
     @property
     def agents(self) -> List[AgentInfo]:
@@ -871,8 +915,9 @@ class SuperQodeApp(App):
         # self._discover_acp_agents()
         # Initialize sidebar width tracking
         self._init_sidebar_resize()
-        # Run provider health check in background
-        self._run_startup_health_check()
+        self.set_timer(0.75, self._prewarm_litellm)
+        if os.getenv("SUPERQODE_STARTUP_HEALTH", "").strip().lower() in ("1", "true", "yes"):
+            self._run_startup_health_check()
 
     def _build_palette_commands(self) -> list[PaletteCommand]:
         """Build the command palette from the real TUI command surface."""
@@ -3247,6 +3292,11 @@ class SuperQodeApp(App):
 
         # Handle Enter key (empty input) for selections
         if not text:
+            if getattr(self, "_awaiting_agent_question", False):
+                self._handle_agent_question_input(text, log)
+                event.input.value = ""
+                return
+
             # Check if awaiting ACP agent selection
             if getattr(self, "_awaiting_acp_agent_selection", False):
                 self.action_select_highlighted_acp_agent()
@@ -3300,6 +3350,10 @@ class SuperQodeApp(App):
             pass
 
         log = self.query_one("#log", ConversationLog)
+
+        if getattr(self, "_awaiting_agent_question", False):
+            if self._handle_agent_question_input(text, log):
+                return
 
         # Check for commands FIRST (before selection handlers) so :home, :back, :cancel work
         # Supports both : (vim-style) and / prefix
@@ -3738,6 +3792,12 @@ class SuperQodeApp(App):
                 registry = ToolRegistry.default()
             elif profile == "standard":
                 registry = ToolRegistry.standard()
+            elif profile in ("ds4", "local-fast", "local_fast"):
+                registry = ToolRegistry.ds4()
+                profile = "ds4"
+            elif profile in ("coding", "code"):
+                registry = ToolRegistry.coding()
+                profile = "coding"
             else:
                 registry = ToolRegistry.full()
                 profile = "full"
@@ -4722,6 +4782,8 @@ team:
 
         # Skip permission input handling when using modal dialogs
         # (permissions are handled directly in the modal)
+        if self._handle_agent_question_input(text, log):
+            return
 
         # Check for BYOK provider/model selection
         if hasattr(self, "_awaiting_byok_provider") and self._awaiting_byok_provider:
@@ -4774,6 +4836,16 @@ team:
         # Enable auto-scroll when user sends a message so they see agent's work
         log.auto_scroll = True
 
+        plan_requested = getattr(self, "_force_plan_once", False) or (
+            getattr(self, "_plan_mode_enabled", False)
+            and not getattr(self, "_force_execute_once", False)
+        )
+        self._active_plan_mode_for_current_message = plan_requested
+        self._force_plan_once = False
+        self._force_execute_once = False
+        if plan_requested:
+            self._pending_plan_request = text
+
         log.add_user(text)
         self._last_user_message = text
 
@@ -4791,15 +4863,135 @@ team:
             agent = session.connected_agent
             # Get the actual agent name from the connected agent, not from old session state
             name = agent.get("short_name", agent.get("name", "agent")) if agent else "agent"
+            if plan_requested:
+                text = (
+                    "PLAN MODE: Analyze the request and produce a concrete implementation plan. "
+                    "Do not edit files, run commands that modify state, or make changes.\n\n"
+                    f"{text}"
+                )
             # Use standard subprocess approach (ACP requires separate adapter)
             self._send_to_agent(text, name, log)
         elif mode != "home" and "." in mode:
             self.is_busy = True
             self._cancel_requested = False
             m, r = mode.split(".", 1)
+            if plan_requested:
+                text = (
+                    "PLAN MODE: Analyze the request and produce a concrete implementation plan. "
+                    "Do not edit files, run commands that modify state, or make changes.\n\n"
+                    f"{text}"
+                )
             self._send_to_role(text, m, r, log)
         else:
             log.add_info("Not connected. Use :connect acp <name> or :qe <role> after :init")
+
+    async def _ask_agent_question(self, question, log: ConversationLog):
+        """Show an agent question in the TUI and await the next input submission."""
+        from superqode.tools.question_tool import Answer
+
+        future: concurrent.futures.Future = concurrent.futures.Future()
+
+        def show_question():
+            self._awaiting_agent_question = True
+            self._pending_agent_question = question
+            self._pending_agent_question_future = future
+            self._permission_pending = True
+
+            lines = [question.question]
+            if getattr(question, "options", None):
+                lines.extend(f"{idx}. {option}" for idx, option in enumerate(question.options, 1))
+            if getattr(question, "default", None):
+                lines.append(f"Default: {question.default}")
+
+            log.add_info("Agent needs your input:")
+            log.add_info("\n".join(lines))
+
+            try:
+                input_widget = self.query_one("#prompt-input", Input)
+                input_widget.placeholder = "Answer the agent question..."
+                input_widget.focus()
+            except Exception:
+                pass
+            self._start_permission_pulse()
+
+        try:
+            self._call_ui(show_question)
+        except RuntimeError as e:
+            message = str(e).lower()
+            if "different thread" in message or "app thread" in message:
+                show_question()
+            else:
+                raise
+
+        answer = await asyncio.wrap_future(future)
+        return Answer(value=answer["value"], custom=answer.get("custom", False))
+
+    def _handle_agent_question_input(self, response: str, log: ConversationLog) -> bool:
+        """Resolve a pending ask_user/confirm question from the prompt input."""
+        if not getattr(self, "_awaiting_agent_question", False):
+            return False
+
+        future = getattr(self, "_pending_agent_question_future", None)
+        question = getattr(self, "_pending_agent_question", None)
+        if future is None or question is None:
+            self._awaiting_agent_question = False
+            return False
+
+        raw = response.strip()
+        lowered = raw.lower()
+
+        if lowered in (":cancel", "/cancel", ":back", "/back"):
+            if not future.done():
+                future.cancel()
+            self._awaiting_agent_question = False
+            self._pending_agent_question = None
+            self._pending_agent_question_future = None
+            self._permission_pending = False
+            self._reset_input_placeholder()
+            log.add_info("Agent question cancelled.")
+            return True
+
+        value: Any = raw
+        custom = False
+        default = getattr(question, "default", None)
+        q_type = getattr(getattr(question, "question_type", None), "value", "text")
+        options = list(getattr(question, "options", []) or [])
+
+        if q_type == "confirm":
+            if lowered in ("y", "yes", "true", "1", "ok", "confirm", "confirmed"):
+                value = True
+            elif lowered in ("n", "no", "false", "0", "deny", "denied"):
+                value = False
+            elif default is not None:
+                value = str(default).lower() in ("yes", "true", "1", "y")
+            else:
+                log.add_info("Answer yes or no.")
+                return True
+        elif not raw and default is not None:
+            value = default
+        elif q_type in ("choice", "multi_choice") and options:
+            selected: list[str] = []
+            parts = [part.strip() for part in raw.split(",") if part.strip()]
+            for part in parts:
+                if part.isdigit() and 1 <= int(part) <= len(options):
+                    selected.append(options[int(part) - 1])
+                elif part in options:
+                    selected.append(part)
+                else:
+                    custom = True
+                    selected.append(part)
+            value = selected if q_type == "multi_choice" else (selected[0] if selected else raw)
+
+        if not future.done():
+            future.set_result({"value": value, "custom": custom})
+
+        self._awaiting_agent_question = False
+        self._pending_agent_question = None
+        self._pending_agent_question_future = None
+        self._permission_pending = False
+        self._reset_input_placeholder()
+        log.add_info("Answered agent question. Continuing...")
+        return True
 
     @work(exclusive=True)
     async def _send_to_pure_mode(self, text: str, log: ConversationLog):
@@ -4897,6 +5089,14 @@ team:
 
         provider = self._pure_mode.session.provider
         model = self._pure_mode.session.model
+        plan_mode_for_run = bool(getattr(self, "_active_plan_mode_for_current_message", False))
+        if plan_mode_for_run:
+            text = (
+                "PLAN MODE: Analyze the request and produce a concrete implementation plan. "
+                "Do not call tools, edit files, run commands, or make changes. "
+                "Include goal, steps, files likely involved, risks, and verification.\n\n"
+                f"{text}"
+            )
 
         # Set up callbacks for BYOK/Local modes
         # Tool calls are ALWAYS visible (the agent's actual work)
@@ -5097,36 +5297,57 @@ team:
             # Stream the response
             # CRITICAL: Accumulate ALL chunks including final response after tool calls
             try:
+                from superqode.tools.question_tool import (
+                    get_question_handler,
+                    set_question_handler,
+                )
+
+                previous_question_handler = get_question_handler()
+
+                async def tui_question_handler(question):
+                    return await self._ask_agent_question(question, log)
+
+                set_question_handler(tui_question_handler)
+
                 # Accumulate chunks to avoid showing each tiny piece as separate thinking line
                 accumulated_chunk = ""
                 last_display_time = time.time()
 
-                async for chunk in self._pure_mode.run_streaming(text):
-                    chunk_count += 1
+                try:
+                    async for chunk in self._pure_mode.run_streaming(
+                        text, plan_mode=plan_mode_for_run
+                    ):
+                        chunk_count += 1
 
-                    # Process chunk
-                    if chunk is not None:
-                        chunk_str = str(chunk) if not isinstance(chunk, str) else chunk
+                        # Process chunk
+                        if chunk is not None:
+                            chunk_str = str(chunk) if not isinstance(chunk, str) else chunk
 
-                        # Always accumulate for final display
-                        full_response += chunk_str
+                            # Always accumulate for final display
+                            full_response += chunk_str
 
-                        # Accumulate chunks and display in batches to avoid weird chunking
-                        if chunk_str.strip():
-                            accumulated_chunk += chunk_str
-                            response_started = True
+                            # Accumulate chunks and display in batches to avoid weird chunking
+                            if chunk_str.strip():
+                                accumulated_chunk += chunk_str
+                                response_started = True
 
-                            # Display accumulated chunk every 100ms or when we hit a newline
-                            # Response chunks go to log.add_response_chunk (not add_assistant)
-                            current_time = time.time()
-                            if (
-                                "\n" in chunk_str
-                                or current_time - last_display_time > 0.1
-                                or len(accumulated_chunk) > 100
-                            ):
-                                _safe_call(log.add_response_chunk, accumulated_chunk)
-                                accumulated_chunk = ""
-                                last_display_time = current_time
+                                # Display accumulated chunk every 100ms or when we hit a newline
+                                # Response chunks go to log.add_response_chunk (not add_assistant)
+                                current_time = time.time()
+                                if (
+                                    "\n" in chunk_str
+                                    or current_time - last_display_time > 0.1
+                                    or len(accumulated_chunk) > 100
+                                ):
+                                    _safe_call(log.add_response_chunk, accumulated_chunk)
+                                    accumulated_chunk = ""
+                                    last_display_time = current_time
+
+                    if accumulated_chunk:
+                        _safe_call(log.add_response_chunk, accumulated_chunk)
+                finally:
+                    if get_question_handler() is tui_question_handler:
+                        set_question_handler(previous_question_handler)
 
             except StopAsyncIteration:
                 # Normal end of stream - display any remaining accumulated chunks
@@ -5410,6 +5631,9 @@ team:
             # Log full traceback for debugging (only in verbose mode)
             if hasattr(self, "show_thinking_logs") and self.show_thinking_logs:
                 log.add_info(f"Debug: {error_trace}")
+
+        self._active_plan_mode_for_current_message = False
+        self.is_busy = False
 
     @work(exclusive=True, thread=True)
     def _send_to_agent(self, text: str, name: str, log: ConversationLog):
@@ -6130,7 +6354,30 @@ team:
                 if agent_type == "opencode" and not model_id.startswith("opencode/"):
                     model_id = f"opencode/{model_id}"
 
-            client = ACPClient(project_root=Path.cwd(), command=command, model=model_id)
+            project_root = Path.cwd()
+            client_key = (str(project_root), command, model_id or "")
+            client = getattr(self, "_acp_client", None)
+            if (
+                client is None
+                or getattr(self, "_acp_client_key", None) != client_key
+                or not client.is_running()
+            ):
+                if client is not None:
+                    try:
+                        await client.stop()
+                    except Exception:
+                        pass
+                client = ACPClient(
+                    project_root=project_root,
+                    command=command,
+                    model=model_id,
+                    startup_timeout=float(os.getenv("SUPERQODE_ACP_STARTUP_TIMEOUT", "15")),
+                    request_timeout=float(os.getenv("SUPERQODE_ACP_REQUEST_TIMEOUT", "12")),
+                    prompt_timeout=float(os.getenv("SUPERQODE_ACP_PROMPT_TIMEOUT", "180")),
+                )
+                self._acp_client = client
+                self._acp_client_key = client_key
+
             client.on_message = on_message
             client.on_thinking = on_thinking
             client.on_tool_call = on_tool_call
@@ -6139,17 +6386,24 @@ team:
             client.on_plan = on_plan
 
             try:
-                self._call_ui(log.add_info, f"Starting ACP process: {command}")
-                ok = await client.start()
-                if not ok:
-                    return None, {}
+                if client.is_running():
+                    self._call_ui(log.add_info, "Reusing warm ACP session. Sending prompt...")
+                else:
+                    self._call_ui(log.add_info, f"Starting ACP process: {command}")
+                    ok = await client.start()
+                    if not ok:
+                        self._acp_client = None
+                        self._acp_client_key = None
+                        return None, {}
 
                 # Store for cancellation cleanup
                 self._acp_client = client
+                self._acp_client_key = client_key
                 if getattr(client, "_process", None) is not None:
                     self._agent_process = client._process  # type: ignore[attr-defined]
 
-                self._call_ui(log.add_info, "ACP session ready. Sending prompt...")
+                if not text_parts and not tool_actions:
+                    self._call_ui(log.add_info, "ACP session ready. Sending prompt...")
                 prompt_task = asyncio.create_task(client.send_prompt(message))
                 prompt_started_at = time.monotonic()
                 waiting_notice_sent = False
@@ -6175,12 +6429,19 @@ team:
                 stats = client.get_stats().__dict__
                 stats["duration"] = time.monotonic() - total_start
                 return stop_reason, stats
-            finally:
-                await client.stop()
+            except Exception:
+                try:
+                    await client.stop()
+                finally:
+                    self._acp_client = None
+                    self._acp_client_key = None
+                    self._agent_process = None
+                raise
 
         try:
-            stop_reason, stats = asyncio.run(run_prompt())
-            self._acp_client = None
+            if self._acp_loop_runner is None:
+                self._acp_loop_runner = _AsyncLoopThread()
+            stop_reason, stats = self._acp_loop_runner.run(run_prompt())
             self._agent_process = None
             self._call_ui(self._stop_stream_animation)
 
@@ -6216,6 +6477,7 @@ team:
         except FileNotFoundError:
             self._agent_process = None
             self._acp_client = None
+            self._acp_client_key = None
             self._call_ui(self._stop_thinking)
             self._call_ui(self._stop_stream_animation)
             self._call_ui(
@@ -6226,6 +6488,7 @@ team:
         except Exception as e:
             self._agent_process = None
             self._acp_client = None
+            self._acp_client_key = None
             self._call_ui(self._stop_thinking)
             self._call_ui(self._stop_stream_animation)
             self._call_ui(
@@ -10892,6 +11155,7 @@ team:
         """Run SuperQode agent with full tool access (AgentLoop) and streaming output."""
         try:
             from superqode.agents.unified import create_unified_agent
+            from superqode.tools.question_tool import get_question_handler, set_question_handler
 
             # Create and initialize agent
             agent = create_unified_agent(resolved)
@@ -10951,13 +11215,18 @@ team:
                 full_response = ""
                 had_content = False
                 streaming_timed_out = False
+                previous_question_handler = get_question_handler()
+
+                async def tui_question_handler(question):
+                    return await self._ask_agent_question(question, log)
 
                 try:
+                    set_question_handler(tui_question_handler)
 
                     async def stream_with_timeout():
+                        nonlocal full_response, had_content
                         async for chunk in agent.send_message_streaming(message):
                             if chunk.strip():
-                                nonlocal had_content
                                 had_content = True
                                 full_response += chunk
                                 self._call_ui(log.add_assistant, chunk)
@@ -10969,6 +11238,9 @@ team:
                         f"⏰ Streaming timed out for {agent.provider}/{agent.model} after 2 minutes"
                     )
                     self._call_ui(log.add_error, error_msg)
+                finally:
+                    if get_question_handler() is tui_question_handler:
+                        set_question_handler(previous_question_handler)
 
                 # If no content was streamed but tools were used, prompt for summary
                 # (only if not timed out)
@@ -11005,7 +11277,13 @@ team:
                 self._call_ui(self._reset_mode_badge_after_qe)
             else:
                 # Fallback to non-streaming with timeout to prevent hanging
+                previous_question_handler = get_question_handler()
+
+                async def tui_question_handler(question):
+                    return await self._ask_agent_question(question, log)
+
                 try:
+                    set_question_handler(tui_question_handler)
                     # Add timeout to prevent hanging on slow/unresponsive models
                     import asyncio
 
@@ -11017,6 +11295,9 @@ team:
                     response = None
                     error_msg = f"⏰ Model {agent.provider}/{agent.model} timed out after 2 minutes"
                     self._call_ui(log.add_error, error_msg)
+                finally:
+                    if get_question_handler() is tui_question_handler:
+                        set_question_handler(previous_question_handler)
 
                 self._call_ui(self._stop_thinking)
                 self._call_ui(self._stop_stream_animation)
@@ -11242,14 +11523,15 @@ team:
 
         # Stop ACP client if running
         if self._acp_client is not None:
-            import asyncio
-
             try:
-                # Schedule the stop coroutine
-                asyncio.create_task(self._acp_client.stop())
+                if self._acp_loop_runner is not None:
+                    self._acp_loop_runner.run(self._acp_client.stop())
+                else:
+                    asyncio.create_task(self._acp_client.stop())
             except Exception:
                 pass
             self._acp_client = None
+            self._acp_client_key = None
 
         # Stop any animations
         self._stop_thinking()
@@ -11841,13 +12123,15 @@ team:
         # Clear any existing ACP connection when switching to BYOK
         if hasattr(self, "_acp_client") and self._acp_client:
             # Disconnect ACP client if switching from ACP to BYOK
-            import asyncio
-
             try:
-                asyncio.create_task(self._acp_client.stop())
+                if self._acp_loop_runner is not None:
+                    self._acp_loop_runner.run(self._acp_client.stop())
+                else:
+                    asyncio.create_task(self._acp_client.stop())
             except Exception:
                 pass
             self._acp_client = None
+            self._acp_client_key = None
 
         # Clear session state
         session = get_session()
@@ -17600,10 +17884,20 @@ team:
         # Stop ACP client
         if self._acp_client is not None:
             try:
-                await asyncio.wait_for(self._acp_client.stop(), timeout=2.0)
+                if self._acp_loop_runner is not None:
+                    self._acp_loop_runner.run(self._acp_client.stop())
+                else:
+                    await asyncio.wait_for(self._acp_client.stop(), timeout=2.0)
             except Exception:
                 pass
             self._acp_client = None
+            self._acp_client_key = None
+        if self._acp_loop_runner is not None:
+            try:
+                self._acp_loop_runner.close()
+            except Exception:
+                pass
+            self._acp_loop_runner = None
 
         # Cancel all pending workers
         try:
@@ -17715,6 +18009,14 @@ team:
                     self._acp_client._process.terminate()
             except Exception:
                 pass
+            self._acp_client = None
+            self._acp_client_key = None
+        if self._acp_loop_runner is not None:
+            try:
+                self._acp_loop_runner.close()
+            except Exception:
+                pass
+            self._acp_loop_runner = None
 
         # Stop all timers
         if self._thinking_timer:
@@ -18526,17 +18828,66 @@ team:
 
     def _handle_plan(self, args: str, log: ConversationLog):
         """Handle :plan command."""
-        from rich.console import Console
+        arg_text = args.strip()
+        arg_lower = arg_text.lower()
 
-        console = Console()
+        if arg_lower in ("on", "enable", "enabled"):
+            self._plan_mode_enabled = True
+            log.add_success(
+                "Plan mode enabled. New prompts will analyze only and will not execute native tools."
+            )
+            log.add_info(
+                "Use :plan off to return to execution mode, or :plan run to execute the last planned request."
+            )
+            return
 
-        if args.lower() == "clear":
+        if arg_lower in ("off", "disable", "disabled"):
+            self._plan_mode_enabled = False
+            log.add_success("Plan mode disabled. New prompts can execute tools again.")
+            return
+
+        if arg_lower in ("run", "execute", "apply"):
+            pending = getattr(self, "_pending_plan_request", "").strip()
+            if not pending:
+                log.add_info("No planned request is available. Use :plan <task> first.")
+                return
+            if getattr(self, "is_busy", False):
+                log.add_info("Agent is already running. Wait for it to finish, then use :plan run.")
+                return
+            self._force_execute_once = True
+            log.add_info("Executing the last planned request with tools enabled...")
+            self._handle_message(pending, log)
+            return
+
+        if arg_lower in ("clear", "reset"):
             self._plan_manager.clear()
+            self._pending_plan_request = ""
+            self._force_plan_once = False
+            self._force_execute_once = False
             log.add_success("Plan cleared")
             return
 
+        if arg_lower in ("status", ""):
+            status = "ON" if getattr(self, "_plan_mode_enabled", False) else "OFF"
+            pending = getattr(self, "_pending_plan_request", "")
+            log.add_info(f"Plan mode: {status}")
+            if pending:
+                log.add_info(f"Last planned request: {pending[:160]}")
+
+        if arg_text and arg_lower not in ("status",):
+            if getattr(self, "is_busy", False):
+                log.add_info("Agent is already running. Wait for it to finish, then plan the task.")
+                return
+            self._force_plan_once = True
+            self._pending_plan_request = arg_text
+            log.add_info("Planning only. No native tools will be executed.")
+            self._handle_message(arg_text, log)
+            return
+
         if not self._plan_manager.tasks:
-            log.add_info("No plan yet. The agent will create one when working.")
+            if not arg_text:
+                log.add_info("Usage: :plan <task>, :plan run, :plan on, :plan off, :plan clear")
+                log.add_info("No internal task plan is active yet.")
             return
 
         # Render the plan

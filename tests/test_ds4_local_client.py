@@ -7,10 +7,12 @@ from superqode.providers.registry import get_local_providers
 @pytest.mark.asyncio
 async def test_ds4_lists_server_models_as_tool_capable(monkeypatch):
     client = DS4Client(host="http://127.0.0.1:8000/v1")
+    seen_timeouts = []
 
     async def fake_request(method, endpoint, data=None, timeout=10.0):
         assert method == "GET"
         assert endpoint == "/models"
+        seen_timeouts.append(timeout)
         return {"data": [{"id": "deepseek-v4-flash"}]}
 
     monkeypatch.setattr(client, "_async_request", fake_request)
@@ -18,6 +20,7 @@ async def test_ds4_lists_server_models_as_tool_capable(monkeypatch):
     models = await client.list_models()
 
     assert [model.id for model in models] == ["deepseek-v4-flash"]
+    assert seen_timeouts == [1.5]
     assert models[0].supports_tools is True
     assert models[0].running is True
     assert models[0].family == "deepseek"
@@ -37,6 +40,38 @@ async def test_ds4_falls_back_to_known_models_when_server_unreachable(monkeypatc
     assert [model.id for model in models] == ["deepseek-v4-flash", "deepseek-chat"]
     assert all(model.supports_tools for model in models)
     assert all(model.running is False for model in models)
+
+
+@pytest.mark.asyncio
+async def test_ds4_health_probe_uses_short_timeout(monkeypatch):
+    client = DS4Client(host="http://127.0.0.1:8000/v1")
+    seen_timeouts = []
+
+    async def fake_request(method, endpoint, data=None, timeout=10.0):
+        seen_timeouts.append(timeout)
+        return {"data": []}
+
+    monkeypatch.setattr(client, "_async_request", fake_request)
+
+    assert await client.is_available() is True
+    assert seen_timeouts == [1.0]
+
+
+@pytest.mark.asyncio
+async def test_ds4_timeout_env_overrides(monkeypatch):
+    client = DS4Client(host="http://127.0.0.1:8000/v1")
+    seen_timeouts = []
+
+    async def fake_request(method, endpoint, data=None, timeout=10.0):
+        seen_timeouts.append(timeout)
+        return {"data": []}
+
+    monkeypatch.setenv("DS4_MODELS_TIMEOUT", "0.25")
+    monkeypatch.setattr(client, "_async_request", fake_request)
+
+    await client.list_models()
+
+    assert seen_timeouts == [0.25]
 
 
 def test_ds4_is_a_local_provider_for_tui_picker():

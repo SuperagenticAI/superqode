@@ -53,7 +53,9 @@ class ScriptedGateway(GatewayInterface):
         tool_choice: Optional[str] = None,
         **kwargs: Any,
     ) -> AsyncIterator[StreamChunk]:
-        yield StreamChunk(content="")
+        self.calls.append(messages)
+        self.tools_seen.append(tools)
+        yield StreamChunk(content="streamed")
 
     async def test_connection(self, provider: str, model: Optional[str] = None) -> Dict[str, Any]:
         return {"ok": True}
@@ -229,6 +231,25 @@ async def test_ds4_project_question_receives_tools():
 
 
 @pytest.mark.asyncio
+async def test_streaming_plan_mode_does_not_send_tools():
+    gateway = ScriptedGateway([])
+    loop = AgentLoop(
+        gateway=gateway,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(
+            provider="ds4",
+            model="deepseek-v4-flash",
+            plan_mode=True,
+        ),
+    )
+
+    chunks = [chunk async for chunk in loop.run_streaming("plan the README update")]
+
+    assert "".join(chunks) == "streamed"
+    assert gateway.tools_seen == [None]
+
+
+@pytest.mark.asyncio
 async def test_agent_retries_when_model_narrates_tool_use_without_call():
     gateway = ScriptedGateway(
         [
@@ -273,9 +294,7 @@ async def test_agent_stops_when_model_keeps_narrating_tool_use_without_call():
                 )
             ),
             GatewayResponse(
-                content=(
-                    "Let me start by inspecting the README and project files first."
-                )
+                content=("Let me start by inspecting the README and project files first.")
             ),
             GatewayResponse(content="should not be called"),
         ]

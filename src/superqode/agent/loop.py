@@ -332,6 +332,7 @@ class AgentConfig:
     enable_session_storage: bool = False
     session_storage_dir: str = ".superqode/sessions"
     session_id: Optional[str] = None
+    session_history_limit: int = 20
 
 
 @dataclass
@@ -516,7 +517,7 @@ class AgentLoop:
             return []
 
         restored: List[AgentMessage] = []
-        for message in self._session_manager.get_messages():
+        for message in self._session_manager.get_messages(limit=self.config.session_history_limit):
             restored.append(
                 AgentMessage(
                     role=message.role,
@@ -1076,16 +1077,20 @@ class AgentLoop:
             # PERFORMANCE: Use cached message conversion
             gateway_messages = self._convert_messages(messages)
 
-            tools_to_send = (
-                tool_defs
-                if _should_send_tools(
-                    self.config.provider,
-                    self.config.model,
-                    user_message,
-                    tool_defs,
+            tools_to_send = None
+            if not self.config.plan_mode:
+                tools_to_send = (
+                    tool_defs
+                    if _should_send_tools(
+                        self.config.provider,
+                        self.config.model,
+                        user_message,
+                        tool_defs,
+                    )
+                    else None
                 )
-                else None
-            )
+            elif self.on_thinking:
+                await self.on_thinking("Plan Mode: Analyzing without executing tools...")
 
             # Stream response
             full_content = ""

@@ -180,6 +180,7 @@ async def run_headless(
         system_prompt_level=system_level or profile.system_level,
         working_directory=active_working_directory,
         job_description=profile.job_description,
+        plan_mode=profile.name == "plan",
         enable_session_storage=True,
         session_storage_dir=storage_dir,
         session_id=session_id,

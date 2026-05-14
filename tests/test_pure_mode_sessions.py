@@ -19,6 +19,65 @@ def test_session_listing_preserves_full_id_and_prefix_resolution(tmp_path, monke
     assert pure.resolve_session_id("abcdefgh1234") == "abcdefgh1234"
 
 
+def test_pure_mode_uses_coding_tool_profile_by_default(monkeypatch):
+    monkeypatch.delenv("SUPERQODE_TOOL_PROFILE", raising=False)
+
+    pure = PureMode()
+    status = pure.get_status()
+
+    assert status["tool_profile"] == "coding"
+    assert "patch" in status["tools"]
+    assert "web_search" not in status["tools"]
+
+
+def test_pure_mode_switches_to_ds4_profile_on_connect(tmp_path, monkeypatch):
+    monkeypatch.delenv("SUPERQODE_TOOL_PROFILE", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    pure = PureMode()
+    pure.connect("ds4", "deepseek-v4-flash")
+    status = pure.get_status()
+
+    assert status["tool_profile"] == "ds4"
+    assert "patch" in status["tools"]
+    assert "batch" not in status["tools"]
+    assert pure._agent is not None
+    assert pure._agent.config.max_iterations == 6
+    assert pure._agent.config.session_history_limit == 8
+    assert pure._agent.parallel_tools is False
+
+
+def test_explicit_tool_profile_overrides_ds4_default(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUPERQODE_TOOL_PROFILE", "coding")
+    monkeypatch.chdir(tmp_path)
+
+    pure = PureMode()
+    pure.connect("ds4", "deepseek-v4-flash")
+    status = pure.get_status()
+
+    assert status["tool_profile"] == "coding"
+    assert "batch" in status["tools"]
+
+
+def test_session_manager_can_load_recent_messages_only(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    manager = SessionManager(".superqode/sessions")
+    manager.start_session("history-window", provider="ds4", model="deepseek-v4-flash")
+
+    for i in range(30):
+        manager.add_user_message(f"message {i}")
+
+    recent = manager.get_messages(limit=5)
+
+    assert [message.content for message in recent] == [
+        "message 25",
+        "message 26",
+        "message 27",
+        "message 28",
+        "message 29",
+    ]
+
+
 def test_resume_reuses_resolved_session_id_and_fork_branches_active_session(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     manager = SessionManager(".superqode/sessions")

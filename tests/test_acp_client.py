@@ -90,6 +90,7 @@ class TestACPClient:
         client = ACPClient(project_root=tmp_path, command="opencode acp")
 
         assert client.model is None
+        assert client.is_running() is False
 
     def test_client_callbacks_default_none(self, tmp_path):
         """Test that callbacks default to None."""
@@ -163,7 +164,7 @@ class TestProtocolConstants:
 
     def test_client_version(self):
         """Test client version format."""
-        assert CLIENT_VERSION == "0.1.18"
+        assert CLIENT_VERSION == "0.1.22"
 
 
 class TestToolCall:

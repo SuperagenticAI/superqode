@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -133,13 +134,17 @@ class SessionStore:
         )
         self.append_message(session_id, message)
 
-    def get_messages(self, session_id: str) -> List[SessionMessage]:
+    def get_messages(self, session_id: str, limit: Optional[int] = None) -> List[SessionMessage]:
         """Get all messages from session."""
         path = self._session_path(session_id)
         if not path.exists():
             return []
 
-        messages = []
+        if limit is not None and limit <= 0:
+            return []
+
+        messages: list[SessionMessage] | deque[SessionMessage]
+        messages = deque(maxlen=limit) if limit else []
         with open(path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
@@ -149,7 +154,7 @@ class SessionStore:
                         messages.append(SessionMessage(**data))
                     except json.JSONDecodeError:
                         continue
-        return messages
+        return list(messages)
 
     def list_sessions(self) -> List[SessionMetadata]:
         """List all sessions."""
@@ -280,11 +285,11 @@ class SessionManager:
             raise RuntimeError("No active session. Call start_session first.")
         self.store.append_tool_result(self._current_session_id, tool_name, result)
 
-    def get_messages(self) -> List[SessionMessage]:
+    def get_messages(self, limit: Optional[int] = None) -> List[SessionMessage]:
         """Get messages from current session."""
         if not self._current_session_id:
             return []
-        return self.store.get_messages(self._current_session_id)
+        return self.store.get_messages(self._current_session_id, limit=limit)
 
     def list_all_sessions(self) -> List[SessionMetadata]:
         """List all sessions."""

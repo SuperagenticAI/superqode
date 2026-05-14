@@ -215,6 +215,104 @@ class ToolRegistry:
         return registry
 
     @classmethod
+    def coding(cls) -> "ToolRegistry":
+        """Create a lean registry for normal interactive coding sessions.
+
+        This keeps the model focused on local code work and avoids sending
+        web, network, sub-agent, A2A, skill, and LSP tools on every turn.
+        """
+        from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
+        from .edit_tools import EditFileTool, InsertTextTool, PatchTool, MultiEditTool
+        from .shell_tools import BashTool
+        from .search_tools import GrepTool, GlobTool, CodeSearchTool, RepoSearchTool
+        from .question_tool import QuestionTool, ConfirmTool
+        from .todo_tools import TodoWriteTool, TodoReadTool
+        from .batch_tool import BatchTool
+        from .compact_tool import CompactTool
+        from .monty_tool import MontyPythonReplTool, is_monty_available
+
+        registry = cls()
+
+        registry.register(ReadFileTool())
+        registry.register(WriteFileTool())
+        registry.register(ListDirectoryTool())
+
+        registry.register(EditFileTool())
+        registry.register(InsertTextTool())
+        registry.register(PatchTool())
+        registry.register(MultiEditTool())
+
+        registry.register(TodoWriteTool())
+        registry.register(TodoReadTool())
+        registry.register(BatchTool())
+
+        registry.register(BashTool())
+        registry.register(GrepTool())
+        registry.register(GlobTool())
+        registry.register(RepoSearchTool())
+        registry.register(CodeSearchTool())
+
+        if is_monty_available():
+            registry.register(MontyPythonReplTool())
+
+        registry.register(QuestionTool())
+        registry.register(ConfirmTool())
+        registry.register(CompactTool())
+
+        return registry
+
+    @classmethod
+    def ds4(cls) -> "ToolRegistry":
+        """Create a compact registry tuned for DS4/local tool calling.
+
+        DS4 benefits from a smaller schema surface. Keep the core coding loop
+        intact while avoiding parallel/meta tools that tend to add latency or
+        extra planning turns on local models.
+        """
+        from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
+        from .edit_tools import EditFileTool, PatchTool
+        from .shell_tools import BashTool
+        from .search_tools import GrepTool, GlobTool, RepoSearchTool
+        from .question_tool import QuestionTool, ConfirmTool
+        from .todo_tools import TodoWriteTool, TodoReadTool
+
+        registry = cls()
+
+        registry.register(ReadFileTool())
+        registry.register(WriteFileTool())
+        registry.register(ListDirectoryTool())
+
+        registry.register(EditFileTool())
+        registry.register(PatchTool())
+
+        registry.register(TodoWriteTool())
+        registry.register(TodoReadTool())
+
+        registry.register(BashTool())
+        registry.register(GrepTool())
+        registry.register(GlobTool())
+        registry.register(RepoSearchTool())
+
+        registry.register(QuestionTool())
+        registry.register(ConfirmTool())
+
+        return registry
+
+    @classmethod
+    def for_profile(cls, profile: str = "coding") -> "ToolRegistry":
+        """Create a registry for a named tool profile."""
+        normalized = (profile or "coding").strip().lower()
+        if normalized in ("full", "all"):
+            return cls.full()
+        if normalized in ("standard", "safe"):
+            return cls.standard()
+        if normalized in ("ds4", "local-fast", "local_fast"):
+            return cls.ds4()
+        if normalized in ("default", "minimal", "small"):
+            return cls.default()
+        return cls.coding()
+
+    @classmethod
     def full(cls) -> "ToolRegistry":
         """Create registry with all available tools."""
         from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool

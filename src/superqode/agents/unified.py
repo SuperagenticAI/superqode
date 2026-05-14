@@ -1,6 +1,7 @@
 """Unified agent interface for both ACP agents and SuperQode models."""
 
 import asyncio
+import os
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List, AsyncIterator
 from dataclasses import dataclass
@@ -86,13 +87,18 @@ class SuperQodeAgent(UnifiedAgent):
         from ..tools.base import ToolResult
         from ..providers.gateway.litellm_gateway import LiteLLMGateway
         from ..providers.gateway.base import ToolDefinition
+        from ..providers.registry import PROVIDERS, ProviderCategory
         from ..mcp.integration import get_mcp_manager
 
         # Initialize gateway
         gateway = LiteLLMGateway()
 
-        # Initialize tools - use full registry for all capabilities
-        tools = ToolRegistry.full()
+        # Use a lean coding profile by default. Full tool surface is available
+        # with SUPERQODE_TOOL_PROFILE=full for workflows that need it.
+        tool_profile = os.getenv("SUPERQODE_TOOL_PROFILE", "").strip().lower()
+        if not tool_profile:
+            tool_profile = "ds4" if self.provider == "ds4" else "coding"
+        tools = ToolRegistry.for_profile(tool_profile)
 
         # Get MCP tools and setup executor
         mcp_executor = None
@@ -149,6 +155,18 @@ class SuperQodeAgent(UnifiedAgent):
         # Determine system prompt level - use FULL to match full() tool registry
         system_level = SystemPromptLevel.FULL
 
+        provider_def = PROVIDERS.get(self.provider)
+        if self.provider == "ds4":
+            max_iterations = int(os.getenv("DS4_MAX_ITERATIONS", "6"))
+            session_history_limit = int(os.getenv("DS4_SESSION_HISTORY_LIMIT", "8"))
+            parallel_tools = False
+        else:
+            max_iterations = (
+                8 if provider_def and provider_def.category == ProviderCategory.LOCAL else 12
+            )
+            session_history_limit = 20
+            parallel_tools = True
+
         # Create agent config with merged job description
         config = AgentConfig(
             provider=self.provider,
@@ -158,10 +176,12 @@ class SuperQodeAgent(UnifiedAgent):
             job_description=merged_job_description,
             working_directory=self._working_directory,
             tools_enabled=True,
-            temperature=0.7,
+            max_iterations=max_iterations,
+            temperature=0.2,
             max_tokens=4000,
             plan_mode=getattr(self.role_config, "plan_mode", False),
             enable_summarization=getattr(self.role_config, "enable_summarization", False),
+            session_history_limit=session_history_limit,
         )
 
         # Create agent loop (on_thinking will be set via send_message if provided)
@@ -169,7 +189,7 @@ class SuperQodeAgent(UnifiedAgent):
             gateway=gateway,
             tools=tools,
             config=config,
-            parallel_tools=True,
+            parallel_tools=parallel_tools,
             mcp_executor=mcp_executor,
             mcp_tools=mcp_tool_defs,
         )

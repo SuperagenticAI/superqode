@@ -25,6 +25,18 @@ DEFAULT_DS4_MODELS = (
     ("deepseek-v4-flash", "DeepSeek V4 Flash"),
     ("deepseek-chat", "DeepSeek V4 Flash (no thinking)"),
 )
+DEFAULT_DS4_HEALTH_TIMEOUT = 1.0
+DEFAULT_DS4_MODELS_TIMEOUT = 1.5
+
+
+def _env_float(name: str, default: float) -> float:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
 
 
 class DS4Client(LocalProviderClient):
@@ -67,7 +79,11 @@ class DS4Client(LocalProviderClient):
     async def is_available(self) -> bool:
         """Check whether DS4 is reachable."""
         try:
-            await self._async_request("GET", "/models", timeout=5.0)
+            await self._async_request(
+                "GET",
+                "/models",
+                timeout=_env_float("DS4_HEALTH_TIMEOUT", DEFAULT_DS4_HEALTH_TIMEOUT),
+            )
             return True
         except Exception:
             return False
@@ -77,7 +93,11 @@ class DS4Client(LocalProviderClient):
         start_time = time.time()
 
         try:
-            response = await self._async_request("GET", "/models", timeout=5.0)
+            response = await self._async_request(
+                "GET",
+                "/models",
+                timeout=_env_float("DS4_HEALTH_TIMEOUT", DEFAULT_DS4_HEALTH_TIMEOUT),
+            )
             models = response.get("data", [])
             latency = (time.time() - start_time) * 1000
             return ProviderStatus(
@@ -102,7 +122,11 @@ class DS4Client(LocalProviderClient):
     async def list_models(self) -> List[LocalModel]:
         """List DS4 models, falling back to known aliases when server is offline."""
         try:
-            response = await self._async_request("GET", "/models")
+            response = await self._async_request(
+                "GET",
+                "/models",
+                timeout=_env_float("DS4_MODELS_TIMEOUT", DEFAULT_DS4_MODELS_TIMEOUT),
+            )
             models = response.get("data", [])
             result = []
             for model_data in models:

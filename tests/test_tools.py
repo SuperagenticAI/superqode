@@ -60,6 +60,43 @@ class TestToolRegistry:
             assert "description" in tool["function"]
             assert "parameters" in tool["function"]
 
+    def test_coding_profile_is_lean_and_local_first(self):
+        """Coding profile keeps routine agent turns focused and smaller than full."""
+        coding = ToolRegistry.coding()
+        full = ToolRegistry.full()
+
+        coding_names = {tool.name for tool in coding.list()}
+
+        assert "read_file" in coding_names
+        assert "patch" in coding_names
+        assert "ask_user" in coding_names
+        assert "web_search" not in coding_names
+        assert "agent" not in coding_names
+        assert "lsp" not in coding_names
+        assert len(coding.to_openai_format()) < len(full.to_openai_format())
+
+    def test_tool_profile_selector_defaults_to_coding(self):
+        registry = ToolRegistry.for_profile("")
+
+        names = {tool.name for tool in registry.list()}
+
+        assert "patch" in names
+        assert "web_fetch" not in names
+
+    def test_ds4_profile_is_smaller_and_avoids_parallel_meta_tools(self):
+        registry = ToolRegistry.for_profile("ds4")
+        names = {tool.name for tool in registry.list()}
+
+        assert "read_file" in names
+        assert "patch" in names
+        assert "bash" in names
+        assert "repo_search" in names
+        assert "ask_user" in names
+        assert "batch" not in names
+        assert "multi_edit" not in names
+        assert "compact" not in names
+        assert len(registry.to_openai_format()) < len(ToolRegistry.coding().to_openai_format())
+
 
 class TestReadFileTool:
     """Test the read file tool."""

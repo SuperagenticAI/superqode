@@ -549,6 +549,7 @@ class SuperQodeGroup(click.Group):
     help="Headless output mode",
 )
 @click.option("--profile", default="build", help="Harness profile: build, plan, review, qe")
+@click.option("--plan", "plan_only", is_flag=True, help="Run headless prompt in plan-only mode")
 @click.option("--provider", envvar="SUPERQODE_PROVIDER", default="openai", help="Model provider")
 @click.option(
     "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-5.4", help="Model name"
@@ -592,6 +593,7 @@ def cli_main(
     print_mode,
     output_mode,
     profile,
+    plan_only,
     provider,
     model_name,
     resume,
@@ -606,6 +608,8 @@ def cli_main(
     """
 
     messages = tuple(_headless_messages or ()) or tuple(ctx.args)
+    if plan_only:
+        profile = "plan"
     headless_requested = (
         print_mode or output_mode == "json" or bool(messages) or resume or fork_from
     )

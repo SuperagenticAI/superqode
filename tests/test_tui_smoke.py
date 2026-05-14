@@ -1,8 +1,10 @@
 from rich.console import Console
 from types import SimpleNamespace
 import asyncio
+import concurrent.futures
 
 from superqode.app_main import SuperQodeApp, render_welcome
+from superqode.tools.question_tool import Question, QuestionType
 
 
 class FakeLog:
@@ -156,6 +158,46 @@ def test_busy_message_rejects_second_prompt():
     app._handle_message("second prompt", log)
 
     assert any("already running" in str(item) for item in log.items)
+
+
+def test_agent_question_input_is_handled_while_busy():
+    app = make_app()
+    log = FakeLog()
+    future = concurrent.futures.Future()
+
+    app.is_busy = True
+    app._awaiting_agent_question = True
+    app._pending_agent_question = Question(
+        question="Which implementation should I use?",
+        question_type=QuestionType.CHOICE,
+        options=["simple", "advanced"],
+    )
+    app._pending_agent_question_future = future
+
+    handled = app._handle_message("2", log)
+
+    assert handled is None
+    assert future.done()
+    assert future.result()["value"] == "advanced"
+    assert app._awaiting_agent_question is False
+    assert any("Continuing" in str(item) for item in log.items)
+
+
+def test_agent_question_empty_input_uses_default():
+    app = make_app()
+    log = FakeLog()
+    future = concurrent.futures.Future()
+
+    app._awaiting_agent_question = True
+    app._pending_agent_question = Question(
+        question="Proceed?",
+        question_type=QuestionType.CONFIRM,
+        default="Yes",
+    )
+    app._pending_agent_question_future = future
+
+    assert app._handle_agent_question_input("", log) is True
+    assert future.result()["value"] is True
 
 
 def test_retry_refuses_while_busy():

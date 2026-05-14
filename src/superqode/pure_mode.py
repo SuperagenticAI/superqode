@@ -6,6 +6,7 @@ without the bias of heavy harnesses.
 """
 
 import asyncio
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional
@@ -45,7 +46,9 @@ class PureMode:
     def __init__(self):
         self.session = PureSession()
         self.gateway = LiteLLMGateway()
-        self.tools = ToolRegistry.full()
+        self._tool_profile_env = os.getenv("SUPERQODE_TOOL_PROFILE", "").strip().lower()
+        self.tool_profile = self._tool_profile_env or "coding"
+        self.tools = ToolRegistry.for_profile(self.tool_profile)
         self._agent: Optional[AgentLoop] = None
         self._session_manager: Optional[SessionManager] = None
 
@@ -117,6 +120,26 @@ class PureMode:
         self.session.working_directory = working_directory or Path.cwd()
         self.session.connected = True
 
+        provider_def = PROVIDERS.get(provider)
+        is_ds4 = provider == "ds4"
+        if is_ds4 and not self._tool_profile_env:
+            self.tool_profile = "ds4"
+            self.tools = ToolRegistry.for_profile(self.tool_profile)
+        elif self._tool_profile_env and self.tool_profile != self._tool_profile_env:
+            self.tool_profile = self._tool_profile_env
+            self.tools = ToolRegistry.for_profile(self.tool_profile)
+
+        if is_ds4:
+            max_iterations = int(os.getenv("DS4_MAX_ITERATIONS", "6"))
+            session_history_limit = int(os.getenv("DS4_SESSION_HISTORY_LIMIT", "8"))
+            parallel_tools = False
+        else:
+            max_iterations = (
+                8 if provider_def and provider_def.category == ProviderCategory.LOCAL else 12
+            )
+            session_history_limit = 20
+            parallel_tools = True
+
         # Create agent loop with job description if provided
         config = AgentConfig(
             provider=provider,
@@ -124,9 +147,11 @@ class PureMode:
             system_prompt_level=system_level,
             working_directory=self.session.working_directory,
             job_description=job_description,
+            max_iterations=max_iterations,
             enable_session_storage=True,
             session_storage_dir=".superqode/sessions",
             session_id=session_id,
+            session_history_limit=session_history_limit,
         )
 
         self._agent = AgentLoop(
@@ -136,6 +161,7 @@ class PureMode:
             on_tool_call=self.on_tool_call,
             on_tool_result=self.on_tool_result,
             on_thinking=self.on_thinking,
+            parallel_tools=parallel_tools,
         )
 
         # Ensure callbacks are set on the agent (in case they were set after agent creation)
@@ -159,12 +185,18 @@ class PureMode:
             self._agent.config.system_prompt_level = level
             self._agent.system_prompt = self._agent._build_system_prompt()
 
-    async def run(self, prompt: str) -> AgentResponse:
+    async def run(self, prompt: str, plan_mode: Optional[bool] = None) -> AgentResponse:
         """Run a task in Pure Mode."""
         if not self._agent:
             raise RuntimeError("Not connected. Call connect() first.")
 
-        response = await self._agent.run(prompt)
+        previous_plan_mode = self._agent.config.plan_mode
+        if plan_mode is not None:
+            self._agent.config.plan_mode = plan_mode
+        try:
+            response = await self._agent.run(prompt)
+        finally:
+            self._agent.config.plan_mode = previous_plan_mode
 
         # Update stats
         self.session.total_tool_calls += response.tool_calls_made
@@ -173,7 +205,7 @@ class PureMode:
 
         return response
 
-    async def run_streaming(self, prompt: str):
+    async def run_streaming(self, prompt: str, plan_mode: Optional[bool] = None):
         """Run a task with streaming output."""
         if not self._agent:
             raise RuntimeError("Not connected. Call connect() first.")
@@ -181,10 +213,16 @@ class PureMode:
         # Reset cancellation flag for new operation
         self._agent.reset_cancellation()
 
-        async for chunk in self._agent.run_streaming(prompt):
-            if self.on_stream_chunk:
-                self.on_stream_chunk(chunk)
-            yield chunk
+        previous_plan_mode = self._agent.config.plan_mode
+        if plan_mode is not None:
+            self._agent.config.plan_mode = plan_mode
+        try:
+            async for chunk in self._agent.run_streaming(prompt):
+                if self.on_stream_chunk:
+                    self.on_stream_chunk(chunk)
+                yield chunk
+        finally:
+            self._agent.config.plan_mode = previous_plan_mode
 
         self.session.total_requests += 1
 
@@ -207,7 +245,7 @@ class PureMode:
                 "total_iterations": self.session.total_iterations,
             },
             "tools": [t.name for t in self.tools.list()],
-            "tool_profile": "full",
+            "tool_profile": self.tool_profile,
         }
 
     # Session management methods

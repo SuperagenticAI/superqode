@@ -37,7 +37,7 @@ from superqode.acp.types import (
 
 PROTOCOL_VERSION = 1
 CLIENT_NAME = "SuperQode"
-CLIENT_VERSION = "0.1.18"
+CLIENT_VERSION = "0.1.22"
 
 
 @dataclass
@@ -122,6 +122,16 @@ class ACPClient:
     def get_message_buffer(self) -> str:
         """Get accumulated message text."""
         return self._message_buffer
+
+    def is_running(self) -> bool:
+        """Return True when the ACP subprocess and session are usable."""
+        return (
+            self._process is not None
+            and self._process.returncode is None
+            and bool(self._session_id)
+            and self._read_task is not None
+            and not self._read_task.done()
+        )
 
     async def start(self) -> bool:
         """Start the ACP agent subprocess."""
