@@ -37,7 +37,7 @@ from superqode.acp.types import (
 
 PROTOCOL_VERSION = 1
 CLIENT_NAME = "SuperQode"
-CLIENT_VERSION = "0.1.0"
+CLIENT_VERSION = "0.1.17"
 
 
 @dataclass
@@ -71,6 +71,9 @@ class ACPClient:
     project_root: Path
     command: str  # e.g., "opencode acp"
     model: Optional[str] = None
+    startup_timeout: float = 30.0
+    prompt_timeout: float = 180.0
+    request_timeout: float = 30.0
 
     # Callbacks for handling agent events
     on_message: Optional[Callable[[str], Awaitable[None]]] = None
@@ -130,8 +133,10 @@ class ACPClient:
             env = os.environ.copy()
             env["PYTHONUNBUFFERED"] = "1"
 
-            # Add --print-logs for debugging if needed
-            if "opencode" in cmd:
+            # OpenCode's verbose logs are useful for debugging, but expensive on
+            # normal runs because every non-JSON line has to be parsed and routed
+            # through the TUI.
+            if "opencode" in cmd and os.environ.get("SUPERQODE_ACP_PRINT_LOGS"):
                 cmd = f"{cmd} --print-logs"
 
             self._process = await asyncio.create_subprocess_shell(
@@ -190,6 +195,7 @@ class ACPClient:
 
         response = await self._call_method(
             "session/prompt",
+            timeout=self.prompt_timeout,
             prompt=content_blocks,
             sessionId=self._session_id,
         )
@@ -294,6 +300,7 @@ class ACPClient:
         """Initialize the ACP protocol."""
         response = await self._call_method(
             "initialize",
+            timeout=self.startup_timeout,
             protocolVersion=PROTOCOL_VERSION,
             clientCapabilities={
                 "fs": {
@@ -312,15 +319,28 @@ class ACPClient:
 
     async def _new_session(self) -> NewSessionResponse:
         """Create a new session."""
+        params: Dict[str, Any] = {
+            "cwd": str(self.project_root),
+            "mcpServers": [],
+        }
+        if self.model:
+            params["model"] = self.model
+
         response = await self._call_method(
             "session/new",
-            cwd=str(self.project_root),
-            mcpServers=[],
+            timeout=self.startup_timeout,
+            **params,
         )
         self._session_id = response.get("sessionId", "")
         return response
 
-    async def _call_method(self, method: str, **params) -> Dict[str, Any]:
+    async def _call_method(
+        self,
+        method: str,
+        *,
+        timeout: Optional[float] = None,
+        **params,
+    ) -> Dict[str, Any]:
         """Call a JSON-RPC method and wait for response."""
         self._request_id += 1
         request_id = self._request_id
@@ -341,7 +361,7 @@ class ACPClient:
 
         # Wait for response
         try:
-            response = await asyncio.wait_for(future, timeout=300.0)  # 5 min timeout
+            response = await asyncio.wait_for(future, timeout=timeout or self.request_timeout)
             return response
         except asyncio.TimeoutError:
             del self._pending_requests[request_id]

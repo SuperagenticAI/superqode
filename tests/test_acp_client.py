@@ -81,6 +81,9 @@ class TestACPClient:
         assert client.project_root == tmp_path
         assert client.command == "opencode acp"
         assert client.model == "test-model"
+        assert client.startup_timeout == 30.0
+        assert client.prompt_timeout == 180.0
+        assert client.request_timeout == 30.0
 
     def test_client_without_model(self, tmp_path):
         """Test client initialization without model."""
@@ -115,6 +118,37 @@ class TestACPClient:
         assert client.on_message is on_message
         assert client.on_thinking is on_thinking
 
+    @pytest.mark.asyncio
+    async def test_new_session_sends_model_when_configured(self, tmp_path, monkeypatch):
+        """Test model is sent during session creation."""
+        client = ACPClient(
+            project_root=tmp_path,
+            command="opencode acp",
+            model="opencode/minimax-m2.5-free",
+        )
+        calls = []
+
+        async def fake_call_method(method, *, timeout=None, **params):
+            calls.append((method, params))
+            return {"sessionId": "session-1"}
+
+        monkeypatch.setattr(client, "_call_method", fake_call_method)
+
+        response = await client._new_session()
+
+        assert response["sessionId"] == "session-1"
+        assert client.get_session_id() == "session-1"
+        assert calls == [
+            (
+                "session/new",
+                {
+                    "cwd": str(tmp_path),
+                    "mcpServers": [],
+                    "model": "opencode/minimax-m2.5-free",
+                },
+            )
+        ]
+
 
 class TestProtocolConstants:
     """Tests for protocol constants."""
@@ -129,7 +163,7 @@ class TestProtocolConstants:
 
     def test_client_version(self):
         """Test client version format."""
-        assert CLIENT_VERSION == "0.1.0"
+        assert CLIENT_VERSION == "0.1.17"
 
 
 class TestToolCall:

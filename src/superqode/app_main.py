@@ -6123,7 +6123,14 @@ team:
             return _pick_option(options, ["allow_once", "allow_always"])
 
         async def run_prompt() -> tuple[str | None, dict]:
-            client = ACPClient(project_root=Path.cwd(), command=command, model=None)
+            total_start = time.monotonic()
+            model_id = None
+            if model and agent_type in ("codex", "openhands", "opencode"):
+                model_id = model
+                if agent_type == "opencode" and not model_id.startswith("opencode/"):
+                    model_id = f"opencode/{model_id}"
+
+            client = ACPClient(project_root=Path.cwd(), command=command, model=model_id)
             client.on_message = on_message
             client.on_thinking = on_thinking
             client.on_tool_call = on_tool_call
@@ -6141,13 +6148,6 @@ team:
                 if getattr(client, "_process", None) is not None:
                     self._agent_process = client._process  # type: ignore[attr-defined]
 
-                # Set model for agents that support ACP model selection
-                if model and agent_type in ("codex", "openhands", "opencode"):
-                    model_id = model
-                    if agent_type == "opencode" and not model_id.startswith("opencode/"):
-                        model_id = f"opencode/{model_id}"
-                    await client.set_model(model_id)
-
                 prompt_task = asyncio.create_task(client.send_prompt(message))
 
                 while not prompt_task.done():
@@ -6157,7 +6157,9 @@ team:
                     await asyncio.sleep(0.1)
 
                 stop_reason = await prompt_task
-                return stop_reason, client.get_stats().__dict__
+                stats = client.get_stats().__dict__
+                stats["duration"] = time.monotonic() - total_start
+                return stop_reason, stats
             finally:
                 await client.stop()
 
