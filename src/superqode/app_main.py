@@ -634,24 +634,23 @@ class SuperQodeApp(App):
     def _get_opencode_models(self) -> List[Dict]:
         """Get OpenCode models from the live CLI catalog."""
         try:
-            from superqode.providers.opencode_models import get_opencode_models_with_fallback
+            from superqode.providers.opencode_models import get_opencode_models_sync
 
-            import asyncio
+            models = get_opencode_models_sync()
 
-            models = asyncio.run(get_opencode_models_with_fallback())
-
-            # Convert to our format
+            # Convert to our format. Show all discovered OpenCode models, not
+            # only free ones, because the catalog and free-tier markers change.
             return [
                 {
                     "id": m["id"],
                     "name": m.get("name", m["id"].split("/")[-1]),
                     "context": m.get("context", 128000),
-                    "free": True,
+                    "free": bool(m.get("is_free", False)),
                     "recommended": bool(m.get("recommended", False)),
                     "desc": m.get("description") or m.get("source", "OpenCode"),
+                    "catalog_unavailable": bool(m.get("catalog_unavailable", False)),
                 }
                 for m in models
-                if m.get("is_free", False)
             ]
         except Exception:
             return []
@@ -2466,8 +2465,10 @@ class SuperQodeApp(App):
         if 0 <= current_idx < len(models):
             model = models[current_idx]
             model_id = model.get("id", "")
+            if model_id == "opencode/auto":
+                model_id = ""
             # Remove "opencode/" prefix if present
-            if model_id.startswith("opencode/"):
+            elif model_id.startswith("opencode/"):
                 model_id = model_id[9:]
 
             log = self.query_one("#log", ConversationLog)
@@ -15888,24 +15889,34 @@ team:
             # Find model info
             model_info = next((m for m in self.opencode_models if m["id"] == model_name), None)
             model_display = model_info["name"] if model_info else model_name
+            selected_is_free = bool(model_info and model_info.get("free"))
+            if model_name == "opencode/auto":
+                stored_model_name = ""
+                badge_model_name = "opencode/default"
+            else:
+                stored_model_name = model_name
+                badge_model_name = model_name
         else:
             model_display = model_name
+            selected_is_free = False
+            stored_model_name = model_name
+            badge_model_name = model_name
 
         # Store the model
-        self.current_model = model_name
+        self.current_model = stored_model_name
         self._awaiting_model_selection = False  # Clear the flag
 
         # Update badge
         badge = self.query_one("#mode-badge", ModeBadge)
-        badge.model = model_name
+        badge.model = badge_model_name
 
         t = Text()
         t.append(f"\n  ✅ ", style=f"bold {THEME['success']}")
         t.append("Model changed to ", style=THEME["text"])
         t.append(f"{model_display}", style=f"bold {THEME['cyan']}")
-        t.append(f" ({model_name})\n", style=THEME["dim"])
+        t.append(f" ({badge_model_name})\n", style=THEME["dim"])
 
-        if self.current_agent == "opencode":
+        if self.current_agent == "opencode" and selected_is_free:
             t.append(f"  🆓 This is a FREE model!\n", style=THEME["success"])
 
         log.write(t)
@@ -16204,15 +16215,22 @@ team:
         if matched_model:
             model_id = matched_model.get("id", "")
             model_name = matched_model.get("name", "")
+            selected_is_free = bool(matched_model.get("free"))
+            if model_id == "opencode/auto":
+                stored_model_id = ""
+                badge_model_id = "opencode/default"
+            else:
+                stored_model_id = model_id
+                badge_model_id = model_id
 
-            self.current_model = model_id
+            self.current_model = stored_model_id
             self.current_provider = "opencode"
             self._awaiting_model_selection = False
 
             # Update badge - ACP mode for agent connections
             badge = self.query_one("#mode-badge", ModeBadge)
             badge.agent = self.current_agent
-            badge.model = model_id
+            badge.model = badge_model_id
             badge.provider = self.current_provider
             badge.execution_mode = "acp"  # ACP mode for :acp connect
 
@@ -16221,8 +16239,11 @@ team:
             t.append(f"\n  ✅ ", style=f"bold {THEME['success']}")
             t.append("Connected with model: ", style=THEME["text"])
             t.append(f"{model_name}", style=f"bold {THEME['cyan']}")
-            t.append(f" ({model_id})\n", style=THEME["dim"])
-            t.append(f"  🆓 This is a FREE model! Ready to chat.\n", style=THEME["success"])
+            t.append(f" ({badge_model_id})\n", style=THEME["dim"])
+            if selected_is_free:
+                t.append(f"  🆓 This is a FREE model! Ready to chat.\n", style=THEME["success"])
+            else:
+                t.append("  Ready to chat.\n", style=THEME["success"])
             log.write(t)
         else:
             # No match found, show available models
@@ -16258,16 +16279,16 @@ team:
         t.append(f"{'':>32}│\n", style=color)
         t.append(f"  ├{'─' * 58}┤\n", style=color)
 
-        # Show available FREE models
+        # Show available models
         t.append(f"  │  🆓 ", style=color)
-        t.append("SELECT A DYNAMIC FREE MODEL", style=f"bold {THEME['success']}")
+        t.append("SELECT OPENCODE MODEL", style=f"bold {THEME['success']}")
         t.append(f"{'':>34}│\n", style=color)
         t.append(f"  ├{'─' * 58}┤\n", style=color)
 
         models = self.opencode_models
         if not models:
             t.append(f"  │  ", style=color)
-            t.append("No free models discovered from OpenCode CLI", style=THEME["warning"])
+            t.append("No models discovered from OpenCode CLI", style=THEME["warning"])
             t.append(f"{'':>10}│\n", style=color)
             t.append(f"  │  ", style=color)
             t.append("Press R to refresh or configure OpenCode", style=THEME["muted"])
@@ -16278,6 +16299,8 @@ team:
             model_name = model.get("name", "")
             desc = model.get("desc", "")
             is_recommended = model.get("recommended", False)
+            is_free = model.get("free", False)
+            catalog_unavailable = model.get("catalog_unavailable", False)
             is_highlighted = i == highlighted_idx
 
             # Number for selection
@@ -16290,6 +16313,10 @@ team:
                 t.append(f" {model_name:<18}", style=f"bold {THEME['success']}")
                 if is_recommended:
                     t.append("⭐ ", style=THEME["gold"])
+                elif is_free:
+                    t.append("FREE ", style=THEME["success"])
+                elif catalog_unavailable:
+                    t.append("AUTO ", style=THEME["warning"])
                 else:
                     t.append("   ", style="")
                 t.append("  ← SELECTED", style=f"bold {THEME['success']}")
@@ -16298,6 +16325,10 @@ team:
                 t.append(f" {model_name:<18}", style=f"bold {THEME['text']}")
                 if is_recommended:
                     t.append("⭐ ", style=THEME["gold"])
+                elif is_free:
+                    t.append("FREE ", style=THEME["success"])
+                elif catalog_unavailable:
+                    t.append("AUTO ", style=THEME["warning"])
                 else:
                     t.append("   ", style="")
 

@@ -263,6 +263,43 @@ async def test_agent_retries_when_model_narrates_tool_use_without_call():
 
 
 @pytest.mark.asyncio
+async def test_agent_stops_when_model_keeps_narrating_tool_use_without_call():
+    gateway = ScriptedGateway(
+        [
+            GatewayResponse(
+                content=(
+                    "I can help understand this project. "
+                    "Let me start by listing the files in the repository."
+                )
+            ),
+            GatewayResponse(
+                content=(
+                    "Let me start by inspecting the README and project files first."
+                )
+            ),
+            GatewayResponse(content="should not be called"),
+        ]
+    )
+    loop = AgentLoop(
+        gateway=gateway,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(
+            provider="ds4",
+            model="deepseek-v4-flash",
+        ),
+        parallel_tools=False,
+    )
+
+    result = await loop.run("what is this project about?")
+
+    assert result.content == "Let me start by inspecting the README and project files first."
+    assert result.stopped_reason == "complete"
+    assert result.tool_calls_made == 0
+    assert result.iterations == 2
+    assert len(gateway.calls) == 2
+
+
+@pytest.mark.asyncio
 async def test_generic_local_provider_stays_conservative_with_tools():
     gateway = ScriptedGateway([GatewayResponse(content="done")])
     loop = AgentLoop(

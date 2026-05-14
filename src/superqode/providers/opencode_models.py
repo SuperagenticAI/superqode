@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import shutil
+import subprocess
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
@@ -17,6 +18,39 @@ logger = logging.getLogger(__name__)
 _cached_models: Optional[List[Dict]] = None
 _cache_time: Optional[datetime] = None
 CACHE_TTL_SECONDS = 300
+
+_FALLBACK_FREE_MODELS = [
+    {
+        "id": "opencode/big-pickle",
+        "name": "Big Pickle",
+        "context": 200000,
+        "description": "OpenCode free model fallback",
+    },
+    {
+        "id": "opencode/deepseek-v4-flash-free",
+        "name": "DeepSeek V4 Flash Free",
+        "context": 1000000,
+        "description": "OpenCode free model fallback",
+    },
+    {
+        "id": "opencode/minimax-m2.5-free",
+        "name": "MiniMax M2.5 Free",
+        "context": 204800,
+        "description": "OpenCode free model fallback",
+    },
+    {
+        "id": "opencode/nemotron-3-super-free",
+        "name": "Nemotron 3 Super Free",
+        "context": 1000000,
+        "description": "OpenCode free model fallback",
+    },
+    {
+        "id": "opencode/qwen3.6-plus-free",
+        "name": "Qwen 3.6 Plus Free",
+        "context": 262144,
+        "description": "OpenCode free model fallback",
+    },
+]
 
 
 async def get_opencode_models(force_refresh: bool = False) -> List[Dict]:
@@ -43,11 +77,14 @@ async def get_opencode_models(force_refresh: bool = False) -> List[Dict]:
         stdout, stderr = await proc.communicate()
 
         if proc.returncode != 0:
-            logger.warning(f"opencode models failed: {stderr.decode()}")
-            return []
+            error = stderr.decode(errors="replace").strip()
+            logger.warning(f"opencode models failed: {error}")
+            return _opencode_fallback_models(error)
 
         output = stdout.decode()
         models = _parse_opencode_models(output)
+        if not models:
+            models = _opencode_fallback_models("OpenCode model catalog returned no models")
 
         _cached_models = models
         _cache_time = datetime.now()
@@ -57,7 +94,78 @@ async def get_opencode_models(force_refresh: bool = False) -> List[Dict]:
 
     except Exception as e:
         logger.error(f"Error fetching OpenCode models: {e}")
+        return _opencode_fallback_models(str(e))
+
+
+def get_opencode_models_sync(force_refresh: bool = False) -> List[Dict]:
+    """Synchronously fetch OpenCode models for TUI code already running an event loop."""
+    global _cached_models, _cache_time
+
+    if not force_refresh and _cached_models and _cache_time:
+        if datetime.now() - _cache_time < timedelta(seconds=CACHE_TTL_SECONDS):
+            logger.debug("Using cached OpenCode models")
+            return _cached_models
+
+    if not shutil.which("opencode"):
+        logger.warning("OpenCode not found in PATH")
         return []
+
+    try:
+        proc = subprocess.run(
+            ["opencode", "models", "--verbose"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if proc.returncode != 0:
+            error = (proc.stderr or proc.stdout or "").strip()
+            logger.warning(f"opencode models failed: {error}")
+            models = _opencode_fallback_models(error)
+        else:
+            models = _parse_opencode_models(proc.stdout)
+            if not models:
+                models = _opencode_fallback_models("OpenCode model catalog returned no models")
+
+        _cached_models = models
+        _cache_time = datetime.now()
+        return models
+    except Exception as e:
+        logger.error(f"Error fetching OpenCode models: {e}")
+        models = _opencode_fallback_models(str(e))
+        _cached_models = models
+        _cache_time = datetime.now()
+        return models
+
+
+def _opencode_fallback_models(reason: str = "") -> List[Dict]:
+    """Return usable OpenCode options when catalog discovery fails."""
+    fallback_models = [
+        {
+            **model,
+            "provider": "opencode",
+            "is_free": True,
+            "source": "opencode fallback",
+            "catalog_unavailable": True,
+            "description": model["description"]
+            + (f" (catalog unavailable: {reason})" if reason else ""),
+        }
+        for model in _FALLBACK_FREE_MODELS
+    ]
+    fallback_models.append(
+        {
+            "id": "opencode/auto",
+            "name": "OpenCode Default",
+            "provider": "opencode",
+            "is_free": False,
+            "context": 128000,
+            "source": "opencode default",
+            "description": "Use OpenCode's configured default model"
+            + (f" (catalog unavailable: {reason})" if reason else ""),
+            "catalog_unavailable": True,
+        }
+    )
+    return fallback_models
 
 
 def _parse_opencode_models(output: str) -> List[Dict]:

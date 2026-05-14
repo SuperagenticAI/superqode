@@ -777,6 +777,8 @@ class AgentLoop:
 
         tool_calls_made = 0
         iterations = 0
+        unexecuted_tool_intent_retries = 0
+        max_unexecuted_tool_intent_retries = 1
 
         # Emit initial processing log
         if self.on_thinking:
@@ -975,7 +977,12 @@ class AgentLoop:
 
             else:
                 # No tool calls - return the response content
-                if tools_to_send and _looks_like_unexecuted_tool_intent(response_content):
+                if (
+                    tools_to_send
+                    and _looks_like_unexecuted_tool_intent(response_content)
+                    and unexecuted_tool_intent_retries < max_unexecuted_tool_intent_retries
+                ):
+                    unexecuted_tool_intent_retries += 1
                     messages.append(AgentMessage(role="assistant", content=response_content))
                     messages.append(
                         AgentMessage(
@@ -991,6 +998,14 @@ class AgentLoop:
                             "Model described tool use without calling a tool; retrying."
                         )
                     continue
+                if (
+                    tools_to_send
+                    and _looks_like_unexecuted_tool_intent(response_content)
+                    and self.on_thinking
+                ):
+                    await self.on_thinking(
+                        "Model still described tool use without calling a tool; returning response."
+                    )
                 if self.on_thinking:
                     await self.on_thinking("Response complete")
                 return AgentResponse(

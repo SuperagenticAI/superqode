@@ -4,6 +4,7 @@ from superqode.app_main import SuperQodeApp
 from superqode.providers.acp_free_models import _parse_opencode_models_for_free
 from superqode.providers.acp_models import get_acp_agent_models
 from superqode.providers.opencode_models import _parse_opencode_models, clear_cache
+from superqode.providers.opencode_models import get_opencode_models_sync
 from superqode.providers.opencode_models import get_opencode_models_with_fallback
 
 
@@ -67,7 +68,7 @@ async def test_acp_protocol_model_discovery_uses_dynamic_cost_metadata():
 def test_tui_opencode_models_are_loaded_dynamically(monkeypatch):
     clear_cache()
 
-    async def fake_get_opencode_models_with_fallback(force_refresh=False):
+    def fake_get_opencode_models_sync(force_refresh=False):
         return [
             {
                 "id": "opencode/live-free",
@@ -85,8 +86,8 @@ def test_tui_opencode_models_are_loaded_dynamically(monkeypatch):
         ]
 
     monkeypatch.setattr(
-        "superqode.providers.opencode_models.get_opencode_models_with_fallback",
-        fake_get_opencode_models_with_fallback,
+        "superqode.providers.opencode_models.get_opencode_models_sync",
+        fake_get_opencode_models_sync,
     )
 
     app = SuperQodeApp()
@@ -100,7 +101,17 @@ def test_tui_opencode_models_are_loaded_dynamically(monkeypatch):
             "free": True,
             "recommended": False,
             "desc": "from cli",
-        }
+            "catalog_unavailable": False,
+        },
+        {
+            "id": "opencode/live-paid",
+            "name": "Live Paid",
+            "context": 123456,
+            "free": False,
+            "recommended": False,
+            "desc": "OpenCode",
+            "catalog_unavailable": False,
+        },
     ]
 
 
@@ -112,3 +123,54 @@ async def test_opencode_models_do_not_fall_back_to_static_catalog(monkeypatch):
     models = await get_opencode_models_with_fallback(force_refresh=True)
 
     assert models == []
+
+
+@pytest.mark.asyncio
+async def test_opencode_models_fall_back_when_cli_catalog_fails(monkeypatch):
+    clear_cache()
+    monkeypatch.setattr("superqode.providers.opencode_models.shutil.which", lambda name: "opencode")
+
+    class FakeProcess:
+        returncode = 1
+
+        async def communicate(self):
+            return b"", b"catalog db unavailable"
+
+    async def fake_subprocess_exec(*args, **kwargs):
+        return FakeProcess()
+
+    monkeypatch.setattr(
+        "superqode.providers.opencode_models.asyncio.create_subprocess_exec",
+        fake_subprocess_exec,
+    )
+
+    models = await get_opencode_models_with_fallback(force_refresh=True)
+
+    assert models[0]["id"] == "opencode/big-pickle"
+    assert models[0]["catalog_unavailable"] is True
+    assert models[0]["is_free"] is True
+    assert models[-1]["id"] == "opencode/auto"
+    assert "configured default" in models[-1]["description"]
+
+
+def test_sync_opencode_models_works_inside_running_event_loop(monkeypatch):
+    clear_cache()
+    monkeypatch.setattr("superqode.providers.opencode_models.shutil.which", lambda name: "opencode")
+
+    class FakeCompletedProcess:
+        returncode = 0
+        stdout = """
+opencode/sync-free
+{"name":"Sync Free","cost":{"input":0,"output":0},"limit":{"context":333000}}
+"""
+        stderr = ""
+
+    monkeypatch.setattr(
+        "superqode.providers.opencode_models.subprocess.run",
+        lambda *args, **kwargs: FakeCompletedProcess(),
+    )
+
+    models = get_opencode_models_sync(force_refresh=True)
+
+    assert models[0]["id"] == "opencode/sync-free"
+    assert models[0]["is_free"] is True
