@@ -163,7 +163,7 @@ class TestProtocolConstants:
 
     def test_client_version(self):
         """Test client version format."""
-        assert CLIENT_VERSION == "0.1.17"
+        assert CLIENT_VERSION == "0.1.18"
 
 
 class TestToolCall:

@@ -6139,6 +6139,7 @@ team:
             client.on_plan = on_plan
 
             try:
+                self._call_ui(log.add_info, f"Starting ACP process: {command}")
                 ok = await client.start()
                 if not ok:
                     return None, {}
@@ -6148,12 +6149,26 @@ team:
                 if getattr(client, "_process", None) is not None:
                     self._agent_process = client._process  # type: ignore[attr-defined]
 
+                self._call_ui(log.add_info, "ACP session ready. Sending prompt...")
                 prompt_task = asyncio.create_task(client.send_prompt(message))
+                prompt_started_at = time.monotonic()
+                waiting_notice_sent = False
 
                 while not prompt_task.done():
                     if self._cancel_requested:
                         await client.cancel()
                         break
+                    if (
+                        not waiting_notice_sent
+                        and time.monotonic() - prompt_started_at > 3.0
+                        and not text_parts
+                        and not tool_actions
+                    ):
+                        self._call_ui(
+                            log.add_info,
+                            "Waiting for the ACP agent/model to emit its first update...",
+                        )
+                        waiting_notice_sent = True
                     await asyncio.sleep(0.1)
 
                 stop_reason = await prompt_task
@@ -12099,8 +12114,8 @@ team:
                 )
                 log.add_info("   Models: deepseek-v4-flash, deepseek-chat")
 
-            log.add_info("Testing connection...")
-            log.add_info("(This runs in background - you can start chatting)")
+            log.add_info("Checking local server...")
+            log.add_info("(This runs a lightweight health check, not a generation)")
             self.run_worker(self._test_local_connection(provider, model, log))
         else:
             log.add_info("Ready to chat! Type your message below.")
@@ -12108,41 +12123,62 @@ team:
     async def _test_local_connection(self, provider: str, model: str, log: ConversationLog):
         """Test connection to a local provider."""
         try:
-            from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
-            from superqode.providers.gateway.base import Message
+            from superqode.providers.registry import PROVIDERS, ProviderCategory
             import os
 
-            gateway = LiteLLMGateway()
+            provider_def = PROVIDERS.get(provider)
+            is_local = provider_def and provider_def.category == ProviderCategory.LOCAL
 
             # Show what we're testing
-            model_string = gateway.get_model_string(provider, model)
-            log.add_info(f"Testing: {model_string}")
+            log.add_info(f"Testing: {provider}/{model}")
 
-            # Check base URL for local servers.
-            if provider == "ollama":
-                ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-                log.add_info(f"Ollama host: {ollama_host}")
-            elif provider == "ds4":
-                ds4_host = os.getenv("DS4_HOST", "http://127.0.0.1:8000/v1")
-                log.add_info(f"DS4 host: {ds4_host}")
+            if is_local:
+                if provider == "ds4":
+                    from superqode.providers.local.ds4 import DS4Client
 
-            # Make a simple test request
-            test_messages = [Message(role="user", content="Say 'test'")]
-            response = await gateway.chat_completion(
-                messages=test_messages,
-                model=model,
-                provider=provider,
-                max_tokens=10,
-            )
+                    ds4_host = os.getenv("DS4_HOST", "http://127.0.0.1:8000/v1")
+                    log.add_info(f"DS4 host: {ds4_host}")
+                    health = await DS4Client(host=ds4_host).get_status()
+                    if health.available:
+                        log.add_success(f"✓ DS4 server ready at {ds4_host}")
+                    else:
+                        log.add_warning(f"DS4 server not ready: {health.error or 'unavailable'}")
+                elif provider == "ollama":
+                    from superqode.providers.local.ollama import OllamaClient
 
-            if response and response.content:
-                log.add_success(f"✓ Connected to {provider}/{model}")
-                log.add_info(f"Test response: {response.content[:50]}")
-                # Clear screen and show fresh workspace
-                self._clear_for_workspace(log, f"BYOK • {provider}")
+                    ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+                    log.add_info(f"Ollama host: {ollama_host}")
+                    health = await OllamaClient(host=ollama_host).get_status()
+                    if health.available:
+                        log.add_success(f"✓ Ollama server ready at {ollama_host}")
+                    else:
+                        log.add_warning(f"Ollama server not ready: {health.error or 'unavailable'}")
+                else:
+                    log.add_info("Local provider selected. First prompt will validate generation.")
             else:
-                log.add_warning(f"⚠️  Connected but no response content. Response: {response}")
-                self._clear_for_workspace(log, f"BYOK • {provider}")
+                from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
+                from superqode.providers.gateway.base import Message
+
+                gateway = LiteLLMGateway()
+                model_string = gateway.get_model_string(provider, model)
+                log.add_info(f"Testing: {model_string}")
+
+                # Cloud/BYOK providers can afford a tiny completion test. Local
+                # providers avoid this path so we do not contend with the first
+                # real user prompt on single-request local servers.
+                test_messages = [Message(role="user", content="Say 'test'")]
+                response = await gateway.chat_completion(
+                    messages=test_messages,
+                    model=model,
+                    provider=provider,
+                    max_tokens=10,
+                )
+
+                if response and response.content:
+                    log.add_success(f"✓ Connected to {provider}/{model}")
+                    log.add_info(f"Test response: {response.content[:50]}")
+                else:
+                    log.add_warning(f"Connected but no response content. Response: {response}")
 
             # Ensure focus returns to input after connection test
             # Use set_timer since we're in the app's event loop, not a separate thread

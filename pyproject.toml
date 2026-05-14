@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.1.17"
+version = "0.1.18"
 description = "SuperQode: Multi-Agent Coding Agent Harness"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
