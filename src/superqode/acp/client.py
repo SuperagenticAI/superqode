@@ -509,8 +509,11 @@ class ACPClient:
         if not update_type and "update" in params:
             update = params.get("update", {})
             update_type = update.get("sessionUpdate", "")
+        if isinstance(update_type, dict):
+            update = update_type
+            update_type = update.get("sessionUpdate", "") or update.get("type", "")
 
-        if update_type == "agent_message_chunk":
+        if update_type in ("agent_message_chunk", "agent_message"):
             content = update.get("content", {})
             text = self._content_to_text(content)
             if text:
@@ -518,7 +521,7 @@ class ACPClient:
                 if self.on_message:
                     await self.on_message(text)
 
-        elif update_type == "agent_thought_chunk":
+        elif update_type in ("agent_thought_chunk", "agent_thought"):
             content = update.get("content", {})
             text = self._content_to_text(content)
             if text and self.on_thinking:

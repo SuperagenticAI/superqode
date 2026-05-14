@@ -150,6 +150,28 @@ class TestACPClient:
             )
         ]
 
+    @pytest.mark.asyncio
+    async def test_session_update_accepts_nested_and_non_chunk_message(self, tmp_path):
+        """Some ACP agents send nested updates or agent_message instead of chunk names."""
+        on_message = AsyncMock()
+        client = ACPClient(
+            project_root=tmp_path,
+            command="fast-agent --acp",
+            on_message=on_message,
+        )
+
+        await client._handle_session_update(
+            {
+                "sessionUpdate": {
+                    "type": "agent_message",
+                    "content": {"type": "text", "text": "hello"},
+                }
+            }
+        )
+
+        on_message.assert_awaited_once_with("hello")
+        assert client.get_message_buffer() == "hello"
+
 
 class TestProtocolConstants:
     """Tests for protocol constants."""

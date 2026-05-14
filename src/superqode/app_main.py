@@ -234,11 +234,11 @@ class _AsyncLoopThread:
             loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
         loop.close()
 
-    def run(self, coro):
+    def run(self, coro, timeout: float | None = None):
         if self._loop is None:
             raise RuntimeError("ACP event loop is not ready")
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        return future.result()
+        return future.result(timeout=timeout)
 
     def close(self) -> None:
         if self._loop is not None and self._loop.is_running():
@@ -608,6 +608,7 @@ class SuperQodeApp(App):
         self._permission_pulse_timer: Optional[Timer] = None  # Timer for permission pulse animation
         self._permission_pending = False  # Track if permission is pending
         self._history_manager = HistoryManager()
+        self._plan_manager = PlanManager()
 
         # PERFORMANCE: Animation manager for throttled animations
         self._animation_manager = None
@@ -1936,19 +1937,39 @@ class SuperQodeApp(App):
 
     def action_cancel_agent(self):
         """Cancel the currently running agent operation."""
+        log = self.query_one("#log", ConversationLog)
+        self._cancel_requested = True
+
+        if self._acp_client is not None:
+            try:
+                if self._acp_loop_runner is not None:
+                    self._acp_loop_runner.run(self._acp_client.cancel(), timeout=1.0)
+                else:
+                    asyncio.create_task(self._acp_client.cancel())
+            except Exception:
+                pass
+            try:
+                process = getattr(self._acp_client, "_process", None)
+                if process is not None and process.returncode is None:
+                    process.terminate()
+            except Exception:
+                pass
+            log.add_info("🛑 Cancelling ACP agent operation...")
+            self._stop_stream_animation()
+            self._stop_thinking()
+            return
+
         if self._agent_process is not None:
             self._cancel_requested = True
             try:
                 self._agent_process.terminate()
             except Exception:
                 pass
-            log = self.query_one("#log", ConversationLog)
             log.add_info("🛑 Cancelling agent operation...")
             self._stop_stream_animation()
             self._stop_thinking()
         elif self.is_busy:
             self._cancel_requested = True
-            log = self.query_one("#log", ConversationLog)
             log.add_info("🛑 Cancel requested...")
 
     def action_smart_cancel(self):
@@ -1999,6 +2020,13 @@ class SuperQodeApp(App):
         # Then check if agent is running (ACP or BYOK)
         log = self.query_one("#log", ConversationLog)
 
+        # Check for ACP operation first. A stale BYOK session may exist even
+        # while an ACP agent is active, so cancellation must target ACP before
+        # falling back to local/native mode.
+        if self._acp_client is not None or self._agent_process is not None:
+            self.action_cancel_agent()
+            return
+
         # Check for BYOK/local operation
         if hasattr(self, "_pure_mode") and self._pure_mode and self._pure_mode._agent:
             # Cancel BYOK operation
@@ -2010,8 +2038,7 @@ class SuperQodeApp(App):
             log.add_info("🛑 Agent operation cancelled")
             return
 
-        # Check for ACP operation
-        if self._agent_process is not None or self.is_busy:
+        if self.is_busy:
             self.action_cancel_agent()
         else:
             # Do nothing - user can use :exit to quit
@@ -5808,10 +5835,13 @@ team:
             "auggie",
             "code-assistant",
             "cagent",
-            "fast-agent",
             "llmling-agent",
             "amp",
         )
+        if agent_type == "fast-agent":
+            self._run_fast_agent_cli(message, model, display_name, log)
+            return
+
         if agent_type in acp_agents:
             self._run_acp_jsonrpc_client(
                 message, agent_type, model, display_name, log, persona_context
@@ -6005,6 +6035,121 @@ team:
             self._call_ui(self._stop_stream_animation)
             self._call_ui(log.add_error, f"❌ Error: {str(e)}")
 
+    def _run_fast_agent_cli(
+        self,
+        message: str,
+        model: str,
+        display_name: str,
+        log: ConversationLog,
+    ) -> None:
+        """Run FastAgent through its installed CLI when ACP is unavailable."""
+        import subprocess
+        from time import monotonic
+
+        start_time = monotonic()
+        cmd = ["fast-agent", "go", "--message", message]
+        if model and model != "auto":
+            cmd[2:2] = ["--model", model]
+
+        text_parts: list[str] = []
+        try:
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._start_stream_animation, log)
+            self._call_ui(
+                log.start_agent_session,
+                display_name,
+                model or "auto",
+                "cli",
+                self.approval_mode,
+            )
+
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            self._agent_process = process
+
+            assert process.stdout is not None
+            for line in process.stdout:
+                if self._cancel_requested:
+                    process.terminate()
+                    self._call_ui(log.add_info, "🛑 Agent operation cancelled")
+                    break
+                if line:
+                    text_parts.append(line)
+                    self._call_ui(log.add_response_chunk, line)
+
+            if self._cancel_requested:
+                try:
+                    process.terminate()
+                    process.wait(timeout=2)
+                except Exception:
+                    try:
+                        process.kill()
+                    except Exception:
+                        pass
+                self._call_ui(
+                    log.end_agent_session,
+                    False,
+                    "🛑 Agent operation cancelled",
+                )
+                return
+
+            return_code = process.wait()
+            response_text = "".join(text_parts).strip()
+            if return_code != 0:
+                self._call_ui(
+                    log.end_agent_session,
+                    False,
+                    response_text or f"fast-agent exited with code {return_code}",
+                )
+                return
+
+            if not response_text:
+                self._call_ui(
+                    log.end_agent_session,
+                    False,
+                    "No response received from fast-agent CLI.",
+                )
+                return
+
+            self._call_ui(
+                log.end_agent_session,
+                True,
+                response_text,
+            )
+            self._call_ui(
+                self._show_final_outcome,
+                response_text,
+                display_name,
+                {
+                    "tool_count": 0,
+                    "files_modified": [],
+                    "files_read": [],
+                    "duration": monotonic() - start_time,
+                    "file_diffs": {},
+                },
+                log,
+            )
+        except FileNotFoundError:
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._stop_stream_animation)
+            self._call_ui(
+                log.end_agent_session,
+                False,
+                "fast-agent CLI not found. Install with: uv tool install fast-agent-mcp",
+            )
+        except Exception as e:
+            self._call_ui(self._stop_thinking)
+            self._call_ui(self._stop_stream_animation)
+            self._call_ui(log.end_agent_session, False, f"❌ Error: {str(e)}")
+        finally:
+            self._agent_process = None
+            self._call_ui(self._stop_stream_animation)
+
     def _use_jsonrpc_acp_client(self) -> bool:
         """Return True when the custom JSON-RPC ACP client is enabled."""
         import os
@@ -6108,7 +6253,7 @@ team:
             command = "cagent --acp"
             model_display = f"cagent/{model}" if model else "cagent/auto"
         elif agent_type == "fast-agent":
-            command = "fast-agent-acp -x"
+            command = os.getenv("SUPERQODE_FAST_AGENT_ACP_COMMAND", "fast-agent --acp")
             model_display = f"fast-agent/{model}" if model else "fast-agent/auto"
         elif agent_type == "llmling-agent":
             command = "llmling-agent --acp"
@@ -6410,8 +6555,22 @@ team:
 
                 while not prompt_task.done():
                     if self._cancel_requested:
-                        await client.cancel()
-                        break
+                        try:
+                            await client.cancel()
+                        except Exception:
+                            pass
+                        prompt_task.cancel()
+                        try:
+                            await prompt_task
+                        except asyncio.CancelledError:
+                            pass
+                        await client.stop()
+                        self._acp_client = None
+                        self._acp_client_key = None
+                        self._agent_process = None
+                        stats = client.get_stats().__dict__
+                        stats["duration"] = time.monotonic() - total_start
+                        return "cancelled", stats
                     if (
                         not waiting_notice_sent
                         and time.monotonic() - prompt_started_at > 3.0
@@ -6447,6 +6606,34 @@ team:
 
             # Get response text
             response_text = "".join(text_parts) if text_parts else ""
+            if stop_reason == "cancelled":
+                self._call_ui(
+                    log.end_agent_session,
+                    False,
+                    "🛑 Agent operation cancelled",
+                    stats.get("prompt_tokens", 0),
+                    stats.get("completion_tokens", 0),
+                    stats.get("thinking_tokens", 0),
+                    stats.get("cost", 0.0),
+                )
+                self._cancel_requested = False
+                self.is_busy = False
+                return
+            if not response_text.strip() and not tool_actions:
+                self._call_ui(
+                    log.end_agent_session,
+                    False,
+                    (
+                        "No response received from the ACP agent. "
+                        "Check the agent configuration and run :log verbose for startup output."
+                    ),
+                    stats.get("prompt_tokens", 0),
+                    stats.get("completion_tokens", 0),
+                    stats.get("thinking_tokens", 0),
+                    stats.get("cost", 0.0),
+                )
+                self.is_busy = False
+                return
 
             # Use enhanced end_agent_session for consistent output
             self._call_ui(

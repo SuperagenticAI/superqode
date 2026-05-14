@@ -35,8 +35,6 @@
 
 ---
 
-
-
 ## What is SuperQode?
 
 **SuperQode** is a coding agent harness for interactive development, local model workflows, BYOK providers, ACP coding agents, and tool-based repository work. It provides a TUI and CLI so developers can connect to the model or agent they prefer, run file/search/edit/shell tools, and get concise summaries of what changed.

@@ -27,6 +27,9 @@ class FakeLog:
     def add_info(self, text):
         self.items.append(text)
 
+    def add_success(self, text):
+        self.items.append(text)
+
     def add_error(self, text):
         self.items.append(text)
 
@@ -50,6 +53,25 @@ class FakePureMode:
 
     def cancel(self):
         self.cancelled = True
+
+
+class FakeACPLoopRunner:
+    def __init__(self):
+        self.cancel_called = False
+
+    def run(self, coro, timeout=None):
+        self.cancel_called = True
+        return asyncio.run(coro)
+
+
+class FakeACPClient:
+    def __init__(self):
+        self.cancelled = False
+        self._process = None
+
+    async def cancel(self):
+        self.cancelled = True
+        return True
 
 
 def render_plain(renderable) -> str:
@@ -160,6 +182,16 @@ def test_busy_message_rejects_second_prompt():
     assert any("already running" in str(item) for item in log.items)
 
 
+def test_plan_command_without_args_does_not_crash():
+    app = make_app()
+    log = FakeLog()
+
+    app._handle_plan("", log)
+
+    assert any("Plan mode:" in str(item) for item in log.items)
+    assert any("Usage: :plan" in str(item) for item in log.items)
+
+
 def test_agent_question_input_is_handled_while_busy():
     app = make_app()
     log = FakeLog()
@@ -227,6 +259,29 @@ def test_smart_cancel_resets_local_byok_busy_state():
     assert app._cancel_requested is True
     assert app.is_busy is False
     assert any("cancelled" in str(item).lower() for item in log.items)
+
+
+def test_smart_cancel_prioritizes_active_acp_client_over_stale_byok_session():
+    app = make_app()
+    log = FakeLog()
+    pure = FakePureMode()
+    acp_client = FakeACPClient()
+    loop_runner = FakeACPLoopRunner()
+    app._pure_mode = pure
+    app._acp_client = acp_client
+    app._acp_loop_runner = loop_runner
+    app.is_busy = True
+    app._stop_thinking = lambda *args, **kwargs: setattr(app, "_stopped_thinking", True)
+    app._stop_stream_animation = lambda *args, **kwargs: setattr(app, "_stopped_stream", True)
+    app.query_one = lambda *args, **kwargs: log
+
+    app.action_smart_cancel()
+
+    assert acp_client.cancelled is True
+    assert loop_runner.cancel_called is True
+    assert pure.cancelled is False
+    assert app._cancel_requested is True
+    assert any("ACP agent operation" in str(item) for item in log.items)
 
 
 def test_recommend_command_renders_actionable_picker(monkeypatch):
