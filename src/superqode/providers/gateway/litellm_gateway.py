@@ -28,6 +28,8 @@ from .base import (
     ModelNotFoundError,
     RateLimitError,
     StreamChunk,
+    TaskBudgetExceeded,
+    TaskTokenBudget,
     ToolDefinition,
     Usage,
 )
@@ -148,6 +150,20 @@ class LiteLLMGateway(GatewayInterface):
         Returns:
             Full model string for LiteLLM (e.g., "anthropic/claude-sonnet-4-20250514")
         """
+        # LiteLLM exposes two Ollama backends:
+        #   ollama/X      -> POST /api/generate (no tool support)
+        #   ollama_chat/X -> POST /api/chat     (full tool support)
+        # The provider registry historically used ``ollama/``, which
+        # silently dropped every tool call. Always route through the chat
+        # endpoint so tool-using agents work out of the box. Plain text
+        # completions still work fine on /api/chat.
+        if provider == "ollama":
+            if model.startswith("ollama_chat/"):
+                return model
+            if model.startswith("ollama/"):
+                model = model[len("ollama/"):]
+            return f"ollama_chat/{model}"
+
         provider_def = PROVIDERS.get(provider)
 
         if provider_def:
@@ -392,6 +408,294 @@ class LiteLLMGateway(GatewayInterface):
             return msg
         return {**msg, "content": blocks}
 
+    # Provider-neutral reasoning effort levels. The names match fast-agent
+    # and (largely) OpenAI's o-series convention so users don't have to
+    # learn a new vocabulary per backend.
+    _REASONING_LEVELS = ("low", "medium", "high", "max")
+
+    # Per-level thinking budgets for Anthropic-shape APIs (Claude
+    # extended thinking, DS4's /v1/messages). Values mirror what DS4's
+    # model card recommends and what Anthropic publishes for Claude.
+    # ``max`` is intentionally just below the 32k ceiling to leave room
+    # for the response itself.
+    _THINKING_BUDGETS = {
+        "low": 1024,
+        "medium": 4096,
+        "high": 16000,
+        "max": 31999,
+    }
+
+    def _resolve_reasoning_effort(
+        self,
+        provider: str,
+        model: str,
+        level: Optional[str],
+    ) -> Dict[str, Any]:
+        """Map a neutral ``reasoning_effort`` level to provider-specific kwargs.
+
+        Returns a dict that callers can ``request_kwargs.update(...)`` into
+        their LiteLLM call. Empty dict means "no special reasoning config
+        needed for this provider/level combo".
+
+        Strategy per provider:
+
+        - **Anthropic** (Claude extended thinking) — emits a top-level
+          ``thinking={"type": "enabled", "budget_tokens": N}``. Caller
+          must also send ``max_tokens > budget_tokens``.
+        - **DS4** — same Anthropic-compatible shape; the gateway's DS4
+          path already reads the thinking config inline via
+          ``_ds4_thinking_config()`` so we mirror the budgets here for
+          parity. The dedicated DS4 path keeps its own env override so
+          ``SUPERQODE_DS4_THINKING`` continues to work session-wide.
+        - **OpenAI** (o1, o3, GPT-5 family) — emits ``reasoning_effort``
+          as a top-level kwarg with values ``low|medium|high`` (no
+          ``max``). We collapse ``max`` to ``high`` since OpenAI doesn't
+          expose a deeper tier through this field.
+        - **OpenRouter** — passes the same field through to whichever
+          backend it's routing to; OpenRouter normalizes it.
+        - **Others** — no native concept; silently dropped. Better than
+          erroring, since users may share one ``reasoning_effort=high``
+          across a multi-provider workflow.
+        """
+        if not level:
+            return {}
+        level = level.strip().lower()
+        if level not in self._REASONING_LEVELS:
+            return {}
+
+        model_lower = (model or "").lower()
+        is_anthropic_shape = (
+            provider == "anthropic"
+            or provider == "ds4"
+            or "deepseek-v4" in model_lower
+        )
+        if is_anthropic_shape:
+            return {
+                "thinking": {
+                    "type": "enabled",
+                    "budget_tokens": self._THINKING_BUDGETS[level],
+                }
+            }
+        if provider in {"openai", "openrouter"}:
+            # o-series/GPT-5 doesn't expose a "max" tier on this field.
+            return {"reasoning_effort": "high" if level == "max" else level}
+        return {}
+
+    # Structured-output mode. Two values are supported:
+    # - ``json``    — request a JSON object back (response_format=json_object
+    #                 for OpenAI, equivalent on others where available).
+    # - ``tool_use`` — force a single tool call whose arguments are the
+    #                  structured output. Works everywhere with tool calling.
+    # ``auto`` (the default) means "let the gateway decide" — currently
+    # behaves as if unset, leaving the request shape untouched.
+    _STRUCTURED_OUTPUT_MODES = ("json", "tool_use", "auto")
+
+    def _resolve_structured_output_mode(
+        self,
+        provider: str,
+        mode: Optional[str],
+        has_response_schema: bool,
+    ) -> Dict[str, Any]:
+        """Translate a neutral structured-output mode to provider kwargs.
+
+        ``has_response_schema`` is informational — when ``True`` we know
+        the caller has a JSON Schema to constrain output, so on providers
+        that support strict schema mode (OpenAI) we can opt in.
+        """
+        if not mode:
+            return {}
+        mode = mode.strip().lower()
+        if mode not in self._STRUCTURED_OUTPUT_MODES or mode == "auto":
+            return {}
+
+        if mode == "json":
+            if provider in {"openai", "openrouter", "azure", "groq"}:
+                return {"response_format": {"type": "json_object"}}
+            # Anthropic/Bedrock/Vertex don't expose a json mode flag —
+            # the agent loop is responsible for the prompt-level "respond
+            # with JSON" instruction in that case.
+            return {}
+        # ``tool_use`` is a request-shape concern handled by the caller
+        # (they bind a single tool and set tool_choice). Nothing for the
+        # gateway to add as a generic kwarg, but we return the marker so
+        # higher layers can detect it.
+        return {"_structured_output_mode": "tool_use"}
+
+    # Providers whose backends benefit from local-model request shaping
+    # (Ollama-style options, keep_alive, num_ctx). MLX uses the temp-clamp
+    # piece of this; the Ollama-specific knobs (keep_alive, num_ctx) are
+    # gated on provider == "ollama" inside the shaper itself.
+    _LOCAL_SHAPED_PROVIDERS = {"ollama", "mlx", "lmstudio", "vllm", "sglang", "tgi", "llama-cpp"}
+
+    # Models whose default Ollama context window is too small (4096) for a
+    # coding agent's system + tools prefix. The override is conservative —
+    # we cap at what the underlying model actually supports so we don't
+    # silently exceed limits and force Ollama into truncation.
+    _OLLAMA_CONTEXT_HINTS = {
+        "qwen2.5-coder": 32768,
+        "qwen2.5": 32768,
+        "qwen3": 32768,
+        "qwen": 32768,
+        "llama3.3": 32768,
+        "llama3.2": 32768,
+        "llama3.1": 32768,
+        "llama3": 8192,
+        "deepseek-coder-v2": 32768,
+        "deepseek-coder": 16384,
+        "mistral": 32768,
+        "mixtral": 32768,
+        "gpt-oss": 32768,
+        "phi": 16384,
+        "gemma2": 8192,
+        "gemma": 8192,
+    }
+
+    def _ollama_num_ctx_for(self, model: str) -> int:
+        """Pick an Ollama num_ctx for ``model``.
+
+        Why this exists: Ollama defaults to num_ctx=4096 regardless of what
+        the model's training context allows. With a coding harness whose
+        system prompt + tool schemas alone run 2–3k tokens, that leaves
+        almost no room for the conversation — Ollama silently truncates
+        from the *front*, dropping the system prompt, and the model then
+        emits "rubbish" because it no longer knows what tools exist.
+
+        Env override: ``SUPERQODE_OLLAMA_NUM_CTX`` (int) wins if set.
+        Otherwise pick the highest hint matching the model name's family.
+        Falls back to 8192 (safe-ish for most modern locals).
+        """
+        env = os.environ.get("SUPERQODE_OLLAMA_NUM_CTX", "").strip()
+        if env.isdigit():
+            return int(env)
+        m = model.lower()
+        # Longest-prefix match so "qwen2.5-coder" beats "qwen".
+        best = 0
+        best_ctx = 8192
+        for key, ctx in self._OLLAMA_CONTEXT_HINTS.items():
+            if key in m and len(key) > best:
+                best = len(key)
+                best_ctx = ctx
+        return best_ctx
+
+    def _apply_local_request_shaping(
+        self,
+        provider: str,
+        model: str,
+        request_kwargs: Dict[str, Any],
+        has_tools: bool,
+    ) -> None:
+        """Tune request params for local-model backends in place.
+
+        Ollama-specific:
+        - ``num_ctx`` — see ``_ollama_num_ctx_for``.
+        - ``keep_alive`` — hold the model resident between turns so the
+          prompt prefix stays warm in KV cache (huge latency win on a
+          multi-turn loop).
+        - Clamp temperature to ≤0.2 when tools are in play; small local
+          models lose tool-call discipline at higher temperatures.
+
+        Mirrors what users would otherwise have to hand-tune via the Ollama
+        Modelfile. Set ``SUPERQODE_DISABLE_LOCAL_SHAPING=1`` to opt out.
+        """
+        if provider not in self._LOCAL_SHAPED_PROVIDERS:
+            return
+        if os.environ.get("SUPERQODE_DISABLE_LOCAL_SHAPING", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
+            return
+
+        if has_tools:
+            cur_temp = request_kwargs.get("temperature")
+            if cur_temp is None or cur_temp > 0.2:
+                request_kwargs["temperature"] = 0.2
+
+        if provider == "ollama":
+            keep_alive = os.environ.get("SUPERQODE_OLLAMA_KEEP_ALIVE", "30m")
+            # LiteLLM forwards unknown kwargs into Ollama's "options" payload.
+            request_kwargs.setdefault("keep_alive", keep_alive)
+            options = dict(request_kwargs.get("options") or {})
+            options.setdefault("num_ctx", self._ollama_num_ctx_for(model))
+            request_kwargs["options"] = options
+
+    # Patterns the in-band extractor recognizes. Order matters: try the
+    # most specific (XML-style tag) first to avoid greedy code-fence matches
+    # swallowing tagged blocks.
+    _INLINE_TOOL_PATTERNS: List[Tuple[str, str]] = [
+        # Qwen / Hermes style
+        ("xml", r"<tool_call>\s*(\{.*?\})\s*</tool_call>"),
+        # ```tool_call ... ``` or ```json ... ``` code fences
+        ("fence", r"```(?:tool_call|json|tool)\s*\n?(\{.*?\})\s*```"),
+        # Llama 3.x / Qwen3 function-call style: bare JSON object with a
+        # ``name`` (or ``function_name``) field and ``parameters``/``arguments``.
+        # Constrained to ``name``-shaped keys so we don't grab arbitrary JSON
+        # the model cited in prose (e.g. example payloads in an explanation).
+        ("bare", r'^\s*(\{\s*"(?:function_name|name)"\s*:\s*"[^"]+"\s*,\s*"(?:parameters|arguments)"\s*:\s*\{.*?\}\s*\})\s*$'),
+    ]
+
+    def _extract_inline_tool_calls(
+        self, content: str
+    ) -> Tuple[str, Optional[List[Dict[str, Any]]]]:
+        """Pull tool calls out of plain content emitted by local models.
+
+        Many open-weight models (Qwen 2.5, Llama 3.x, Hermes) emit tool
+        calls inline as text instead of through the OpenAI-style
+        ``tool_calls`` channel — either as ``<tool_call>{...}</tool_call>``
+        or inside a fenced code block. LiteLLM passes those through as
+        normal content; the agent loop then sees zero tool calls and the
+        model appears to "narrate without acting".
+
+        This shim recognizes those patterns, lifts them into proper
+        ``tool_calls`` dicts, and returns the stripped content. Returns
+        ``(content, None)`` if no patterns match — safe to call on any
+        response.
+        """
+        import re
+
+        if not content or "{" not in content:
+            return content, None
+
+        extracted: List[Dict[str, Any]] = []
+        stripped = content
+        for kind, pattern in self._INLINE_TOOL_PATTERNS:
+            flags = re.DOTALL | (re.MULTILINE if kind == "bare" else 0)
+            for match in re.finditer(pattern, stripped, flags):
+                raw = match.group(1)
+                try:
+                    parsed = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(parsed, dict):
+                    continue
+                name = parsed.get("name") or parsed.get("function_name")
+                if not name or not isinstance(name, str):
+                    continue
+                args = parsed.get("arguments")
+                if args is None:
+                    args = parsed.get("parameters") or {}
+                # Normalize arguments to a JSON string (OpenAI's tool_calls
+                # contract — agent loop json.loads it back).
+                if isinstance(args, (dict, list)):
+                    args_str = json.dumps(args)
+                else:
+                    args_str = str(args) if args else "{}"
+                extracted.append(
+                    {
+                        "id": f"extracted_{len(extracted)}",
+                        "type": "function",
+                        "function": {"name": name, "arguments": args_str},
+                    }
+                )
+            if extracted:
+                # Strip the matched substrings so the content shown to the
+                # user doesn't double up with the tool-call invocation.
+                stripped = re.sub(pattern, "", stripped, flags=flags).strip()
+                break  # one pattern is enough — don't re-scan the residue
+
+        return stripped, (extracted or None)
+
     def _convert_tools(
         self, tools: Optional[List[ToolDefinition]]
     ) -> Optional[List[Dict[str, Any]]]:
@@ -574,10 +878,21 @@ class LiteLLMGateway(GatewayInterface):
         if tool_choice:
             request_data["tool_choice"] = tool_choice
 
+        # MLX doesn't honor reasoning/structured-output natively; strip
+        # so the markers don't leak into the wire payload.
+        kwargs.pop("reasoning_effort", None)
+        kwargs.pop("structured_output_mode", None)
+        budget_for_credit: Optional[TaskTokenBudget] = kwargs.pop("task_budget", None)
+
+        # Same shaping the LiteLLM path applies for Ollama-family locals:
+        # clamp temperature when tools are present so the small MLX model
+        # doesn't dribble out half-formed tool JSON.
+        self._apply_local_request_shaping("mlx", model, request_data, bool(tools))
+
         try:
             # Make direct request to MLX server (MLX models can be slow)
             response_data = await client._async_request(
-                "POST", "/v1/chat/completions", request_data, timeout=120.0
+                "POST", "/v1/chat/completions", request_data, timeout=300.0
             )
 
             # Extract response
@@ -593,6 +908,8 @@ class LiteLLMGateway(GatewayInterface):
                     completion_tokens=usage_data.get("completion_tokens", 0),
                     total_tokens=usage_data.get("total_tokens", 0),
                 )
+                if budget_for_credit is not None:
+                    budget_for_credit.credit(usage.total_tokens)
 
             # Clean up MLX response content - remove special tokens that might confuse users
             content = message.get("content", "")
@@ -609,6 +926,16 @@ class LiteLLMGateway(GatewayInterface):
                     "assistant", ""
                 ).strip()  # Remove duplicate assistant markers
 
+            # Normalize native tool_calls and, failing that, scan the
+            # content for in-band tool calls (Gemma/Llama don't emit
+            # OpenAI-shaped tool_calls reliably under MLX).
+            tool_calls = self._normalize_tool_calls(message.get("tool_calls"))
+            if not tool_calls and isinstance(content, str) and content:
+                stripped, extracted = self._extract_inline_tool_calls(content)
+                if extracted:
+                    tool_calls = extracted
+                    content = stripped
+
             return GatewayResponse(
                 content=content,
                 role=message.get("role", "assistant"),
@@ -616,7 +943,7 @@ class LiteLLMGateway(GatewayInterface):
                 usage=usage,
                 model=response_data.get("model", model),
                 provider="mlx",
-                tool_calls=message.get("tool_calls"),
+                tool_calls=tool_calls,
                 raw_response=response_data,
             )
 
@@ -1085,14 +1412,29 @@ class LiteLLMGateway(GatewayInterface):
         if temperature is not None:
             request_data["temperature"] = temperature
 
-        thinking_cfg = self._ds4_thinking_config()
-        if thinking_cfg is not None:
-            request_data["thinking"] = thinking_cfg
+        # Per-call reasoning override (kwarg wins over the env-based
+        # SUPERQODE_DS4_THINKING default). Lets a caller bump a single
+        # turn to think_max without changing session-wide config.
+        reasoning_effort = kwargs.pop("reasoning_effort", None)
+        if reasoning_effort:
+            resolved = self._resolve_reasoning_effort("ds4", model, reasoning_effort)
+            if "thinking" in resolved:
+                request_data["thinking"] = resolved["thinking"]
+        else:
+            thinking_cfg = self._ds4_thinking_config()
+            if thinking_cfg is not None:
+                request_data["thinking"] = thinking_cfg
 
         anthropic_tools = self._ds4_convert_tools_anthropic(tools)
         if anthropic_tools:
             request_data["tools"] = anthropic_tools
             request_data["tool_choice"] = {"type": "auto"}
+
+        # DS4 doesn't accept reasoning_effort / structured_output_mode /
+        # task_budget on the wire. Strip so leftover kwargs don't fan out
+        # into aiohttp by accident in any future refactor.
+        budget_for_credit: Optional[TaskTokenBudget] = kwargs.pop("task_budget", None)
+        kwargs.pop("structured_output_mode", None)
 
         headers = {
             "Content-Type": "application/json",
@@ -1145,6 +1487,8 @@ class LiteLLMGateway(GatewayInterface):
                     completion_tokens=usage_data.get("output_tokens", 0),
                     total_tokens=usage_data.get("input_tokens", 0) + usage_data.get("output_tokens", 0),
                 )
+                if budget_for_credit is not None:
+                    budget_for_credit.credit(usage.total_tokens)
 
             return GatewayResponse(
                 content=text_content,
@@ -1407,10 +1751,13 @@ class LiteLLMGateway(GatewayInterface):
         if tool_choice:
             request_data["tool_choice"] = tool_choice
 
+        # Same local-model shaping (temp clamp) as the non-streaming path.
+        self._apply_local_request_shaping("mlx", model, request_data, bool(tools))
+
         try:
             # Make non-streaming request to MLX server (streaming causes KV cache issues)
             response_data = await client._async_request(
-                "POST", "/v1/chat/completions", request_data, timeout=120.0
+                "POST", "/v1/chat/completions", request_data, timeout=300.0
             )
 
             # Extract response and yield as single chunk
@@ -1434,11 +1781,21 @@ class LiteLLMGateway(GatewayInterface):
                     "assistant", ""
                 ).strip()  # Remove duplicate assistant markers
 
+            # Same tool-call rescue as the non-streaming MLX path: normalize
+            # native tool_calls, else scan for inline tool calls (Gemma/Llama
+            # variants under MLX often emit <tool_call> tags instead).
+            tool_calls = self._normalize_tool_calls(message.get("tool_calls"))
+            if not tool_calls and isinstance(content, str) and content:
+                stripped, extracted = self._extract_inline_tool_calls(content)
+                if extracted:
+                    tool_calls = extracted
+                    content = stripped
+
             yield StreamChunk(
                 content=content,
                 role=message.get("role"),
-                finish_reason=choice.get("finish_reason"),
-                tool_calls=message.get("tool_calls"),
+                finish_reason="tool_calls" if tool_calls else choice.get("finish_reason"),
+                tool_calls=tool_calls,
             )
 
         except Exception as e:
@@ -1501,6 +1858,14 @@ class LiteLLMGateway(GatewayInterface):
             provider = model.split("/")[0]
         provider = provider or "unknown"
 
+        # Per-task budget pre-check. Done before any provider dispatch so
+        # DS4 / MLX / LMStudio all share the fail-fast behavior; the
+        # specialized methods credit usage themselves on the way out.
+        # We peek without popping so dispatched methods can still credit.
+        task_budget: Optional[TaskTokenBudget] = kwargs.get("task_budget")
+        if task_budget is not None:
+            task_budget.check()
+
         # Special handling for MLX - use direct client instead of LiteLLM
         if provider == "mlx":
             return await self._mlx_chat_completion(
@@ -1549,8 +1914,35 @@ class LiteLLMGateway(GatewayInterface):
         if tool_choice:
             request_kwargs["tool_choice"] = tool_choice
 
-        # Add any extra kwargs
+        # Provider-neutral reasoning effort + structured output. Pulled
+        # from kwargs so callers can pass them through transparently;
+        # the gateway translates to whatever the backend expects.
+        reasoning_effort = kwargs.pop("reasoning_effort", None)
+        structured_output_mode = kwargs.pop("structured_output_mode", None)
+        response_schema = kwargs.get("response_schema")
+        if reasoning_effort:
+            request_kwargs.update(
+                self._resolve_reasoning_effort(provider, model, reasoning_effort)
+            )
+        if structured_output_mode:
+            request_kwargs.update(
+                self._resolve_structured_output_mode(
+                    provider, structured_output_mode, response_schema is not None
+                )
+            )
+            # Internal-only marker — strip before sending to LiteLLM.
+            request_kwargs.pop("_structured_output_mode", None)
+
+        # Strip the budget marker — it's our concern, not LiteLLM's.
+        # (Pre-check already happened at the dispatcher's entry point.)
+        budget_for_credit: Optional[TaskTokenBudget] = kwargs.pop("task_budget", None)
+
+        # Add any remaining extra kwargs
         request_kwargs.update(kwargs)
+
+        # Local-model tuning (Ollama num_ctx, keep_alive, tool-temp clamp).
+        # Applied after kwargs merge so user overrides via extra kwargs win.
+        self._apply_local_request_shaping(provider, model, request_kwargs, bool(tools))
 
         try:
             model_candidates = self._get_model_candidates(provider, model)
@@ -1623,6 +2015,8 @@ class LiteLLMGateway(GatewayInterface):
                     completion_tokens=response.usage.completion_tokens or 0,
                     total_tokens=response.usage.total_tokens or 0,
                 )
+                if budget_for_credit is not None:
+                    budget_for_credit.credit(usage.total_tokens)
 
             # Build cost info if tracking enabled
             cost = None
@@ -1682,6 +2076,20 @@ class LiteLLMGateway(GatewayInterface):
             if hasattr(message, "tool_calls") and message.tool_calls:
                 tool_calls = self._normalize_tool_calls(message.tool_calls)
 
+            # Local models often emit tool calls in-band as text instead of
+            # via the OpenAI tool_calls channel. If no native tool calls
+            # came back and we're talking to a local provider, scan content
+            # for <tool_call> / fenced JSON / bare function-call patterns.
+            if (
+                not tool_calls
+                and provider in self._LOCAL_SHAPED_PROVIDERS
+                and isinstance(content, str)
+            ):
+                stripped, extracted = self._extract_inline_tool_calls(content)
+                if extracted:
+                    tool_calls = extracted
+                    content = stripped
+
             return GatewayResponse(
                 content=content,
                 role=message.role,
@@ -1716,6 +2124,11 @@ class LiteLLMGateway(GatewayInterface):
         if not provider and "/" in model:
             provider = model.split("/")[0]
         provider = provider or "unknown"
+
+        # Per-task budget pre-check (mirrors chat_completion).
+        task_budget: Optional[TaskTokenBudget] = kwargs.get("task_budget")
+        if task_budget is not None:
+            task_budget.check()
 
         # Special handling for MLX - use direct client instead of LiteLLM
         if provider == "mlx":
@@ -1763,7 +2176,29 @@ class LiteLLMGateway(GatewayInterface):
             if google_key:
                 request_kwargs["api_key"] = google_key
 
+        # Provider-neutral reasoning + structured output (stream path).
+        reasoning_effort = kwargs.pop("reasoning_effort", None)
+        structured_output_mode = kwargs.pop("structured_output_mode", None)
+        response_schema = kwargs.get("response_schema")
+        if reasoning_effort:
+            request_kwargs.update(
+                self._resolve_reasoning_effort(provider, model, reasoning_effort)
+            )
+        if structured_output_mode:
+            request_kwargs.update(
+                self._resolve_structured_output_mode(
+                    provider, structured_output_mode, response_schema is not None
+                )
+            )
+            request_kwargs.pop("_structured_output_mode", None)
+
+        # Strip budget marker; pre-check already happened above.
+        budget_for_credit: Optional[TaskTokenBudget] = kwargs.pop("task_budget", None)
+
         request_kwargs.update(kwargs)
+
+        # Local-model tuning. Same rationale as in chat_completion.
+        self._apply_local_request_shaping(provider, model, request_kwargs, bool(tools))
 
         try:
             model_candidates = self._get_model_candidates(provider, model)
@@ -1794,7 +2229,25 @@ class LiteLLMGateway(GatewayInterface):
                     model=model,
                 )
 
+            # Accumulators for end-of-stream in-band tool extraction
+            # (only used when provider is a local-shaped one).
+            inline_capture = provider in self._LOCAL_SHAPED_PROVIDERS
+            inline_buffer: List[str] = []
+            saw_native_tool_calls = False
+
+            credited = False
             async for chunk in response:
+                # Credit the budget from any usage field LiteLLM attaches
+                # to the terminal stream chunk. LiteLLM typically only
+                # emits ``.usage`` on the last chunk, but we guard with
+                # ``credited`` so repeated echoes don't double-charge.
+                if budget_for_credit is not None and not credited:
+                    chunk_usage = getattr(chunk, "usage", None)
+                    if chunk_usage is not None:
+                        total = getattr(chunk_usage, "total_tokens", 0) or 0
+                        if total > 0:
+                            budget_for_credit.credit(total)
+                            credited = True
                 if not chunk.choices:
                     continue
 
@@ -1861,6 +2314,31 @@ class LiteLLMGateway(GatewayInterface):
                 # Normalize tool calls (may be objects or dicts from LiteLLM)
                 if delta and hasattr(delta, "tool_calls") and delta.tool_calls:
                     stream_chunk.tool_calls = self._normalize_tool_calls(delta.tool_calls)
+                    if stream_chunk.tool_calls:
+                        saw_native_tool_calls = True
+
+                if inline_capture and content and not saw_native_tool_calls:
+                    inline_buffer.append(content)
+
+                # At end-of-stream for a local provider that emitted no native
+                # tool_calls, scan the buffered content. If we find inline
+                # tool calls, emit a synthesized terminal chunk carrying them
+                # so the agent loop can act on them.
+                if (
+                    inline_capture
+                    and choice.finish_reason
+                    and not saw_native_tool_calls
+                    and inline_buffer
+                ):
+                    full = "".join(inline_buffer)
+                    _, extracted = self._extract_inline_tool_calls(full)
+                    if extracted:
+                        # Hand the tool calls to the loop. We do not echo the
+                        # raw content again — earlier chunks already carried
+                        # it — so the user sees the model's text once and the
+                        # tool calls fire from the trailing chunk.
+                        stream_chunk.tool_calls = extracted
+                        stream_chunk.finish_reason = "tool_calls"
 
                 yield stream_chunk
 

@@ -126,6 +126,67 @@ class InvalidRequestError(GatewayError):
     pass
 
 
+class TaskBudgetExceeded(GatewayError):
+    """Raised when a session's cumulative token budget is exhausted.
+
+    The agent loop is expected to catch this and stop the task with a
+    user-visible message — silently halving the budget mid-run would
+    confuse cost accounting downstream.
+    """
+
+    pass
+
+
+class TaskTokenBudget:
+    """Per-session token ceiling, shared across turns.
+
+    Wire this into the gateway via ``task_budget=`` on the request kwarg.
+    The gateway pre-checks before every call and credits the response
+    usage when it lands. Callers reset between sessions.
+
+    Concurrency note: a single budget is **not** safe to share across
+    parallel sessions — the credit step is non-atomic. Use one budget
+    per session (the typical agent-loop case).
+    """
+
+    def __init__(self, max_tokens: int) -> None:
+        if max_tokens <= 0:
+            raise ValueError("max_tokens must be positive")
+        self.max_tokens = max_tokens
+        self.used = 0
+
+    @property
+    def remaining(self) -> int:
+        return max(0, self.max_tokens - self.used)
+
+    @property
+    def exhausted(self) -> bool:
+        return self.used >= self.max_tokens
+
+    def check(self) -> None:
+        """Raise ``TaskBudgetExceeded`` if no budget remains.
+
+        Called before each LLM request so the loop fails fast instead
+        of paying for a final round-trip just to learn it's over.
+        """
+        if self.exhausted:
+            raise TaskBudgetExceeded(
+                f"Task token budget exhausted "
+                f"({self.used}/{self.max_tokens} tokens used). "
+                f"Reset the budget or start a new task.",
+                error_type="task_budget_exceeded",
+            )
+
+    def credit(self, tokens: int) -> None:
+        """Add ``tokens`` to the used count. No-op for non-positive values."""
+        if tokens > 0:
+            self.used += tokens
+
+    def reset(self) -> None:
+        """Zero the used counter; cap unchanged."""
+        self.used = 0
+
+
 class GatewayInterface(ABC):
     """Abstract interface for LLM gateways.
 

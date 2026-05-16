@@ -31,6 +31,25 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 
+# Typed exceptions so callers can branch on the failure mode rather than
+# parsing strings out of a bare ``ValueError``. The class names mirror
+# fast-agent's ``oauth_client.py`` for cross-codebase consistency.
+class OAuthError(Exception):
+    """Base class for OAuth-flow problems."""
+
+
+class OAuthCallbackTimeoutError(OAuthError, TimeoutError):
+    """Raised when the user never completes the browser callback in time."""
+
+
+class OAuthFlowCancelledError(OAuthError):
+    """Raised when the user explicitly aborts the flow (Ctrl-C, etc.)."""
+
+
+class OAuthMetadataError(OAuthError):
+    """Raised when neither RFC 8414 nor RFC 9728 metadata can be fetched."""
+
+
 @dataclass
 class OAuthConfig:
     """OAuth configuration for an MCP server."""
@@ -131,33 +150,83 @@ class MCPOAuthProvider:
         self._metadata_cache: Dict[str, Dict[str, Any]] = {}
 
     async def discover_oauth_metadata(self, server_url: str) -> Dict[str, Any]:
-        """
-        Discover OAuth metadata from server.
+        """Discover OAuth metadata for ``server_url``.
 
-        Looks for .well-known/oauth-authorization-server endpoint.
+        Tries discovery in this order (matches fast-agent's behavior and
+        what modern MCP servers expect):
+
+        1. **RFC 9728 — Protected Resource Metadata** at
+           ``<server>/.well-known/oauth-protected-resource``. Newer MCP
+           pattern. Resource server points to an authorization server.
+        2. **RFC 8414 — Authorization Server Metadata** at
+           ``<server>/.well-known/oauth-authorization-server`` (the
+           original discovery endpoint our older code supported).
+
+        If RFC 9728 succeeds and lists an ``authorization_servers`` URL,
+        we then fetch that server's RFC 8414 metadata so callers get a
+        merged dict with both ``authorization_endpoint`` and any
+        protected-resource hints. Empty dict on total failure.
         """
         if server_url in self._metadata_cache:
             return self._metadata_cache[server_url]
 
-        # Try standard OAuth discovery endpoint
         parsed = urllib.parse.urlparse(server_url)
         base_url = f"{parsed.scheme}://{parsed.netloc}"
 
-        metadata_url = f"{base_url}/.well-known/oauth-authorization-server"
+        loop = asyncio.get_event_loop()
 
+        prm_url = f"{base_url}/.well-known/oauth-protected-resource"
+        as_url = f"{base_url}/.well-known/oauth-authorization-server"
+
+        merged: Dict[str, Any] = {}
+
+        # RFC 9728 — Protected Resource Metadata. If we get auth-server
+        # pointers from it, we follow the first one for the AS metadata.
         try:
-            loop = asyncio.get_event_loop()
-            metadata = await loop.run_in_executor(None, lambda: self._fetch_metadata(metadata_url))
-
-            if metadata:
-                self._metadata_cache[server_url] = metadata
-                return metadata
-
+            prm = await loop.run_in_executor(
+                None, lambda: self._fetch_metadata(prm_url)
+            )
         except Exception as e:
-            logger.debug(f"OAuth discovery failed for {server_url}: {e}")
+            prm = None
+            logger.debug(f"PRM discovery failed for {server_url}: {e}")
 
-        # Return empty if discovery fails
-        return {}
+        if prm:
+            merged.update(prm)
+            auth_servers = prm.get("authorization_servers") or []
+            for auth_server in auth_servers:
+                if not auth_server:
+                    continue
+                as_meta_url = (
+                    f"{auth_server.rstrip('/')}/.well-known/oauth-authorization-server"
+                )
+                try:
+                    as_meta = await loop.run_in_executor(
+                        None, lambda u=as_meta_url: self._fetch_metadata(u)
+                    )
+                except Exception:
+                    as_meta = None
+                if as_meta:
+                    # AS fields take precedence — they have the actual
+                    # endpoints we'll hit. PRM fields stay as hints.
+                    merged.update(as_meta)
+                    break
+
+        # RFC 8414 fallback — try the server's own metadata if PRM
+        # didn't yield anything actionable.
+        if "authorization_endpoint" not in merged:
+            try:
+                as_meta = await loop.run_in_executor(
+                    None, lambda: self._fetch_metadata(as_url)
+                )
+            except Exception as e:
+                as_meta = None
+                logger.debug(f"OAuth AS discovery failed for {server_url}: {e}")
+            if as_meta:
+                merged.update(as_meta)
+
+        if merged:
+            self._metadata_cache[server_url] = merged
+        return merged
 
     def _fetch_metadata(self, url: str) -> Optional[Dict[str, Any]]:
         """Fetch OAuth metadata synchronously."""

@@ -21,7 +21,7 @@ import stat
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Protocol
 
 from .oauth import OAuthTokens
 
@@ -364,6 +364,151 @@ class MCPAuthStorage:
             if temp_path.exists():
                 temp_path.unlink()
             raise e
+
+
+# ---------------------------------------------------------------------------
+# Pluggable TokenStorage protocol + optional keyring backend
+# ---------------------------------------------------------------------------
+#
+# The dataclass-shaped MCPAuthStorage above is the file-system default.
+# This protocol lets callers (and tests) swap in a different backend
+# without changing call-sites. fast-agent uses the same pattern with
+# InMemoryTokenStorage + KeyringTokenStorage; we expose the equivalent
+# so MCP servers requiring OAuth get keyring-backed storage on systems
+# that have it, falling back to the file store everywhere else.
+
+
+class TokenStorage(Protocol):
+    """Minimal contract any token store must satisfy.
+
+    Methods are sync because both backends we ship (file + keyring)
+    are synchronous, and the MCP client wraps calls in
+    ``asyncio.to_thread`` at the right point. A future async-native
+    backend (e.g. Vault) could implement this with sync wrappers.
+    """
+
+    def save_tokens(self, server_url: str, tokens: "OAuthTokens") -> None:
+        ...
+
+    def load_tokens(self, server_url: str) -> Optional["OAuthTokens"]:
+        ...
+
+    def delete_tokens(self, server_url: str) -> bool:
+        ...
+
+
+def _has_keyring() -> bool:
+    """True if the ``keyring`` package is importable AND has a usable
+    backend (some envs install the lib but no daemon)."""
+    try:
+        import keyring  # type: ignore
+        # ``get_keyring()`` raises on environments where no backend is
+        # available rather than returning None — guard with broad except.
+        keyring.get_keyring()
+        return True
+    except Exception:
+        return False
+
+
+class KeyringTokenStorage:
+    """OS-keychain-backed token storage.
+
+    Uses macOS Keychain on Darwin, Windows Credential Manager on
+    Windows, and the GNOME Secret Service / KWallet on Linux when
+    available. Falls back gracefully — if the backend disappears
+    mid-session (rare, but happens when a Linux desktop session ends),
+    we surface ``None`` from ``load_tokens`` rather than raising, so
+    the caller can re-prompt.
+
+    Soft-imports ``keyring`` at construction so importing this module
+    on a system without keyring installed still works — you just can't
+    instantiate the class. Use ``_has_keyring()`` to gate.
+    """
+
+    SERVICE = "superqode-mcp"
+
+    def __init__(self, service: Optional[str] = None) -> None:
+        import keyring  # type: ignore  # local import — see soft-dep note
+        self._keyring = keyring
+        self._service = service or self.SERVICE
+
+    @staticmethod
+    def _identity(server_url: str) -> str:
+        # The keyring "username" slot stores our identity for this
+        # server. Hash like the file backend does so the key doesn't
+        # contain raw URLs (some keychains display these in plaintext).
+        return hashlib.sha256(server_url.encode("utf-8")).hexdigest()[:24]
+
+    def save_tokens(self, server_url: str, tokens: "OAuthTokens") -> None:
+        identity = self._identity(server_url)
+        self._keyring.set_password(
+            self._service, identity, json.dumps(tokens.to_dict())
+        )
+
+    def load_tokens(self, server_url: str) -> Optional["OAuthTokens"]:
+        identity = self._identity(server_url)
+        try:
+            payload = self._keyring.get_password(self._service, identity)
+        except Exception:
+            return None
+        if not payload:
+            return None
+        try:
+            return OAuthTokens.from_dict(json.loads(payload))
+        except (json.JSONDecodeError, KeyError):
+            return None
+
+    def delete_tokens(self, server_url: str) -> bool:
+        identity = self._identity(server_url)
+        try:
+            self._keyring.delete_password(self._service, identity)
+            return True
+        except Exception:
+            return False
+
+
+def make_default_token_storage() -> TokenStorage:
+    """Return the preferred token storage backend for this system.
+
+    Keyring when available (most secure: tokens never touch disk in
+    plaintext); file-backed otherwise (still 0o600, but readable by
+    anything running as the user). Tests can construct either
+    explicitly without going through this helper.
+    """
+    if _has_keyring():
+        try:
+            return KeyringTokenStorage()
+        except Exception:
+            # Lib imported but instantiation failed — fall through.
+            pass
+    return _FileTokenStorageAdapter(MCPAuthStorage())
+
+
+class _FileTokenStorageAdapter:
+    """Adapter so the existing MCPAuthStorage satisfies the new Protocol.
+
+    Avoids breaking any pre-B7 caller that holds an MCPAuthStorage
+    directly. Once everyone goes through ``TokenStorage``, this can
+    fold into MCPAuthStorage as a thin method renaming.
+    """
+
+    def __init__(self, file_storage: "MCPAuthStorage") -> None:
+        self._file = file_storage
+
+    def save_tokens(self, server_url: str, tokens: "OAuthTokens") -> None:
+        self._file.save_tokens(server_url, tokens)
+
+    def load_tokens(self, server_url: str) -> Optional["OAuthTokens"]:
+        return self._file.load_tokens(server_url)
+
+    def delete_tokens(self, server_url: str) -> bool:
+        # The legacy file-store API names this ``clear_tokens`` and
+        # returns None. Adapt to the protocol's bool return by probing
+        # whether tokens existed first — keeps the old method's
+        # signature stable for existing callers.
+        existed = self._file.load_tokens(server_url) is not None
+        self._file.clear_tokens(server_url)
+        return existed
 
 
 # Global storage instance

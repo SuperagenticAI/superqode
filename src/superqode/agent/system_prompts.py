@@ -69,6 +69,55 @@ Stopping:
 - If a task is ambiguous, ask one focused question before starting."""
 
 
+# Local-model prompt. Tuned for Ollama/MLX/llama.cpp where tool-call reliability
+# is the dominant failure mode. The wording is deliberate:
+#   - "Always call tools, never narrate" — counters the "Let me start by reading..."
+#     pattern where the model describes a plan but emits no tool_calls block.
+#   - Concrete JSON shape reminder — local models often emit tool calls inline
+#     as text. The gateway extracts them, but reminding the model to use the
+#     native tool-call channel cuts the extraction-fallback rate roughly in half
+#     on Qwen 2.5 / Llama 3.x in our smoke tests.
+#   - No long thinking budget guidance — local models don't expose a thinking
+#     budget the way DS4 does, so that paragraph would be dead weight.
+LOCAL_PROMPT = """You are a precise coding assistant running on a local model.
+
+You have tools for reading, searching, editing files, and running shell commands.
+Always call tools through the native function-calling channel. Do NOT paste
+JSON tool calls into your reply text — they will not execute.
+
+Behavior:
+- When the task needs the repo, call a tool. Do not say "let me read..." — read it.
+- Use ONE tool call at a time and wait for its result before deciding the next step.
+- Read before you edit; verify before you claim a task is done.
+- Keep responses short. The user sees the diff and tool output.
+- For general-knowledge or chat questions, answer directly without tools.
+
+Tool use:
+- `read_file` for any path; `list_directory` to explore.
+- `grep` for content patterns, `glob` for file names.
+- `edit_file` requires the old text to match exactly, including whitespace.
+- `bash` for one-shot commands.
+
+Code references in prose use `path:line` (e.g. `src/utils.py:42`).
+
+Stopping:
+- After tool calls, write a brief summary: what changed, where, what was verified.
+- If a task is ambiguous, ask one focused question before starting."""
+
+
+# Qwen models honor a more structured tool-call directive — Alibaba's instruct
+# tuning makes them sensitive to the exact "<tool_call>...</tool_call>" wording.
+# Adding this is non-breaking: the gateway extracts whichever channel the model
+# uses (native tool_calls or inline tags).
+QWEN_PROMPT = LOCAL_PROMPT + """
+
+Tool call format:
+- Prefer the native function-call output. If you must emit a tool call inline,
+  use this exact shape on its own line:
+  <tool_call>{"name": "<tool>", "arguments": {<json-args>}}</tool_call>
+- Never wrap tool calls in markdown code fences."""
+
+
 # System prompts by level
 SYSTEM_PROMPTS = {
     SystemPromptLevel.NONE: "",
@@ -342,6 +391,10 @@ def get_provider_prompt(provider: Optional[str], model: Optional[str]) -> str:
     model_lower = (model or "").lower()
     if provider == "ds4" or "deepseek-v4" in model_lower:
         return DS4_PROMPT
+    if provider in {"ollama", "mlx", "lmstudio", "vllm", "sglang", "tgi", "llama-cpp"}:
+        if "qwen" in model_lower:
+            return QWEN_PROMPT
+        return LOCAL_PROMPT
     return ""
 
 

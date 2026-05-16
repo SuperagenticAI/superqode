@@ -15,6 +15,11 @@ from typing import Any, Callable, Awaitable, Optional, Dict, List
 from dataclasses import dataclass, field
 from time import monotonic
 
+from superqode.acp.permission_store import (
+    ACPPermissionStore,
+    PermissionDecision,
+)
+from superqode.acp.session_store import ACPSessionStore, StoredSession
 from superqode.acp.types import (
     PermissionOption,
     ToolCall,
@@ -85,6 +90,24 @@ class ACPClient:
     ] = None
     on_plan: Optional[Callable[[List[dict]], Awaitable[None]]] = None
 
+    # Persistent permission store. When set, ``_handle_permission_request``
+    # consults the store before invoking the user callback. If the user
+    # picks an ``always`` decision, we save it. Optional — leaving these
+    # unset preserves the previous always-ask behavior verbatim.
+    permission_store: Optional["ACPPermissionStore"] = None
+    permission_scope: Optional[str] = None
+
+    # Persistent session store. When configured, newly-created sessions
+    # are recorded on disk and the client can resume prior sessions via
+    # ``load_session()`` if the agent advertises ``loadSession`` capability.
+    # ``agent_identity`` scopes the index so listings stay per-agent.
+    session_store: Optional["ACPSessionStore"] = None
+    agent_identity: Optional[str] = None
+    # If set, the client tries to resume this session id (gated on the
+    # agent's ``loadSession`` capability) instead of creating a fresh one
+    # on startup. Falls back to ``session/new`` if resume fails.
+    resume_session_id: Optional[str] = None
+
     # Internal state
     _process: Optional[asyncio.subprocess.Process] = field(default=None, repr=False)
     _request_id: int = field(default=0, repr=False)
@@ -101,6 +124,13 @@ class ACPClient:
     _tool_actions: List[dict] = field(default_factory=list, repr=False)
     _start_time: float = field(default=0.0, repr=False)
     _message_buffer: str = field(default="", repr=False)
+
+    # Agent-advertised capabilities from the initialize response.
+    # ``loadSession`` is the one we care about for resume; if the agent
+    # didn't advertise it, ``load_session()`` raises rather than failing
+    # silently on the wire. Default ``{}`` so attribute access via
+    # ``.get()`` always works even before initialize completes.
+    _agent_capabilities: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     def reset_stats(self) -> None:
         """Reset tracking stats for a new prompt."""
@@ -165,8 +195,26 @@ class ACPClient:
             # Initialize the protocol
             await self._initialize()
 
-            # Create a new session
-            await self._new_session()
+            # Resume the requested session if possible, else create new.
+            # We only try resume when the caller asked for it AND the
+            # agent advertised loadSession capability — otherwise we'd
+            # send a method the agent doesn't implement and get an error.
+            resumed = False
+            if (
+                self.resume_session_id
+                and self._agent_capabilities.get("loadSession")
+            ):
+                try:
+                    await self._load_session(self.resume_session_id)
+                    resumed = True
+                except Exception as e:
+                    if self.on_thinking:
+                        await self.on_thinking(
+                            f"[resume failed, falling back to new session] {e}"
+                        )
+
+            if not resumed:
+                await self._new_session()
 
             return True
 
@@ -211,6 +259,13 @@ class ACPClient:
         )
 
         stop_reason = response.get("stopReason") if response else None
+
+        # Bump last_used_at so "list recent sessions" reflects real
+        # activity, not just creation time. Best-effort; store warns
+        # internally on failure.
+        if self.session_store is not None and self.agent_identity and self._session_id:
+            await self.session_store.touch(self.agent_identity, self._session_id)
+
         return stop_reason
 
     async def cancel(self) -> bool:
@@ -302,6 +357,35 @@ class ACPClient:
         """Get the current session ID."""
         return self._session_id
 
+    def supports_resume(self) -> bool:
+        """Whether the connected agent advertised ``loadSession`` support.
+
+        Only meaningful after ``start()`` has completed initialize.
+        Useful for CLIs that want to grey out a resume menu rather than
+        attempt and fail.
+        """
+        return bool(self._agent_capabilities.get("loadSession"))
+
+    def get_agent_capabilities(self) -> Dict[str, Any]:
+        """Return a copy of the agent capabilities reported at initialize."""
+        return dict(self._agent_capabilities)
+
+    async def list_persisted_sessions(
+        self, *, cwd_only: bool = True, limit: int = 50
+    ) -> List["StoredSession"]:
+        """List prior sessions for this client's agent identity.
+
+        ``cwd_only=True`` (the default) scopes the listing to the
+        current project root — typically what a user wants. Pass
+        ``cwd_only=False`` for the global cross-project view.
+        """
+        if self.session_store is None or not self.agent_identity:
+            return []
+        cwd = str(self.project_root) if cwd_only else None
+        return await self.session_store.list_for_agent(
+            self.agent_identity, cwd=cwd, limit=limit
+        )
+
     # ========================================================================
     # Internal Methods
     # ========================================================================
@@ -325,10 +409,15 @@ class ACPClient:
                 "version": CLIENT_VERSION,
             },
         )
+        # Stash whatever the agent told us about itself. We only act on
+        # ``loadSession`` today, but keeping the full dict means future
+        # capability checks (e.g. ``promptCapabilities.embeddedContent``)
+        # don't require a re-roundtrip.
+        self._agent_capabilities = response.get("agentCapabilities") or {}
         return response
 
     async def _new_session(self) -> NewSessionResponse:
-        """Create a new session."""
+        """Create a new session and persist it if a store is configured."""
         from superqode.mcp.config import get_acp_mcp_servers
 
         params: Dict[str, Any] = {
@@ -344,7 +433,55 @@ class ACPClient:
             **params,
         )
         self._session_id = response.get("sessionId", "")
+        await self._persist_current_session()
         return response
+
+    async def _load_session(self, session_id: str) -> Dict[str, Any]:
+        """Send ``session/load`` for a prior session id.
+
+        The agent will re-emit historical updates (or a subset, depending
+        on the agent) so the client can rebuild any cached UI state. We
+        persist the touch on success so the resume bumps last_used_at.
+        """
+        from superqode.mcp.config import get_acp_mcp_servers
+
+        params: Dict[str, Any] = {
+            "cwd": str(self.project_root),
+            "mcpServers": get_acp_mcp_servers(),
+            "sessionId": session_id,
+        }
+        response = await self._call_method(
+            "session/load",
+            timeout=self.startup_timeout,
+            **params,
+        )
+        self._session_id = session_id
+        await self._persist_current_session(touch_only=True)
+        return response
+
+    async def _persist_current_session(self, *, touch_only: bool = False) -> None:
+        """Record the current session in the store (if configured).
+
+        ``touch_only=True`` skips the metadata payload — used after a
+        resume so we just bump ``last_used_at`` without overwriting any
+        prior model / agent info the user may have set.
+        """
+        if self.session_store is None or not self.agent_identity:
+            return
+        if not self._session_id:
+            return
+        if touch_only:
+            await self.session_store.touch(self.agent_identity, self._session_id)
+            return
+        metadata: Dict[str, Any] = {}
+        if self.model:
+            metadata["model"] = self.model
+        await self.session_store.record(
+            self.agent_identity,
+            self._session_id,
+            str(self.project_root),
+            metadata=metadata,
+        )
 
     async def _call_method(
         self,
@@ -533,15 +670,20 @@ class ACPClient:
             tool_call_id = update.get("toolCallId", "")
             self._tool_calls[tool_call_id] = update
 
-            # Track tool action
+            # Track tool action — surface parentToolCallId so consumers
+            # (TUI, stats) can render nested calls under their parent
+            # without having to dig into `_meta` themselves.
             kind = update.get("kind", "other")
             title = update.get("title", "")
             raw_input = update.get("rawInput", {})
+            parent_id = (update.get("_meta") or {}).get("parentToolCallId")
             self._tool_actions.append(
                 {
                     "tool": title,
                     "kind": kind,
                     "input": raw_input,
+                    "tool_call_id": tool_call_id,
+                    "parent_tool_call_id": parent_id,
                 }
             )
 
@@ -567,6 +709,24 @@ class ACPClient:
                 for key, value in update.items():
                     if value is not None:
                         self._tool_calls[tool_call_id][key] = value
+            else:
+                # Late-arriving update with no prior tool_call event —
+                # some agents (notably OpenHands, some Codex builds)
+                # skip the create event. Synthesize a placeholder so we
+                # don't silently drop the update, then merge.
+                synthesized = {
+                    "sessionUpdate": "tool_call",
+                    "toolCallId": tool_call_id,
+                    "title": "Tool call",
+                }
+                for key, value in update.items():
+                    if value is not None:
+                        synthesized[key] = value
+                self._tool_calls[tool_call_id] = synthesized
+                # Surface as a tool_call (not update) for the first sight.
+                if self.on_tool_call:
+                    await self.on_tool_call(synthesized)
+                return
             if self.on_tool_update:
                 await self.on_tool_update(update)
 
@@ -609,7 +769,17 @@ class ACPClient:
         return ""
 
     async def _handle_permission_request(self, params: dict) -> dict:
-        """Handle permission request from agent."""
+        """Handle permission request from agent.
+
+        Resolution order:
+        1. Persistent store (if configured) — auto-respond with the
+           remembered ``allow_always`` / ``reject_always`` outcome so
+           the user isn't re-prompted across sessions.
+        2. User callback — prompts the user for a fresh decision. If
+           the user picks an ``always`` option, persist it.
+        3. Default fall-through — ``allow_once`` if present, otherwise
+           the first option, otherwise ``cancelled``.
+        """
         options = params.get("options", [])
         tool_call = params.get("toolCall", {})
 
@@ -618,9 +788,57 @@ class ACPClient:
         if tool_call_id and tool_call_id not in self._tool_calls:
             self._tool_calls[tool_call_id] = tool_call
 
-        # Call the permission callback if set
+        # Step 1: persistent store lookup.
+        if self.permission_store is not None and self.permission_scope:
+            tool_key = tool_call.get("title") or (tool_call.get("rawInput") or {}).get(
+                "tool_name"
+            ) or "unknown"
+            stored = await self.permission_store.get(self.permission_scope, tool_key)
+            if stored is not None:
+                target_kind = stored.value  # "allow_always" | "reject_always"
+                for opt in options:
+                    if opt.get("kind") == target_kind:
+                        return {
+                            "outcome": {
+                                "outcome": "selected",
+                                "optionId": opt.get("optionId", ""),
+                            }
+                        }
+                # Stored decision exists but the agent didn't offer a
+                # matching ``always`` option. Fall back to the matching
+                # once-variant so the decision is still respected this
+                # turn even if it can't be re-locked.
+                fallback_kind = "allow_once" if stored.allowed else "reject_once"
+                for opt in options:
+                    if opt.get("kind") == fallback_kind:
+                        return {
+                            "outcome": {
+                                "outcome": "selected",
+                                "optionId": opt.get("optionId", ""),
+                            }
+                        }
+
+        # Step 2: user callback. If they pick an ``always`` option, save it.
         if self.on_permission_request:
             option_id = await self.on_permission_request(options, tool_call)
+            if (
+                self.permission_store is not None
+                and self.permission_scope
+                and option_id
+            ):
+                picked = next(
+                    (o for o in options if o.get("optionId") == option_id),
+                    None,
+                )
+                if picked is not None:
+                    decision = PermissionDecision.from_option_kind(picked.get("kind"))
+                    if decision is not None:
+                        tool_key = tool_call.get("title") or (
+                            tool_call.get("rawInput") or {}
+                        ).get("tool_name") or "unknown"
+                        await self.permission_store.set(
+                            self.permission_scope, tool_key, decision
+                        )
             return {
                 "outcome": {
                     "outcome": "selected",

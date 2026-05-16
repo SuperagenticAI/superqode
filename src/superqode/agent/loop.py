@@ -673,8 +673,22 @@ class AgentLoop:
             metadata={"permission": "ask_denied", "tool": name},
         )
 
-    async def _execute_tool(self, name: str, arguments: Dict[str, Any]) -> ToolResult:
-        """Execute a single tool call."""
+    async def _execute_tool(
+        self,
+        name: str,
+        arguments: Dict[str, Any],
+        tool_call_id: Optional[str] = None,
+    ) -> ToolResult:
+        """Execute a single tool call.
+
+        ``tool_call_id`` is threaded through so any tool calls nested
+        inside this one (e.g. tools invoked by a sub-agent spawned via
+        SubAgentTool) inherit it as ``parentToolCallId`` in their ACP
+        ``_meta`` payload. Optional for backwards compatibility — if a
+        caller doesn't supply it, no parent linkage is recorded.
+        """
+        from ..acp.tool_call_context import acp_tool_call_context
+
         tool = self.tools.get(name)
 
         if not tool:
@@ -705,7 +719,11 @@ class AgentLoop:
         ctx = self._create_tool_context()
 
         try:
-            result = await tool.execute(arguments, ctx)
+            # Set this call's id as the parent for anything it spawns.
+            # ContextVar propagates through asyncio.create_task automatically,
+            # so SubAgentTool's background _execute_subtask sees it too.
+            with acp_tool_call_context(parent_tool_call_id=tool_call_id):
+                result = await tool.execute(arguments, ctx)
             return result
         except Exception as e:
             return ToolResult(success=False, output="", error=f"Tool execution error: {str(e)}")
@@ -801,7 +819,7 @@ class AgentLoop:
             if self.on_tool_call:
                 self.on_tool_call(tool_name, tool_args)
 
-            result = await self._execute_tool(tool_name, tool_args)
+            result = await self._execute_tool(tool_name, tool_args, tool_call_id=tool_call_id)
 
             # Callback for result
             if self.on_tool_result:
@@ -1036,7 +1054,7 @@ class AgentLoop:
                         if self.on_tool_call:
                             self.on_tool_call(tool_name, tool_args)
 
-                        result = await self._execute_tool(tool_name, tool_args)
+                        result = await self._execute_tool(tool_name, tool_args, tool_call_id=tool_call_id)
                         tool_calls_made += 1
 
                         if self.on_tool_result:
@@ -1349,7 +1367,7 @@ class AgentLoop:
                         if self.on_tool_call:
                             self.on_tool_call(tool_name, tool_args)
 
-                        result = await self._execute_tool(tool_name, tool_args)
+                        result = await self._execute_tool(tool_name, tool_args, tool_call_id=tool_call_id)
                         tool_calls_made += 1
 
                         if self.on_tool_result:
