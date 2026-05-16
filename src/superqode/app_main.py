@@ -630,7 +630,7 @@ class SuperQodeApp(App):
     current_provider = reactive("")
     is_busy = reactive(False)
     sidebar_visible = reactive(False)
-    show_thinking_logs = reactive(False)  # Toggle for thinking logs visibility
+    show_thinking_logs = reactive(True)  # Toggle for thinking logs visibility (default enabled)
     show_verbose_agent_logs = reactive(False)  # Show raw [agent] session logs (verbose mode)
     approval_mode = reactive(
         "ask"
@@ -6417,13 +6417,12 @@ team:
             if not text:
                 return
 
-            # Filter out raw agent stdout logs - these are verbose session logs
+            # Handle raw agent stdout logs - these show what the agent is doing
             # The [agent] prefix comes from non-JSON output from the agent process
             if text.startswith("[agent]"):
-                # Only show in verbose mode (`:log verbose`)
-                if self.show_verbose_agent_logs:
-                    clean_text = text[8:]  # Remove "[agent] " prefix
-                    self._call_ui(self._show_thinking_line, f"📡 {clean_text}", log)
+                # Show agent activity by default (useful to see what agent is doing)
+                clean_text = text[8:]  # Remove "[agent] " prefix
+                self._call_ui(self._show_thinking_line, f"📡 {clean_text}", log)
                 return
 
             # Filter out other verbose prefixes
@@ -6500,6 +6499,8 @@ team:
                 "running",
                 file_path,
                 command,
+                "",  # output
+                raw_input,  # Pass arguments so format_tool_call_compact can display them properly
             )
 
         async def on_tool_update(update: dict) -> None:
@@ -6509,8 +6510,7 @@ team:
             tool_title = update.get("title") or "Tool"
 
             if status == "completed":
-                if not self.show_verbose_agent_logs:
-                    return
+                # Always show tool results - this is the agent's actual work
                 # Try to parse and display JSON nicely
                 formatted = self._format_tool_output(tool_title, output, log)
                 if not formatted:

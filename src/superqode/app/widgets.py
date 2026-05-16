@@ -1314,7 +1314,7 @@ class ConversationLog(RichLog):
             style=THEME["text"],
         )
 
-        if output and status == "error":
+        if output and status in ("success", "error"):
             summary = summarize_tool_output(
                 tool_name,
                 status,
@@ -1322,20 +1322,8 @@ class ConversationLog(RichLog):
                 getattr(self, "tool_output_mode", "normal"),
             )
             if summary:
-                line.append(f"\n    → {summary}", style=THEME["error"])
-        elif (
-            output
-            and status == "success"
-            and getattr(self, "tool_output_mode", "normal") == "verbose"
-        ):
-            summary = summarize_tool_output(
-                tool_name,
-                status,
-                output,
-                getattr(self, "tool_output_mode", "normal"),
-            )
-            if summary:
-                line.append(f"\n    → {summary}", style=THEME["muted"])
+                style = THEME["error"] if status == "error" else THEME["muted"]
+                line.append(f"\n    → {summary}", style=style)
 
         line.append("\n")
         self.write(line)

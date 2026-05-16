@@ -17,6 +17,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from .base import Tool, ToolResult, ToolContext
 from .validation import validate_path_in_working_directory
 
+try:
+    from superqode.file_explorer import PathFilter
+except ImportError:
+    PathFilter = None
+
 
 class GrepTool(Tool):
     """Search for text patterns in files using ripgrep or grep."""
@@ -108,7 +113,7 @@ class GrepTool(Tool):
         self, pattern: str, path: Path, include: str, case_sensitive: bool
     ) -> str:
         """Build ripgrep command."""
-        cmd_parts = ["rg", "--line-number", "--no-heading"]
+        cmd_parts = ["rg", "--line-number", "--no-heading", "--git-ignore"]
 
         if not case_sensitive:
             cmd_parts.append("-i")
@@ -189,13 +194,25 @@ class GlobTool(Tool):
             # Use pathlib glob
             matches = list(base_path.glob(pattern))
 
-            # Filter out hidden files and common ignore patterns
+            # Create path filter to respect .gitignore
+            path_filter = None
+            if PathFilter:
+                try:
+                    path_filter = PathFilter.from_git_root(base_path)
+                except Exception:
+                    pass
+
+            # Filter out hidden files and gitignored patterns
             filtered = []
             for m in matches:
                 parts = m.relative_to(base_path).parts
+                # Skip hidden files and common ignore directories
                 if any(
                     p.startswith(".") or p in ("node_modules", "__pycache__", "venv") for p in parts
                 ):
+                    continue
+                # Use PathFilter to check gitignore
+                if path_filter and path_filter.match(m):
                     continue
                 filtered.append(m)
 
