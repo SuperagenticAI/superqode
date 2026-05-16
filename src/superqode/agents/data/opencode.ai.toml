@@ -58,3 +58,46 @@ https://github.com/josephschmitt/opencode-acp
 [actions."*".install]
 command = "npm i -g opencode-ai"
 description = "Install OpenCode (see https://zed.dev/acp for latest)"
+
+# Generic free-model discovery (see src/superqode/agents/free_models.py).
+# OpenCode exposes its catalog via `opencode models --verbose`; the
+# opencode_models_table parser handles both the legacy block format and the
+# newer JSON document format. If the command fails or returns nothing, the
+# fallback list below is surfaced instead.
+[free_models]
+enabled = true
+
+[free_models.discovery]
+command = "opencode models --verbose"
+parser = "opencode_models_table"
+timeout_seconds = 10
+
+[[free_models.fallback]]
+id = "opencode/big-pickle"
+name = "Big Pickle"
+context = 200000
+provider = "opencode"
+
+[[free_models.fallback]]
+id = "opencode/deepseek-v4-flash-free"
+name = "DeepSeek V4 Flash Free"
+context = 1000000
+provider = "opencode"
+
+[[free_models.fallback]]
+id = "opencode/minimax-m2.5-free"
+name = "MiniMax M2.5 Free"
+context = 204800
+provider = "opencode"
+
+[[free_models.fallback]]
+id = "opencode/nemotron-3-super-free"
+name = "Nemotron 3 Super Free"
+context = 1000000
+provider = "opencode"
+
+[[free_models.fallback]]
+id = "opencode/qwen3.6-plus-free"
+name = "Qwen 3.6 Plus Free"
+context = 262144
+provider = "opencode"

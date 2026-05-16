@@ -25,6 +25,41 @@ class Command(TypedDict):
     """Bootstrap UV installer (set to `true` if the command users `uv`)."""
 
 
+class FreeModelEntry(TypedDict, total=False):
+    """A single entry in an agent's ``free_models.fallback`` list."""
+
+    id: str
+    name: str
+    context: int
+    provider: str
+    description: str
+
+
+class FreeModelDiscoverySpec(TypedDict, total=False):
+    """How to dynamically discover an agent's free-model catalog."""
+
+    command: str
+    """Shell command that lists the agent's models. Stdout is fed to ``parser``."""
+    parser: str
+    """Name of a registered parser (see ``agents/free_models.py``)."""
+    timeout_seconds: float
+    """Subprocess timeout in seconds. Defaults to 10."""
+
+
+class FreeModelsSpec(TypedDict, total=False):
+    """Optional ``[free_models]`` section describing how to surface an agent's
+    free model catalog to SuperQode users.
+
+    If ``discovery`` is set, SuperQode runs the command at probe time and
+    parses its output. If discovery is missing, fails, times out, or returns
+    nothing, ``fallback`` is used.
+    """
+
+    enabled: bool
+    discovery: FreeModelDiscoverySpec
+    fallback: list[FreeModelEntry]
+
+
 class Agent(TypedDict):
     """Describes an agent which SuperQode can connect to. Currently only Agent Client Protocol is supported.
 
@@ -70,3 +105,6 @@ class Agent(TypedDict):
     """Command to run the agent, by OS or wildcard."""
     actions: dict[OS, dict[Action, Command]]
     """Scripts to perform actions, typically at least to install the agent."""
+    free_models: NotRequired[FreeModelsSpec]
+    """Optional free-model catalog discovery rules. When present, SuperQode
+    can surface this agent's free-tier models in unified pickers."""

@@ -137,3 +137,121 @@ def test_ds4_thinking_unknown_value_falls_back_to_default(monkeypatch):
     monkeypatch.setenv("SUPERQODE_DS4_THINKING", "ultraturbo")
     gateway = LiteLLMGateway()
     assert gateway._ds4_thinking_config() is None
+
+
+# ---------------------------------------------------------------------------
+# Prompt caching
+# ---------------------------------------------------------------------------
+
+
+def _msgs(*roles_contents):
+    """Helper to build LiteLLM-shaped dicts."""
+    return [{"role": r, "content": c} for r, c in roles_contents]
+
+
+def test_caching_marks_system_and_last_two_for_anthropic(monkeypatch):
+    """The opencode-style pattern: system + last 2 non-system get marked.
+    Intermediate user/assistant turns are left alone so the cache window
+    sweeps forward with the conversation."""
+    monkeypatch.delenv("SUPERQODE_DISABLE_PROMPT_CACHE", raising=False)
+    gateway = LiteLLMGateway()
+
+    msgs = _msgs(
+        ("system", "you are helpful"),
+        ("user", "first"),
+        ("assistant", "first reply"),
+        ("user", "second"),
+        ("assistant", "second reply"),
+    )
+    out = gateway._apply_prompt_caching(msgs, provider="anthropic")
+
+    # System message: content lifted to a list with cache_control on the last block.
+    assert isinstance(out[0]["content"], list)
+    assert out[0]["content"][0]["cache_control"] == {"type": "ephemeral"}
+
+    # Middle two messages untouched.
+    assert out[1]["content"] == "first"
+    assert out[2]["content"] == "first reply"
+
+    # Last two non-system messages marked.
+    assert isinstance(out[3]["content"], list)
+    assert out[3]["content"][0]["cache_control"] == {"type": "ephemeral"}
+    assert isinstance(out[4]["content"], list)
+    assert out[4]["content"][0]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_caching_uses_copilot_marker_for_github_copilot():
+    """GitHub Copilot's API uses a distinct field name."""
+    gateway = LiteLLMGateway()
+    out = gateway._apply_prompt_caching(
+        _msgs(("system", "S"), ("user", "U")), provider="github-copilot"
+    )
+    assert "copilot_cache_control" in out[0]["content"][0]
+    assert "cache_control" not in out[0]["content"][0]
+
+
+def test_caching_skipped_for_unsupported_provider():
+    """OpenAI auto-caches without explicit markers; never add them."""
+    gateway = LiteLLMGateway()
+    msgs = _msgs(("system", "S"), ("user", "U"))
+    out = gateway._apply_prompt_caching(msgs, provider="openai")
+    assert out == msgs  # no mutation
+
+
+def test_caching_disabled_via_env(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_DISABLE_PROMPT_CACHE", "1")
+    gateway = LiteLLMGateway()
+    msgs = _msgs(("system", "S"), ("user", "U"))
+    out = gateway._apply_prompt_caching(msgs, provider="anthropic")
+    assert out == msgs
+
+
+def test_caching_is_idempotent():
+    """Running through caching twice must not nest markers or duplicate."""
+    gateway = LiteLLMGateway()
+    msgs = _msgs(("system", "S"), ("user", "U"))
+    once = gateway._apply_prompt_caching(msgs, provider="anthropic")
+    twice = gateway._apply_prompt_caching(once, provider="anthropic")
+    assert once == twice
+
+
+def test_caching_preserves_existing_content_blocks():
+    """If content is already a list of blocks (e.g. multi-part user msg with
+    an image), tag only the last text block — don't clobber the structure."""
+    gateway = LiteLLMGateway()
+    msgs = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": "..."}},
+                {"type": "text", "text": "describe this"},
+            ],
+        }
+    ]
+    out = gateway._apply_prompt_caching(msgs, provider="anthropic")
+    assert out[0]["content"][0] == {"type": "image_url", "image_url": {"url": "..."}}
+    assert out[0]["content"][1]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_caching_skips_empty_string_content():
+    """Don't promote an empty string to a content block — would be a wire-
+    format error on some providers."""
+    gateway = LiteLLMGateway()
+    msgs = [{"role": "user", "content": ""}]
+    out = gateway._apply_prompt_caching(msgs, provider="anthropic")
+    assert out[0]["content"] == ""
+
+
+def test_caching_handles_empty_message_list():
+    gateway = LiteLLMGateway()
+    assert gateway._apply_prompt_caching([], provider="anthropic") == []
+
+
+@pytest.mark.parametrize("provider", ["bedrock", "amazon-bedrock", "vertex", "openrouter"])
+def test_caching_supported_provider_aliases_get_marked(provider):
+    """Bedrock/Vertex host Anthropic models — same cache_control field.
+    OpenRouter routes Anthropic models too."""
+    gateway = LiteLLMGateway()
+    msgs = _msgs(("system", "S"), ("user", "U"))
+    out = gateway._apply_prompt_caching(msgs, provider=provider)
+    assert "cache_control" in out[0]["content"][0]

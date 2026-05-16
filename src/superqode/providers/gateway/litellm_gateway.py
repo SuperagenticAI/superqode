@@ -305,6 +305,93 @@ class LiteLLMGateway(GatewayInterface):
             result.append(m)
         return result
 
+    # Providers whose backends honor explicit prompt-cache markers.
+    # The dict value is the field name to attach to a content block.
+    # OpenAI native auto-caches without explicit markers, so it's not listed.
+    _CACHE_PROVIDERS: Dict[str, str] = {
+        "anthropic": "cache_control",
+        "openrouter": "cache_control",
+        "amazon-bedrock": "cache_control",
+        "bedrock": "cache_control",
+        "vertex": "cache_control",
+        "github-copilot": "copilot_cache_control",
+    }
+
+    def _apply_prompt_caching(
+        self, message_dicts: List[Dict[str, Any]], provider: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        """Mark cache-eligible messages with provider-specific cache hints.
+
+        Following opencode's ``applyCaching`` strategy: tag the first two
+        system messages and the last two non-system messages so the long
+        stable prefix (system + tools) and the immediate prior turn both
+        cache cheaply across an agent loop's iterations.
+
+        Skipped when:
+        - ``SUPERQODE_DISABLE_PROMPT_CACHE`` is set in the environment.
+        - The provider isn't known to honor cache markers (OpenAI auto-
+          caches, Google/Gemini uses a separate ``cachedContent`` API, etc.).
+
+        Idempotent: re-applying does not duplicate markers.
+        """
+        if not message_dicts or not provider:
+            return message_dicts
+        if os.environ.get("SUPERQODE_DISABLE_PROMPT_CACHE", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
+            return message_dicts
+
+        field = self._CACHE_PROVIDERS.get(provider)
+        if not field:
+            return message_dicts
+
+        marker = {field: {"type": "ephemeral"}}
+
+        system_idx = [i for i, m in enumerate(message_dicts) if m.get("role") == "system"][:2]
+        non_system_idx = [
+            i for i, m in enumerate(message_dicts) if m.get("role") != "system"
+        ][-2:]
+        targets = set(system_idx + non_system_idx)
+
+        out: List[Dict[str, Any]] = []
+        for i, m in enumerate(message_dicts):
+            if i not in targets:
+                out.append(m)
+                continue
+            out.append(self._mark_with_cache(m, field, marker[field]))
+        return out
+
+    @staticmethod
+    def _mark_with_cache(
+        msg: Dict[str, Any], field: str, value: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Tag the last text block of ``msg`` with ``{field: value}``.
+
+        Converts string content to a one-block list so providers that
+        require structured content (Anthropic, Bedrock) parse it correctly.
+        Returns a new message — callers must not mutate the original.
+        """
+        content = msg.get("content")
+        if isinstance(content, str):
+            if not content:
+                return msg
+            blocks = [{"type": "text", "text": content, field: value}]
+        elif isinstance(content, list) and content:
+            blocks = list(content)
+            last = blocks[-1]
+            if isinstance(last, dict) and last.get("type") == "text":
+                if field in last and last[field] == value:
+                    return msg  # already marked — idempotent
+                blocks[-1] = {**last, field: value}
+            else:
+                return msg
+        else:
+            return msg
+        return {**msg, "content": blocks}
+
     def _convert_tools(
         self, tools: Optional[List[ToolDefinition]]
     ) -> Optional[List[Dict[str, Any]]]:
@@ -1440,7 +1527,9 @@ class LiteLLMGateway(GatewayInterface):
 
         # Build request
         request_kwargs = {
-            "messages": self._convert_messages(messages),
+            "messages": self._apply_prompt_caching(
+                self._convert_messages(messages), provider
+            ),
             "timeout": self.timeout,
         }
 
@@ -1651,7 +1740,9 @@ class LiteLLMGateway(GatewayInterface):
 
         # Build request
         request_kwargs = {
-            "messages": self._convert_messages(messages),
+            "messages": self._apply_prompt_caching(
+                self._convert_messages(messages), provider
+            ),
             "stream": True,
             "timeout": self.timeout,
         }

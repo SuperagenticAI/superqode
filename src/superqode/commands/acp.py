@@ -967,3 +967,102 @@ def connect_agent(agent_identifier: str, project_dir: str | None = None) -> int:
 def install_agent_cmd(agent_identifier: str) -> int:
     """Install an ACP agent (synchronous wrapper)."""
     return install_agent(agent_identifier)
+
+
+def show_free_models(
+    agent_filter: str | None = None,
+    refresh: bool = False,
+    as_json: bool = False,
+) -> int:
+    """List free models discovered across all installed ACP agents.
+
+    Returns 0 on success even when no models are found — an empty result is
+    informational, not an error.
+    """
+    import json as _json
+
+    from superqode.agents.free_models import discover_all_free_models
+
+    async def _run() -> int:
+        try:
+            agent_map = await read_agents(include_registry=False)
+        except Exception as e:
+            _console.print(f"[red]Failed to read agent catalog: {e}[/red]")
+            return 1
+
+        agents = list(agent_map.values())
+        if agent_filter:
+            wanted = agent_filter.lower()
+            agents = [
+                a
+                for a in agents
+                if a.get("identity", "").lower() == wanted
+                or a.get("short_name", "").lower() == wanted
+            ]
+            if not agents:
+                _console.print(
+                    f"[yellow]No agent matches '{agent_filter}'.[/yellow]"
+                    " Try `superqode agents list`."
+                )
+                return 1
+
+        results = await discover_all_free_models(agents, force_refresh=refresh)
+
+        if as_json:
+            payload = [
+                {
+                    "agent_id": r.agent_id,
+                    "used_fallback": r.used_fallback,
+                    "error": r.error,
+                    "duration_ms": r.duration_ms,
+                    "models": [m.to_dict() for m in r.models],
+                }
+                for r in results
+                if r.models or r.error
+            ]
+            _console.print_json(_json.dumps(payload))
+            return 0
+
+        total = sum(len(r.models) for r in results)
+        if total == 0:
+            _console.print(
+                "[yellow]No free models discovered.[/yellow] Install an agent that"
+                " exposes a free catalog (e.g. `opencode`)."
+            )
+            return 0
+
+        table = Table(title="Free models across ACP agents", header_style="bold")
+        table.add_column("Agent")
+        table.add_column("Model")
+        table.add_column("Context", justify="right")
+        table.add_column("Source", justify="center")
+        for r in results:
+            for m in r.models:
+                table.add_row(
+                    r.agent_id,
+                    m.id,
+                    f"{m.context:,}" if m.context else "?",
+                    "fallback" if r.used_fallback else "live",
+                )
+        _console.print(table)
+        # Surface any per-agent errors as dim hints below the table.
+        for r in results:
+            if r.error and not r.used_fallback:
+                _console.print(f"[dim]{r.agent_id}: {r.error}[/dim]")
+            elif r.used_fallback and r.error:
+                _console.print(
+                    f"[dim]{r.agent_id}: using fallback ({r.error})[/dim]"
+                )
+        return 0
+
+    try:
+        return asyncio.run(_run())
+    except RuntimeError as exc:
+        # Re-entrant event loop in tests / Jupyter — mirror the existing
+        # workaround used by install_agent_cmd / connect_agent.
+        if "already running" not in str(exc):
+            raise
+        import nest_asyncio
+
+        nest_asyncio.apply()
+        return asyncio.run(_run())

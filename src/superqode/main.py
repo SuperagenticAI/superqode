@@ -1544,6 +1544,22 @@ def agents_install(agent):
     exit(install_agent_cmd(agent))
 
 
+@agents.command("free-models")
+@click.option("--agent", "agent_filter", default=None, help="Only show free models from this agent (identity or short_name)")
+@click.option("--refresh", is_flag=True, help="Skip the discovery cache and re-probe live")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of a table")
+def agents_free_models(agent_filter, refresh, as_json):
+    """List free-tier models discovered across all installed ACP agents.
+
+    Each agent declares its catalog via the optional [free_models] section
+    in its TOML descriptor; SuperQode probes them in parallel and falls
+    back to a curated list when the live probe is unavailable.
+    """
+    from superqode.commands.acp import show_free_models
+
+    exit(show_free_models(agent_filter=agent_filter, refresh=refresh, as_json=as_json))
+
+
 @cli_main.group()
 def connect():
     """Connect to models via ACP agents, BYOK providers, or LOCAL providers."""
