@@ -655,11 +655,13 @@ class AgentStreamClient:
 
     async def _new_session(self):
         """Create a new ACP session."""
+        from superqode.mcp.config import get_acp_mcp_servers
+
         future = await self._send(
             "session/new",
             {
                 "projectRoot": str(self.project_root),
-                "mcpServers": [],
+                "mcpServers": get_acp_mcp_servers(),
             },
         )
 

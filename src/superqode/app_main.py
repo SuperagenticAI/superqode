@@ -33,7 +33,7 @@ from time import monotonic
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, Center, ScrollableContainer
-from textual.widgets import Static, Input, Footer, RichLog, DirectoryTree
+from textual.widgets import Static, Input, Footer, RichLog, DirectoryTree, TextArea
 from textual.binding import Binding
 from textual.reactive import reactive, var
 from textual.suggester import Suggester
@@ -252,15 +252,95 @@ class _AsyncLoopThread:
 # ============================================================================
 
 
-class SelectionAwareInput(Input):
+class SelectionAwareInput(TextArea):
     """
-    Custom Input that passes arrow keys and number keys to parent when app is in selection mode.
+    Wrapped prompt input that passes selection keys to the parent app.
 
-    Standard Textual Input captures up/down arrows for cursor/history navigation,
+    Standard Textual input widgets capture up/down arrows for cursor/history navigation,
     which prevents the App's on_key handler from receiving them during
     provider/model selection modes. This subclass intercepts arrow keys and number keys
     and directly calls the app's navigation/selection actions when in selection mode.
     """
+
+    MIN_PROMPT_HEIGHT = 1
+    MAX_PROMPT_HEIGHT = 6
+
+    def __init__(self, *args, suggester=None, **kwargs) -> None:
+        # TextArea doesn't support Input's suggester API. Accept it so the prompt
+        # can keep the existing construction path while using soft wrapping.
+        kwargs.setdefault("soft_wrap", True)
+        kwargs.setdefault("show_line_numbers", False)
+        kwargs.setdefault("compact", True)
+        kwargs.setdefault("highlight_cursor_line", False)
+        kwargs.setdefault("tab_behavior", "focus")
+        super().__init__(*args, **kwargs)
+        self.suggester = suggester
+
+    @property
+    def value(self) -> str:
+        """Input-compatible text value."""
+        return self.text
+
+    @value.setter
+    def value(self, new_value: str) -> None:
+        self.load_text(new_value)
+        self._resize_to_content()
+
+    @property
+    def cursor_position(self) -> int:
+        """Input-compatible absolute cursor offset."""
+        row, column = self.cursor_location
+        lines = self.text.split("\n")
+        return sum(len(line) + 1 for line in lines[:row]) + column
+
+    @cursor_position.setter
+    def cursor_position(self, position: int) -> None:
+        position = max(0, min(position, len(self.text)))
+        offset = 0
+        for row, line in enumerate(self.text.split("\n")):
+            line_end = offset + len(line)
+            if position <= line_end:
+                self.move_cursor((row, position - offset))
+                return
+            offset = line_end + 1
+        last_line = self.text.split("\n")[-1]
+        self.move_cursor((len(self.text.split("\n")) - 1, len(last_line)))
+
+    def _resize_to_content(self) -> None:
+        """Grow the prompt until the configured maximum, then scroll internally."""
+        # Match the text area's usable inner width. The prompt has a fixed
+        # symbol column and border, so using the full widget width overestimates
+        # how much text fits on a visual line.
+        width = max(12, (self.content_size.width or self.size.width or 80) - 1)
+        height = self._height_for_text(self.text, width)
+        self.styles.height = height
+        try:
+            input_box = self.app.query_one("#input-box")
+            input_box.styles.height = height + 2
+            symbol = self.app.query_one("#prompt-symbol")
+            symbol.styles.height = height
+        except Exception:
+            pass
+
+    @classmethod
+    def _height_for_text(cls, text: str, width: int) -> int:
+        visual_lines = 0
+        width = max(1, width)
+        for line in (text or "").split("\n"):
+            visual_lines += max(1, ((len(line) - 1) // width) + 1 if line else 1)
+        return max(cls.MIN_PROMPT_HEIGHT, min(cls.MAX_PROMPT_HEIGHT, visual_lines))
+
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        self._resize_to_content()
+
+    def on_resize(self, event: events.Resize) -> None:
+        self._resize_to_content()
+
+    def _submit_current_value(self, event: events.Key) -> None:
+        value = self.value
+        event.stop()
+        event.prevent_default()
+        self.post_message(Input.Submitted(self, value))
 
     def _is_in_selection_mode_for_number_keys(self, app) -> bool:
         """Check if the app is in a selection mode that supports number key shortcuts.
@@ -281,6 +361,10 @@ class SelectionAwareInput(Input):
     def on_key(self, event: events.Key) -> None:
         """Intercept key events for selection navigation and number selection."""
         app = self.app
+
+        if event.key == "enter":
+            self._submit_current_value(event)
+            return
 
         # Handle number keys during selection modes
         if event.key in ("1", "2", "3", "4", "5", "6", "7", "8", "9"):
@@ -360,8 +444,7 @@ class SelectionAwareInput(Input):
                 return
 
         # For all other keys or when not in selection mode, let parent handle it
-        # Don't call super().on_key() as Input doesn't have this method
-        pass
+        # TextArea handles normal editing, wrapping, and cursor movement.
 
 
 # ============================================================================
@@ -547,7 +630,7 @@ class SuperQodeApp(App):
     current_provider = reactive("")
     is_busy = reactive(False)
     sidebar_visible = reactive(False)
-    show_thinking_logs = reactive(True)  # Toggle for thinking logs visibility
+    show_thinking_logs = reactive(False)  # Toggle for thinking logs visibility
     show_verbose_agent_logs = reactive(False)  # Show raw [agent] session logs (verbose mode)
     approval_mode = reactive(
         "ask"
@@ -1164,7 +1247,7 @@ class SuperQodeApp(App):
     def _focus_input_on_ready(self):
         """Focus the input box once widgets are ready."""
         try:
-            input_widget = self.query_one("#prompt-input", Input)
+            input_widget = self.query_one("#prompt-input", SelectionAwareInput)
             # Ensure input is ready to receive all characters
             input_widget.can_focus = True
             input_widget.focus()
@@ -1177,7 +1260,7 @@ class SuperQodeApp(App):
     def _ensure_input_focus(self):
         """Ensure the input box has focus - called after operations."""
         try:
-            input_widget = self.query_one("#prompt-input", Input)
+            input_widget = self.query_one("#prompt-input", SelectionAwareInput)
             if not input_widget.has_focus:
                 input_widget.focus()
                 # Force focus to be active immediately
@@ -1677,7 +1760,7 @@ class SuperQodeApp(App):
             return
 
         if event.command.id in prompt_commands:
-            input_widget = self.query_one("#prompt-input", Input)
+            input_widget = self.query_one("#prompt-input", SelectionAwareInput)
             input_widget.value = prompt_commands[event.command.id]
             input_widget.cursor_position = len(input_widget.value)
             input_widget.focus()
@@ -1847,9 +1930,9 @@ class SuperQodeApp(App):
             self._current_tui_logger.logger.config.show_thinking = self.show_thinking_logs
 
         if self.show_thinking_logs:
-            log.add_info("💭 Thinking logs: ON - you'll see agent's work")
+            log.add_info("Thinking logs: ON - agent reasoning/session notes are visible")
         else:
-            log.add_info("💭 Thinking logs: OFF - only final response shown")
+            log.add_info("Thinking logs: OFF - compact stream view enabled")
 
     def action_undo_action(self):
         """Undo the last agent operation."""
@@ -2210,7 +2293,7 @@ class SuperQodeApp(App):
             or getattr(self, "_awaiting_recommendation_selection", False)
         ):
             try:
-                prompt_input = self.query_one("#prompt-input", Input)
+                prompt_input = self.query_one("#prompt-input", SelectionAwareInput)
                 if not prompt_input.has_focus:
                     prompt_input.focus()
                 cursor = prompt_input.cursor_position
@@ -2311,7 +2394,7 @@ class SuperQodeApp(App):
 
         # Mirror buffer in prompt input for visibility
         try:
-            prompt_input = self.query_one("#prompt-input", Input)
+            prompt_input = self.query_one("#prompt-input", SelectionAwareInput)
             prompt_input.value = buf
             prompt_input.cursor_position = len(buf)
         except Exception:
@@ -2336,7 +2419,7 @@ class SuperQodeApp(App):
         self._selection_digit_buffer = ""
         self._selection_digit_timer = None
         try:
-            prompt_input = self.query_one("#prompt-input", Input)
+            prompt_input = self.query_one("#prompt-input", SelectionAwareInput)
             prompt_input.value = ""
             prompt_input.cursor_position = 0
         except Exception:
@@ -3129,7 +3212,7 @@ class SuperQodeApp(App):
             prompt_area = self.query_one("#prompt-area")
             prompt_area.remove_class("hidden")
             # Re-focus the input
-            self.query_one("#prompt-input", Input).focus()
+            self.query_one("#prompt-input", SelectionAwareInput).focus()
         except Exception:
             pass
 
@@ -3251,7 +3334,7 @@ class SuperQodeApp(App):
         try:
             prompt_area = self.query_one("#prompt-area")
             prompt_area.remove_class("hidden")
-            self.query_one("#prompt-input", Input).focus()
+            self.query_one("#prompt-input", SelectionAwareInput).focus()
         except Exception:
             pass
 
@@ -4934,7 +5017,7 @@ team:
             log.add_info("\n".join(lines))
 
             try:
-                input_widget = self.query_one("#prompt-input", Input)
+                input_widget = self.query_one("#prompt-input", SelectionAwareInput)
                 input_widget.placeholder = "Answer the agent question..."
                 input_widget.focus()
             except Exception:
@@ -6350,6 +6433,9 @@ team:
                 self._call_ui(log.add_error, clean_text)
                 return
 
+            if not self.show_thinking_logs:
+                return
+
             # Buffer thinking chunks and display as complete thoughts
             # This prevents word-by-word display when chunks come in small pieces
             current_time = time.time()
@@ -6417,12 +6503,14 @@ team:
             )
 
         async def on_tool_update(update: dict) -> None:
-            """Handle tool updates - ALWAYS visible with full JSON parsing."""
+            """Handle tool updates, keeping normal streaming output compact."""
             status = update.get("status", "")
             output = update.get("rawOutput") or update.get("output") or update.get("result")
             tool_title = update.get("title") or "Tool"
 
             if status == "completed":
+                if not self.show_verbose_agent_logs:
+                    return
                 # Try to parse and display JSON nicely
                 formatted = self._format_tool_output(tool_title, output, log)
                 if not formatted:
@@ -9541,7 +9629,7 @@ team:
             pass
 
         try:
-            input_widget = self.query_one("#prompt-input", Input)
+            input_widget = self.query_one("#prompt-input", SelectionAwareInput)
             input_widget.placeholder = "Ask anything or type : for commands..."
         except Exception:
             pass
@@ -18732,7 +18820,7 @@ team:
 
             if message:
                 # Put message in input and submit
-                prompt_input = self.query_one("#prompt-input", Input)
+                prompt_input = self.query_one("#prompt-input", SelectionAwareInput)
                 prompt_input.value = message
                 # Auto-submit the message
                 self._handle_message(message, log)

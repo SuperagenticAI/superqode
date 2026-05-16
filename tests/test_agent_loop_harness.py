@@ -213,6 +213,24 @@ async def test_simple_ds4_query_skips_tools():
 
 
 @pytest.mark.asyncio
+async def test_direct_ds4_code_generation_skips_tools():
+    gateway = ScriptedGateway([GatewayResponse(content="def reverse_string(value): ...")])
+    loop = AgentLoop(
+        gateway=gateway,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(
+            provider="ds4",
+            model="deepseek-v4-flash",
+        ),
+    )
+
+    result = await loop.run("write a Python function that reverses a string")
+
+    assert result.content.startswith("def reverse_string")
+    assert gateway.tools_seen[0] is None
+
+
+@pytest.mark.asyncio
 async def test_ds4_project_question_receives_tools():
     gateway = ScriptedGateway([GatewayResponse(content="done")])
     loop = AgentLoop(
@@ -225,6 +243,43 @@ async def test_ds4_project_question_receives_tools():
     )
 
     result = await loop.run("what is this project about?")
+
+    assert result.content == "done"
+    assert gateway.tools_seen[0]
+
+
+@pytest.mark.asyncio
+async def test_ds4_repo_summary_receives_tools():
+    gateway = ScriptedGateway([GatewayResponse(content="done")])
+    loop = AgentLoop(
+        gateway=gateway,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(
+            provider="ds4",
+            model="deepseek-v4-flash",
+        ),
+    )
+
+    result = await loop.run("summarize this repository")
+
+    assert result.content == "done"
+    assert gateway.tools_seen[0]
+
+
+@pytest.mark.asyncio
+async def test_ds4_tool_mode_always_overrides_direct_gating(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_DS4_TOOL_MODE", "always")
+    gateway = ScriptedGateway([GatewayResponse(content="done")])
+    loop = AgentLoop(
+        gateway=gateway,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(
+            provider="ds4",
+            model="deepseek-v4-flash",
+        ),
+    )
+
+    result = await loop.run("write a Python function that reverses a string")
 
     assert result.content == "done"
     assert gateway.tools_seen[0]

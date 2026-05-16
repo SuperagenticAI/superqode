@@ -52,6 +52,25 @@ superqode connect acp opencode
 | `mcp_tools` | Use MCP servers |
 | `git_operations` | Git commands |
 
+#### Web Fetch and MCP Tools
+
+ACP agents do not automatically receive SuperQode's internal Python tools such as `fetch` and `web_fetch`. To make web fetch available to OpenCode or another ACP agent, configure an enabled MCP fetch server. SuperQode passes enabled MCP servers from `.superqode/mcp.json`, `~/.superqode/mcp.json`, or `~/.config/superqode/mcp.json` into each ACP `session/new` request.
+
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Restart the ACP session after changing MCP configuration so the agent receives the updated server list.
+
 ---
 
 ### OpenClaw (Enterprise Integration, Experimental)

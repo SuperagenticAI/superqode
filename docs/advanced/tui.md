@@ -7,6 +7,7 @@ SuperQode includes a rich Terminal User Interface (TUI) for interactive coding-a
 - **Rich Output**: Colored, formatted terminal output
 - **Progress Tracking**: Real-time progress indicators
 - **Compact Tool Activity**: Search, read, edit, and shell tools are summarized by default
+- **Quiet Streaming Logs**: Agent thinking and successful tool output are hidden by default
 - **Provider Selection**: ACP, BYOK, and Local provider pickers with setup hints
 - **Model Labels**: Tool support, vision, reasoning, coding, context, and price labels where available
 - **Local DS4 Support**: DS4 appears in the local provider picker when configured
@@ -59,6 +60,7 @@ superqode --role qe.security_tester
 | `Ctrl+A` | Switch agent/role |
 | `Ctrl+S` | Save session |
 | `Ctrl+Q` | Quit |
+| `Ctrl+T` | Toggle agent thinking/session logs |
 | `Escape` | Close modal/cancel |
 | `Enter` | Submit input |
 | `Tab` | Next widget |
@@ -80,11 +82,15 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:view <file>` - View file content
 - `:help` - Show all available commands
 
-Tool and file-change output is collapsed by default so normal coding sessions stay readable. Use `:log verbose` before a task when you want full search output, command output, and file names in the session report.
+Tool and file-change output is collapsed by default so normal coding sessions stay readable. Agent thinking/session notes are also hidden by default. Use `Ctrl+T` when you want to see thinking logs, and use `:log verbose` before a task when you want full successful tool output, raw ACP agent session logs, and file names in the session report.
+
+## Prompt Input
+
+The top prompt is a wrapped multiline input. Long prompts expand the prompt box up to a fixed height and then scroll internally, so pasted tasks remain visible instead of being cut off. Press `Enter` to submit the current prompt.
 
 ## Tool Activity Display
 
-The TUI shows compact tool rows by default. Examples:
+The TUI shows compact tool rows by default. Successful tools appear as compact action rows while failures remain visible with their error summary. Examples:
 
 ```text
 read_file(pyproject.toml)
@@ -93,7 +99,7 @@ bash("uv run pytest tests")
 python_repl(2 lines: "x = 1")
 ```
 
-This keeps the main response readable while still showing what the agent did. Errors remain visible in normal mode. Use `:log verbose` when you need full successful tool output.
+This keeps the main response readable while still showing what the agent did. Errors remain visible in normal mode. Use `:log verbose` when you need full successful tool output, and `Ctrl+T` when you need agent thinking/session notes.
 
 ## Provider and Model Selection
 

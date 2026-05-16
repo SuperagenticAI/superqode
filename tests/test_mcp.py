@@ -13,6 +13,7 @@ from superqode.mcp.config import (
     load_mcp_config,
     save_mcp_config,
     create_default_mcp_config,
+    get_acp_mcp_servers,
 )
 from superqode.mcp.types import (
     MCPTool,
@@ -63,6 +64,37 @@ class TestMCPConfig:
         assert isinstance(server.config, MCPStdioConfig)
         assert server.config.command == "test-command"
         assert server.config.args == ["--arg1", "value1"]
+
+    def test_get_acp_mcp_servers_includes_enabled_servers(self, tmp_path: Path):
+        """Test converting MCP config to ACP session format."""
+        config_data = {
+            "mcpServers": {
+                "fetch": {
+                    "name": "Fetch",
+                    "transport": "stdio",
+                    "command": "uvx",
+                    "args": ["mcp-server-fetch"],
+                    "enabled": True,
+                },
+                "disabled-server": {
+                    "transport": "stdio",
+                    "command": "disabled",
+                    "enabled": False,
+                },
+            }
+        }
+
+        config_file = tmp_path / "mcp.json"
+        config_file.write_text(json.dumps(config_data))
+
+        assert get_acp_mcp_servers(config_file) == [
+            {
+                "name": "fetch",
+                "transport": "stdio",
+                "command": "uvx",
+                "args": ["mcp-server-fetch"],
+            }
+        ]
 
     def test_load_http_config(self, tmp_path: Path):
         """Test loading HTTP transport config."""

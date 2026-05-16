@@ -16,9 +16,11 @@ Features:
 from __future__ import annotations
 
 import asyncio
+import gzip
 import json
 import re
 import ssl
+import zlib
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -467,7 +469,11 @@ class WebFetchTool(Tool):
     - Configurable output format
     """
 
-    USER_AGENT = "SuperQode/1.0 (AI Coding Assistant)"
+    USER_AGENT = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0 Safari/537.36 SuperQode/1.0"
+    )
     DEFAULT_TIMEOUT = 30
     MAX_SIZE = 2 * 1024 * 1024  # 2MB
 
@@ -579,6 +585,8 @@ Useful for reading documentation, API responses, web pages, etc."""
             req.add_header(
                 "Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
             )
+            req.add_header("Accept-Language", "en-US,en;q=0.9")
+            req.add_header("Accept-Encoding", "gzip, deflate")
 
             ctx = ssl.create_default_context()
 
@@ -587,6 +595,7 @@ Useful for reading documentation, API responses, web pages, etc."""
 
                 # Read with size limit
                 content = response.read(self.MAX_SIZE)
+                content = self._decode_body(content, response.headers.get("Content-Encoding", ""))
 
                 # Check for truncation
                 extra = response.read(1)
@@ -610,6 +619,18 @@ Useful for reading documentation, API responses, web pages, etc."""
             return {"error": f"URL Error: {str(e.reason)}"}
         except Exception as e:
             return {"error": str(e)}
+
+    def _decode_body(self, content: bytes, encoding: str) -> bytes:
+        """Decode common HTTP content encodings."""
+        encoding = encoding.lower()
+        try:
+            if "gzip" in encoding:
+                return gzip.decompress(content)
+            if "deflate" in encoding:
+                return zlib.decompress(content)
+        except Exception:
+            return content
+        return content
 
     def _get_charset(self, content_type: str) -> str:
         """Extract charset from Content-Type header."""

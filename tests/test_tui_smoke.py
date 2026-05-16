@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import asyncio
 import concurrent.futures
 
-from superqode.app_main import SuperQodeApp, render_welcome
+from superqode.app_main import SelectionAwareInput, SuperQodeApp, render_welcome
 from superqode.tools.question_tool import Question, QuestionType
 
 
@@ -95,6 +95,14 @@ def test_welcome_positions_superqode_as_coding_harness():
     assert "SuperQode = Multi-agent coding harness" in text
     assert ":connect local" in text
     assert "Agentic Code Needs Super Quality Engineering" not in text
+
+
+def test_prompt_height_wraps_and_caps_long_text():
+    assert SelectionAwareInput._height_for_text("", 40) == 1
+    assert SelectionAwareInput._height_for_text("short prompt", 40) == 1
+    assert SelectionAwareInput._height_for_text("x" * 90, 40) == 3
+    assert SelectionAwareInput._height_for_text("x" * 1000, 40) == 6
+    assert SelectionAwareInput._height_for_text("line 1\nline 2", 40) == 2
 
 
 def test_connect_local_picker_lists_ds4():

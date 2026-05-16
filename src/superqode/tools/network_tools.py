@@ -12,8 +12,10 @@ Features:
 """
 
 import asyncio
+import gzip
 import json
 import ssl
+import zlib
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -72,7 +74,11 @@ class FetchTool(Tool):
 
     DEFAULT_TIMEOUT = 30
     MAX_SIZE = 1024 * 1024  # 1MB default limit
-    USER_AGENT = "SuperQode/1.0 (AI Coding Assistant)"
+    USER_AGENT = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0 Safari/537.36 SuperQode/1.0"
+    )
 
     @property
     def name(self) -> str:
@@ -164,6 +170,12 @@ class FetchTool(Tool):
             # Build request
             req = urllib.request.Request(url)
             req.add_header("User-Agent", self.USER_AGENT)
+            req.add_header(
+                "Accept",
+                "text/html,application/xhtml+xml,application/json,text/plain,*/*;q=0.8",
+            )
+            req.add_header("Accept-Language", "en-US,en;q=0.9")
+            req.add_header("Accept-Encoding", "gzip, deflate")
 
             for key, value in headers.items():
                 req.add_header(key, value)
@@ -176,6 +188,7 @@ class FetchTool(Tool):
 
                 # Read with size limit
                 content = response.read(max_size)
+                content = self._decode_body(content, response.headers.get("Content-Encoding", ""))
 
                 # Check if truncated
                 extra = response.read(1)
@@ -197,6 +210,18 @@ class FetchTool(Tool):
             return {"error": f"URL Error: {str(e.reason)}"}
         except Exception as e:
             return {"error": str(e)}
+
+    def _decode_body(self, content: bytes, encoding: str) -> bytes:
+        """Decode common HTTP content encodings."""
+        encoding = encoding.lower()
+        try:
+            if "gzip" in encoding:
+                return gzip.decompress(content)
+            if "deflate" in encoding:
+                return zlib.decompress(content)
+        except Exception:
+            return content
+        return content
 
     def _get_charset(self, content_type: str) -> str:
         """Extract charset from Content-Type header."""

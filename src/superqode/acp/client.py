@@ -37,7 +37,7 @@ from superqode.acp.types import (
 
 PROTOCOL_VERSION = 1
 CLIENT_NAME = "SuperQode"
-CLIENT_VERSION = "0.1.22"
+CLIENT_VERSION = "0.1.20"
 
 
 @dataclass
@@ -329,9 +329,11 @@ class ACPClient:
 
     async def _new_session(self) -> NewSessionResponse:
         """Create a new session."""
+        from superqode.mcp.config import get_acp_mcp_servers
+
         params: Dict[str, Any] = {
             "cwd": str(self.project_root),
-            "mcpServers": [],
+            "mcpServers": get_acp_mcp_servers(),
         }
         if self.model:
             params["model"] = self.model

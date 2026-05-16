@@ -151,6 +151,40 @@ class TestACPClient:
         ]
 
     @pytest.mark.asyncio
+    async def test_new_session_passes_configured_mcp_servers(self, tmp_path, monkeypatch):
+        """ACP agents should receive enabled MCP servers, including fetch servers."""
+        client = ACPClient(project_root=tmp_path, command="opencode acp")
+        mcp_servers = [
+            {
+                "name": "fetch",
+                "transport": "stdio",
+                "command": "uvx",
+                "args": ["mcp-server-fetch"],
+            }
+        ]
+        calls = []
+
+        monkeypatch.setattr("superqode.mcp.config.get_acp_mcp_servers", lambda: mcp_servers)
+
+        async def fake_call_method(method, *, timeout=None, **params):
+            calls.append((method, params))
+            return {"sessionId": "session-1"}
+
+        monkeypatch.setattr(client, "_call_method", fake_call_method)
+
+        await client._new_session()
+
+        assert calls == [
+            (
+                "session/new",
+                {
+                    "cwd": str(tmp_path),
+                    "mcpServers": mcp_servers,
+                },
+            )
+        ]
+
+    @pytest.mark.asyncio
     async def test_session_update_accepts_nested_and_non_chunk_message(self, tmp_path):
         """Some ACP agents send nested updates or agent_message instead of chunk names."""
         on_message = AsyncMock()
@@ -186,7 +220,7 @@ class TestProtocolConstants:
 
     def test_client_version(self):
         """Test client version format."""
-        assert CLIENT_VERSION == "0.1.22"
+        assert CLIENT_VERSION == "0.1.20"
 
 
 class TestToolCall:

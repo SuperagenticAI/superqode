@@ -96,7 +96,7 @@ superqe run . --mode quick
 | Feature | Description |
 |---------|-------------|
 | **Multi-agent harness** | Use ACP agents, BYOK providers, and local models from one interface |
-| **Developer TUI** | Interactive sessions with compact tool activity and readable change summaries |
+| **Developer TUI** | Interactive sessions with wrapped prompts, quiet streaming logs, compact tool activity, and readable change summaries |
 | **Headless CLI** | Run coding tasks and provider checks from scripts or terminals |
 | **Tool system** | File, search, edit, shell, todo, MCP, and optional Monty Python REPL tools |
 | **Provider UX** | Provider doctor, model listing, guided local provider selection, and dynamic OpenCode free model discovery |

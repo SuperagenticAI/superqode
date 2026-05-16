@@ -97,10 +97,39 @@ ConversationLog {
 #prompt-area { height: auto; padding: 0 1; background: #000000; margin-top: 0; border-bottom: solid #1a1a1a; }
 #prompt-area.hidden { display: none; }
 #mode-badge { height: auto; text-align: center; margin-bottom: 0; }
-#input-box { height: 3; background: #000000; border: tall #1a1a1a; margin: 0 4; margin-top: 1; }
-#input-box:focus-within { border: tall #a855f7; }
-#prompt-symbol { width: 3; color: #ec4899; text-style: bold; padding: 0 1; }
-#prompt-input { background: transparent; border: none; }
+#input-box {
+    height: auto;
+    min-height: 3;
+    max-height: 8;
+    width: 100%;
+    background: #050505;
+    border: solid #27272a;
+    margin: 1 2 0 2;
+    padding: 0 1;
+    overflow: hidden;
+}
+#input-box:focus-within { border: solid #a855f7; }
+#prompt-symbol {
+    width: 2;
+    min-width: 2;
+    height: 1;
+    color: #ec4899;
+    text-style: bold;
+    padding: 0;
+    content-align: center top;
+}
+#prompt-input {
+    width: 1fr;
+    height: 1;
+    min-height: 1;
+    max-height: 6;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    scrollbar-gutter: stable;
+    overflow: hidden auto;
+}
 #hints { text-align: center; color: #52525b; height: 1; margin-top: 1; padding: 0; }
 
 /* Streaming thinking indicator with changing text - shown when agent is thinking */

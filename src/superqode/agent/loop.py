@@ -26,6 +26,7 @@ Performance optimizations:
 
 import asyncio
 import json
+import os
 import re
 import uuid
 from dataclasses import dataclass, field, replace
@@ -235,10 +236,94 @@ def _model_supports_tools(provider: str, model: str) -> bool:
         return False
 
 
+def _ds4_should_send_tools(user_message: str) -> bool:
+    """Return whether DS4 should receive tools for this user turn.
+
+    DS4 is strong for local coding, but it tends to use tools more eagerly than
+    larger hosted models. Keep default DS4 behavior direct unless the user asks
+    about the current project, files, tests, commands, or code changes.
+    """
+    mode = os.getenv("SUPERQODE_DS4_TOOL_MODE", "auto").strip().lower()
+    if mode in {"always", "all", "on", "1", "true"}:
+        return True
+    if mode in {"never", "none", "off", "0", "false"}:
+        return False
+
+    text = user_message.lower().strip()
+
+    project_targets = [
+        "this repo",
+        "this repository",
+        "this project",
+        "the repo",
+        "the repository",
+        "the project",
+        "codebase",
+        "workspace",
+        "current directory",
+        "current project",
+        "git diff",
+        "diff",
+    ]
+    if any(target in text for target in project_targets):
+        return True
+
+    file_or_path_patterns = [
+        r"\b(readme|pyproject|package\.json|cargo\.toml|go\.mod|pom\.xml)\b",
+        r"\b[\w./-]+\.(py|js|ts|tsx|jsx|go|rs|java|rb|php|c|cc|cpp|h|hpp|md|toml|yaml|yml|json|sh)\b",
+        r"\b(src|lib|app|tests?|docs?|scripts?)/",
+    ]
+    if any(re.search(pattern, text) for pattern in file_or_path_patterns):
+        return True
+
+    action_words = [
+        "inspect",
+        "read",
+        "scan",
+        "search",
+        "grep",
+        "find",
+        "list",
+        "open",
+        "review",
+        "summarize",
+        "explain",
+        "fix",
+        "edit",
+        "modify",
+        "update",
+        "patch",
+        "refactor",
+        "debug",
+        "test",
+        "run",
+    ]
+    object_words = [
+        "file",
+        "files",
+        "directory",
+        "directories",
+        "folder",
+        "folders",
+        "repo",
+        "repository",
+        "project",
+        "codebase",
+        "code",
+        "tests",
+        "docs",
+        "readme",
+    ]
+    return any(word in text for word in action_words) and any(word in text for word in object_words)
+
+
 def _should_send_tools(provider: str, model: str, user_message: str, tool_defs: List[Any]) -> bool:
     """Decide whether to pass tools to the model for this turn."""
     if not tool_defs or _is_simple_conversational_query(user_message):
         return False
+
+    if provider == "ds4":
+        return _ds4_should_send_tools(user_message)
 
     from ..providers.registry import PROVIDERS, ProviderCategory
 

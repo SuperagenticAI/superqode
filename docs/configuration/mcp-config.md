@@ -27,7 +27,7 @@ MCP servers can be configured in two ways:
        args: ["-y", "@modelcontextprotocol/server-filesystem", "."]
    ```
 
-2. **JSON Configuration** (`.superqode/mcp.json` or `~/.superqode/mcp.json`):
+2. **JSON Configuration** (`.superqode/mcp.json`, `~/.superqode/mcp.json`, or `~/.config/superqode/mcp.json`):
    ```json
    {
      "mcpServers": {
@@ -40,7 +40,26 @@ MCP servers can be configured in two ways:
    }
    ```
 
-**Priority**: YAML configuration takes precedence over JSON.
+**Priority**: YAML configuration takes precedence over JSON for SuperQode's internal MCP manager. ACP sessions read enabled MCP servers from the JSON MCP config locations and pass them to the ACP agent when a new session is created.
+
+### Web Fetch for ACP Agents
+
+SuperQode's built-in `fetch` and `web_fetch` tools are available to SuperQode's internal agent loop. ACP agents such as OpenCode need fetch exposed through MCP. Add an enabled fetch server to one of the JSON MCP config locations:
+
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Restart the ACP connection after editing this file. Existing ACP sessions keep the MCP server list they received at session creation.
 
 ---
 

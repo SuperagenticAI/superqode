@@ -106,9 +106,25 @@ Direct model selection is still supported:
 
 - DS4 is local, so no API key is required.
 - SuperQode uses a dummy OpenAI API key internally for OpenAI-compatible client libraries that require one.
-- DS4 receives SuperQode tool definitions in coding profiles, so it can use file, search, edit, shell, todo, and agent tools subject to the selected harness profile permissions.
+- DS4 uses a smaller DS4-specific tool profile and disables parallel tool execution by default.
+- DS4 uses direct tool gating by default: SuperQode sends tools for repo, file, test, command, and code-change requests, but skips tools for ordinary questions and standalone code-generation prompts. This reduces unnecessary agent iterations.
 - `deepseek-v4-flash` is the recommended default for coding and long-context local work.
 - `deepseek-chat` is useful when you want the non-thinking mode exposed by DS4-compatible clients.
+
+### DS4 Tool Mode
+
+The default DS4 tool mode is `auto`. Override it when you need different behavior:
+
+```bash
+# Default: send tools only for project/file/codebase work
+export SUPERQODE_DS4_TOOL_MODE=auto
+
+# Restore eager tool use
+export SUPERQODE_DS4_TOOL_MODE=always
+
+# Disable tools for DS4
+export SUPERQODE_DS4_TOOL_MODE=never
+```
 
 ---
 
