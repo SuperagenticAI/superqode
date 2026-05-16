@@ -29,6 +29,46 @@ class SystemPromptLevel(Enum):
     EXPERT = "expert"  # Comprehensive with examples
 
 
+# Provider/model-tuned base prompts. These take over at the MINIMAL level
+# (the default) when a session is bound to a model that benefits from
+# specific phrasing. Higher levels (STANDARD/FULL/EXPERT) remain unchanged
+# so explicit user choice always wins.
+#
+# The DS4 prompt is intentionally short: DeepSeek V4 Flash sizes its
+# thinking section to the problem complexity, so a long, hand-holdy system
+# prompt makes the model burn tokens reasoning about the prompt itself
+# instead of the task.
+DS4_PROMPT = """You are a precise coding assistant powered by DeepSeek V4 Flash.
+
+You have tools for reading, searching, editing files, and running shell commands.
+
+Behavior:
+- Use tools instead of asking the user for code; the whole repo is accessible.
+- Read before you edit; verify before you claim a task is done.
+- Prefer one decisive tool call over a long explanation of what you might do.
+- For general-knowledge or chat questions that don't need the repo, answer directly.
+- Keep responses short. The user can see the diff and tool output.
+
+Tool use:
+- `read_file` for any path; `list_directory` to explore.
+- `grep` for content patterns, `glob` for file names, `code_search` for symbols.
+- `edit_file` requires the old text to match exactly, including whitespace.
+- `bash` for one-shot commands; quote paths containing spaces.
+
+Code references in prose use `path:line` (e.g. `src/utils.py:42`).
+
+Thinking:
+- Think when the problem is genuinely hard. For routine edits, lookups, or
+  one-step actions, skip thinking and act.
+- Keep reasoning proportional to the task. Long thinking on a simple question
+  usually means you're stuck — call a tool instead.
+
+Stopping:
+- After tool calls, write a brief summary: what changed, where, what was verified.
+  Do not narrate steps you did not take.
+- If a task is ambiguous, ask one focused question before starting."""
+
+
 # System prompts by level
 SYSTEM_PROMPTS = {
     SystemPromptLevel.NONE: "",
@@ -287,6 +327,22 @@ If a command times out:
 - Be concise but thorough in explanations
 - Ask clarifying questions if the task is ambiguous""",
 }
+
+
+def get_provider_prompt(provider: Optional[str], model: Optional[str]) -> str:
+    """Return a provider/model-tuned base prompt, or empty string.
+
+    Used by the agent loop at MINIMAL level to swap in a prompt tailored to
+    the model in use. Higher SystemPromptLevel choices intentionally bypass
+    this so users can opt into the generic verbose prompts when they want
+    them.
+    """
+    if not provider and not model:
+        return ""
+    model_lower = (model or "").lower()
+    if provider == "ds4" or "deepseek-v4" in model_lower:
+        return DS4_PROMPT
+    return ""
 
 
 def get_system_prompt(

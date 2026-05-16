@@ -133,6 +133,12 @@ class PureMode:
             max_iterations = int(os.getenv("DS4_MAX_ITERATIONS", "6"))
             session_history_limit = int(os.getenv("DS4_SESSION_HISTORY_LIMIT", "8"))
             parallel_tools = False
+
+            # DS4 KV cache configuration
+            kv_disk_dir = os.getenv("DS4_KV_DISK_DIR", "/tmp/ds4-kv")
+            kv_disk_space = int(os.getenv("DS4_KV_DISK_SPACE_MB", "8192"))
+            os.environ["DS4_KV_DISK_DIR"] = kv_disk_dir
+            os.environ["DS4_KV_DISK_SPACE_MB"] = str(kv_disk_space)
         else:
             max_iterations = (
                 8 if provider_def and provider_def.category == ProviderCategory.LOCAL else 12

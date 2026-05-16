@@ -15,7 +15,7 @@ import json
 import os
 import threading
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 from .base import (
     AuthenticationError,
@@ -702,6 +702,169 @@ class LiteLLMGateway(GatewayInterface):
                 model=model,
             ) from e
 
+    def _ds4_thinking_config(self) -> Optional[Dict[str, Any]]:
+        """Resolve DS4's ``thinking`` request field from env.
+
+        ``SUPERQODE_DS4_THINKING`` controls reasoning effort for DS4's
+        Anthropic-compatible ``/v1/messages`` endpoint:
+
+        - ``off`` / ``disabled`` / ``none`` / ``0`` / ``false`` →
+          ``{"type": "disabled"}`` (no thinking section).
+        - ``low`` / ``medium`` / ``high`` / ``max`` →
+          ``{"type": "enabled", "budget_tokens": N}`` with budgets that
+          mirror the model card's regimes; ``max`` requests DS4's Think Max.
+        - unset / ``auto`` / ``default`` → return ``None`` so DS4's own
+          default applies (thinking enabled, normal regime).
+
+        Returns ``None`` to mean "don't send a thinking field at all", which
+        keeps the rendered prefix stable for sessions that don't pin a level.
+        """
+        mode = os.getenv("SUPERQODE_DS4_THINKING", "").strip().lower()
+        if not mode or mode in {"auto", "default"}:
+            return None
+        if mode in {"off", "disabled", "none", "no", "0", "false"}:
+            return {"type": "disabled"}
+        budgets = {
+            "low": 1024,
+            "medium": 4096,
+            "high": 16000,
+            "max": 31999,
+        }
+        budget = budgets.get(mode)
+        if budget is None:
+            return None
+        return {"type": "enabled", "budget_tokens": budget}
+
+    def _ds4_server_url(self) -> str:
+        """Return the DS4 server base URL with any trailing ``/v1`` stripped.
+
+        Both ``/v1/messages`` and ``/v1/chat/completions`` are appended by
+        callers, so this returns just the host root (e.g. ``http://127.0.0.1:8000``).
+        """
+        provider_def = PROVIDERS.get("ds4")
+        base = provider_def.default_base_url if provider_def else "http://127.0.0.1:8000/v1"
+        if provider_def and provider_def.base_url_env:
+            base = os.environ.get(provider_def.base_url_env, base)
+        base = base.rstrip("/")
+        if base.endswith("/v1"):
+            base = base[:-3]
+        return base
+
+    def _ds4_convert_tools_anthropic(
+        self, tools: Optional[List[ToolDefinition]]
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Convert ToolDefinition list to DS4 ``/v1/messages`` (Anthropic) format."""
+        if not tools:
+            return None
+        return [
+            {
+                "name": t.name,
+                "description": t.description or "",
+                "input_schema": t.parameters or {"type": "object", "properties": {}},
+            }
+            for t in tools
+        ]
+
+    def _ds4_convert_to_anthropic(
+        self, messages: List[Message]
+    ) -> Tuple[Optional[str], List[Dict[str, Any]]]:
+        """Convert gateway messages to DS4 ``/v1/messages`` format.
+
+        Returns ``(system_text, messages)``:
+
+        - System messages are joined and lifted to the top-level ``system`` field.
+        - ``role="tool"`` messages become ``role="user"`` with ``tool_result``
+          content blocks. Consecutive tool results are merged into a single
+          user message, which the Anthropic spec requires when the previous
+          assistant turn emitted multiple parallel ``tool_use`` blocks.
+        - Assistant ``tool_calls`` become standalone ``tool_use`` blocks, each
+          carrying the original ``id`` so DS4's exact-DSML replay map stays
+          intact across turns.
+        """
+        system_parts: List[str] = []
+        out: List[Dict[str, Any]] = []
+        pending_tool_results: List[Dict[str, Any]] = []
+
+        def flush_pending() -> None:
+            if pending_tool_results:
+                out.append({"role": "user", "content": list(pending_tool_results)})
+                pending_tool_results.clear()
+
+        for msg in messages:
+            if msg.role == "system":
+                if msg.content:
+                    system_parts.append(
+                        msg.content
+                        if isinstance(msg.content, str)
+                        else json.dumps(msg.content)
+                    )
+                continue
+
+            if msg.role == "tool":
+                content_text = (
+                    msg.content
+                    if isinstance(msg.content, str)
+                    else (json.dumps(msg.content) if msg.content is not None else "")
+                )
+                pending_tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": msg.tool_call_id or "",
+                        "content": content_text,
+                    }
+                )
+                continue
+
+            # Any non-tool message terminates the run of pending tool results.
+            flush_pending()
+
+            content_blocks: List[Dict[str, Any]] = []
+            if msg.content:
+                if isinstance(msg.content, str):
+                    content_blocks.append({"type": "text", "text": msg.content})
+                elif isinstance(msg.content, list):
+                    for part in msg.content:
+                        if isinstance(part, str):
+                            content_blocks.append({"type": "text", "text": part})
+                        elif isinstance(part, dict) and part.get("type") == "text":
+                            content_blocks.append(part)
+
+            if msg.tool_calls:
+                for tc in msg.tool_calls:
+                    tc_id = tc.get("id")
+                    if not tc_id:
+                        # Without an id we cannot round-trip to a matching
+                        # tool_result; drop the call rather than fabricate one
+                        # that breaks DS4's exact-DSML replay map.
+                        continue
+                    func = tc.get("function", {}) or {}
+                    args = func.get("arguments", "{}")
+                    if isinstance(args, str):
+                        try:
+                            tc_input = json.loads(args) if args else {}
+                        except json.JSONDecodeError:
+                            tc_input = {}
+                    elif isinstance(args, dict):
+                        tc_input = args
+                    else:
+                        tc_input = {}
+                    content_blocks.append(
+                        {
+                            "type": "tool_use",
+                            "id": tc_id,
+                            "name": func.get("name", ""),
+                            "input": tc_input,
+                        }
+                    )
+
+            if content_blocks:
+                out.append({"role": msg.role, "content": content_blocks})
+
+        flush_pending()
+
+        system_text = "\n\n".join(system_parts).strip() or None
+        return system_text, out
+
     async def _ds4_chat_completion(
         self,
         messages: List[Message],
@@ -799,6 +962,317 @@ class LiteLLMGateway(GatewayInterface):
                 f"Start ds4-server, then retry:\n"
                 f"./ds4-server --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192\n\n"
                 f"If DS4 is running somewhere else, set DS4_HOST.",
+                provider="ds4",
+                model=model,
+            ) from e
+
+    async def _ds4_messages_completion(
+        self,
+        messages: List[Message],
+        model: str,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        tools: Optional[List[ToolDefinition]] = None,
+        session_id: Optional[str] = None,
+        **kwargs,
+    ) -> GatewayResponse:
+        """Handle DS4 using /v1/messages (Anthropic-compatible API).
+
+        This endpoint provides better tool calling support with the native
+        Anthropic-style tool format and supports KV cache persistence via
+        the server's rendered-prefix lookup for efficient context reuse.
+        """
+        import aiohttp
+
+        url = f"{self._ds4_server_url()}/v1/messages"
+
+        system_text, anthropic_messages = self._ds4_convert_to_anthropic(messages)
+
+        request_data: Dict[str, Any] = {
+            "model": model,
+            "messages": anthropic_messages,
+            "max_tokens": max_tokens or 8192,
+        }
+        if system_text:
+            request_data["system"] = system_text
+        if temperature is not None:
+            request_data["temperature"] = temperature
+
+        thinking_cfg = self._ds4_thinking_config()
+        if thinking_cfg is not None:
+            request_data["thinking"] = thinking_cfg
+
+        anthropic_tools = self._ds4_convert_tools_anthropic(tools)
+        if anthropic_tools:
+            request_data["tools"] = anthropic_tools
+            request_data["tool_choice"] = {"type": "auto"}
+
+        headers = {
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01",
+            "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY', 'sk-local-ds4-dummy')}",
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    json=request_data,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=self.timeout),
+                ) as response:
+                    response_text = await response.text()
+                    if response.status >= 400:
+                        raise GatewayError(
+                            f"DS4 /v1/messages request failed with HTTP {response.status}.\n\n"
+                            f"Endpoint: {url}\n"
+                            f"Response: {response_text}",
+                            provider="ds4",
+                            model=model,
+                        )
+
+                    response_data = json.loads(response_text)
+
+            content = response_data.get("content", [])
+            text_content = ""
+            tool_calls = []
+
+            for block in content:
+                if block.get("type") == "text":
+                    text_content += block.get("text", "")
+                elif block.get("type") == "tool_use":
+                    tool_calls.append({
+                        "id": block.get("id", ""),
+                        "type": "function",
+                        "function": {
+                            "name": block.get("name", ""),
+                            "arguments": json.dumps(block.get("input", {})),
+                        },
+                    })
+
+            usage_data = response_data.get("usage", {})
+            usage = None
+            if usage_data:
+                usage = Usage(
+                    prompt_tokens=usage_data.get("input_tokens", 0),
+                    completion_tokens=usage_data.get("output_tokens", 0),
+                    total_tokens=usage_data.get("input_tokens", 0) + usage_data.get("output_tokens", 0),
+                )
+
+            return GatewayResponse(
+                content=text_content,
+                role="assistant",
+                finish_reason=response_data.get("stop_reason"),
+                usage=usage,
+                model=response_data.get("model", model),
+                provider="ds4",
+                tool_calls=tool_calls if tool_calls else None,
+                raw_response=response_data,
+            )
+
+        except aiohttp.ClientError as e:
+            raise GatewayError(
+                f"Cannot connect to DS4 server at {self._ds4_server_url()}.\n\n"
+                f"Start ds4-server, then retry:\n"
+                f"./ds4-server --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192\n\n"
+                f"If DS4 is running somewhere else, set DS4_HOST.",
+                provider="ds4",
+                model=model,
+            ) from e
+
+    async def _ds4_messages_stream(
+        self,
+        messages: List[Message],
+        model: str,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        tools: Optional[List[ToolDefinition]] = None,
+        **kwargs,
+    ) -> AsyncIterator[StreamChunk]:
+        """Handle DS4 streaming with /v1/messages (Anthropic-compatible API).
+
+        Uses SSE streaming for real-time token-by-token output with proper
+        tool call handling.
+        """
+        import aiohttp
+
+        url = f"{self._ds4_server_url()}/v1/messages"
+
+        system_text, anthropic_messages = self._ds4_convert_to_anthropic(messages)
+
+        request_data: Dict[str, Any] = {
+            "model": model,
+            "messages": anthropic_messages,
+            "max_tokens": max_tokens or 8192,
+            "stream": True,
+        }
+        if system_text:
+            request_data["system"] = system_text
+        if temperature is not None:
+            request_data["temperature"] = temperature
+
+        thinking_cfg = self._ds4_thinking_config()
+        if thinking_cfg is not None:
+            request_data["thinking"] = thinking_cfg
+
+        anthropic_tools = self._ds4_convert_tools_anthropic(tools)
+        if anthropic_tools:
+            request_data["tools"] = anthropic_tools
+            request_data["tool_choice"] = {"type": "auto"}
+
+        headers = {
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01",
+            "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY', 'sk-local-ds4-dummy')}",
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    json=request_data,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=self.timeout),
+                ) as response:
+                    if response.status >= 400:
+                        response_text = await response.text()
+                        raise GatewayError(
+                            f"DS4 streaming request failed with HTTP {response.status}.\n\n"
+                            f"Response: {response_text}",
+                            provider="ds4",
+                            model=model,
+                        )
+
+                    # Parse the Anthropic SSE event stream. Per the spec, tool
+                    # argument fragments arrive as ``input_json_delta`` events
+                    # whose ``partial_json`` field is a raw substring of the
+                    # final JSON — not a parseable object. We must concatenate
+                    # the fragments and parse once at ``content_block_stop``.
+                    # ``stop_reason`` and ``usage`` arrive on ``message_delta``,
+                    # not on ``message_stop``.
+                    final_stop_reason: Optional[str] = None
+                    final_usage_data: Dict[str, Any] = {}
+                    tool_blocks: Dict[int, Dict[str, Any]] = {}
+                    tool_arg_buffers: Dict[int, str] = {}
+
+                    async for line in response.content:
+                        line = line.decode("utf-8").strip()
+                        if not line.startswith("data:"):
+                            continue
+
+                        data = line[5:].strip()
+                        if not data or data == "[DONE]":
+                            continue
+
+                        try:
+                            event = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+
+                        event_type = event.get("type", "")
+
+                        if event_type == "message_start":
+                            msg_payload = event.get("message", {}) or {}
+                            usage = msg_payload.get("usage")
+                            if isinstance(usage, dict):
+                                final_usage_data.update(usage)
+
+                        elif event_type == "content_block_start":
+                            index = event.get("index", 0)
+                            block = event.get("content_block") or event.get("block") or {}
+                            if block.get("type") == "tool_use":
+                                tool_blocks[index] = {
+                                    "id": block.get("id", ""),
+                                    "type": "function",
+                                    "function": {
+                                        "name": block.get("name", ""),
+                                        "arguments": "",
+                                    },
+                                }
+                                tool_arg_buffers[index] = ""
+
+                        elif event_type == "content_block_delta":
+                            delta = event.get("delta", {})
+                            delta_type = delta.get("type")
+                            index = event.get("index", 0)
+
+                            if delta_type == "text_delta":
+                                text = delta.get("text", "")
+                                if text:
+                                    yield StreamChunk(
+                                        content=text,
+                                        role="assistant",
+                                        finish_reason=None,
+                                    )
+                            elif delta_type == "input_json_delta":
+                                if index in tool_arg_buffers:
+                                    tool_arg_buffers[index] += delta.get("partial_json", "")
+                            elif delta_type in ("thinking_delta", "summary_delta"):
+                                thinking = (
+                                    delta.get("thinking")
+                                    or delta.get("text")
+                                    or delta.get("summary")
+                                    or ""
+                                )
+                                if thinking:
+                                    yield StreamChunk(
+                                        content="",
+                                        role="assistant",
+                                        finish_reason=None,
+                                        thinking_content=thinking,
+                                    )
+
+                        elif event_type == "content_block_stop":
+                            index = event.get("index", 0)
+                            if index in tool_blocks:
+                                raw = tool_arg_buffers.get(index, "") or "{}"
+                                try:
+                                    json.loads(raw)
+                                    tool_blocks[index]["function"]["arguments"] = raw
+                                except json.JSONDecodeError:
+                                    tool_blocks[index]["function"]["arguments"] = "{}"
+
+                        elif event_type == "message_delta":
+                            delta = event.get("delta", {})
+                            stop_reason = delta.get("stop_reason")
+                            if stop_reason:
+                                final_stop_reason = stop_reason
+                            usage = event.get("usage")
+                            if isinstance(usage, dict):
+                                final_usage_data.update(usage)
+
+                        elif event_type == "message_stop":
+                            tool_calls_out = [
+                                tc
+                                for _, tc in sorted(tool_blocks.items())
+                                if tc.get("function", {}).get("name")
+                            ] or None
+
+                            usage_obj: Optional[Usage] = None
+                            if final_usage_data:
+                                prompt_tokens = int(
+                                    final_usage_data.get("input_tokens") or 0
+                                )
+                                completion_tokens = int(
+                                    final_usage_data.get("output_tokens") or 0
+                                )
+                                usage_obj = Usage(
+                                    prompt_tokens=prompt_tokens,
+                                    completion_tokens=completion_tokens,
+                                    total_tokens=prompt_tokens + completion_tokens,
+                                )
+
+                            yield StreamChunk(
+                                content="",
+                                role="assistant",
+                                finish_reason=final_stop_reason or "end_turn",
+                                tool_calls=tool_calls_out,
+                                usage=usage_obj,
+                            )
+
+        except aiohttp.ClientError as e:
+            raise GatewayError(
+                f"Cannot connect to DS4 server at {self._ds4_server_url()}",
                 provider="ds4",
                 model=model,
             ) from e
@@ -952,10 +1426,11 @@ class LiteLLMGateway(GatewayInterface):
                 messages, model, temperature, max_tokens, tools, tool_choice, **kwargs
             )
 
-        # Special handling for DS4 - use direct OpenAI-compatible local endpoint.
+        # Special handling for DS4 - use Anthropic-compatible /v1/messages endpoint
+        # for better tool calling and KV cache support
         if provider == "ds4":
-            return await self._ds4_chat_completion(
-                messages, model, temperature, max_tokens, tools, tool_choice, **kwargs
+            return await self._ds4_messages_completion(
+                messages, model, temperature, max_tokens, tools, **kwargs
             )
 
         litellm = self._get_litellm()
@@ -1161,22 +1636,12 @@ class LiteLLMGateway(GatewayInterface):
                 yield chunk
             return
 
-        # DS4 should never go through LiteLLM, including streaming. Use a
-        # direct completion and yield it as one stream chunk so the agent loop
-        # still handles tool calls normally.
+        # DS4 - use /v1/messages streaming for better tool calling and KV cache support
         if provider == "ds4":
-            response = await self._ds4_chat_completion(
-                messages, model, temperature, max_tokens, tools, tool_choice, **kwargs
-            )
-            yield StreamChunk(
-                content=response.content,
-                role=response.role,
-                finish_reason=response.finish_reason,
-                tool_calls=response.tool_calls,
-                usage=response.usage,
-                cost=response.cost,
-                thinking_content=response.thinking_content,
-            )
+            async for chunk in self._ds4_messages_stream(
+                messages, model, temperature, max_tokens, tools, **kwargs
+            ):
+                yield chunk
             return
 
         litellm = self._get_litellm()

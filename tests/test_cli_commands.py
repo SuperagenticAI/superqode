@@ -158,6 +158,24 @@ class TestProvidersCommand:
         # Should show provider list or handle gracefully
         assert result.exit_code == 0 or "Error" not in result.output
 
+    def test_providers_ds4_server_prints_start_command(self, runner):
+        """`providers ds4 server` must surface the kv-disk-dir flag — that's
+        the single biggest perf knob and it's easy to forget."""
+        result = runner.invoke(cli_main, ["providers", "ds4", "server"])
+        assert result.exit_code == 0
+        assert "ds4-server" in result.output
+        assert "--kv-disk-dir" in result.output
+
+    def test_providers_ds4_doctor_reports_unreachable_when_no_server(self, runner):
+        """The doctor must exit non-zero and tell the user how to recover
+        rather than hanging or printing a misleading 'ok'."""
+        result = runner.invoke(
+            cli_main,
+            ["providers", "ds4", "doctor", "--host", "http://127.0.0.1:1/v1"],
+        )
+        assert result.exit_code != 0
+        assert "Not reachable" in result.output
+
     def test_profiles_list_json(self, runner):
         """Test harness profile listing."""
         result = runner.invoke(cli_main, ["profiles", "list", "--json"])

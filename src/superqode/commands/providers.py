@@ -676,6 +676,148 @@ def monty_command(action: str):
         console.print(result.error or result.output)
 
 
+@providers.command("ds4")
+@click.argument("action", type=click.Choice(["doctor", "list", "server"]))
+@click.option("--host", default=None, help="Override DS4 base URL (else uses DS4_HOST or default)")
+def ds4_command(action: str, host: Optional[str]):
+    """Manage the local DS4 (DeepSeek V4 Flash) server.
+
+    Actions:
+    - doctor: Connectivity + recommendations (KV-cache, thinking mode)
+    - list:   List models with reported context limits
+    - server: Print a ready-to-paste ds4-server start command
+    """
+    from ..providers.local.ds4 import DS4Client, DEFAULT_DS4_HOST
+    from ..providers.registry import PROVIDERS
+
+    provider_def = PROVIDERS.get("ds4")
+    base_url = host or os.environ.get("DS4_HOST") or (
+        provider_def.default_base_url if provider_def else DEFAULT_DS4_HOST
+    )
+
+    if action == "server":
+        # The README's canonical example. Show it verbatim so users can copy-paste
+        # without us inventing flag combinations that might drift from upstream.
+        console.print("[bold]Recommended ds4-server start command[/bold]")
+        console.print()
+        console.print(
+            "  [cyan]./ds4-server --ctx 100000 "
+            "--kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192[/cyan]"
+        )
+        console.print()
+        console.print("[dim]Notes:[/dim]")
+        console.print(
+            "[dim]  • --kv-disk-dir is what makes prefixes survive restarts and"
+            " session switches.[/dim]"
+        )
+        console.print(
+            "[dim]  • --ctx caps the in-memory KV window; raise it only if you have"
+            " RAM headroom (full 1M ctx ≈ 26GB).[/dim]"
+        )
+        console.print(
+            f"[dim]  • SuperQode talks to it at: {base_url}"
+            " (override with DS4_HOST).[/dim]"
+        )
+        return
+
+    client = DS4Client(host=base_url)
+
+    if action == "list":
+        async def _list():
+            available = await client.is_available()
+            if not available:
+                console.print(f"[red]❌ DS4 not reachable at {base_url}[/red]")
+                console.print(
+                    "Run [cyan]superqode providers ds4 server[/cyan] for a"
+                    " start command."
+                )
+                return 1
+            models = await client.list_models()
+            table = Table(title="DS4 models", header_style="bold")
+            table.add_column("Model")
+            table.add_column("Context", justify="right")
+            table.add_column("Tools", justify="center")
+            for m in models:
+                table.add_row(
+                    m.id,
+                    f"{m.context_window:,}",
+                    "yes" if m.supports_tools else "no",
+                )
+            console.print(table)
+            return 0
+
+        raise SystemExit(asyncio.run(_list()) or 0)
+
+    # doctor
+    async def _doctor() -> int:
+        console.print(f"[bold]DS4 doctor[/bold]  ({base_url})")
+        console.print()
+
+        status = await client.get_status()
+        if not status.available:
+            console.print(f"[red]❌ Not reachable:[/red] {status.error}")
+            console.print()
+            console.print(
+                "[yellow]Start the server, then re-run:[/yellow] "
+                "[cyan]superqode providers ds4 server[/cyan]"
+            )
+            return 1
+
+        console.print(
+            f"[green]✓ Reachable[/green]  ({status.latency_ms:.0f} ms,"
+            f" {status.models_count} model"
+            f"{'s' if status.models_count != 1 else ''})"
+        )
+
+        models = await client.list_models()
+        if models:
+            console.print()
+            console.print("[bold]Models:[/bold]")
+            for m in models:
+                console.print(f"  • {m.id}  (ctx {m.context_window:,})")
+
+        # KV-cache reminder. The DS4 server doesn't expose its config, so we
+        # can only nudge — but it's the single biggest perf knob.
+        console.print()
+        console.print("[bold]Recommendations[/bold]")
+        console.print(
+            "  • [yellow]KV disk cache:[/yellow] start the server with"
+            " [cyan]--kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192[/cyan]."
+            " Without it, every session restart re-prefills the whole prompt."
+        )
+
+        thinking_env = os.environ.get("SUPERQODE_DS4_THINKING", "").strip().lower()
+        if not thinking_env:
+            console.print(
+                "  • [yellow]Thinking mode:[/yellow] unset"
+                " (DS4 server default applies). For routine coding sessions"
+                " try [cyan]SUPERQODE_DS4_THINKING=low[/cyan]; for tricky"
+                " refactors [cyan]high[/cyan] or [cyan]max[/cyan]."
+            )
+        else:
+            console.print(
+                f"  • [green]Thinking mode:[/green] {thinking_env}"
+                " (via SUPERQODE_DS4_THINKING)"
+            )
+
+        tool_mode = os.environ.get("SUPERQODE_DS4_TOOL_MODE", "").strip().lower()
+        if tool_mode in {"never", "none", "off", "0", "false"}:
+            console.print(
+                "  • [yellow]Tools:[/yellow] disabled session-wide"
+                " (SUPERQODE_DS4_TOOL_MODE=never). Unset to re-enable."
+            )
+        else:
+            console.print(
+                "  • [green]Tools:[/green] enabled and prefix-stable"
+                " (the rendered request is byte-stable across turns so DS4"
+                " can hit its KV checkpoint)."
+            )
+
+        return 0
+
+    raise SystemExit(asyncio.run(_doctor()) or 0)
+
+
 def connect_provider(provider: Optional[str] = None, model: Optional[str] = None) -> int:
     """Connect to a BYOK provider/model via CLI.
 

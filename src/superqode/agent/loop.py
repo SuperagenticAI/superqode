@@ -37,7 +37,12 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 from ..tools.base import Tool, ToolContext, ToolRegistry, ToolResult
 from ..tools.permissions import Permission, PermissionConfig, PermissionManager
 from ..providers.gateway.base import GatewayInterface, Message, ToolDefinition
-from .system_prompts import SystemPromptLevel, get_system_prompt, get_job_description_prompt
+from .system_prompts import (
+    SystemPromptLevel,
+    get_system_prompt,
+    get_job_description_prompt,
+    get_provider_prompt,
+)
 from .session_manager import SessionManager, SessionMessage
 
 
@@ -48,9 +53,27 @@ def _cached_system_prompt(
     working_directory: str,
     custom_prompt: str | None,
     job_description: str | None,
+    provider: str | None = None,
+    model: str | None = None,
 ) -> str:
-    """Cached system prompt builder."""
-    prompt = get_system_prompt(level=level, working_directory=Path(working_directory))
+    """Cached system prompt builder.
+
+    At MINIMAL (the default) we substitute a provider/model-tuned prompt
+    when one exists — e.g. DeepSeek V4 Flash gets a terse DS4-specific
+    prompt instead of the generic one-liner. Higher levels keep the user's
+    explicit choice intact.
+    """
+    tuned = (
+        get_provider_prompt(provider, model)
+        if level == SystemPromptLevel.MINIMAL
+        else ""
+    )
+    if tuned:
+        prompt = tuned
+        if working_directory:
+            prompt += f"\n\nWorking directory: {working_directory}"
+    else:
+        prompt = get_system_prompt(level=level, working_directory=Path(working_directory))
     try:
         from ..skills import load_project_instructions
 
@@ -236,94 +259,35 @@ def _model_supports_tools(provider: str, model: str) -> bool:
         return False
 
 
-def _ds4_should_send_tools(user_message: str) -> bool:
-    """Return whether DS4 should receive tools for this user turn.
+def _ds4_should_send_tools() -> bool:
+    """Return whether DS4 should receive tools for this session.
 
-    DS4 is strong for local coding, but it tends to use tools more eagerly than
-    larger hosted models. Keep default DS4 behavior direct unless the user asks
-    about the current project, files, tests, commands, or code changes.
+    DS4 reuses a KV-cache checkpoint based on the *rendered byte prefix* of
+    every request. Adding or dropping tool definitions between turns changes
+    the prefix and invalidates the cache, forcing an expensive re-prefill.
+    The decision is therefore made once per session via env, not per turn.
+
+    Set ``SUPERQODE_DS4_TOOL_MODE=never`` (or off/0/false) to disable tools
+    for the whole session; default is to keep tools on so the rendered
+    prefix is byte-stable.
     """
-    mode = os.getenv("SUPERQODE_DS4_TOOL_MODE", "auto").strip().lower()
-    if mode in {"always", "all", "on", "1", "true"}:
-        return True
-    if mode in {"never", "none", "off", "0", "false"}:
-        return False
-
-    text = user_message.lower().strip()
-
-    project_targets = [
-        "this repo",
-        "this repository",
-        "this project",
-        "the repo",
-        "the repository",
-        "the project",
-        "codebase",
-        "workspace",
-        "current directory",
-        "current project",
-        "git diff",
-        "diff",
-    ]
-    if any(target in text for target in project_targets):
-        return True
-
-    file_or_path_patterns = [
-        r"\b(readme|pyproject|package\.json|cargo\.toml|go\.mod|pom\.xml)\b",
-        r"\b[\w./-]+\.(py|js|ts|tsx|jsx|go|rs|java|rb|php|c|cc|cpp|h|hpp|md|toml|yaml|yml|json|sh)\b",
-        r"\b(src|lib|app|tests?|docs?|scripts?)/",
-    ]
-    if any(re.search(pattern, text) for pattern in file_or_path_patterns):
-        return True
-
-    action_words = [
-        "inspect",
-        "read",
-        "scan",
-        "search",
-        "grep",
-        "find",
-        "list",
-        "open",
-        "review",
-        "summarize",
-        "explain",
-        "fix",
-        "edit",
-        "modify",
-        "update",
-        "patch",
-        "refactor",
-        "debug",
-        "test",
-        "run",
-    ]
-    object_words = [
-        "file",
-        "files",
-        "directory",
-        "directories",
-        "folder",
-        "folders",
-        "repo",
-        "repository",
-        "project",
-        "codebase",
-        "code",
-        "tests",
-        "docs",
-        "readme",
-    ]
-    return any(word in text for word in action_words) and any(word in text for word in object_words)
+    mode = os.getenv("SUPERQODE_DS4_TOOL_MODE", "always").strip().lower()
+    return mode not in {"never", "none", "off", "0", "false"}
 
 
 def _should_send_tools(provider: str, model: str, user_message: str, tool_defs: List[Any]) -> bool:
     """Decide whether to pass tools to the model for this turn."""
-    if not tool_defs or _is_simple_conversational_query(user_message):
+    if not tool_defs:
         return False
 
+    # For DS4, the decision is session-level (see _ds4_should_send_tools).
+    # Do not inspect the user message — flipping tools mid-session
+    # invalidates DS4's rendered-prefix KV cache.
     if provider == "ds4":
-        return _ds4_should_send_tools(user_message)
+        return _ds4_should_send_tools()
+
+    if _is_simple_conversational_query(user_message):
+        return False
 
     from ..providers.registry import PROVIDERS, ProviderCategory
 
@@ -534,10 +498,19 @@ class AgentLoop:
             working_directory=str(self.config.working_directory),
             custom_prompt=self.config.custom_system_prompt,
             job_description=self.config.job_description,
+            provider=self.config.provider,
+            model=self.config.model,
         )
 
     def _compute_tool_definitions(self) -> List[ToolDefinition]:
-        """Compute tool definitions once at init."""
+        """Compute tool definitions once at init.
+
+        Definitions are sorted by name so that the rendered request prefix is
+        byte-stable across processes. This matters for providers that key a
+        cached KV checkpoint on the rendered prefix (DS4, Anthropic prompt
+        caching, OpenAI prompt caching); even a reordering of tool schemas
+        forces a cold prefill.
+        """
         if not self.config.tools_enabled:
             return []
 
@@ -573,6 +546,8 @@ class AgentLoop:
 
         # Add explicitly passed MCP tools if available
         definitions.extend(self._mcp_tools)
+
+        definitions.sort(key=lambda d: d.name)
         return definitions
 
     def _get_tool_definitions(self) -> List[ToolDefinition]:
@@ -735,48 +710,71 @@ class AgentLoop:
         except Exception as e:
             return ToolResult(success=False, output="", error=f"Tool execution error: {str(e)}")
 
-    def _maybe_summarize(self, messages: List["AgentMessage"]) -> List["AgentMessage"]:
-        """Auto-summarize or prune messages if context exceeds token limit."""
+    async def _maybe_summarize(
+        self, messages: List["AgentMessage"]
+    ) -> List["AgentMessage"]:
+        """Compact or prune messages when context exceeds the limit.
+
+        Strategy:
+        1. Estimate tokens; bail if under the limit.
+        2. Try LLM-backed structured compaction (9-section template). Replace
+           the head of history with the summary; keep the system prompt and a
+           short tail of recent turns intact so the next assistant turn has
+           live context to work with.
+        3. If compaction fails or returns nothing, fall back to mechanical
+           prune-from-front so the loop can still make progress.
+        """
         if not self.config.enable_summarization:
             return messages
 
-        # Use ContextManager for pruning
-        # 1. Convert AgentMessages to Dicts for ContextManager
-        msg_dicts = []
-        for m in messages:
-            msg_dicts.append(
-                {
-                    "role": m.role,
-                    "content": m.content,
-                    "tool_calls": m.tool_calls,
-                    "tool_result": m.content if m.role == "tool" else None,
-                }
-            )
-
-        # 2. Estimate tokens
+        msg_dicts = [
+            {
+                "role": m.role,
+                "content": m.content,
+                "tool_calls": m.tool_calls,
+                "tool_result": m.content if m.role == "tool" else None,
+            }
+            for m in messages
+        ]
         token_count = self.context_manager.count_tokens(msg_dicts)
-
         if token_count <= self.config.max_context_tokens:
             return messages
 
-        # 3. Prune or alert
         if self.on_thinking:
-            asyncio.create_task(
-                self.on_thinking(
-                    f"Context management active ({token_count} tokens). Pruning history..."
+            await self.on_thinking(
+                f"Context management active ({token_count} tokens)."
+                " Compacting earlier turns..."
+            )
+
+        from .compaction import compact_history
+
+        keep_tail = 4
+        system_prefix = [m for m in messages if m.role == "system"][:1]
+        body = [m for m in messages if m.role != "system" or m is not system_prefix[0]] \
+            if system_prefix else list(messages)
+
+        if len(body) > keep_tail:
+            head = body[:-keep_tail]
+            tail = body[-keep_tail:]
+            summary = await compact_history(
+                head,
+                self.gateway,
+                self.config.provider,
+                self.config.model,
+            )
+            if summary:
+                summary_msg = AgentMessage(
+                    role="system",
+                    content=f"[Earlier conversation summary]\n\n{summary}",
                 )
-            )
+                return system_prefix + [summary_msg] + tail
 
+        # Fallback: mechanical prune-from-front (existing path).
         pruned_dicts = self.context_manager.prune_history(msg_dicts)
-
-        # 4. Convert back to AgentMessages
-        new_messages = []
-        for d in pruned_dicts:
-            new_messages.append(
-                AgentMessage(role=d["role"], content=d["content"], tool_calls=d.get("tool_calls"))
-            )
-
-        return new_messages
+        return [
+            AgentMessage(role=d["role"], content=d["content"], tool_calls=d.get("tool_calls"))
+            for d in pruned_dicts
+        ]
 
     async def _execute_tools_parallel(
         self,
@@ -1059,7 +1057,7 @@ class AgentLoop:
 
                 # Auto-summarize if enabled and context is too large
                 if self.config.enable_summarization:
-                    messages = self._maybe_summarize(messages)
+                    messages = await self._maybe_summarize(messages)
 
             else:
                 # No tool calls - return the response content

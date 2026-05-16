@@ -6,7 +6,8 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 
 import pytest
 
-from superqode.agent.loop import AgentConfig, AgentLoop
+from superqode.agent.loop import AgentConfig, AgentLoop, _cached_system_prompt
+from superqode.agent.system_prompts import DS4_PROMPT, SystemPromptLevel
 from superqode.providers.gateway.base import (
     GatewayInterface,
     GatewayResponse,
@@ -195,7 +196,12 @@ async def test_ds4_local_provider_receives_tools_for_coding_tasks():
 
 
 @pytest.mark.asyncio
-async def test_simple_ds4_query_skips_tools():
+async def test_ds4_keeps_tools_on_simple_query_for_kv_cache_stability():
+    """DS4 must not drop tools based on the user message.
+
+    DS4's KV-cache reuse keys on the rendered prefix; toggling tools per
+    turn invalidates the cache and forces a cold prefill on every request.
+    """
     gateway = ScriptedGateway([GatewayResponse(content="hello")])
     loop = AgentLoop(
         gateway=gateway,
@@ -209,11 +215,13 @@ async def test_simple_ds4_query_skips_tools():
     result = await loop.run("what is 2+2?")
 
     assert result.content == "hello"
-    assert gateway.tools_seen[0] is None
+    assert gateway.tools_seen[0]
 
 
 @pytest.mark.asyncio
-async def test_direct_ds4_code_generation_skips_tools():
+async def test_ds4_keeps_tools_on_direct_code_request():
+    """DS4 must keep tools attached even for chatty coding asks; the
+    session-stable contract is what makes the rendered prefix reusable."""
     gateway = ScriptedGateway([GatewayResponse(content="def reverse_string(value): ...")])
     loop = AgentLoop(
         gateway=gateway,
@@ -227,7 +235,7 @@ async def test_direct_ds4_code_generation_skips_tools():
     result = await loop.run("write a Python function that reverses a string")
 
     assert result.content.startswith("def reverse_string")
-    assert gateway.tools_seen[0] is None
+    assert gateway.tools_seen[0]
 
 
 @pytest.mark.asyncio
@@ -267,8 +275,13 @@ async def test_ds4_repo_summary_receives_tools():
 
 
 @pytest.mark.asyncio
-async def test_ds4_tool_mode_always_overrides_direct_gating(monkeypatch):
-    monkeypatch.setenv("SUPERQODE_DS4_TOOL_MODE", "always")
+async def test_ds4_tool_mode_never_disables_tools_session_wide(monkeypatch):
+    """SUPERQODE_DS4_TOOL_MODE=never opts out of tools for the whole session.
+
+    This is the only honored override; per-turn flipping is intentionally
+    not supported because it breaks DS4's rendered-prefix KV cache.
+    """
+    monkeypatch.setenv("SUPERQODE_DS4_TOOL_MODE", "never")
     gateway = ScriptedGateway([GatewayResponse(content="done")])
     loop = AgentLoop(
         gateway=gateway,
@@ -279,10 +292,32 @@ async def test_ds4_tool_mode_always_overrides_direct_gating(monkeypatch):
         ),
     )
 
-    result = await loop.run("write a Python function that reverses a string")
+    result = await loop.run("read README.md and summarize the setup")
 
     assert result.content == "done"
-    assert gateway.tools_seen[0]
+    assert gateway.tools_seen[0] is None
+
+
+@pytest.mark.asyncio
+async def test_ds4_tool_definitions_are_sorted_for_prefix_stability():
+    """Tool defs are sorted by name so the rendered request prefix is
+    byte-stable across processes (a prerequisite for KV-cache reuse)."""
+    gateway = ScriptedGateway([GatewayResponse(content="done")])
+    loop = AgentLoop(
+        gateway=gateway,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(
+            provider="ds4",
+            model="deepseek-v4-flash",
+        ),
+    )
+
+    await loop.run("read README.md and summarize")
+
+    tools = gateway.tools_seen[0]
+    assert tools, "expected tools to be sent for ds4 session"
+    names = [t.name for t in tools]
+    assert names == sorted(names), f"tools not sorted by name: {names}"
 
 
 @pytest.mark.asyncio
@@ -389,3 +424,49 @@ async def test_generic_local_provider_stays_conservative_with_tools():
 
     assert result.content == "done"
     assert gateway.tools_seen[0] is None
+
+
+def _build_loop_system_prompt(
+    provider: str, model: str, level: SystemPromptLevel = SystemPromptLevel.MINIMAL
+) -> str:
+    """Construct an AgentLoop and return its rendered system prompt."""
+    _cached_system_prompt.cache_clear()
+    loop = AgentLoop(
+        gateway=ScriptedGateway([]),
+        tools=ToolRegistry.default(),
+        config=AgentConfig(provider=provider, model=model, system_prompt_level=level),
+    )
+    return loop.system_prompt
+
+
+def test_ds4_session_uses_tuned_system_prompt_at_minimal_level():
+    """Default sessions on DS4 must get the DS4-tuned prompt, not the
+    generic one-liner. Long generic prompts inflate DS4's thinking budget."""
+    prompt = _build_loop_system_prompt("ds4", "deepseek-v4-flash")
+    assert "DeepSeek V4 Flash" in prompt
+    assert "Thinking:" in prompt
+
+
+def test_non_ds4_session_keeps_generic_minimal_prompt():
+    prompt = _build_loop_system_prompt("anthropic", "claude-opus-4-7")
+    assert prompt.startswith("You are a coding assistant with access to tools.")
+    assert "DeepSeek V4 Flash" not in prompt
+
+
+def test_explicit_full_level_overrides_provider_prompt():
+    """When users opt into FULL/EXPERT, the verbose prompt wins over the
+    DS4 tuned default; the level is an explicit user choice."""
+    prompt = _build_loop_system_prompt(
+        "ds4", "deepseek-v4-flash", level=SystemPromptLevel.FULL
+    )
+    assert DS4_PROMPT not in prompt
+    assert "FILE OPERATIONS" in prompt
+
+
+def test_deepseek_v4_model_id_triggers_tuned_prompt_via_any_provider():
+    """An OpenAI-compatible provider hosting deepseek-v4 should still get
+    the DS4 prompt — we key on model id, not just provider id."""
+    prompt = _build_loop_system_prompt(
+        "openai-compatible", "deepseek-v4-flash"
+    )
+    assert "DeepSeek V4 Flash" in prompt
