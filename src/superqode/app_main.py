@@ -6504,18 +6504,63 @@ team:
             )
 
         async def on_tool_update(update: dict) -> None:
-            """Handle tool updates, keeping normal streaming output compact."""
+            """Handle tool updates, keeping normal streaming output compact.
+
+            Order of preference for the "output" cell:
+            1. Diff blocks from ``content`` — rendered as a unified diff
+               so the user sees what changed in the file (this is the
+               feature the user explicitly asked for).
+            2. Text blocks from ``content`` — the spec-canonical channel.
+            3. Legacy ``rawOutput`` / ``output`` / ``result`` — same as
+               before, but suppressed for completed Read/Execute calls
+               in normal mode (where the one-liner action row already
+               tells the story).
+            Verbose mode (``log.tool_output_mode == "verbose"``) opts
+            back into the full payload.
+            """
+            from superqode.acp.render import render_acp_tool_output
+
             status = update.get("status", "")
-            output = update.get("rawOutput") or update.get("output") or update.get("result")
+            raw_output = (
+                update.get("rawOutput") or update.get("output") or update.get("result")
+            )
+            content = update.get("content")
+            kind = update.get("kind") or ""
             tool_title = update.get("title") or "Tool"
+            mode = getattr(log, "tool_output_mode", "normal")
 
             if status == "completed":
-                # Always show tool results - this is the agent's actual work
-                # Try to parse and display JSON nicely
-                formatted = self._format_tool_output(tool_title, output, log)
+                output_str = render_acp_tool_output(
+                    kind=kind,
+                    status="completed",
+                    content=content,
+                    raw_output=raw_output,
+                    mode=mode,
+                )
+
+                # Diff path: emit directly without JSON-parsing — the
+                # output is already formatted unified diff text.
+                if output_str and self._looks_like_diff(output_str):
+                    self._call_ui(
+                        log.add_tool_call,
+                        tool_title,
+                        "success",
+                        "",
+                        "",
+                        output_str,
+                    )
+                    return
+
+                # Suppressed path: no output line, just the action row
+                # stays as the visual record. The user can flip to
+                # verbose with `:log verbose` if they need details.
+                if output_str is None:
+                    return
+
+                # Legacy path: JSON parsing for structured outputs,
+                # fallback to summary line.
+                formatted = self._format_tool_output(tool_title, output_str, log)
                 if not formatted:
-                    # Fallback to simple display - show full output, no truncation
-                    output_str = str(output) if output else ""
                     self._call_ui(
                         log.add_tool_call,
                         tool_title,
@@ -6525,14 +6570,26 @@ team:
                         output_str,
                     )
             elif status == "failed":
-                error_msg = str(output) if output else "failed"
+                # Errors are *always* shown, even in minimal mode.
+                # A failure is the one place where hiding output
+                # would cost more than the noise saves.
+                error_payload = (
+                    render_acp_tool_output(
+                        kind=kind,
+                        status="failed",
+                        content=content,
+                        raw_output=raw_output,
+                        mode="verbose",  # never suppress errors
+                    )
+                    or "failed"
+                )
                 self._call_ui(
                     log.add_tool_call,
                     tool_title,
                     "error",
                     "",
                     "",
-                    error_msg,
+                    str(error_payload),
                 )
 
         async def on_plan(entries: list[dict]) -> None:
@@ -9852,6 +9909,26 @@ team:
                 msg = f"🔴 {msg}"
 
         return msg
+
+    def _looks_like_diff(self, text: str) -> bool:
+        """Detect unified-diff-shaped text produced by acp/render.py.
+
+        We pre-format diffs in the ACP layer rather than letting
+        ``_format_tool_output`` JSON-parse them, so it needs a cheap
+        check to skip the JSON path. A single leading ``@@`` or a line
+        starting with ``+ `` / ``- `` (with a space, to avoid false-
+        positives on markdown list bullets) is enough signal.
+        """
+        if not text:
+            return False
+        head = text.lstrip().splitlines()
+        for line in head[:6]:
+            stripped = line.strip()
+            if stripped.startswith("@@"):
+                return True
+            if stripped.startswith(("+ ", "- ", "+\t", "-\t")):
+                return True
+        return False
 
     def _format_tool_output(self, tool_name: str, output: Any, log: ConversationLog) -> bool:
         """Format and display tool output with proper JSON parsing.

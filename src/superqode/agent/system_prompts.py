@@ -66,6 +66,9 @@ Thinking:
 Stopping:
 - After tool calls, write a brief summary: what changed, where, what was verified.
   Do not narrate steps you did not take.
+- End with one short "Next:" line proposing the obvious next step
+  (run tests, commit, refactor X) so the user has a one-keystroke
+  follow-up. Skip it only when the task is conclusively done.
 - If a task is ambiguous, ask one focused question before starting."""
 
 
@@ -102,6 +105,8 @@ Code references in prose use `path:line` (e.g. `src/utils.py:42`).
 
 Stopping:
 - After tool calls, write a brief summary: what changed, where, what was verified.
+- End with one short "Next:" line proposing the obvious next step
+  (run tests, commit, refactor X). Skip it only when conclusively done.
 - If a task is ambiguous, ask one focused question before starting."""
 
 

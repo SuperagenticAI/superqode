@@ -738,7 +738,22 @@ class ConversationLog(RichLog):
         self._thinking_lines: list[str] = []
         self._tool_calls: list[dict] = []
         self._streaming_response: str = ""
-        self.tool_output_mode: str = "normal"
+        # Initial verbosity respects ``SUPERQODE_LOG_VERBOSITY`` so a
+        # user who runs ``SUPERQODE_LOG_VERBOSITY=verbose superqode`` or
+        # passes ``--verbose`` sees full tool output from the first
+        # tool call, not just after they run ``:log verbose`` mid-
+        # session. Unknown values silently fall back to ``normal``.
+        import os as _os
+        _initial_mode = (_os.environ.get("SUPERQODE_LOG_VERBOSITY") or "").strip().lower()
+        if _initial_mode in ("min", "minimum"):
+            _initial_mode = "minimal"
+        elif _initial_mode in ("full", "debug"):
+            _initial_mode = "verbose"
+        elif _initial_mode in ("default",):
+            _initial_mode = "normal"
+        if _initial_mode not in ("minimal", "normal", "verbose"):
+            _initial_mode = "normal"
+        self.tool_output_mode: str = _initial_mode
         # Force console width to None (unlimited) immediately after init
         self._force_unlimited_width = True
 

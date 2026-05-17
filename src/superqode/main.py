@@ -586,6 +586,22 @@ class SuperQodeGroup(click.Group):
     show_default=True,
     help="How to show workspace changes after headless coding tasks",
 )
+@click.option(
+    "--verbose",
+    "-v",
+    "verbose_logs",
+    is_flag=True,
+    envvar="SUPERQODE_VERBOSE",
+    help="Show full tool outputs (equivalent to SUPERQODE_LOG_VERBOSITY=verbose)",
+)
+@click.option(
+    "--quiet",
+    "-q",
+    "quiet_logs",
+    is_flag=True,
+    envvar="SUPERQODE_QUIET",
+    help="Show only tool status (equivalent to SUPERQODE_LOG_VERBOSITY=minimal)",
+)
 @click.pass_context
 def cli_main(
     ctx,
@@ -600,8 +616,20 @@ def cli_main(
     fork_from,
     sandbox_backend,
     changes,
+    verbose_logs,
+    quiet_logs,
     _headless_messages=None,
 ):
+    # Tool-output verbosity propagates through env so the TUI widget
+    # picks it up at construction time without us threading another
+    # argument through every Textual subclass. The env-first design
+    # also means downstream subprocesses (e.g. ACP clients we may
+    # later spawn) inherit it.
+    import os as _os
+    if verbose_logs and not quiet_logs:
+        _os.environ["SUPERQODE_LOG_VERBOSITY"] = "verbose"
+    elif quiet_logs and not verbose_logs:
+        _os.environ["SUPERQODE_LOG_VERBOSITY"] = "minimal"
     """SuperQode - coding agent harness for developer workflows.
 
     Use the TUI for interactive coding work or headless mode for one-shot tasks.
