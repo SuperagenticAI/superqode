@@ -44,6 +44,7 @@ from .system_prompts import (
     get_provider_prompt,
 )
 from .session_manager import SessionManager, SessionMessage
+from ..providers.profiles import resolve_model_profile, run_pre_init_once
 
 
 # Module-level cache for system prompts
@@ -82,6 +83,9 @@ def _cached_system_prompt(
         prompt += f"\n\n{custom_prompt}"
     if job_description:
         prompt += get_job_description_prompt(job_description)
+    profile = resolve_model_profile(provider, model)
+    if profile.system_prompt_suffix:
+        prompt += "\n\n" + profile.system_prompt_suffix
     return prompt
 
 
@@ -498,6 +502,18 @@ class AgentLoop:
             model=self.config.model,
         )
 
+    def _profile_kwargs(self) -> Dict[str, Any]:
+        """Resolve the active model profile's request kwargs.
+
+        Runs ``pre_init`` once per spec, then returns the profile's
+        ``init_kwargs`` merged with ``init_kwargs_factory()`` output.
+        Caller-supplied kwargs at the gateway call site still override
+        these — caller wins by passing them as explicit arguments.
+        """
+        run_pre_init_once(self.config.provider, self.config.model)
+        profile = resolve_model_profile(self.config.provider, self.config.model)
+        return profile.resolve_kwargs()
+
     def _compute_tool_definitions(self) -> List[ToolDefinition]:
         """Compute tool definitions once at init.
 
@@ -542,6 +558,11 @@ class AgentLoop:
 
         # Add explicitly passed MCP tools if available
         definitions.extend(self._mcp_tools)
+
+        # Hide tools the resolved model profile excludes.
+        profile = resolve_model_profile(self.config.provider, self.config.model)
+        if profile.excluded_tools:
+            definitions = [d for d in definitions if d.name not in profile.excluded_tools]
 
         definitions.sort(key=lambda d: d.name)
         return definitions
@@ -924,6 +945,7 @@ class AgentLoop:
                     tools=tools_to_send,
                     temperature=self.config.temperature,
                     max_tokens=self.config.max_tokens,
+                    **self._profile_kwargs(),
                 )
             except Exception as e:
                 return AgentResponse(
@@ -1211,6 +1233,7 @@ class AgentLoop:
                     tools=tools_to_send,
                     temperature=self.config.temperature,
                     max_tokens=self.config.max_tokens,
+                    **self._profile_kwargs(),
                 ):
                     # Check for cancellation during streaming
                     if self._cancelled:
@@ -1272,6 +1295,7 @@ class AgentLoop:
                         tools=tools_to_send,
                         temperature=self.config.temperature,
                         max_tokens=self.config.max_tokens,
+                        **self._profile_kwargs(),
                     )
                     if fallback.tool_calls:
                         tool_calls.extend(fallback.tool_calls)
@@ -1304,6 +1328,7 @@ class AgentLoop:
                         tools=tools_to_send,
                         temperature=self.config.temperature,
                         max_tokens=self.config.max_tokens,
+                        **self._profile_kwargs(),
                     )
                     if fallback.tool_calls:
                         tool_calls.extend(fallback.tool_calls)

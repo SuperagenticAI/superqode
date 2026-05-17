@@ -198,6 +198,7 @@ nav:
     - 🔁 A2A Providers: providers/a2a.md
     - 💻 Local Models: providers/local.md
     - 🌐 OpenResponses: providers/openresponses.md
+    - 🎛️ Model Profiles: providers/profiles.md
 
   - 🔗 Integration:
     - integration/index.md
