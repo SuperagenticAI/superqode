@@ -162,14 +162,10 @@ class ACPPermissionStore:
             return
         if self._path.exists():
             try:
-                text = await asyncio.to_thread(
-                    self._path.read_text, encoding="utf-8"
-                )
+                text = await asyncio.to_thread(self._path.read_text, encoding="utf-8")
                 self._parse(text)
             except Exception as e:
-                await self._warn(
-                    f"[permission_store] failed to load {self._path}: {e}"
-                )
+                await self._warn(f"[permission_store] failed to load {self._path}: {e}")
         self._loaded = True
 
     def _parse(self, content: str) -> None:
@@ -216,14 +212,10 @@ class ACPPermissionStore:
                 for key, dec in sorted(self._cache.items())
             ]
             content = "\n".join(self._HEADER_LINES + tuple(rows) + ("",))
-            await asyncio.to_thread(
-                self._path.write_text, content, encoding="utf-8"
-            )
+            await asyncio.to_thread(self._path.write_text, content, encoding="utf-8")
         except Exception as e:
             # In-memory cache stays correct; just log.
-            await self._warn(
-                f"[permission_store] failed to save {self._path}: {e}"
-            )
+            await self._warn(f"[permission_store] failed to save {self._path}: {e}")
 
     # ------------------------------------------------------------------
     # Public API
@@ -235,9 +227,7 @@ class ACPPermissionStore:
             await self._ensure_loaded()
             return self._cache.get(self._key(scope, tool))
 
-    async def set(
-        self, scope: str, tool: str, decision: PermissionDecision
-    ) -> None:
+    async def set(self, scope: str, tool: str, decision: PermissionDecision) -> None:
         """Persist a decision. Overwrites any prior entry for the same pair."""
         async with self._lock:
             await self._ensure_loaded()
@@ -261,9 +251,7 @@ class ACPPermissionStore:
                     if self._path.exists():
                         await asyncio.to_thread(self._path.unlink)
                 except Exception as e:
-                    await self._warn(
-                        f"[permission_store] failed to delete {self._path}: {e}"
-                    )
+                    await self._warn(f"[permission_store] failed to delete {self._path}: {e}")
             return True
 
     async def clear(self) -> None:
@@ -274,9 +262,7 @@ class ACPPermissionStore:
                 if self._path.exists():
                     await asyncio.to_thread(self._path.unlink)
             except Exception as e:
-                await self._warn(
-                    f"[permission_store] failed to delete {self._path}: {e}"
-                )
+                await self._warn(f"[permission_store] failed to delete {self._path}: {e}")
 
     async def list_all(self) -> Dict[str, PermissionDecision]:
         """Snapshot of every stored decision keyed by ``scope/tool``."""

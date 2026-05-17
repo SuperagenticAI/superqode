@@ -171,7 +171,7 @@ def test_extract_qwen_style_tool_call_tag():
     proper tool_calls and strip from content."""
     gw = LiteLLMGateway()
     content = (
-        'I will read the README.\n'
+        "I will read the README.\n"
         '<tool_call>{"name": "read_file", "arguments": {"path": "README.md"}}</tool_call>'
     )
     stripped, calls = gw._extract_inline_tool_calls(content)
@@ -343,7 +343,11 @@ async def test_mlx_chat_clamps_temperature_and_extracts_inline_tool_calls(monkey
             ToolDefinition(
                 name="read_file",
                 description="Read a file",
-                parameters={"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+                parameters={
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
             )
         ],
         temperature=0.9,
@@ -430,7 +434,8 @@ async def test_mlx_stream_extracts_inline_tool_calls(monkeypatch):
 
     gw = LiteLLMGateway()
     chunks = [
-        c async for c in gw.stream_completion(
+        c
+        async for c in gw.stream_completion(
             messages=[Message(role="user", content="list files")],
             model="gemma-mlx",
             provider="mlx",

@@ -63,11 +63,7 @@ def _cached_system_prompt(
     prompt instead of the generic one-liner. Higher levels keep the user's
     explicit choice intact.
     """
-    tuned = (
-        get_provider_prompt(provider, model)
-        if level == SystemPromptLevel.MINIMAL
-        else ""
-    )
+    tuned = get_provider_prompt(provider, model) if level == SystemPromptLevel.MINIMAL else ""
     if tuned:
         prompt = tuned
         if working_directory:
@@ -728,9 +724,7 @@ class AgentLoop:
         except Exception as e:
             return ToolResult(success=False, output="", error=f"Tool execution error: {str(e)}")
 
-    async def _maybe_summarize(
-        self, messages: List["AgentMessage"]
-    ) -> List["AgentMessage"]:
+    async def _maybe_summarize(self, messages: List["AgentMessage"]) -> List["AgentMessage"]:
         """Compact or prune messages when context exceeds the limit.
 
         Strategy:
@@ -760,16 +754,18 @@ class AgentLoop:
 
         if self.on_thinking:
             await self.on_thinking(
-                f"Context management active ({token_count} tokens)."
-                " Compacting earlier turns..."
+                f"Context management active ({token_count} tokens). Compacting earlier turns..."
             )
 
         from .compaction import compact_history
 
         keep_tail = 4
         system_prefix = [m for m in messages if m.role == "system"][:1]
-        body = [m for m in messages if m.role != "system" or m is not system_prefix[0]] \
-            if system_prefix else list(messages)
+        body = (
+            [m for m in messages if m.role != "system" or m is not system_prefix[0]]
+            if system_prefix
+            else list(messages)
+        )
 
         if len(body) > keep_tail:
             head = body[:-keep_tail]
@@ -1054,7 +1050,9 @@ class AgentLoop:
                         if self.on_tool_call:
                             self.on_tool_call(tool_name, tool_args)
 
-                        result = await self._execute_tool(tool_name, tool_args, tool_call_id=tool_call_id)
+                        result = await self._execute_tool(
+                            tool_name, tool_args, tool_call_id=tool_call_id
+                        )
                         tool_calls_made += 1
 
                         if self.on_tool_result:
@@ -1367,7 +1365,9 @@ class AgentLoop:
                         if self.on_tool_call:
                             self.on_tool_call(tool_name, tool_args)
 
-                        result = await self._execute_tool(tool_name, tool_args, tool_call_id=tool_call_id)
+                        result = await self._execute_tool(
+                            tool_name, tool_args, tool_call_id=tool_call_id
+                        )
                         tool_calls_made += 1
 
                         if self.on_tool_result:

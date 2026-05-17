@@ -134,8 +134,7 @@ class ElicitationHandler(Protocol):
     the connection.
     """
 
-    async def __call__(self, request: ElicitRequest) -> ElicitResult:
-        ...
+    async def __call__(self, request: ElicitRequest) -> ElicitResult: ...
 
 
 # ---------------------------------------------------------------------------

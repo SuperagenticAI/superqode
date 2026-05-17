@@ -51,9 +51,7 @@ class RecordingGateway(GatewayInterface):
         if False:
             yield  # pragma: no cover
 
-    async def test_connection(
-        self, provider: str, model: Optional[str] = None
-    ) -> Dict[str, Any]:
+    async def test_connection(self, provider: str, model: Optional[str] = None) -> Dict[str, Any]:
         return {"ok": True}
 
     def get_model_string(self, provider: str, model: str) -> str:
@@ -111,9 +109,7 @@ def test_serialize_skips_empty_messages_and_summarizes_tool_calls():
 
 @pytest.mark.asyncio
 async def test_compact_history_returns_model_summary():
-    gateway = RecordingGateway(
-        [GatewayResponse(content="## Goal\n- summary returned by model")]
-    )
+    gateway = RecordingGateway([GatewayResponse(content="## Goal\n- summary returned by model")])
     messages = [
         AgentMessage(role="user", content="fix README typo"),
         AgentMessage(role="assistant", content="done"),
@@ -177,9 +173,7 @@ async def test_agent_loop_uses_structured_compaction_when_over_limit():
 
     # Seed long history so token estimator goes over budget.
     long_text = "x " * 200
-    history = [
-        AgentMessage(role="user", content=f"step {i}: {long_text}") for i in range(6)
-    ]
+    history = [AgentMessage(role="user", content=f"step {i}: {long_text}") for i in range(6)]
 
     compacted = await loop._maybe_summarize(history)
 
@@ -212,9 +206,7 @@ async def test_agent_loop_falls_back_to_prune_when_compaction_fails():
     )
 
     long_text = "y " * 200
-    history = [
-        AgentMessage(role="user", content=f"step {i}: {long_text}") for i in range(6)
-    ]
+    history = [AgentMessage(role="user", content=f"step {i}: {long_text}") for i in range(6)]
 
     result = await loop._maybe_summarize(history)
 

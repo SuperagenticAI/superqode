@@ -79,7 +79,12 @@ async def probe(model: str, provider: str = "ollama") -> Dict[str, Any]:
             temperature=0.0,
         )
     except Exception as e:
-        return {"model": model, "ok": False, "error": f"{type(e).__name__}: {e}", "shaping": pre_kwargs}
+        return {
+            "model": model,
+            "ok": False,
+            "error": f"{type(e).__name__}: {e}",
+            "shaping": pre_kwargs,
+        }
 
     tool_calls = resp.tool_calls or []
     has_native_or_extracted = bool(tool_calls)
@@ -108,9 +113,9 @@ async def main() -> int:
     targets: List[tuple] = []
     for r in raw:
         if r.startswith("mlx="):
-            targets.append(("mlx", r[len("mlx="):]))
+            targets.append(("mlx", r[len("mlx=") :]))
         elif r.startswith("ollama="):
-            targets.append(("ollama", r[len("ollama="):]))
+            targets.append(("ollama", r[len("ollama=") :]))
         else:
             targets.append(("ollama", r))
 

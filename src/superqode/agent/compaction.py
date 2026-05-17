@@ -77,9 +77,7 @@ def serialize_for_compaction(messages: Iterable["AgentMessage"]) -> str:
         role = m.role
         content = (m.content or "").strip()
         if m.tool_calls:
-            names = ", ".join(
-                tc.get("function", {}).get("name", "?") for tc in m.tool_calls
-            )
+            names = ", ".join(tc.get("function", {}).get("name", "?") for tc in m.tool_calls)
             tool_line = f"[tool calls: {names}]"
             content = (content + "\n" + tool_line).strip() if content else tool_line
         if not content:

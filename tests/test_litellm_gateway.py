@@ -82,7 +82,11 @@ async def test_ds4_streaming_uses_direct_local_gateway(monkeypatch):
             role="assistant",
             finish_reason="tool_use",
             tool_calls=[
-                {"id": "call-1", "type": "function", "function": {"name": "read_file", "arguments": "{}"}}
+                {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {"name": "read_file", "arguments": "{}"},
+                }
             ],
         )
 

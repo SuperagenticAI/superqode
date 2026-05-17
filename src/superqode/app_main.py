@@ -6521,9 +6521,7 @@ team:
             from superqode.acp.render import render_acp_tool_output
 
             status = update.get("status", "")
-            raw_output = (
-                update.get("rawOutput") or update.get("output") or update.get("result")
-            )
+            raw_output = update.get("rawOutput") or update.get("output") or update.get("result")
             content = update.get("content")
             kind = update.get("kind") or ""
             tool_title = update.get("title") or "Tool"

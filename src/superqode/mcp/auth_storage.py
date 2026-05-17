@@ -387,14 +387,11 @@ class TokenStorage(Protocol):
     backend (e.g. Vault) could implement this with sync wrappers.
     """
 
-    def save_tokens(self, server_url: str, tokens: "OAuthTokens") -> None:
-        ...
+    def save_tokens(self, server_url: str, tokens: "OAuthTokens") -> None: ...
 
-    def load_tokens(self, server_url: str) -> Optional["OAuthTokens"]:
-        ...
+    def load_tokens(self, server_url: str) -> Optional["OAuthTokens"]: ...
 
-    def delete_tokens(self, server_url: str) -> bool:
-        ...
+    def delete_tokens(self, server_url: str) -> bool: ...
 
 
 def _has_keyring() -> bool:
@@ -402,6 +399,7 @@ def _has_keyring() -> bool:
     backend (some envs install the lib but no daemon)."""
     try:
         import keyring  # type: ignore
+
         # ``get_keyring()`` raises on environments where no backend is
         # available rather than returning None — guard with broad except.
         keyring.get_keyring()
@@ -429,6 +427,7 @@ class KeyringTokenStorage:
 
     def __init__(self, service: Optional[str] = None) -> None:
         import keyring  # type: ignore  # local import — see soft-dep note
+
         self._keyring = keyring
         self._service = service or self.SERVICE
 
@@ -441,9 +440,7 @@ class KeyringTokenStorage:
 
     def save_tokens(self, server_url: str, tokens: "OAuthTokens") -> None:
         identity = self._identity(server_url)
-        self._keyring.set_password(
-            self._service, identity, json.dumps(tokens.to_dict())
-        )
+        self._keyring.set_password(self._service, identity, json.dumps(tokens.to_dict()))
 
     def load_tokens(self, server_url: str) -> Optional["OAuthTokens"]:
         identity = self._identity(server_url)

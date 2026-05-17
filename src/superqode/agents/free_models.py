@@ -157,9 +157,7 @@ def _parse_opencode_table(stdout: str, agent_id: str) -> List[FreeModel]:
                 raw_id = item.get("id") or item.get("model") or item.get("name") or ""
                 if not raw_id:
                     continue
-                model_id = (
-                    raw_id if str(raw_id).startswith("opencode/") else f"opencode/{raw_id}"
-                )
+                model_id = raw_id if str(raw_id).startswith("opencode/") else f"opencode/{raw_id}"
                 if not _has_free_pricing(item, model_id=model_id):
                     continue
                 models.append(

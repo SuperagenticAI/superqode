@@ -626,6 +626,7 @@ def cli_main(
     # also means downstream subprocesses (e.g. ACP clients we may
     # later spawn) inherit it.
     import os as _os
+
     if verbose_logs and not quiet_logs:
         _os.environ["SUPERQODE_LOG_VERBOSITY"] = "verbose"
     elif quiet_logs and not verbose_logs:
@@ -1573,7 +1574,12 @@ def agents_install(agent):
 
 
 @agents.command("free-models")
-@click.option("--agent", "agent_filter", default=None, help="Only show free models from this agent (identity or short_name)")
+@click.option(
+    "--agent",
+    "agent_filter",
+    default=None,
+    help="Only show free models from this agent (identity or short_name)",
+)
 @click.option("--refresh", is_flag=True, help="Skip the discovery cache and re-probe live")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of a table")
 def agents_free_models(agent_filter, refresh, as_json):

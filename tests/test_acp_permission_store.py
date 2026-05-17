@@ -200,9 +200,7 @@ async def test_stored_allow_always_short_circuits_user_prompt(tmp_path):
     """The whole point of the store: once the user has said "allow
     always" for a tool, never bother them again about it."""
     client = _client(tmp_path)
-    await client.permission_store.set(
-        "opencode.ai", "bash", PermissionDecision.ALLOW_ALWAYS
-    )
+    await client.permission_store.set("opencode.ai", "bash", PermissionDecision.ALLOW_ALWAYS)
 
     asked = False
 
@@ -309,9 +307,7 @@ async def test_stored_decision_falls_back_to_once_when_always_option_missing(tmp
     user previously stored ``allow_always`` for it, we should still
     respect their intent for the current call by picking ``allow_once``."""
     client = _client(tmp_path)
-    await client.permission_store.set(
-        "opencode.ai", "bash", PermissionDecision.ALLOW_ALWAYS
-    )
+    await client.permission_store.set("opencode.ai", "bash", PermissionDecision.ALLOW_ALWAYS)
 
     once_only = [
         {"kind": "allow_once", "optionId": "ao", "name": "Allow once"},

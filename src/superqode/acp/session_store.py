@@ -164,9 +164,7 @@ class ACPSessionStore:
                 await asyncio.to_thread(self._init_sync)
                 self._initialized = True
             except Exception as e:
-                await self._warn(
-                    f"[session_store] failed to initialize {self._path}: {e}"
-                )
+                await self._warn(f"[session_store] failed to initialize {self._path}: {e}")
 
     def _init_sync(self) -> None:
         conn = sqlite3.connect(self._path)
@@ -270,46 +268,34 @@ class ACPSessionStore:
         """
         await self._ensure_initialized()
         try:
-            await asyncio.to_thread(
-                self._touch_sync, agent_identity, session_id, time.time()
-            )
+            await asyncio.to_thread(self._touch_sync, agent_identity, session_id, time.time())
         except Exception as e:
             await self._warn(f"[session_store] failed to touch session: {e}")
 
-    def _touch_sync(
-        self, agent_identity: str, session_id: str, now: float
-    ) -> None:
+    def _touch_sync(self, agent_identity: str, session_id: str, now: float) -> None:
         conn = sqlite3.connect(self._path)
         try:
             conn.execute(
-                "UPDATE sessions SET last_used_at = ? "
-                "WHERE agent_identity = ? AND session_id = ?",
+                "UPDATE sessions SET last_used_at = ? WHERE agent_identity = ? AND session_id = ?",
                 (now, agent_identity, session_id),
             )
             conn.commit()
         finally:
             conn.close()
 
-    async def update_name(
-        self, agent_identity: str, session_id: str, name: str
-    ) -> None:
+    async def update_name(self, agent_identity: str, session_id: str, name: str) -> None:
         """Rename a session — useful for the CLI ``acp rename`` flow."""
         await self._ensure_initialized()
         try:
-            await asyncio.to_thread(
-                self._update_name_sync, agent_identity, session_id, name
-            )
+            await asyncio.to_thread(self._update_name_sync, agent_identity, session_id, name)
         except Exception as e:
             await self._warn(f"[session_store] failed to rename: {e}")
 
-    def _update_name_sync(
-        self, agent_identity: str, session_id: str, name: str
-    ) -> None:
+    def _update_name_sync(self, agent_identity: str, session_id: str, name: str) -> None:
         conn = sqlite3.connect(self._path)
         try:
             conn.execute(
-                "UPDATE sessions SET name = ? "
-                "WHERE agent_identity = ? AND session_id = ?",
+                "UPDATE sessions SET name = ? WHERE agent_identity = ? AND session_id = ?",
                 (name, agent_identity, session_id),
             )
             conn.commit()
@@ -320,9 +306,7 @@ class ACPSessionStore:
         """Remove a single session row. Returns True if a row was removed."""
         await self._ensure_initialized()
         try:
-            removed = await asyncio.to_thread(
-                self._delete_sync, agent_identity, session_id
-            )
+            removed = await asyncio.to_thread(self._delete_sync, agent_identity, session_id)
             return bool(removed)
         except Exception as e:
             await self._warn(f"[session_store] failed to delete: {e}")
@@ -332,8 +316,7 @@ class ACPSessionStore:
         conn = sqlite3.connect(self._path)
         try:
             cur = conn.execute(
-                "DELETE FROM sessions "
-                "WHERE agent_identity = ? AND session_id = ?",
+                "DELETE FROM sessions WHERE agent_identity = ? AND session_id = ?",
                 (agent_identity, session_id),
             )
             conn.commit()
@@ -361,23 +344,17 @@ class ACPSessionStore:
     # Read operations
     # ------------------------------------------------------------------
 
-    async def get(
-        self, agent_identity: str, session_id: str
-    ) -> Optional[StoredSession]:
+    async def get(self, agent_identity: str, session_id: str) -> Optional[StoredSession]:
         """Fetch a single row by ``(agent_identity, session_id)``."""
         await self._ensure_initialized()
         try:
-            row = await asyncio.to_thread(
-                self._get_sync, agent_identity, session_id
-            )
+            row = await asyncio.to_thread(self._get_sync, agent_identity, session_id)
         except Exception as e:
             await self._warn(f"[session_store] read failed: {e}")
             return None
         return StoredSession.from_row(row) if row else None
 
-    def _get_sync(
-        self, agent_identity: str, session_id: str
-    ) -> Optional[tuple]:
+    def _get_sync(self, agent_identity: str, session_id: str) -> Optional[tuple]:
         conn = sqlite3.connect(self._path)
         try:
             cur = conn.execute(
@@ -406,9 +383,7 @@ class ACPSessionStore:
         """
         await self._ensure_initialized()
         try:
-            rows = await asyncio.to_thread(
-                self._list_sync, agent_identity, cwd, limit
-            )
+            rows = await asyncio.to_thread(self._list_sync, agent_identity, cwd, limit)
         except Exception as e:
             await self._warn(f"[session_store] list failed: {e}")
             return []

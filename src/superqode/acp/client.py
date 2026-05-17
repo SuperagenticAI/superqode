@@ -200,18 +200,13 @@ class ACPClient:
             # agent advertised loadSession capability — otherwise we'd
             # send a method the agent doesn't implement and get an error.
             resumed = False
-            if (
-                self.resume_session_id
-                and self._agent_capabilities.get("loadSession")
-            ):
+            if self.resume_session_id and self._agent_capabilities.get("loadSession"):
                 try:
                     await self._load_session(self.resume_session_id)
                     resumed = True
                 except Exception as e:
                     if self.on_thinking:
-                        await self.on_thinking(
-                            f"[resume failed, falling back to new session] {e}"
-                        )
+                        await self.on_thinking(f"[resume failed, falling back to new session] {e}")
 
             if not resumed:
                 await self._new_session()
@@ -382,9 +377,7 @@ class ACPClient:
         if self.session_store is None or not self.agent_identity:
             return []
         cwd = str(self.project_root) if cwd_only else None
-        return await self.session_store.list_for_agent(
-            self.agent_identity, cwd=cwd, limit=limit
-        )
+        return await self.session_store.list_for_agent(self.agent_identity, cwd=cwd, limit=limit)
 
     # ========================================================================
     # Internal Methods
@@ -790,9 +783,11 @@ class ACPClient:
 
         # Step 1: persistent store lookup.
         if self.permission_store is not None and self.permission_scope:
-            tool_key = tool_call.get("title") or (tool_call.get("rawInput") or {}).get(
-                "tool_name"
-            ) or "unknown"
+            tool_key = (
+                tool_call.get("title")
+                or (tool_call.get("rawInput") or {}).get("tool_name")
+                or "unknown"
+            )
             stored = await self.permission_store.get(self.permission_scope, tool_key)
             if stored is not None:
                 target_kind = stored.value  # "allow_always" | "reject_always"
@@ -821,11 +816,7 @@ class ACPClient:
         # Step 2: user callback. If they pick an ``always`` option, save it.
         if self.on_permission_request:
             option_id = await self.on_permission_request(options, tool_call)
-            if (
-                self.permission_store is not None
-                and self.permission_scope
-                and option_id
-            ):
+            if self.permission_store is not None and self.permission_scope and option_id:
                 picked = next(
                     (o for o in options if o.get("optionId") == option_id),
                     None,
@@ -833,12 +824,12 @@ class ACPClient:
                 if picked is not None:
                     decision = PermissionDecision.from_option_kind(picked.get("kind"))
                     if decision is not None:
-                        tool_key = tool_call.get("title") or (
-                            tool_call.get("rawInput") or {}
-                        ).get("tool_name") or "unknown"
-                        await self.permission_store.set(
-                            self.permission_scope, tool_key, decision
+                        tool_key = (
+                            tool_call.get("title")
+                            or (tool_call.get("rawInput") or {}).get("tool_name")
+                            or "unknown"
                         )
+                        await self.permission_store.set(self.permission_scope, tool_key, decision)
             return {
                 "outcome": {
                     "outcome": "selected",

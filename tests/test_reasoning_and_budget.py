@@ -29,13 +29,43 @@ from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
     "provider,model,level,expected",
     [
         # Anthropic-shape (Claude, DS4) → thinking.budget_tokens
-        ("anthropic", "claude-sonnet-4", "low", {"thinking": {"type": "enabled", "budget_tokens": 1024}}),
-        ("anthropic", "claude-sonnet-4", "medium", {"thinking": {"type": "enabled", "budget_tokens": 4096}}),
-        ("anthropic", "claude-sonnet-4", "high", {"thinking": {"type": "enabled", "budget_tokens": 16000}}),
-        ("anthropic", "claude-sonnet-4", "max", {"thinking": {"type": "enabled", "budget_tokens": 31999}}),
-        ("ds4", "deepseek-v4-flash", "high", {"thinking": {"type": "enabled", "budget_tokens": 16000}}),
+        (
+            "anthropic",
+            "claude-sonnet-4",
+            "low",
+            {"thinking": {"type": "enabled", "budget_tokens": 1024}},
+        ),
+        (
+            "anthropic",
+            "claude-sonnet-4",
+            "medium",
+            {"thinking": {"type": "enabled", "budget_tokens": 4096}},
+        ),
+        (
+            "anthropic",
+            "claude-sonnet-4",
+            "high",
+            {"thinking": {"type": "enabled", "budget_tokens": 16000}},
+        ),
+        (
+            "anthropic",
+            "claude-sonnet-4",
+            "max",
+            {"thinking": {"type": "enabled", "budget_tokens": 31999}},
+        ),
+        (
+            "ds4",
+            "deepseek-v4-flash",
+            "high",
+            {"thinking": {"type": "enabled", "budget_tokens": 16000}},
+        ),
         # Model-name-based detection: provider isn't "ds4" but the model is
-        ("openai-compatible", "deepseek-v4-flash", "low", {"thinking": {"type": "enabled", "budget_tokens": 1024}}),
+        (
+            "openai-compatible",
+            "deepseek-v4-flash",
+            "low",
+            {"thinking": {"type": "enabled", "budget_tokens": 1024}},
+        ),
         # OpenAI o-series → reasoning_effort
         ("openai", "gpt-5", "low", {"reasoning_effort": "low"}),
         ("openai", "gpt-5", "medium", {"reasoning_effort": "medium"}),
@@ -66,9 +96,7 @@ def test_reasoning_effort_unknown_level_returns_empty():
 
 def test_reasoning_effort_is_case_insensitive():
     gw = LiteLLMGateway()
-    assert gw._resolve_reasoning_effort("openai", "gpt-5", "HIGH") == {
-        "reasoning_effort": "high"
-    }
+    assert gw._resolve_reasoning_effort("openai", "gpt-5", "HIGH") == {"reasoning_effort": "high"}
     assert gw._resolve_reasoning_effort("anthropic", "claude", "  Medium  ") == {
         "thinking": {"type": "enabled", "budget_tokens": 4096}
     }
@@ -330,7 +358,9 @@ async def test_budget_credited_from_response_usage(monkeypatch):
     class _FakeResponse:
         choices = [_Choice()]
         model = "gpt-5"
-        usage = type("U", (), {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150})()
+        usage = type(
+            "U", (), {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+        )()
         _hidden_params = {}
 
     class _FakeLiteLLM:

@@ -79,7 +79,12 @@ def test_opencode_parser_handles_json_document_format():
     parser = get_parser("opencode_models_table")
     payload = {
         "models": [
-            {"id": "free-1", "name": "Free One", "limit": {"context": 1000}, "pricing": {"input": 0}},
+            {
+                "id": "free-1",
+                "name": "Free One",
+                "limit": {"context": 1000},
+                "pricing": {"input": 0},
+            },
             {"id": "paid-1", "name": "Paid", "pricing": {"input": 1.0}},
         ]
     }

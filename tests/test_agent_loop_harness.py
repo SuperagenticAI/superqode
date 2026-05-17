@@ -456,9 +456,7 @@ def test_non_ds4_session_keeps_generic_minimal_prompt():
 def test_explicit_full_level_overrides_provider_prompt():
     """When users opt into FULL/EXPERT, the verbose prompt wins over the
     DS4 tuned default; the level is an explicit user choice."""
-    prompt = _build_loop_system_prompt(
-        "ds4", "deepseek-v4-flash", level=SystemPromptLevel.FULL
-    )
+    prompt = _build_loop_system_prompt("ds4", "deepseek-v4-flash", level=SystemPromptLevel.FULL)
     assert DS4_PROMPT not in prompt
     assert "FILE OPERATIONS" in prompt
 
@@ -466,7 +464,5 @@ def test_explicit_full_level_overrides_provider_prompt():
 def test_deepseek_v4_model_id_triggers_tuned_prompt_via_any_provider():
     """An OpenAI-compatible provider hosting deepseek-v4 should still get
     the DS4 prompt — we key on model id, not just provider id."""
-    prompt = _build_loop_system_prompt(
-        "openai-compatible", "deepseek-v4-flash"
-    )
+    prompt = _build_loop_system_prompt("openai-compatible", "deepseek-v4-flash")
     assert "DeepSeek V4 Flash" in prompt

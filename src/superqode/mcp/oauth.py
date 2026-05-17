@@ -183,9 +183,7 @@ class MCPOAuthProvider:
         # RFC 9728 — Protected Resource Metadata. If we get auth-server
         # pointers from it, we follow the first one for the AS metadata.
         try:
-            prm = await loop.run_in_executor(
-                None, lambda: self._fetch_metadata(prm_url)
-            )
+            prm = await loop.run_in_executor(None, lambda: self._fetch_metadata(prm_url))
         except Exception as e:
             prm = None
             logger.debug(f"PRM discovery failed for {server_url}: {e}")
@@ -196,9 +194,7 @@ class MCPOAuthProvider:
             for auth_server in auth_servers:
                 if not auth_server:
                     continue
-                as_meta_url = (
-                    f"{auth_server.rstrip('/')}/.well-known/oauth-authorization-server"
-                )
+                as_meta_url = f"{auth_server.rstrip('/')}/.well-known/oauth-authorization-server"
                 try:
                     as_meta = await loop.run_in_executor(
                         None, lambda u=as_meta_url: self._fetch_metadata(u)
@@ -215,9 +211,7 @@ class MCPOAuthProvider:
         # didn't yield anything actionable.
         if "authorization_endpoint" not in merged:
             try:
-                as_meta = await loop.run_in_executor(
-                    None, lambda: self._fetch_metadata(as_url)
-                )
+                as_meta = await loop.run_in_executor(None, lambda: self._fetch_metadata(as_url))
             except Exception as e:
                 as_meta = None
                 logger.debug(f"OAuth AS discovery failed for {server_url}: {e}")

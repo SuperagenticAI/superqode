@@ -1050,9 +1050,7 @@ def show_free_models(
             if r.error and not r.used_fallback:
                 _console.print(f"[dim]{r.agent_id}: {r.error}[/dim]")
             elif r.used_fallback and r.error:
-                _console.print(
-                    f"[dim]{r.agent_id}: using fallback ({r.error})[/dim]"
-                )
+                _console.print(f"[dim]{r.agent_id}: using fallback ({r.error})[/dim]")
         return 0
 
     try:

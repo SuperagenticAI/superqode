@@ -161,7 +161,7 @@ class LiteLLMGateway(GatewayInterface):
             if model.startswith("ollama_chat/"):
                 return model
             if model.startswith("ollama/"):
-                model = model[len("ollama/"):]
+                model = model[len("ollama/") :]
             return f"ollama_chat/{model}"
 
         provider_def = PROVIDERS.get(provider)
@@ -367,9 +367,7 @@ class LiteLLMGateway(GatewayInterface):
         marker = {field: {"type": "ephemeral"}}
 
         system_idx = [i for i, m in enumerate(message_dicts) if m.get("role") == "system"][:2]
-        non_system_idx = [
-            i for i, m in enumerate(message_dicts) if m.get("role") != "system"
-        ][-2:]
+        non_system_idx = [i for i, m in enumerate(message_dicts) if m.get("role") != "system"][-2:]
         targets = set(system_idx + non_system_idx)
 
         out: List[Dict[str, Any]] = []
@@ -381,9 +379,7 @@ class LiteLLMGateway(GatewayInterface):
         return out
 
     @staticmethod
-    def _mark_with_cache(
-        msg: Dict[str, Any], field: str, value: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _mark_with_cache(msg: Dict[str, Any], field: str, value: Dict[str, Any]) -> Dict[str, Any]:
         """Tag the last text block of ``msg`` with ``{field: value}``.
 
         Converts string content to a one-block list so providers that
@@ -465,9 +461,7 @@ class LiteLLMGateway(GatewayInterface):
 
         model_lower = (model or "").lower()
         is_anthropic_shape = (
-            provider == "anthropic"
-            or provider == "ds4"
-            or "deepseek-v4" in model_lower
+            provider == "anthropic" or provider == "ds4" or "deepseek-v4" in model_lower
         )
         if is_anthropic_shape:
             return {
@@ -632,7 +626,10 @@ class LiteLLMGateway(GatewayInterface):
         # ``name`` (or ``function_name``) field and ``parameters``/``arguments``.
         # Constrained to ``name``-shaped keys so we don't grab arbitrary JSON
         # the model cited in prose (e.g. example payloads in an explanation).
-        ("bare", r'^\s*(\{\s*"(?:function_name|name)"\s*:\s*"[^"]+"\s*,\s*"(?:parameters|arguments)"\s*:\s*\{.*?\}\s*\})\s*$'),
+        (
+            "bare",
+            r'^\s*(\{\s*"(?:function_name|name)"\s*:\s*"[^"]+"\s*,\s*"(?:parameters|arguments)"\s*:\s*\{.*?\}\s*\})\s*$',
+        ),
     ]
 
     def _extract_inline_tool_calls(
@@ -1208,9 +1205,7 @@ class LiteLLMGateway(GatewayInterface):
             if msg.role == "system":
                 if msg.content:
                     system_parts.append(
-                        msg.content
-                        if isinstance(msg.content, str)
-                        else json.dumps(msg.content)
+                        msg.content if isinstance(msg.content, str) else json.dumps(msg.content)
                     )
                 continue
 
@@ -1470,14 +1465,16 @@ class LiteLLMGateway(GatewayInterface):
                 if block.get("type") == "text":
                     text_content += block.get("text", "")
                 elif block.get("type") == "tool_use":
-                    tool_calls.append({
-                        "id": block.get("id", ""),
-                        "type": "function",
-                        "function": {
-                            "name": block.get("name", ""),
-                            "arguments": json.dumps(block.get("input", {})),
-                        },
-                    })
+                    tool_calls.append(
+                        {
+                            "id": block.get("id", ""),
+                            "type": "function",
+                            "function": {
+                                "name": block.get("name", ""),
+                                "arguments": json.dumps(block.get("input", {})),
+                            },
+                        }
+                    )
 
             usage_data = response_data.get("usage", {})
             usage = None
@@ -1485,7 +1482,8 @@ class LiteLLMGateway(GatewayInterface):
                 usage = Usage(
                     prompt_tokens=usage_data.get("input_tokens", 0),
                     completion_tokens=usage_data.get("output_tokens", 0),
-                    total_tokens=usage_data.get("input_tokens", 0) + usage_data.get("output_tokens", 0),
+                    total_tokens=usage_data.get("input_tokens", 0)
+                    + usage_data.get("output_tokens", 0),
                 )
                 if budget_for_credit is not None:
                     budget_for_credit.credit(usage.total_tokens)
@@ -1681,12 +1679,8 @@ class LiteLLMGateway(GatewayInterface):
 
                             usage_obj: Optional[Usage] = None
                             if final_usage_data:
-                                prompt_tokens = int(
-                                    final_usage_data.get("input_tokens") or 0
-                                )
-                                completion_tokens = int(
-                                    final_usage_data.get("output_tokens") or 0
-                                )
+                                prompt_tokens = int(final_usage_data.get("input_tokens") or 0)
+                                completion_tokens = int(final_usage_data.get("output_tokens") or 0)
                                 usage_obj = Usage(
                                     prompt_tokens=prompt_tokens,
                                     completion_tokens=completion_tokens,
@@ -1892,9 +1886,7 @@ class LiteLLMGateway(GatewayInterface):
 
         # Build request
         request_kwargs = {
-            "messages": self._apply_prompt_caching(
-                self._convert_messages(messages), provider
-            ),
+            "messages": self._apply_prompt_caching(self._convert_messages(messages), provider),
             "timeout": self.timeout,
         }
 
@@ -1921,9 +1913,7 @@ class LiteLLMGateway(GatewayInterface):
         structured_output_mode = kwargs.pop("structured_output_mode", None)
         response_schema = kwargs.get("response_schema")
         if reasoning_effort:
-            request_kwargs.update(
-                self._resolve_reasoning_effort(provider, model, reasoning_effort)
-            )
+            request_kwargs.update(self._resolve_reasoning_effort(provider, model, reasoning_effort))
         if structured_output_mode:
             request_kwargs.update(
                 self._resolve_structured_output_mode(
@@ -2153,9 +2143,7 @@ class LiteLLMGateway(GatewayInterface):
 
         # Build request
         request_kwargs = {
-            "messages": self._apply_prompt_caching(
-                self._convert_messages(messages), provider
-            ),
+            "messages": self._apply_prompt_caching(self._convert_messages(messages), provider),
             "stream": True,
             "timeout": self.timeout,
         }
@@ -2181,9 +2169,7 @@ class LiteLLMGateway(GatewayInterface):
         structured_output_mode = kwargs.pop("structured_output_mode", None)
         response_schema = kwargs.get("response_schema")
         if reasoning_effort:
-            request_kwargs.update(
-                self._resolve_reasoning_effort(provider, model, reasoning_effort)
-            )
+            request_kwargs.update(self._resolve_reasoning_effort(provider, model, reasoning_effort))
         if structured_output_mode:
             request_kwargs.update(
                 self._resolve_structured_output_mode(

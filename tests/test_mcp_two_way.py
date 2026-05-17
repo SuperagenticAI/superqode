@@ -116,9 +116,7 @@ def test_parse_elicitation_request_tolerates_missing_fields():
 def test_parse_elicitation_request_accepts_schema_alias():
     """Some non-canonical servers use ``schema`` instead of
     ``requestedSchema``. Accept both rather than rejecting."""
-    req = parse_elicitation_request(
-        {"message": "x", "schema": {"type": "string"}}
-    )
+    req = parse_elicitation_request({"message": "x", "schema": {"type": "string"}})
     assert req.requested_schema == {"type": "string"}
 
 
@@ -130,17 +128,13 @@ def test_parse_elicitation_request_accepts_schema_alias():
 @pytest.mark.asyncio
 async def test_auto_cancel_handler_cancels():
     """The unattended-environment default. Servers get a clean refusal."""
-    result = await auto_cancel_elicitation_handler(
-        ElicitRequest(message="please respond")
-    )
+    result = await auto_cancel_elicitation_handler(ElicitRequest(message="please respond"))
     assert result.action == "cancel"
 
 
 @pytest.mark.asyncio
 async def test_auto_decline_handler_declines():
-    result = await auto_decline_elicitation_handler(
-        ElicitRequest(message="please respond")
-    )
+    result = await auto_decline_elicitation_handler(ElicitRequest(message="please respond"))
     assert result.action == "decline"
 
 
@@ -189,9 +183,7 @@ async def test_dispatch_routes_request_to_callback():
         return ElicitResult.accept({"answer": "yes"})
 
     handler = make_callback_elicitation_handler(cb)
-    wire = await dispatch_elicitation(
-        handler, {"message": "ok?", "elicitationId": "e1"}
-    )
+    wire = await dispatch_elicitation(handler, {"message": "ok?", "elicitationId": "e1"})
     assert wire == {"action": "accept", "content": {"answer": "yes"}}
     assert len(seen) == 1
     assert seen[0].elicitation_id == "e1"
@@ -256,11 +248,7 @@ def test_parse_sampling_request_extracts_text_from_string_content():
 
 def test_parse_sampling_request_extracts_text_from_block_content():
     req = parse_sampling_request(
-        {
-            "messages": [
-                {"role": "user", "content": {"type": "text", "text": "block-form"}}
-            ]
-        }
+        {"messages": [{"role": "user", "content": {"type": "text", "text": "block-form"}}]}
     )
     assert req.messages[0].text == "block-form"
 
@@ -368,9 +356,7 @@ async def test_dispatch_sampling_rejects_handler_returning_wrong_type():
         return {"role": "assistant", "content": "x"}
 
     with pytest.raises(TypeError):
-        await dispatch_sampling(
-            bad_handler, {"messages": [{"role": "user", "content": "hi"}]}
-        )
+        await dispatch_sampling(bad_handler, {"messages": [{"role": "user", "content": "hi"}]})
 
 
 @pytest.mark.asyncio
@@ -432,9 +418,7 @@ class _FakeGateway:
 async def test_gateway_sampling_handler_routes_through_chat_completion():
     """The whole point of this handler: convert MCP sampling format
     into the gateway's Message list, run the call, package the result."""
-    gw = _FakeGateway(
-        _FakeGatewayResponse(content="summary text", model="claude-sonnet-4")
-    )
+    gw = _FakeGateway(_FakeGatewayResponse(content="summary text", model="claude-sonnet-4"))
     handler = make_gateway_sampling_handler(
         gw, default_model="claude-sonnet-4", default_provider="anthropic"
     )
@@ -474,9 +458,7 @@ async def test_gateway_sampling_handler_applies_max_tokens_cap():
     """A cap means the host gets to limit per-server cost regardless
     of what the server asked for."""
     gw = _FakeGateway(_FakeGatewayResponse(content="x", model="m"))
-    handler = make_gateway_sampling_handler(
-        gw, default_model="m", max_tokens_cap=100
-    )
+    handler = make_gateway_sampling_handler(gw, default_model="m", max_tokens_cap=100)
 
     await handler(
         SamplingRequest(
@@ -493,12 +475,8 @@ async def test_gateway_sampling_handler_uses_cap_when_no_request_max():
     the cap — server should never accidentally exceed the host's
     intended ceiling just by omitting the field."""
     gw = _FakeGateway(_FakeGatewayResponse(content="x", model="m"))
-    handler = make_gateway_sampling_handler(
-        gw, default_model="m", max_tokens_cap=50
-    )
-    await handler(
-        SamplingRequest(messages=[SamplingMessage(role="user", text="hi")])
-    )
+    handler = make_gateway_sampling_handler(gw, default_model="m", max_tokens_cap=50)
+    await handler(SamplingRequest(messages=[SamplingMessage(role="user", text="hi")]))
     assert gw.calls[0]["max_tokens"] == 50
 
 
@@ -522,9 +500,7 @@ async def test_gateway_sampling_handler_empty_content_becomes_empty_string():
     string is the right wire value."""
     gw = _FakeGateway(_FakeGatewayResponse(content=""))
     handler = make_gateway_sampling_handler(gw, default_model="m")
-    result = await handler(
-        SamplingRequest(messages=[SamplingMessage(role="user", text="hi")])
-    )
+    result = await handler(SamplingRequest(messages=[SamplingMessage(role="user", text="hi")]))
     assert result.content_text == ""
 
 
@@ -536,9 +512,7 @@ async def test_gateway_sampling_handler_maps_finish_reasons():
     async def _call(finish: Optional[str]) -> str:
         gw = _FakeGateway(_FakeGatewayResponse(content="x", finish_reason=finish))
         handler = make_gateway_sampling_handler(gw, default_model="m")
-        result = await handler(
-            SamplingRequest(messages=[SamplingMessage(role="user", text="hi")])
-        )
+        result = await handler(SamplingRequest(messages=[SamplingMessage(role="user", text="hi")]))
         return result.stop_reason
 
     assert await _call("length") == "maxTokens"
@@ -554,17 +528,13 @@ async def test_dispatch_sampling_uses_gateway_handler_end_to_end():
     """Full round-trip: JSON wire payload → parse → gateway handler
     → SamplingResult.to_dict → JSON wire payload. This is the path
     real MCP servers will exercise."""
-    gw = _FakeGateway(
-        _FakeGatewayResponse(content="ranked", model="claude-sonnet-4")
-    )
+    gw = _FakeGateway(_FakeGatewayResponse(content="ranked", model="claude-sonnet-4"))
     handler = make_gateway_sampling_handler(gw, default_model="claude-sonnet-4")
 
     wire = await dispatch_sampling(
         handler,
         {
-            "messages": [
-                {"role": "user", "content": "rank these search results"}
-            ],
+            "messages": [{"role": "user", "content": "rank these search results"}],
             "systemPrompt": "Score 0-1.",
             "maxTokens": 100,
         },

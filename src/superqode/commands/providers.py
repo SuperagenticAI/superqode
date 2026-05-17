@@ -691,8 +691,10 @@ def ds4_command(action: str, host: Optional[str]):
     from ..providers.registry import PROVIDERS
 
     provider_def = PROVIDERS.get("ds4")
-    base_url = host or os.environ.get("DS4_HOST") or (
-        provider_def.default_base_url if provider_def else DEFAULT_DS4_HOST
+    base_url = (
+        host
+        or os.environ.get("DS4_HOST")
+        or (provider_def.default_base_url if provider_def else DEFAULT_DS4_HOST)
     )
 
     if action == "server":
@@ -715,21 +717,20 @@ def ds4_command(action: str, host: Optional[str]):
             " RAM headroom (full 1M ctx ≈ 26GB).[/dim]"
         )
         console.print(
-            f"[dim]  • SuperQode talks to it at: {base_url}"
-            " (override with DS4_HOST).[/dim]"
+            f"[dim]  • SuperQode talks to it at: {base_url} (override with DS4_HOST).[/dim]"
         )
         return
 
     client = DS4Client(host=base_url)
 
     if action == "list":
+
         async def _list():
             available = await client.is_available()
             if not available:
                 console.print(f"[red]❌ DS4 not reachable at {base_url}[/red]")
                 console.print(
-                    "Run [cyan]superqode providers ds4 server[/cyan] for a"
-                    " start command."
+                    "Run [cyan]superqode providers ds4 server[/cyan] for a start command."
                 )
                 return 1
             models = await client.list_models()
@@ -796,8 +797,7 @@ def ds4_command(action: str, host: Optional[str]):
             )
         else:
             console.print(
-                f"  • [green]Thinking mode:[/green] {thinking_env}"
-                " (via SUPERQODE_DS4_THINKING)"
+                f"  • [green]Thinking mode:[/green] {thinking_env} (via SUPERQODE_DS4_THINKING)"
             )
 
         tool_mode = os.environ.get("SUPERQODE_DS4_TOOL_MODE", "").strip().lower()

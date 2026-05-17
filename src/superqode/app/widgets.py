@@ -744,6 +744,7 @@ class ConversationLog(RichLog):
         # tool call, not just after they run ``:log verbose`` mid-
         # session. Unknown values silently fall back to ``normal``.
         import os as _os
+
         _initial_mode = (_os.environ.get("SUPERQODE_LOG_VERBOSITY") or "").strip().lower()
         if _initial_mode in ("min", "minimum"):
             _initial_mode = "minimal"

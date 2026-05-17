@@ -114,13 +114,16 @@ Stopping:
 # tuning makes them sensitive to the exact "<tool_call>...</tool_call>" wording.
 # Adding this is non-breaking: the gateway extracts whichever channel the model
 # uses (native tool_calls or inline tags).
-QWEN_PROMPT = LOCAL_PROMPT + """
+QWEN_PROMPT = (
+    LOCAL_PROMPT
+    + """
 
 Tool call format:
 - Prefer the native function-call output. If you must emit a tool call inline,
   use this exact shape on its own line:
   <tool_call>{"name": "<tool>", "arguments": {<json-args>}}</tool_call>
 - Never wrap tool calls in markdown code fences."""
+)
 
 
 # System prompts by level

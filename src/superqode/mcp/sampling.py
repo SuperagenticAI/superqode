@@ -129,8 +129,7 @@ class SamplingResult:
 class SamplingHandler(Protocol):
     """Async callable that turns a ``SamplingRequest`` into a result."""
 
-    async def __call__(self, request: SamplingRequest) -> SamplingResult:
-        ...
+    async def __call__(self, request: SamplingRequest) -> SamplingResult: ...
 
 
 # ---------------------------------------------------------------------------
@@ -316,9 +315,7 @@ def parse_sampling_request(params: Dict[str, Any]) -> SamplingRequest:
         max_tokens=params.get("maxTokens") or params.get("max_tokens"),
         system_prompt=params.get("systemPrompt") or params.get("system_prompt"),
         temperature=params.get("temperature"),
-        model_preferences=(
-            params.get("modelPreferences") or params.get("model_preferences") or {}
-        ),
+        model_preferences=(params.get("modelPreferences") or params.get("model_preferences") or {}),
         include_context=params.get("includeContext") or params.get("include_context"),
         metadata=params.get("metadata") or {},
         meta=params.get("_meta") or {},
@@ -347,7 +344,5 @@ async def dispatch_sampling(
     if not isinstance(result, SamplingResult):
         # Handler returned the wrong type — that's a contract violation,
         # surface as a real error rather than a fake reply.
-        raise TypeError(
-            f"Sampling handler must return SamplingResult, got {type(result).__name__}"
-        )
+        raise TypeError(f"Sampling handler must return SamplingResult, got {type(result).__name__}")
     return result.to_dict()

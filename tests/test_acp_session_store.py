@@ -227,6 +227,7 @@ async def test_corrupted_metadata_does_not_crash_listing(tmp_path):
 
     # Corrupt the JSON column directly.
     import sqlite3
+
     conn = sqlite3.connect(tmp_path / "sessions.db")
     conn.execute(
         "UPDATE sessions SET metadata_json = ? WHERE session_id = ?",
