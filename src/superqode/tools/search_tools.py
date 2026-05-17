@@ -749,32 +749,63 @@ class RepoSearchTool(Tool):
         limit: int,
     ) -> List[str]:
         rg_path = shutil.which("rg")
-        if not rg_path:
-            return []
+        if rg_path:
+            command = [
+                rg_path,
+                "--line-number",
+                "--no-heading",
+                "--color",
+                "never",
+                "-i",
+                "-F",
+                query,
+                str(path),
+            ]
+            if include:
+                command[1:1] = ["-g", include]
 
-        command = [
-            rg_path,
-            "--line-number",
-            "--no-heading",
-            "--color",
-            "never",
-            "-i",
-            "-F",
-            query,
-            str(path),
-        ]
-        if include:
-            command[1:1] = ["-g", include]
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(ctx.working_directory),
+            )
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20)
+            lines = stdout.decode("utf-8", errors="replace").splitlines()
+            return [self._relative_match_line(line, ctx.working_directory) for line in lines[:limit]]
 
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(ctx.working_directory),
-        )
-        stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20)
-        lines = stdout.decode("utf-8", errors="replace").splitlines()
-        return [self._relative_match_line(line, ctx.working_directory) for line in lines[:limit]]
+        # Fallback: use grep or pure-Python search
+        grep_path = shutil.which("grep")
+        if grep_path:
+            command = [grep_path, "-rni", "--include", include or "*", "-F", query, str(path)]
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(ctx.working_directory),
+            )
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20)
+            lines = stdout.decode("utf-8", errors="replace").splitlines()
+            return [self._relative_match_line(line, ctx.working_directory) for line in lines[:limit]]
+
+        # Pure-Python fallback
+        results: List[str] = []
+        query_lower = query.lower()
+        glob_pattern = include or "**/*"
+        for file_path in path.rglob("*") if not include else path.glob(glob_pattern):
+            if not file_path.is_file():
+                continue
+            try:
+                content = file_path.read_text(errors="replace")
+                for line_num, line in enumerate(content.splitlines(), 1):
+                    if query_lower in line.lower():
+                        display = self._relative_display(str(file_path), ctx.working_directory)
+                        results.append(f"{display}:{line_num}:{line.rstrip()}")
+                        if len(results) >= limit:
+                            return results
+            except Exception:
+                continue
+        return results
 
     def _path_score(self, query: str, path: str) -> int:
         query_lower = query.lower()
