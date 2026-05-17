@@ -772,7 +772,9 @@ class RepoSearchTool(Tool):
             )
             stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20)
             lines = stdout.decode("utf-8", errors="replace").splitlines()
-            return [self._relative_match_line(line, ctx.working_directory) for line in lines[:limit]]
+            return [
+                self._relative_match_line(line, ctx.working_directory) for line in lines[:limit]
+            ]
 
         # Fallback: use grep or pure-Python search
         grep_path = shutil.which("grep")
@@ -786,7 +788,9 @@ class RepoSearchTool(Tool):
             )
             stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20)
             lines = stdout.decode("utf-8", errors="replace").splitlines()
-            return [self._relative_match_line(line, ctx.working_directory) for line in lines[:limit]]
+            return [
+                self._relative_match_line(line, ctx.working_directory) for line in lines[:limit]
+            ]
 
         # Pure-Python fallback
         results: List[str] = []
