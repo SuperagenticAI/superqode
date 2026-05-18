@@ -24,6 +24,7 @@ class EffectiveModelPolicy:
     system_level: SystemPromptLevel = SystemPromptLevel.FULL
     tool_profile: str | None = None
     tool_call_format: str | None = None
+    reasoning: str | None = None
     parallel_tools: bool = True
     max_iterations: int = 50
     session_history_limit: int = 20
@@ -89,6 +90,7 @@ def _base_policy(spec: HarnessSpec, profile: str) -> EffectiveModelPolicy:
             system_level=SystemPromptLevel.NO_TOOL,
             tool_profile="none",
             tool_call_format=tool_call_format,
+            reasoning=spec.model_policy.reasoning or "off",
             parallel_tools=False,
             max_iterations=6,
             session_history_limit=8,
@@ -102,6 +104,7 @@ def _base_policy(spec: HarnessSpec, profile: str) -> EffectiveModelPolicy:
             system_level=SystemPromptLevel.MINIMAL,
             tool_profile="ds4",
             tool_call_format=tool_call_format or "compact-json",
+            reasoning=spec.model_policy.reasoning or "low",
             parallel_tools=False,
             max_iterations=25 if profile == "ds4-fast-local" else 40,
             session_history_limit=10 if profile == "ds4-fast-local" else 12,
@@ -115,6 +118,7 @@ def _base_policy(spec: HarnessSpec, profile: str) -> EffectiveModelPolicy:
             system_level=SystemPromptLevel.MINIMAL,
             tool_profile="ds4",
             tool_call_format=tool_call_format or "strict-json",
+            reasoning=spec.model_policy.reasoning,
             parallel_tools=False,
             max_iterations=30,
             session_history_limit=12,
@@ -127,6 +131,7 @@ def _base_policy(spec: HarnessSpec, profile: str) -> EffectiveModelPolicy:
         system_level=SystemPromptLevel.FULL,
         tool_profile=None,
         tool_call_format=tool_call_format,
+        reasoning=spec.model_policy.reasoning,
         parallel_tools=True,
         max_iterations=50,
         session_history_limit=20,
@@ -153,6 +158,10 @@ def _apply_config_overrides(
         values["tool_profile"] = str(config["tool_profile"]).strip().lower() or None
     if "tool_call_format" in config:
         values["tool_call_format"] = str(config["tool_call_format"]).strip().lower() or None
+    if "reasoning" in config:
+        values["reasoning"] = str(config["reasoning"]).strip().lower() or None
+    if "reasoning_effort" in config:
+        values["reasoning"] = str(config["reasoning_effort"]).strip().lower() or None
     if "parallel_tools" in config:
         values["parallel_tools"] = bool(config["parallel_tools"])
     if "max_iterations" in config:

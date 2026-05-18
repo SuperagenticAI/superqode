@@ -72,6 +72,7 @@ def test_no_tool_gemma4_policy_keeps_model_only_contract():
 
     assert policy.system_level == SystemPromptLevel.NO_TOOL
     assert policy.tool_profile == "none"
+    assert policy.reasoning == "off"
     assert policy.parallel_tools is False
     assert policy.max_iterations == 6
 
@@ -90,6 +91,7 @@ def test_model_policy_config_overrides_profile_defaults():
                     "parallel_tools": True,
                     "tool_profile": "coding",
                     "system_prompt_level": "standard",
+                    "reasoning_effort": "high",
                 },
             ),
         }
@@ -103,6 +105,7 @@ def test_model_policy_config_overrides_profile_defaults():
     assert policy.parallel_tools is True
     assert policy.tool_profile == "coding"
     assert policy.system_level == SystemPromptLevel.STANDARD
+    assert policy.reasoning == "high"
 
 
 @pytest.mark.asyncio
@@ -131,12 +134,42 @@ async def test_runtime_backend_applies_gemma4_policy(monkeypatch, tmp_path):
     tool_names = [tool.name for tool in created["kwargs"]["tools"].list()]
     assert config.system_prompt_level == SystemPromptLevel.MINIMAL
     assert config.temperature == 0.2
+    assert config.reasoning_effort is None
     assert config.max_iterations == 30
     assert config.session_history_limit == 12
     assert created["kwargs"]["parallel_tools"] is False
     assert "read_file" in tool_names
     assert "patch" in tool_names
     assert "multi_edit" not in tool_names
+
+
+@pytest.mark.asyncio
+async def test_runtime_backend_applies_no_tool_reasoning_off(monkeypatch, tmp_path):
+    created = {}
+
+    def fake_create_runtime(name, **kwargs):
+        created["name"] = name
+        created["kwargs"] = kwargs
+        return FakeRuntime(**kwargs)
+
+    monkeypatch.setattr("superqode.harness.backends.runtime.create_runtime", fake_create_runtime)
+    backend = RuntimeHarnessBackend("builtin")
+    request = HarnessBackendRequest(
+        spec=get_harness_template("no-tool"),
+        prompt="think",
+        provider="ds4",
+        model="deepseek-v4-flash",
+        working_directory=tmp_path,
+        session_id="s",
+    )
+
+    await backend.run(request)
+
+    config = created["kwargs"]["config"]
+    assert config.tools_enabled is False
+    assert config.reasoning_effort == "off"
+    assert config.system_prompt_level == SystemPromptLevel.NO_TOOL
+    assert created["kwargs"]["parallel_tools"] is False
 
 
 @pytest.mark.asyncio

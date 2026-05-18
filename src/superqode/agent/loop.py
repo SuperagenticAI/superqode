@@ -369,6 +369,7 @@ class AgentConfig:
     # Model parameters (passed through to gateway)
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
+    reasoning_effort: Optional[str] = None
 
     # Plan mode - analyze without executing tools
     plan_mode: bool = False
@@ -949,6 +950,7 @@ class AgentLoop:
                     tools=tools_to_send,
                     temperature=self.config.temperature,
                     max_tokens=self.config.max_tokens,
+                    reasoning_effort=self.config.reasoning_effort,
                     **self._profile_kwargs(),
                 )
             except Exception as e:
@@ -1237,6 +1239,7 @@ class AgentLoop:
                     tools=tools_to_send,
                     temperature=self.config.temperature,
                     max_tokens=self.config.max_tokens,
+                    reasoning_effort=self.config.reasoning_effort,
                     **self._profile_kwargs(),
                 ):
                     # Check for cancellation during streaming
@@ -1299,6 +1302,7 @@ class AgentLoop:
                         tools=tools_to_send,
                         temperature=self.config.temperature,
                         max_tokens=self.config.max_tokens,
+                        reasoning_effort=self.config.reasoning_effort,
                         **self._profile_kwargs(),
                     )
                     if fallback.tool_calls:

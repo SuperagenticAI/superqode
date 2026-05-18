@@ -39,6 +39,7 @@ class RuntimeHarnessBackend:
             tools_enabled=request.spec.flavor != HarnessFlavor.NO_TOOL,
             max_iterations=model_policy.max_iterations,
             temperature=model_policy.temperature,
+            reasoning_effort=model_policy.reasoning,
             enable_session_storage=True,
             session_storage_dir=request.spec.context.session_storage,
             session_id=request.session_id,

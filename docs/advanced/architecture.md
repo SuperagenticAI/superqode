@@ -1,10 +1,27 @@
 # Architecture Overview
 
 SuperQode v2 is organized around a programmable coding-agent harness. The core product is the harness
-kernel: sessions, tools, runtimes, model policy, sandbox policy, validation hooks, events, and backend
-adapters.
+kernel: specs, sessions, tools, runtimes, model policy, sandbox policy, typed outputs, workflows, validation
+hooks, events, and backend adapters.
 
 Higher-level applications should compose through A2A later. They should not define the core architecture.
+
+---
+
+## Mental Model
+
+SuperQode has five distinct layers:
+
+| Layer | Responsibility |
+| --- | --- |
+| Harness | Defines the run contract: flavor, policy, workflow, output, events, and validation |
+| Runtime | Executes the contract through a native loop, SDK, or agent framework adapter |
+| Model policy | Shapes model behavior for hosted models, local models, Gemma4, DS4, and no-tool runs |
+| Tool and sandbox layer | Grants capabilities under explicit read, write, shell, and command policy |
+| Interface | Exposes the harness through CLI, TUI, headless runs, ACP, and later A2A |
+
+The harness remains stable when the runtime changes. A runtime adapter is allowed to reject a spec if it cannot
+honor the requested policy.
 
 ---
 
@@ -55,7 +72,7 @@ internal call is implemented.
 It should cover:
 
 - harness flavor: `coding`, `no_tool`, or custom
-- runtime backend: `builtin`, `openai-agents`, `adk`, or custom
+- runtime backend: `builtin`, `openai-agents`, `adk`, `deepagents`, or custom
 - model policy: primary model, fallbacks, local hardware hints, prompt profile, context budgets
 - agents: roles, tools, skills, delegation rules
 - workflow: single, chain, router, parallel, orchestrator, evaluator-optimizer
@@ -75,6 +92,7 @@ Responsibilities:
 - enforce tool and sandbox policy
 - dispatch model calls through runtime backends
 - expose typed outputs and structured results
+- execute harness workflows across steps, routes, workers, and evaluators
 - call validation hooks after changes
 - provide a backend-neutral API to CLI, TUI, ACP, and A2A surfaces
 
@@ -87,9 +105,13 @@ Backends are adapters behind the same harness contract.
 | `builtin` | SuperQode native agent loop |
 | `openai-agents` | OpenAI Agents SDK runtime |
 | `adk` | Google ADK runtime |
+| `deepagents` | Optional DeepAgents runtime for graph and middleware-heavy coding harnesses |
 | custom | Bring-your-own backend implementation |
 
 No backend should become the product center. SuperQode owns the contract; backends provide execution.
+Backend adapters must fail clearly when they cannot honor a harness policy. For example, the DeepAgents
+adapter is tool-oriented and does not run no-tool specs. The native runtime remains the canonical path for
+model-only runs, local-model policy, and exact sandbox behavior.
 
 ### 4. Tool And Sandbox Layer
 
@@ -117,9 +139,11 @@ Policy should include:
 - default model and fallback models
 - local model hints for MLX, Ollama, llama.cpp, and DS4
 - Gemma4 coding and no-tool prompt profiles
+- DS4 coding and fast local profiles
 - temperature and reasoning defaults
 - context limits and compaction thresholds
 - tool-call format repair policy
+- no-tool reasoning disablement where provider APIs support it
 
 ### 6. Validation Hooks
 
@@ -152,7 +176,7 @@ Examples:
    The kernel creates or resumes session history and loads project instructions.
 
 5. RUNTIME EXECUTION
-   The selected backend runs the model loop or model-only call.
+   The selected backend runs the model loop, workflow step, or model-only call.
 
 6. TOOL / SANDBOX ACCESS
    Tool-capable flavors execute approved tool calls through the sandbox layer.
@@ -161,8 +185,25 @@ Examples:
    If changes or suggestions were produced, configured validation hooks run.
 
 8. RESULT
-   The kernel returns text, structured data, diffs, events, and validation state.
+   The kernel returns text, typed data, workflow output, diffs, events, and validation state.
 ```
+
+---
+
+## Production Capabilities
+
+| Capability | Current direction |
+| --- | --- |
+| Native coding harness | Default runtime for repository work |
+| No-tool harness | First-class model-only flavor with no tools, no file access, no shell, and reasoning disabled where supported |
+| HarnessSpec | Declarative schema for flavor, runtime, model policy, agents, workflow, context, validation, and observability |
+| Templates | Coding, no-tool, Gemma4, DS4, and DS4 fast local starts |
+| Model policy | Central resolver for prompt level, tool surface, temperature, reasoning, iteration, and history limits |
+| Typed outputs | Pydantic validation with explicit result delimiters |
+| Workflow engine | Single, chain, parallel, router, orchestrator, and evaluator-optimizer modes |
+| Run store | File-backed session and run records with replayable events |
+| Sandbox contract | Local backend protocol for path, edit, shell, grep, glob, and command policy |
+| Runtime adapters | Builtin, Google ADK, OpenAI Agents SDK, optional DeepAgents, and future custom runtimes |
 
 ---
 
@@ -185,6 +226,7 @@ src/superqode/harness/
     builtin.py
     openai_agents.py
     google_adk.py
+    deepagents.py
 ```
 
 Existing modules map into this structure:

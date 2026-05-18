@@ -1,5 +1,13 @@
 # Harness System
 
+SuperQode separates the harness from the runtime that executes it.
+
+The harness is the product contract. It defines what a run is allowed to do, how model behavior is shaped,
+which tools are available, how sessions and events are stored, and what output must be returned.
+
+The runtime is the execution engine behind that contract. It can be the native SuperQode loop, an SDK adapter,
+or an external agent framework adapter.
+
 SuperQode uses the word harness in two related ways:
 
 - **Agent harness**: the runtime that turns a request into model calls, tools, sessions, sandbox access,
@@ -7,19 +15,46 @@ SuperQode uses the word harness in two related ways:
 - **Validation harness**: the patch and project checks that prove generated changes before they are surfaced
   to users or downstream automation.
 
-The validation harness exists today. The agent harness is the direction for the next SuperQode runtime layer:
-keep the current coding-agent harness intact, then add explicit harness flavors that can be selected,
-composed, and optimized.
+The production harness now has a v2 foundation: `HarnessSpec`, built-in templates, a kernel, backend
+adapters, run storage, typed outputs, sandbox policy, model policy, and workflow execution. The validation
+harness remains a lifecycle hook that can be used by coding harnesses.
 
 ---
 
-## Agent Harness Direction
+## Production Harness Vision
 
-The SuperQode agent harness should be a small framework kernel rather than a single agent loop. The kernel owns
-stable contracts for sessions, events, tool policy, sandbox access, model policy, skills, roles, validation, and
-backend adapters. Individual harnesses are user-owned specs compiled into that kernel.
+SuperQode should be a small framework kernel rather than a single agent loop. The kernel owns stable contracts
+for sessions, events, tool policy, sandbox access, model policy, skills, roles, typed outputs, validation,
+workflows, and backend adapters. Individual harnesses are user-owned specs compiled into that kernel.
 
 This keeps the existing coding harness as the default while making room for other styles.
+
+### Built In Pieces
+
+| Piece | Production role |
+| --- | --- |
+| `HarnessSpec` | Declarative contract for flavor, runtime, model policy, agents, workflow, context, validation, and observability |
+| Templates | Built-in starts for `coding`, `no-tool`, `gemma4-coding`, `gemma4-no-tool`, `ds4-coding`, and `ds4-fast-local` |
+| Kernel | Opens sessions, starts runs, emits events, stores records, and dispatches to backends |
+| Backend adapters | Native runtime, Google ADK, OpenAI Agents SDK, optional DeepAgents, and future custom runtimes |
+| Sandbox contract | Local read, write, shell, grep, glob, edit, and command policy behind a stable backend protocol |
+| Typed outputs | Pydantic-backed result parsing with explicit delimiters and validation failure reporting |
+| Workflow engine | Single, chain, parallel, router, orchestrator, and evaluator-optimizer execution |
+| Model policy | Explicit prompt, tool, reasoning, temperature, history, and iteration defaults per model family |
+
+### What Users Configure
+
+Users configure a harness by selecting:
+
+- flavor: `coding` or `no_tool`
+- runtime: `builtin`, `adk`, `openai-agents`, `deepagents`, or custom
+- model policy: hosted model, local model, Gemma4 profile, DS4 profile, fallbacks, and reasoning defaults
+- tools: repository tools, shell, MCP, validation, or no tools
+- sandbox policy: read, write, shell, command, and network boundaries
+- workflow: single step, chain, parallel workers, router, orchestrator, or evaluator-optimizer
+- output: plain text, typed result, events, validation state, and run records
+
+This lets the same harness contract run through different engines while preserving the user-facing behavior.
 
 ### Harness Flavors
 
@@ -55,6 +90,7 @@ It bets on model capability alone:
 - prompt, context, and model policy only
 - optional structured output validation
 - optional final-answer scoring/evaluation
+- reasoning disabled where provider APIs support it
 
 Use it when the task is reasoning, planning, code review from supplied context, design critique, explanation,
 spec generation, or when evaluating whether a model can solve a task without tool scaffolding.
@@ -94,6 +130,49 @@ The compiler decides what capabilities are legal for each flavor:
 | MCP tools | policy-controlled | no |
 | Validation harness | yes | optional, output-only |
 | Multi-agent delegation | yes | optional, model-only |
+
+### Runtime Backends
+
+Runtime backends are interchangeable execution adapters behind the same harness contract.
+
+| Backend | Status | Use when |
+| --- | --- | --- |
+| `builtin` | default | You want the native SuperQode coding loop, local-model tuning, and the full harness policy surface |
+| `adk` | optional | You want to run through Google ADK while keeping SuperQode harness configuration |
+| `openai-agents` | optional | You want OpenAI Agents SDK behavior, sessions, and tool plumbing |
+| `deepagents` | optional | You want DeepAgents graph, middleware, and subagent behavior for tool-capable coding harnesses |
+
+The `deepagents` backend is intentionally not used for no-tool harnesses. DeepAgents 0.6 is built around a
+tool-capable deep-agent stack, so SuperQode rejects no-tool specs for that backend and directs users to the
+native runtime for model-only runs.
+
+### Model Policy
+
+Model policy is resolved before backend execution. This keeps local-model behavior explicit and portable across
+runtimes.
+
+| Profile | Defaults |
+| --- | --- |
+| `gemma4-coding` | minimal prompt, compact local tool surface, strict JSON tool-call hints, low temperature, sequential tools |
+| `gemma4-no-tool` | model-only prompt, no tools, low temperature, short history, reasoning disabled where supported |
+| `ds4-coding` | DS4 prompt path, compact tool surface, low temperature, low reasoning, sequential tools |
+| `ds4-fast-local` | DS4 coding with tighter iteration and history budgets for fast local loops |
+
+No-tool policy also sets `reasoning=off`. For Anthropic-shape providers such as DS4, this maps to the provider
+thinking-disable field. Providers without that capability ignore the setting safely.
+
+### Workflow Modes
+
+The workflow engine lets a harness describe more than one prompt call without replacing the runtime backend.
+
+| Mode | Behavior |
+| --- | --- |
+| `single` | Run one step |
+| `chain` | Run steps sequentially and pass previous output forward |
+| `parallel` | Run independent steps concurrently with bounded parallelism |
+| `router` | Choose a route by config or by router output |
+| `orchestrator` | Run worker steps then synthesize |
+| `evaluator_optimizer` | Generate, evaluate, and optionally optimize |
 
 ### Example Specs
 
@@ -152,29 +231,26 @@ harness:
   and evaluation rules should be tuned for tool-free reasoning.
 - Keep validation as a lifecycle hook that the coding harness can call after changes.
 - Rename the current patch harness internally to validation harness when the broader agent harness lands.
-- Gemma4 should get both coding and no-tool templates so local-model behavior can be compared cleanly.
+- Gemma4 should get both coding and no-tool templates so local-model behavior is measurable through the harness.
+- Keep DeepAgents as an optional peer backend, not as the core harness foundation.
+- Prefer explicit rejection over silent degradation when a runtime cannot honor a harness policy.
 
 ---
 
 ## Validation Harness Overview
 
-The Harness System validates patches and changes to ensure:
+Validation is a secondary lifecycle capability inside the broader harness system. A coding harness can call
+validation after it edits files, produces a patch, or returns structured suggestions.
+
+Validation can check:
 
 - **Syntactic correctness**: Code parses correctly
 - **Type safety**: Type checking passes
 - **Style compliance**: Linting rules followed
 - **No regressions**: Changes don't break existing code
 
-All validation happens before suggestions are surfaced to users or downstream automation.
-
----
-
-## Principle
-
-> "SuperQode never edits, rewrites, or commits code."
-> "All fixes are suggested, validated, and proven, never auto-applied."
-
-The harness **VALIDATES** suggestions - it doesn't apply them.
+Validation does not define the product identity and does not replace runtime policy. It is an optional proof
+step that can be attached to coding, workflow, or typed-output runs.
 
 ---
 
@@ -266,13 +342,13 @@ superqode:
 
 ## How It Works
 
-### 1. Patch Generation
+### 1. Change Or Suggestion Generation
 
-Agent generates a patch or suggestion during a coding harness run.
+The harness produces a file change, patch, or structured suggestion during a coding run.
 
-### 2. Harness Validation
+### 2. Validation Hook
 
-Harness validates the patch:
+The validation hook checks the affected files or patch:
 
 ```python
 harness = PatchHarness(project_root)
@@ -292,11 +368,11 @@ Result includes:
 
 ### 4. Result Inclusion
 
-Only validated patches are included in the final result or downstream event stream:
+The final result can include validation state alongside text, typed data, events, and diffs:
 
 ```python
 if result.success:
-    output.add_suggestion(patch, result)
+    output.add_validation_state(result)
 else:
     output.add_validation_failures(result.findings)
 ```

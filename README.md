@@ -8,8 +8,8 @@
 <h1 align="center">SuperQode</h1>
 
 <p align="center">
-  <strong>Multi-agent coding harness for local, BYOK, and ACP workflows</strong><br>
-  <em>Connect models, run tools, inspect changes, and keep coding sessions readable.</em><br>
+  <strong>Production coding harness for local models, BYOK providers, and pluggable agent runtimes</strong><br>
+  <em>Define the harness, choose the runtime, control the tools, and keep coding sessions readable.</em><br>
   <strong>Bring your own model, runtime, tools, and harness.</strong>
 </p>
 
@@ -36,11 +36,26 @@
 
 ## What is SuperQode?
 
-**SuperQode** is a coding agent harness for interactive development, local model workflows, BYOK providers, ACP coding agents, and tool-based repository work. It provides a TUI and CLI so developers can connect to the model or agent they prefer, run file/search/edit/shell tools, and get concise summaries of what changed.
+**SuperQode** is a production coding-agent harness for interactive development, local model workflows, BYOK providers, ACP coding agents, and tool-based repository work. It provides a TUI and CLI so developers can connect to the model or agent runtime they prefer, run file/search/edit/shell tools under policy, and get concise summaries of what changed.
 
-The v2 direction is harness-first: SuperQode owns the kernel for sessions, tools, runtimes, model policies, sandboxing, validation, events, and backend adapters. Product workflows can be built on top through A2A later without changing the core identity.
+The v2 direction is harness-first: SuperQode owns the kernel for sessions, tools, runtimes, model policies, sandboxing, typed outputs, workflow execution, validation, events, and backend adapters. Higher-level workflows can be built on top through A2A later without changing the core identity.
 
 **Note (Enterprise):** Enterprise adds deeper automation, evaluation testing, and enterprise integrations.
+
+## Core Concepts
+
+SuperQode separates the pieces of an agent system so teams can change one piece without rewriting the rest.
+
+| Concept | What it means in SuperQode |
+|---------|----------------------------|
+| **Harness** | The full contract for a run: flavor, model policy, tools, sandbox, workflow, output, events, and validation |
+| **Runtime** | The engine that executes the harness, such as the native loop, Google ADK, OpenAI Agents SDK, or DeepAgents |
+| **Flavor** | The kind of harness being run, such as tool-rich coding or model-only no-tool |
+| **Tools** | Capabilities granted by policy, including file, search, edit, shell, MCP, todo, and validation tools |
+| **Model policy** | The model-specific behavior for prompt level, temperature, reasoning, tool surface, history, and iteration limits |
+| **Framework adapter** | A bridge that lets an external agent framework run behind the SuperQode harness contract |
+
+The harness is the product contract. Runtimes and framework adapters are execution choices behind that contract.
 
 ## Demo Video
 
@@ -92,27 +107,33 @@ superqode --print "inspect this repository and suggest the smallest next step"
 
 | Feature | Description |
 |---------|-------------|
-| **Multi-agent harness** | Use ACP agents, BYOK providers, and local models from one interface |
-| **Pluggable runtimes** | Swap the agent loop: SuperQode native (default), Google ADK, or OpenAI Agents SDK |
+| **HarnessSpec** | Define coding, no-tool, local-model, and custom harness behavior with one declarative contract |
+| **Harness kernel** | Run sessions with normalized events, run records, backend dispatch, typed outputs, and workflow execution |
+| **Pluggable runtimes** | Swap the agent loop: SuperQode native, Google ADK, OpenAI Agents SDK, or optional DeepAgents |
 | **Developer TUI** | Interactive sessions with wrapped prompts, quiet streaming logs, compact tool activity, and readable change summaries |
 | **Headless CLI** | Run coding tasks and provider checks from scripts or terminals |
 | **Tool system** | File, search, edit, shell, todo, MCP, and optional Monty Python REPL tools |
+| **Sandbox contract** | Use local sandbox policy for read, write, shell, command, grep, glob, and edit access |
+| **Typed outputs** | Ask a harness run to return validated structured data using explicit result delimiters |
+| **Workflow engine** | Run single, chain, parallel, router, orchestrator, and evaluator-optimizer workflows |
+| **Model policies** | First-class Gemma4, DS4, coding, and no-tool policy profiles for local and hosted models |
 | **Provider UX** | Provider doctor, model listing, guided local provider selection, and dynamic OpenCode free model discovery |
-| **Harness flavors** | Coding and no-tool profiles, with room for custom Bring Your Own Harness specs |
+| **Harness flavors** | Tool-rich coding and model-only no-tool profiles, with room for Bring Your Own Harness specs |
 
 ## How It Works
 
 ```
 HARNESS LIFECYCLE
 ━━━━━━━━━━━━━━━━━
-1. SPEC       → Choose coding, no-tool, or custom harness behavior
-2. RUNTIME    → Run on builtin, OpenAI Agents, Google ADK, or another backend
-3. TOOLS      → Attach file, search, edit, shell, MCP, or no tools
-4. SESSION    → Stream events, persist history, compact context
-5. VALIDATE   → Run project checks when the harness produces changes
+1. SPEC       Choose coding, no-tool, local-model, or custom harness behavior
+2. MODEL      Resolve policy for Gemma4, DS4, hosted models, or model-only runs
+3. RUNTIME    Run on builtin, OpenAI Agents, Google ADK, DeepAgents, or another backend
+4. TOOLS      Attach file, search, edit, shell, MCP, or no tools
+5. SESSION    Stream events, persist history, compact context, and store runs
+6. OUTPUT     Return text, typed data, workflow results, and validation state
 ```
 
-The default coding harness keeps repository work practical. The no-tool harness lets you bet directly on model capability.
+The default coding harness keeps repository work practical. The no-tool harness lets you bet directly on model capability. Optional runtimes let teams bring their preferred agent framework without replacing the SuperQode harness contract.
 
 ## Documentation
 

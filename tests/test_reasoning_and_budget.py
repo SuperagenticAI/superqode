@@ -74,6 +74,10 @@ from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
         ("openai", "gpt-5", "max", {"reasoning_effort": "high"}),
         # OpenRouter passes through.
         ("openrouter", "anthropic/claude-sonnet-4", "medium", {"reasoning_effort": "medium"}),
+        # Pi-style model-only runs can explicitly disable Anthropic-shape thinking.
+        ("anthropic", "claude-sonnet-4", "off", {"thinking": {"type": "disabled"}}),
+        ("ds4", "deepseek-v4-flash", "off", {"thinking": {"type": "disabled"}}),
+        ("openai", "gpt-5", "off", {}),
         # Providers with no native reasoning concept → empty mapping.
         ("ollama", "qwen2.5-coder", "high", {}),
         ("google", "gemini-pro", "high", {}),

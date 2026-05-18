@@ -407,7 +407,7 @@ class LiteLLMGateway(GatewayInterface):
     # Provider-neutral reasoning effort levels. The names match fast-agent
     # and (largely) OpenAI's o-series convention so users don't have to
     # learn a new vocabulary per backend.
-    _REASONING_LEVELS = ("low", "medium", "high", "max")
+    _REASONING_LEVELS = ("off", "low", "medium", "high", "max")
 
     # Per-level thinking budgets for Anthropic-shape APIs (Claude
     # extended thinking, DS4's /v1/messages). Values mirror what DS4's
@@ -463,6 +463,10 @@ class LiteLLMGateway(GatewayInterface):
         is_anthropic_shape = (
             provider == "anthropic" or provider == "ds4" or "deepseek-v4" in model_lower
         )
+        if level == "off":
+            if is_anthropic_shape:
+                return {"thinking": {"type": "disabled"}}
+            return {}
         if is_anthropic_shape:
             return {
                 "thinking": {
