@@ -268,6 +268,26 @@ def create_builtin_commands(handlers: dict) -> list[SlashCommand]:
         )
     )
 
+    # HITL approval / rejection for the OpenAI Agents runtime. Bare :approve
+    # acts on the first pending approval; :approve <index> picks one; trailing
+    # text on :reject is sent to the model as the rejection message.
+    commands.append(
+        SlashCommand(
+            name="approve",
+            description="Approve a pending tool call (OpenAI Agents HITL)",
+            handler=handlers.get("approve", lambda _: None),
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="reject",
+            description="Reject a pending tool call (OpenAI Agents HITL)",
+            handler=handlers.get("reject", lambda _: None),
+            category="session",
+        )
+    )
+
     return commands
 
 

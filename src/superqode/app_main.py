@@ -3748,6 +3748,10 @@ class SuperQodeApp(App):
             self.run_worker(self._a2a_cmd(args, log))
         elif c == "runtime":
             self._runtime_cmd(args, log)
+        elif c == "approve":
+            self.run_worker(self._approval_cmd("approve", args, log))
+        elif c == "reject":
+            self.run_worker(self._approval_cmd("reject", args, log))
         elif c == "mcp":
             self.run_worker(self._mcp_cmd(args, log))
         elif c == "context":
@@ -4254,6 +4258,102 @@ class SuperQodeApp(App):
         log.add_info(
             f"Runtime swapped: {current} → {sub}. Next message will reconnect with the new backend."
         )
+
+    async def _approval_cmd(self, action: str, args: str, log) -> None:
+        """Handle :approve / :reject for the OpenAI Agents HITL flow.
+
+        Usage:
+            :approve              # approve pending #0 (the first interruption)
+            :approve 1            # approve pending #1
+            :approve always       # approve #0 and remember the choice
+            :reject               # reject pending #0
+            :reject 1 "<msg>"     # reject pending #1 with explicit message
+        """
+        pure = getattr(self, "_pure_mode", None)
+        runtime = getattr(pure, "_runtime", None) if pure is not None else None
+        if runtime is None or not hasattr(runtime, "get_pending_approvals"):
+            log.add_error("No active runtime supports interactive approvals.")
+            return
+
+        pending = runtime.get_pending_approvals()
+        if not pending:
+            log.add_info("No pending approvals.")
+            return
+
+        # Parse args: optional integer index, optional "always", optional quoted message
+        tokens = args.strip().split(maxsplit=1)
+        index = 0
+        always = False
+        message: Optional[str] = None
+        if tokens:
+            head = tokens[0].lower()
+            tail = tokens[1] if len(tokens) > 1 else ""
+            if head.isdigit():
+                index = int(head)
+                if tail.lower().startswith("always"):
+                    always = True
+                    rest = tail.split(maxsplit=1)
+                    if len(rest) > 1:
+                        message = rest[1].strip().strip('"').strip("'")
+                elif tail:
+                    message = tail.strip().strip('"').strip("'")
+            elif head == "always":
+                always = True
+                if tail:
+                    message = tail.strip().strip('"').strip("'")
+            else:
+                # Treat the whole arg as the rejection message.
+                message = args.strip().strip('"').strip("'")
+
+        if index < 0 or index >= len(pending):
+            log.add_error(f"Approval index {index} out of range (0..{len(pending) - 1}).")
+            return
+        choice = pending[index]
+        try:
+            if action == "approve":
+                response = await runtime.approve_and_resume(index=index, always=always)
+                log.add_info(
+                    f"Approved tool '{choice['tool_name']}'" + (" (always)" if always else "") + "."
+                )
+            else:
+                response = await runtime.reject_and_resume(
+                    index=index, message=message, always=always
+                )
+                log.add_info(
+                    f"Rejected tool '{choice['tool_name']}'"
+                    + (f": {message}" if message else "")
+                    + "."
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"{action.capitalize()} failed: {type(exc).__name__}: {exc}")
+            return
+
+        # Show resumed run result.
+        if getattr(response, "stopped_reason", "") == "needs_approval":
+            self._announce_pending_approvals(runtime, log)
+        elif response.error:
+            log.add_error(f"Run failed: {response.error}")
+        elif response.content:
+            log.add_info(response.content)
+
+    def _announce_pending_approvals(self, runtime, log) -> None:
+        """Surface pending approvals from an OpenAI Agents runtime in the conversation log."""
+        try:
+            pending = runtime.get_pending_approvals()
+        except Exception:  # noqa: BLE001
+            return
+        if not pending:
+            return
+        log.add_info(
+            f"Tool approval needed ({len(pending)} item(s)). "
+            'Use :approve [N] or :reject [N] ["message"].'
+        )
+        for entry in pending:
+            tool = entry.get("tool_name") or "<unknown>"
+            args_preview = str(entry.get("arguments", {}))
+            if len(args_preview) > 120:
+                args_preview = args_preview[:117] + "..."
+            log.add_info(f"  [{entry['index']}] {tool} {args_preview}")
 
     def _handle_resume_session(self, args: str, log: ConversationLog):
         """Resume a previous local provider session."""
@@ -5554,6 +5654,11 @@ team:
                     stats.get("thinking_tokens", 0),
                     stats.get("total_cost", 0.0),
                 )
+                # Phase 6 — if the OpenAI Agents runtime paused for HITL,
+                # surface pending approvals here.
+                runtime = getattr(self._pure_mode, "_runtime", None)
+                if runtime is not None and hasattr(runtime, "get_pending_approvals"):
+                    self._announce_pending_approvals(runtime, log)
                 pass
             except Exception as stream_error:
                 # Error during streaming

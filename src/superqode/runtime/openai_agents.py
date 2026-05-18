@@ -205,6 +205,7 @@ class OpenAIAgentsRuntime:
         mcp_tools: Optional[List[ToolDefinition]] = None,
         include_mcp: bool = False,
         permission_manager: Optional[PermissionManager] = None,
+        sandbox_backend: Optional[str] = None,
         **_unused: Any,
     ):
         _require_sdk()
@@ -282,17 +283,53 @@ class OpenAIAgentsRuntime:
                 storage_dir=config.session_storage_dir,
             )
 
-        # Build the Agent. Default tool_use_behavior is "run_llm_again",
-        # matching the AgentLoop iteration model.
-        self._agent = Agent(
-            name="superqode",
-            instructions=instructions,
-            tools=bridged_tools,
-            model=_build_model(config.provider, config.model),
-        )
+        # Sandbox: when the caller asks for a backend, upgrade the Agent to a
+        # SandboxAgent and wire RunConfig.sandbox. Backends we don't recognize
+        # pass through to the regular Agent path (and log a debug note).
+        self.sandbox_backend = (sandbox_backend or "").strip().lower() or None
+        self._sandbox_client = None
+        if self.sandbox_backend:
+            from .openai_sandbox import (
+                build_manifest,
+                build_sandbox_agent,
+                build_sandbox_client,
+                build_sandbox_run_config,
+                supported_sandbox_backends,
+            )
 
-        # RunConfig: keep tracing disabled by default for privacy.
-        self._run_config = RunConfig(tracing_disabled=True)
+            if self.sandbox_backend in supported_sandbox_backends():
+                self._sandbox_client = build_sandbox_client(self.sandbox_backend)
+                manifest = build_manifest(config)
+                self._agent = build_sandbox_agent(
+                    name="superqode",
+                    instructions=instructions,
+                    tools=bridged_tools,
+                    model=_build_model(config.provider, config.model),
+                    manifest=manifest,
+                )
+                self._run_config = build_sandbox_run_config(
+                    client=self._sandbox_client,
+                    base_run_config=RunConfig(tracing_disabled=True),
+                )
+            else:
+                logger.warning(
+                    "OpenAIAgentsRuntime: sandbox_backend '%s' not recognized by the OpenAI "
+                    "Agents bridge; falling back to non-sandbox Agent.",
+                    self.sandbox_backend,
+                )
+                self.sandbox_backend = None
+
+        if self._sandbox_client is None:
+            # Build the Agent. Default tool_use_behavior is "run_llm_again",
+            # matching the AgentLoop iteration model.
+            self._agent = Agent(
+                name="superqode",
+                instructions=instructions,
+                tools=bridged_tools,
+                model=_build_model(config.provider, config.model),
+            )
+            # RunConfig: keep tracing disabled by default for privacy.
+            self._run_config = RunConfig(tracing_disabled=True)
 
         # Cancellation: keep a flag *and* a handle to any active streaming
         # result so cancel() can call result.cancel() directly.
@@ -372,8 +409,8 @@ class OpenAIAgentsRuntime:
         """Resume a HITL-interrupted run after caller calls state.approve/reject.
 
         Phase 6 plumbs this into the TUI permission dialog. For now any caller
-        that has a ``RunState`` (typically ``self.pending_state``) can call this
-        directly to continue the run.
+        that has a ``RunState`` (typically derived from ``self.pending_state``)
+        can call this directly to continue the run.
         """
         from agents import Runner
 
@@ -385,6 +422,79 @@ class OpenAIAgentsRuntime:
             max_turns=self.config.max_iterations,
         )
         return self._translate_result(prompt="", result=result)
+
+    # ------------------------------------------------------------------
+    # Phase 6 — HITL approval surface
+    # ------------------------------------------------------------------
+
+    def get_pending_approvals(self) -> List[Dict[str, Any]]:
+        """Return a serialized snapshot of pending approval items.
+
+        Each entry has ``{index, tool_name, arguments}`` so callers (TUI dialogs
+        or :approve / :reject slash commands) can display the tool calls and
+        pick one by index. Returns an empty list when no run is awaiting
+        approval.
+        """
+        result = self.pending_state
+        if result is None:
+            return []
+        interruptions = list(getattr(result, "interruptions", []) or [])
+        out: List[Dict[str, Any]] = []
+        for idx, item in enumerate(interruptions):
+            tool_name = getattr(item, "tool_name", None) or _tool_name_from_item(item)
+            args = _tool_args_from_item(item)
+            out.append({"index": idx, "tool_name": tool_name, "arguments": args})
+        return out
+
+    async def approve_and_resume(self, index: int = 0, always: bool = False) -> AgentResponse:
+        """Approve the pending approval at ``index`` and resume the run.
+
+        Raises ``RuntimeError`` when there's nothing pending or the index is
+        out of range. ``always=True`` records a permanent approval for the
+        tool (the SDK persists this across resume cycles).
+        """
+        state, item = self._take_pending(index)
+        state.approve(item, always_approve=always)
+        return await self._consume_state(state)
+
+    async def reject_and_resume(
+        self,
+        index: int = 0,
+        message: Optional[str] = None,
+        always: bool = False,
+    ) -> AgentResponse:
+        """Reject the pending approval at ``index`` and resume the run.
+
+        ``message`` is sent verbatim to the model as the rejection reason;
+        when omitted the SDK's default rejection text is used.
+        """
+        state, item = self._take_pending(index)
+        if message is not None:
+            state.reject(item, always_reject=always, rejection_message=message)
+        else:
+            state.reject(item, always_reject=always)
+        return await self._consume_state(state)
+
+    def clear_pending(self) -> None:
+        """Drop any pending interruption without approving or rejecting."""
+        self.pending_state = None
+
+    def _take_pending(self, index: int) -> tuple[Any, Any]:
+        result = self.pending_state
+        if result is None:
+            raise RuntimeError("No pending approval to act on")
+        interruptions = list(getattr(result, "interruptions", []) or [])
+        if not interruptions:
+            raise RuntimeError("No pending approval to act on")
+        if index < 0 or index >= len(interruptions):
+            raise RuntimeError(f"Approval index {index} out of range (have {len(interruptions)})")
+        state = result.to_state()
+        return state, interruptions[index]
+
+    async def _consume_state(self, state: Any) -> AgentResponse:
+        # Clear pending before resuming so a cascading interrupt sets it fresh.
+        self.pending_state = None
+        return await self.resume(state)
 
     # ------------------------------------------------------------------
     # Internal

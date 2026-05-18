@@ -73,8 +73,25 @@ def list_runtimes_cmd(json_output: bool) -> None:
 def doctor(name: Optional[str]) -> None:
     """Probe a runtime's optional dependencies and report what loads.
 
-    With no argument, probes every known runtime.
+    With no argument, probes every known runtime. Pass ``agents-md`` to
+    inspect AGENTS.md / CLAUDE.md resolution from the current directory.
     """
+    # Special target: print the resolved AGENTS.md / CLAUDE.md prompt chain.
+    if name == "agents-md":
+        from pathlib import Path
+
+        from ..skills import load_project_instructions
+
+        resolved = load_project_instructions(Path.cwd())
+        if not resolved:
+            console.print(
+                "[yellow]No AGENTS.md or CLAUDE.md found from this directory upward.[/yellow]"
+            )
+            return
+        console.rule("[bold]Resolved project instructions[/bold]")
+        console.print(resolved)
+        return
+
     target_names: list[str] = []
     info_by_name = {r.name: r for r in list_runtimes()}
 
@@ -84,7 +101,7 @@ def doctor(name: Optional[str]) -> None:
         target_names = [name]
     else:
         console.print(f"[red]Unknown runtime '{name}'[/red]")
-        console.print(f"Known: {', '.join(sorted(info_by_name))}")
+        console.print(f"Known: {', '.join(sorted(info_by_name))} (or 'agents-md')")
         sys.exit(2)
 
     any_problems = False

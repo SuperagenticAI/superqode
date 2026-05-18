@@ -166,7 +166,20 @@ def load_skills(
 
 
 def load_project_instructions(root: str | Path = ".") -> str:
-    """Load project-level instructions from global, parent, and local files."""
+    """Load project-level instructions from global, parent, and local files.
+
+    Compatibility with the OpenAI Agents AGENTS.md spec:
+        * AGENTS.md from the root of the workspace and any directories from
+          CWD up to the root are loaded (parent → child order).
+        * More-deeply-nested files take precedence — we put them later in the
+          concatenated output, since prompt order is "later wins" by convention.
+        * Within a single directory, AGENTS.md is the canonical source; we only
+          read CLAUDE.md when AGENTS.md is absent. This preserves SuperQode's
+          legacy CLAUDE.md support without letting it override AGENTS.md.
+
+    Globals (``~/.superqode``, ``~/.config/superqode``) are loaded first so
+    project files override them.
+    """
     base = Path(root).expanduser().resolve()
     parts: List[str] = []
 
@@ -183,23 +196,31 @@ def load_project_instructions(root: str | Path = ".") -> str:
             continue
         seen.add(directory)
 
-        for filename in ["AGENTS.md", "CLAUDE.md"]:
-            path = directory / filename
-            if not path.exists():
-                continue
+        # AGENTS.md is canonical (OpenAI Agents SDK / Codex convention).
+        # CLAUDE.md is a SuperQode legacy fallback: only loaded when AGENTS.md
+        # is missing from the same directory.
+        agents_path = directory / "AGENTS.md"
+        claude_path = directory / "CLAUDE.md"
+        path: Optional[Path]
+        if agents_path.exists():
+            path = agents_path
+        elif claude_path.exists():
+            path = claude_path
+        else:
+            continue
 
-            try:
-                content = path.read_text(encoding="utf-8").strip()
-            except Exception:
-                continue
+        try:
+            content = path.read_text(encoding="utf-8").strip()
+        except Exception:
+            continue
 
-            if not content:
-                continue
+        if not content:
+            continue
 
-            try:
-                label = path.relative_to(base)
-            except ValueError:
-                label = path
-            parts.append(f"## Instructions from {label}\n\n{content}")
+        try:
+            label = path.relative_to(base)
+        except ValueError:
+            label = path
+        parts.append(f"## Instructions from {label}\n\n{content}")
 
     return "\n\n".join(parts)
