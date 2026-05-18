@@ -6,6 +6,7 @@ We offer multiple levels so users can test model capabilities fairly.
 
 Levels:
 - NONE: No system prompt at all - pure model behavior
+- NO_TOOL: Tool-free reasoning harness
 - MINIMAL: Just "You are a coding assistant"
 - STANDARD: Basic tool usage guidance
 - FULL: Detailed instructions (like other coding agents)
@@ -23,6 +24,7 @@ class SystemPromptLevel(Enum):
     """System prompt verbosity levels."""
 
     NONE = "none"  # No system prompt
+    NO_TOOL = "no_tool"  # Tool-free reasoning harness
     MINIMAL = "minimal"  # One line
     STANDARD = "standard"  # Basic guidance
     FULL = "full"  # Detailed (like other agents)
@@ -129,6 +131,16 @@ Tool call format:
 # System prompts by level
 SYSTEM_PROMPTS = {
     SystemPromptLevel.NONE: "",
+    SystemPromptLevel.NO_TOOL: """You are a precise software reasoning assistant.
+
+You do not have access to tools, files, shell commands, external services, or hidden repository context.
+Use only the information provided in the conversation.
+
+If the user asks for codebase-specific facts that are not present in the prompt, state the missing context
+instead of pretending to inspect files. When useful, provide assumptions explicitly and give a concrete plan
+that a tool-enabled coding harness could execute later.
+
+Be concise, technically specific, and distinguish facts from inference.""",
     SystemPromptLevel.MINIMAL: "You are a coding assistant with access to tools.",
     SystemPromptLevel.STANDARD: """You are a coding assistant with access to tools for reading, writing, and editing files, running shell commands, and searching code.
 

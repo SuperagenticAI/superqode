@@ -453,6 +453,14 @@ def test_non_ds4_session_keeps_generic_minimal_prompt():
     assert "DeepSeek V4 Flash" not in prompt
 
 
+def test_no_tool_system_prompt_does_not_claim_tool_access():
+    prompt = _build_loop_system_prompt("anthropic", "claude-opus-4-7", level=SystemPromptLevel.NO_TOOL)
+    lowered = prompt.lower()
+
+    assert "do not have access to tools" in lowered
+    assert "use only the information provided" in lowered
+
+
 def test_explicit_full_level_overrides_provider_prompt():
     """When users opt into FULL/EXPERT, the verbose prompt wins over the
     DS4 tuned default; the level is an explicit user choice."""

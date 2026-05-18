@@ -81,6 +81,13 @@ def get_harness_profiles() -> Dict[str, HarnessProfile]:
     )
 
     return {
+        "no-tool": HarnessProfile(
+            name="no-tool",
+            description="Model-only reasoning profile with no tools or repository access.",
+            system_level=SystemPromptLevel.NO_TOOL,
+            tools=[],
+            permissions=PermissionConfig(default=Permission.DENY),
+        ),
         "build": HarnessProfile(
             name="build",
             description="Full-access coding profile for implementation work.",

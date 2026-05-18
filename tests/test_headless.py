@@ -31,6 +31,16 @@ def test_build_profile_exposes_full_registry():
     assert "agent" in tool_names
 
 
+def test_no_tool_profile_exposes_no_tools_and_denies_permissions():
+    profile = get_harness_profiles()["no-tool"]
+    registry = create_tool_registry(profile)
+
+    assert registry.list() == []
+    assert profile.system_level.value == "no_tool"
+    assert profile.permissions.get_permission("read_file") == Permission.DENY
+    assert profile.permissions.get_permission("bash") == Permission.DENY
+
+
 def test_response_to_json_is_stable():
     response = AgentResponse(
         content="done",

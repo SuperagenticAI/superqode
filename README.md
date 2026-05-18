@@ -10,13 +10,12 @@
 <p align="center">
   <strong>Multi-agent coding harness for local, BYOK, and ACP workflows</strong><br>
   <em>Connect models, run tools, inspect changes, and keep coding sessions readable.</em><br>
-  <strong>Build with agents. Validate with evidence. Ship with confidence.</strong>
+  <strong>Bring your own model, runtime, tools, and harness.</strong>
 </p>
 
 <p align="center">
   <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/v/superqode?style=flat-square&color=blue" alt="PyPI"></a>
   <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/pyversions/superqode?style=flat-square" alt="Python"></a>
-  <a href="https://github.com/SuperagenticAI/superqode/actions"><img src="https://img.shields.io/github/actions/workflow/status/SuperagenticAI/superqode/superqe.yml?style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/SuperagenticAI/superqode/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square" alt="License"></a>
 </p>
 
@@ -39,7 +38,7 @@
 
 **SuperQode** is a coding agent harness for interactive development, local model workflows, BYOK providers, ACP coding agents, and tool-based repository work. It provides a TUI and CLI so developers can connect to the model or agent they prefer, run file/search/edit/shell tools, and get concise summaries of what changed.
 
-**SuperQE** is the quality engineering workflow included with SuperQode. Use it when you want agents to stress, validate, and report on code before release. QE is an important workflow, but SuperQode is first a general coding harness.
+The v2 direction is harness-first: SuperQode owns the kernel for sessions, tools, runtimes, model policies, sandboxing, validation, events, and backend adapters. Product workflows can be built on top through A2A later without changing the core identity.
 
 **Note (Enterprise):** Enterprise adds deeper automation, evaluation testing, and enterprise integrations.
 
@@ -65,7 +64,6 @@ pip install superqode
 ```
 
 **Alternate (No Python Required, SuperQode TUI Only)**
-> Note: SuperQE (CLI) requires the Python install above (uv or pip).
 ```bash
 # Using Homebrew (macOS/Linux)
 brew install SuperagenticAI/superqode/superqode
@@ -82,11 +80,10 @@ cd your-project
 superqode
 ```
 
-**Automated QE (CI/CD)**
+**Headless coding harness**
 ```bash
 cd your-project
-superqe init
-superqe run . --mode quick
+superqode --print "inspect this repository and suggest the smallest next step"
 ```
 
 
@@ -101,21 +98,21 @@ superqe run . --mode quick
 | **Headless CLI** | Run coding tasks and provider checks from scripts or terminals |
 | **Tool system** | File, search, edit, shell, todo, MCP, and optional Monty Python REPL tools |
 | **Provider UX** | Provider doctor, model listing, guided local provider selection, and dynamic OpenCode free model discovery |
-| **QE workflows** | Optional SuperQE roles, sandboxes, reports, and release validation |
+| **Harness flavors** | Coding and no-tool profiles, with room for custom Bring Your Own Harness specs |
 
 ## How It Works
 
 ```
-QE SESSION LIFECYCLE
-━━━━━━━━━━━━━━━━━━━━
-1. SNAPSHOT    → Original code preserved
-2. QE SANDBOX  → Agents modify, test, break freely
-3. REPORT      → Document findings and fixes
-4. REVERT      → All changes removed automatically
-5. ARTIFACTS   → QRs and patches preserved
+HARNESS LIFECYCLE
+━━━━━━━━━━━━━━━━━
+1. SPEC       → Choose coding, no-tool, or custom harness behavior
+2. RUNTIME    → Run on builtin, OpenAI Agents, Google ADK, or another backend
+3. TOOLS      → Attach file, search, edit, shell, MCP, or no tools
+4. SESSION    → Stream events, persist history, compact context
+5. VALIDATE   → Run project checks when the harness produces changes
 ```
 
-**Your original code is ALWAYS restored.**
+The default coding harness keeps repository work practical. The no-tool harness lets you bet directly on model capability.
 
 ## Documentation
 

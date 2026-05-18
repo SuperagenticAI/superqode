@@ -1,10 +1,162 @@
 # Harness System
 
-Fast validation for QE-generated patches and changes before they're suggested in QRs.
+SuperQode uses the word harness in two related ways:
+
+- **Agent harness**: the runtime that turns a request into model calls, tools, sessions, sandbox access,
+  events, and validated output.
+- **Validation harness**: the patch and project checks that prove generated changes before they are surfaced
+  to users or downstream automation.
+
+The validation harness exists today. The agent harness is the direction for the next SuperQode runtime layer:
+keep the current coding-agent harness intact, then add explicit harness flavors that can be selected,
+composed, and optimized.
 
 ---
 
-## Overview
+## Agent Harness Direction
+
+The SuperQode agent harness should be a small framework kernel rather than a single agent loop. The kernel owns
+stable contracts for sessions, events, tool policy, sandbox access, model policy, skills, roles, validation, and
+backend adapters. Individual harnesses are user-owned specs compiled into that kernel.
+
+This keeps the existing coding harness as the default while making room for other styles.
+
+### Harness Flavors
+
+#### Coding Harness
+
+The coding harness is the current SuperQode strength and should remain the default for repository work.
+
+It gives the model controlled capabilities:
+
+- repository context discovery
+- file read/search/edit tools
+- shell and test execution under policy
+- MCP tools when configured
+- validation hooks
+- patch/diff reporting
+- session memory and compaction
+- approval gates for risky operations
+
+Use it when the model must inspect, change, run, or verify code. This is the right flavor for implementation,
+debugging, refactoring, CI triage, and multi-agent coding workflows.
+
+#### No-Tool Harness
+
+The no-tool harness is a separate first-class flavor, not just "coding harness with tools disabled."
+
+It bets on model capability alone:
+
+- no file tools
+- no shell tools
+- no MCP tools
+- no write access
+- no implicit repo mutation path
+- prompt, context, and model policy only
+- optional structured output validation
+- optional final-answer scoring/evaluation
+
+Use it when the task is reasoning, planning, code review from supplied context, design critique, explanation,
+spec generation, or when evaluating whether a model can solve a task without tool scaffolding.
+
+This flavor is especially useful for Gemma4 and other strong local models because it makes model capability
+measurable without hiding weaknesses behind tool execution.
+
+### Flavor Contract
+
+Both flavors should compile from the same `HarnessSpec` shape:
+
+```yaml
+harness:
+  flavor: coding  # coding | no_tool
+  runtime:
+    backend: builtin
+  model_policy:
+    primary: gemma4-local
+    fallback: ds4-local
+  execution_policy:
+    approval_profile: balanced
+  validation:
+    enabled: true
+```
+
+The compiler decides what capabilities are legal for each flavor:
+
+| Capability | Coding | No-tool |
+| --- | --- | --- |
+| Model calls | yes | yes |
+| Sessions/history | yes | yes |
+| Skills/roles | yes | yes |
+| Typed outputs | yes | yes |
+| File read/search | yes | no |
+| File edit/write | policy-controlled | no |
+| Shell/tests | policy-controlled | no |
+| MCP tools | policy-controlled | no |
+| Validation harness | yes | optional, output-only |
+| Multi-agent delegation | yes | optional, model-only |
+
+### Example Specs
+
+Coding harness:
+
+```yaml
+harness:
+  name: superqode-coder
+  flavor: coding
+  runtime:
+    backend: builtin
+  model_policy:
+    primary: gpt-5.5
+    fallbacks: [gemma4-local, ds4-local]
+  execution_policy:
+    sandbox: local
+    allow_read: true
+    allow_write: true
+    allow_shell: true
+    approval_profile: balanced
+  agents:
+    - id: coder
+      tools: [filesystem, search, edit, shell, validation]
+      skills: [repo-navigation, implementation]
+```
+
+No-tool harness:
+
+```yaml
+harness:
+  name: superqode-reasoner
+  flavor: no_tool
+  runtime:
+    backend: builtin
+  model_policy:
+    primary: gemma4-local
+    fallbacks: [ds4-local]
+    temperature: 0.2
+  execution_policy:
+    allow_read: false
+    allow_write: false
+    allow_shell: false
+  agents:
+    - id: reasoner
+      tools: []
+      skills: [architecture-review, code-review-from-context]
+  output:
+    typed: true
+```
+
+### Implementation Notes
+
+- Preserve the current native loop as the `coding` + `builtin` backend.
+- Add `no_tool` as a separate profile with its own system prompt and model policy.
+- Do not route no-tool runs through empty tool registries only; the prompt, stop conditions, output parsing,
+  and evaluation rules should be tuned for tool-free reasoning.
+- Keep validation as a lifecycle hook that the coding harness can call after changes.
+- Rename the current patch harness internally to validation harness when the broader agent harness lands.
+- Gemma4 should get both coding and no-tool templates so local-model behavior can be compared cleanly.
+
+---
+
+## Validation Harness Overview
 
 The Harness System validates patches and changes to ensure:
 
@@ -13,7 +165,7 @@ The Harness System validates patches and changes to ensure:
 - **Style compliance**: Linting rules followed
 - **No regressions**: Changes don't break existing code
 
-All validation happens **before** suggestions are included in QRs.
+All validation happens before suggestions are surfaced to users or downstream automation.
 
 ---
 
@@ -59,8 +211,8 @@ Language-specific validation:
 
 ```yaml
 superqode:
-  qe:
-    harness:
+  harness:
+    validation:
       enabled: true
       timeout_seconds: 30
       fail_on_error: false
@@ -103,7 +255,6 @@ superqode:
         tools:
           - shellcheck
 
-      # Bring Your Own Harness (BYOH)
       custom_steps:
         - name: "project-harness"
           command: "python scripts/harness_check.py"
@@ -117,7 +268,7 @@ superqode:
 
 ### 1. Patch Generation
 
-Agent generates a patch/suggestion during QE.
+Agent generates a patch or suggestion during a coding harness run.
 
 ### 2. Harness Validation
 
@@ -139,17 +290,15 @@ Result includes:
 - **Tools run**: Which validators executed
 - **Duration**: Validation time
 
-### 4. QR Inclusion
+### 4. Result Inclusion
 
-Only validated patches included in QR:
+Only validated patches are included in the final result or downstream event stream:
 
 ```python
 if result.success:
-    # Include in QR
-    qr.add_suggestion(patch, result)
+    output.add_suggestion(patch, result)
 else:
-    # Report validation failures
-    qr.add_validation_failures(result.findings)
+    output.add_validation_failures(result.findings)
 ```
 
 ---
@@ -304,37 +453,36 @@ class HarnessFinding:
 
 ## Integration
 
-### With QE Sessions
+### With Coding Harness Runs
 
-Harness runs automatically during QE:
+Validation can run automatically after a coding harness produces a patch:
 
 ```python
-# During QE session
 patch = agent.generate_suggestion()
 result = await harness.validate_changes(patch)
 
 if result.success:
-    # Include in QR
+    # Include in final output
 else:
     # Report validation issues
 ```
 
-### With Suggestions (Enterprise)
+### With Suggestions
 
 All suggestions validated:
 
 ```bash
 # Suggestions already validated
-superqe run . --mode deep --allow-suggestions
+superqode --print "inspect this package and suggest the smallest safe cleanup"
 ```
 
-### With QR Generation
+### With Event Output
 
-QR includes validation results:
+Harness events can include validation results:
 
 ```json
 {
-  "suggestions": [
+  "changes": [
     {
       "patch": "...",
       "validation": {
@@ -441,7 +589,7 @@ harness:
 
 ```yaml
 harness:
-  fail_on_error: false  # Report but don't fail QE
+  fail_on_error: false  # Report validation failures without failing the whole run
 ```
 
 ### 4. Tool Installation
@@ -505,7 +653,6 @@ harness:
 
 ## Related Features
 
-- [Fix Verifier](../qe-features/fix-verifier.md) - Fix verification
 - [Suggestions](../concepts/suggestions.md) - Suggestion workflow
 - [Configuration](../configuration/yaml-reference.md) - Config reference
 
@@ -514,4 +661,4 @@ harness:
 ## Next Steps
 
 - [Advanced Features Index](index.md) - All advanced features
-- [Guidance System](guidance-system.md) - QE guidance
+- [Tools System](tools-system.md) - Tool registry and permissions

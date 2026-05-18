@@ -186,6 +186,11 @@ class ToolRegistry:
         return [tool.to_openai_format() for tool in self._tools.values()]
 
     @classmethod
+    def empty(cls) -> "ToolRegistry":
+        """Create an empty registry for no-tool harness runs."""
+        return cls()
+
+    @classmethod
     def default(cls) -> "ToolRegistry":
         """Create registry with default minimal tools."""
         from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
@@ -308,6 +313,8 @@ class ToolRegistry:
             return cls.standard()
         if normalized in ("ds4", "local-fast", "local_fast"):
             return cls.ds4()
+        if normalized in ("none", "no-tool", "no_tool", "notool", "model-only", "model_only"):
+            return cls.empty()
         if normalized in ("default", "minimal", "small"):
             return cls.default()
         return cls.coding()

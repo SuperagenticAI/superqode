@@ -1,328 +1,225 @@
 # Architecture Overview
 
-This document provides a high-level overview of SuperQode's internal architecture, explaining how the various subsystems work together to deliver agentic quality engineering.
+SuperQode v2 is organized around a programmable coding-agent harness. The core product is the harness
+kernel: sessions, tools, runtimes, model policy, sandbox policy, validation hooks, events, and backend
+adapters.
+
+Higher-level applications should compose through A2A later. They should not define the core architecture.
 
 ---
 
 ## System Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              SUPERQODE                                       │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐         │
-│  │   CLI / TUI     │    │   Web Server    │    │   LSP Server    │         │
-│  │   Interface     │    │   (Dashboard)   │    │   (IDE)         │         │
-│  └────────┬────────┘    └────────┬────────┘    └────────┬────────┘         │
-│           │                      │                      │                   │
-│           └──────────────────────┴──────────────────────┘                   │
+│                                                                             │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐        │
+│  │   CLI / TUI     │    │  Headless CLI   │    │  A2A / ACP      │        │
+│  │   Interface     │    │  Automation     │    │  Interfaces     │        │
+│  └────────┬────────┘    └────────┬────────┘    └────────┬────────┘        │
+│           └──────────────────────┴──────────────────────┘                  │
 │                                  │                                          │
-│                    ┌─────────────▼─────────────┐                           │
-│                    │    Execution Pipeline     │                           │
-│                    │  (Request -> QR Report)   │                           │
-│                    └─────────────┬─────────────┘                           │
+│                    ┌─────────────▼─────────────┐                          │
+│                    │       Harness Kernel       │                          │
+│                    │ sessions/events/policies   │                          │
+│                    └─────────────┬─────────────┘                          │
 │                                  │                                          │
-│    ┌─────────────────────────────┼─────────────────────────────┐           │
-│    │                             │                             │           │
-│    ▼                             ▼                             ▼           │
-│  ┌─────────────┐    ┌─────────────────────┐    ┌─────────────────┐        │
-│  │  Workspace  │    │    Agent Runtime    │    │   QR Generator  │        │
-│  │  Manager    │    │  (Prompts + Tools)  │    │   (Reports)     │        │
-│  └──────┬──────┘    └──────────┬──────────┘    └────────┬────────┘        │
-│         │                      │                        │                  │
-│         │           ┌──────────┴──────────┐             │                  │
-│         │           │                     │             │                  │
-│         ▼           ▼                     ▼             ▼                  │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐       │
-│  │  Snapshot   │  │  Provider   │  │   Tools     │  │  Artifacts  │       │
-│  │  & Revert   │  │  Gateway    │  │   System    │  │  Storage    │       │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘       │
-│                          │                                                  │
-│         ┌────────────────┼────────────────┐                                │
-│         │                │                │                                │
-│         ▼                ▼                ▼                                │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                        │
-│  │    BYOK     │  │    ACP      │  │   Local     │                        │
-│  │  (LiteLLM)  │  │  (Agents)   │  │  (Ollama)   │                        │
-│  └─────────────┘  └─────────────┘  └─────────────┘                        │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                    Safety & Permissions Layer                        │   │
-│  │         (Sandbox, Approvals, Dangerous Op Detection)                 │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
+│       ┌──────────────────────────┼──────────────────────────┐              │
+│       │                          │                          │              │
+│       ▼                          ▼                          ▼              │
+│ ┌──────────────┐          ┌──────────────┐          ┌──────────────┐       │
+│ │ HarnessSpec  │          │ Runtime      │          │ Tool +       │       │
+│ │ Compiler     │          │ Backends     │          │ Sandbox      │       │
+│ └──────┬───────┘          └──────┬───────┘          └──────┬───────┘       │
+│        │                         │                         │               │
+│        ▼                         ▼                         ▼               │
+│ ┌──────────────┐          ┌──────────────┐          ┌──────────────┐       │
+│ │ Model Policy │          │ Provider     │          │ Validation   │       │
+│ │ + Profiles   │          │ Gateways     │          │ Hooks        │       │
+│ └──────────────┘          └──────────────┘          └──────────────┘       │
+│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Core Subsystems
+## Core Layers
 
-### 1. Execution Pipeline
+### 1. HarnessSpec
 
-The execution pipeline orchestrates the entire QE session lifecycle:
+`HarnessSpec` is the user-owned definition of a harness. It describes what should run, not how every
+internal call is implemented.
 
-| Component | Location | Responsibility |
-|-----------|----------|----------------|
-| **Runner** | `execution/runner.py` | Coordinates QE session execution |
-| **Modes** | `execution/modes.py` | Quick vs Deep mode configuration |
-| **Resolver** | `execution/resolver.py` | Resolves roles and execution targets |
-| **NL Parser (Enterprise)** | Enterprise module | Parses natural language requests |
-| **NL Executor (Enterprise)** | Enterprise module | Executes parsed commands |
+It should cover:
 
-**Data Flow:**
+- harness flavor: `coding`, `no_tool`, or custom
+- runtime backend: `builtin`, `openai-agents`, `adk`, or custom
+- model policy: primary model, fallbacks, local hardware hints, prompt profile, context budgets
+- agents: roles, tools, skills, delegation rules
+- workflow: single, chain, router, parallel, orchestrator, evaluator-optimizer
+- execution policy: sandbox, approvals, allowed commands, blocked operations
+- validation hooks: tests, linters, custom commands
+- observability: events, traces, session persistence
 
-```
-User Request
-     │
-     ▼
-NL Parser (parse intent, extract targets)
-     │
-     ▼
-Role Resolver (select appropriate QE roles)
-     │
-     ▼
-Execution Runner (orchestrate session)
-     │
-     ├──► Workspace Manager (create sandbox)
-     │
-     ├──► Agent Runtime (execute with tools)
-     │
-     ├──► QR Generator (create reports)
-     │
-     └──► Artifact Storage (persist results)
-```
+### 2. Harness Kernel
 
-[:octicons-arrow-right-24: Execution Pipeline Details](execution-pipeline.md)
+The kernel is SuperQode-owned. It provides the stable runtime contract used by every flavor and backend.
 
----
+Responsibilities:
 
-### 2. Workspace Manager
+- create and resume sessions
+- stream normalized events
+- persist history and compact context
+- enforce tool and sandbox policy
+- dispatch model calls through runtime backends
+- expose typed outputs and structured results
+- call validation hooks after changes
+- provide a backend-neutral API to CLI, TUI, ACP, and A2A surfaces
 
-The workspace manager provides ephemeral, isolated environments for testing:
+### 3. Runtime Backends
 
-| Component | Location | Responsibility |
-|-----------|----------|----------------|
-| **Manager** | `workspace/manager.py` | Orchestrates workspace lifecycle |
-| **Snapshot** | `workspace/snapshot.py` | File-based isolation |
-| **Git Snapshot** | `workspace/git_snapshot.py` | Git stash-based isolation |
-| **Worktree** | `workspace/worktree.py` | Git worktree isolation |
-| **Git Guard** | `workspace/git_guard.py` | Prevents accidental commits |
-| **Diff Tracker** | `workspace/diff_tracker.py` | Tracks all changes |
-| **Artifacts** | `workspace/artifacts.py` | Manages QE artifacts |
-| **Watcher** | `workspace/watcher.py` | File system monitoring |
-| **Coordinator** | `workspace/coordinator.py` | Multi-agent coordination |
+Backends are adapters behind the same harness contract.
 
-[:octicons-arrow-right-24: Workspace Internals](workspace-internals.md)
+| Backend | Role |
+| --- | --- |
+| `builtin` | SuperQode native agent loop |
+| `openai-agents` | OpenAI Agents SDK runtime |
+| `adk` | Google ADK runtime |
+| custom | Bring-your-own backend implementation |
 
----
+No backend should become the product center. SuperQode owns the contract; backends provide execution.
 
-### 3. Agent Runtime
+### 4. Tool And Sandbox Layer
 
-The agent runtime manages AI agent interactions:
+Tools are capabilities attached by policy.
 
-| Component | Location | Responsibility |
-|-----------|----------|----------------|
-| **Agent Loop** | `agent/loop.py` | Main agent execution loop |
-| **System Prompts** | `agent/system_prompts.py` | Base system prompts |
-| **QE Expert Prompts (Enterprise)** | Enterprise module | Role-specific prompts |
-| **Edit Strategies** | `agent/edit_strategies.py` | Code modification strategies |
-| **Tool Call** | `tool_call.py` | Tool invocation handling |
-| **Agent Stream** | `agent_stream.py` | Streaming response handling |
+The coding harness can expose:
 
----
+- file read/write/edit
+- search and code search
+- shell execution
+- MCP tools
+- todo/task tools
+- validation tools
+- optional Python REPL
 
-### 4. Provider Gateway
+The no-tool harness exposes none of these. That is intentional: it provides a clean model-only path for
+reasoning and evaluation.
 
-The provider gateway abstracts different AI model sources:
+### 5. Model Policy
 
-| Component | Location | Responsibility |
-|-----------|----------|----------------|
-| **Manager** | `providers/manager.py` | Provider lifecycle management |
-| **Registry** | `providers/registry.py` | Provider registration |
-| **Models** | `providers/models.py` | Model definitions |
-| **Health** | `providers/health.py` | Provider health checks |
-| **Usage** | `providers/usage.py` | Token/cost tracking |
-| **LiteLLM Gateway** | `providers/gateway/litellm_gateway.py` | BYOK provider |
-| **OpenResponses** | `providers/gateway/openresponses_gateway.py` | OpenResponses provider |
+Model behavior should be explicit instead of scattered through runtime conditionals.
 
----
+Policy should include:
 
-### 5. Tools System
+- default model and fallback models
+- local model hints for MLX, Ollama, llama.cpp, and DS4
+- Gemma4 coding and no-tool prompt profiles
+- temperature and reasoning defaults
+- context limits and compaction thresholds
+- tool-call format repair policy
 
-The tools system provides capabilities to AI agents:
+### 6. Validation Hooks
 
-| Component | Location | Responsibility |
-|-----------|----------|----------------|
-| **Base** | `tools/base.py` | Base tool classes |
-| **File Tools** | `tools/file_tools.py` | File read/write operations |
-| **Edit Tools** | `tools/edit_tools.py` | Code editing |
-| **Shell Tools** | `tools/shell_tools.py` | Command execution |
-| **Search Tools** | `tools/search_tools.py` | Code search |
-| **Web Tools** | `tools/web_tools.py` | Web fetching |
-| **LSP Tools** | `tools/lsp_tools.py` | Language server integration |
-| **Permissions** | `tools/permissions.py` | Tool permission enforcement |
-| **Validation** | `tools/validation.py` | Input/output validation |
+Validation is infrastructure, not the product identity. The harness can run project checks after it produces
+changes or structured suggestions.
 
-[:octicons-arrow-right-24: Tools System](tools-system.md)
+Examples:
 
----
-
-### 6. Safety & Permissions
-
-The safety layer ensures secure operation:
-
-| Component | Location | Responsibility |
-|-----------|----------|----------------|
-| **Permission Rules** | `permissions/rules.py` | Permission rule engine |
-| **Sandbox** | `safety/sandbox.py` | Sandbox enforcement |
-| **Warnings** | `safety/warnings.py` | Safety warning system |
-| **Danger Detection** | `danger.py` | Dangerous operation detection |
-| **Approval** | `approval.py` | User approval workflow |
-
-[:octicons-arrow-right-24: Safety & Permissions](safety-permissions.md)
-
----
-
-### 7. QR Generator
-
-The QR (Quality Report) generator creates research-grade reports:
-
-| Component | Location | Responsibility |
-|-----------|----------|----------------|
-| **Generator** | `qr/generator.py` | Report generation |
-| **Templates** | `qr/templates.py` | Report templates |
-| **Dashboard** | `qr/dashboard.py` | QR visualization |
-
----
-
-### 8. SuperQE Orchestrator
-
-The SuperQE orchestrator coordinates multi-role sessions:
-
-| Component | Location | Responsibility |
-|-----------|----------|----------------|
-| **Orchestrator** | `superqe/orchestrator.py` | Multi-role coordination |
-| **Session** | `superqe/session.py` | QE session management |
-| **Roles** | `superqe/roles.py` | Role definitions |
-| **Verifier** | `superqe/verifier.py` | Fix verification |
-| **Noise Filter** | `superqe/noise.py` | False positive filtering |
-| **Events** | `superqe/events.py` | JSONL event streaming |
-| **Constitution** | `superqe/constitution/` | Behavior constraints |
-| **Frameworks** | `superqe/frameworks/` | Test framework support |
-| **Skills** | `superqe/skills/` | Reusable QE skills |
+- syntax checks
+- type checks
+- lint checks
+- test commands
+- project-specific custom commands
 
 ---
 
 ## Request Lifecycle
 
-A complete QE session follows this lifecycle:
-
-```
+```text
 1. REQUEST
-   User runs: superqe run . --mode quick -r security_tester
+   User sends a prompt from TUI, CLI, ACP, A2A, or an embedding API.
 
-2. PARSE
-   - CLI parses arguments
-   - Resolves roles from registry
-   - Determines execution mode
+2. SPEC RESOLUTION
+   SuperQode selects a built-in or user-provided HarnessSpec.
 
-3. WORKSPACE SETUP
-   - Creates ephemeral workspace (snapshot/worktree)
-   - Initializes git guard
-   - Starts diff tracking
+3. POLICY COMPILATION
+   The spec resolves model, runtime, tools, sandbox, permissions, and validation.
 
-4. AGENT EXECUTION
-   - Loads role-specific prompts
-   - Connects to provider (BYOK/ACP/Local)
-   - Executes agent loop with tools
-   - Handles tool calls (file, shell, search)
+4. SESSION OPEN
+   The kernel creates or resumes session history and loads project instructions.
 
-5. VERIFICATION
-   - Verifies findings
-   - Filters noise/false positives
-   - Validates suggested fixes
+5. RUNTIME EXECUTION
+   The selected backend runs the model loop or model-only call.
 
-6. REPORT GENERATION
-   - Generates QR (Quality Report)
-   - Creates patches for fixes
-   - Generates test files
+6. TOOL / SANDBOX ACCESS
+   Tool-capable flavors execute approved tool calls through the sandbox layer.
 
-7. ARTIFACT STORAGE
-   - Saves QR to .superqode/qe-artifacts/
-   - Stores patches and tests
-   - Records session metadata
+7. VALIDATION
+   If changes or suggestions were produced, configured validation hooks run.
 
-8. CLEANUP
-   - Reverts all workspace changes
-   - Restores original code
-   - Preserves artifacts only
+8. RESULT
+   The kernel returns text, structured data, diffs, events, and validation state.
 ```
 
 ---
 
-## Configuration Flow
+## Module Direction
 
-```
-superqode.yaml (project)
-        │
-        ▼
-~/.superqode.yaml (user)
-        │
-        ▼
-Environment Variables
-        │
-        ▼
-CLI Arguments (highest priority)
+```text
+src/superqode/harness/
+  spec.py
+  loader.py
+  templates.py
+  compiler.py
+  kernel.py
+  session.py
+  events.py
+  history.py
+  sandbox.py
+  validation.py
+  backends/
+    base.py
+    builtin.py
+    openai_agents.py
+    google_adk.py
 ```
 
----
+Existing modules map into this structure:
 
-## Module Dependencies
-
-```
-CLI/TUI
-   │
-   ├──► commands/* (Click commands)
-   │
-   ├──► execution/* (Pipeline)
-   │       │
-   │       ├──► workspace/* (Isolation)
-   │       │
-   │       ├──► agent/* (Runtime)
-   │       │       │
-   │       │       └──► tools/* (Capabilities)
-   │       │
-   │       └──► superqe/* (Orchestration)
-   │
-   ├──► providers/* (Model access)
-   │
-   ├──► safety/* (Security)
-   │
-   └──► qr/* (Reporting)
-```
+| Current Area | v2 Role |
+| --- | --- |
+| `agent/loop.py` | `builtin` backend |
+| `headless.py` profiles | built-in HarnessSpec templates |
+| `tools/*` | tool capability layer |
+| `runtime/*` | backend adapters |
+| `providers/*` | model/provider gateway |
+| `sandbox/*` | execution policy and workspace isolation |
+| `harness/validator.py` | validation hook implementation |
 
 ---
 
 ## Extension Points
 
-SuperQode can be extended at these points:
-
-| Extension Point | Location | How to Extend |
-|-----------------|----------|---------------|
-| **Custom Roles** | `superqe/roles.py` | Add role definitions |
-| **New Tools** | `tools/` | Implement base tool class |
-| **Providers** | `providers/gateway/` | Add gateway implementation |
-| **Frameworks** | `superqe/frameworks/` | Add test framework support |
-| **Skills** | `superqe/skills/` | Add reusable QE skills |
+| Extension Point | Purpose |
+| --- | --- |
+| Harness templates | Add reusable coding, no-tool, local-model, or team-specific profiles |
+| Runtime backends | Add a new agent runtime behind the stable kernel contract |
+| Tool packs | Add domain-specific capabilities |
+| Sandbox connectors | Adapt local, remote, or provider-owned workspaces |
+| Model profiles | Tune prompts, tool-call behavior, and fallback policy |
+| Validation hooks | Add project-specific checks |
+| A2A apps | Compose higher-level applications outside the core harness |
 
 ---
 
 ## Related Documentation
 
-- [Execution Pipeline](execution-pipeline.md) - Detailed execution flow
-- [Workspace Internals](workspace-internals.md) - Isolation mechanisms
-- [Safety & Permissions](safety-permissions.md) - Security model
-- [Tools System](tools-system.md) - Tool development
-- [Session Management](session-management.md) - Session persistence
+- [Harness System](harness-system.md)
+- [Agent Runtimes](../runtimes.md)
+- [Tools System](tools-system.md)
+- [Workspace Internals](workspace-internals.md)
+- [Safety & Permissions](safety-permissions.md)
+- [Session Management](session-management.md)

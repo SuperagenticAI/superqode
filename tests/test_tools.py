@@ -97,6 +97,12 @@ class TestToolRegistry:
         assert "compact" not in names
         assert len(registry.to_openai_format()) < len(ToolRegistry.coding().to_openai_format())
 
+    def test_no_tool_profile_is_empty(self):
+        registry = ToolRegistry.for_profile("no-tool")
+
+        assert registry.list() == []
+        assert registry.to_openai_format() == []
+
 
 class TestReadFileTool:
     """Test the read file tool."""
