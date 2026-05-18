@@ -1,0 +1,139 @@
+"""Runtime registry and factory.
+
+Public entry points:
+    create_runtime(name, **kwargs) -> AgentRuntime
+    list_runtimes() -> list[RuntimeInfo]
+    resolve_runtime_name(cli, yaml, env) -> str
+
+Optional backends (adk, openai-agents) are imported lazily so importing
+``superqode.runtime`` is cheap and works without optional extras.
+"""
+
+from __future__ import annotations
+
+import importlib
+import os
+from dataclasses import dataclass
+from typing import Any, Callable
+
+from .base import AgentRuntime
+from .builtin import BuiltinRuntime
+from .errors import RuntimeNotInstalledError, UnknownRuntimeError
+
+_DEFAULT = "builtin"
+
+
+@dataclass(frozen=True)
+class RuntimeInfo:
+    """Metadata about a known runtime, for `superqode runtime list` and the TUI dialog."""
+
+    name: str
+    description: str
+    installed: bool
+    install_hint: str | None  # None when no extra is needed
+    implemented: bool  # False for stubs (openai-agents in v1)
+
+
+def _builtin_factory(**kwargs) -> AgentRuntime:
+    return BuiltinRuntime(**kwargs)
+
+
+def _adk_factory(**kwargs) -> AgentRuntime:
+    try:
+        module = importlib.import_module("superqode.runtime.adk")
+    except ImportError as exc:
+        raise RuntimeNotInstalledError(
+            "ADK runtime requires the 'adk' extra. Install with: pip install superqode[adk]"
+        ) from exc
+    return module.ADKRuntime(**kwargs)
+
+
+def _openai_agents_factory(**kwargs) -> AgentRuntime:
+    try:
+        module = importlib.import_module("superqode.runtime.openai_agents")
+    except ImportError as exc:
+        raise RuntimeNotInstalledError(
+            "OpenAI Agents runtime requires the 'openai-agents' extra. "
+            "Install with: pip install superqode[openai-agents]"
+        ) from exc
+    return module.OpenAIAgentsRuntime(**kwargs)
+
+
+_FACTORIES: dict[str, Callable[..., AgentRuntime]] = {
+    "builtin": _builtin_factory,
+    "adk": _adk_factory,
+    "openai-agents": _openai_agents_factory,
+}
+
+_DESCRIPTIONS: dict[str, str] = {
+    "builtin": "SuperQode native agent loop (default)",
+    "adk": "Google Agent Development Kit",
+    "openai-agents": "OpenAI Agents SDK",
+}
+
+_OPTIONAL_PACKAGES: dict[str, tuple[str, str]] = {
+    # runtime name -> (importable package, pip extra)
+    "adk": ("google.adk", "superqode[adk]"),
+    "openai-agents": ("agents", "superqode[openai-agents]"),
+}
+
+
+def create_runtime(name: str | None, **kwargs: Any) -> AgentRuntime:
+    """Construct a runtime by name.
+
+    ``name=None`` or an empty string returns the default (builtin). Unknown
+    names raise UnknownRuntimeError. Missing optional deps raise
+    RuntimeNotInstalledError with the exact install hint.
+    """
+    resolved = (name or _DEFAULT).strip().lower()
+    if resolved not in _FACTORIES:
+        raise UnknownRuntimeError(
+            f"Unknown runtime '{name}'. Known: {', '.join(sorted(_FACTORIES))}"
+        )
+    return _FACTORIES[resolved](**kwargs)
+
+
+def list_runtimes() -> list[RuntimeInfo]:
+    """Describe every known runtime and whether its dependencies are installed."""
+    out: list[RuntimeInfo] = []
+    for name in _FACTORIES:
+        if name == "builtin":
+            installed = True
+            install_hint = None
+            implemented = True
+        else:
+            pkg, extra = _OPTIONAL_PACKAGES[name]
+            try:
+                importlib.import_module(pkg)
+                installed = True
+            except ImportError:
+                installed = False
+            install_hint = None if installed else f"pip install {extra}"
+            implemented = True
+        out.append(
+            RuntimeInfo(
+                name=name,
+                description=_DESCRIPTIONS[name],
+                installed=installed,
+                install_hint=install_hint,
+                implemented=implemented,
+            )
+        )
+    return out
+
+
+def known_runtime_names() -> list[str]:
+    """Return all registered runtime names — useful for click choice arguments."""
+    return list(_FACTORIES.keys())
+
+
+def resolve_runtime_name(
+    cli: str | None = None,
+    yaml: str | None = None,
+    env_var: str = "SUPERQODE_RUNTIME",
+) -> str:
+    """Resolve the active runtime name with precedence: CLI > YAML > env > default."""
+    for candidate in (cli, yaml, os.environ.get(env_var)):
+        if candidate:
+            return candidate.strip().lower()
+    return _DEFAULT

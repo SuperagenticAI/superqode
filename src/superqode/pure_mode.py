@@ -22,6 +22,7 @@ from .agent.session_manager import SessionManager, SessionMetadata
 from .tools.base import ToolRegistry, ToolResult
 from .providers.gateway.litellm_gateway import LiteLLMGateway
 from .providers.registry import PROVIDERS, ProviderTier, ProviderCategory
+from .runtime import AgentRuntime, create_runtime, resolve_runtime_name
 
 
 @dataclass
@@ -43,12 +44,14 @@ class PureSession:
 class PureMode:
     """Pure Mode manager for TUI and CLI integration."""
 
-    def __init__(self):
+    def __init__(self, runtime: Optional[str] = None):
         self.session = PureSession()
         self.gateway = LiteLLMGateway()
         self._tool_profile_env = os.getenv("SUPERQODE_TOOL_PROFILE", "").strip().lower()
         self.tool_profile = self._tool_profile_env or "coding"
         self.tools = ToolRegistry.for_profile(self.tool_profile)
+        self.runtime_name = resolve_runtime_name(cli=runtime)
+        self._runtime: Optional[AgentRuntime] = None
         self._agent: Optional[AgentLoop] = None
         self._session_manager: Optional[SessionManager] = None
 
@@ -160,7 +163,8 @@ class PureMode:
             session_history_limit=session_history_limit,
         )
 
-        self._agent = AgentLoop(
+        self._runtime = create_runtime(
+            self.runtime_name,
             gateway=self.gateway,
             tools=self.tools,
             config=config,
@@ -169,6 +173,7 @@ class PureMode:
             on_thinking=self.on_thinking,
             parallel_tools=parallel_tools,
         )
+        self._agent = getattr(self._runtime, "loop", None)
 
         # Ensure callbacks are set on the agent (in case they were set after agent creation)
         if self._agent:
@@ -183,6 +188,7 @@ class PureMode:
         """Disconnect from Pure Mode."""
         self.session = PureSession()
         self._agent = None
+        self._runtime = None
 
     def set_system_level(self, level: SystemPromptLevel):
         """Change the system prompt level."""

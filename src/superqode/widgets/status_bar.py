@@ -104,6 +104,7 @@ class StatusBar(Widget):
     task_count: reactive[int] = reactive(0)
     qe_active: reactive[bool] = reactive(False)
     qe_mode: reactive[str] = reactive("")  # "quick" or "deep"
+    runtime_name: reactive[str] = reactive("builtin")
 
     def __init__(
         self,
@@ -128,6 +129,9 @@ class StatusBar(Widget):
         with Horizontal():
             yield Static(self._get_mode_text(), id="mode-indicator", classes="status-section")
             yield Static(self._get_agent_text(), id="agent-indicator", classes="status-section")
+            yield Static(
+                self._get_runtime_text(), id="runtime-indicator", classes="status-section"
+            )
             yield Static(self._get_qe_text(), id="qe-indicator", classes="status-section")
             yield Static(self._get_project_text(), id="project-indicator", classes="status-section")
             yield Static(
@@ -166,6 +170,10 @@ class StatusBar(Widget):
         else:
             return "🔌 No Agent"
 
+    def _get_runtime_text(self) -> str:
+        """Get the runtime badge text."""
+        return f"🔧 {self.runtime_name}"
+
     def _get_project_text(self) -> str:
         """Get the project indicator text."""
         if self.task_count > 0:
@@ -183,6 +191,16 @@ class StatusBar(Widget):
         try:
             mode_widget = self.query_one("#mode-indicator", Static)
             mode_widget.update(self._get_mode_text())
+        except Exception:
+            pass
+
+    def watch_runtime_name(self, _runtime: str) -> None:
+        """React to runtime swaps."""
+        if not self.is_mounted:
+            return
+        try:
+            widget = self.query_one("#runtime-indicator", Static)
+            widget.update(self._get_runtime_text())
         except Exception:
             pass
 

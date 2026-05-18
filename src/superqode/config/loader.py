@@ -261,6 +261,7 @@ def parse_config(data: Dict[str, Any]) -> Config:
             version=sq_data.get("version", "1.0"),
             team_name=sq_data.get("team_name", sq_data.get("name", "My Development Team")),
             description=sq_data.get("description", "Multi-agent software development team"),
+            runtime=sq_data.get("runtime"),
         )
 
         # Parse gateway config

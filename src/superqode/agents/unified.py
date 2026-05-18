@@ -81,7 +81,7 @@ class SuperQodeAgent(UnifiedAgent):
             return False
 
         # Import here to avoid circular imports
-        from ..agent.loop import AgentLoop, AgentConfig
+        from ..agent.loop import AgentConfig
         from ..agent.system_prompts import SystemPromptLevel, get_job_description_prompt
         from ..tools.base import ToolRegistry
         from ..tools.base import ToolResult
@@ -89,6 +89,7 @@ class SuperQodeAgent(UnifiedAgent):
         from ..providers.gateway.base import ToolDefinition
         from ..providers.registry import PROVIDERS, ProviderCategory
         from ..mcp.integration import get_mcp_manager
+        from ..runtime import create_runtime, resolve_runtime_name
 
         # Initialize gateway
         gateway = LiteLLMGateway()
@@ -184,8 +185,11 @@ class SuperQodeAgent(UnifiedAgent):
             session_history_limit=session_history_limit,
         )
 
-        # Create agent loop (on_thinking will be set via send_message if provided)
-        self._agent_loop = AgentLoop(
+        # Create agent runtime (on_thinking will be set via send_message if provided).
+        # role_config.runtime is honored if set; otherwise resolve from env / default.
+        runtime_name = resolve_runtime_name(cli=getattr(self.role_config, "runtime", None))
+        self._runtime = create_runtime(
+            runtime_name,
             gateway=gateway,
             tools=tools,
             config=config,
@@ -193,6 +197,9 @@ class SuperQodeAgent(UnifiedAgent):
             mcp_executor=mcp_executor,
             mcp_tools=mcp_tool_defs,
         )
+        # Backward-compat: callers / tests poke at _agent_loop for AgentLoop internals.
+        # Available only for the builtin runtime.
+        self._agent_loop = getattr(self._runtime, "loop", None)
 
         self._initialized = True
         return True

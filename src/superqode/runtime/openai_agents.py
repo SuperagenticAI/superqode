@@ -1,0 +1,505 @@
+"""OpenAI Agents SDK runtime adapter.
+
+Wraps ``agents.Agent`` + ``agents.Runner`` behind SuperQode's AgentRuntime
+Protocol. SuperQode callers (TUI, headless, A2A server) drive the OpenAI
+Agents SDK with the same constructor signature used by the builtin runtime.
+
+Phase 3 scope:
+    * SuperQode tools bridged via ``tool_bridge_openai.to_openai_function_tools``
+    * ``needs_approval`` wired to PermissionManager (real HITL for ASK)
+    * JSONL Session persistence via ``openai_session.SuperQodeSession``
+    * Streaming via ``Runner.run_streamed`` / ``stream_events``
+    * Cancellation via ``RunResultStreaming.cancel`` (no flag-poll hack)
+    * LiteLLM wrapper for non-OpenAI providers (transparent via [litellm] extra)
+
+Phase 3 gaps (documented; deferred to later phases):
+    * MCP servers are bridged at the tool-definition layer only — each
+      ``mcp_tools`` entry becomes a FunctionTool that delegates to
+      ``mcp_executor``. Native ``MCPServerStdio`` instances on Agent come
+      in a later phase along with SandboxAgent.
+    * HITL approval flow: ``run()`` reports ``stopped_reason="needs_approval"``
+      and stashes ``RunState`` on ``self._pending_state``; TUI plumbing
+      to surface the approval dialog + ``resume()`` is Phase 6.
+    * SandboxAgent + Manifest + ``RunConfig(sandbox=...)`` is Phase 7.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import uuid
+from pathlib import Path
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
+
+from ..agent.loop import AgentConfig, AgentMessage, AgentResponse, _cached_system_prompt
+from ..providers.gateway.base import GatewayInterface, ToolDefinition
+from ..providers.profiles import resolve_model_profile, run_pre_init_once
+from ..tools.base import Tool, ToolContext, ToolRegistry, ToolResult
+from ..tools.permissions import (
+    Permission,
+    PermissionConfig,
+    PermissionManager,
+)
+from .errors import RuntimeNotInstalledError
+from .tool_bridge_openai import to_openai_function_tools
+
+logger = logging.getLogger(__name__)
+
+
+def _require_sdk():
+    try:
+        from agents import Agent, Runner  # noqa: F401
+        from agents.run import RunConfig  # noqa: F401
+    except ImportError as exc:
+        raise RuntimeNotInstalledError(
+            "OpenAI Agents runtime requires the 'openai-agents' extra. "
+            "Install with: pip install superqode[openai-agents]"
+        ) from exc
+
+
+def _build_model(provider: str, model: str):
+    """Return the SDK model spec for the given (provider, model).
+
+    For OpenAI's own provider we pass the bare model id (the SDK handles it
+    via the default OpenAI client). For anything else we wrap in
+    ``LitellmModel`` so the same model name works across providers.
+    """
+    _require_sdk()
+    if (provider or "").strip().lower() in {"openai", "openai-compatible"}:
+        return model
+    try:
+        from agents.extensions.models.litellm_model import LitellmModel
+    except ImportError as exc:
+        raise RuntimeNotInstalledError(
+            "Non-OpenAI providers require the litellm sub-extra. "
+            "Install with: pip install 'openai-agents[litellm]' "
+            "(included automatically in superqode[openai-agents])"
+        ) from exc
+    return LitellmModel(model=f"{provider}/{model}")
+
+
+def _build_context_factory(
+    config: AgentConfig,
+    tool_registry: ToolRegistry,
+    permission_manager: PermissionManager,
+    session_id: str,
+) -> Callable[[], ToolContext]:
+    """Return a ctx_factory that mints a fresh ToolContext per tool call."""
+    working_directory = Path(config.working_directory)
+
+    def make_ctx() -> ToolContext:
+        return ToolContext(
+            session_id=session_id,
+            working_directory=working_directory,
+            require_confirmation=config.require_confirmation,
+            tool_registry=tool_registry,
+            sub_agent_runner=None,
+        )
+
+    return make_ctx
+
+
+def _bridge_mcp_tools_as_function_tools(
+    mcp_tools: List[ToolDefinition],
+    mcp_executor: Callable[..., Awaitable[ToolResult]],
+    permission_manager: PermissionManager,
+) -> List[Any]:
+    """Wrap each MCP ToolDefinition as a FunctionTool delegating to mcp_executor.
+
+    SuperQode names MCP tools ``mcp_{server_id}_{tool_name}``; we parse the
+    server_id off the prefix when invoking. This is a v1 bridge — native
+    ``MCPServerStdio`` integration on Agent is a follow-up.
+    """
+    if not mcp_tools or mcp_executor is None:
+        return []
+
+    _require_sdk()
+    from agents.tool import FunctionTool
+
+    out: List[Any] = []
+    for tool_def in mcp_tools:
+        name = tool_def.name
+        # Strip the "mcp_" prefix and split "{server_id}_{tool_name}".
+        rest = name[len("mcp_"):] if name.startswith("mcp_") else name
+        if "_" in rest:
+            server_id, real_tool_name = rest.split("_", 1)
+        else:
+            server_id, real_tool_name = "", rest
+
+        out.append(
+            _make_mcp_function_tool(
+                FunctionTool=FunctionTool,
+                tool_name=name,
+                description=tool_def.description,
+                params_schema=tool_def.parameters or {"type": "object", "properties": {}},
+                server_id=server_id,
+                real_tool_name=real_tool_name,
+                mcp_executor=mcp_executor,
+                permission_manager=permission_manager,
+            )
+        )
+    return out
+
+
+def _make_mcp_function_tool(
+    *,
+    FunctionTool: Any,
+    tool_name: str,
+    description: str,
+    params_schema: Dict[str, Any],
+    server_id: str,
+    real_tool_name: str,
+    mcp_executor: Callable[..., Awaitable[ToolResult]],
+    permission_manager: PermissionManager,
+) -> Any:
+    """Build one MCP FunctionTool wrapper bound to a specific server+tool."""
+
+    async def _needs_approval(_ctx: Any, params: Dict[str, Any], _call_id: str) -> bool:
+        return permission_manager.check_permission(tool_name, params) == Permission.ASK
+
+    async def _on_invoke(_ctx: Any, args_json: str) -> str:
+        try:
+            args = json.loads(args_json) if args_json else {}
+        except json.JSONDecodeError:
+            return "ERROR: invalid JSON arguments"
+        perm = permission_manager.check_permission(tool_name, args)
+        if perm == Permission.DENY:
+            return f"ERROR: Permission denied for tool: {tool_name}"
+        try:
+            result: ToolResult = await mcp_executor(server_id, real_tool_name, args)
+        except Exception as exc:  # noqa: BLE001
+            return f"ERROR: {type(exc).__name__}: {exc}"
+        if not result.success:
+            return f"ERROR: {result.error or 'mcp tool error'}"
+        output = result.output
+        if isinstance(output, (dict, list)):
+            return json.dumps(output, default=str)
+        return "" if output is None else str(output)
+
+    return FunctionTool(
+        name=tool_name,
+        description=description,
+        params_json_schema=params_schema,
+        on_invoke_tool=_on_invoke,
+        needs_approval=_needs_approval,
+        strict_json_schema=False,
+    )
+
+
+class OpenAIAgentsRuntime:
+    """OpenAI Agents SDK-backed implementation of AgentRuntime."""
+
+    name = "openai-agents"
+
+    def __init__(
+        self,
+        gateway: Optional[GatewayInterface] = None,
+        tools: Optional[ToolRegistry] = None,
+        config: Optional[AgentConfig] = None,
+        on_tool_call: Optional[Callable[[str, Dict], None]] = None,
+        on_tool_result: Optional[Callable[[str, ToolResult], None]] = None,
+        on_thinking: Optional[Callable[[str], Awaitable[None]]] = None,
+        parallel_tools: bool = True,
+        mcp_executor: Optional[Callable[..., Awaitable[ToolResult]]] = None,
+        mcp_tools: Optional[List[ToolDefinition]] = None,
+        include_mcp: bool = False,
+        permission_manager: Optional[PermissionManager] = None,
+        **_unused: Any,
+    ):
+        _require_sdk()
+        if config is None or tools is None:
+            raise ValueError("OpenAIAgentsRuntime requires both 'config' and 'tools'")
+
+        from agents import Agent, Runner  # noqa: F401
+        from agents.run import RunConfig
+
+        # gateway is unused by the OpenAI Agents SDK (it has its own model layer).
+        if gateway is not None:
+            logger.debug(
+                "OpenAIAgentsRuntime: 'gateway' is unused (SDK manages its own models)"
+            )
+
+        self.config = config
+        self.tools = tools
+        self.on_tool_call = on_tool_call
+        self.on_tool_result = on_tool_result
+        self.on_thinking = on_thinking
+        self.parallel_tools = parallel_tools
+
+        if permission_manager is not None:
+            self.permission_manager = permission_manager
+        elif config.require_confirmation:
+            self.permission_manager = PermissionManager()
+        else:
+            self.permission_manager = PermissionManager(
+                PermissionConfig(default=Permission.ALLOW)
+            )
+
+        run_pre_init_once(config.provider, config.model)
+
+        self.session_id = config.session_id or f"oai-{uuid.uuid4().hex[:8]}"
+
+        # System prompt — reuse the builtin cache so behavior matches.
+        instructions = _cached_system_prompt(
+            level=config.system_prompt_level,
+            working_directory=str(config.working_directory),
+            custom_prompt=config.custom_system_prompt,
+            job_description=config.job_description,
+            provider=config.provider,
+            model=config.model,
+        )
+
+        profile = resolve_model_profile(config.provider, config.model)
+
+        ctx_factory = _build_context_factory(
+            config=config,
+            tool_registry=tools,
+            permission_manager=self.permission_manager,
+            session_id=self.session_id,
+        )
+
+        # Bridge SuperQode tools as FunctionTools.
+        bridged_tools = to_openai_function_tools(
+            tools,
+            ctx_factory=ctx_factory,
+            permission_manager=self.permission_manager,
+            excluded=profile.excluded_tools,
+        )
+        # Bridge MCP tool definitions (if any) as additional FunctionTools.
+        bridged_tools.extend(
+            _bridge_mcp_tools_as_function_tools(
+                mcp_tools or [],
+                mcp_executor,
+                self.permission_manager,
+            )
+        )
+
+        # Optional JSONL session — only if the caller asked for persistence.
+        self._session = None
+        if config.enable_session_storage:
+            from .openai_session import make_session_class
+
+            SuperQodeSession = make_session_class()
+            self._session = SuperQodeSession(
+                session_id=self.session_id,
+                storage_dir=config.session_storage_dir,
+            )
+
+        # Build the Agent. Default tool_use_behavior is "run_llm_again",
+        # matching the AgentLoop iteration model.
+        self._agent = Agent(
+            name="superqode",
+            instructions=instructions,
+            tools=bridged_tools,
+            model=_build_model(config.provider, config.model),
+        )
+
+        # RunConfig: keep tracing disabled by default for privacy.
+        self._run_config = RunConfig(tracing_disabled=True)
+
+        # Cancellation: keep a flag *and* a handle to any active streaming
+        # result so cancel() can call result.cancel() directly.
+        self._cancelled = False
+        self._active_stream = None
+
+        # Phase 6 plumbing — when run() returns needs_approval, we stash the
+        # RunResult here so the TUI can drive an approve/reject loop.
+        self.pending_state: Any = None
+
+    # ------------------------------------------------------------------
+    # AgentRuntime Protocol
+    # ------------------------------------------------------------------
+
+    async def run(self, prompt: str) -> AgentResponse:
+        from agents import Runner
+
+        try:
+            result = await Runner.run(
+                self._agent,
+                prompt,
+                session=self._session,
+                run_config=self._run_config,
+                max_turns=self.config.max_iterations,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — surface as AgentResponse error
+            logger.exception("OpenAI Agents Runner.run failed")
+            return AgentResponse(
+                content="",
+                messages=[AgentMessage(role="user", content=prompt)],
+                tool_calls_made=0,
+                iterations=0,
+                stopped_reason="error",
+                error=f"{type(exc).__name__}: {exc}",
+            )
+
+        return self._translate_result(prompt, result)
+
+    async def run_streaming(self, prompt: str) -> AsyncIterator[str]:
+        from agents import Runner
+        from agents.stream_events import RawResponsesStreamEvent
+
+        result = Runner.run_streamed(
+            self._agent,
+            prompt,
+            session=self._session,
+            run_config=self._run_config,
+            max_turns=self.config.max_iterations,
+        )
+        self._active_stream = result
+        try:
+            async for event in result.stream_events():
+                if self._cancelled:
+                    break
+                if isinstance(event, RawResponsesStreamEvent):
+                    text = _extract_text_delta(event)
+                    if text:
+                        yield text
+        finally:
+            self._active_stream = None
+
+    def cancel(self) -> None:
+        self._cancelled = True
+        active = self._active_stream
+        if active is not None:
+            try:
+                active.cancel()
+            except Exception:  # noqa: BLE001 — best effort
+                logger.debug("active_stream.cancel() raised", exc_info=True)
+
+    def reset_cancellation(self) -> None:
+        self._cancelled = False
+
+    async def resume(self, state: Any) -> AgentResponse:
+        """Resume a HITL-interrupted run after caller calls state.approve/reject.
+
+        Phase 6 plumbs this into the TUI permission dialog. For now any caller
+        that has a ``RunState`` (typically ``self.pending_state``) can call this
+        directly to continue the run.
+        """
+        from agents import Runner
+
+        result = await Runner.run(
+            self._agent,
+            state,
+            session=self._session,
+            run_config=self._run_config,
+            max_turns=self.config.max_iterations,
+        )
+        return self._translate_result(prompt="", result=result)
+
+    # ------------------------------------------------------------------
+    # Internal
+    # ------------------------------------------------------------------
+
+    def _translate_result(self, prompt: str, result: Any) -> AgentResponse:
+        messages: List[AgentMessage] = []
+        if prompt:
+            messages.append(AgentMessage(role="user", content=prompt))
+
+        tool_calls_made = 0
+        for item in getattr(result, "new_items", []) or []:
+            type_name = getattr(item, "type", "")
+            if type_name == "message_output_item":
+                content = _text_from_message_item(item)
+                if content:
+                    messages.append(AgentMessage(role="assistant", content=content))
+            elif type_name in {"tool_call_item", "handoff_call_item"}:
+                tool_calls_made += 1
+                if self.on_tool_call is not None:
+                    try:
+                        name = _tool_name_from_item(item)
+                        args = _tool_args_from_item(item)
+                        self.on_tool_call(name, args)
+                    except Exception:  # noqa: BLE001
+                        logger.debug("on_tool_call callback raised", exc_info=True)
+
+        interruptions = list(getattr(result, "interruptions", []) or [])
+        if interruptions:
+            stopped = "needs_approval"
+            self.pending_state = result
+        elif self._cancelled:
+            stopped = "cancelled"
+        else:
+            stopped = "complete"
+            self.pending_state = None
+
+        content = ""
+        final = getattr(result, "final_output", None)
+        if final is not None:
+            content = final if isinstance(final, str) else str(final)
+        if not content and messages and messages[-1].role == "assistant":
+            content = messages[-1].content
+
+        iterations = len(getattr(result, "raw_responses", []) or [])
+
+        return AgentResponse(
+            content=content,
+            messages=messages,
+            tool_calls_made=tool_calls_made,
+            iterations=iterations,
+            stopped_reason=stopped,
+        )
+
+
+def _extract_text_delta(event: Any) -> str:
+    """Pull a text delta off a RawResponsesStreamEvent if present."""
+    data = getattr(event, "data", None)
+    if data is None:
+        return ""
+    # Responses API streaming: ResponseTextDeltaEvent has a `.delta` string.
+    delta = getattr(data, "delta", None)
+    if isinstance(delta, str):
+        return delta
+    # Some delta events nest text under `.delta.text`.
+    if delta is not None:
+        text = getattr(delta, "text", None)
+        if isinstance(text, str):
+            return text
+    return ""
+
+
+def _text_from_message_item(item: Any) -> str:
+    raw = getattr(item, "raw_item", None)
+    if raw is None:
+        return ""
+    content = getattr(raw, "content", None)
+    if not content:
+        return ""
+    parts: List[str] = []
+    for part in content:
+        text = getattr(part, "text", None)
+        if isinstance(text, str):
+            parts.append(text)
+    return "".join(parts)
+
+
+def _tool_name_from_item(item: Any) -> str:
+    raw = getattr(item, "raw_item", None)
+    if raw is None:
+        return ""
+    name = getattr(raw, "name", None)
+    if isinstance(name, str):
+        return name
+    if isinstance(raw, dict):
+        return str(raw.get("name", ""))
+    return ""
+
+
+def _tool_args_from_item(item: Any) -> Dict[str, Any]:
+    raw = getattr(item, "raw_item", None)
+    if raw is None:
+        return {}
+    args = getattr(raw, "arguments", None)
+    if isinstance(args, str):
+        try:
+            return json.loads(args)
+        except json.JSONDecodeError:
+            return {}
+    if isinstance(args, dict):
+        return args
+    if isinstance(raw, dict):
+        return dict(raw.get("arguments", {}) or {})
+    return {}

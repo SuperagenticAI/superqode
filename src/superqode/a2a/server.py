@@ -275,27 +275,34 @@ import asyncio
 async def create_a2a_server(
     agent_config: AgentConfig,
     server_url: str = "http://localhost:8000",
+    runtime: Optional[str] = None,
 ) -> A2AServer:
     """Create and configure an A2A server.
 
     Args:
         agent_config: Agent configuration
         server_url: URL where server will be accessible
+        runtime: Agent runtime backend name (builtin/adk/openai-agents); defaults to builtin
 
     Returns:
         Configured A2AServer instance
     """
     from ..providers.gateway.litellm_gateway import LiteLLMGateway
     from ..tools.base import ToolRegistry
+    from ..runtime import create_runtime, resolve_runtime_name
 
     gateway = LiteLLMGateway()
     tools = ToolRegistry.full()
 
-    agent_loop = AgentLoop(
+    runtime_obj = create_runtime(
+        resolve_runtime_name(cli=runtime),
         gateway=gateway,
         tools=tools,
         config=agent_config,
     )
+    # A2AServer currently expects an AgentLoop. The builtin runtime exposes it
+    # via .loop; non-builtin runtimes will need a follow-up adapter in Phase 2.
+    agent_loop = getattr(runtime_obj, "loop", runtime_obj)
 
     config = A2AServerConfig(
         name="SuperQode",

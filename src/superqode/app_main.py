@@ -3746,6 +3746,8 @@ class SuperQodeApp(App):
             self._handoff(args, log)
         elif c == "a2a":
             self.run_worker(self._a2a_cmd(args, log))
+        elif c == "runtime":
+            self._runtime_cmd(args, log)
         elif c == "mcp":
             self.run_worker(self._mcp_cmd(args, log))
         elif c == "context":
@@ -4179,6 +4181,82 @@ class SuperQodeApp(App):
 
             self._pure_mode = PureMode()
         return self._pure_mode
+
+    def _runtime_cmd(self, args: str, log) -> None:
+        """Handle :runtime / :runtime list / :runtime <name>.
+
+        With no args: open the RuntimeDialog picker.
+        With "list":  print an inline status table.
+        With a name:  swap runtime mid-session (env + disconnect; next message reconnects).
+        """
+        import os as _os
+        from superqode.runtime import list_runtimes, resolve_runtime_name
+
+        sub = args.strip().lower()
+
+        if sub == "list":
+            for info in list_runtimes():
+                marker = "▸" if info.name == resolve_runtime_name() else " "
+                if not info.installed:
+                    status = f"missing — {info.install_hint or ''}"
+                elif not info.implemented:
+                    status = "stub"
+                else:
+                    status = "ready"
+                log.add_info(f"  {marker} {info.name:18} {status:30} {info.description}")
+            return
+
+        if not sub:
+            # Open the picker dialog. The dialog uses prompt_toolkit which
+            # collides with Textual's input loop; for now we fall back to
+            # the inline "list" rendering and instruct the user to switch
+            # via /runtime <name>. The full modal flow lands in Phase 5b.
+            log.add_info("Available runtimes:")
+            self._runtime_cmd("list", log)
+            log.add_info("Switch with `:runtime <name>` (e.g. `:runtime adk`).")
+            return
+
+        # Direct switch by name.
+        info_by_name = {r.name: r for r in list_runtimes()}
+        if sub not in info_by_name:
+            log.add_error(
+                f"Unknown runtime '{sub}'. Known: {', '.join(sorted(info_by_name))}"
+            )
+            return
+        info = info_by_name[sub]
+        if not info.installed:
+            log.add_error(
+                f"Runtime '{sub}' is not installed. Run: {info.install_hint or 'pip install ...'}"
+            )
+            return
+        if not info.implemented:
+            log.add_error(f"Runtime '{sub}' is a stub and not yet usable.")
+            return
+
+        current = resolve_runtime_name()
+        if sub == current:
+            log.add_info(f"Already on runtime '{sub}'.")
+            return
+
+        _os.environ["SUPERQODE_RUNTIME"] = sub
+        if hasattr(self, "_pure_mode") and self._pure_mode is not None:
+            try:
+                self._pure_mode.disconnect()
+            except Exception:  # noqa: BLE001 — best-effort
+                pass
+            self._pure_mode.runtime_name = sub
+        # Update the status bar badge if it's mounted.
+        try:
+            from superqode.widgets.status_bar import StatusBar
+
+            for status_bar in self.query(StatusBar):
+                status_bar.runtime_name = sub
+        except Exception:  # noqa: BLE001
+            pass
+        log.add_info(
+            f"Runtime swapped: {current} → {sub}. "
+            "Next message will reconnect with the new backend."
+        )
 
     def _handle_resume_session(self, args: str, log: ConversationLog):
         """Resume a previous local provider session."""

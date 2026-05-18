@@ -630,6 +630,10 @@ class AgentLoop:
             enable_session_storage=False,
         )
 
+        # Sub-agent shares the parent's runtime. For Phase 1 the parent always
+        # *is* an AgentLoop (builtin runtime), so direct instantiation is correct.
+        # Phase 2 TODO: propagate the parent's runtime name when ADK / other
+        # backends can host sub-agents, and construct via create_runtime().
         child_loop = AgentLoop(
             gateway=self.gateway,
             tools=child_tools,

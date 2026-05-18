@@ -433,6 +433,9 @@ class SuperQodeConfig:
     team_name: str = "My Development Team"
     description: str = "Multi-agent software development team"
 
+    # Agent runtime backend: "builtin" | "adk" | "openai-agents"
+    runtime: Optional[str] = None
+
     # Gateway and error handling config
     gateway: GatewayConfig = field(default_factory=GatewayConfig)
     cost_tracking: CostTrackingConfig = field(default_factory=CostTrackingConfig)

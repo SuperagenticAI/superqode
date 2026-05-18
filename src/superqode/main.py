@@ -602,6 +602,14 @@ class SuperQodeGroup(click.Group):
     envvar="SUPERQODE_QUIET",
     help="Show only tool status (equivalent to SUPERQODE_LOG_VERBOSITY=minimal)",
 )
+@click.option(
+    "--runtime",
+    "runtime_name",
+    envvar="SUPERQODE_RUNTIME",
+    default=None,
+    type=click.Choice(["builtin", "adk", "openai-agents"]),
+    help="Agent runtime backend (default: builtin). adk and openai-agents require optional extras.",
+)
 @click.pass_context
 def cli_main(
     ctx,
@@ -618,6 +626,7 @@ def cli_main(
     changes,
     verbose_logs,
     quiet_logs,
+    runtime_name,
     _headless_messages=None,
 ):
     # Tool-output verbosity propagates through env so the TUI widget
@@ -631,6 +640,22 @@ def cli_main(
         _os.environ["SUPERQODE_LOG_VERBOSITY"] = "verbose"
     elif quiet_logs and not verbose_logs:
         _os.environ["SUPERQODE_LOG_VERBOSITY"] = "minimal"
+
+    # Runtime precedence: CLI flag > superqode.yaml > env > default. We resolve
+    # the YAML value here (best-effort: ignore failures so a broken config
+    # doesn't crash startup) and set the env var so downstream code that uses
+    # resolve_runtime_name() picks it up.
+    yaml_runtime: Optional[str] = None
+    if not runtime_name:
+        try:
+            from superqode.config.loader import load_config
+
+            yaml_runtime = load_config().superqode.runtime
+        except Exception:  # noqa: BLE001 — startup must remain resilient
+            yaml_runtime = None
+    effective_runtime = runtime_name or yaml_runtime
+    if effective_runtime:
+        _os.environ["SUPERQODE_RUNTIME"] = effective_runtime
     """SuperQode - coding agent harness for developer workflows.
 
     Use the TUI for interactive coding work or headless mode for one-shot tasks.
@@ -677,6 +702,7 @@ def cli_main(
                         session_id=resume,
                         fork_from=fork_from,
                         sandbox_backend=sandbox_backend,
+                        runtime=effective_runtime,
                     )
                 )
             except Exception as e:
@@ -1920,6 +1946,11 @@ cli_main.add_command(suggestions_cmd, name="suggestions")
 
 # Add Server commands (superqode serve lsp, superqode serve web, etc.)
 cli_main.add_command(serve_cmd, name="serve")
+
+# Add runtime management commands (superqode runtime list, superqode runtime doctor)
+from superqode.commands.runtime import runtime_cmd  # noqa: E402
+
+cli_main.add_command(runtime_cmd, name="runtime")
 
 # Note: agents command already exists, so we add the new one with a different approach
 # The existing agents command handles ACP agents, we'll enhance it

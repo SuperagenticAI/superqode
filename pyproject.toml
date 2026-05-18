@@ -53,6 +53,13 @@ a2a = [
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",
 ]
+adk = [
+    "google-adk>=1.33.0,<2.0",
+]
+openai-agents = [
+    "openai-agents>=0.17.2",
+    "openai-agents[litellm]>=0.17.2",
+]
 dev = [
     "pytest>=8.3.5",
     "pytest-asyncio>=0.24.0",

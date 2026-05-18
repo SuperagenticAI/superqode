@@ -9,7 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .agent.loop import AgentConfig, AgentLoop, AgentResponse
+from .agent.loop import AgentConfig, AgentResponse
+from .runtime import create_runtime, resolve_runtime_name
 from .agent.session_manager import SessionManager, SessionMessage, SessionMetadata
 from .agent.system_prompts import SystemPromptLevel
 from .providers.gateway.litellm_gateway import LiteLLMGateway
@@ -141,6 +142,7 @@ async def run_headless(
     session_id: Optional[str] = None,
     fork_from: Optional[str] = None,
     sandbox_backend: str = "local",
+    runtime: Optional[str] = None,
 ) -> AgentResponse:
     """Run a single non-interactive SuperQode request."""
     profiles = get_harness_profiles()
@@ -186,7 +188,8 @@ async def run_headless(
         session_id=session_id,
     )
 
-    loop = AgentLoop(
+    runtime_obj = create_runtime(
+        resolve_runtime_name(cli=runtime),
         gateway=LiteLLMGateway(),
         tools=create_tool_registry(profile),
         config=config,
@@ -196,7 +199,7 @@ async def run_headless(
         ),
     )
     try:
-        return await loop.run(prompt)
+        return await runtime_obj.run(prompt)
     finally:
         if worktree_info:
             from .workspace.worktree import GitWorktreeManager

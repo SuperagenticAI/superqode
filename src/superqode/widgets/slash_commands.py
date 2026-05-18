@@ -256,6 +256,18 @@ def create_builtin_commands(handlers: dict) -> list[SlashCommand]:
         )
     )
 
+    # Runtime selection (builtin / adk / openai-agents). Bare /runtime opens
+    # the picker dialog; /runtime <name> switches directly; /runtime list
+    # prints the inline status table.
+    commands.append(
+        SlashCommand(
+            name="runtime",
+            description="Switch agent runtime (builtin / adk / openai-agents)",
+            handler=handlers.get("runtime", lambda _: None),
+            category="session",
+        )
+    )
+
     return commands
 
 

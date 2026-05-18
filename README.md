@@ -96,6 +96,7 @@ superqe run . --mode quick
 | Feature | Description |
 |---------|-------------|
 | **Multi-agent harness** | Use ACP agents, BYOK providers, and local models from one interface |
+| **Pluggable runtimes** | Swap the agent loop: SuperQode native (default), Google ADK, or OpenAI Agents SDK |
 | **Developer TUI** | Interactive sessions with wrapped prompts, quiet streaming logs, compact tool activity, and readable change summaries |
 | **Headless CLI** | Run coding tasks and provider checks from scripts or terminals |
 | **Tool system** | File, search, edit, shell, todo, MCP, and optional Monty Python REPL tools |
