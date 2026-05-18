@@ -42,9 +42,7 @@ async def test_add_then_get_roundtrips(tmp_session):
 
 @pytest.mark.asyncio
 async def test_get_items_respects_limit(tmp_session):
-    await tmp_session.add_items(
-        [{"role": "user", "content": f"msg{i}"} for i in range(5)]
-    )
+    await tmp_session.add_items([{"role": "user", "content": f"msg{i}"} for i in range(5)])
     last_two = await tmp_session.get_items(limit=2)
     assert [m["content"] for m in last_two] == ["msg3", "msg4"]
 

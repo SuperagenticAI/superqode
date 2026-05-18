@@ -106,7 +106,9 @@ def make_session_class():
             with self._lock:
                 if not self._path.exists():
                     return None
-                lines = [ln for ln in self._path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+                lines = [
+                    ln for ln in self._path.read_text(encoding="utf-8").splitlines() if ln.strip()
+                ]
                 if not lines:
                     return None
                 last, remaining = lines[-1], lines[:-1]

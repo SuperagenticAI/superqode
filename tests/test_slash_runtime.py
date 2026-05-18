@@ -19,8 +19,7 @@ def test_runtime_command_has_description():
     runtime_cmd = next(c for c in commands if c.name == "runtime")
     assert "runtime" in runtime_cmd.description.lower()
     assert any(
-        name in runtime_cmd.description.lower()
-        for name in ("builtin", "adk", "openai-agents")
+        name in runtime_cmd.description.lower() for name in ("builtin", "adk", "openai-agents")
     )
 
 

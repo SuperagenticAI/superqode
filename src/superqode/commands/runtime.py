@@ -1,7 +1,7 @@
 """CLI commands for managing the agent runtime backend.
 
-    superqode runtime list           # show all known runtimes + status
-    superqode runtime doctor [name]  # probe installs + show install hints
+superqode runtime list           # show all known runtimes + status
+superqode runtime doctor [name]  # probe installs + show install hints
 """
 
 from __future__ import annotations

@@ -129,9 +129,7 @@ class StatusBar(Widget):
         with Horizontal():
             yield Static(self._get_mode_text(), id="mode-indicator", classes="status-section")
             yield Static(self._get_agent_text(), id="agent-indicator", classes="status-section")
-            yield Static(
-                self._get_runtime_text(), id="runtime-indicator", classes="status-section"
-            )
+            yield Static(self._get_runtime_text(), id="runtime-indicator", classes="status-section")
             yield Static(self._get_qe_text(), id="qe-indicator", classes="status-section")
             yield Static(self._get_project_text(), id="project-indicator", classes="status-section")
             yield Static(

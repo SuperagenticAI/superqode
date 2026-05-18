@@ -62,7 +62,9 @@ def _check_permission(
     """
     perm = permission_manager.check_permission(tool_name, args)
     if perm == Permission.DENY:
-        return ToolResult(success=False, output="", error=f"Permission denied for tool: {tool_name}")
+        return ToolResult(
+            success=False, output="", error=f"Permission denied for tool: {tool_name}"
+        )
     if perm == Permission.ASK:
         return ToolResult(
             success=False,

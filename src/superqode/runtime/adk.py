@@ -148,9 +148,7 @@ class ADKRuntime:
         elif config.require_confirmation:
             self.permission_manager = PermissionManager()
         else:
-            self.permission_manager = PermissionManager(
-                PermissionConfig(default=Permission.ALLOW)
-            )
+            self.permission_manager = PermissionManager(PermissionConfig(default=Permission.ALLOW))
 
         # Run provider/model pre-init once (e.g. OpenRouter attribution setup).
         run_pre_init_once(config.provider, config.model)

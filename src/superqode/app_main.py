@@ -4219,9 +4219,7 @@ class SuperQodeApp(App):
         # Direct switch by name.
         info_by_name = {r.name: r for r in list_runtimes()}
         if sub not in info_by_name:
-            log.add_error(
-                f"Unknown runtime '{sub}'. Known: {', '.join(sorted(info_by_name))}"
-            )
+            log.add_error(f"Unknown runtime '{sub}'. Known: {', '.join(sorted(info_by_name))}")
             return
         info = info_by_name[sub]
         if not info.installed:
@@ -4254,8 +4252,7 @@ class SuperQodeApp(App):
         except Exception:  # noqa: BLE001
             pass
         log.add_info(
-            f"Runtime swapped: {current} → {sub}. "
-            "Next message will reconnect with the new backend."
+            f"Runtime swapped: {current} → {sub}. Next message will reconnect with the new backend."
         )
 
     def _handle_resume_session(self, args: str, log: ConversationLog):

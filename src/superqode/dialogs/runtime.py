@@ -102,9 +102,7 @@ class RuntimeDialog:
             return None
 
         if not selected.implemented:
-            _console.print(
-                f"[red]Runtime '{selected.name}' is a stub and not yet usable.[/red]"
-            )
+            _console.print(f"[red]Runtime '{selected.name}' is a stub and not yet usable.[/red]")
             return None
 
         return selected.name

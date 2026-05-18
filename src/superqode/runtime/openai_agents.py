@@ -121,7 +121,7 @@ def _bridge_mcp_tools_as_function_tools(
     for tool_def in mcp_tools:
         name = tool_def.name
         # Strip the "mcp_" prefix and split "{server_id}_{tool_name}".
-        rest = name[len("mcp_"):] if name.startswith("mcp_") else name
+        rest = name[len("mcp_") :] if name.startswith("mcp_") else name
         if "_" in rest:
             server_id, real_tool_name = rest.split("_", 1)
         else:
@@ -216,9 +216,7 @@ class OpenAIAgentsRuntime:
 
         # gateway is unused by the OpenAI Agents SDK (it has its own model layer).
         if gateway is not None:
-            logger.debug(
-                "OpenAIAgentsRuntime: 'gateway' is unused (SDK manages its own models)"
-            )
+            logger.debug("OpenAIAgentsRuntime: 'gateway' is unused (SDK manages its own models)")
 
         self.config = config
         self.tools = tools
@@ -232,9 +230,7 @@ class OpenAIAgentsRuntime:
         elif config.require_confirmation:
             self.permission_manager = PermissionManager()
         else:
-            self.permission_manager = PermissionManager(
-                PermissionConfig(default=Permission.ALLOW)
-            )
+            self.permission_manager = PermissionManager(PermissionConfig(default=Permission.ALLOW))
 
         run_pre_init_once(config.provider, config.model)
 
