@@ -119,6 +119,7 @@ Wraps `agents.Agent` and `agents.Runner` from the OpenAI Agents SDK.
 Current behavior:
 
 - Bridges SuperQode tools as `FunctionTool`s.
+- Streams rich harness events from SDK stream events, including model deltas, tool calls, tool results, approval pauses, and sandbox start markers when SandboxAgent execution is enabled.
 - Uses SDK cancellation for streaming runs.
 - Persists SDK sessions through a SuperQode JSONL adapter.
 - Routes non-OpenAI providers through `LitellmModel(...)` when the `[litellm]` extra is installed.
@@ -139,7 +140,7 @@ Current behavior:
 
 - Bridges SuperQode tools through PydanticAI's lower-level `ToolDefinition.parameters_json_schema` path.
 - Supports tool-capable coding specs and no-tool specs.
-- Streams text deltas through PydanticAI `run_stream`.
+- Streams rich harness events through PydanticAI `run_stream_events`, including model deltas, tool calls, tool results, final results, and deferred approval requests.
 - Surfaces PydanticAI deferred tool approvals through the same `:approve` and `:reject` harness flow used by other pausing runtimes.
 - Loads native PydanticAI MCP toolsets from `runtime.config.pydanticai.mcp_config_path`.
 - Uses PydanticAI `FallbackModel` when `model_policy.fallbacks` are present.
@@ -182,6 +183,7 @@ SuperQode maps:
 - SuperQode job prompt to DeepAgents `system_prompt`
 - configured skills and memory from runtime config
 - DeepAgents results back into a normalized `AgentResponse`
+- DeepAgents stream events into harness graph nodes for model deltas, tool calls, subagents, memory reads/writes, sandbox file/command activity, and final results
 
 Current limits:
 

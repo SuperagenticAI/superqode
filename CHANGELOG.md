@@ -5,6 +5,17 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Harness event graph persistence for file and SQLite stores, with typed nodes and edges derived from normalized harness events.
+- `superqode harness events` and `superqode harness graph` commands for inspecting persisted run timelines and graph structure.
+- `superqode harness doctor` for preflight checks across backend installation, spec compatibility, sandbox policy, event-store readiness, rich-event support, approvals, and MCP config paths.
+- Rich PydanticAI harness streaming that maps `run_stream_events` into model, tool, result, and approval graph events.
+- Rich OpenAI Agents SDK harness streaming that maps SDK stream events into model, tool, approval, and sandbox graph events.
+- Rich DeepAgents harness streaming that maps graph streams into model, tool, subagent, memory, sandbox, and result graph events.
+
 ## [0.1.25] - 2026-05-20
 
 ### Added

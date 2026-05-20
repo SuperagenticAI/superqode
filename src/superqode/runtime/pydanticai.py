@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 
 from ..agent.loop import AgentConfig, AgentResponse, _cached_system_prompt
+from ..harness.events import HarnessEvent
 from ..harness.spec import HarnessSpec
 from ..providers.gateway.base import GatewayInterface, ToolDefinition
 from ..providers.profiles import resolve_model_profile, run_pre_init_once
@@ -325,6 +326,48 @@ class PydanticAIRuntime:
         except Exception as exc:  # noqa: BLE001
             yield f"Runtime error: {exc}"
 
+    async def run_harness_events(self, prompt: str) -> AsyncIterator[HarnessEvent]:
+        """Stream PydanticAI events as normalized SuperQode harness events."""
+        self.reset_cancellation()
+        self._last_prompt = prompt
+        yield HarnessEvent(type="model_request", data={"runtime": self.name})
+        try:
+            if not hasattr(self._agent, "run_stream_events"):
+                async for chunk in self.run_streaming(prompt):
+                    if chunk:
+                        yield HarnessEvent(type="model_delta", data={"text": chunk})
+                return
+
+            async with self._agent.run_stream_events(prompt) as stream:
+                async for event in stream:
+                    if self._cancelled:
+                        break
+                    for normalized in _events_from_pydanticai_event(event):
+                        yield normalized
+                    result = _result_from_pydanticai_event(event)
+                    if result is not None:
+                        output = getattr(result, "output", None)
+                        if _is_deferred_tool_requests(output):
+                            self._pending_requests = output
+                            self._pending_messages = _messages_from_result(result)
+            if self._pending_requests is not None:
+                yield HarnessEvent(
+                    type="approval_required",
+                    data={
+                        "backend": self.name,
+                        "runtime": self.name,
+                        "pending_approvals": self.get_pending_approvals(),
+                        "pending_runtime": self,
+                    },
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            yield HarnessEvent(
+                type="runtime_error",
+                data={"error": str(exc), "error_type": type(exc).__name__},
+            )
+
     def get_pending_approvals(self) -> List[Dict[str, Any]]:
         if self._pending_requests is None:
             return []
@@ -422,3 +465,120 @@ class PydanticAIRuntime:
 
     def reset_cancellation(self) -> None:
         self._cancelled = False
+
+
+def _events_from_pydanticai_event(event: Any) -> list[HarnessEvent]:
+    event_name = event.__class__.__name__
+    events: list[HarnessEvent] = []
+
+    text = _text_delta_from_event(event)
+    if text:
+        events.append(
+            HarnessEvent(
+                type="model_delta",
+                data={"text": text, "source_event": event_name},
+            )
+        )
+
+    tool_call = _tool_call_from_event(event)
+    if tool_call is not None:
+        events.append(
+            HarnessEvent(
+                type="tool_call",
+                data={**tool_call, "source_event": event_name},
+            )
+        )
+
+    tool_result = _tool_result_from_event(event)
+    if tool_result is not None:
+        events.append(
+            HarnessEvent(
+                type="tool_result",
+                data={**tool_result, "source_event": event_name},
+            )
+        )
+
+    result = _result_from_pydanticai_event(event)
+    if result is not None:
+        output = getattr(result, "output", None)
+        if not _is_deferred_tool_requests(output):
+            events.append(
+                HarnessEvent(
+                    type="model_result",
+                    data={"output": _result_text(result), "source_event": event_name},
+                )
+            )
+
+    if not events:
+        events.append(
+            HarnessEvent(
+                type="runtime_event",
+                data={"source_event": event_name},
+            )
+        )
+    return events
+
+
+def _text_delta_from_event(event: Any) -> str:
+    for attr in ("text", "content", "delta", "content_delta", "text_delta"):
+        value = getattr(event, attr, None)
+        if isinstance(value, str):
+            return value
+    for owner_attr in ("delta", "part_delta"):
+        owner = getattr(event, owner_attr, None)
+        if owner is None or isinstance(owner, str):
+            continue
+        for attr in ("content_delta", "text_delta", "text", "content"):
+            value = getattr(owner, attr, None)
+            if isinstance(value, str):
+                return value
+    return ""
+
+
+def _tool_call_from_event(event: Any) -> dict[str, Any] | None:
+    part = getattr(event, "part", None) or getattr(event, "tool_call", None)
+    if part is None:
+        return None
+    tool_name = getattr(part, "tool_name", None) or getattr(part, "name", None)
+    if not tool_name:
+        return None
+    if getattr(part, "content", None) is not None or getattr(part, "result", None) is not None:
+        return None
+    args = getattr(part, "args", None) or getattr(part, "arguments", None) or {}
+    return {
+        "tool_name": tool_name,
+        "tool_call_id": getattr(part, "tool_call_id", None),
+        "arguments": args,
+    }
+
+
+def _tool_result_from_event(event: Any) -> dict[str, Any] | None:
+    part = getattr(event, "part", None) or getattr(event, "tool_result", None)
+    if part is None:
+        return None
+    tool_name = getattr(part, "tool_name", None) or getattr(event, "tool_name", None)
+    content = getattr(part, "content", None) or getattr(part, "result", None)
+    if content is None:
+        return None
+    return {
+        "tool_name": tool_name,
+        "tool_call_id": getattr(part, "tool_call_id", None) or getattr(event, "tool_call_id", None),
+        "content": content,
+    }
+
+
+def _result_from_pydanticai_event(event: Any) -> Any | None:
+    for attr in ("result", "run_result", "agent_run_result"):
+        value = getattr(event, attr, None)
+        if value is not None:
+            return value
+    return None
+
+
+def _messages_from_result(result: Any) -> list[Any]:
+    if hasattr(result, "all_messages"):
+        return list(result.all_messages())
+    messages = getattr(result, "messages", None)
+    if isinstance(messages, list):
+        return messages
+    return []

@@ -1142,6 +1142,183 @@ def harness_inspect(spec_path, runtime_name, sandbox_backend, json_output):
             click.echo(f"  [{issue.severity}] {issue.code}: {issue.message}")
 
 
+@harness.command("doctor")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--runtime", "runtime_name", default=None, help="Override runtime or backend")
+@click.option("--sandbox", "sandbox_backend", default=None, help="Override sandbox backend")
+@click.option(
+    "--store",
+    "store_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Override harness event store directory",
+)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_doctor(spec_path, runtime_name, sandbox_backend, store_path, json_output):
+    """Diagnose a harness spec before running it."""
+    from superqode.harness import (
+        FileHarnessStore,
+        backend_capabilities,
+        get_sandbox_capabilities,
+        inspect_harness_backend,
+        load_harness_spec,
+    )
+
+    spec = load_harness_spec(spec_path)
+    backend_name = runtime_name or spec.runtime.backend
+    selected_sandbox = sandbox_backend or spec.execution_policy.sandbox
+    store_root = Path(store_path) if store_path is not None else Path(spec.context.session_storage)
+    inspection = inspect_harness_backend(
+        backend_name,
+        spec,
+        sandbox_backend=selected_sandbox,
+    )
+    capabilities = backend_capabilities(backend_name)
+
+    checks = []
+
+    def add_check(name, status, message, **extra):
+        checks.append({"name": name, "status": status, "message": message, **extra})
+
+    add_check("spec", "ok", f"Loaded HarnessSpec '{spec.name}'.")
+    add_check(
+        "backend",
+        "ok" if capabilities.availability == "available" else "error",
+        (
+            f"Backend '{backend_name}' is available."
+            if capabilities.availability == "available"
+            else f"Backend '{backend_name}' is missing."
+        ),
+        install_hint=capabilities.install_hint,
+    )
+    add_check(
+        "compatibility",
+        "ok" if inspection.ok else "error",
+        "Backend can run this spec." if inspection.ok else "Backend/spec compatibility is blocked.",
+        issues=[issue.to_dict() for issue in inspection.issues],
+    )
+
+    if selected_sandbox in {"", "none", None}:
+        add_check(
+            "sandbox",
+            "ok",
+            "No sandbox is requested for this harness.",
+            backend="none",
+            capabilities={
+                "backend": "none",
+                "can_read": False,
+                "can_write": False,
+                "can_shell": False,
+                "can_network": False,
+                "description": "No tool or sandbox access.",
+            },
+        )
+    else:
+        try:
+            sandbox_caps = get_sandbox_capabilities(selected_sandbox)
+        except ValueError as exc:
+            add_check("sandbox", "error", f"Unknown sandbox backend '{selected_sandbox}': {exc}")
+        else:
+            add_check(
+                "sandbox",
+                "ok",
+                f"Sandbox policy '{selected_sandbox}' is recognized.",
+                backend=selected_sandbox,
+                capabilities={
+                    "backend": sandbox_caps.backend.value,
+                    "can_read": sandbox_caps.can_read,
+                    "can_write": sandbox_caps.can_write,
+                    "can_shell": sandbox_caps.can_shell,
+                    "can_network": sandbox_caps.can_network,
+                    "description": sandbox_caps.description,
+                },
+            )
+
+    try:
+        FileHarnessStore(store_root)
+    except Exception as exc:  # noqa: BLE001
+        add_check(
+            "event_store",
+            "error",
+            f"Cannot initialize harness event store at {store_root}: {exc}",
+        )
+    else:
+        add_check(
+            "event_store",
+            "ok",
+            f"Harness event store is writable at {store_root}.",
+            graph=True,
+        )
+
+    rich_event_backends = {"pydanticai", "openai-agents", "deepagents"}
+    add_check(
+        "event_graph",
+        "ok" if backend_name in rich_event_backends else "warning",
+        (
+            f"Backend '{backend_name}' emits rich graph events."
+            if backend_name in rich_event_backends
+            else f"Backend '{backend_name}' emits coarse graph events."
+        ),
+        rich_events=backend_name in rich_event_backends,
+    )
+
+    if spec.execution_policy.approval_profile != "deny":
+        add_check(
+            "approvals",
+            "ok" if capabilities.supports_approvals else "warning",
+            (
+                f"Backend '{backend_name}' supports approval pauses."
+                if capabilities.supports_approvals
+                else f"Backend '{backend_name}' may not pause for approvals."
+            ),
+        )
+
+    mcp_path = _harness_mcp_config_path(spec)
+    if mcp_path is not None:
+        add_check(
+            "mcp",
+            "ok" if mcp_path.exists() else "warning",
+            (
+                f"MCP config exists at {mcp_path}."
+                if mcp_path.exists()
+                else f"MCP config path does not exist: {mcp_path}."
+            ),
+            path=str(mcp_path),
+        )
+
+    status = "ok"
+    if any(check["status"] == "error" for check in checks):
+        status = "error"
+    elif any(check["status"] == "warning" for check in checks):
+        status = "warning"
+
+    payload = {
+        "status": status,
+        "name": spec.name,
+        "runtime": backend_name,
+        "flavor": spec.flavor.value,
+        "workflow": spec.workflow.mode.value,
+        "sandbox": selected_sandbox,
+        "checks": checks,
+    }
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        if status == "error":
+            raise click.exceptions.Exit(1)
+        return
+
+    click.echo(f"Harness doctor: {spec.name}")
+    click.echo(f"Status: {status}")
+    for check in checks:
+        click.echo(f"[{check['status']}] {check['name']}: {check['message']}")
+        if check.get("install_hint"):
+            click.echo(f"  install: {check['install_hint']}")
+        for issue in check.get("issues", []):
+            click.echo(f"  [{issue['severity']}] {issue['code']}: {issue['message']}")
+    if status == "error":
+        raise click.Abort()
+
+
 @harness.command("run")
 @click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
 @click.option("--prompt", "-p", required=True, help="Prompt to run")
@@ -1253,6 +1430,90 @@ def harness_run(
         else:
             click.echo(f"Error: {exc}", err=True)
         raise click.Abort() from exc
+
+
+@harness.command("events")
+@click.argument("run_id")
+@click.option(
+    "--store",
+    "store_path",
+    type=click.Path(path_type=Path),
+    default=Path(".superqode/sessions"),
+    show_default=True,
+    help="Harness store directory",
+)
+@click.option("--after", type=int, default=0, show_default=True, help="First event index")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_events(run_id, store_path, after, json_output):
+    """Show normalized events for a harness run."""
+    from superqode.harness import FileHarnessStore
+
+    store = FileHarnessStore(store_path)
+    try:
+        events = store.get_events(run_id, after=after)
+    except KeyError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    payload = [event.to_dict() for event in events]
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    for index, event in enumerate(events, start=after):
+        preview = (
+            event.data.get("text") or event.data.get("status") or event.data.get("error") or ""
+        )
+        preview = str(preview).replace("\n", " ")
+        if len(preview) > 100:
+            preview = preview[:97] + "..."
+        suffix = f"  {preview}" if preview else ""
+        click.echo(f"{index:04d}  {event.type}{suffix}")
+
+
+@harness.command("graph")
+@click.argument("run_id")
+@click.option(
+    "--store",
+    "store_path",
+    type=click.Path(path_type=Path),
+    default=Path(".superqode/sessions"),
+    show_default=True,
+    help="Harness store directory",
+)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_graph(run_id, store_path, json_output):
+    """Show the persisted event graph for a harness run."""
+    from superqode.harness import FileHarnessStore
+
+    store = FileHarnessStore(store_path)
+    try:
+        graph = store.get_event_graph(run_id)
+    except KeyError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if json_output:
+        click.echo(json.dumps(graph.to_dict(), indent=2))
+        return
+
+    click.echo(f"Run: {graph.run_id}")
+    click.echo("Nodes:")
+    for node in graph.nodes:
+        click.echo(f"  {node.node_id}  {node.type}  {node.label}")
+    if graph.edges:
+        click.echo("Edges:")
+        for edge in graph.edges:
+            click.echo(f"  {edge.source} -> {edge.target}  {edge.type}")
+
+
+def _harness_mcp_config_path(spec) -> Path | None:
+    runtime_config = spec.runtime.config
+    pydanticai_config = runtime_config.get("pydanticai", {})
+    if isinstance(pydanticai_config, dict):
+        configured = pydanticai_config.get("mcp_config_path") or pydanticai_config.get("mcp_config")
+        if configured:
+            return Path(configured)
+    configured = runtime_config.get("mcp_config_path") or runtime_config.get("mcp_config")
+    return Path(configured) if configured else None
 
 
 @cli_main.group()

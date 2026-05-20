@@ -179,6 +179,7 @@ superqode harness init my-coder --template coding --output harness.yaml
 superqode harness validate harness.yaml
 superqode harness validate harness.yaml --schema
 superqode harness inspect --spec harness.yaml
+superqode harness doctor --spec harness.yaml
 superqode harness run --spec harness.yaml --prompt "summarize this repository"
 ```
 
@@ -194,9 +195,34 @@ capability warnings before running a spec. Use `--runtime` and `--sandbox` on `i
 Inspection also warns when a backend may not honor model-side constraints such as reasoning effort,
 temperature, or max iterations.
 
+Use `harness doctor` before sharing or committing a spec. It checks spec loading, backend installation,
+backend/spec compatibility, sandbox policy, event-store writability, rich-event graph support, approval
+support, and MCP config paths.
+
 Use `--runtime`, `--provider`, `--model`, `--session`, `--working-dir`, and `--sandbox` on `harness run` to
 override the spec for one run. Use `--stream` to print normalized stream events and `--json` for machine
 readable output.
+
+### Event Graph
+
+Every HarnessSpec run writes normalized events and a graph view of the execution. The graph turns runtime
+events into typed nodes such as run, model, tool, approval, sandbox, MCP, subagent, validation, and typed
+output nodes. Edges preserve execution order and mark pauses, resumes, and tool-style calls.
+
+Use the graph commands after a run:
+
+```bash
+superqode harness events <run-id>
+superqode harness events <run-id> --json
+superqode harness graph <run-id>
+superqode harness graph <run-id> --json
+```
+
+This is the common inspection layer for builtin, OpenAI Agents SDK, Google ADK, DeepAgents, PydanticAI, and
+future custom backends. Runtime-specific adapters can emit richer events, but the stored graph stays stable.
+PydanticAI, OpenAI Agents, and DeepAgents are rich-event backends. PydanticAI maps `run_stream_events` into
+model, tool, result, and approval nodes. OpenAI Agents maps SDK stream events into model, tool, approval, and
+sandbox markers. DeepAgents maps graph streams into model, tool, subagent, memory, sandbox, and result nodes.
 
 The interactive TUI can also run through a harness spec:
 

@@ -12,6 +12,7 @@ from superqode.harness import (
     DeepAgentsHarnessBackend,
     ExecutionPolicySpec,
     HarnessBackendRequest,
+    HarnessEvent,
     ModelPolicySpec,
     OpenAIAgentsHarnessBackend,
     PydanticAIHarnessBackend,
@@ -54,6 +55,37 @@ class FakeApprovalRuntime(FakeRuntime):
 
     def get_pending_approvals(self):
         return [{"index": 0, "tool_name": "bash", "arguments": {"command": "ls"}}]
+
+
+class FakeEventRuntime(FakeRuntime):
+    async def run_harness_events(self, prompt: str):
+        yield HarnessEvent(type="model_delta", data={"text": prompt})
+        yield HarnessEvent(type="tool_call", data={"tool_name": "echo"})
+
+
+def install_fake_deepagents(monkeypatch, agent):
+    class FakeFilesystemBackend:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    class FakeFilesystemPermission:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    deepagents_module = types.ModuleType("deepagents")
+    backends_module = types.ModuleType("deepagents.backends")
+    graph_module = types.ModuleType("deepagents.graph")
+    middleware_module = types.ModuleType("deepagents.middleware")
+    filesystem_module = types.ModuleType("deepagents.middleware.filesystem")
+    backends_module.FilesystemBackend = FakeFilesystemBackend
+    graph_module.create_deep_agent = lambda **kwargs: agent
+    filesystem_module.FilesystemPermission = FakeFilesystemPermission
+
+    monkeypatch.setitem(sys.modules, "deepagents", deepagents_module)
+    monkeypatch.setitem(sys.modules, "deepagents.backends", backends_module)
+    monkeypatch.setitem(sys.modules, "deepagents.graph", graph_module)
+    monkeypatch.setitem(sys.modules, "deepagents.middleware", middleware_module)
+    monkeypatch.setitem(sys.modules, "deepagents.middleware.filesystem", filesystem_module)
 
 
 def test_known_harness_backends_include_current_runtime_backends():
@@ -311,6 +343,82 @@ async def test_deepagents_backend_maps_coding_spec_to_create_deep_agent(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_deepagents_backend_streams_rich_graph_events(monkeypatch, tmp_path):
+    class FakeDeepAgent:
+        async def astream_events(self, payload):
+            assert payload["messages"][0]["content"] == "implement"
+            yield {"event": "on_chat_model_stream", "data": {"chunk": "hello"}}
+            yield {
+                "event": "on_tool_start",
+                "name": "execute",
+                "data": {"input": {"command": "pytest"}},
+            }
+            yield {
+                "event": "on_tool_end",
+                "name": "execute",
+                "data": {"output": "ok"},
+            }
+            yield {
+                "event": "on_tool_start",
+                "name": "task",
+                "data": {"input": {"subagent_type": "researcher"}},
+            }
+            yield {
+                "event": "on_tool_end",
+                "name": "write_file",
+                "data": {"path": "/memories/user/preferences.md", "output": "saved"},
+            }
+            yield {"event": "on_chain_end", "data": {"output": "done"}}
+
+    install_fake_deepagents(monkeypatch, FakeDeepAgent())
+    backend = DeepAgentsHarnessBackend()
+    request = HarnessBackendRequest(
+        spec=get_harness_template("coding"),
+        prompt="implement",
+        provider="openai",
+        model="gpt-5",
+        working_directory=tmp_path,
+        session_id="s",
+    )
+
+    events = [event async for event in backend.stream(request)]
+
+    event_types = [event.type for event in events]
+    assert "model_request" in event_types
+    assert "model_delta" in event_types
+    assert "tool_call" in event_types
+    assert "tool_result" in event_types
+    assert "subagent_start" in event_types
+    assert "memory_write" in event_types
+    assert "sandbox_command" in event_types
+    assert "model_result" in event_types
+    assert events[-1].type == "end"
+
+
+@pytest.mark.asyncio
+async def test_deepagents_backend_stream_falls_back_to_model_result(monkeypatch, tmp_path):
+    class FakeDeepAgent:
+        async def ainvoke(self, payload):
+            return {"messages": [{"role": "assistant", "content": "fallback"}]}
+
+    install_fake_deepagents(monkeypatch, FakeDeepAgent())
+    backend = DeepAgentsHarnessBackend()
+    request = HarnessBackendRequest(
+        spec=get_harness_template("coding"),
+        prompt="implement",
+        provider="openai",
+        model="gpt-5",
+        working_directory=tmp_path,
+        session_id="s",
+    )
+
+    events = [event async for event in backend.stream(request)]
+
+    assert [event.type for event in events] == ["model_request", "model_result", "end"]
+    assert events[1].data["output"] == "fallback"
+
+
+@pytest.mark.asyncio
 async def test_pydanticai_backend_delegates_to_runtime(monkeypatch, tmp_path):
     created = {}
 
@@ -336,3 +444,26 @@ async def test_pydanticai_backend_delegates_to_runtime(monkeypatch, tmp_path):
     assert result.backend == "pydanticai"
     assert result.runtime == "pydanticai"
     assert result.response.content.startswith("code|tools=")
+
+
+@pytest.mark.asyncio
+async def test_runtime_harness_backend_preserves_rich_runtime_events(monkeypatch, tmp_path):
+    def fake_create_runtime(name, **kwargs):
+        return FakeEventRuntime(**kwargs)
+
+    monkeypatch.setattr("superqode.harness.backends.runtime.create_runtime", fake_create_runtime)
+    backend = RuntimeHarnessBackend("pydanticai")
+    request = HarnessBackendRequest(
+        spec=get_harness_template("coding"),
+        prompt="code",
+        provider="openai",
+        model="gpt-5",
+        working_directory=tmp_path,
+        session_id="s",
+    )
+
+    events = [event async for event in backend.stream(request)]
+
+    assert [event.type for event in events[:2]] == ["model_delta", "tool_call"]
+    assert events[0].session_id == "s"
+    assert events[-1].type == "end"

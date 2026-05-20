@@ -71,6 +71,9 @@ from .sandbox import (
 )
 from .store import (
     FileHarnessStore,
+    HarnessEventGraph,
+    HarnessGraphEdge,
+    HarnessGraphNode,
     HarnessRunRecord,
     HarnessSessionRecord,
     SQLiteHarnessStore,
@@ -136,6 +139,9 @@ __all__ = [
     "HarnessBackendResult",
     "HarnessEvent",
     "HarnessKernel",
+    "HarnessEventGraph",
+    "HarnessGraphEdge",
+    "HarnessGraphNode",
     "HarnessRunRequest",
     "HarnessRunResult",
     "HarnessSession",

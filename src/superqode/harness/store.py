@@ -111,6 +111,85 @@ class HarnessRunRecord:
         )
 
 
+@dataclass(frozen=True)
+class HarnessGraphNode:
+    """One normalized node in a harness run event graph."""
+
+    node_id: str
+    run_id: str
+    type: str
+    label: str
+    timestamp: float
+    event_index: int
+    data: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "node_id": self.node_id,
+            "run_id": self.run_id,
+            "type": self.type,
+            "label": self.label,
+            "timestamp": self.timestamp,
+            "event_index": self.event_index,
+            "data": dict(self.data),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "HarnessGraphNode":
+        return cls(
+            node_id=str(data["node_id"]),
+            run_id=str(data["run_id"]),
+            type=str(data["type"]),
+            label=str(data["label"]),
+            timestamp=float(data["timestamp"]),
+            event_index=int(data["event_index"]),
+            data=dict(data.get("data") or {}),
+        )
+
+
+@dataclass(frozen=True)
+class HarnessGraphEdge:
+    """Directed relationship between two harness graph nodes."""
+
+    source: str
+    target: str
+    type: str = "next"
+    data: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source": self.source,
+            "target": self.target,
+            "type": self.type,
+            "data": dict(self.data),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "HarnessGraphEdge":
+        return cls(
+            source=str(data["source"]),
+            target=str(data["target"]),
+            type=str(data.get("type") or "next"),
+            data=dict(data.get("data") or {}),
+        )
+
+
+@dataclass(frozen=True)
+class HarnessEventGraph:
+    """Persisted graph view of one harness run."""
+
+    run_id: str
+    nodes: tuple[HarnessGraphNode, ...] = ()
+    edges: tuple[HarnessGraphEdge, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "run_id": self.run_id,
+            "nodes": [node.to_dict() for node in self.nodes],
+            "edges": [edge.to_dict() for edge in self.edges],
+        }
+
+
 class FileHarnessStore:
     """File-backed harness store.
 
@@ -199,13 +278,31 @@ class FileHarnessStore:
 
     def append_event(self, run_id: str, event: HarnessEvent) -> HarnessRunRecord:
         record = self._require_run(run_id)
+        event_index = len(record.events)
+        node = _graph_node_from_event(run_id, event_index, event)
+        graph = self.get_event_graph(run_id)
+        edges = list(graph.edges)
+        if graph.nodes:
+            edges.append(
+                HarnessGraphEdge(
+                    source=graph.nodes[-1].node_id,
+                    target=node.node_id,
+                    type=_edge_type(graph.nodes[-1], node),
+                )
+            )
         updated = HarnessRunRecord(
             **{
                 **record.__dict__,
                 "events": (*record.events, event),
             }
         )
-        self._write_json(self._run_path(run_id), updated.to_dict())
+        data = updated.to_dict()
+        data["graph"] = HarnessEventGraph(
+            run_id=run_id,
+            nodes=(*graph.nodes, node),
+            edges=tuple(edges),
+        ).to_dict()
+        self._write_json(self._run_path(run_id), data)
         return updated
 
     def end_run(
@@ -250,6 +347,23 @@ class FileHarnessStore:
     def get_events(self, run_id: str, *, after: int = 0) -> list[HarnessEvent]:
         record = self._require_run(run_id)
         return list(record.events[after:])
+
+    def get_event_graph(self, run_id: str) -> HarnessEventGraph:
+        record = self._require_run(run_id)
+        path = self._run_path(run_id)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        graph_data = data.get("graph")
+        if isinstance(graph_data, dict):
+            return HarnessEventGraph(
+                run_id=run_id,
+                nodes=tuple(
+                    HarnessGraphNode.from_dict(item) for item in graph_data.get("nodes", [])
+                ),
+                edges=tuple(
+                    HarnessGraphEdge.from_dict(item) for item in graph_data.get("edges", [])
+                ),
+            )
+        return _graph_from_events(run_id, record.events)
 
     def _require_run(self, run_id: str) -> HarnessRunRecord:
         record = self.get_run(run_id)
@@ -390,6 +504,15 @@ class SQLiteHarnessStore:
                 "select coalesce(max(position), -1) + 1 as position from events where run_id = ?",
                 (run_id,),
             ).fetchone()
+            position = int(row["position"])
+            node = _graph_node_from_event(run_id, position, event)
+            previous = conn.execute(
+                """
+                select node_id, type, label, timestamp, event_index, data
+                from graph_nodes where run_id = ? order by event_index desc limit 1
+                """,
+                (run_id,),
+            ).fetchone()
             conn.execute(
                 """
                 insert into events(run_id, position, type, timestamp, session_id, data)
@@ -397,13 +520,44 @@ class SQLiteHarnessStore:
                 """,
                 (
                     run_id,
-                    int(row["position"]),
+                    position,
                     event.type,
                     event.timestamp,
                     event.session_id,
                     json.dumps(event.data, sort_keys=True),
                 ),
             )
+            conn.execute(
+                """
+                insert into graph_nodes(
+                    node_id, run_id, type, label, timestamp, event_index, data
+                )
+                values (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    node.node_id,
+                    node.run_id,
+                    node.type,
+                    node.label,
+                    node.timestamp,
+                    node.event_index,
+                    json.dumps(node.data, sort_keys=True),
+                ),
+            )
+            if previous is not None:
+                previous_node = _graph_node_from_row(previous, run_id=run_id)
+                conn.execute(
+                    """
+                    insert into graph_edges(source, target, type, data)
+                    values (?, ?, ?, ?)
+                    """,
+                    (
+                        previous_node.node_id,
+                        node.node_id,
+                        _edge_type(previous_node, node),
+                        "{}",
+                    ),
+                )
         return self._require_run(run_id)
 
     def end_run(
@@ -446,6 +600,31 @@ class SQLiteHarnessStore:
                 (run_id, after),
             ).fetchall()
         return [_event_from_row(row) for row in rows]
+
+    def get_event_graph(self, run_id: str) -> HarnessEventGraph:
+        self._require_run(run_id)
+        with self._connect() as conn:
+            node_rows = conn.execute(
+                "select * from graph_nodes where run_id = ? order by event_index",
+                (run_id,),
+            ).fetchall()
+            edge_rows = conn.execute(
+                """
+                select graph_edges.*
+                from graph_edges
+                join graph_nodes on graph_nodes.node_id = graph_edges.source
+                where graph_nodes.run_id = ?
+                order by graph_nodes.event_index
+                """,
+                (run_id,),
+            ).fetchall()
+        if not node_rows:
+            return _graph_from_events(run_id, self.get_events(run_id))
+        return HarnessEventGraph(
+            run_id=run_id,
+            nodes=tuple(_graph_node_from_row(row) for row in node_rows),
+            edges=tuple(_graph_edge_from_row(row) for row in edge_rows),
+        )
 
     def _require_run(self, run_id: str) -> HarnessRunRecord:
         record = self.get_run(run_id)
@@ -514,6 +693,24 @@ class SQLiteHarnessStore:
                 );
                 create index if not exists idx_events_run_position
                     on events(run_id, position);
+                create table if not exists graph_nodes (
+                    node_id text primary key,
+                    run_id text not null,
+                    type text not null,
+                    label text not null,
+                    timestamp real not null,
+                    event_index integer not null,
+                    data text not null
+                );
+                create index if not exists idx_graph_nodes_run_index
+                    on graph_nodes(run_id, event_index);
+                create table if not exists graph_edges (
+                    source text not null,
+                    target text not null,
+                    type text not null,
+                    data text not null,
+                    primary key(source, target, type)
+                );
                 """
             )
 
@@ -565,4 +762,92 @@ def _event_from_row(row: sqlite3.Row) -> HarnessEvent:
         timestamp=float(row["timestamp"]),
         session_id=row["session_id"],
         run_id=row["run_id"],
+    )
+
+
+def _graph_from_events(run_id: str, events: tuple[HarnessEvent, ...]) -> HarnessEventGraph:
+    nodes = tuple(
+        _graph_node_from_event(run_id, index, event) for index, event in enumerate(events)
+    )
+    edges = tuple(
+        HarnessGraphEdge(
+            source=nodes[index - 1].node_id,
+            target=nodes[index].node_id,
+            type=_edge_type(nodes[index - 1], nodes[index]),
+        )
+        for index in range(1, len(nodes))
+    )
+    return HarnessEventGraph(run_id=run_id, nodes=nodes, edges=edges)
+
+
+def _graph_node_from_event(
+    run_id: str,
+    event_index: int,
+    event: HarnessEvent,
+) -> HarnessGraphNode:
+    return HarnessGraphNode(
+        node_id=f"{run_id}:n{event_index}",
+        run_id=run_id,
+        type=_node_type(event.type),
+        label=event.type,
+        timestamp=event.timestamp,
+        event_index=event_index,
+        data=event.to_dict(),
+    )
+
+
+def _node_type(event_type: str) -> str:
+    if event_type in {"run_start", "run_end"}:
+        return "run"
+    if event_type in {"delta", "thinking"} or event_type.startswith("model_"):
+        return "model"
+    if event_type.startswith("tool_"):
+        return "tool"
+    if event_type.startswith("approval_") or event_type == "approval_required":
+        return "approval"
+    if event_type.startswith("sandbox_"):
+        return "sandbox"
+    if event_type.startswith("mcp_"):
+        return "mcp"
+    if event_type.startswith("subagent_"):
+        return "subagent"
+    if event_type.startswith("validation_"):
+        return "validation"
+    if event_type.startswith("typed_output"):
+        return "typed_output"
+    return "event"
+
+
+def _edge_type(source: HarnessGraphNode, target: HarnessGraphNode) -> str:
+    if source.type == "approval" and target.label == "approval_resumed":
+        return "resume"
+    if target.type == "approval":
+        return "pause"
+    if target.type in {"tool", "sandbox", "mcp", "subagent"}:
+        return "calls"
+    return "next"
+
+
+def _graph_node_from_row(
+    row: sqlite3.Row,
+    *,
+    run_id: str | None = None,
+) -> HarnessGraphNode:
+    return HarnessGraphNode(
+        node_id=row["node_id"],
+        run_id=run_id or row["run_id"],
+        type=row["type"],
+        label=row["label"],
+        timestamp=float(row["timestamp"]),
+        event_index=int(row["event_index"]),
+        data=json.loads(row["data"] or "{}"),
+    )
+
+
+def _graph_edge_from_row(row: sqlite3.Row) -> HarnessGraphEdge:
+    return HarnessGraphEdge(
+        source=row["source"],
+        target=row["target"],
+        type=row["type"],
+        data=json.loads(row["data"] or "{}"),
     )

@@ -42,13 +42,23 @@ class RuntimeHarnessBackend:
     async def stream(self, request: HarnessBackendRequest) -> AsyncIterator[HarnessEvent]:
         """Stream normalized harness delta events from the wrapped runtime."""
         _runtime_name, runtime_obj = _create_runtime_for_request(request, self.runtime_name)
-        async for chunk in runtime_obj.run_streaming(request.prompt):
-            if chunk:
+        if hasattr(runtime_obj, "run_harness_events"):
+            async for event in runtime_obj.run_harness_events(request.prompt):
                 yield HarnessEvent(
-                    type="delta",
-                    data={"text": chunk},
+                    type=event.type,
+                    data=event.data,
+                    timestamp=event.timestamp,
                     session_id=request.session_id,
+                    run_id=event.run_id,
                 )
+        else:
+            async for chunk in runtime_obj.run_streaming(request.prompt):
+                if chunk:
+                    yield HarnessEvent(
+                        type="delta",
+                        data={"text": chunk},
+                        session_id=request.session_id,
+                    )
         pending_approvals = _pending_approvals(runtime_obj)
         if pending_approvals:
             yield HarnessEvent(

@@ -5,6 +5,7 @@ import pytest
 from superqode.harness import (
     FileHarnessStore,
     HarnessEvent,
+    HarnessEventGraph,
     SQLiteHarnessStore,
     get_harness_template,
 )
@@ -88,3 +89,44 @@ def test_harness_store_contract_persists_runs_and_events(tmp_path, store_factory
     assert loaded.events[0].data == {"text": "ok"}
     assert store.list_sessions()[0].metadata["team"] == "runtime"
     assert store.list_runs(session_id="session-1")[0].run_id == run.run_id
+
+
+@pytest.mark.parametrize("store_factory", [FileHarnessStore, SQLiteHarnessStore])
+def test_harness_store_builds_event_graph(tmp_path, store_factory):
+    path = tmp_path / "store.sqlite3" if store_factory is SQLiteHarnessStore else tmp_path / "files"
+    store = store_factory(path)
+    spec = get_harness_template("coding")
+    store.open_session("session-graph", spec)
+    run = store.start_run(
+        session_id="session-graph",
+        spec=spec,
+        provider="openai",
+        model="gpt-5",
+        runtime="builtin",
+        prompt="build graph",
+    )
+
+    store.append_event(
+        run.run_id,
+        HarnessEvent(type="model_delta", data={"text": "thinking"}, run_id=run.run_id),
+    )
+    store.append_event(
+        run.run_id,
+        HarnessEvent(type="tool_call", data={"tool": "read_file"}, run_id=run.run_id),
+    )
+    store.append_event(
+        run.run_id,
+        HarnessEvent(type="approval_required", data={"pending": 1}, run_id=run.run_id),
+    )
+
+    graph = store.get_event_graph(run.run_id)
+
+    assert isinstance(graph, HarnessEventGraph)
+    assert [node.type for node in graph.nodes] == ["model", "tool", "approval"]
+    assert [node.label for node in graph.nodes] == [
+        "model_delta",
+        "tool_call",
+        "approval_required",
+    ]
+    assert [edge.type for edge in graph.edges] == ["calls", "pause"]
+    assert graph.to_dict()["nodes"][1]["data"]["type"] == "tool_call"

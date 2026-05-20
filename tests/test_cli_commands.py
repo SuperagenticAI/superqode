@@ -79,6 +79,7 @@ class TestHarnessCommand:
         assert "list-templates" in result.output
         assert "validate" in result.output
         assert "inspect" in result.output
+        assert "doctor" in result.output
         assert "run" in result.output
 
     def test_harness_list_backends_json(self, runner):
@@ -150,6 +151,66 @@ class TestHarnessCommand:
             assert payload["backend"]["ok"] is False
             assert payload["backend"]["issues"][0]["code"] == "no_tool_unsupported"
             assert payload["backend"]["capabilities"]["supports_no_tool"] is False
+
+    def test_harness_doctor_json_reports_readiness(self, runner):
+        with runner.isolated_filesystem():
+            init = runner.invoke(
+                cli_main,
+                ["harness", "init", "demo", "--template", "no-tool", "--output", "harness.yaml"],
+            )
+            assert init.exit_code == 0
+
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "doctor",
+                    "--spec",
+                    "harness.yaml",
+                    "--runtime",
+                    "builtin",
+                    "--json",
+                ],
+            )
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["name"] == "demo"
+            assert payload["runtime"] == "builtin"
+            by_check = {check["name"]: check for check in payload["checks"]}
+            assert by_check["spec"]["status"] == "ok"
+            assert by_check["backend"]["status"] == "ok"
+            assert by_check["event_store"]["graph"] is True
+            assert by_check["event_graph"]["rich_events"] is False
+
+    def test_harness_doctor_json_blocks_incompatible_backend(self, runner):
+        with runner.isolated_filesystem():
+            init = runner.invoke(
+                cli_main,
+                ["harness", "init", "demo", "--template", "no-tool", "--output", "harness.yaml"],
+            )
+            assert init.exit_code == 0
+
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "doctor",
+                    "--spec",
+                    "harness.yaml",
+                    "--runtime",
+                    "deepagents",
+                    "--json",
+                ],
+            )
+
+            assert result.exit_code != 0
+            payload = json.loads(result.output)
+            assert payload["status"] == "error"
+            compatibility = next(
+                check for check in payload["checks"] if check["name"] == "compatibility"
+            )
+            assert compatibility["issues"][0]["code"] == "no_tool_unsupported"
 
     def test_harness_run_json_uses_kernel(self, runner, monkeypatch):
         class FakeRuntime:

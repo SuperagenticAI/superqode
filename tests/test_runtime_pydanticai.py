@@ -144,6 +144,27 @@ class FakeResult:
         return list(self._messages)
 
 
+class FakeStream:
+    def __init__(self, events):
+        self.events = events
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    def __aiter__(self):
+        self._iter = iter(self.events)
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._iter)
+        except StopIteration as exc:
+            raise StopAsyncIteration from exc
+
+
 @pytest.mark.asyncio
 async def test_pydanticai_toolset_preserves_superqode_json_schema(monkeypatch, tmp_path):
     fake = install_fake_pydanticai(monkeypatch)
@@ -302,3 +323,120 @@ def test_pydanticai_runtime_can_wrap_prefect_durable_agent(monkeypatch, tmp_path
 
     assert isinstance(runtime._agent, fake.PrefectAgent)
     assert isinstance(runtime._agent.agent, Agent)
+
+
+@pytest.mark.asyncio
+async def test_pydanticai_runtime_streams_rich_harness_events(monkeypatch, tmp_path):
+    class TextDeltaEvent:
+        def __init__(self, text):
+            self.delta = types.SimpleNamespace(content_delta=text)
+
+    class ToolCallEvent:
+        def __init__(self):
+            self.part = types.SimpleNamespace(
+                tool_name="echo",
+                tool_call_id="call-1",
+                args={"message": "hi"},
+            )
+
+    class ToolResultEvent:
+        def __init__(self):
+            self.part = types.SimpleNamespace(
+                tool_name="echo",
+                tool_call_id="call-1",
+                content="ok",
+            )
+
+    class AgentRunResultEvent:
+        def __init__(self):
+            self.result = FakeResult("done")
+
+    class Agent:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def run_stream_events(self, prompt):
+            assert prompt == "stream"
+            return FakeStream(
+                [
+                    TextDeltaEvent("hello"),
+                    ToolCallEvent(),
+                    ToolResultEvent(),
+                    AgentRunResultEvent(),
+                ]
+            )
+
+    install_fake_pydanticai(monkeypatch, agent_cls=Agent)
+    runtime = PydanticAIRuntime(
+        tools=ToolRegistry.empty(),
+        config=AgentConfig(
+            provider="openai",
+            model="gpt-5",
+            working_directory=tmp_path,
+        ),
+    )
+
+    events = [event async for event in runtime.run_harness_events("stream")]
+
+    assert [event.type for event in events] == [
+        "model_request",
+        "model_delta",
+        "tool_call",
+        "tool_result",
+        "model_result",
+    ]
+    assert events[1].data["text"] == "hello"
+    assert events[2].data["tool_name"] == "echo"
+    assert events[3].data["content"] == "ok"
+    assert events[4].data["output"] == "done"
+
+
+@pytest.mark.asyncio
+async def test_pydanticai_runtime_streams_deferred_approval_event(monkeypatch, tmp_path):
+    class ToolCall:
+        tool_name = "bash"
+        args = {"command": "ls"}
+        tool_call_id = "call-1"
+
+    class AgentRunResultEvent:
+        def __init__(self, result):
+            self.result = result
+
+    class Agent:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def run_stream_events(self, prompt):
+            return FakeStream(
+                [
+                    AgentRunResultEvent(
+                        FakeResult(
+                            fake.DeferredToolRequests(approvals=[ToolCall()]),
+                            messages=["history"],
+                        )
+                    )
+                ]
+            )
+
+    fake = install_fake_pydanticai(monkeypatch, agent_cls=Agent)
+    runtime = PydanticAIRuntime(
+        tools=ToolRegistry.empty(),
+        config=AgentConfig(
+            provider="openai",
+            model="gpt-5",
+            working_directory=tmp_path,
+        ),
+    )
+
+    events = [event async for event in runtime.run_harness_events("stream")]
+
+    assert events[-1].type == "approval_required"
+    assert events[-1].data["pending_approvals"] == [
+        {
+            "index": 0,
+            "tool_name": "bash",
+            "arguments": {"command": "ls"},
+            "tool_call_id": "call-1",
+        }
+    ]
+    assert runtime.get_pending_approvals()[0]["tool_name"] == "bash"

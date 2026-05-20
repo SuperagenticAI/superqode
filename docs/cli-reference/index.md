@@ -100,6 +100,15 @@ Benchmark harness:
 superqode benchmark run tasks.json --target superqode --target opencode --target pi --target deepagents
 ```
 
+Harness event graph:
+
+```bash
+superqode harness doctor --spec harness.yaml
+superqode harness events <run-id>
+superqode harness graph <run-id>
+superqode harness graph <run-id> --json
+```
+
 Sandbox capability profiles:
 
 ```bash

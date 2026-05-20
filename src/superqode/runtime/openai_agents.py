@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 
 from ..agent.loop import AgentConfig, AgentMessage, AgentResponse, _cached_system_prompt
+from ..harness.events import HarnessEvent
 from ..providers.gateway.base import GatewayInterface, ToolDefinition
 from ..providers.profiles import resolve_model_profile, run_pre_init_once
 from ..tools.base import Tool, ToolContext, ToolRegistry, ToolResult
@@ -393,6 +394,66 @@ class OpenAIAgentsRuntime:
         finally:
             self._active_stream = None
 
+    async def run_harness_events(self, prompt: str) -> AsyncIterator[HarnessEvent]:
+        """Stream OpenAI Agents SDK events as normalized SuperQode harness events."""
+        from agents import Runner
+
+        self.reset_cancellation()
+        yield HarnessEvent(type="model_request", data={"runtime": self.name})
+        if self.sandbox_backend:
+            yield HarnessEvent(
+                type="sandbox_start",
+                data={"backend": self.sandbox_backend, "runtime": self.name},
+            )
+
+        result = Runner.run_streamed(
+            self._agent,
+            prompt,
+            session=self._session,
+            run_config=self._run_config,
+            max_turns=self.config.max_iterations,
+        )
+        self._active_stream = result
+        try:
+            async for event in result.stream_events():
+                if self._cancelled:
+                    break
+                for normalized in _events_from_openai_agents_event(event):
+                    yield normalized
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("OpenAI Agents Runner.run_streamed failed")
+            yield HarnessEvent(
+                type="runtime_error",
+                data={"error": str(exc), "error_type": type(exc).__name__},
+            )
+            return
+        finally:
+            self._active_stream = None
+
+        response = self._translate_result(prompt, result)
+        if response.stopped_reason == "needs_approval":
+            yield HarnessEvent(
+                type="approval_required",
+                data={
+                    "backend": self.name,
+                    "runtime": self.name,
+                    "pending_approvals": self.get_pending_approvals(),
+                    "pending_runtime": self,
+                },
+            )
+        else:
+            yield HarnessEvent(
+                type="model_result",
+                data={
+                    "output": response.content,
+                    "tool_calls_made": response.tool_calls_made,
+                    "iterations": response.iterations,
+                    "stopped_reason": response.stopped_reason,
+                },
+            )
+
     def cancel(self) -> None:
         self._cancelled = True
         active = self._active_stream
@@ -565,6 +626,107 @@ def _extract_text_delta(event: Any) -> str:
         if isinstance(text, str):
             return text
     return ""
+
+
+def _events_from_openai_agents_event(event: Any) -> list[HarnessEvent]:
+    event_name = event.__class__.__name__
+    events: list[HarnessEvent] = []
+
+    text = _extract_text_delta(event)
+    if text:
+        events.append(
+            HarnessEvent(
+                type="model_delta",
+                data={"text": text, "source_event": event_name},
+            )
+        )
+
+    item = getattr(event, "item", None) or getattr(event, "data", None)
+    tool_call = _tool_call_event_data(item)
+    if tool_call is not None:
+        events.append(
+            HarnessEvent(
+                type="tool_call",
+                data={**tool_call, "source_event": event_name},
+            )
+        )
+
+    tool_result = _tool_result_event_data(item)
+    if tool_result is not None:
+        events.append(
+            HarnessEvent(
+                type="tool_result",
+                data={**tool_result, "source_event": event_name},
+            )
+        )
+
+    if _is_sandbox_item(item):
+        events.append(
+            HarnessEvent(
+                type=_sandbox_event_type(item),
+                data={"source_event": event_name, "item_type": getattr(item, "type", "")},
+            )
+        )
+
+    if not events and _should_keep_runtime_event(event):
+        events.append(
+            HarnessEvent(
+                type="runtime_event",
+                data={"source_event": event_name},
+            )
+        )
+    return events
+
+
+def _tool_call_event_data(item: Any) -> dict[str, Any] | None:
+    if item is None:
+        return None
+    item_type = getattr(item, "type", "")
+    if item_type not in {"tool_call_item", "handoff_call_item"}:
+        return None
+    return {
+        "tool_name": _tool_name_from_item(item),
+        "arguments": _tool_args_from_item(item),
+    }
+
+
+def _tool_result_event_data(item: Any) -> dict[str, Any] | None:
+    if item is None:
+        return None
+    item_type = getattr(item, "type", "")
+    if item_type not in {"tool_call_output_item", "handoff_output_item"}:
+        return None
+    raw = getattr(item, "raw_item", None)
+    output = getattr(raw, "output", None) if raw is not None else getattr(item, "output", None)
+    return {
+        "tool_name": _tool_name_from_item(item),
+        "content": output,
+    }
+
+
+def _is_sandbox_item(item: Any) -> bool:
+    item_type = str(getattr(item, "type", "")).lower()
+    return "sandbox" in item_type or item_type in {
+        "file_search_call",
+        "computer_call",
+        "code_interpreter_call",
+    }
+
+
+def _sandbox_event_type(item: Any) -> str:
+    item_type = str(getattr(item, "type", "")).lower()
+    if "command" in item_type or "code_interpreter" in item_type:
+        return "sandbox_command"
+    if "file" in item_type:
+        return "sandbox_file"
+    if "snapshot" in item_type:
+        return "sandbox_snapshot"
+    return "sandbox_event"
+
+
+def _should_keep_runtime_event(event: Any) -> bool:
+    name = event.__class__.__name__.lower()
+    return any(token in name for token in ("handoff", "tool", "sandbox", "approval"))
 
 
 def _text_from_message_item(item: Any) -> str:
