@@ -1,0 +1,79 @@
+version: 1
+name: example-ds4
+description: DS4 fast local coding harness with compact JSON tools and short session history.
+flavor: coding
+runtime:
+  backend: builtin
+model_policy:
+  primary: ds4-local
+  profile: ds4-fast-local
+  temperature: 0.1
+  tool_call_format: compact-json
+  config:
+    provider: local
+    max_iterations: 10
+    session_history_limit: 10
+    parallel_tools: false
+    tool_profile: ds4
+execution_policy:
+  sandbox: local
+  approval_profile: balanced
+  allow_read: true
+  allow_write: true
+  allow_shell: true
+  allow_network: false
+  allowed_commands:
+    - pytest
+    - uv run pytest
+    - uv run ruff
+  blocked_categories:
+    - destructive
+    - credential-access
+agents:
+  - id: ds4-coder
+    role: implementation
+    system_prompt: |
+      Optimize for fast local iteration. Read narrowly, patch directly, and
+      keep tool arguments compact.
+    tools:
+      - read_file
+      - write_file
+      - list_directory
+      - edit_file
+      - patch
+      - grep
+      - glob
+      - bash
+    skills:
+      - repo-navigation
+      - implementation
+    max_iterations: 10
+workflow:
+  mode: single
+  max_task_depth: 3
+  parallelism: 1
+  merge_strategy: summary
+context:
+  instruction_files:
+    - AGENTS.md
+    - SUPERQODE.md
+  skills_dir: .agents/skills
+  roles_dir: .agents/roles
+  session_storage: .superqode/sessions
+  compaction:
+    strategy: aggressive-summary
+  memory:
+    enabled: false
+validation:
+  enabled: true
+  fail_on_error: false
+  timeout_seconds: 300
+  custom_steps: []
+observability:
+  events: true
+  traces: false
+  run_store: file
+metadata:
+  example: ds4
+  best_for: fast DS4 local coding
+

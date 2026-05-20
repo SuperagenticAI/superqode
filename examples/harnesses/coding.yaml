@@ -1,0 +1,86 @@
+version: 1
+name: example-coding
+description: General coding harness with repository tools, shell access, approvals, and event storage.
+flavor: coding
+runtime:
+  backend: builtin
+model_policy:
+  primary: gpt-5.4
+  fallbacks:
+    - gpt-5.4-mini
+  profile: balanced-coding
+  temperature: 0.2
+  reasoning: medium
+  config:
+    provider: openai
+    max_iterations: 12
+execution_policy:
+  sandbox: local
+  approval_profile: balanced
+  allow_read: true
+  allow_write: true
+  allow_shell: true
+  allow_network: false
+  allowed_commands:
+    - pytest
+    - uv run pytest
+    - uv run ruff
+  blocked_categories:
+    - destructive
+    - credential-access
+agents:
+  - id: coder
+    role: implementation
+    system_prompt: |
+      Work as a pragmatic coding agent. Inspect the repository before editing,
+      keep changes focused, and verify behavior with the narrowest useful test.
+    tools:
+      - read_file
+      - write_file
+      - list_directory
+      - edit_file
+      - patch
+      - grep
+      - glob
+      - repo_search
+      - bash
+      - todo_write
+      - todo_read
+    skills:
+      - repo-navigation
+      - implementation
+    max_iterations: 12
+workflow:
+  mode: single
+  max_task_depth: 4
+  parallelism: 1
+  merge_strategy: summary
+context:
+  instruction_files:
+    - AGENTS.md
+    - CLAUDE.md
+    - SUPERQODE.md
+  skills_dir: .agents/skills
+  roles_dir: .agents/roles
+  session_storage: .superqode/sessions
+  compaction:
+    strategy: summarize-when-large
+  memory:
+    enabled: true
+validation:
+  enabled: true
+  fail_on_error: false
+  timeout_seconds: 300
+  custom_steps:
+    - name: lint
+      command: uv run ruff check src tests
+      enabled: true
+      timeout: 300
+observability:
+  events: true
+  traces: false
+  run_store: file
+metadata:
+  example: coding
+  best_for: general repository coding
+

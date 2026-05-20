@@ -1,288 +1,225 @@
 # Quick Start
 
-Get started with SuperQode in 5 minutes.
+Get a SuperQode harness running in a few minutes.
 
-**Safety note (OSS):** Run the open-source SuperQode in a safe, controlled environment (sandbox, VM, or low-risk machine). This reduces the blast radius for testing workflows and agent-driven actions.
+SuperQode is a harness-first coding agent. A harness defines the run contract: model policy, runtime backend, tool access, sandbox policy, workflow shape, events, and output handling.
+
+!!! note "Safe first run"
+    Start in a low-risk repository, throwaway branch, sandbox, or VM. Coding harnesses can read files, edit files, and run shell commands when policy allows it.
 
 ---
 
-## Install SuperQode
+## 1. Install
 
 ```bash
 pip install superqode
 ```
 
+Or with `uv`:
+
+```bash
+uv tool install superqode
+```
+
+Optional runtime backends are installed only when you need them:
+
+```bash
+pip install "superqode[openai-agents]"
+pip install "superqode[pydanticai]"
+pip install "superqode[deepagents]"
+pip install "superqode[adk]"
+```
+
 ---
 
-## Overview
+## 2. Run The TUI
 
-This guide covers:
-
-1. **Project Setup** - Initialize and configure your project
-2. **Choose Workflow** - TUI for exploration or CLI for automation
-3. **Connect to Agent** - Set up your preferred connection mode
-4. **Run First Validation Session** - Start validation and evaluation
-
----
-
-## Step 1: Initialize Your Project
-
-Navigate to your project and initialize SuperQode:
+For interactive coding work:
 
 ```bash
 cd /path/to/your/project
-superqode config init
-```
-
-This will:
-- Create `superqode.yaml` in the current directory from the comprehensive role catalog
-- Enable core, implemented roles so you can run immediately
-- Leave the rest disabled so you can prune what you don’t need
-
-### Edit Configuration
-
-After initialization, edit `superqode.yaml` to set your preferred model:
-
-```bash
-nano superqode.yaml
-```
-
-Choose your connection mode:
-
-```yaml
-# Option 1: ACP (recommended for full features)
-default:
-  mode: acp
-  coding_agent: opencode
-
-# Option 2: BYOK (use your own API keys)
-default:
-  mode: byok
-  provider: google
-  model: gemini-3-pro
-
-# Option 3: Local (privacy-first)
-default:
-  mode: local
-  provider: ollama
-  model: qwen3:8b
-```
-
----
-
-## Step 2: Choose Your Workflow
-
-SuperQode offers two workflows:
-
-### TUI (Terminal UI) - For Exploratory Testing
-
-**Best for:** Interactive exploration, ad-hoc testing, learning
-
-```bash
-# Launch TUI
 superqode
 ```
 
-Then use TUI commands:
-- `:connect acp opencode` - Connect to agent
-- `:qe security_tester` - Switch to security role
-- Chat with agent: "Check for SQL injection vulnerabilities"
+Useful TUI commands:
 
-### CLI (Command Line) - For Automation
+| Command | Purpose |
+| --- | --- |
+| `:status` | Show current provider, runtime, mode, and harness state |
+| `:harness harness.yaml` | Load a HarnessSpec into the session |
+| `:runtime list` | Show runtime backends |
+| `:runtime pydanticai` | Switch runtime where available |
+| `:providers` | Inspect provider setup |
+| `:sandbox` | Inspect sandbox policy |
+| `:help` | Show available commands |
 
-**Best for:** CI/CD, batch processing, automation
+You can also ask directly in natural language:
 
-```bash
-# Run validation session directly
-superqode qe run . --mode quick
-
-# With specific roles
-superqode qe run . -r security_tester -r api_tester
+```text
+Summarize this repository and suggest the smallest safe improvement.
 ```
 
 ---
 
-## Step 3: Run Your First Session
+## 3. Run One Headless Task
 
-### Quick Scan (60 seconds)
+For a quick terminal task:
 
-For fast feedback during development:
+```bash
+superqode --print "summarize this repository"
+```
+
+For JSON output:
+
+```bash
+superqode --mode json --print "summarize this repository"
+```
+
+---
+
+## 4. Create A Harness
+
+Create a reusable coding harness:
+
+```bash
+superqode harness init my-coder --template coding --output harness.yaml
+```
+
+Check it before running:
+
+```bash
+superqode harness doctor --spec harness.yaml
+```
+
+Run it:
+
+```bash
+superqode harness run --spec harness.yaml --prompt "summarize the architecture"
+```
+
+For complete starting points, use the repository examples in `examples/harnesses/`. They cover the builtin coding harness, no-tool reasoning, PydanticAI, DeepAgents, OpenAI Agents SDK, Google ADK, Gemma4, and DS4.
+
+The JSON form includes the `run_id`:
+
+```bash
+superqode harness run --spec harness.yaml --prompt "summarize the architecture" --json
+```
+
+---
+
+## 5. Inspect What Happened
+
+Every HarnessSpec run writes normalized events and a graph view.
+
+```bash
+superqode harness events <run-id>
+superqode harness graph <run-id>
+superqode harness graph <run-id> --json
+```
+
+Use this when a run behaves unexpectedly. The graph gives one inspection model across backends.
+
+| Backend | Rich graph events |
+| --- | --- |
+| `pydanticai` | Model deltas, tools, results, approvals |
+| `openai-agents` | Model deltas, tools, approvals, sandbox markers |
+| `deepagents` | Model deltas, tools, subagents, memory, sandbox activity, results |
+| `builtin`, `adk` | Coarse run and stream events |
+
+---
+
+## 6. Pick The Right Template
+
+| Template | Use when |
+| --- | --- |
+| `coding` | You want repository-aware coding with file/search/edit/shell tools under policy |
+| `no-tool` | You want model-only reasoning with no tools, shell, or repository access |
+| `gemma4-coding` | You want a Gemma4 local coding starting point |
+| `gemma4-no-tool` | You want Gemma4 model-only reasoning |
+| `ds4-coding` | You want a DS4 local coding starting point |
+| `ds4-fast-local` | You want lower-latency local DS4 iteration |
+
+List templates:
+
+```bash
+superqode harness list-templates
+```
+
+---
+
+## 7. Choose A Runtime
+
+List backends:
+
+```bash
+superqode harness list-backends
+```
+
+Run with a backend override:
+
+```bash
+superqode harness run --spec harness.yaml --runtime pydanticai --prompt "review this design"
+superqode harness run --spec harness.yaml --runtime openai-agents --prompt "make the smallest safe fix"
+superqode harness run --spec harness.yaml --runtime deepagents --prompt "prototype the implementation"
+```
+
+Use `doctor` with the same override before a team run:
+
+```bash
+superqode harness doctor --spec harness.yaml --runtime pydanticai
+```
+
+---
+
+## 8. Common Commands
+
+| Command | Purpose |
+| --- | --- |
+| `superqode` | Launch the interactive TUI |
+| `superqode --print "..."` | Run one headless task |
+| `superqode harness init ...` | Create a HarnessSpec |
+| `superqode harness validate harness.yaml` | Validate spec syntax |
+| `superqode harness doctor --spec harness.yaml` | Preflight a spec and backend |
+| `superqode harness inspect --spec harness.yaml` | Show resolved policy and compatibility |
+| `superqode harness run --spec harness.yaml --prompt "..."` | Run a harness task |
+| `superqode harness events <run-id>` | Show normalized run events |
+| `superqode harness graph <run-id>` | Show the persisted event graph |
+| `superqode providers doctor openai` | Check provider setup |
+| `superqode runtime list` | List runtime backends |
+
+---
+
+## 9. Validation Workflows
+
+Validation and evaluation are available as secondary workflows behind the main SuperQode CLI:
 
 ```bash
 superqode qe run . --mode quick
-```
-
-**Note:** validation sessions are run via CLI commands, not TUI commands. In the TUI, you interact directly with agents by typing natural language requests after switching to a validation role with `:qe <role>`.
-
-### Deep validation (Full Analysis)
-
-For comprehensive quality analysis:
-
-```bash
 superqode qe run . --mode deep
 ```
 
----
-
-## Step 4: View Results
-
-After a validation session completes, you'll see:
-
-### Console Output
-
-```
-╭─────────────────────────────────────────────────────╮
-│                 Validation Session Complete                  │
-├─────────────────────────────────────────────────────┤
-│ Duration: 45.2s                                      │
-│ Roles Run: 3 (security_tester, api_tester, fullstack)│
-│ Findings: 5 (1 critical, 2 high, 2 medium)          │
-├─────────────────────────────────────────────────────┤
-│ Artifacts Generated:                                 │
-│   • report: .superqode/qe-artifacts/qr/qr-2024-01-18-1a2b3c4d.json │
-╰─────────────────────────────────────────────────────╯
-```
-
-### Artifacts Location
-
-All artifacts are saved to `.superqode/qe-artifacts/`:
-
-```
-.superqode/qe-artifacts/
-├── manifest.json
-├── qr/
-│   ├── qr-<date>-<session>.json    # Quality Report (JSON)
-│   └── qr-<date>-<session>.md      # Quality Report (Markdown)
-├── patches/
-│   └── ...                         # Suggested patch files (when available)
-└── generated-tests/
-    └── ...                         # Generated tests (when available)
-```
-
----
-
-## Step 5: Essential Commands
-
-### TUI Commands (prefix with `:`)
-
-| Command | Description |
-|---------|-------------|
-| `:connect` or `:c` | Interactive connection picker (recommended) |
-| `:connect acp <agent>` | Connect directly to ACP agent |
-| `:connect byok <provider> <model>` | Connect directly to BYOK provider |
-| `:connect local <provider> <model>` | Connect directly to local model |
-| `:qe <role>` | Switch to validation role mode (e.g., `:qe security_tester`) |
-| `:disconnect` | Disconnect current session |
-| `:status` | Show session status |
-| `:help` | Show help |
-| `:quit` | Exit SuperQode |
-
-### CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `superqode` | Launch TUI |
-| `superqode qe run .` | Run validation on current directory |
-| `superqode providers list` | List available providers |
-| `superqode agents list` | List available agents |
-| `superqode config init` | Initialize configuration |
-
----
-
-## Step 6: Quick Examples
-
-### Example 1: Security Scan
-
-```bash
-# Run security-focused validation
-superqode qe run . -r security_tester --mode quick
-```
-
-### Example 2: API Testing
-
-```bash
-# Test API endpoints
-superqode qe run . -r api_tester -r unit_tester
-```
-
-### Example 3: Full validation with Suggestions (Enterprise)
-
-```bash
-# Deep validation with fix suggestions (sandbox mode)
-superqode qe run . --mode deep --allow-suggestions --generate
-```
-
-### Example 4: CI-Friendly Output (Enterprise)
-
-```bash
-# JSONL output for CI/CD
-superqode qe run . --mode quick --jsonl
-
-# JUnit XML for test reporting
-superqode qe run . --mode quick --junit results.xml
-```
-
----
-
-## Step 7: Understanding the Output
-
-### Finding Severity Levels
-
-| Severity | Description | Action |
-|----------|-------------|--------|
-| **Critical** | Security vulnerability, data loss risk | Fix immediately |
-| **High** | Significant bug or security issue | Fix before release |
-| **Medium** | Bug or code smell | Fix soon |
-| **Low** | Minor issue or suggestion | Fix when convenient |
-
-### Confidence Scores
-
-Each finding includes a confidence score (0.0 - 1.0):
-
-- **0.9 - 1.0**: Very high confidence, verified finding
-- **0.7 - 0.9**: High confidence, likely valid
-- **0.5 - 0.7**: Medium confidence, review recommended
-- **< 0.5**: Low confidence, may be false positive
-
----
-
-## Step 8: Keyboard Shortcuts (TUI)
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+C` | Cancel current operation |
-| `Ctrl+D` | Exit SuperQode |
-| `Ctrl+K` | Open command palette |
-| `Ctrl+L` | Clear screen |
-| `Ctrl+R` | Refresh |
-| `Tab` | Auto-complete |
-| `↑/↓` | Navigate history |
-| `Esc` | Cancel/close dialog |
+Use these when you want role-based project checks, reports, generated tests, or release validation. For day-to-day coding, start with the harness commands above.
 
 ---
 
 ## Next Steps
 
-Now that you've completed the quick start:
-
-1. **[Your First Session](first-session.md)** - Detailed walkthrough
-2. **[Configuration Guide](configuration.md)** - Customize SuperQode
-3. **[Understanding Modes](../concepts/modes.md)** - Learn about BYOK, ACP, Local
-4. **[Role-Based Workflows](../concepts/roles.md)** - Understand testing roles
-5. **[CI/CD Integration](../integration/cicd.md)** - Add to your pipeline
+1. [Your First Session](first-session.md)
+2. [Harness System](../advanced/harness-system.md)
+3. [Runtime Backends](../runtimes.md)
+4. [Configuration Guide](configuration.md)
+5. [Three Modes](../concepts/modes.md)
+6. [CI/CD Integration](../integration/cicd.md)
 
 ---
 
-## Tips for Success
+## Tips
 
-!!! tip "Start with Quick Scan"
-    Use `--mode quick` during development for fast feedback. Save `--mode deep` for pre-release validation.
+!!! tip "Run doctor first"
+    `superqode harness doctor --spec harness.yaml` catches missing optional runtimes, incompatible no-tool/coding settings, sandbox policy issues, and event-store problems.
 
-!!! tip "Focus on Critical Findings"
-    Address critical and high severity findings first. Configure noise filters to reduce false positives.
+!!! tip "Use no-tool for pure reasoning"
+    The `no-tool` template intentionally removes filesystem, shell, network, and repository access.
 
-!!! tip "Review Suggested Fixes"
-    When using `--allow-suggestions`, always review the generated patches before applying.
-
-!!! tip "Use CI Integration"
-    Add SuperQode to your CI/CD pipeline with `--jsonl` output for automated quality gates.
+!!! tip "Use the graph when debugging"
+    `superqode harness graph <run-id> --json` is the best way to see what a backend actually emitted.

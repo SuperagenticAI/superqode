@@ -1,8 +1,9 @@
 [project]
 name = "superqode"
-version = "0.1.25"
+version = "0.1.26"
 description = "SuperQode: Multi-Agent Coding Agent Harness"
 readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.12,<3.14"
 authors = [
     {name = "Shashi Jagtap", email = "info@super-agentic.ai"}
@@ -14,7 +15,6 @@ keywords = ["ai", "coding-agents", "multi-agent", "orchestration", "sdlc", "auto
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries :: Python Modules",

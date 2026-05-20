@@ -1,0 +1,99 @@
+version: 1
+name: example-deepagents
+description: DeepAgents harness for longer repository tasks with subagent, memory, and rich graph events.
+flavor: coding
+runtime:
+  backend: deepagents
+  config:
+    memory:
+      enabled: true
+    skills:
+      - repo-navigation
+      - implementation
+model_policy:
+  primary: gpt-5.4
+  fallbacks:
+    - gpt-5.4-mini
+  profile: deepagents-coding
+  temperature: 0.2
+  reasoning: medium
+  config:
+    provider: openai
+    max_iterations: 20
+execution_policy:
+  sandbox: local
+  approval_profile: balanced
+  allow_read: true
+  allow_write: true
+  allow_shell: true
+  allow_network: false
+  allowed_commands:
+    - pytest
+    - uv run pytest
+    - uv run ruff
+  blocked_categories:
+    - destructive
+agents:
+  - id: lead-coder
+    role: orchestrator
+    system_prompt: |
+      Break larger coding tasks into small steps, keep a visible plan, and use
+      repository evidence before proposing or applying changes.
+    tools:
+      - read_file
+      - write_file
+      - list_directory
+      - edit_file
+      - patch
+      - grep
+      - glob
+      - bash
+      - todo_write
+      - todo_read
+    skills:
+      - repo-navigation
+      - implementation
+    delegates_to:
+      - reviewer
+    max_iterations: 20
+  - id: reviewer
+    role: review
+    system_prompt: |
+      Review proposed changes for correctness, test coverage, and regression risk.
+    tools:
+      - read_file
+      - grep
+      - bash
+    skills:
+      - code-review
+workflow:
+  mode: orchestrator
+  max_task_depth: 4
+  parallelism: 2
+  merge_strategy: summary
+context:
+  instruction_files:
+    - AGENTS.md
+    - CLAUDE.md
+    - SUPERQODE.md
+  skills_dir: .agents/skills
+  roles_dir: .agents/roles
+  session_storage: .superqode/sessions
+  compaction:
+    strategy: summarize-when-large
+  memory:
+    enabled: true
+validation:
+  enabled: true
+  fail_on_error: false
+  timeout_seconds: 600
+  custom_steps: []
+observability:
+  events: true
+  traces: false
+  run_store: file
+metadata:
+  example: deepagents
+  install: pip install "superqode[deepagents]"
+  best_for: long-running coding tasks
+

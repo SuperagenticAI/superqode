@@ -1,0 +1,66 @@
+version: 1
+name: example-no-tool
+description: Tool-free reasoning harness for planning, design review, and architecture discussion.
+flavor: no_tool
+runtime:
+  backend: builtin
+model_policy:
+  primary: gpt-5.4
+  fallbacks:
+    - gpt-5.4-mini
+  profile: no-tool-reasoning
+  temperature: 0.1
+  reasoning: high
+  config:
+    provider: openai
+execution_policy:
+  sandbox: none
+  approval_profile: deny
+  allow_read: false
+  allow_write: false
+  allow_shell: false
+  allow_network: false
+  allowed_commands: []
+  blocked_categories:
+    - tools
+    - filesystem
+    - shell
+agents:
+  - id: reasoner
+    role: architecture-review
+    system_prompt: |
+      Answer using only the prompt context. Do not assume filesystem, shell,
+      network, or repository access.
+    tools: []
+    skills:
+      - architecture-review
+      - code-review-from-context
+workflow:
+  mode: single
+  max_task_depth: 1
+  parallelism: 1
+  merge_strategy: summary
+context:
+  instruction_files:
+    - AGENTS.md
+    - SUPERQODE.md
+  skills_dir: .agents/skills
+  roles_dir: .agents/roles
+  session_storage: .superqode/sessions
+  compaction:
+    strategy: prompt-only
+  memory:
+    enabled: false
+validation:
+  enabled: false
+  fail_on_error: false
+  timeout_seconds: 300
+  custom_steps: []
+observability:
+  events: true
+  traces: false
+  run_store: file
+metadata:
+  example: no-tool
+  best_for: planning without tools
+

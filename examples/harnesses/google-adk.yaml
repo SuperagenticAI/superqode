@@ -1,0 +1,77 @@
+version: 1
+name: example-google-adk
+description: Google ADK-backed coding harness using SuperQode tool and permission policy.
+flavor: coding
+runtime:
+  backend: adk
+model_policy:
+  primary: gemini-2.5-pro
+  fallbacks:
+    - gemini-2.5-flash
+  profile: adk-coding
+  temperature: 0.2
+  reasoning: medium
+  config:
+    provider: google
+    max_iterations: 12
+execution_policy:
+  sandbox: local
+  approval_profile: balanced
+  allow_read: true
+  allow_write: true
+  allow_shell: true
+  allow_network: false
+  allowed_commands:
+    - pytest
+    - uv run pytest
+    - uv run ruff
+  blocked_categories:
+    - destructive
+agents:
+  - id: adk-coder
+    role: implementation
+    system_prompt: |
+      Use the ADK runtime through SuperQode policy. Keep edits small and verify
+      with project-local commands when shell access is available.
+    tools:
+      - read_file
+      - write_file
+      - list_directory
+      - edit_file
+      - patch
+      - grep
+      - glob
+      - bash
+    skills:
+      - implementation
+    max_iterations: 12
+workflow:
+  mode: single
+  max_task_depth: 4
+  parallelism: 1
+  merge_strategy: summary
+context:
+  instruction_files:
+    - AGENTS.md
+    - SUPERQODE.md
+  skills_dir: .agents/skills
+  roles_dir: .agents/roles
+  session_storage: .superqode/sessions
+  compaction:
+    strategy: summarize-when-large
+  memory:
+    enabled: true
+validation:
+  enabled: true
+  fail_on_error: false
+  timeout_seconds: 300
+  custom_steps: []
+observability:
+  events: true
+  traces: false
+  run_store: file
+metadata:
+  example: google-adk
+  install: pip install "superqode[adk]"
+  best_for: Google ADK integration
+

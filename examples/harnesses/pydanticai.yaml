@@ -1,0 +1,97 @@
+version: 1
+name: example-pydanticai
+description: PydanticAI harness with SuperQode tools, fallback models, typed output, and optional Logfire traces.
+flavor: coding
+runtime:
+  backend: pydanticai
+  config:
+    pydanticai:
+      logfire:
+        send_to_logfire: if-token-present
+        service_name: superqode-example
+model_policy:
+  primary: openai:gpt-5.4
+  fallbacks:
+    - openai:gpt-5.4-mini
+  profile: pydanticai-coding
+  temperature: 0.2
+  reasoning: medium
+  config:
+    provider: openai
+    max_iterations: 12
+execution_policy:
+  sandbox: local
+  approval_profile: balanced
+  allow_read: true
+  allow_write: true
+  allow_shell: true
+  allow_network: false
+  allowed_commands:
+    - pytest
+    - uv run pytest
+    - uv run ruff
+  blocked_categories:
+    - destructive
+agents:
+  - id: pydanticai-coder
+    role: typed-coding
+    system_prompt: |
+      Use tools deliberately and return clear implementation notes. When a
+      structured result is requested, respect the requested output schema.
+    tools:
+      - read_file
+      - write_file
+      - list_directory
+      - edit_file
+      - patch
+      - grep
+      - glob
+      - bash
+    skills:
+      - implementation
+    max_iterations: 12
+    output_schema:
+      type: object
+      properties:
+        summary:
+          type: string
+        files_changed:
+          type: array
+          items:
+            type: string
+        verification:
+          type: array
+          items:
+            type: string
+      required:
+        - summary
+workflow:
+  mode: single
+  max_task_depth: 4
+  parallelism: 1
+  merge_strategy: summary
+context:
+  instruction_files:
+    - AGENTS.md
+    - SUPERQODE.md
+  skills_dir: .agents/skills
+  roles_dir: .agents/roles
+  session_storage: .superqode/sessions
+  compaction:
+    strategy: summarize-when-large
+  memory:
+    enabled: true
+validation:
+  enabled: true
+  fail_on_error: false
+  timeout_seconds: 300
+  custom_steps: []
+observability:
+  events: true
+  traces: true
+  run_store: file
+metadata:
+  example: pydanticai
+  install: pip install "superqode[pydanticai]"
+  best_for: typed Python agent framework integration
+

@@ -16,7 +16,7 @@
 <p align="center">
   <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/v/superqode?style=flat-square&color=blue" alt="PyPI"></a>
   <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/pyversions/superqode?style=flat-square" alt="Python"></a>
-  <a href="https://github.com/SuperagenticAI/superqode/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square" alt="License"></a>
+  <a href="https://github.com/SuperagenticAI/superqode/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square" alt="License"></a>
 </p>
 
 <p align="center">
@@ -101,7 +101,55 @@ cd your-project
 superqode --print "inspect this repository and suggest the smallest next step"
 ```
 
+### Your First Harness Run
 
+A harness is the repeatable contract for how an agent run behaves. Start with the default coding harness:
+
+```bash
+cd your-project
+superqode harness init my-coder --template coding --output harness.yaml
+superqode harness doctor --spec harness.yaml
+superqode harness run --spec harness.yaml --prompt "summarize the architecture"
+```
+
+Prefer to start from a complete file? See [`examples/harnesses`](examples/harnesses) for ready-to-run specs covering builtin, no-tool, PydanticAI, DeepAgents, OpenAI Agents SDK, Google ADK, Gemma4, and DS4.
+
+After a run, inspect what happened:
+
+```bash
+superqode harness events <run-id>
+superqode harness graph <run-id>
+superqode harness graph <run-id> --json
+```
+
+Use `doctor` before sharing a harness with a team. It checks backend availability, spec compatibility, sandbox policy, event-store readiness, approval support, MCP config paths, and rich event graph support.
+
+### Common Harness Choices
+
+| Goal | Start with |
+|------|------------|
+| Let SuperQode edit, search, and run shell commands under policy | `superqode harness init app --template coding` |
+| Bet on model capability without tools or repository access | `superqode harness init reasoner --template no-tool` |
+| Optimize for local Gemma4 coding | `superqode harness init local --template gemma4-coding` |
+| Optimize for fast DS4 local iteration | `superqode harness init fast --template ds4-fast-local` |
+
+### Optional Runtime Backends
+
+Install only the runtimes you need:
+
+```bash
+pip install "superqode[adk]"
+pip install "superqode[openai-agents]"
+pip install "superqode[deepagents]"
+pip install "superqode[pydanticai]"
+```
+
+Then select a backend in a spec or at run time:
+
+```bash
+superqode harness run --spec harness.yaml --runtime pydanticai --prompt "review this design"
+superqode harness run --spec harness.yaml --runtime openai-agents --prompt "make the smallest safe fix"
+```
 
 ## Key Features
 
@@ -110,6 +158,8 @@ superqode --print "inspect this repository and suggest the smallest next step"
 | **HarnessSpec** | Define coding, no-tool, local-model, and custom harness behavior with one declarative contract |
 | **Harness kernel** | Run sessions with normalized events, run records, backend dispatch, typed outputs, and workflow execution |
 | **Pluggable runtimes** | Swap the agent loop: SuperQode native, Google ADK, OpenAI Agents SDK, optional DeepAgents, or optional PydanticAI |
+| **Event graph** | Inspect model, tool, approval, sandbox, subagent, memory, and result events across supported runtimes |
+| **Harness doctor** | Preflight backend installation, spec compatibility, sandbox policy, MCP config, approvals, and graph readiness |
 | **Developer TUI** | Interactive sessions with wrapped prompts, quiet streaming logs, compact tool activity, and readable change summaries |
 | **Headless CLI** | Run coding tasks and provider checks from scripts or terminals |
 | **Tool system** | File, search, edit, shell, todo, MCP, and optional Monty Python REPL tools |
@@ -135,6 +185,19 @@ HARNESS LIFECYCLE
 
 The default coding harness keeps repository work practical. The no-tool harness lets you bet directly on model capability. Optional runtimes let teams bring their preferred agent framework without replacing the SuperQode harness contract.
 
+## Rich Runtime Observability
+
+SuperQode normalizes runtime-specific streams into one harness event graph:
+
+| Backend | Rich graph events |
+|---------|-------------------|
+| `pydanticai` | Model deltas, tool calls, tool results, final results, approval pauses |
+| `openai-agents` | Model deltas, tool calls, tool results, approval pauses, sandbox markers |
+| `deepagents` | Model deltas, tool calls, subagent activity, memory reads/writes, sandbox file/command events, final results |
+| `builtin` and `adk` | Coarse run and stream events, with the same graph storage contract |
+
+This gives teams one way to debug runs even when they use different agent frameworks.
+
 ## Documentation
 
 For complete guides, configuration options, and API reference:
@@ -154,4 +217,4 @@ pytest
 
 ## License
 
-[AGPL-3.0](LICENSE) - Built by [Superagentic AI](https://super-agentic.ai/) for developers who care about code quality.
+[Apache-2.0](LICENSE) - Built by [Superagentic AI](https://super-agentic.ai/) for developers who care about code quality.

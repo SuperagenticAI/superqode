@@ -1,0 +1,80 @@
+version: 1
+name: example-gemma4
+description: Gemma4 local coding harness tuned for strict JSON tool calls and conservative iteration.
+flavor: coding
+runtime:
+  backend: builtin
+model_policy:
+  primary: gemma4-local
+  fallbacks:
+    - ds4-local
+  profile: gemma4-coding
+  temperature: 0.2
+  local_hardware: mlx
+  tool_call_format: strict-json
+  config:
+    provider: local
+    max_iterations: 8
+    parallel_tools: false
+execution_policy:
+  sandbox: local
+  approval_profile: balanced
+  allow_read: true
+  allow_write: true
+  allow_shell: true
+  allow_network: false
+  allowed_commands:
+    - pytest
+    - uv run pytest
+    - uv run ruff
+  blocked_categories:
+    - destructive
+    - credential-access
+agents:
+  - id: gemma4-coder
+    role: implementation
+    system_prompt: |
+      Use compact steps and strict tool-call JSON. Prefer reading the smallest
+      relevant files before editing. Keep final answers short and concrete.
+    tools:
+      - read_file
+      - write_file
+      - list_directory
+      - edit_file
+      - patch
+      - grep
+      - glob
+      - bash
+    skills:
+      - repo-navigation
+      - implementation
+    max_iterations: 8
+workflow:
+  mode: single
+  max_task_depth: 3
+  parallelism: 1
+  merge_strategy: summary
+context:
+  instruction_files:
+    - AGENTS.md
+    - SUPERQODE.md
+  skills_dir: .agents/skills
+  roles_dir: .agents/roles
+  session_storage: .superqode/sessions
+  compaction:
+    strategy: aggressive-summary
+  memory:
+    enabled: false
+validation:
+  enabled: true
+  fail_on_error: false
+  timeout_seconds: 300
+  custom_steps: []
+observability:
+  events: true
+  traces: false
+  run_store: file
+metadata:
+  example: gemma4
+  best_for: local Gemma-style coding models
+
