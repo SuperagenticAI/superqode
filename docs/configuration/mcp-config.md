@@ -6,7 +6,7 @@ Complete guide to configuring Model Context Protocol (MCP) servers in SuperQode.
 
 ## Overview
 
-MCP servers provide tools and resources that agents can use during QE sessions. SuperQode supports:
+MCP servers provide tools and resources that agents can use during validation sessions. SuperQode supports:
 
 - **Stdio Transport**: Local process-based servers
 - **HTTP Transport**: HTTP/HTTPS servers
@@ -517,6 +517,6 @@ mcp_servers:
 
 ## Next Steps
 
-- [MCP Tools](../qe-features/mcp-tools.md) - Using MCP tools in QE
+- [MCP Tools](../qe-features/mcp-tools.md) - Using MCP tools in validation
 - [YAML Reference](yaml-reference.md) - Complete configuration reference
 - [Team Configuration](team.md) - Role-specific MCP assignment

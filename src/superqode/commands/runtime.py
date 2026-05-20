@@ -126,6 +126,14 @@ def doctor(name: Optional[str]) -> None:
                     "agents.extensions.models.litellm_model",
                 ]
             )
+        elif target == "pydanticai":
+            _probe_modules(
+                [
+                    "pydantic_ai",
+                    "pydantic_ai.agent",
+                    "pydantic_ai.toolsets",
+                ]
+            )
         elif target == "builtin":
             _probe_modules(["superqode.agent.loop", "superqode.tools.base"])
 

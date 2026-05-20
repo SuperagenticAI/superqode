@@ -6,7 +6,7 @@ This guide helps you resolve common issues when using SuperQode.
 
 - [Installation Issues](#installation-issues)
 - [Agent Connection Problems](#agent-connection-problems)
-- [QE Analysis Failures](#qe-analysis-failures)
+- [Validation Analysis Failures](#validation-analysis-failures)
 - [Performance Issues](#performance-issues)
 - [Configuration Problems](#configuration-problems)
 - [Common Error Messages](#common-error-messages)
@@ -129,7 +129,7 @@ ModuleNotFoundError: No module named 'superqode'
    npm install -g @josephschmitt/opencode-acp  # If using ACP adapter
    ```
 
-## QE Analysis Failures
+## validation Analysis Failures
 
 ### "No tests detected" when tests exist
 
@@ -147,7 +147,7 @@ Verdict: 🟠 NO TESTS DETECTED - Add tests for proper validation
 
 2. **Run with verbose logging:**
    ```bash
-   superqe run . --verbose
+   superqode qe run . --verbose
    ```
 
 3. **Check file permissions:**
@@ -168,11 +168,11 @@ Failed to parse jest JSON output: Expecting value: line 1 column 1 (char 0)
 2. **To suppress warnings, ensure proper Jest configuration**
 3. **Use different test runners if needed**
 
-### Deep QE not showing agent activity
+### Deep validation not showing agent activity
 
 **Problem:**
 ```bash
-superqe run . --mode deep
+superqode qe run . --mode deep
 # Nothing appears in console
 ```
 
@@ -180,7 +180,7 @@ superqe run . --mode deep
 
 1. **Use verbose flag:**
    ```bash
-   superqe run . --mode deep --verbose
+   superqode qe run . --mode deep --verbose
    ```
 
 2. **Check OpenCode installation:**
@@ -215,21 +215,21 @@ superqe run . --mode deep
 
 3. **Close other memory-intensive applications**
 
-### High memory usage during QE
+### High memory usage during validation
 
-**Problem:** QE analysis uses too much memory
+**Problem:** validation analysis uses too much memory
 
 **Solutions:**
 
 1. **Memory limits are already implemented** (50MB per process)
 2. **Run smaller analysis scopes:**
    ```bash
-   superqe run ./src --mode quick
+   superqode qe run ./src --mode quick
    ```
 
 3. **Use worktree isolation:**
    ```bash
-   superqe run . --worktree
+   superqode qe run . --worktree
    ```
 
 ### Agent timeouts
@@ -243,12 +243,12 @@ superqe run . --mode deep
 
 1. **Increase timeout:**
    ```bash
-   superqe run . --timeout 60
+   superqode qe run . --timeout 60
    ```
 
 2. **Use specific roles instead of all:**
    ```bash
-   superqe run . -r unit_tester
+   superqode qe run . -r unit_tester
    ```
 
 ## Configuration Problems
@@ -286,21 +286,21 @@ Configuration error: Invalid YAML format
    ```
 
 2. **Restart SuperQode after config changes**
-3. **Use `superqe init` to reset configuration**
+3. **Use `superqode config init` to reset configuration**
 
 ## Common Error Messages
 
-### "Another QE session is already running"
+### "Another validation session is already running"
 
-**Problem:** Multiple QE sessions conflict
+**Problem:** Multiple validation sessions conflict
 
 **Solution:**
 ```bash
 # Check running sessions
-superqe status
+superqode qe status
 
 # View session logs
-superqe logs
+superqode qe logs
 ```
 
 ### "Permission denied" errors
@@ -316,7 +316,7 @@ ls -la /path/to/project
 chmod -R u+rwx /path/to/project
 
 # Or run with sudo (not recommended)
-sudo superqe run .
+sudo superqode qe run .
 ```
 
 ### "Connection refused" for MCP servers
@@ -341,7 +341,7 @@ sudo superqe run .
 
 ### "Import error" for custom modules
 
-**Problem:** Python path issues in QE analysis
+**Problem:** Python path issues in validation analysis
 
 **Solutions:**
 
@@ -364,7 +364,7 @@ If these solutions don't resolve your issue:
 
 1. **Check the logs:**
    ```bash
-   superqe logs
+   superqode qe logs
    ```
 
 2. **Run with debug output:**
@@ -436,6 +436,6 @@ if shutil.which('node'):
 else:
     print('❌ Node.js not found')
 
-print('\\n💡 Run \"superqe run .\" to test QE functionality')
+print('\\n💡 Run \"superqode qe run .\" to test validation functionality')
 "
 ```

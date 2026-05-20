@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.1.24"
+version = "0.1.25"
 description = "SuperQode: Multi-Agent Coding Agent Harness"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
@@ -18,7 +18,6 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: Software Development :: Quality Assurance",
     "Topic :: Software Development :: Build Tools",
 ]
 
@@ -62,6 +61,13 @@ openai-agents = [
 ]
 deepagents = [
     "deepagents>=0.6.0,<0.7.0",
+]
+pydanticai = [
+    "pydantic-ai>=1.98.0,<2.0.0",
+]
+pydanticai-logfire = [
+    "pydantic-ai>=1.98.0,<2.0.0",
+    "logfire>=4.0.0",
 ]
 dev = [
     "pytest>=8.3.5",
@@ -109,7 +115,6 @@ Changelog = "https://github.com/SuperagenticAI/superqode/blob/main/CHANGELOG.md"
 
 [project.scripts]
 superqode = "superqode.main:cli_main"
-superqe = "superqode.superqe_cli:main"
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]

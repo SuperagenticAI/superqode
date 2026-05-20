@@ -1,5 +1,5 @@
 """
-Quality Report (QR) Module.
+Validation report module.
 
 Generates research-grade QA reports that document:
 - Investigation objective and scope

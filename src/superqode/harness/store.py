@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import sqlite3
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -269,6 +270,254 @@ class FileHarnessStore:
         tmp.replace(path)
 
 
+class SQLiteHarnessStore:
+    """SQLite-backed harness store for indexed run/session history."""
+
+    def __init__(self, path: str | Path = ".superqode/harness/store.sqlite3") -> None:
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._init_db()
+
+    def open_session(
+        self,
+        session_id: str,
+        spec: HarnessSpec,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> HarnessSessionRecord:
+        now = time.time()
+        existing = self.get_session(session_id)
+        created_at = existing.created_at if existing else now
+        merged_metadata = dict(existing.metadata if existing else {})
+        merged_metadata.update(metadata or {})
+        record = HarnessSessionRecord(
+            session_id=session_id,
+            harness=spec.name,
+            flavor=spec.flavor.value,
+            created_at=created_at,
+            updated_at=now,
+            metadata=merged_metadata,
+        )
+        with self._connect() as conn:
+            conn.execute(
+                """
+                insert into sessions(session_id, harness, flavor, created_at, updated_at, metadata)
+                values (?, ?, ?, ?, ?, ?)
+                on conflict(session_id) do update set
+                    harness=excluded.harness,
+                    flavor=excluded.flavor,
+                    updated_at=excluded.updated_at,
+                    metadata=excluded.metadata
+                """,
+                (
+                    record.session_id,
+                    record.harness,
+                    record.flavor,
+                    record.created_at,
+                    record.updated_at,
+                    json.dumps(record.metadata, sort_keys=True),
+                ),
+            )
+        return record
+
+    def get_session(self, session_id: str) -> HarnessSessionRecord | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "select * from sessions where session_id = ?",
+                (session_id,),
+            ).fetchone()
+        return _session_from_row(row) if row else None
+
+    def list_sessions(self) -> list[HarnessSessionRecord]:
+        with self._connect() as conn:
+            rows = conn.execute("select * from sessions order by updated_at desc").fetchall()
+        return [_session_from_row(row) for row in rows]
+
+    def start_run(
+        self,
+        *,
+        session_id: str,
+        spec: HarnessSpec,
+        provider: str,
+        model: str,
+        runtime: str,
+        prompt: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> HarnessRunRecord:
+        record = HarnessRunRecord(
+            run_id=generate_run_id(),
+            session_id=session_id,
+            harness=spec.name,
+            flavor=spec.flavor.value,
+            provider=provider,
+            model=model,
+            runtime=runtime,
+            status="running",
+            started_at=time.time(),
+            prompt_preview=_preview(prompt),
+            metadata=dict(metadata or {}),
+        )
+        with self._connect() as conn:
+            conn.execute(
+                """
+                insert into runs(
+                    run_id, session_id, harness, flavor, provider, model, runtime, status,
+                    started_at, ended_at, prompt_preview, metadata
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.run_id,
+                    record.session_id,
+                    record.harness,
+                    record.flavor,
+                    record.provider,
+                    record.model,
+                    record.runtime,
+                    record.status,
+                    record.started_at,
+                    record.ended_at,
+                    record.prompt_preview,
+                    json.dumps(record.metadata, sort_keys=True),
+                ),
+            )
+        return record
+
+    def append_event(self, run_id: str, event: HarnessEvent) -> HarnessRunRecord:
+        self._require_run(run_id)
+        with self._connect() as conn:
+            row = conn.execute(
+                "select coalesce(max(position), -1) + 1 as position from events where run_id = ?",
+                (run_id,),
+            ).fetchone()
+            conn.execute(
+                """
+                insert into events(run_id, position, type, timestamp, session_id, data)
+                values (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    int(row["position"]),
+                    event.type,
+                    event.timestamp,
+                    event.session_id,
+                    json.dumps(event.data, sort_keys=True),
+                ),
+            )
+        return self._require_run(run_id)
+
+    def end_run(
+        self,
+        run_id: str,
+        *,
+        status: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> HarnessRunRecord:
+        record = self._require_run(run_id)
+        merged_metadata = dict(record.metadata)
+        merged_metadata.update(metadata or {})
+        with self._connect() as conn:
+            conn.execute(
+                "update runs set status = ?, ended_at = ?, metadata = ? where run_id = ?",
+                (status, time.time(), json.dumps(merged_metadata, sort_keys=True), run_id),
+            )
+        return self._require_run(run_id)
+
+    def get_run(self, run_id: str) -> HarnessRunRecord | None:
+        with self._connect() as conn:
+            row = conn.execute("select * from runs where run_id = ?", (run_id,)).fetchone()
+        return self._run_from_row(row) if row else None
+
+    def list_runs(self, *, session_id: str | None = None) -> list[HarnessRunRecord]:
+        with self._connect() as conn:
+            if session_id is None:
+                rows = conn.execute("select * from runs order by started_at desc").fetchall()
+            else:
+                rows = conn.execute(
+                    "select * from runs where session_id = ? order by started_at desc",
+                    (session_id,),
+                ).fetchall()
+        return [self._run_from_row(row) for row in rows]
+
+    def get_events(self, run_id: str, *, after: int = 0) -> list[HarnessEvent]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "select * from events where run_id = ? and position >= ? order by position",
+                (run_id, after),
+            ).fetchall()
+        return [_event_from_row(row) for row in rows]
+
+    def _require_run(self, run_id: str) -> HarnessRunRecord:
+        record = self.get_run(run_id)
+        if record is None:
+            raise KeyError(f"Unknown harness run: {run_id}")
+        return record
+
+    def _run_from_row(self, row: sqlite3.Row) -> HarnessRunRecord:
+        return HarnessRunRecord(
+            run_id=row["run_id"],
+            session_id=row["session_id"],
+            harness=row["harness"],
+            flavor=row["flavor"],
+            provider=row["provider"],
+            model=row["model"],
+            runtime=row["runtime"],
+            status=row["status"],
+            started_at=float(row["started_at"]),
+            ended_at=float(row["ended_at"]) if row["ended_at"] is not None else None,
+            prompt_preview=row["prompt_preview"] or "",
+            events=tuple(self.get_events(row["run_id"])),
+            metadata=json.loads(row["metadata"] or "{}"),
+        )
+
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _init_db(self) -> None:
+        with self._connect() as conn:
+            conn.executescript(
+                """
+                create table if not exists sessions (
+                    session_id text primary key,
+                    harness text not null,
+                    flavor text not null,
+                    created_at real not null,
+                    updated_at real not null,
+                    metadata text not null
+                );
+                create table if not exists runs (
+                    run_id text primary key,
+                    session_id text not null,
+                    harness text not null,
+                    flavor text not null,
+                    provider text not null,
+                    model text not null,
+                    runtime text not null,
+                    status text not null,
+                    started_at real not null,
+                    ended_at real,
+                    prompt_preview text not null,
+                    metadata text not null
+                );
+                create index if not exists idx_runs_session_started
+                    on runs(session_id, started_at desc);
+                create table if not exists events (
+                    run_id text not null,
+                    position integer not null,
+                    type text not null,
+                    timestamp real not null,
+                    session_id text,
+                    data text not null,
+                    primary key(run_id, position)
+                );
+                create index if not exists idx_events_run_position
+                    on events(run_id, position);
+                """
+            )
+
+
 def _encode_base32(value: int, length: int) -> str:
     chars = []
     for _ in range(length):
@@ -295,4 +544,25 @@ def _event_from_dict(data: dict[str, Any]) -> HarnessEvent:
         timestamp=float(data.get("timestamp") or time.time()),
         session_id=data.get("session_id"),
         run_id=data.get("run_id"),
+    )
+
+
+def _session_from_row(row: sqlite3.Row) -> HarnessSessionRecord:
+    return HarnessSessionRecord(
+        session_id=row["session_id"],
+        harness=row["harness"],
+        flavor=row["flavor"],
+        created_at=float(row["created_at"]),
+        updated_at=float(row["updated_at"]),
+        metadata=json.loads(row["metadata"] or "{}"),
+    )
+
+
+def _event_from_row(row: sqlite3.Row) -> HarnessEvent:
+    return HarnessEvent(
+        type=row["type"],
+        data=json.loads(row["data"] or "{}"),
+        timestamp=float(row["timestamp"]),
+        session_id=row["session_id"],
+        run_id=row["run_id"],
     )

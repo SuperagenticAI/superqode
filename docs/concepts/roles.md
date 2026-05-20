@@ -1,6 +1,6 @@
-# QE Roles
+# Role-Based Workflows
 
-SuperQode uses a role-based model where different AI agents specialize in specific types of quality engineering. This page explains each role and how they work together.
+SuperQode uses a role-based model where different AI agents specialize in specific types of validation and evaluation. This page explains each role and how they work together.
 
 The default template ships with a comprehensive role catalog. Only roles with implementations can run, so leave unimplemented roles disabled or remove them.
 
@@ -10,7 +10,7 @@ The default template ships with a comprehensive role catalog. Only roles with im
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      QE ROLES                                │
+│                      validation ROLES                                │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  ┌─────────────────────────────────────────────────────┐    │
@@ -30,7 +30,7 @@ The default template ships with a comprehensive role catalog. Only roles with im
 │                                                              │
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │              HEURISTIC ROLE                          │    │
-│  │  (Senior QE Comprehensive Review)                    │    │
+│  │  (Senior validation Comprehensive Review)                    │    │
 │  │                                                      │    │
 │  │                   fullstack                          │    │
 │  └─────────────────────────────────────────────────────┘    │
@@ -63,7 +63,7 @@ Execution roles run existing tests deterministically. They don't use AI for disc
 
 **Usage:**
 ```bash
-superqe run . -r smoke_tester
+superqode qe run . -r smoke_tester
 ```
 
 **When to Use:**
@@ -91,7 +91,7 @@ superqe run . -r smoke_tester
 
 **Usage:**
 ```bash
-superqe run . -r sanity_tester
+superqode qe run . -r sanity_tester
 ```
 
 **When to Use:**
@@ -119,7 +119,7 @@ superqe run . -r sanity_tester
 
 **Usage:**
 ```bash
-superqe run . -r regression_tester
+superqode qe run . -r regression_tester
 ```
 
 **When to Use:**
@@ -147,7 +147,7 @@ superqe run . -r regression_tester
 
 **Usage:**
 ```bash
-superqe run . -r lint_tester
+superqode qe run . -r lint_tester
 ```
 
 **When to Use:**
@@ -184,7 +184,7 @@ Detection roles use AI to analyze code and discover issues. They can generate te
 
 **Usage:**
 ```bash
-superqe run . -r security_tester
+superqode qe run . -r security_tester
 ```
 
 **Typical Findings:**
@@ -221,7 +221,7 @@ superqe run . -r security_tester
 
 **Usage:**
 ```bash
-superqe run . -r api_tester
+superqode qe run . -r api_tester
 ```
 
 **Typical Findings:**
@@ -257,7 +257,7 @@ superqe run . -r api_tester
 
 **Usage (Enterprise):**
 ```bash
-superqe run . -r unit_tester --generate
+superqode qe run . -r unit_tester --generate
 ```
 
 **Typical Findings:**
@@ -292,7 +292,7 @@ superqe run . -r unit_tester --generate
 
 **Usage:**
 ```bash
-superqe run . -r e2e_tester
+superqode qe run . -r e2e_tester
 ```
 
 **Typical Findings:**
@@ -328,7 +328,7 @@ superqe run . -r e2e_tester
 
 **Usage:**
 ```bash
-superqe run . -r performance_tester
+superqode qe run . -r performance_tester
 ```
 
 **Typical Findings:**
@@ -346,7 +346,7 @@ superqe run . -r performance_tester
 
 ### fullstack
 
-**Purpose:** Senior QE comprehensive review
+**Purpose:** Senior validation comprehensive review
 
 | Property | Value |
 |----------|-------|
@@ -364,7 +364,7 @@ superqe run . -r performance_tester
 
 **Usage:**
 ```bash
-superqe run . -r fullstack
+superqode qe run . -r fullstack
 ```
 
 **Typical Output:**
@@ -397,25 +397,25 @@ Blocking Issues: 2
 ### Single Role
 
 ```bash
-superqe run . -r security_tester
+superqode qe run . -r security_tester
 ```
 
 ### Multiple Roles
 
 ```bash
-superqe run . -r security_tester -r api_tester -r fullstack
+superqode qe run . -r security_tester -r api_tester -r fullstack
 ```
 
 ### All Detection Roles
 
 ```bash
-superqe run . --mode deep
+superqode qe run . --mode deep
 ```
 
 ### Quick Scan (Selected Roles)
 
 ```bash
-superqe run . --mode quick
+superqode qe run . --mode quick
 ```
 
 Quick scan runs a subset of roles optimized for speed.
@@ -493,7 +493,7 @@ Expert prompt packs are available in SuperQode Enterprise. OSS ignores these fie
 
 ## Role Specializations
 
-### Specialized QE Agents
+### Specialized validation Agents
 
 SuperQode includes additional specialized agents:
 
@@ -511,6 +511,6 @@ SuperQode includes additional specialized agents:
 
 ## Next Steps
 
-- [Quality Reports](qr.md) - Understanding QR output
+- [Validation Reports](qr.md) - Understanding report output
 - [Allow Suggestions](suggestions.md) - Fix demonstration workflow
-- [Role Configuration](../configuration/team.md) - Configure QE roles
+- [Role Configuration](../configuration/team.md) - Configure validation roles

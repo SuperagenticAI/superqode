@@ -15,12 +15,13 @@ def runner() -> CliRunner:
     return CliRunner()
 
 
-def test_list_shows_all_three_runtimes(runner):
+def test_list_shows_current_runtimes(runner):
     result = runner.invoke(runtime_cmd, ["list"])
     assert result.exit_code == 0, result.output
     assert "builtin" in result.output
     assert "adk" in result.output
     assert "openai-agents" in result.output
+    assert "pydanticai" in result.output
 
 
 def test_list_marks_active_runtime(runner, monkeypatch):
@@ -37,7 +38,7 @@ def test_list_json_emits_array(runner, monkeypatch):
     payload = json.loads(result.output)
     assert isinstance(payload, list)
     names = {entry["name"] for entry in payload}
-    assert names == {"builtin", "adk", "openai-agents"}
+    assert names == {"builtin", "adk", "openai-agents", "pydanticai"}
     # Exactly one entry is marked active.
     active = [e for e in payload if e["active"]]
     assert len(active) == 1
@@ -63,3 +64,4 @@ def test_doctor_no_arg_probes_all(runner):
     assert "builtin" in result.output
     assert "adk" in result.output
     assert "openai-agents" in result.output
+    assert "pydanticai" in result.output

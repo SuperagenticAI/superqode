@@ -21,10 +21,10 @@ Create a default configuration file:
 ```bash
 # In your project directory (recommended)
 cd /path/to/your/project
-superqe init
+superqode config init
 ```
 
-`superqe init` writes a comprehensive role catalog to `superqode.yaml`. Keep only the roles you want enabled; leave the rest disabled or remove them.
+`superqode config init` writes a comprehensive role catalog to `superqode.yaml`. Keep only the roles you want enabled; leave the rest disabled or remove them.
 
 ---
 
@@ -109,7 +109,7 @@ team:
           coding_agent: opencode
           enabled: true
 
-    # Quality Engineering mode
+    # validation and evaluation mode
     qe:
       description: "Quality engineering roles"
       enabled: true
@@ -147,7 +147,7 @@ team:
           enabled: true
 
         fullstack:
-          description: "Senior QE comprehensive review"
+          description: "Senior validation comprehensive review"
           mode: acp
           coding_agent: opencode
           enabled: true
@@ -155,9 +155,9 @@ team:
 
 ---
 
-## QE Configuration
+## validation Configuration
 
-Configure quality engineering settings:
+Configure validation and evaluation settings:
 
 ```yaml
 qe:
@@ -499,4 +499,4 @@ SuperQode validates configuration on load. Common validation errors:
 - [YAML Reference](../configuration/yaml-reference.md) - Complete configuration reference
 - [Team Configuration](../configuration/team.md) - Advanced team setup
 - [Provider Setup](../providers/index.md) - Provider-specific configuration
-- [QE Settings](../configuration/yaml-reference.md) - Quality engineering options
+- [validation Settings](../configuration/yaml-reference.md) - Quality engineering options

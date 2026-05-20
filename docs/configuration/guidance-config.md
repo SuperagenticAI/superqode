@@ -1,18 +1,18 @@
 # Guidance Configuration
 
-Configure QE guidance prompts that control agent behavior, time constraints, and verification requirements.
+Configure validation guidance prompts that control agent behavior, time constraints, and verification requirements.
 
 ---
 
 ## Overview
 
-Guidance configuration defines how QE agents operate:
+Guidance configuration defines how validation agents operate:
 
 - **Time Constraints**: Time limits for different modes
 - **Verification Requirements**: Proof before success claims
 - **Focus Areas**: What agents should prioritize
 - **Forbidden Actions**: What agents should avoid
-- **Anti-Pattern Detection**: Prevent common QE mistakes
+- **Anti-Pattern Detection**: Prevent common validation mistakes
 
 ---
 
@@ -82,7 +82,7 @@ qe:
 | `focus_areas` | array | (see defaults) | Areas to prioritize |
 | `forbidden_actions` | array | (see defaults) | Actions to avoid |
 
-### Deep QE Configuration
+### Deep validation Configuration
 
 Comprehensive analysis:
 
@@ -169,7 +169,7 @@ qe:
 
 ## Anti-Pattern Detection
 
-Configure detection of common QE mistakes:
+Configure detection of common validation mistakes:
 
 ```yaml
 qe:
@@ -260,7 +260,7 @@ qe:
 | Mode | Timeout | Rationale |
 |------|---------|-----------|
 | Quick Scan | 60s | Fast feedback loop |
-| Deep QE | 1800s (30m) | Comprehensive analysis |
+| Deep validation | 1800s (30m) | Comprehensive analysis |
 
 ---
 
@@ -344,7 +344,7 @@ FORBIDDEN ACTIONS:
 
 ---
 
-## QR Format
+## report Format
 
 Control Quality Report format:
 
@@ -557,4 +557,4 @@ qe:
 
 - [Guidance System](../advanced/guidance-system.md) - How guidance works
 - [YAML Reference](yaml-reference.md) - Complete configuration reference
-- [QE Modes](../concepts/modes.md) - Quick Scan vs Deep QE
+- [validation Modes](../concepts/modes.md) - Quick Scan vs Deep validation

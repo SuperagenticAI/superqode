@@ -164,12 +164,12 @@ class ProgressPanel:
 
 def create_qe_progress(role: str, mode: str) -> ProgressPanel:
     """
-    Create a progress panel for a QE session.
+    Create a progress panel for a validation session.
 
     Pre-populates with standard QE steps.
     """
     panel = ProgressPanel(
-        title="SuperQE Session",
+        title="validation workflow Session",
         role=role,
         mode=mode,
     )

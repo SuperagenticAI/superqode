@@ -12,7 +12,7 @@ Note: JSONL streaming and JUnit output are enterprise features. OSS can use `--j
 
 ```yaml
 # .github/workflows/qe.yml
-name: Quality Engineering
+name: validation and evaluation
 
 on:
   push:
@@ -33,8 +33,8 @@ jobs:
       - name: Install SuperQode
         run: pip install superqode
 
-      - name: Run QE
-        run: superqe run . --mode quick --junit results.xml
+      - name: Run validation
+        run: superqode qe run . --mode quick --junit results.xml
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
@@ -74,7 +74,7 @@ jobs:
       - run: pip install superqode
 
       - name: Security Scan
-        run: superqe run . --mode quick -r security_tester --junit results.xml
+        run: superqode qe run . --mode quick -r security_tester --junit results.xml
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
@@ -87,12 +87,12 @@ jobs:
           reporter: java-junit
 ```
 
-### Full QE on Push
+### Full validation on Push
 
-Comprehensive QE on main branch:
+Comprehensive validation on main branch:
 
 ```yaml
-name: Full QE
+name: Full validation
 
 on:
   push:
@@ -111,8 +111,8 @@ jobs:
 
       - run: pip install superqode
 
-      - name: Run Deep QE
-        run: superqe run . --mode deep --junit results.xml
+      - name: Run Deep validation
+        run: superqode qe run . --mode deep --junit results.xml
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
@@ -127,7 +127,7 @@ jobs:
         uses: dorny/test-reporter@v1
         if: always()
         with:
-          name: QE Findings
+          name: validation Findings
           path: results.xml
           reporter: java-junit
 ```
@@ -137,7 +137,7 @@ jobs:
 Scheduled comprehensive analysis:
 
 ```yaml
-name: Nightly QE
+name: Nightly validation
 
 on:
   schedule:
@@ -157,9 +157,9 @@ jobs:
 
       - run: pip install superqode
 
-      - name: Run Deep QE with Suggestions
+      - name: Run Deep validation with Suggestions
         run: |
-          superqe run . \
+          superqode qe run . \
             --mode deep \
             --allow-suggestions \
             --generate \
@@ -183,17 +183,17 @@ jobs:
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: 'QE: Critical Issues Found',
-              body: 'Nightly QE found critical issues. Check the workflow artifacts.'
+              title: 'validation: Critical Issues Found',
+              body: 'Nightly validation found critical issues. Check the workflow artifacts.'
             });
 ```
 
 ### PR Comment with Findings
 
-Post QE summary as PR comment:
+Post validation summary as PR comment:
 
 ```yaml
-name: QE with PR Comment
+name: validation with PR Comment
 
 on:
   pull_request:
@@ -212,10 +212,10 @@ jobs:
 
       - run: pip install superqode
 
-      - name: Run QE
+      - name: Run validation
         id: qe
         run: |
-          superqe run . --mode quick --json > qe-output.json
+          superqode qe run . --mode quick --json > qe-output.json
           echo "findings=$(jq '.summary.total_findings' qe-output.json)" >> $GITHUB_OUTPUT
           echo "critical=$(jq '.summary.by_severity.critical' qe-output.json)" >> $GITHUB_OUTPUT
         env:
@@ -235,7 +235,7 @@ jobs:
               status = 'WARNING: Issues found';
             }
 
-            const body = `## SuperQode QE Results
+            const body = `## SuperQode validation Results
 
             ${status}
 
@@ -277,8 +277,8 @@ jobs:
 
       - run: pip install superqode
 
-      - name: Run QE
-        run: superqe run . --mode quick --json > qe-output.json
+      - name: Run validation
+        run: superqode qe run . --mode quick --json > qe-output.json
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
@@ -354,7 +354,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install superqode
-      - run: superqe run . --mode quick
+      - run: superqode qe run . --mode quick
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -369,7 +369,7 @@ Configure branch protection rules:
 1. Go to repository **Settings** → **Branches**
 2. Add rule for `main`
 3. Enable **Require status checks to pass**
-4. Select your QE workflow
+4. Select your validation workflow
 
 ---
 
@@ -405,8 +405,8 @@ For large repos, focus on changed files:
   id: changed
   uses: tj-actions/changed-files@v44
 
-- name: Run QE on changes
-  run: superqe run . --mode quick --files ${{ steps.changed.outputs.all_changed_files }}
+- name: Run validation on changes
+  run: superqode qe run . --mode quick --files ${{ steps.changed.outputs.all_changed_files }}
 ```
 
 ---

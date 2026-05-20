@@ -6,7 +6,7 @@ Configure noise filtering to reduce false positives and focus on actionable find
 
 ## Overview
 
-Noise configuration controls how SuperQode filters and deduplicates QE findings:
+Noise configuration controls how SuperQode filters and deduplicates validation findings:
 
 - **Confidence Thresholds**: Filter low-confidence findings
 - **Deduplication**: Remove similar findings
@@ -224,7 +224,7 @@ memory:
 
 ## Mode-Specific Configuration
 
-Different noise settings for Quick Scan vs Deep QE:
+Different noise settings for Quick Scan vs Deep validation:
 
 ```yaml
 qe:
@@ -245,7 +245,7 @@ qe:
 **Rationale:**
 
 - **Quick Scan**: Stricter filtering for fast feedback
-- **Deep QE**: More permissive to catch edge cases
+- **Deep validation**: More permissive to catch edge cases
 
 ---
 
@@ -318,10 +318,10 @@ team:
 Test noise configuration:
 
 ```bash
-# Run QE with verbose output
-superqe run . --mode quick -v
+# Run validation with verbose output
+superqode qe run . --mode quick -v
 
-# Check filtering stats in QR
+# Check filtering stats in report
 cat .superqode/qe-artifacts/qr-*.json | jq '.noise_filter_stats'
 ```
 
@@ -366,7 +366,7 @@ qe:
 
 ### 4. Adjust by Mode
 
-Stricter for Quick Scan, permissive for Deep QE:
+Stricter for Quick Scan, permissive for Deep validation:
 
 ```yaml
 qe:

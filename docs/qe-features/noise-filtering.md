@@ -254,7 +254,7 @@ Use feedback from previous sessions to suppress false positives.
 When you mark findings as false positives:
 
 ```bash
-superqe feedback finding-001 --false-positive
+superqode qe feedback finding-001 --false-positive
 ```
 
 The system remembers this and suppresses similar findings in future sessions.
@@ -371,8 +371,8 @@ qe:
 ### Check Filtered Counts
 
 ```bash
-# View QR to see filtering stats
-superqe report
+# View report to see filtering stats
+superqode qe report
 
 # Check artifacts for filtering details
 cat .superqode/qe-artifacts/qr/qr-*.json | jq '.noise_filtering'
@@ -401,7 +401,7 @@ min_severity: "low"
 
 ```bash
 # Mark false positives
-superqe feedback finding-001 --false-positive
+superqode qe feedback finding-001 --false-positive
 
 # System learns automatically
 ```
@@ -468,5 +468,5 @@ similarity_threshold: 0.7  # More aggressive
 
 ## Next Steps
 
-- [QE Features Index](index.md) - All QE features
+- [Validation Features Index](index.md) - All validation features
 - [Configuration Reference](../configuration/yaml-reference.md) - Full config options

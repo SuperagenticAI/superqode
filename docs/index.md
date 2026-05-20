@@ -105,6 +105,7 @@ SuperQode keeps the harness contract stable while allowing different runtimes un
 | `openai-agents` | OpenAI Agents SDK adapter |
 | `adk` | Google ADK adapter |
 | `deepagents` | Optional DeepAgents runtime adapter for graph and middleware-heavy coding harnesses |
+| `pydanticai` | Optional PydanticAI runtime with SuperQode tool bridging |
 | custom | Bring your own backend behind the same harness contract |
 
 ## Harness Lifecycle
@@ -112,7 +113,7 @@ SuperQode keeps the harness contract stable while allowing different runtimes un
 ```text
 1. SPEC       Choose coding, no-tool, or custom harness behavior
 2. MODEL      Apply model policy, local hints, fallback rules, and prompt profile
-3. RUNTIME    Select builtin, OpenAI Agents, Google ADK, DeepAgents, or a custom backend
+3. RUNTIME    Select builtin, OpenAI Agents, Google ADK, DeepAgents, PydanticAI, or a custom backend
 4. TOOLS      Attach repository tools, MCP tools, validation hooks, or no tools
 5. SESSION    Persist history, stream events, compact context, store runs, and resume work
 6. WORKFLOW   Run single, chain, parallel, router, orchestrator, or evaluator-optimizer flows

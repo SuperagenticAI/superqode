@@ -1,6 +1,6 @@
 # Init Commands
 
-Initialize SuperQE configuration in a repository (creates `superqode.yaml`).
+Initialize SuperQode validation configuration in a repository (creates `superqode.yaml`).
 
 ---
 
@@ -9,7 +9,7 @@ Initialize SuperQE configuration in a repository (creates `superqode.yaml`).
 Create `superqode.yaml` in the current directory from the comprehensive role catalog template.
 
 ```bash
-superqe init [--force] [--guided]
+superqode config init [--force] [--guided]
 ```
 
 ### What It Does
@@ -22,13 +22,13 @@ superqe init [--force] [--guided]
 
 ```bash
 # Initialize current directory
-superqe init
+superqode config init
 
 # Guided, interactive setup
-superqe init --guided
+superqode config init --guided
 
 # Overwrite existing config
-superqe init --force
+superqode config init --force
 ```
 
 ---
@@ -43,8 +43,8 @@ cat superqode.yaml
 superqode config list-modes
 
 # Run a quick scan
-superqe run . --mode quick
+superqode qe run . --mode quick
 
-# View the latest QR
-superqe report
+# View the latest report
+superqode qe report
 ```

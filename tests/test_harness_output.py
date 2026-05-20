@@ -29,9 +29,7 @@ def test_build_typed_output_prompt_adds_delimiters_and_schema():
 
 def test_parse_typed_output_from_delimiters():
     parsed = parse_typed_output(
-        f"done\n{RESULT_START}\n"
-        '{"fix_applied": true, "summary": "ok"}'
-        f"\n{RESULT_END}",
+        f'done\n{RESULT_START}\n{{"fix_applied": true, "summary": "ok"}}\n{RESULT_END}',
         TriageResult,
     )
 
@@ -53,4 +51,4 @@ def test_parse_typed_output_reports_missing_delimiter():
 
 def test_parse_typed_output_reports_validation_error():
     with pytest.raises(TypedOutputError, match="failed validation"):
-        parse_typed_output(f"{RESULT_START}\n" '{"fix_applied": "bad"}' f"\n{RESULT_END}", TriageResult)
+        parse_typed_output(f'{RESULT_START}\n{{"fix_applied": "bad"}}\n{RESULT_END}', TriageResult)

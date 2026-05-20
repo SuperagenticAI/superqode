@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import AsyncIterator
 from typing import Any
 
 from ...agent.loop import AgentMessage, AgentResponse
 from ..compiler import compile_to_headless_profile
+from ..events import HarnessEvent
 from ..model_policy import resolve_harness_model_policy
 from ..spec import AgentSpec, HarnessFlavor
-from .base import HarnessBackendRequest, HarnessBackendResult
+from .base import HarnessBackendCapabilities, HarnessBackendRequest, HarnessBackendResult
 
 
 class DeepAgentsHarnessBackend:
@@ -22,6 +24,21 @@ class DeepAgentsHarnessBackend:
     """
 
     name = "deepagents"
+    capabilities = HarnessBackendCapabilities(
+        backend=name,
+        supports_coding=True,
+        supports_no_tool=False,
+        supports_streaming=True,
+        supports_approvals=False,
+        supports_sandbox=True,
+        supports_shell=True,
+        supports_mcp=False,
+        supports_typed_output=True,
+        notes=(
+            "DeepAgents requires a tool-capable harness.",
+            "DeepAgents currently requires allow_shell=True with its filesystem backend.",
+        ),
+    )
 
     async def run(self, request: HarnessBackendRequest) -> HarnessBackendResult:
         if request.spec.flavor == HarnessFlavor.NO_TOOL:
@@ -48,7 +65,9 @@ class DeepAgentsHarnessBackend:
             model=model,
             tools=[],
             system_prompt=profile.job_description or None,
-            subagents=_subagent_specs(request.spec.agents, provider=request.provider, default_model=model),
+            subagents=_subagent_specs(
+                request.spec.agents, provider=request.provider, default_model=model
+            ),
             skills=_skill_sources(request.spec),
             memory=_memory_sources(request.spec),
             permissions=_filesystem_permissions(request, filesystem_permission_cls),
@@ -73,6 +92,20 @@ class DeepAgentsHarnessBackend:
                 "model_policy": model_policy.profile,
                 "model": model,
             },
+        )
+
+    async def stream(self, request: HarnessBackendRequest) -> AsyncIterator[HarnessEvent]:
+        result = await self.run(request)
+        if result.response.content:
+            yield HarnessEvent(
+                type="delta",
+                data={"text": result.response.content},
+                session_id=request.session_id,
+            )
+        yield HarnessEvent(
+            type="end",
+            data={"backend": self.name, "runtime": self.name},
+            session_id=request.session_id,
         )
 
 
@@ -103,7 +136,12 @@ def _subagent_specs(
 ) -> list[dict[str, Any]]:
     specs: list[dict[str, Any]] = []
     for agent in agents[1:]:
-        if not agent.delegates_to and agent.role not in {"subagent", "worker", "research", "review"}:
+        if not agent.delegates_to and agent.role not in {
+            "subagent",
+            "worker",
+            "research",
+            "review",
+        }:
             continue
         model = _model_spec(provider, agent.model) if agent.model else default_model
         specs.append(
@@ -191,7 +229,9 @@ def _messages_from_result(result: Any) -> list[Any]:
 
 
 def _message_content(message: Any) -> str:
-    content = message.get("content") if isinstance(message, dict) else getattr(message, "content", None)
+    content = (
+        message.get("content") if isinstance(message, dict) else getattr(message, "content", None)
+    )
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -210,7 +250,11 @@ def _message_content(message: Any) -> str:
 def _count_tool_calls(result: Any) -> int:
     count = 0
     for message in _messages_from_result(result):
-        tool_calls = message.get("tool_calls") if isinstance(message, dict) else getattr(message, "tool_calls", None)
+        tool_calls = (
+            message.get("tool_calls")
+            if isinstance(message, dict)
+            else getattr(message, "tool_calls", None)
+        )
         if isinstance(tool_calls, list):
             count += len(tool_calls)
     return count

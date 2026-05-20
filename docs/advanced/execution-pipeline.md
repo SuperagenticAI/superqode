@@ -1,12 +1,12 @@
 # Execution Pipeline
 
-This document explains how SuperQode executes QE sessions, from receiving a user request to generating the final Quality Report.
+This document explains how SuperQode executes validation sessions, from receiving a user request to generating the final Quality Report.
 
 ---
 
 ## Overview
 
-The execution pipeline orchestrates the entire QE session lifecycle:
+The execution pipeline orchestrates the entire validation session lifecycle:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -43,7 +43,7 @@ The execution pipeline orchestrates the entire QE session lifecycle:
 │         │                                                    │
 │         ▼                                                    │
 │  ┌─────────────┐                                            │
-│  │ QR Generator│ ─── Generate Quality Report                │
+│  │ report Generator│ ─── Generate Quality Report                │
 │  └──────┬──────┘                                            │
 │         │                                                    │
 │         ▼                                                    │
@@ -64,9 +64,9 @@ The request parser interprets CLI options and config:
 
 **Input Examples:**
 ```bash
-superqe run . --mode quick -r security_tester
-superqe run src/ -r api_tester -r unit_tester
-superqe run . --mode deep
+superqode qe run . --mode quick -r security_tester
+superqode qe run src/ -r api_tester -r unit_tester
+superqode qe run . --mode deep
 ```
 
 **Parser Output:**
@@ -131,7 +131,7 @@ with workspace.activate():
 
 ### 4. Execution Runner
 
-The runner (`execution/runner.py`) executes the QE session:
+The runner (`execution/runner.py`) executes the validation session:
 
 ```
 For each role in roles:
@@ -232,7 +232,7 @@ Permission Check
 
 ### 8. Verification
 
-The verifier (`superqe/verifier.py`) validates findings:
+The verifier (`superqode qe/verifier.py`) validates findings:
 
 | Verification Step | Description |
 |-------------------|-------------|
@@ -243,7 +243,7 @@ The verifier (`superqe/verifier.py`) validates findings:
 
 ### 9. Noise Filtering
 
-The noise filter (`superqe/noise.py`) removes false positives:
+The noise filter (`superqode qe/noise.py`) removes false positives:
 
 ```python
 class NoiseFilter:
@@ -263,7 +263,7 @@ class NoiseFilter:
 
 ### 10. Report Generation
 
-The QR generator (`qr/generator.py`) creates reports:
+The report generator (`qr/generator.py`) creates reports:
 
 **Report Structure:**
 ```json
@@ -307,7 +307,7 @@ def cleanup(session: QESession):
 
 ## Event Streaming
 
-The pipeline emits JSONL events (`superqe/events.py`):
+The pipeline emits JSONL events (`superqode qe/events.py`):
 
 ```jsonl
 {"event": "session_start", "session_id": "qe-abc123", "timestamp": "..."}
@@ -375,7 +375,7 @@ execution:
 ### Session Status
 
 ```bash
-superqe status
+superqode qe status
 
 # Output:
 # Session: qe-abc123
@@ -388,7 +388,7 @@ superqe status
 ### Live Events
 
 ```bash
-superqe run . --jsonl | jq .
+superqode qe run . --jsonl | jq .
 ```
 
 ---
@@ -398,5 +398,5 @@ superqe run . --jsonl | jq .
 - [Architecture Overview](architecture.md) - System architecture
 - [Workspace Internals](workspace-internals.md) - Isolation details
 - [Tools System](tools-system.md) - Available tools
-- [QE Commands](../cli-reference/qe-commands.md) - CLI reference
+- [Validation Commands](../cli-reference/qe-commands.md) - CLI reference
 - [JSONL Events](../api-reference/jsonl-events.md) - Event format

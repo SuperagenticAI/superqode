@@ -11,14 +11,14 @@ You can:
 
 - Append a **system-prompt suffix** that lands closest to the conversation.
 - Hide specific **tools** from the model.
-- Inject **gateway kwargs** (e.g. headers, response-API toggles) — statically
+- Inject **gateway kwargs** (e.g. headers, response-API toggles): statically
   or computed at request time.
 - Run a one-shot **pre-init hook** (e.g. version-pin enforcement,
   environment validation) before the first request.
 
 The pattern is borrowed from
 [langchain-ai/deepagents](https://github.com/langchain-ai/deepagents) but
-collapsed into a single struct — SuperQode does not split
+collapsed into a single struct: SuperQode does not split
 model-construction from runtime behaviour the way LangChain does.
 
 ## When to reach for a profile
@@ -46,7 +46,7 @@ ModelProfile(
 )
 ```
 
-All fields are optional — an empty `ModelProfile()` is a valid no-op.
+All fields are optional: an empty `ModelProfile()` is a valid no-op.
 
 The struct is frozen: trying to mutate `profile.init_kwargs["x"] = 1` raises
 `TypeError`. Re-register the key to layer new fields on top instead.
@@ -93,18 +93,18 @@ are merged with model-level fields winning. The merge rules:
 | `system_prompt_suffix` | model wins if set; else provider |
 | `excluded_tools` | union of both sets |
 | `init_kwargs` | dict merge, model wins per key |
-| `init_kwargs_factory` | chained — provider runs, then model; model keys win on collision |
-| `pre_init` | chained — provider runs first, then model |
+| `init_kwargs_factory` | chained: provider runs, then model; model keys win on collision |
+| `pre_init` | chained: provider runs first, then model |
 
 ## How profiles plug into the agent loop
 
 You don't call profiles directly. The loop applies them at three points:
 
-1. **System-prompt assembly** — `system_prompt_suffix` is appended to the
+1. **System-prompt assembly**: `system_prompt_suffix` is appended to the
    final prompt with a blank-line separator.
-2. **Tool-definition build** — names in `excluded_tools` are filtered out
+2. **Tool-definition build**: names in `excluded_tools` are filtered out
    before tool defs are sent to the model.
-3. **Gateway request** — `init_kwargs` + `init_kwargs_factory()` are merged
+3. **Gateway request**: `init_kwargs` + `init_kwargs_factory()` are merged
    into the `chat_completion` / `stream_completion` kwargs. The explicit
    arguments the loop already passes (`temperature`, `max_tokens`, `tools`,
    etc.) still take precedence.
@@ -118,7 +118,7 @@ These ship with SuperQode and load lazily on first registry access. You can
 layer your own profile on top of any of them with another
 `register_model_profile()` call.
 
-### Anthropic — Claude family
+### Anthropic: Claude family
 
 Registered under:
 
@@ -129,11 +129,11 @@ Registered under:
 Applies a `system_prompt_suffix` with three blocks drawn from Anthropic's
 [prompt-engineering best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices):
 
-- `<use_parallel_tool_calls>` — encourages parallel tool calls when there
+- `<use_parallel_tool_calls>`: encourages parallel tool calls when there
   are no dependencies between them.
-- `<investigate_before_answering>` — discourages speculation about files
+- `<investigate_before_answering>`: discourages speculation about files
   the model hasn't read.
-- `<tool_result_reflection>` — encourages reflection between tool calls.
+- `<tool_result_reflection>`: encourages reflection between tool calls.
 
 ### OpenRouter
 
@@ -141,14 +141,14 @@ Registered under: `openrouter`
 
 Uses `init_kwargs_factory` to inject `app_url` and `app_title` headers when
 the corresponding env vars are unset. Set `OPENROUTER_APP_URL` or
-`OPENROUTER_APP_TITLE` to override — an explicitly empty string is treated
+`OPENROUTER_APP_TITLE` to override: an explicitly empty string is treated
 as "user-set, don't override".
 
 ## Examples
 
 ### Add a custom suffix on top of the built-in Anthropic one
 
-The registration is additive — the merged suffix is provider's suffix +
+The registration is additive: the merged suffix is provider's suffix +
 yours, separated by a blank line.
 
 ```python

@@ -13,7 +13,7 @@ SuperQode integrates with any CI/CD system through:
 - **Exit codes** for simple pass/fail
 - **JSON output** for programmatic access
 
-OSS tip: use `superqe run . --json > results.json` when JSONL/JUnit are unavailable.
+OSS tip: use `superqode qe run . --json > results.json` when JSONL/JUnit are unavailable.
 
 ---
 
@@ -24,7 +24,7 @@ OSS tip: use `superqe run . --json > results.json` when JSONL/JUnit are unavaila
 Stream events in real-time:
 
 ```bash
-superqe run . --jsonl
+superqode qe run . --jsonl
 ```
 
 Output:
@@ -40,7 +40,7 @@ Output:
 Export for test reporting tools:
 
 ```bash
-superqe run . --junit results.xml
+superqode qe run . --junit results.xml
 ```
 
 Compatible with:
@@ -66,10 +66,10 @@ Compatible with:
 
 ```bash
 #!/bin/bash
-superqe run . --mode quick
+superqode qe run . --mode quick
 
 if [ $? -ne 0 ]; then
-    echo "QE failed, blocking deployment"
+    echo "validation failed, blocking deployment"
     exit 1
 fi
 ```
@@ -78,7 +78,7 @@ fi
 
 ```bash
 #!/bin/bash
-superqe run . --mode quick --json > results.json
+superqode qe run . --mode quick --json > results.json
 
 CRITICAL=$(jq '.summary.by_severity.critical' results.json)
 HIGH=$(jq '.summary.by_severity.high' results.json)
@@ -104,10 +104,10 @@ import json
 import sys
 import glob
 
-# Find latest QR
+# Find latest report
 qr_files = glob.glob('.superqode/qe-artifacts/qr-*.json')
 if not qr_files:
-    print("No QR found")
+    print("No report found")
     sys.exit(1)
 
 latest_qr = max(qr_files)
@@ -137,8 +137,8 @@ sys.exit(0)
 
 | Event Type | Description |
 |------------|-------------|
-| `qe.started` | QE session started |
-| `qe.completed` | QE session completed |
+| `qe.started` | validation session started |
+| `qe.completed` | validation session completed |
 | `role.started` | Role execution started |
 | `role.completed` | Role execution completed |
 | `finding.detected` | New finding detected |
@@ -148,12 +148,12 @@ sys.exit(0)
 ### Processing JSONL
 
 ```bash
-superqe run . --jsonl | while read event; do
+superqode qe run . --jsonl | while read event; do
     TYPE=$(echo $event | jq -r '.type')
 
     case $TYPE in
         "qe.started")
-            echo "🚀 QE session started"
+            echo "🚀 validation session started"
             ;;
         "finding.detected")
             TITLE=$(echo $event | jq -r '.data.title')
@@ -183,10 +183,10 @@ pipeline {
     }
 
     stages {
-        stage('Quality Engineering') {
+        stage('validation and evaluation') {
             steps {
                 sh 'pip install superqode'
-                sh 'superqe run . --mode quick --junit results.xml'
+                sh 'superqode qe run . --mode quick --junit results.xml'
             }
             post {
                 always {
@@ -213,7 +213,7 @@ qe:
     ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY
   script:
     - pip install superqode
-    - superqe run . --mode quick --junit results.xml
+    - superqode qe run . --mode quick --junit results.xml
   artifacts:
     reports:
       junit: results.xml
@@ -238,8 +238,8 @@ jobs:
           name: Install SuperQode
           command: pip install superqode
       - run:
-          name: Run QE
-          command: superqe run . --mode quick --junit results.xml
+          name: Run validation
+          command: superqode qe run . --mode quick --junit results.xml
       - store_test_results:
           path: results.xml
       - store_artifacts:
@@ -270,8 +270,8 @@ steps:
   - script: pip install superqode
     displayName: 'Install SuperQode'
 
-  - script: superqe run . --mode quick --junit results.xml
-    displayName: 'Run QE'
+  - script: superqode qe run . --mode quick --junit results.xml
+    displayName: 'Run validation'
     env:
       ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
 
@@ -298,7 +298,7 @@ jobs:
   qe-quick:
     runs-on: ubuntu-latest
     steps:
-      - run: superqe run . --mode quick -r security_tester
+      - run: superqode qe run . --mode quick -r security_tester
 ```
 
 ### Nightly Deep Analysis
@@ -314,7 +314,7 @@ jobs:
   qe-deep:
     runs-on: ubuntu-latest
     steps:
-      - run: superqe run . --mode deep --allow-suggestions
+      - run: superqode qe run . --mode deep --allow-suggestions
 ```
 
 ### Release Gate
@@ -330,7 +330,7 @@ jobs:
   qe-release:
     runs-on: ubuntu-latest
     steps:
-      - run: superqe run . --mode deep
+      - run: superqode qe run . --mode deep
       - name: Check for blockers
         run: |
           CRITICAL=$(cat .superqode/qe-artifacts/qr-*.json | jq '.summary.by_severity.critical')
@@ -347,14 +347,14 @@ jobs:
 
 ```bash
 #!/bin/bash
-superqe run . --mode quick --json > results.json
+superqode qe run . --mode quick --json > results.json
 
 FINDINGS=$(jq '.summary.total_findings' results.json)
 CRITICAL=$(jq '.summary.by_severity.critical' results.json)
 
 if [ "$CRITICAL" -gt 0 ]; then
     curl -X POST -H 'Content-type: application/json' \
-        --data "{\"text\":\"🚨 QE found $CRITICAL critical issues!\"}" \
+        --data "{\"text\":\"🚨 validation found $CRITICAL critical issues!\"}" \
         $SLACK_WEBHOOK_URL
 fi
 ```
@@ -410,13 +410,13 @@ jobs:
   qe:
     timeout-minutes: 30
     steps:
-      - run: superqe run . --mode quick --timeout 300
+      - run: superqode qe run . --mode quick --timeout 300
 ```
 
 ### 3. Handle Failures Gracefully
 
 ```yaml
-- run: superqe run . --mode quick || true
+- run: superqode qe run . --mode quick || true
   continue-on-error: true
 - run: cat .superqode/qe-artifacts/qr/qr-*.md
 ```
@@ -434,4 +434,4 @@ Never commit API keys. Use CI secrets:
 ## Next Steps
 
 - [GitHub Actions](github-actions.md) - GitHub-specific workflows
-- [Artifacts](../qe-features/artifacts.md) - QE output formats
+- [Artifacts](../qe-features/artifacts.md) - validation output formats

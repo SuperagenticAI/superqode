@@ -1,10 +1,10 @@
 """
-SuperQE (Super Quality Engineering) Module.
+validation workflow (validation workflow) Module.
 
-This is the main entry point for SuperQode's quality engineering functionality.
+This is the main entry point for SuperQode's validation and evaluation functionality.
 
 Key components:
-- QESession: Orchestrates a QE session
+- QESession: Orchestrates a validation session
 - QEOrchestrator: High-level interface for CLI/CI
 - QEEventEmitter: JSONL event streaming for CI
 - NoiseFilter: Filters and deduplicates findings
@@ -22,8 +22,8 @@ Features:
 - Constitution system with guardrails
 - MCP tools with lazy loading
 - Multi-framework test execution
-- QE Skills bank (46+ skills)
-- 8 specialized QE agents
+- validation skills bank (46+ skills)
+- 8 specialized validation agents
 """
 
 from .session import QESession, QESessionConfig
@@ -97,7 +97,7 @@ from .frameworks import (
     execute_tests,
 )
 
-# QE Skills Bank
+# validation skills Bank
 from .skills import (
     Skill,
     SkillConfig,
@@ -174,7 +174,7 @@ __all__ = [
     "get_framework",
     "MultiFrameworkExecutor",
     "execute_tests",
-    # QE Skills Bank
+    # validation skills Bank
     "Skill",
     "SkillConfig",
     "SkillResult",

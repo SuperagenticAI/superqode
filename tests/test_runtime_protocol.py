@@ -18,11 +18,12 @@ from superqode.runtime import (
 )
 
 
-def test_known_runtime_names_contains_all_three():
+def test_known_runtime_names_contains_current_runtimes():
     names = known_runtime_names()
     assert "builtin" in names
     assert "adk" in names
     assert "openai-agents" in names
+    assert "pydanticai" in names
 
 
 def test_list_runtimes_marks_builtin_installed():
@@ -40,6 +41,8 @@ def test_list_runtimes_reports_install_hint_for_missing_extras():
         assert info["adk"].install_hint == "pip install superqode[adk]"
     if not info["openai-agents"].installed:
         assert info["openai-agents"].install_hint == "pip install superqode[openai-agents]"
+    if not info["pydanticai"].installed:
+        assert info["pydanticai"].install_hint == "pip install superqode[pydanticai]"
 
 
 def test_all_known_runtimes_are_implemented():

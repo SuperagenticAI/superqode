@@ -1,5 +1,5 @@
 """
-QE Orchestrator - High-level interface for running QE sessions.
+QE Orchestrator - High-level interface for running validation sessions.
 
 Provides:
 - Simple API for CLI and CI integration
@@ -103,7 +103,7 @@ class SuggestionMode:
 
 class QEOrchestrator:
     """
-    High-level orchestrator for QE sessions.
+    High-level orchestrator for validation sessions.
 
     Usage:
         orchestrator = QEOrchestrator(Path("."))
@@ -150,7 +150,7 @@ class QEOrchestrator:
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> QESessionResult:
         """
-        Run a quick scan QE session.
+        Run a quick scan validation session.
 
         - Time-boxed (60 seconds default)
         - Shallow exploration
@@ -167,7 +167,7 @@ class QEOrchestrator:
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> QESessionResult:
         """
-        Run a deep QE session.
+        Run a deep validation session.
 
         - Full sandbox
         - Destructive testing allowed
@@ -247,7 +247,7 @@ class QEOrchestrator:
         config: Optional[QESessionConfig] = None,
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> QESessionResult:
-        """Run a QE session with custom configuration."""
+        """Run a validation session with custom configuration."""
         config = config or QESessionConfig()
         config.verbose = self.verbose  # Pass verbose flag from orchestrator
         return await self._run_session(config, on_progress)
@@ -720,7 +720,7 @@ class QEOrchestrator:
     ) -> Dict[str, Any]:
         """Run QE using external A2A agents.
 
-        Uses A2A protocol to call external agents for quality engineering.
+        Uses A2A protocol to call external agents for validation and evaluation.
 
         Args:
             agent_urls: List of A2A agent URLs to coordinate
@@ -744,7 +744,7 @@ class QEOrchestrator:
 
             results = {}
 
-            # Run multiple QE agents in parallel
+            # Run multiple validation agents in parallel
             for url in agent_urls:
                 try:
                     from ..a2a.client import A2AClient
@@ -853,7 +853,7 @@ async def run_quick_scan(
     project_root: Path,
     verbose: bool = False,
 ) -> QESessionResult:
-    """Run a quick scan QE session."""
+    """Run a quick scan validation session."""
     orchestrator = QEOrchestrator(project_root, verbose=verbose)
     return await orchestrator.quick_scan()
 
@@ -862,6 +862,6 @@ async def run_deep_qe(
     project_root: Path,
     verbose: bool = False,
 ) -> QESessionResult:
-    """Run a deep QE session."""
+    """Run a deep validation session."""
     orchestrator = QEOrchestrator(project_root, verbose=verbose)
     return await orchestrator.deep_qe()

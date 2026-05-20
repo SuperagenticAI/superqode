@@ -1,8 +1,8 @@
 # Installation
 
-This guide covers all installation methods for SuperQode (TUI) and SuperQE (CLI), including prerequisites, verification, and troubleshooting.
+This guide covers SuperQode installation, including prerequisites, verification, optional runtime extras, and troubleshooting.
 
-**Safety note (OSS):** Run the open-source SuperQode/SuperQE in a safe, controlled environment (sandbox, VM, or low-risk machine). This reduces the blast radius for testing workflows and agent-driven actions.
+**Safety note (OSS):** Run the open-source SuperQode in a safe, controlled environment (sandbox, VM, or low-risk machine). This reduces the blast radius for testing workflows and agent-driven actions.
 
 ---
 
@@ -22,7 +22,6 @@ That's it! Verify with:
 
 ```bash
 superqode --version
-superqe --version
 ```
 
 ---
@@ -99,7 +98,7 @@ superqode --version
 
 ## Alternate Installation Methods (No Python Required)
 
-These methods provide a pre-compiled binary for **SuperQode (TUI) only**. SuperQE (CLI) requires
+These methods provide a pre-compiled binary for the SuperQode TUI. Validation workflows require
 the Python install (uv or pip). These methods are convenient for users who do not want to manage a
 Python environment, but may have a slightly slower startup time (~1-2 seconds) compared to the
 primary methods.
@@ -147,7 +146,7 @@ superqode --version
 ```bash
 # In your project directory, create a repo config
 cd /path/to/your/project
-superqe init
+superqode config init
 ```
 
 This creates `superqode.yaml` in the current directory (project-level config).
@@ -245,7 +244,7 @@ superqode providers test anthropic
     opencode --version
     ```
 
-### For Full QE Capabilities
+### For Full validation Capabilities
 
 Install language-specific linters for harness validation:
 
@@ -303,8 +302,8 @@ superqode providers list
 # List agents
 superqode agents list
 
-# List QE roles
-superqe roles
+# List validation roles
+superqode qe roles
 ```
 
 ### Expected Output
@@ -454,5 +453,5 @@ rm -f superqode.yaml
 ## Next Steps
 
 - [Quick Start Guide](quickstart.md) - Get started in 5 minutes
-- [Your First QE Session](first-session.md) - Complete walkthrough
+- [Your First Session](first-session.md) - Complete walkthrough
 - [Configuration](configuration.md) - Customize SuperQode

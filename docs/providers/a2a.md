@@ -1,6 +1,6 @@
 # A2A Protocol
 
-The Agent-to-Agent (A2A) protocol enables SuperQode to communicate and coordinate with external A2A-compliant agents. This integration extends SuperQode into a multi-agent orchestration platform while maintaining its quality engineering DNA.
+The Agent-to-Agent (A2A) protocol enables SuperQode to communicate and coordinate with external A2A-compliant agents. This integration extends SuperQode into a multi-agent orchestration platform while maintaining its validation and evaluation DNA.
 
 ---
 
@@ -133,7 +133,7 @@ SuperQode includes pre-built workflow presets for common scenarios:
 
 | Preset | Description | Pattern |
 |--------|-------------|---------|
-| `full_qe` | Complete quality engineering: unit, integration, security, lint | Parallel |
+| `full_qe` | Complete validation and evaluation: unit, integration, security, lint | Parallel |
 | `pre_commit` | Quick checks before commit: format, lint, unit tests | Parallel |
 | `ci_pipeline` | Full CI pipeline: build, test, security, deps | Sequential |
 | `review_cycle` | Automated code review: style, security, quality, smells | Parallel |
@@ -195,20 +195,20 @@ mappings = mapper.map_skills(agent_card.skills)
 
 ---
 
-## Running QE with A2A Agents
+## Running validation with A2A Agents
 
-Integrate external A2A agents into your QE workflow:
+Integrate external A2A agents into your validation workflow:
 
 ```python
-from superqode.superqe import QEOrchestrator
+from superqode.evaluation import QEOrchestrator
 
 orch = QEOrchestrator(Path("."))
 
-# Run QE with external A2A agents
+# Run validation with external A2A agents
 result = await orch.run_a2a_qe([
     "http://test-agent:8000",
     "http://security-agent:8000",
-], task="Run full QE analysis")
+], task="Run full validation analysis")
 ```
 
 ---

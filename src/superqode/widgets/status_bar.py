@@ -18,9 +18,9 @@ if TYPE_CHECKING:
 class StatusBar(Widget):
     """
     Bottom status bar showing:
-    - Current mode/role (HOME, DEV.FULLSTACK, QE.QUICK, etc.)
+    - Current mode/role (HOME, DEV.FULLSTACK, validation.QUICK, etc.)
     - Connected agent and status
-    - QE workspace status (ephemeral mode indicator)
+    - Validation workflow status when active
     - Current project directory
     - Keyboard shortcut hints
 
@@ -72,16 +72,18 @@ class StatusBar(Widget):
     StatusBar #qe-indicator {
         color: #ff00ff;
         text-style: bold;
-        min-width: 18;
+        min-width: 0;
     }
 
     StatusBar #qe-indicator.active {
         color: #00ff00;
         background: #003300;
+        min-width: 18;
     }
 
     StatusBar #qe-indicator.inactive {
         color: #666666;
+        display: none;
     }
 
     StatusBar #project-indicator {
@@ -130,7 +132,7 @@ class StatusBar(Widget):
             yield Static(self._get_mode_text(), id="mode-indicator", classes="status-section")
             yield Static(self._get_agent_text(), id="agent-indicator", classes="status-section")
             yield Static(self._get_runtime_text(), id="runtime-indicator", classes="status-section")
-            yield Static(self._get_qe_text(), id="qe-indicator", classes="status-section")
+            yield Static(self._get_qe_text(), id="qe-indicator", classes="status-section inactive")
             yield Static(self._get_project_text(), id="project-indicator", classes="status-section")
             yield Static(
                 self._get_shortcuts_text(), id="shortcuts-indicator", classes="status-section"
@@ -142,7 +144,7 @@ class StatusBar(Widget):
             "HOME": "🏠",
             "DEV": "💻",
             "QA": "🧪",
-            "QE": "🔬",
+            "validation": "🔬",
             "DEVOPS": "⚙️",
         }
         # Extract base mode for icon
@@ -151,13 +153,12 @@ class StatusBar(Widget):
         return f"{icon} {self.mode}"
 
     def _get_qe_text(self) -> str:
-        """Get the QE status indicator text."""
+        """Get the validation status indicator text."""
         if self.qe_active:
             mode_emoji = "⚡" if self.qe_mode == "quick" else "🔬"
             mode_name = "QUICK" if self.qe_mode == "quick" else "DEEP"
-            return f"{mode_emoji} QE:{mode_name}"
-        else:
-            return "🛡️ QE:READY"
+            return f"{mode_emoji} VALIDATION:{mode_name}"
+        return ""
 
     def _get_agent_text(self) -> str:
         """Get the agent indicator text."""
@@ -244,28 +245,28 @@ class StatusBar(Widget):
             pass
 
     def watch_qe_active(self, active: bool) -> None:
-        """React to QE active state changes."""
+        """React to validation active state changes."""
         if not self.is_mounted:
             return
         self._update_qe_indicator()
 
     def watch_qe_mode(self, mode: str) -> None:
-        """React to QE mode changes."""
+        """React to validation mode changes."""
         if not self.is_mounted:
             return
         self._update_qe_indicator()
 
     def _update_qe_indicator(self) -> None:
-        """Update the QE indicator widget."""
+        """Update the validation indicator widget."""
         try:
             qe_widget = self.query_one("#qe-indicator", Static)
             qe_widget.update(self._get_qe_text())
             qe_widget.set_class(self.qe_active, "active")
             qe_widget.set_class(not self.qe_active, "inactive")
 
-            # Also update mode indicator class for QE mode
+            # Also update mode indicator class for validation mode
             mode_widget = self.query_one("#mode-indicator", Static)
-            is_qe = self.mode.upper().startswith("QE")
+            is_qe = self.mode.upper().startswith("validation")
             mode_widget.set_class(is_qe, "qe-mode")
         except Exception:
             pass
@@ -284,6 +285,6 @@ class StatusBar(Widget):
         self.task_count = count
 
     def set_qe_status(self, active: bool, mode: str = "") -> None:
-        """Set the QE workspace status."""
+        """Set the validation workspace status."""
         self.qe_active = active
         self.qe_mode = mode

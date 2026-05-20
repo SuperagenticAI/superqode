@@ -1,7 +1,7 @@
 """
-QE Skills Bank - Collection of QE-focused skills.
+validation skills Bank - Collection of QE-focused skills.
 
-Provides 46+ specialized skills for quality engineering:
+Provides 46+ specialized skills for validation and evaluation:
 - testability-scoring: Pre-test code testability assessment
 - qx-partner: QA + UX collaboration
 - chaos-engineering-resilience: Chaos testing

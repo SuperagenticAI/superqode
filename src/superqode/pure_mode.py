@@ -34,6 +34,10 @@ class PureSession:
     system_level: SystemPromptLevel = SystemPromptLevel.MINIMAL
     working_directory: Path = field(default_factory=Path.cwd)
     connected: bool = False
+    harness_name: str = ""
+    harness_path: str = ""
+    harness_flavor: str = ""
+    harness_runtime: str = ""
 
     # Stats
     total_tool_calls: int = 0
@@ -54,12 +58,56 @@ class PureMode:
         self._runtime: Optional[AgentRuntime] = None
         self._agent: Optional[AgentLoop] = None
         self._session_manager: Optional[SessionManager] = None
+        self._harness_spec = None
+        self._harness_path = ""
+        self._harness_kernel = None
+        self._harness_session = None
+        self._harness_session_id = ""
+        self._load_env_harness()
 
         # Callbacks for UI updates
         self.on_tool_call: Optional[Callable[[str, Dict], None]] = None
         self.on_tool_result: Optional[Callable[[str, ToolResult], None]] = None
         self.on_thinking: Optional[Callable[[str], Awaitable[None]]] = None
         self.on_stream_chunk: Optional[Callable[[str], None]] = None
+
+    def _load_env_harness(self) -> None:
+        path = os.getenv("SUPERQODE_HARNESS", "").strip()
+        if not path:
+            return
+        self.load_harness(path)
+
+    def load_harness(self, path: str | Path):
+        """Load a HarnessSpec for subsequent provider connections."""
+        from superqode.harness import load_harness_spec
+
+        spec_path = Path(path).expanduser()
+        self._harness_spec = load_harness_spec(spec_path)
+        self._harness_path = str(spec_path)
+        self._harness_kernel = None
+        self._harness_session = None
+        self._harness_session_id = ""
+        return self._harness_spec
+
+    def set_harness(self, spec, *, path: str | Path | None = None) -> None:
+        """Set an already loaded HarnessSpec."""
+        self._harness_spec = spec
+        self._harness_path = str(path or "")
+        self._harness_kernel = None
+        self._harness_session = None
+        self._harness_session_id = ""
+
+    def clear_harness(self) -> None:
+        """Return to direct runtime mode."""
+        self._harness_spec = None
+        self._harness_path = ""
+        self._harness_kernel = None
+        self._harness_session = None
+        self._harness_session_id = ""
+
+    @property
+    def harness_enabled(self) -> bool:
+        return self._harness_spec is not None
 
     def get_providers_for_picker(self) -> List[Dict[str, Any]]:
         """Get providers formatted for the TUI picker."""
@@ -122,6 +170,17 @@ class PureMode:
         self.session.system_level = system_level
         self.session.working_directory = working_directory or Path.cwd()
         self.session.connected = True
+        if self._harness_spec is not None:
+            self.session.harness_name = self._harness_spec.name
+            self.session.harness_path = self._harness_path
+            self.session.harness_flavor = self._harness_spec.flavor.value
+            self.session.harness_runtime = self._harness_spec.runtime.backend
+            if self._harness_spec.is_no_tool:
+                self.tool_profile = "none"
+                self.tools = ToolRegistry.empty()
+            self._runtime = None
+            self._agent = None
+            return True
 
         provider_def = PROVIDERS.get(provider)
         is_ds4 = provider == "ds4"
@@ -189,6 +248,9 @@ class PureMode:
         self.session = PureSession()
         self._agent = None
         self._runtime = None
+        self._harness_kernel = None
+        self._harness_session = None
+        self._harness_session_id = ""
 
     def set_system_level(self, level: SystemPromptLevel):
         """Change the system prompt level."""
@@ -199,6 +261,20 @@ class PureMode:
 
     async def run(self, prompt: str, plan_mode: Optional[bool] = None) -> AgentResponse:
         """Run a task in Pure Mode."""
+        if self._harness_spec is not None:
+            session = await self._ensure_harness_session()
+            result = await session.prompt(
+                prompt,
+                provider=self.session.provider,
+                model=self.session.model,
+                working_directory=self.session.working_directory,
+                runtime=self._harness_spec.runtime.backend,
+            )
+            self.session.total_tool_calls += result.tool_calls_made
+            self.session.total_iterations += result.iterations
+            self.session.total_requests += 1
+            return result.response
+
         if not self._agent:
             raise RuntimeError("Not connected. Call connect() first.")
 
@@ -219,6 +295,24 @@ class PureMode:
 
     async def run_streaming(self, prompt: str, plan_mode: Optional[bool] = None):
         """Run a task with streaming output."""
+        if self._harness_spec is not None:
+            session = await self._ensure_harness_session()
+            async for event in session.stream(
+                prompt,
+                provider=self.session.provider,
+                model=self.session.model,
+                working_directory=self.session.working_directory,
+                runtime=self._harness_spec.runtime.backend,
+            ):
+                if event.type != "delta":
+                    continue
+                chunk = str(event.data.get("text", ""))
+                if self.on_stream_chunk:
+                    self.on_stream_chunk(chunk)
+                yield chunk
+            self.session.total_requests += 1
+            return
+
         if not self._agent:
             raise RuntimeError("Not connected. Call connect() first.")
 
@@ -237,6 +331,67 @@ class PureMode:
             self._agent.config.plan_mode = previous_plan_mode
 
         self.session.total_requests += 1
+
+    async def _ensure_harness_session(self):
+        if self._harness_spec is None:
+            raise RuntimeError("No HarnessSpec loaded.")
+        if self._harness_session is not None:
+            return self._harness_session
+        from superqode.harness import FileHarnessStore, init_harness
+
+        self._harness_kernel = await init_harness(
+            self._harness_spec,
+            store=FileHarnessStore(Path(self._harness_spec.context.session_storage)),
+        )
+        self._harness_session_id = self._harness_session_id or ""
+        self._harness_session = await self._harness_kernel.session(self._harness_session_id or None)
+        self._harness_session_id = self._harness_session.session_id
+        return self._harness_session
+
+    def get_pending_approvals(self) -> list[dict[str, Any]]:
+        """Return pending approval requests from the active harness or runtime."""
+        if self._harness_session is not None:
+            pending = self._harness_session.pending_approvals()
+            if pending:
+                return [dict(item) for item in pending]
+        if self._runtime is not None and hasattr(self._runtime, "get_pending_approvals"):
+            return [dict(item) for item in self._runtime.get_pending_approvals()]
+        return []
+
+    async def approve_and_resume(self, index: int = 0, *, always: bool = False) -> AgentResponse:
+        """Approve a pending tool call and resume the active harness or runtime."""
+        if self._harness_session is not None and self._harness_session.pending_approvals():
+            return await self._harness_session.approve_pending(index=index, always=always)
+        if self._runtime is not None and hasattr(self._runtime, "approve_and_resume"):
+            return await self._runtime.approve_and_resume(index=index, always=always)
+        raise RuntimeError("No pending approval to approve")
+
+    async def reject_and_resume(
+        self,
+        index: int = 0,
+        *,
+        message: str | None = None,
+        always: bool = False,
+    ) -> AgentResponse:
+        """Reject a pending tool call and resume the active harness or runtime."""
+        if self._harness_session is not None and self._harness_session.pending_approvals():
+            return await self._harness_session.reject_pending(
+                index=index,
+                message=message,
+                always=always,
+            )
+        if self._runtime is not None and hasattr(self._runtime, "reject_and_resume"):
+            return await self._runtime.reject_and_resume(
+                index=index,
+                message=message,
+                always=always,
+            )
+        raise RuntimeError("No pending approval to reject")
+
+    def clear_pending(self) -> None:
+        """Clear pending approval state when the underlying runtime supports it."""
+        if self._runtime is not None and hasattr(self._runtime, "clear_pending"):
+            self._runtime.clear_pending()
 
     def cancel(self):
         """Cancel the current agent operation."""
@@ -258,6 +413,13 @@ class PureMode:
             },
             "tools": [t.name for t in self.tools.list()],
             "tool_profile": self.tool_profile,
+            "harness": {
+                "enabled": self._harness_spec is not None,
+                "name": self.session.harness_name,
+                "path": self.session.harness_path,
+                "flavor": self.session.harness_flavor,
+                "runtime": self.session.harness_runtime,
+            },
         }
 
     # Session management methods

@@ -188,7 +188,9 @@ async def _run_parallel(
     async def run_one(index: int, step: WorkflowStep) -> HarnessRunResult:
         async with semaphore:
             session_suffix = step.id or str(index + 1)
-            session = await kernel.session(f"{kwargs.get('session_id') or 'workflow'}:{session_suffix}")
+            session = await kernel.session(
+                f"{kwargs.get('session_id') or 'workflow'}:{session_suffix}"
+            )
             return await session.prompt(
                 step.prompt,
                 provider=kwargs["provider"],
@@ -215,7 +217,9 @@ async def _run_router(
     route_to = kernel.spec.workflow.config.get("route_to")
     if route_to is not None:
         selected = _select_step(steps, str(route_to), default_index=0)
-        result = await _run_routed_step(kernel, selected, kwargs, route_reason=f"route_to:{route_to}")
+        result = await _run_routed_step(
+            kernel, selected, kwargs, route_reason=f"route_to:{route_to}"
+        )
         return WorkflowResult(mode=WorkflowMode.ROUTER, results=(result,))
     if len(steps) == 1:
         result = await _run_routed_step(kernel, steps[0], kwargs, route_reason="single")
@@ -344,7 +348,9 @@ async def _run_routed_step(
     *,
     route_reason: str,
 ) -> HarnessRunResult:
-    session = await kernel.session(f"{kwargs.get('session_id') or 'router'}:{step.id or 'selected'}")
+    session = await kernel.session(
+        f"{kwargs.get('session_id') or 'router'}:{step.id or 'selected'}"
+    )
     return await session.prompt(
         step.prompt,
         provider=kwargs["provider"],
@@ -363,7 +369,9 @@ async def _run_routed_step(
 
 
 def _router_prompt(prompt: str, candidates: list[WorkflowStep] | tuple[WorkflowStep, ...]) -> str:
-    options = "\n".join(f"- {step.id or index + 1}: {step.prompt}" for index, step in enumerate(candidates))
+    options = "\n".join(
+        f"- {step.id or index + 1}: {step.prompt}" for index, step in enumerate(candidates)
+    )
     return (
         f"{prompt}\n\nChoose exactly one route from these options. "
         "Return only the route id or number.\n"

@@ -1,7 +1,7 @@
 """
-SuperQode QE Guidance - System prompts for time-constrained QE.
+SuperQode validation Guidance - System prompts for time-constrained validation.
 
-Provides verification-first guidance for QE agents to prevent:
+Provides verification-first guidance for validation agents to prevent:
 - False positives (claiming success without proof)
 - Shallow testing (skipping edge cases)
 - Time wasting (long speculative work before feedback)
@@ -34,8 +34,8 @@ superqode:
 ```
 
 Integrates with:
-- CI: `superqe run --mode quick` (proactive)
-- TUI: Interactive QE sessions (reactive)
+- CI: `superqode qe run --mode quick` (proactive)
+- TUI: Interactive validation sessions (reactive)
 """
 
 from .prompts import (

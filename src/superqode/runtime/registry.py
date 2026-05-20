@@ -5,7 +5,7 @@ Public entry points:
     list_runtimes() -> list[RuntimeInfo]
     resolve_runtime_name(cli, yaml, env) -> str
 
-Optional backends (adk, openai-agents) are imported lazily so importing
+Optional backends (adk, openai-agents, pydanticai) are imported lazily so importing
 ``superqode.runtime`` is cheap and works without optional extras.
 """
 
@@ -59,22 +59,36 @@ def _openai_agents_factory(**kwargs) -> AgentRuntime:
     return module.OpenAIAgentsRuntime(**kwargs)
 
 
+def _pydanticai_factory(**kwargs) -> AgentRuntime:
+    try:
+        module = importlib.import_module("superqode.runtime.pydanticai")
+    except ImportError as exc:
+        raise RuntimeNotInstalledError(
+            "PydanticAI runtime requires the 'pydanticai' extra. "
+            "Install with: pip install superqode[pydanticai]"
+        ) from exc
+    return module.PydanticAIRuntime(**kwargs)
+
+
 _FACTORIES: dict[str, Callable[..., AgentRuntime]] = {
     "builtin": _builtin_factory,
     "adk": _adk_factory,
     "openai-agents": _openai_agents_factory,
+    "pydanticai": _pydanticai_factory,
 }
 
 _DESCRIPTIONS: dict[str, str] = {
     "builtin": "SuperQode native agent loop (default)",
     "adk": "Google Agent Development Kit",
     "openai-agents": "OpenAI Agents SDK",
+    "pydanticai": "PydanticAI agent framework",
 }
 
 _OPTIONAL_PACKAGES: dict[str, tuple[str, str]] = {
     # runtime name -> (importable package, pip extra)
     "adk": ("google.adk", "superqode[adk]"),
     "openai-agents": ("agents", "superqode[openai-agents]"),
+    "pydanticai": ("pydantic_ai", "superqode[pydanticai]"),
 }
 
 

@@ -2,7 +2,7 @@
 ACP Runner - Execute QE roles using ACP-compatible agents.
 
 Uses the existing AgentStreamClient to communicate with coding agents
-like OpenCode for AI-powered quality engineering analysis.
+like OpenCode for AI-powered validation and evaluation analysis.
 
 Features:
 - Real-time streaming of agent analysis
@@ -896,7 +896,7 @@ Evidence: problematic code
 Suggested optimization
 
 Analyze performance now.""",
-    "fullstack": """You are a Senior QE Tech Lead with 15+ years of experience. Conduct a comprehensive code review.
+    "fullstack": """You are a Senior validation Tech Lead with 15+ years of experience. Conduct a comprehensive code review.
 
 Review all aspects:
 1. Functional correctness - does the code do what it should?

@@ -1,7 +1,7 @@
 """
-SuperQE Advanced Commands (CodeOptiX).
+Advanced validation commands (CodeOptiX).
 
-Advanced quality engineering powered by CodeOptiX integration:
+Advanced validation and evaluation powered by CodeOptiX integration:
 • 🔬 Deep behavioral evaluation
 • 🧬 GEPA evolution engine
 • 🌸 Bloom scenario generation
@@ -31,7 +31,7 @@ console = Console()
 def check_codeoptix():
     """Check if CodeOptiX is available and show helpful message if not."""
     if not CODEOPTIX_AVAILABLE:
-        console.print("[red]CodeOptiX is required for SuperQE.[/red]")
+        console.print("[red]CodeOptiX is required for validation workflow.[/red]")
         console.print("[dim]Install dependencies and retry.[/dim]")
         return False
     return True
@@ -39,18 +39,18 @@ def check_codeoptix():
 
 @click.group()
 def superqe():
-    """🚀 SuperQE Advanced: CodeOptiX-powered quality engineering.
+    """Advanced validation workflows powered by CodeOptiX.
 
-    Supercharges your QE with AI agent optimization:
+    Supercharges your validation with AI agent optimization:
     • 🔬 Deep behavioral evaluation (beyond basic checks)
     • 🧬 GEPA evolution engine (agent improvement)
     • 🌸 Bloom scenario generation (intelligent testing)
     • 🛡️ Advanced security analysis (comprehensive)
 
     💡 Works with any LLM provider: Ollama, OpenAI, Anthropic, Google
-    ✨ All SuperQE advanced features are available in this package
+    ✨ Advanced validation features are available in this package
 
-    Note: Use these commands via `superqe advanced ...`.
+    Note: Use these commands via `superqode qe advanced ...`.
     """
     pass
 
@@ -68,7 +68,9 @@ def superqe():
 @click.option("--agent", help="Specific agent to evaluate (claude-code, codex, gemini-cli)")
 @click.option("--output", "-o", type=click.Path(), help="Output directory for enhanced results")
 @click.option("--json", "json_output", is_flag=True, help="Output enhanced results as JSON")
-@click.option("--verbose", "-v", is_flag=True, help="Show detailed SuperQE analysis logs")
+@click.option(
+    "--verbose", "-v", is_flag=True, help="Show detailed validation workflow analysis logs"
+)
 def superqe_run(
     path: str,
     behaviors: str,
@@ -78,15 +80,15 @@ def superqe_run(
     json_output: bool,
     verbose: bool,
 ):
-    """Run SuperQE enhanced evaluation with integrated CodeOptiX.
+    """Run validation workflow enhanced evaluation with integrated CodeOptiX.
 
     Examples:
 
-        superqe advanced run . --behaviors security-vulnerabilities,test-quality
+        superqode qe advanced run . --behaviors security-vulnerabilities,test-quality
 
-        superqe advanced run . --behaviors all --use-bloom
+        superqode qe advanced run . --behaviors all --use-bloom
 
-        superqe advanced run . --agent claude-code --behaviors security-vulnerabilities
+        superqode qe advanced run . --agent claude-code --behaviors security-vulnerabilities
     """
     if not check_codeoptix():
         return
@@ -116,7 +118,9 @@ def superqe_run(
 
     console.print()
     console.print(
-        Panel("[bold cyan]🚀 SuperQE Enhanced Evaluation[/bold cyan]", border_style="cyan")
+        Panel(
+            "[bold cyan]🚀 validation workflow Enhanced Evaluation[/bold cyan]", border_style="cyan"
+        )
     )
     console.print()
 
@@ -141,7 +145,9 @@ def superqe_run(
             if "Ollama" in error_msg and ("daemon" in error_msg or "contact" in error_msg):
                 console.print()
                 console.print("[yellow]⚠️  LLM provider not available[/yellow]")
-                console.print("SuperQE requires an LLM provider for enhanced evaluation.")
+                console.print(
+                    "validation workflow requires an LLM provider for enhanced evaluation."
+                )
                 console.print()
                 console.print("Configure any supported provider:")
                 console.print(
@@ -157,9 +163,11 @@ def superqe_run(
                     "• [cyan]Google[/cyan]: Set [cyan]GOOGLE_API_KEY[/cyan] environment variable"
                 )
                 console.print()
-                console.print("Alternatively, use basic QE: [cyan]superqe run .[/cyan]")
+                console.print(
+                    "Alternatively, use basic validation: [cyan]superqode qe run .[/cyan]"
+                )
             else:
-                console.print(f"[red]❌ SuperQE evaluation failed: {error_msg}[/red]")
+                console.print(f"[red]❌ validation workflow evaluation failed: {error_msg}[/red]")
                 if verbose:
                     import traceback
 
@@ -193,16 +201,16 @@ def superqe_run(
         if "Ollama" in error_msg and "daemon" in error_msg:
             console.print()
             console.print("[yellow]⚠️  Ollama not available[/yellow]")
-            console.print("SuperQE requires Ollama for enhanced evaluation.")
+            console.print("validation workflow requires Ollama for enhanced evaluation.")
             console.print()
-            console.print("To use SuperQE features:")
+            console.print("To use validation workflow features:")
             console.print("1. Install Ollama: https://ollama.ai")
             console.print("2. Start Ollama: [cyan]ollama serve[/cyan]")
             console.print("3. Pull a model: [cyan]ollama pull llama3.1[/cyan]")
             console.print()
-            console.print("Alternatively, use basic QE: [cyan]superqe run .[/cyan]")
+            console.print("Alternatively, use basic validation: [cyan]superqode qe run .[/cyan]")
         else:
-            console.print(f"[red]❌ SuperQE evaluation failed: {error_msg}[/red]")
+            console.print(f"[red]❌ validation workflow evaluation failed: {error_msg}[/red]")
             if verbose:
                 import traceback
 
@@ -212,14 +220,16 @@ def superqe_run(
 
 @superqe.command("behaviors")
 def superqe_behaviors():
-    """List all available SuperQE enhanced behaviors."""
+    """List all available validation workflow enhanced behaviors."""
     if not check_codeoptix():
         return
     from superqode.evaluation.behaviors import get_enhanced_behaviors
 
     console.print()
     console.print(
-        Panel("[bold cyan]🚀 SuperQE Enhanced Behaviors[/bold cyan]", border_style="cyan")
+        Panel(
+            "[bold cyan]🚀 validation workflow Enhanced Behaviors[/bold cyan]", border_style="cyan"
+        )
     )
     console.print()
 
@@ -240,7 +250,7 @@ def superqe_behaviors():
 
     console.print()
     console.print(
-        "[dim]Usage: superqe advanced run . --behaviors security-vulnerabilities,test-quality[/dim]"
+        "[dim]Usage: superqode qe advanced run . --behaviors security-vulnerabilities,test-quality[/dim]"
     )
 
 
@@ -256,13 +266,13 @@ def superqe_behaviors():
 )
 @click.option("--output", "-o", type=click.Path(), help="Output directory for comparison results")
 def superqe_agent_eval(path: str, agents: str, behaviors: str, output: str):
-    """Compare multiple AI agents using SuperQE evaluation.
+    """Compare multiple AI agents using validation workflow evaluation.
 
     Examples:
 
-        superqe advanced agent-eval . --agents claude-code,codex
+        superqode qe advanced agent-eval . --agents claude-code,codex
 
-        superqe advanced agent-eval . --agents claude-code,gemini-cli --behaviors all
+        superqode qe advanced agent-eval . --agents claude-code,gemini-cli --behaviors all
     """
     if not check_codeoptix():
         return
@@ -277,7 +287,9 @@ def superqe_agent_eval(path: str, agents: str, behaviors: str, output: str):
     behavior_list = [b.strip() for b in behaviors.split(",")]
 
     console.print()
-    console.print(Panel("[bold cyan]🤖 SuperQE Agent Comparison[/bold cyan]", border_style="cyan"))
+    console.print(
+        Panel("[bold cyan]🤖 validation workflow Agent Comparison[/bold cyan]", border_style="cyan")
+    )
     console.print()
 
     console.print(f"[cyan]Agents:[/cyan] {', '.join(agent_list)}")
@@ -334,13 +346,13 @@ def superqe_agent_eval(path: str, agents: str, behaviors: str, output: str):
 @click.option("--count", type=int, default=5, help="Number of scenarios to generate")
 @click.option("--output", "-o", type=click.Path(), help="Output file for scenarios")
 def superqe_scenarios(action: str, path: str, behavior: str, count: int, output: str):
-    """Manage Bloom scenario generation for SuperQE.
+    """Manage Bloom scenario generation for validation workflow.
 
     Examples:
 
-        superqe advanced scenarios generate . --behavior security-vulnerabilities --count 10
+        superqode qe advanced scenarios generate . --behavior security-vulnerabilities --count 10
 
-        superqe advanced scenarios list
+        superqode qe advanced scenarios list
     """
     if not check_codeoptix():
         return
@@ -356,7 +368,8 @@ def superqe_scenarios(action: str, path: str, behavior: str, count: int, output:
         console.print()
         console.print(
             Panel(
-                "[bold cyan]🌸 SuperQE Bloom Scenario Generation[/bold cyan]", border_style="cyan"
+                "[bold cyan]🌸 validation workflow Bloom Scenario Generation[/bold cyan]",
+                border_style="cyan",
             )
         )
         console.print()
@@ -407,7 +420,7 @@ def superqe_scenarios(action: str, path: str, behavior: str, count: int, output:
 
 
 def _display_superqe_results(results: dict, behavior_list: list, use_bloom: bool):
-    """Display SuperQE evaluation results in a nice format."""
+    """Display validation workflow evaluation results in a nice format."""
     if "error" in results:
         console.print(f"[red]❌ {results['error']}[/red]")
         return
@@ -416,7 +429,7 @@ def _display_superqe_results(results: dict, behavior_list: list, use_bloom: bool
     behaviors_evaluated = results.get("behaviors_evaluated", [])
     scenarios_used = results.get("scenarios_used", 0)
 
-    console.print("[green]✓ SuperQE evaluation completed![/green]")
+    console.print("[green]✓ validation workflow evaluation completed![/green]")
     console.print(f"   Behaviors evaluated: {len(behaviors_evaluated)}")
     console.print(f"   Scenarios used: {scenarios_used}")
 

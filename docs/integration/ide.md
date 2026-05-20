@@ -12,9 +12,9 @@ SuperQode provides IDE integration through:
 
 - **LSP Server**: Language Server Protocol for editor-agnostic integration
 - **VSCode Extension**: Native VSCode extension with diagnostics and commands
-- **Diagnostics**: QE findings shown as inline errors/warnings
-- **Quick Fixes**: Apply QE-suggested fixes directly from the editor
-- **Commands**: Run QE sessions from within your IDE
+- **Diagnostics**: validation findings shown as inline errors/warnings
+- **Quick Fixes**: Apply validation-suggested fixes directly from the editor
+- **Commands**: Run validation sessions from within your IDE
 
 ---
 
@@ -39,11 +39,11 @@ code --install-extension superqode.superqode
 
 The VSCode extension provides:
 
-- **Real-time Diagnostics**: QE findings shown as problems in Problems panel
+- **Real-time Diagnostics**: validation findings shown as problems in Problems panel
 - **Inline Warnings**: Findings highlighted directly in code
-- **Quick Fixes**: Apply patches from QE sessions
-- **Status Bar**: QE status indicator
-- **Commands**: Run QE sessions from Command Palette
+- **Quick Fixes**: Apply patches from validation sessions
+- **Status Bar**: validation status indicator
+- **Commands**: Run validation sessions from Command Palette
 
 ### Configuration
 
@@ -72,20 +72,20 @@ Add to your VSCode `settings.json`:
 | `superqode.enable` | Enable SuperQode | `true` |
 | `superqode.showStatusBar` | Show status bar item | `true` |
 | `superqode.serverPath` | Path to `superqode` CLI | `"superqode"` |
-| `superqode.autoRunOnSave` | Run QE on file save | `false` |
-| `superqode.diagnosticSeverity` | Map QE severity to diagnostic level | (see above) |
+| `superqode.autoRunOnSave` | Run validation on file save | `false` |
+| `superqode.diagnosticSeverity` | Map validation severity to diagnostic level | (see above) |
 
 ### Usage
 
-#### Run QE Session
+#### Run Validation Session
 
 1. Open Command Palette (Ctrl+Shift+P / Cmd+Shift+P)
-2. Type "SuperQode: Run QE"
-3. Select mode (Quick Scan or Deep QE)
+2. Type "SuperQode: Run validation"
+3. Select mode (Quick Scan or Deep validation)
 
 Or use the status bar:
 - Click the SuperQode status bar item
-- Select "Run Quick Scan" or "Run Deep QE"
+- Select "Run Quick Scan" or "Run Deep validation"
 
 #### View Findings
 
@@ -99,7 +99,7 @@ Findings appear in:
 
 1. Hover over a finding in the editor
 2. Click "Quick Fix" or press Ctrl+. (Cmd+. on Mac)
-3. Select "Apply QE Fix" from suggestions
+3. Select "Apply validation Fix" from suggestions
 
 ---
 
@@ -203,7 +203,7 @@ require('lspconfig').superqode.setup({
 
 ### Diagnostics
 
-QE findings are exposed as LSP diagnostics:
+validation findings are exposed as LSP diagnostics:
 
 ```json
 {
@@ -220,7 +220,7 @@ QE findings are exposed as LSP diagnostics:
 
 **Severity Mapping:**
 
-| QE Severity | LSP Severity | Description |
+| validation Severity | LSP Severity | Description |
 |-------------|--------------|-------------|
 | `critical` | `1` (Error) | Red underline |
 | `high` | `1` (Error) | Red underline |
@@ -230,11 +230,11 @@ QE findings are exposed as LSP diagnostics:
 
 ### Code Actions
 
-Apply QE fixes via code actions:
+Apply validation fixes via code actions:
 
 ```json
 {
-  "title": "Apply QE Fix: Sanitize SQL query",
+  "title": "Apply validation Fix: Sanitize SQL query",
   "kind": "quickfix",
   "edit": {
     "changes": {
@@ -318,15 +318,15 @@ lsp:
 
 ### Diagnostics Not Showing
 
-**Problem**: QE findings not appearing as diagnostics
+**Problem**: validation findings not appearing as diagnostics
 
 **Solution**:
-1. Run a QE session first:
+1. Run a validation session first:
    ```bash
-   superqe run . --mode quick
+   superqode qe run . --mode quick
    ```
 
-2. Check if QR was generated:
+2. Check if report was generated:
    ```bash
    ls -la .superqode/qe-artifacts/
    ```
@@ -341,7 +341,7 @@ lsp:
 
 **Solution**:
 1. Reduce `max_diagnostics` in config
-2. Use `--mode quick` for faster QE
+2. Use `--mode quick` for faster validation
 3. Exclude large directories:
    ```yaml
    qe:
@@ -360,11 +360,11 @@ lsp:
 
 Available in Command Palette:
 
-- **SuperQode: Run Quick Scan**: Run quick QE analysis
-- **SuperQode: Run Deep QE**: Run comprehensive QE analysis
+- **SuperQode: Run Quick Scan**: Run quick validation analysis
+- **SuperQode: Run Deep validation**: Run comprehensive validation analysis
 - **SuperQode: Show Findings**: Open findings panel
 - **SuperQode: Clear Findings**: Clear current diagnostics
-- **SuperQode: Refresh Diagnostics**: Reload findings from latest QR
+- **SuperQode: Refresh Diagnostics**: Reload findings from latest report
 
 ### Key Bindings
 
@@ -393,7 +393,7 @@ cd /path/to/project
 code .
 ```
 
-### 3. Run QE
+### 3. Run validation
 
 - Press `Ctrl+Shift+P` (Cmd+Shift+P on Mac)
 - Type "SuperQode: Run Quick Scan"
@@ -409,7 +409,7 @@ code .
 
 - Place cursor on finding
 - Press `Ctrl+.` (Cmd+. on Mac)
-- Select "Apply QE Fix"
+- Select "Apply validation Fix"
 
 ---
 
@@ -447,12 +447,12 @@ superqode serve lsp --transport websocket --port 9000
 
 ## Best Practices
 
-### 1. Run QE Before Reviewing
+### 1. Run validation Before Reviewing
 
-Always run QE session before expecting diagnostics:
+Always run validation session before expecting diagnostics:
 
 ```bash
-superqe run . --mode quick
+superqode qe run . --mode quick
 ```
 
 ### 2. Use Quick Mode for Development
@@ -490,4 +490,4 @@ qe:
 ## Next Steps
 
 - [CI/CD Integration](cicd.md) - Pipeline integration
-- [QE Features](../qe-features/index.md) - Understanding QE capabilities
+- [Validation Features](../qe-features/index.md) - Understanding validation capabilities

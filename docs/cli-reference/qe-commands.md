@@ -1,15 +1,15 @@
-# QE Commands
+# Validation Commands
 
-Quality Engineering commands for running QE sessions, viewing reports, and managing artifacts.
+validation and evaluation commands for running validation sessions, viewing reports, and managing artifacts.
 
 ---
 
 ## Overview
 
-The `superqe` command group provides all quality engineering functionality:
+The `superqode qe` command group provides all validation and evaluation functionality:
 
 ```bash
-superqe COMMAND [OPTIONS] [ARGS]
+superqode qe COMMAND [OPTIONS] [ARGS]
 ```
 
 ---
@@ -28,10 +28,10 @@ streaming, and JUnit export.
 
 ## run
 
-Run a QE session on the specified path.
+Run a validation session on the specified path.
 
 ```bash
-superqe run [PATH] [OPTIONS]
+superqode qe run [PATH] [OPTIONS]
 ```
 
 ### Arguments
@@ -44,8 +44,8 @@ superqe run [PATH] [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `--mode`, `-m` | QE mode: `quick` (60s) or `deep` (30min) |
-| `--role`, `-r` | QE role(s) to run (can specify multiple) |
+| `--mode`, `-m` | validation mode: `quick` (60s) or `deep` (30min) |
+| `--role`, `-r` | validation role(s) to run (can specify multiple) |
 | `--timeout`, `-t` | Timeout in seconds |
 | `--no-revert` | Don't revert changes (for debugging) |
 | `--output`, `-o` | Output directory for artifacts |
@@ -61,28 +61,28 @@ superqe run [PATH] [OPTIONS]
 
 ```bash
 # Quick scan current directory
-superqe run .
+superqode qe run .
 
 # Quick scan with 60s timeout
-superqe run . --mode quick
+superqode qe run . --mode quick
 
 # Deep analysis with verbose output
-superqe run . --mode deep --verbose
+superqode qe run . --mode deep --verbose
 
 # Run specific roles
-superqe run . -r security_tester -r api_tester
+superqode qe run . -r security_tester -r api_tester
 
 # Run with suggestions enabled
-superqe run . --mode deep --allow-suggestions --generate
+superqode qe run . --mode deep --allow-suggestions --generate
 
 # Export for CI
-superqe run . --junit results.xml
+superqode qe run . --junit results.xml
 
 # Stream JSONL events
-superqe run . --jsonl
+superqode qe run . --jsonl
 
 # Use worktree isolation
-superqe run . --worktree
+superqode qe run . --worktree
 ```
 
 ---
@@ -92,15 +92,15 @@ superqe run . --worktree
 Alias for `run --mode quick`.
 
 ```bash
-superqe quick [PATH]
+superqode qe quick [PATH]
 ```
 
-Fast, time-boxed QE for pre-commit and developer feedback.
+Fast, time-boxed validation for pre-commit and developer feedback.
 
 ### Example
 
 ```bash
-superqe quick .
+superqode qe quick .
 ```
 
 ---
@@ -110,7 +110,7 @@ superqe quick .
 Alias for `run --mode deep`.
 
 ```bash
-superqe deep [PATH]
+superqode qe deep [PATH]
 ```
 
 Full investigation for pre-release and nightly CI.
@@ -118,17 +118,17 @@ Full investigation for pre-release and nightly CI.
 ### Example
 
 ```bash
-superqe deep .
+superqode qe deep .
 ```
 
 ---
 
 ## roles
 
-List all available QE roles.
+List all available validation roles.
 
 ```bash
-superqe roles
+superqode qe roles
 ```
 
 ### Output
@@ -137,14 +137,14 @@ Shows roles grouped by type:
 
 - **Execution Roles**: Run existing tests deterministically
 - **Detection Roles**: AI-powered issue discovery
-- **Heuristic Roles**: Senior QE comprehensive review
+- **Heuristic Roles**: Senior validation comprehensive review
 
 The list is pulled from your `superqode.yaml`. The default template includes a comprehensive role catalog, but only roles with implementations can actually run.
 
 ### Example Output
 
 ```
-Available QE Roles
+Available Role-Based Workflows
 
 Execution Roles (run existing tests)
   smoke_tester: Fast critical path validation
@@ -161,18 +161,18 @@ Detection Roles (AI-powered issue detection)
   e2e_tester: End-to-end workflow testing
   performance_tester: Performance bottleneck detection
 
-Heuristic Roles (senior QE review)
-  fullstack: Senior QE comprehensive review
+Heuristic Roles (senior validation review)
+  fullstack: Senior validation comprehensive review
 ```
 
 ---
 
 ## status
 
-Show current QE workspace status.
+Show current validation workspace status.
 
 ```bash
-superqe status [PATH]
+superqode qe status [PATH]
 ```
 
 ### Output
@@ -188,10 +188,10 @@ Shows:
 
 ## artifacts
 
-List QE artifacts from previous sessions.
+List validation artifacts from previous sessions.
 
 ```bash
-superqe artifacts [PATH] [OPTIONS]
+superqode qe artifacts [PATH] [OPTIONS]
 ```
 
 ### Options
@@ -204,10 +204,10 @@ superqe artifacts [PATH] [OPTIONS]
 
 ```bash
 # List all artifacts
-superqe artifacts
+superqode qe artifacts
 
 # List only patches
-superqe artifacts --type patch
+superqode qe artifacts --type patch
 ```
 
 ---
@@ -217,7 +217,7 @@ superqe artifacts --type patch
 Show content of a specific artifact.
 
 ```bash
-superqe show ARTIFACT_ID [PATH]
+superqode qe show ARTIFACT_ID [PATH]
 ```
 
 ### Arguments
@@ -229,17 +229,17 @@ superqe show ARTIFACT_ID [PATH]
 ### Example
 
 ```bash
-superqe show patch-001
+superqode qe show patch-001
 ```
 
 ---
 
 ## report
 
-View or export the latest QR.
+View or export the latest report.
 
 ```bash
-superqe report [PATH] [OPTIONS]
+superqode qe report [PATH] [OPTIONS]
 ```
 
 ### Options
@@ -252,21 +252,21 @@ superqe report [PATH] [OPTIONS]
 ### Examples
 
 ```bash
-# View latest QR in terminal
-superqe report
+# View latest report in terminal
+superqode qe report
 
 # Export as JSON
-superqe report --format json --output report.json
+superqode qe report --format json --output report.json
 ```
 
 ---
 
 ## logs
 
-Show detailed agent work logs for QE sessions.
+Show detailed agent work logs for validation sessions.
 
 ```bash
-superqe logs [SESSION_ID] [PATH]
+superqode qe logs [SESSION_ID] [PATH]
 ```
 
 Shows the actual agent interaction logs, including:
@@ -286,23 +286,23 @@ Shows the actual agent interaction logs, including:
 
 ```bash
 # Show logs for latest session
-superqe logs
+superqode qe logs
 
 # Show logs for specific session
-superqe logs qe-20240118-143022
+superqode qe logs qe-20240118-143022
 ```
 
 ---
 
 ## dashboard
 
-Open QR dashboard in web browser.
+Open report dashboard in web browser.
 
 ```bash
-superqe dashboard [PATH] [OPTIONS]
+superqode qe dashboard [PATH] [OPTIONS]
 ```
 
-Provides an interactive web interface for viewing Quality Reports.
+Provides an interactive web interface for viewing Validation Reports.
 
 ### Options
 
@@ -315,51 +315,51 @@ Provides an interactive web interface for viewing Quality Reports.
 ### Examples
 
 ```bash
-# Open latest QR in browser
-superqe dashboard
+# Open latest report in browser
+superqode qe dashboard
 
 # Use custom port
-superqe dashboard --port 9000
+superqode qe dashboard --port 9000
 
 # Export as HTML file
-superqe dashboard --export report.html
+superqode qe dashboard --export report.html
 ```
 
 ---
 
 ## clean
 
-Clean up QE artifacts.
+Clean up validation artifacts.
 
 ```bash
-superqe clean [PATH] [OPTIONS]
+superqode qe clean [PATH] [OPTIONS]
 ```
 
 ### Options
 
 | Option | Description |
 |--------|-------------|
-| `--keep-qrs` | Keep QR files (default: true) |
-| `--all` | Remove all including QRs |
+| `--keep-qrs` | Keep report files (default: true) |
+| `--all` | Remove all including reports |
 
 ### Example
 
 ```bash
-# Clean artifacts but keep QRs
-superqe clean
+# Clean artifacts but keep reports
+superqode qe clean
 
 # Remove everything
-superqe clean --all
+superqode qe clean --all
 ```
 
 ---
 
 ## feedback
 
-Provide feedback on a finding to improve future QE runs.
+Provide feedback on a finding to improve future validation runs.
 
 ```bash
-superqe feedback FINDING_ID [OPTIONS] [PATH]
+superqode qe feedback FINDING_ID [OPTIONS] [PATH]
 ```
 
 ### Arguments
@@ -384,16 +384,16 @@ superqe feedback FINDING_ID [OPTIONS] [PATH]
 
 ```bash
 # Mark as valid
-superqe feedback sec-001 --valid
+superqode qe feedback sec-001 --valid
 
 # Mark as false positive
-superqe feedback sec-002 --false-positive -r "Intentional for testing"
+superqode qe feedback sec-002 --false-positive -r "Intentional for testing"
 
 # Mark as false positive with team scope
-superqe feedback sec-003 --false-positive --scope team -r "Known limitation"
+superqode qe feedback sec-003 --false-positive --scope team -r "Known limitation"
 
 # Mark as fixed
-superqe feedback perf-001 --fixed -r "Optimized query"
+superqode qe feedback perf-001 --fixed -r "Optimized query"
 ```
 
 ---
@@ -403,7 +403,7 @@ superqe feedback perf-001 --fixed -r "Optimized query"
 List or manage finding suppressions.
 
 ```bash
-superqe suppressions [PATH] [OPTIONS]
+superqode qe suppressions [PATH] [OPTIONS]
 ```
 
 ### Options
@@ -416,10 +416,10 @@ superqe suppressions [PATH] [OPTIONS]
 
 ```bash
 # List active suppressions
-superqe suppressions
+superqode qe suppressions
 
 # Remove a suppression
-superqe suppressions -r abc123
+superqode qe suppressions -r abc123
 ```
 
 ---
@@ -429,36 +429,36 @@ superqe suppressions -r abc123
 ### Pre-Commit Check
 
 ```bash
-superqe run . --mode quick -r security_tester
+superqode qe run . --mode quick -r security_tester
 ```
 
 ### Pre-Release Validation
 
 ```bash
-superqe run . --mode deep --allow-suggestions --generate
+superqode qe run . --mode deep --allow-suggestions --generate
 ```
 
 ### CI/CD Integration
 
 ```bash
 # JSONL output for streaming
-superqe run . --jsonl
+superqode qe run . --jsonl
 
 # JUnit XML for test reporting
-superqe run . --junit results.xml
+superqode qe run . --junit results.xml
 ```
 
 ### Review Findings
 
 ```bash
 # View report
-superqe report
+superqode qe report
 
 # View agent work logs
-superqe logs
+superqode qe logs
 
 # Open dashboard
-superqe dashboard
+superqode qe dashboard
 ```
 
 ---

@@ -47,7 +47,7 @@ team:
 | `providers` | object | No | `{}` | Provider-specific settings |
 | `agents` | object | No | `{}` | ACP agent definitions |
 | `mcp_servers` | object | No | `{}` | MCP server definitions |
-| `qe` | object | No | `{}` | QE-specific settings |
+| `qe` | object | No | `{}` | validation-specific settings |
 | `team` | object | No | `{}` | Team modes and roles |
 
 ---
@@ -320,7 +320,7 @@ Quality engineering settings.
 | Field | Type | Description |
 |-------|------|-------------|
 | `quick_scan` | object | Quick scan mode settings |
-| `deep_qe` | object | Deep QE mode settings |
+| `deep_qe` | object | Deep validation mode settings |
 
 ```yaml
 qe:
@@ -475,7 +475,7 @@ team:
           enabled: true
 
         fullstack:
-          description: "Senior QE comprehensive review"
+          description: "Senior validation comprehensive review"
           mode: byok
           provider: anthropic
           model: claude-sonnet-4
@@ -614,7 +614,7 @@ team:
           enabled: true
 
         fullstack:
-          description: "Senior QE review"
+          description: "Senior validation review"
           mode: byok
           provider: anthropic
           model: claude-sonnet-4
@@ -627,4 +627,4 @@ team:
 
 - [Team Configuration](team.md) - Advanced team setup
 - [Providers](../providers/index.md) - Provider-specific settings
-- [QE Settings](#qe-section) - Quality engineering options
+- [validation Settings](#qe-section) - Quality engineering options

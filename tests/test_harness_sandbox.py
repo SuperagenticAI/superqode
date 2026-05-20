@@ -3,11 +3,17 @@
 import pytest
 
 from superqode.harness import (
+    HarnessSandboxBackend,
     LocalSandboxBackend,
+    SandboxCapabilityBackend,
     SandboxPolicy,
+    apply_backend_permissions,
+    get_sandbox_capabilities,
     get_harness_template,
     sandbox_policy_from_execution_policy,
+    supported_openai_sandbox_backends,
 )
+from superqode.tools.permissions import Permission, PermissionConfig, ToolGroup
 
 
 def test_local_sandbox_read_list_stat_grep_and_glob(tmp_path):
@@ -21,6 +27,10 @@ def test_local_sandbox_read_list_stat_grep_and_glob(tmp_path):
     assert sandbox.exists("src/app.py") is True
     assert sandbox.grep("hello", path="src") == "src/app.py:1:print('hello')"
     assert sandbox.glob("src/*.py") == "src/app.py"
+
+
+def test_harness_sandbox_backend_protocol_is_exported():
+    assert HarnessSandboxBackend is not None
 
 
 def test_local_sandbox_blocks_path_escape(tmp_path):
@@ -80,3 +90,39 @@ def test_sandbox_policy_from_execution_policy_clamps_no_tool_template():
     assert policy.allow_read is False
     assert policy.allow_write is False
     assert policy.allow_shell is False
+
+
+def test_harness_sandbox_capabilities_are_single_source():
+    caps = get_sandbox_capabilities(SandboxCapabilityBackend.READ_ONLY)
+
+    assert caps.can_read is True
+    assert caps.can_write is False
+    assert caps.can_shell is False
+    assert caps.can_network is False
+
+
+def test_harness_apply_backend_permissions_clamps_tools():
+    config = PermissionConfig(
+        groups={ToolGroup.WRITE: Permission.ALLOW, ToolGroup.SHELL: Permission.ALLOW},
+        tools={"bash": Permission.ALLOW},
+    )
+
+    restricted = apply_backend_permissions(config, "no-shell")
+
+    assert restricted.groups[ToolGroup.WRITE] is Permission.ALLOW
+    assert restricted.groups[ToolGroup.SHELL] is Permission.DENY
+    assert restricted.tools["bash"] is Permission.DENY
+
+
+def test_harness_lists_openai_sandbox_backends():
+    assert set(supported_openai_sandbox_backends()) == {
+        "local",
+        "docker",
+        "e2b",
+        "daytona",
+        "modal",
+        "vercel",
+        "runloop",
+        "blaxel",
+        "cloudflare",
+    }

@@ -8,7 +8,7 @@ Programmatic access to SuperQode functionality through Python SDK and JSONL even
 
 The SuperQode API provides two main interfaces:
 
-1. **Python SDK**: High-level Python APIs for orchestrating QE sessions
+1. **Python SDK**: High-level Python APIs for orchestrating validation sessions
 2. **JSONL Events**: Machine-readable event stream for CI/CD integration
 
 ---
@@ -19,7 +19,7 @@ The SuperQode API provides two main interfaces:
 
 ```python
 from pathlib import Path
-from superqode.superqe import QEOrchestrator
+from superqode.evaluation import QEOrchestrator
 
 orchestrator = QEOrchestrator(Path("."))
 result = await orchestrator.quick_scan()
@@ -32,10 +32,10 @@ print(f"Findings: {len(result.findings)}")
 
 ```bash
 # Stream events to stdout
-superqe run . --jsonl
+superqode qe run . --jsonl
 
 # Stream to file
-superqe run . --jsonl > events.jsonl
+superqode qe run . --jsonl > events.jsonl
 ```
 
 ---
@@ -46,16 +46,16 @@ superqe run . --jsonl > events.jsonl
 
 Complete Python API reference:
 
-- **QEOrchestrator**: High-level QE session orchestration
+- **QEOrchestrator**: High-level validation session orchestration
 - **QESession**: Lower-level session management
 - **WorkspaceManager**: Ephemeral workspace control
-- **Event Handling**: Subscribe to QE events
+- **Event Handling**: Subscribe to validation events
 
 **Use for:**
 - Custom Python scripts
 - CI/CD integrations
 - Automated quality gates
-- Programmatic QE workflows
+- Programmatic validation workflows
 
 ### [JSONL Events](jsonl-events.md)
 
@@ -79,7 +79,7 @@ Event streaming API:
 ### CI/CD Quality Gate
 
 ```python
-from superqode.superqe import QEOrchestrator
+from superqode.evaluation import QEOrchestrator
 
 orchestrator = QEOrchestrator(Path("."))
 result = await orchestrator.quick_scan()
@@ -88,10 +88,10 @@ if result.verdict == "fail":
     exit(1)
 ```
 
-### Custom QE Workflow
+### Custom validation Workflow
 
 ```python
-from superqode.superqe import QESession, QESessionConfig, QEMode
+from superqode.evaluation import QESession, QESessionConfig, QEMode
 
 config = QESessionConfig(
     mode=QEMode.DEEP_QE,
@@ -106,12 +106,12 @@ result = await session.run()
 ### Event Monitoring
 
 ```python
-from superqode.superqe.events import QEEventCollector
+from superqode.evaluation.events import QEEventCollector
 
 collector = QEEventCollector()
 emitter.add_handler(collector.collect)
 
-# After QE
+# After validation
 summary = collector.get_summary()
 ```
 
@@ -128,7 +128,7 @@ See [JSONL Events - CI/CD Integration](jsonl-events.md#cicd-integration) for com
 ```python
 import asyncio
 from pathlib import Path
-from superqode.superqe import QEOrchestrator
+from superqode.evaluation import QEOrchestrator
 
 async def main():
     orchestrator = QEOrchestrator(Path("."))

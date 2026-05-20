@@ -1,6 +1,6 @@
 # Safety & Permissions
 
-SuperQode implements a comprehensive safety model to ensure secure operation while allowing agents to perform effective quality engineering. This document describes the security architecture, permission system, and safety guarantees.
+SuperQode implements a comprehensive safety model to ensure secure operation while allowing agents to perform effective validation and evaluation. This document describes the security architecture, permission system, and safety guarantees.
 
 ---
 
@@ -199,7 +199,7 @@ When a dangerous operation is detected, SuperQode prompts for approval:
 | **Y (Yes)** | Allow this specific operation | Once |
 | **A (Always)** | Allow similar operations | Session |
 | **N (No)** | Deny and continue | Once |
-| **! (Abort)** | Stop QE session | Immediate |
+| **! (Abort)** | Stop validation session | Immediate |
 
 ### Approval Memory
 

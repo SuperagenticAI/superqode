@@ -13,7 +13,7 @@ SuperQode includes a rich Terminal User Interface (TUI) for interactive coding-a
 - **Local DS4 Support**: DS4 appears in the local provider picker when configured
 - **Interactive Prompts**: User input with completion
 - **File Browser**: Navigate project files
-- **Agent Switcher**: Switch between QE roles
+- **Agent Switcher**: Switch between validation roles
 - **Command Palette**: Quick actions
 - **Status Bar**: Session status at a glance
 
@@ -31,7 +31,7 @@ superqode --role qe.security_tester
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ SuperQode - QE Session: qe-20260108-143052                  ×│
+│ SuperQode - Validation Session: qe-20260108-143052                  ×│
 ├─────────────────────────────────────────────────────────────────┤
 │ Sidebar        │ Main Content Area                              │
 │                │                                                 │
@@ -78,7 +78,7 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:log minimal` - Show status-only tool activity
 - `:log normal` - Show compact tool summaries
 - `:log verbose` - Show full tool outputs and changed file names
-- `:qe <role>` - Switch to QE role mode (e.g., `:qe security_tester`)
+- `:qe <role>` - Switch to validation role mode (e.g., `:qe security_tester`)
 - `:view <file>` - View file content
 - `:help` - Show all available commands
 
@@ -124,7 +124,7 @@ The BYOK model view includes capability labels:
 
 Local providers include DS4, Ollama, LM Studio, MLX, vLLM, and SGLang when supported by the current installation.
 
-Note: QE analysis sessions are run via CLI, not TUI commands. Use `superqe run .` in your terminal to start QE sessions.
+Note: validation analysis sessions are run via CLI, not TUI commands. Use `superqode qe run .` in your terminal to start validation sessions.
 
 ## Configuration
 
@@ -146,7 +146,7 @@ superqode:
 |--------|---------|
 | `Prompt` | User input with completion |
 | `FileBrowser` | Navigate project files |
-| `AgentSwitcher` | Switch QE roles |
+| `AgentSwitcher` | Switch validation roles |
 | `CommandPalette` | Quick actions |
 | `StatusBar` | Session status |
 | `Throbber` | Loading indicator |
@@ -172,24 +172,24 @@ switcher = AgentSwitcher(roles)
 selected = await switcher.select()
 ```
 
-## Integration with QE
+## Integration with validation
 
-The TUI allows you to interact with agents in QE roles, while QE analysis sessions are run separately via CLI:
+The TUI allows you to interact with agents in validation roles, while validation analysis sessions are run separately via CLI:
 
 ```bash
 # Start TUI
 superqode
 
-# In TUI, switch to QE role
+# In TUI, switch to validation role
 :qe security_tester
 
-# Run QE analysis via CLI (in separate terminal)
-superqe run . --mode quick
-superqe run . --mode deep
+# Run validation analysis via CLI (in separate terminal)
+superqode qe run . --mode quick
+superqode qe run . --mode deep
 
-# View QE artifacts (via CLI)
-superqe artifacts .
-superqe dashboard
+# View validation artifacts (via CLI)
+superqode qe artifacts .
+superqode qe dashboard
 ```
 
 ## Requirements

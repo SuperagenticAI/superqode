@@ -7,15 +7,15 @@ Enterprise adds powerful automation, deep evaluation testing, and integrations o
 | Capability | OSS | Enterprise |
 | --- | --- | --- |
 | CLI automation | Basic | Powerful + deep evaluation testing |
-| Deep QE (agentic scans) | ✅ | ✅ |
+| Deep validation (agentic scans) | ✅ | ✅ |
 | Fix suggestions + verification | ❌ | ✅ |
 | Test generation & scenario packs | ❌ | ✅ |
 | CI outputs (JSONL/JUnit) | ❌ | ✅ |
-| QE dashboard & artifacts UI | ❌ | ✅ |
+| validation dashboard & artifacts UI | ❌ | ✅ |
 | Expert prompt packs | ❌ | ✅ |
-| Optimized SuperQE mode | ❌ | ✅ |
+| Optimized validation mode | ❌ | ✅ |
 | IDE integrations (VSCode/LSP) | ❌ | ✅ |
-| Natural Language QE | ❌ | ✅ |
+| Natural Language Validation | ❌ | ✅ |
 | ML severity model | ❌ | ✅ |
 | SuperOpt optimizer | ✅ (flagged) | ✅ (optimized) |
 | OpenClaw integration | ❌ | ✅ |
@@ -25,9 +25,9 @@ Enterprise adds powerful automation, deep evaluation testing, and integrations o
 - Fix suggestions + verification
 - Test generation and scenario packs
 - CI outputs (JSONL/JUnit)
-- QE dashboard and artifacts UI
+- validation dashboard and artifacts UI
 - IDE/LSP and server integrations
-- Natural language QE
+- Natural language validation
 - Prompt packs and optimized workflows
 - ML severity model
 - Enterprise integrations (OpenClaw first; more bot integrations coming)
@@ -35,7 +35,7 @@ Enterprise adds powerful automation, deep evaluation testing, and integrations o
 
 ## Enterprise Integrations
 
-Enterprise integrations let you connect SuperQode/SuperQE with external agent platforms in a
+Enterprise integrations let you connect SuperQode with external agent platforms in a
 self-hosted setup. OpenClaw is the first supported integration (experimental); more bot integrations
 will be added over time.
 

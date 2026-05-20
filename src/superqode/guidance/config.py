@@ -2,7 +2,7 @@
 QE Guidance Configuration - YAML-driven settings for time-constrained QE.
 
 All configuration comes from superqode.yaml, aligned with PRD:
-> "SuperQode operationalizes SuperQE, where autonomous agents aggressively test software,
+> "SuperQode operationalizes validation workflow, where autonomous agents aggressively test software,
 >  propose fixes, prove improvements, and report findings with research-grade rigor."
 """
 

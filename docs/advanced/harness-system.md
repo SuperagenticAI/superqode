@@ -36,18 +36,32 @@ This keeps the existing coding harness as the default while making room for othe
 | `HarnessSpec` | Declarative contract for flavor, runtime, model policy, agents, workflow, context, validation, and observability |
 | Templates | Built-in starts for `coding`, `no-tool`, `gemma4-coding`, `gemma4-no-tool`, `ds4-coding`, and `ds4-fast-local` |
 | Kernel | Opens sessions, starts runs, emits events, stores records, and dispatches to backends |
-| Backend adapters | Native runtime, Google ADK, OpenAI Agents SDK, optional DeepAgents, and future custom runtimes |
+| Backend adapters | Native runtime, Google ADK, OpenAI Agents SDK, optional DeepAgents, optional PydanticAI, and future custom runtimes |
 | Sandbox contract | Local read, write, shell, grep, glob, edit, and command policy behind a stable backend protocol |
 | Typed outputs | Pydantic-backed result parsing with explicit delimiters and validation failure reporting |
 | Workflow engine | Single, chain, parallel, router, orchestrator, and evaluator-optimizer execution |
 | Model policy | Explicit prompt, tool, reasoning, temperature, history, and iteration defaults per model family |
+
+The harness sandbox contract is the source of truth for capability profiles. Runtime adapters consume that
+contract when they need backend-specific execution, including OpenAI Agents SDK SandboxAgent wiring. Legacy
+runtime and sandbox modules keep compatibility imports, but policy decisions live with the harness.
+`HarnessSandboxBackend` is the file and shell protocol used by local and future remote harness sandboxes.
+OpenAI SandboxAgent clients are exposed through the same harness module as SDK execution clients, not as
+direct file-protocol implementations.
+
+Backend adapters also advertise a capability matrix. SuperQode uses it to flag unsupported combinations early,
+such as a no-tool spec with DeepAgents or a remote sandbox request against a backend that only supports local policy.
+
+Patch validation primitives are exposed through `superqode.patch_harness`. The `superqode.harness` package
+keeps compatibility re-exports, but new agent-harness work should use the HarnessSpec types in this module and
+new patch-validation work should use `superqode.patch_harness`.
 
 ### What Users Configure
 
 Users configure a harness by selecting:
 
 - flavor: `coding` or `no_tool`
-- runtime: `builtin`, `adk`, `openai-agents`, `deepagents`, or custom
+- runtime: `builtin`, `adk`, `openai-agents`, `deepagents`, `pydanticai`, or custom
 - model policy: hosted model, local model, Gemma4 profile, DS4 profile, fallbacks, and reasoning defaults
 - tools: repository tools, shell, MCP, validation, or no tools
 - sandbox policy: read, write, shell, command, and network boundaries
@@ -141,10 +155,79 @@ Runtime backends are interchangeable execution adapters behind the same harness 
 | `adk` | optional | You want to run through Google ADK while keeping SuperQode harness configuration |
 | `openai-agents` | optional | You want OpenAI Agents SDK behavior, sessions, and tool plumbing |
 | `deepagents` | optional | You want DeepAgents graph, middleware, and subagent behavior for tool-capable coding harnesses |
+| `pydanticai` | optional | You want PydanticAI's agent kernel with SuperQode tools and HarnessSpec policy |
 
 The `deepagents` backend is intentionally not used for no-tool harnesses. DeepAgents 0.6 is built around a
 tool-capable deep-agent stack, so SuperQode rejects no-tool specs for that backend and directs users to the
 native runtime for model-only runs.
+
+The `pydanticai` backend supports tool-capable coding specs through SuperQode's JSON-schema tool bridge.
+It also maps PydanticAI deferred approvals into the standard harness approval flow, loads native
+PydanticAI MCP toolsets from `runtime.config.pydanticai.mcp_config_path`, uses PydanticAI fallback
+models from `model_policy.fallbacks`, and can enable Logfire instrumentation through `observability.traces`
+or `runtime.config.pydanticai.logfire`. Prefect and DBOS durable wrappers are available through
+`runtime.config.pydanticai.durable`; Temporal still requires an explicit workflow and worker.
+
+### CLI
+
+Harness specs are usable from the command line:
+
+```bash
+superqode harness list-templates
+superqode harness list-backends
+superqode harness init my-coder --template coding --output harness.yaml
+superqode harness validate harness.yaml
+superqode harness validate harness.yaml --schema
+superqode harness inspect --spec harness.yaml
+superqode harness run --spec harness.yaml --prompt "summarize this repository"
+```
+
+Use `--schema` on `harness validate` to print the HarnessSpec JSON Schema for editor integration and CI
+validation.
+
+Use `harness list-backends` to see the backend capability snapshot without loading a spec. It reports coding,
+no-tool, streaming, approval, sandbox, shell, MCP, typed-output support, dependency availability, and install
+hints for optional backends.
+
+Use `harness inspect` to view the resolved backend, model policy, tools, sandbox policy, workflow, and backend
+capability warnings before running a spec. Use `--runtime` and `--sandbox` on `inspect` to check overrides.
+Inspection also warns when a backend may not honor model-side constraints such as reasoning effort,
+temperature, or max iterations.
+
+Use `--runtime`, `--provider`, `--model`, `--session`, `--working-dir`, and `--sandbox` on `harness run` to
+override the spec for one run. Use `--stream` to print normalized stream events and `--json` for machine
+readable output.
+
+The interactive TUI can also run through a harness spec:
+
+```bash
+superqode --harness harness.yaml
+```
+
+Inside the TUI, use:
+
+```text
+:harness harness.yaml
+:harness status
+:harness templates
+:harness off
+```
+
+After loading a spec, connect a model with `:connect byok` or `:connect local`. TUI prompts then stream through
+the loaded `HarnessSpec` while keeping the normal conversation display.
+
+When a harness-backed runtime pauses for tool approval, SuperQode surfaces the pending tool calls in the same
+conversation log:
+
+```text
+:approve
+:approve 1 always
+:reject
+:reject 1 "use a safer command"
+```
+
+The same commands work for direct runtime sessions and `HarnessSpec` sessions. JSON output from
+`superqode harness run` includes `stopped_reason` and `pending_approvals` so automation can detect paused runs.
 
 ### Model Policy
 
@@ -173,6 +256,13 @@ The workflow engine lets a harness describe more than one prompt call without re
 | `router` | Choose a route by config or by router output |
 | `orchestrator` | Run worker steps then synthesize |
 | `evaluator_optimizer` | Generate, evaluate, and optionally optimize |
+
+### Run Storage
+
+Harness sessions can use a file store or SQLite store:
+
+- `FileHarnessStore`: simple JSON files for local development and easy inspection
+- `SQLiteHarnessStore`: indexed session, run, and event history for concurrent readers and larger run sets
 
 ### Example Specs
 

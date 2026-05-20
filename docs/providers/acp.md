@@ -187,7 +187,7 @@ team:
         fullstack:
           mode: acp
           coding_agent: opencode
-          description: "Senior QE using OpenCode"
+          description: "Senior validation using OpenCode"
 ```
 
 ---
@@ -352,7 +352,7 @@ team:
           mode: acp
           coding_agent: opencode
           job_description: |
-            Perform comprehensive QE review:
+            Perform comprehensive validation review:
             - Analyze code structure
             - Run tests
             - Check security issues

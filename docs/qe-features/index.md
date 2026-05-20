@@ -1,12 +1,12 @@
-# QE Features
+# Validation Features
 
-SuperQode provides comprehensive quality engineering features for AI-assisted code analysis and testing.
+SuperQode provides comprehensive validation and evaluation features for AI-assisted code analysis and testing.
 
 ---
 
 ## Feature Overview
 
-SuperQode OSS ships the core agentic scan + QR workflow. Enterprise adds automated fixes, verified patches,
+SuperQode OSS ships the core agentic scan + report workflow. Enterprise adds automated fixes, verified patches,
 test generation, CI-grade outputs, and curated prompt packs. Contact us for access.
 
 <div class="grid cards" markdown>
@@ -15,7 +15,7 @@ test generation, CI-grade outputs, and curated prompt packs. Contact us for acce
 
     ---
 
-    QRs, patches, generated tests, and other outputs from QE sessions.
+    reports, patches, generated tests, and other outputs from validation sessions.
 
     [:octicons-arrow-right-24: Artifacts](artifacts.md)
 
@@ -35,13 +35,13 @@ test generation, CI-grade outputs, and curated prompt packs. Contact us for acce
 
     [:octicons-arrow-right-24: Noise Filtering](noise-filtering.md)
 
--   **Natural Language QE (Enterprise)**
+-   **Natural Language Validation (Enterprise)**
 
     ---
 
     Describe testing needs in plain English - automatic role and scope selection.
 
-    [:octicons-arrow-right-24: Natural Language QE](natural-language-qe.md)
+    [:octicons-arrow-right-24: Natural Language Validation](natural-language-qe.md)
 
 -   **Constitution System**
 
@@ -63,18 +63,18 @@ test generation, CI-grade outputs, and curated prompt packs. Contact us for acce
 
 ---
 
-## QE Session Lifecycle
+## Validation Session Lifecycle
 
-Every QE session follows this lifecycle:
+Every validation session follows this lifecycle:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    QE SESSION LIFECYCLE                      │
+│                    VALIDATION SESSION LIFECYCLE                      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  1. SNAPSHOT         Original code preserved                 │
 │        ↓                                                     │
-│  2. QE SANDBOX       Agents freely modify, inject tests,    │
+│  2. SANDBOX       Agents freely modify, inject tests,    │
 │        │             run experiments, break things           │
 │        ↓                                                     │
 │  3. ANALYSIS         Role-specific quality investigation    │
@@ -93,7 +93,7 @@ Every QE session follows this lifecycle:
 
 ## Core Features
 
-### Quality Reports (QRs)
+### Validation Reports
 
 Research-grade forensic artifacts that document the complete investigation process:
 
@@ -103,7 +103,7 @@ Research-grade forensic artifacts that document the complete investigation proce
 - Suggested fixes with validation
 - Production readiness verdict
 
-[Learn more about QRs](../concepts/qr.md)
+[Learn more about reports](../concepts/qr.md)
 
 ### Ephemeral Workspace
 
@@ -130,14 +130,14 @@ Demonstrated fixes in a sandbox:
 
 ---
 
-## QE Modes
+## validation Modes
 
 ### Quick Scan
 
 Fast, time-boxed analysis for development feedback:
 
 ```bash
-superqe run . --mode quick
+superqode qe run . --mode quick
 ```
 
 - **Duration**: ~60 seconds
@@ -145,12 +145,12 @@ superqe run . --mode quick
 - **Depth**: Shallow analysis
 - **Test generation**: Disabled
 
-### Deep QE
+### Deep validation
 
 Comprehensive quality investigation:
 
 ```bash
-superqe run . --mode deep
+superqode qe run . --mode deep
 ```
 
 - **Duration**: ~30 minutes
@@ -160,7 +160,7 @@ superqe run . --mode deep
 
 ---
 
-## QE Roles
+## Role-Based Workflows
 
 ### Execution Roles
 
@@ -189,7 +189,7 @@ AI-powered issue discovery:
 
 | Role | Purpose |
 |------|---------|
-| `fullstack` | Senior QE comprehensive review |
+| `fullstack` | Senior validation comprehensive review |
 
 ---
 
@@ -204,7 +204,7 @@ Real-time progress and findings in the terminal.
 For CI/CD integration:
 
 ```bash
-superqe run . --jsonl
+superqode qe run . --jsonl
 ```
 
 ### JUnit XML
@@ -212,7 +212,7 @@ superqe run . --jsonl
 For test reporting integration:
 
 ```bash
-superqe run . --junit results.xml
+superqode qe run . --junit results.xml
 ```
 
 ### Web Dashboard
@@ -220,7 +220,7 @@ superqe run . --junit results.xml
 Interactive HTML report:
 
 ```bash
-superqe dashboard
+superqode qe dashboard
 ```
 
 ---
@@ -260,32 +260,32 @@ qe:
 ### Pre-Commit Check
 
 ```bash
-superqe run . --mode quick -r security_tester
+superqode qe run . --mode quick -r security_tester
 ```
 
 ### Security Audit
 
 ```bash
-superqe run . --mode deep -r security_tester
+superqode qe run . --mode deep -r security_tester
 ```
 
-### Full QE Session
+### Full Validation Session
 
 ```bash
-superqe run . --mode deep --allow-suggestions --generate
+superqode qe run . --mode deep --allow-suggestions --generate
 ```
 
 ### CI Integration
 
 ```bash
-superqe run . --mode quick --jsonl --junit results.xml
+superqode qe run . --mode quick --jsonl --junit results.xml
 ```
 
 ---
 
 ## Next Steps
 
-- [Artifacts](artifacts.md) - QE output artifacts
+- [Artifacts](artifacts.md) - validation output artifacts
 - [Test Generation](test-generation.md) - Automatic test creation
 - [Noise Filtering](noise-filtering.md) - Reduce false positives
 - [CI/CD Integration](../integration/cicd.md) - Automated quality gates

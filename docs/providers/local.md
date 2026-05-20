@@ -563,7 +563,7 @@ mlx_lm.download mlx-community/Qwen2.5-Coder-7B-4bit  # vs 8bit
 
 ### 3. Keep Server Running
 
-Start servers before QE sessions to avoid startup delays.
+Start servers before validation sessions to avoid startup delays.
 
 ### 4. Use Appropriate Context Length
 

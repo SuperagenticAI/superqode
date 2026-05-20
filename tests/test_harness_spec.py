@@ -14,6 +14,7 @@ from superqode.harness import (
     load_harness_spec,
     spec_from_headless_profile,
 )
+from superqode.patch_harness import PatchHarness
 from superqode.tools.permissions import Permission
 
 
@@ -110,6 +111,10 @@ def test_harness_spec_round_trip_preserves_core_fields():
     assert restored.agents[0].tools == ("read_file", "bash")
     assert restored.validation.enabled is True
     assert restored.validation.custom_steps[0].command == "pytest -q"
+
+
+def test_patch_harness_namespace_exports_legacy_validator():
+    assert PatchHarness.__name__ == "PatchHarness"
 
 
 @pytest.mark.parametrize("profile_name", ["build", "plan", "review", "no-tool"])

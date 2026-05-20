@@ -6,13 +6,13 @@ Integrate Model Context Protocol (MCP) servers to extend SuperQode with external
 
 ## Overview
 
-MCP (Model Context Protocol) is a standard protocol for connecting AI applications to external tools and services. SuperQode includes full MCP client support, allowing QE agents to use tools from MCP servers during quality engineering sessions.
+MCP (Model Context Protocol) is a standard protocol for connecting AI applications to external tools and services. SuperQode includes full MCP client support, allowing validation agents to use tools from MCP servers during validation and evaluation sessions.
 
 ### Capabilities
 
 - **Tool Execution**: Agents can call tools from MCP servers
 - **Resource Access**: Read files, databases, APIs via MCP resources
-- **Prompt Templates**: Use MCP prompt templates in QE workflows
+- **Prompt Templates**: Use MCP prompt templates in validation workflows
 - **Multi-Server**: Connect to multiple MCP servers simultaneously
 - **Auto-Discovery**: Tools, resources, and prompts automatically discovered on connection
 
@@ -26,7 +26,7 @@ MCP is a protocol standard (aligned with Zed editor's implementation) that enabl
 - **Resources**: Readable data sources (e.g., files, databases, configuration)
 - **Prompts**: Reusable prompt templates with arguments
 
-MCP servers expose these capabilities, and SuperQode agents can use them during QE sessions.
+MCP servers expose these capabilities, and SuperQode agents can use them during validation sessions.
 
 ---
 
@@ -246,7 +246,7 @@ When an MCP server connects, SuperQode automatically discovers:
 - **Resources**: Available resources
 - **Prompts**: Available prompt templates
 
-Tools are made available to QE agents with the naming convention:
+Tools are made available to validation agents with the naming convention:
 
 ```
 mcp_{server_id}_{tool_name}
@@ -260,7 +260,7 @@ For example, `mcp_filesystem_read_file` or `mcp_github_create_issue`.
 
 ### Agent Usage
 
-Agents automatically see and can use MCP tools during QE sessions. Tools are discovered and listed alongside built-in SuperQode tools.
+Agents automatically see and can use MCP tools during validation sessions. Tools are discovered and listed alongside built-in SuperQode tools.
 
 ### Tool Result Formatting
 
@@ -530,12 +530,12 @@ Set appropriate timeouts:
 
 ---
 
-## Integration with QE
+## Integration with validation
 
-MCP tools are automatically available to QE agents:
+MCP tools are automatically available to validation agents:
 
 1. **Tool Discovery**: Tools discovered on connection
-2. **Agent Access**: Agents can call tools during QE
+2. **Agent Access**: Agents can call tools during validation
 3. **Result Formatting**: Results formatted for agent use
 4. **Error Handling**: Errors handled gracefully
 
@@ -545,7 +545,7 @@ MCP tools are automatically available to QE agents:
 
 - [MCP Configuration](../configuration/mcp-config.md) - MCP usage and settings
 - [Configuration](../configuration/yaml-reference.md) - Config reference
-- [QE Features Index](index.md) - All QE features
+- [Validation Features Index](index.md) - All validation features
 
 ---
 

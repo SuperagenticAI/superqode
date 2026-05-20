@@ -2,7 +2,7 @@
 
 Get started with SuperQode in 5 minutes.
 
-**Safety note (OSS):** Run the open-source SuperQode/SuperQE in a safe, controlled environment (sandbox, VM, or low-risk machine). This reduces the blast radius for testing workflows and agent-driven actions.
+**Safety note (OSS):** Run the open-source SuperQode in a safe, controlled environment (sandbox, VM, or low-risk machine). This reduces the blast radius for testing workflows and agent-driven actions.
 
 ---
 
@@ -21,7 +21,7 @@ This guide covers:
 1. **Project Setup** - Initialize and configure your project
 2. **Choose Workflow** - TUI for exploration or CLI for automation
 3. **Connect to Agent** - Set up your preferred connection mode
-4. **Run First QE Session** - Start quality engineering
+4. **Run First Validation Session** - Start validation and evaluation
 
 ---
 
@@ -31,7 +31,7 @@ Navigate to your project and initialize SuperQode:
 
 ```bash
 cd /path/to/your/project
-superqe init
+superqode config init
 ```
 
 This will:
@@ -93,53 +93,53 @@ Then use TUI commands:
 **Best for:** CI/CD, batch processing, automation
 
 ```bash
-# Run QE session directly
-superqe run . --mode quick
+# Run validation session directly
+superqode qe run . --mode quick
 
 # With specific roles
-superqe run . -r security_tester -r api_tester
+superqode qe run . -r security_tester -r api_tester
 ```
 
 ---
 
-## Step 3: Run Your First QE Session
+## Step 3: Run Your First Session
 
 ### Quick Scan (60 seconds)
 
 For fast feedback during development:
 
 ```bash
-superqe run . --mode quick
+superqode qe run . --mode quick
 ```
 
-**Note:** QE sessions are run via CLI commands, not TUI commands. In the TUI, you interact directly with agents by typing natural language requests after switching to a QE role with `:qe <role>`.
+**Note:** validation sessions are run via CLI commands, not TUI commands. In the TUI, you interact directly with agents by typing natural language requests after switching to a validation role with `:qe <role>`.
 
-### Deep QE (Full Analysis)
+### Deep validation (Full Analysis)
 
 For comprehensive quality analysis:
 
 ```bash
-superqe run . --mode deep
+superqode qe run . --mode deep
 ```
 
 ---
 
 ## Step 4: View Results
 
-After a QE session completes, you'll see:
+After a validation session completes, you'll see:
 
 ### Console Output
 
 ```
 ╭─────────────────────────────────────────────────────╮
-│                 QE Session Complete                  │
+│                 Validation Session Complete                  │
 ├─────────────────────────────────────────────────────┤
 │ Duration: 45.2s                                      │
 │ Roles Run: 3 (security_tester, api_tester, fullstack)│
 │ Findings: 5 (1 critical, 2 high, 2 medium)          │
 ├─────────────────────────────────────────────────────┤
 │ Artifacts Generated:                                 │
-│   • QR: .superqode/qe-artifacts/qr/qr-2024-01-18-1a2b3c4d.json │
+│   • report: .superqode/qe-artifacts/qr/qr-2024-01-18-1a2b3c4d.json │
 ╰─────────────────────────────────────────────────────╯
 ```
 
@@ -171,7 +171,7 @@ All artifacts are saved to `.superqode/qe-artifacts/`:
 | `:connect acp <agent>` | Connect directly to ACP agent |
 | `:connect byok <provider> <model>` | Connect directly to BYOK provider |
 | `:connect local <provider> <model>` | Connect directly to local model |
-| `:qe <role>` | Switch to QE role mode (e.g., `:qe security_tester`) |
+| `:qe <role>` | Switch to validation role mode (e.g., `:qe security_tester`) |
 | `:disconnect` | Disconnect current session |
 | `:status` | Show session status |
 | `:help` | Show help |
@@ -182,10 +182,10 @@ All artifacts are saved to `.superqode/qe-artifacts/`:
 | Command | Description |
 |---------|-------------|
 | `superqode` | Launch TUI |
-| `superqe run .` | Run QE on current directory |
+| `superqode qe run .` | Run validation on current directory |
 | `superqode providers list` | List available providers |
 | `superqode agents list` | List available agents |
-| `superqe init` | Initialize configuration |
+| `superqode config init` | Initialize configuration |
 
 ---
 
@@ -194,32 +194,32 @@ All artifacts are saved to `.superqode/qe-artifacts/`:
 ### Example 1: Security Scan
 
 ```bash
-# Run security-focused QE
-superqe run . -r security_tester --mode quick
+# Run security-focused validation
+superqode qe run . -r security_tester --mode quick
 ```
 
 ### Example 2: API Testing
 
 ```bash
 # Test API endpoints
-superqe run . -r api_tester -r unit_tester
+superqode qe run . -r api_tester -r unit_tester
 ```
 
-### Example 3: Full QE with Suggestions (Enterprise)
+### Example 3: Full validation with Suggestions (Enterprise)
 
 ```bash
-# Deep QE with fix suggestions (sandbox mode)
-superqe run . --mode deep --allow-suggestions --generate
+# Deep validation with fix suggestions (sandbox mode)
+superqode qe run . --mode deep --allow-suggestions --generate
 ```
 
 ### Example 4: CI-Friendly Output (Enterprise)
 
 ```bash
 # JSONL output for CI/CD
-superqe run . --mode quick --jsonl
+superqode qe run . --mode quick --jsonl
 
 # JUnit XML for test reporting
-superqe run . --mode quick --junit results.xml
+superqode qe run . --mode quick --junit results.xml
 ```
 
 ---
@@ -265,10 +265,10 @@ Each finding includes a confidence score (0.0 - 1.0):
 
 Now that you've completed the quick start:
 
-1. **[Your First QE Session](first-session.md)** - Detailed walkthrough
+1. **[Your First Session](first-session.md)** - Detailed walkthrough
 2. **[Configuration Guide](configuration.md)** - Customize SuperQode
 3. **[Understanding Modes](../concepts/modes.md)** - Learn about BYOK, ACP, Local
-4. **[QE Roles](../concepts/roles.md)** - Understand testing roles
+4. **[Role-Based Workflows](../concepts/roles.md)** - Understand testing roles
 5. **[CI/CD Integration](../integration/cicd.md)** - Add to your pipeline
 
 ---

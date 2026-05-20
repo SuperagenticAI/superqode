@@ -68,6 +68,146 @@ class TestCLIHelp:
         assert "superqode" in payload["next_steps"][0]
 
 
+class TestHarnessCommand:
+    """Tests for HarnessSpec CLI commands."""
+
+    def test_harness_help(self, runner):
+        result = runner.invoke(cli_main, ["harness", "--help"])
+
+        assert result.exit_code == 0
+        assert "list-backends" in result.output
+        assert "list-templates" in result.output
+        assert "validate" in result.output
+        assert "inspect" in result.output
+        assert "run" in result.output
+
+    def test_harness_list_backends_json(self, runner):
+        result = runner.invoke(cli_main, ["harness", "list-backends", "--json"])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        by_backend = {item["backend"]: item for item in payload}
+        assert by_backend["builtin"]["availability"] == "available"
+        assert by_backend["openai-agents"]["supports_approvals"] is True
+        assert "install_hint" in by_backend["deepagents"]
+
+    def test_harness_list_templates_json(self, runner):
+        result = runner.invoke(cli_main, ["harness", "list-templates", "--json"])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        names = {item["name"] for item in payload}
+        assert {"coding", "no-tool", "gemma4-coding"} <= names
+
+    def test_harness_init_and_validate(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(
+                cli_main,
+                ["harness", "init", "demo", "--template", "no-tool", "--output", "harness.yaml"],
+            )
+
+            assert result.exit_code == 0
+            assert Path("harness.yaml").exists()
+            assert Path(".agents/skills").is_dir()
+
+            validate = runner.invoke(cli_main, ["harness", "validate", "harness.yaml", "--json"])
+            assert validate.exit_code == 0
+            payload = json.loads(validate.output)
+            assert payload["valid"] is True
+            assert payload["name"] == "demo"
+            assert payload["flavor"] == "no_tool"
+
+            schema = runner.invoke(cli_main, ["harness", "validate", "harness.yaml", "--schema"])
+            assert schema.exit_code == 0
+            schema_payload = json.loads(schema.output)
+            assert schema_payload["title"] == "SuperQode HarnessSpec"
+            assert "flavor" in schema_payload["properties"]
+
+    def test_harness_inspect_json_reports_backend_capabilities(self, runner):
+        with runner.isolated_filesystem():
+            init = runner.invoke(
+                cli_main,
+                ["harness", "init", "demo", "--template", "no-tool", "--output", "harness.yaml"],
+            )
+            assert init.exit_code == 0
+
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "inspect",
+                    "--spec",
+                    "harness.yaml",
+                    "--runtime",
+                    "deepagents",
+                    "--json",
+                ],
+            )
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["name"] == "demo"
+            assert payload["backend"]["ok"] is False
+            assert payload["backend"]["issues"][0]["code"] == "no_tool_unsupported"
+            assert payload["backend"]["capabilities"]["supports_no_tool"] is False
+
+    def test_harness_run_json_uses_kernel(self, runner, monkeypatch):
+        class FakeRuntime:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            async def run(self, prompt):
+                return AgentResponse(
+                    content=f"ran:{prompt}",
+                    messages=[],
+                    tool_calls_made=0,
+                    iterations=1,
+                    stopped_reason="complete",
+                )
+
+            async def run_streaming(self, prompt):
+                yield prompt
+
+            def cancel(self):
+                pass
+
+            def reset_cancellation(self):
+                pass
+
+        monkeypatch.setattr(
+            "superqode.harness.backends.runtime.create_runtime",
+            lambda name, **kwargs: FakeRuntime(**kwargs),
+        )
+        with runner.isolated_filesystem():
+            init = runner.invoke(
+                cli_main,
+                ["harness", "init", "demo", "--template", "no-tool", "--output", "harness.yaml"],
+            )
+            assert init.exit_code == 0
+
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "run",
+                    "--spec",
+                    "harness.yaml",
+                    "--prompt",
+                    "hello",
+                    "--provider",
+                    "test",
+                    "--model",
+                    "model",
+                    "--json",
+                ],
+            )
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["content"] == "ran:hello"
+            assert payload["harness"] == "demo"
+
+
 class TestAgentsCommand:
     """Tests for agents commands."""
 

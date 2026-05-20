@@ -1,6 +1,6 @@
 # Memory & Learning System
 
-SuperQode learns from your feedback to improve over time. The memory system stores project-specific learnings that persist across QE sessions.
+SuperQode learns from your feedback to improve over time. The memory system stores project-specific learnings that persist across validation sessions.
 
 ---
 
@@ -12,7 +12,7 @@ The Memory & Learning System enables SuperQode to:
 - **Learn from feedback**: Improve based on your corrections
 - **Suppress false positives**: Automatically filter known false positives
 - **Score file risk**: Identify high-risk files based on history
-- **Track role effectiveness**: Measure which QE roles work best for your project
+- **Track role effectiveness**: Measure which validation roles work best for your project
 
 ---
 
@@ -101,7 +101,7 @@ Risk scores per file based on finding history:
 
 ### Role Metrics
 
-Effectiveness tracking per QE role:
+Effectiveness tracking per validation role:
 
 ```python
 {
@@ -121,7 +121,7 @@ Effectiveness tracking per QE role:
 ### Mark Finding as Valid
 
 ```bash
-superqe feedback finding-001 --valid
+superqode qe feedback finding-001 --valid
 ```
 
 Updates:
@@ -132,7 +132,7 @@ Updates:
 ### Mark as False Positive
 
 ```bash
-superqe feedback finding-002 --false-positive -r "Intentional for testing"
+superqode qe feedback finding-002 --false-positive -r "Intentional for testing"
 ```
 
 Creates:
@@ -143,7 +143,7 @@ Creates:
 ### Mark as Fixed
 
 ```bash
-superqe feedback finding-003 --fixed -r "Applied suggested patch"
+superqode qe feedback finding-003 --fixed -r "Applied suggested patch"
 ```
 
 Records:
@@ -267,7 +267,7 @@ store.save()
 
 ```bash
 # First time: mark as false positive
-superqe feedback finding-001 --false-positive -r "Known pattern"
+superqode qe feedback finding-001 --false-positive -r "Known pattern"
 
 # Future sessions: automatically suppressed
 ```
@@ -311,9 +311,9 @@ print(f"Confirmed: {metrics.confirmed_findings}")
 ### 1. Provide Regular Feedback
 
 ```bash
-# After each QE session
-superqe feedback finding-001 --valid
-superqe feedback finding-002 --false-positive -r "reason"
+# After each validation session
+superqode qe feedback finding-001 --valid
+superqode qe feedback finding-002 --false-positive -r "reason"
 ```
 
 ### 2. Share Team Memory
@@ -330,7 +330,7 @@ git commit -m "Update team memory"
 Periodically review suppressions:
 
 ```bash
-superqe suppressions
+superqode qe suppressions
 ```
 
 ### 4. Monitor Role Metrics
@@ -363,14 +363,14 @@ Check which roles are most effective:
 
 **Ensure feedback collected**:
 ```bash
-superqe feedback finding-001 --valid
+superqode qe feedback finding-001 --valid
 ```
 
 ---
 
 ## Related Features
 
-- [QE Feedback Commands](../cli-reference/qe-commands.md) - Feedback workflow
+- [validation Feedback Commands](../cli-reference/qe-commands.md) - Feedback workflow
 - [Noise Filtering](../qe-features/noise-filtering.md) - Filtering false positives
 
 ---

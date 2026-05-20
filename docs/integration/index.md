@@ -62,9 +62,9 @@ Add quality checks before commits:
 ```bash
 # .git/hooks/pre-commit
 #!/bin/bash
-superqe run . --mode quick -r security_tester
+superqode qe run . --mode quick -r security_tester
 if [ $? -ne 0 ]; then
-    echo "QE found issues. Fix them before committing."
+    echo "validation found issues. Fix them before committing."
     exit 1
 fi
 ```
@@ -73,7 +73,7 @@ fi
 
 ```yaml
 # .github/workflows/qe.yml
-name: Quality Engineering
+name: validation and evaluation
 on: [push, pull_request]
 
 jobs:
@@ -85,7 +85,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install superqode
-      - run: superqe run . --mode quick --json
+      - run: superqode qe run . --mode quick --json
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
@@ -110,7 +110,7 @@ SuperQode supports multiple output formats for integration:
 ### Block on Critical Issues
 
 ```bash
-superqe run . --mode quick
+superqode qe run . --mode quick
 
 # Check exit code
 if [ $? -eq 1 ]; then
@@ -119,7 +119,7 @@ if [ $? -eq 1 ]; then
 fi
 ```
 
-### Parse QR for Custom Gates
+### Parse report for Custom Gates
 
 ```bash
 CRITICAL=$(cat .superqode/qe-artifacts/qr-*.json | jq '.summary.by_severity.critical')
@@ -168,7 +168,7 @@ cache:
 
 ## Artifacts
 
-Preserve QE artifacts in CI:
+Preserve validation artifacts in CI:
 
 ### GitHub Actions
 
@@ -197,10 +197,10 @@ artifacts:
 For fast feedback in PRs:
 
 ```bash
-superqe run . --mode quick
+superqode qe run . --mode quick
 ```
 
-### 2. Deep QE on Schedule
+### 2. Deep validation on Schedule
 
 Run comprehensive analysis nightly:
 
@@ -212,7 +212,7 @@ jobs:
   deep-qe:
     runs-on: ubuntu-latest
     steps:
-      - run: superqe run . --mode deep
+      - run: superqode qe run . --mode deep
 ```
 
 ### 3. Security Focus on PRs
@@ -220,7 +220,7 @@ jobs:
 Focus on security for PRs:
 
 ```bash
-superqe run . --mode quick -r security_tester
+superqode qe run . --mode quick -r security_tester
 ```
 
 ### 4. Report to PR Comments
@@ -235,7 +235,7 @@ Add findings as PR comments (GitHub Actions):
       const fs = require('fs');
       const path = require('path');
 
-      // Pick the most recent QR JSON artifact.
+      // Pick the most recent report JSON artifact.
       const qrDir = '.superqode/qe-artifacts/qr';
       const candidates = fs.readdirSync(qrDir)
         .filter((f) => f.startsWith('qr-') && f.endsWith('.json'))
@@ -243,7 +243,7 @@ Add findings as PR comments (GitHub Actions):
         .sort((a, b) => b.mtime - a.mtime);
 
       if (!candidates.length) {
-        throw new Error(`No QR JSON artifacts found in ${qrDir}. Did the QE job generate artifacts?`);
+        throw new Error(`No report JSON artifacts found in ${qrDir}. Did the validation job generate artifacts?`);
       }
 
       const qr = JSON.parse(fs.readFileSync(path.join(qrDir, candidates[0].f), 'utf8'));

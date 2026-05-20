@@ -81,7 +81,7 @@ superqode serve lsp --project ./myproject
 
 1. Install the SuperQode VSCode extension
 2. The extension automatically connects to the LSP server
-3. QE findings appear as diagnostics in the Problems panel
+3. validation findings appear as diagnostics in the Problems panel
 
 **Configuration**: The extension launches `superqode serve lsp` automatically.
 
@@ -251,7 +251,7 @@ superqode serve status
 
 ### LSP Server Features
 
-- **Diagnostics**: QE findings appear as editor diagnostics
+- **Diagnostics**: validation findings appear as editor diagnostics
 - **Code Actions**: Quick fixes and suggestions
 - **Documentation**: Hover information for findings
 - **Workspace**: Full project context awareness
@@ -311,7 +311,7 @@ superqode serve web -h 0.0.0.0
 **Check**:
 1. LSP server is running (`superqode serve status`)
 2. Editor LSP client is configured correctly
-3. Project has QE findings (run `superqe run .` first)
+3. Project has validation findings (run `superqode qe run .` first)
 
 ---
 
@@ -338,12 +338,12 @@ superqode serve web -h 0.0.0.0
 
 ## Related Commands
 
-- `superqe run` - Generate QE findings for LSP diagnostics
-- `superqe dashboard` - Alternative web interface for QRs
+- `superqode qe run` - Generate validation findings for LSP diagnostics
+- `superqode qe dashboard` - Alternative web interface for reports
 
 ---
 
 ## Next Steps
 
 - [IDE Integration](../integration/ide.md) - Detailed IDE setup guides
-- [QE Commands](qe-commands.md) - Quality engineering workflows
+- [Validation Commands](qe-commands.md) - Quality engineering workflows

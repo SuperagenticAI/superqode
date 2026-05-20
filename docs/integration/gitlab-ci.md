@@ -11,7 +11,7 @@ Note: JSONL streaming and JUnit output are enterprise features. OSS can use `--j
 SuperQode integrates seamlessly with GitLab CI/CD through:
 
 - **JUnit XML reports**: Native test reporting in GitLab
-- **Artifacts**: Preserve QE results and QRs
+- **Artifacts**: Preserve validation results and reports
 - **Exit codes**: Simple pass/fail for quality gates
 - **JSONL streaming**: Real-time event processing
 
@@ -33,7 +33,7 @@ qe:
     ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY
   script:
     - pip install superqode
-    - superqe run . --mode quick --junit results.xml
+    - superqode qe run . --mode quick --junit results.xml
   artifacts:
     reports:
       junit: results.xml
@@ -62,7 +62,7 @@ qe-quick:
     - pip install --upgrade pip
     - pip install superqode
   script:
-    - superqe run . --mode quick --junit results.xml --jsonl
+    - superqode qe run . --mode quick --junit results.xml --jsonl
   artifacts:
     reports:
       junit: results.xml
@@ -76,7 +76,7 @@ qe-quick:
     - branches
 ```
 
-### Deep QE on Schedule
+### Deep validation on Schedule
 
 ```yaml
 # .gitlab-ci.yml
@@ -89,7 +89,7 @@ qe-deep:
     - pip install --upgrade pip
     - pip install superqode
   script:
-    - superqe run . --mode deep --junit results.xml --allow-suggestions
+    - superqode qe run . --mode deep --junit results.xml --allow-suggestions
   artifacts:
     reports:
       junit: results.xml
@@ -114,7 +114,7 @@ qe-security:
     ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY
   script:
     - pip install superqode
-    - superqe run . --mode quick -r security_tester --junit security-results.xml
+    - superqode qe run . --mode quick -r security_tester --junit security-results.xml
   artifacts:
     reports:
       junit: security-results.xml
@@ -156,7 +156,7 @@ quality-engineering:
     ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY
   script:
     - pip install superqode
-    - superqe run . --mode quick --junit qe-results.xml
+    - superqode qe run . --mode quick --junit qe-results.xml
   artifacts:
     reports:
       junit: qe-results.xml
@@ -208,7 +208,7 @@ qe-gate:
   image: python:3.12
   script:
     - pip install superqode jq
-    - superqe run . --mode quick --json > results.json
+    - superqode qe run . --mode quick --json > results.json
     - |
       CRITICAL=$(jq '.summary.by_severity.critical' results.json)
       if [ "$CRITICAL" -gt 0 ]; then
@@ -226,7 +226,7 @@ qe-custom:
   stage: quality
   script:
     - pip install superqode jq
-    - superqe run . --mode quick --json > results.json
+    - superqode qe run . --mode quick --json > results.json
     - |
       CRITICAL=$(jq '.summary.by_severity.critical' results.json)
       HIGH=$(jq '.summary.by_severity.high' results.json)
@@ -248,7 +248,7 @@ qe-custom:
 
 ## Artifacts
 
-### Preserve QE Artifacts
+### Preserve validation Artifacts
 
 ```yaml
 qe:
@@ -309,12 +309,12 @@ qe:
 qe:
   script:
     - pip install superqode jq curl
-    - superqe run . --mode quick --json > results.json
+    - superqode qe run . --mode quick --json > results.json
     - |
       CRITICAL=$(jq '.summary.by_severity.critical' results.json)
       if [ "$CRITICAL" -gt 0 ]; then
         curl -X POST -H 'Content-type: application/json' \
-          --data "{\"text\":\"🚨 QE found $CRITICAL critical issues in $CI_PROJECT_NAME\"}" \
+          --data "{\"text\":\"🚨 validation found $CRITICAL critical issues in $CI_PROJECT_NAME\"}" \
           $SLACK_WEBHOOK_URL
       fi
   variables:
@@ -340,7 +340,7 @@ qe:
 qe-security:
   extends: .qe-base
   script:
-    - superqe run . --mode quick -r security_tester --junit security.xml
+    - superqode qe run . --mode quick -r security_tester --junit security.xml
   artifacts:
     reports:
       junit: security.xml
@@ -348,7 +348,7 @@ qe-security:
 qe-api:
   extends: .qe-base
   script:
-    - superqe run . --mode quick -r api_tester --junit api.xml
+    - superqode qe run . --mode quick -r api_tester --junit api.xml
   artifacts:
     reports:
       junit: api.xml
@@ -409,13 +409,13 @@ qe-staging:
   stage: quality
   environment: staging
   script:
-    - superqe run . --mode quick
+    - superqode qe run . --mode quick
 
 qe-production:
   stage: quality
   environment: production
   script:
-    - superqe run . --mode deep
+    - superqode qe run . --mode deep
   only:
     - main
 ```
@@ -430,7 +430,7 @@ qe-production:
 qe:
   timeout: 30m  # Maximum 30 minutes
   script:
-    - superqe run . --mode deep --timeout 1800
+    - superqode qe run . --mode deep --timeout 1800
 ```
 
 ### Resource Allocation
@@ -452,8 +452,8 @@ qe:
 qe:
   allow_failure: true
   script:
-    - superqe run . --mode quick
-  # Job won't block pipeline if QE fails
+    - superqode qe run . --mode quick
+  # Job won't block pipeline if validation fails
 ```
 
 ### Always Upload Artifacts
@@ -461,7 +461,7 @@ qe:
 ```yaml
 qe:
   script:
-    - superqe run . --mode quick --junit results.xml || true
+    - superqode qe run . --mode quick --junit results.xml || true
   artifacts:
     when: always  # Upload even if job fails
     paths:
@@ -479,7 +479,7 @@ qe:
   script:
     - pip install superqode jq
     - |
-      superqe run . --mode quick --jsonl | tee events.jsonl | while read event; do
+      superqode qe run . --mode quick --jsonl | tee events.jsonl | while read event; do
         TYPE=$(echo $event | jq -r '.type')
         if [ "$TYPE" = "finding.detected" ]; then
           SEVERITY=$(echo $event | jq -r '.severity')
@@ -496,7 +496,7 @@ qe:
 
 ## Integration with GitLab Pages
 
-### Publish QE Reports
+### Publish validation Reports
 
 ```yaml
 pages:
@@ -523,12 +523,12 @@ pages:
 qe-quick:
   timeout: 10m
   script:
-    - superqe run . --mode quick
+    - superqode qe run . --mode quick
 
 qe-deep:
   timeout: 60m
   script:
-    - superqe run . --mode deep
+    - superqode qe run . --mode deep
 ```
 
 ### 2. Cache Dependencies
@@ -560,7 +560,7 @@ Always mark API keys as **Protected** and **Masked** in GitLab settings.
 
 ### Job Timeouts
 
-**Problem**: QE job times out
+**Problem**: validation job times out
 
 **Solution**: Increase timeout or use quick mode:
 
@@ -568,7 +568,7 @@ Always mark API keys as **Protected** and **Masked** in GitLab settings.
 qe:
   timeout: 30m
   script:
-    - superqe run . --mode quick
+    - superqode qe run . --mode quick
 ```
 
 ### Missing Artifacts

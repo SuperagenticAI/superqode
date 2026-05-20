@@ -2,17 +2,24 @@
 
 import sys
 import types
+from dataclasses import replace
 
 import pytest
 
 from superqode.agent.loop import AgentResponse
 from superqode.harness import (
+    ADKHarnessBackend,
     DeepAgentsHarnessBackend,
     ExecutionPolicySpec,
     HarnessBackendRequest,
+    ModelPolicySpec,
+    OpenAIAgentsHarnessBackend,
+    PydanticAIHarnessBackend,
     RuntimeHarnessBackend,
+    backend_capabilities,
     create_harness_backend,
     get_harness_template,
+    inspect_harness_backend,
     known_harness_backend_names,
 )
 
@@ -35,6 +42,20 @@ class FakeRuntime:
         )
 
 
+class FakeApprovalRuntime(FakeRuntime):
+    async def run(self, prompt: str) -> AgentResponse:
+        return AgentResponse(
+            content="",
+            messages=[],
+            tool_calls_made=0,
+            iterations=1,
+            stopped_reason="needs_approval",
+        )
+
+    def get_pending_approvals(self):
+        return [{"index": 0, "tool_name": "bash", "arguments": {"command": "ls"}}]
+
+
 def test_known_harness_backends_include_current_runtime_backends():
     names = known_harness_backend_names()
 
@@ -42,6 +63,7 @@ def test_known_harness_backends_include_current_runtime_backends():
     assert "adk" in names
     assert "openai-agents" in names
     assert "deepagents" in names
+    assert "pydanticai" in names
 
 
 def test_create_harness_backend_returns_runtime_adapter():
@@ -58,9 +80,71 @@ def test_create_harness_backend_returns_deepagents_adapter():
     assert backend.name == "deepagents"
 
 
+def test_create_harness_backend_returns_direct_runtime_adapters():
+    assert isinstance(create_harness_backend("adk"), ADKHarnessBackend)
+    assert isinstance(create_harness_backend("openai-agents"), OpenAIAgentsHarnessBackend)
+    assert isinstance(create_harness_backend("pydanticai"), PydanticAIHarnessBackend)
+
+
 def test_create_harness_backend_rejects_unknown():
     with pytest.raises(ValueError, match="Unknown harness backend"):
         create_harness_backend("unknown-backend")
+
+
+def test_backend_capabilities_are_advertised():
+    assert create_harness_backend("builtin").capabilities.supports_no_tool is True
+    assert create_harness_backend("openai-agents").capabilities.supports_approvals is True
+    assert create_harness_backend("deepagents").capabilities.supports_no_tool is False
+    assert create_harness_backend("pydanticai").capabilities.supports_coding is True
+
+
+def test_backend_capabilities_lookup_reports_availability():
+    capabilities = backend_capabilities("builtin")
+
+    assert capabilities.backend == "builtin"
+    assert capabilities.availability == "available"
+    assert capabilities.install_hint is None
+
+
+def test_inspect_harness_backend_flags_unsupported_no_tool():
+    inspection = inspect_harness_backend("deepagents", get_harness_template("no-tool"))
+
+    assert inspection.ok is False
+    assert inspection.issues[0].code == "no_tool_unsupported"
+
+
+def test_inspect_harness_backend_accepts_pydanticai_coding():
+    inspection = inspect_harness_backend("pydanticai", get_harness_template("coding"))
+
+    assert inspection.ok is True
+    assert inspection.capabilities.supports_coding is True
+
+
+def test_inspect_harness_backend_accepts_builtin_no_tool():
+    inspection = inspect_harness_backend("builtin", get_harness_template("no-tool"))
+
+    assert inspection.ok is True
+    assert inspection.capabilities.supports_no_tool is True
+    assert inspection.to_dict()["capabilities"]["supports_streaming"] is True
+
+
+def test_inspect_harness_backend_warns_for_unverified_model_policy():
+    spec = replace(
+        get_harness_template("coding"),
+        model_policy=ModelPolicySpec(
+            primary="gpt-5.4",
+            reasoning="high",
+            temperature=0.2,
+            config={"max_iterations": 7},
+        ),
+    )
+
+    inspection = inspect_harness_backend("deepagents", spec)
+    codes = {issue.code for issue in inspection.issues}
+
+    assert "reasoning_policy_unverified" in codes
+    assert "temperature_policy_unverified" in codes
+    assert "max_iterations_policy_unverified" in codes
 
 
 @pytest.mark.asyncio
@@ -90,6 +174,31 @@ async def test_runtime_harness_backend_clamps_no_tool_registry(monkeypatch, tmp_
     assert result.response.content == "think|tools=0|enabled=False"
     assert created["kwargs"]["tools"].list() == []
     assert created["kwargs"]["config"].tools_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_runtime_harness_backend_surfaces_pending_approvals(monkeypatch, tmp_path):
+    def fake_create_runtime(name, **kwargs):
+        return FakeApprovalRuntime(**kwargs)
+
+    monkeypatch.setattr("superqode.harness.backends.runtime.create_runtime", fake_create_runtime)
+    backend = RuntimeHarnessBackend("openai-agents")
+    request = HarnessBackendRequest(
+        spec=get_harness_template("coding"),
+        prompt="run shell",
+        provider="openai",
+        model="gpt-5",
+        working_directory=tmp_path,
+        session_id="s",
+    )
+
+    result = await backend.run(request)
+
+    assert result.response.stopped_reason == "needs_approval"
+    assert result.metadata["pending_approvals"] == [
+        {"index": 0, "tool_name": "bash", "arguments": {"command": "ls"}}
+    ]
+    assert isinstance(result.metadata["pending_runtime"], FakeApprovalRuntime)
 
 
 @pytest.mark.asyncio
@@ -199,3 +308,31 @@ async def test_deepagents_backend_maps_coding_spec_to_create_deep_agent(monkeypa
     assert captured["create_deep_agent"]["skills"] is None
     assert captured["create_deep_agent"]["memory"] is None
     assert captured["payload"]["messages"][0]["content"] == "implement"
+
+
+@pytest.mark.asyncio
+async def test_pydanticai_backend_delegates_to_runtime(monkeypatch, tmp_path):
+    created = {}
+
+    def fake_create_runtime(name, **kwargs):
+        created["name"] = name
+        created["kwargs"] = kwargs
+        return FakeRuntime(**kwargs)
+
+    monkeypatch.setattr("superqode.harness.backends.runtime.create_runtime", fake_create_runtime)
+    backend = PydanticAIHarnessBackend()
+    request = HarnessBackendRequest(
+        spec=get_harness_template("coding"),
+        prompt="code",
+        provider="openai",
+        model="gpt-5",
+        working_directory=tmp_path,
+        session_id="s",
+    )
+
+    result = await backend.run(request)
+
+    assert created["name"] == "pydanticai"
+    assert result.backend == "pydanticai"
+    assert result.runtime == "pydanticai"
+    assert result.response.content.startswith("code|tools=")

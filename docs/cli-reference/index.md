@@ -1,14 +1,13 @@
 # CLI Reference
 
-SuperQE provides the automation CLI for quality engineering tasks. SuperQode focuses on the developer TUI and includes helper commands for agents, providers, and configuration. This reference documents the available commands, options, and usage patterns.
+SuperQode provides a harness-first CLI for coding sessions, runtime management, provider setup, validation workflows, agents, and configuration. This reference documents the available commands, options, and usage patterns.
 
 ---
 
 ## Command Structure
 
 ```bash
-superqe [OPTIONS] COMMAND [ARGS]...
-superqe advanced [OPTIONS] COMMAND [ARGS]...
+superqode qe [OPTIONS] COMMAND [ARGS]...
 superqode [OPTIONS] COMMAND [ARGS]...
 ```
 
@@ -16,8 +15,8 @@ superqode [OPTIONS] COMMAND [ARGS]...
 
 | Option | CLI | Description |
 |--------|-----|-------------|
-| `--version` | superqe, superqode | Show version and exit |
-| `--help` | superqe, superqode | Show help message and exit |
+| `--version` | superqode qe, superqode | Show version and exit |
+| `--help` | superqode qe, superqode | Show help message and exit |
 | `--tui` | superqode | Force the Textual TUI (default) |
 | `-p`, `--print` | superqode | Run one headless coding task and print the response |
 | `--mode json` | superqode | Run one headless task and emit structured JSON |
@@ -134,21 +133,13 @@ superqode sandbox run e2b -- "pytest -q"
 
 <div class="grid cards" markdown>
 
--   **QE Commands (superqe)**
+-   **Validation Commands (superqode qe)**
 
     ---
 
-    Quality engineering commands for running QE sessions, viewing reports, and managing artifacts.
+    Quality engineering commands for running validation sessions, viewing reports, and managing artifacts.
 
-    [:octicons-arrow-right-24: QE Commands](qe-commands.md)
-
--   **SuperQE Advanced (superqe advanced)**
-
-    ---
-
-    Advanced quality engineering with CodeOptiX integration - AI-powered evaluation capabilities.
-
-    [:octicons-arrow-right-24: SuperQE Commands](superqe-commands.md)
+    [:octicons-arrow-right-24: Validation Commands](qe-commands.md)
 
 -   **Config Commands (superqode config)**
 
@@ -170,7 +161,7 @@ superqode sandbox run e2b -- "pytest -q"
 
     ---
 
-    Commands for reviewing and applying verified fix suggestions from QE sessions.
+    Commands for reviewing and applying verified fix suggestions from validation sessions.
 
     [:octicons-arrow-right-24: Suggestion Commands](suggestion-commands.md)
 
@@ -220,38 +211,38 @@ superqode sandbox run e2b -- "pytest -q"
 
 ## Quick Command Reference
 
-### QE Commands
+### Validation Commands
 
 | Command | Description |
 |---------|-------------|
-| `superqe run .` | Run QE session on current directory |
-| `superqe run . --mode quick` | Quick 60-second scan |
-| `superqe run . --mode deep` | Deep 30-minute analysis |
-| `superqe run . -r security_tester` | Run specific role |
-| `superqe roles` | List available QE roles |
-| `superqe status` | Show workspace status |
-| `superqe artifacts` | List QE artifacts |
-| `superqe report` | View latest QR |
-| `superqe logs` | View agent work logs |
-| `superqe dashboard` | Open QR in web browser |
-| `superqe feedback` | Provide feedback on findings |
-| `superqe suppressions` | Manage finding suppressions |
+| `superqode qe run .` | Run validation session on current directory |
+| `superqode qe run . --mode quick` | Quick 60-second scan |
+| `superqode qe run . --mode deep` | Deep 30-minute analysis |
+| `superqode qe run . -r security_tester` | Run specific role |
+| `superqode qe roles` | List available validation roles |
+| `superqode qe status` | Show workspace status |
+| `superqode qe artifacts` | List validation artifacts |
+| `superqode qe report` | View latest report |
+| `superqode qe logs` | View agent work logs |
+| `superqode qe dashboard` | Open report in web browser |
+| `superqode qe feedback` | Provide feedback on findings |
+| `superqode qe suppressions` | Manage finding suppressions |
 
-### SuperQE Advanced Commands
+### Validation Commands
 
 | Command | Description |
 |---------|-------------|
-| `superqe advanced run .` | Enhanced evaluation with CodeOptiX |
-| `superqe advanced run . --behaviors security-vulnerabilities` | Security-focused SuperQE |
-| `superqe advanced behaviors` | List SuperQE enhanced behaviors |
-| `superqe advanced agent-eval . --agents claude-code,codex` | Compare AI agents |
-| `superqe advanced scenarios generate . --behavior security` | Generate Bloom scenarios |
+| `superqode qe run . --mode quick` | Fast validation pass |
+| `superqode qe run . --mode deep` | Broader release-readiness pass |
+| `superqode qe run . -r security_tester` | Focused security validation |
+| `superqode qe roles` | List validation roles |
+| `superqode qe artifacts` | List validation artifacts |
 
 ### Config Commands
 
 | Command | Description |
 |---------|-------------|
-| `superqe init` | Create `superqode.yaml` in the current directory (recommended) |
+| `superqode config init` | Create `superqode.yaml` in the current directory (recommended) |
 | `superqode config init --force` | Initialize config (overwrite if present) |
 | `superqode config list-modes` | List configured modes and roles |
 | `superqode config set-model MODE.ROLE MODEL` | Set model for a mode/role |
@@ -289,9 +280,7 @@ When running the interactive TUI (`superqode`), prefix commands with `:`:
 | `:connect acp opencode` | Connect directly to ACP agent |
 | `:connect byok <provider> <model>` | Connect directly to BYOK provider |
 | `:connect local <provider> <model>` | Connect directly to local model |
-| `:qe <role>` | Switch to QE role mode (e.g., `:qe security_tester`) |
-| `:superqe run . --behaviors security` | Run SuperQE enhanced evaluation |
-| `:superqe behaviors` | List SuperQE enhanced behaviors |
+| `:qe <role>` | Switch to validation role mode (e.g., `:qe security_tester`) |
 | `:disconnect` | Disconnect current session |
 | `:status` | Show session status |
 | `:help` | Show help |
@@ -329,8 +318,8 @@ When running the interactive TUI (`superqode`), prefix commands with `:`:
 
 For detailed documentation of each command group:
 
-- [QE Commands](qe-commands.md) - Quality engineering operations
-- [SuperQE Commands](superqe-commands.md) - Advanced quality engineering with CodeOptiX
+- [Validation Commands](qe-commands.md) - Quality engineering operations
+- [Validation Commands](advanced-validation-commands.md) - Validation workflows and release evidence
 - [Config Commands](config-commands.md) - Configuration management
 - [Provider Commands](provider-commands.md) - Provider management
 - [Suggestion Commands](suggestion-commands.md) - Fix suggestion handling

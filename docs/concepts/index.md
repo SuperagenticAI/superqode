@@ -1,6 +1,6 @@
 # Core Concepts
 
-Understanding SuperQode's core concepts is essential for effective quality engineering. This section explains the fundamental ideas that power SuperQode.
+Understanding SuperQode's core concepts is essential for effective validation and evaluation. This section explains the fundamental ideas that power SuperQode.
 
 ---
 
@@ -32,7 +32,7 @@ Understanding SuperQode's core concepts is essential for effective quality engin
 
     [:octicons-arrow-right-24: Learn about workspaces](workspace.md)
 
--   **QE Roles**
+-   **Role-Based Workflows**
 
     ---
 
@@ -40,13 +40,13 @@ Understanding SuperQode's core concepts is essential for effective quality engin
 
     [:octicons-arrow-right-24: Explore roles](roles.md)
 
--   **Quality Reports**
+-   **Validation Reports**
 
     ---
 
-    Learn about QRs - research-grade forensic reports with evidence and recommendations.
+    Learn about reports - research-grade forensic reports with evidence and recommendations.
 
-    [:octicons-arrow-right-24: Understand QRs](qr.md)
+    [:octicons-arrow-right-24: Understand reports](qr.md)
 
 -   **Allow Suggestions**
 
@@ -56,13 +56,13 @@ Understanding SuperQode's core concepts is essential for effective quality engin
 
     [:octicons-arrow-right-24: Learn about suggestions](suggestions.md)
 
--   **What is SuperQE?**
+-   **Release Validation**
 
     ---
 
-    Understand SuperQE (Agentic Quality Engineering) and how it relates to SuperQode.
+    Understand validation workflows and how they relate to the SuperQode harness.
 
-    [:octicons-arrow-right-24: Learn about SuperQE](superqe.md)
+    [:octicons-arrow-right-24: Learn about validation](release-validation.md)
 
 </div>
 
@@ -83,7 +83,7 @@ All testing happens in isolated ephemeral workspaces. Your production code is **
 │                                                              │
 │   Original Code        →        Snapshot Created            │
 │         ↓                              ↓                     │
-│   QE Sandbox           ←        Agents Test Freely          │
+│   validation Sandbox           ←        Agents Test Freely          │
 │         ↓                              ↓                     │
 │   Session Ends         →        Changes Reverted            │
 │         ↓                              ↓                     │
@@ -111,7 +111,7 @@ SuperQode **suggests**, never **applies**:
 
 ### 4. Evidence-Based Reporting
 
-QRs are research-grade forensic reports:
+reports are research-grade forensic reports:
 
 - Every finding includes reproduction steps
 - Evidence is collected and documented
@@ -143,7 +143,7 @@ graph TB
     end
 
     subgraph "Output Layer"
-        QR[Quality Report]
+        report[Quality Report]
         PATCHES[Suggested Patches]
         TESTS[Generated Tests]
     end
@@ -158,12 +158,12 @@ graph TB
     SANDBOX --> HEUR
     SANDBOX --> REVERT
 
-    EXEC --> QR
-    DETECT --> QR
-    HEUR --> QR
+    EXEC --> report
+    DETECT --> report
+    HEUR --> report
 
-    QR --> PATCHES
-    QR --> TESTS
+    report --> PATCHES
+    report --> TESTS
 ```
 
 ---
@@ -174,12 +174,12 @@ graph TB
 |------|------------|
 | **BYOK** | Bring Your Own Key - Direct LLM API calls using your API keys |
 | **ACP** | Agent Client Protocol - Full coding agent integration |
-| **QE** | Quality Engineering - The process of ensuring software quality |
-| **QR** | Quality Report - Forensic quality report |
+| **validation** | validation and evaluation - The process of ensuring software quality |
+| **report** | Quality Report - Forensic quality report |
 | **Role** | A specialized testing persona (security_tester, api_tester, etc.) |
 | **Harness** | Validation system for patches and code changes |
 | **Sandbox** | Isolated environment for testing |
-| **Artifact** | Output from QE session (patches, tests, reports) |
+| **Artifact** | Output from validation session (patches, tests, reports) |
 
 ---
 
@@ -208,26 +208,26 @@ The workspace system ensures safety:
 
 [:octicons-arrow-right-24: Learn more about workspaces](workspace.md)
 
-### QE Roles
+### Role-Based Workflows
 
 Roles represent specialized testing personas:
 
 - **Execution Roles**: Run existing tests deterministically
 - **Detection Roles**: AI-powered issue discovery
-- **Heuristic Role**: Senior QE comprehensive review
+- **Heuristic Role**: Senior validation comprehensive review
 
 [:octicons-arrow-right-24: Learn more about roles](roles.md)
 
-### Quality Reports
+### Validation Reports
 
-QRs transform QA outputs from tickets to decisions:
+reports transform QA outputs from tickets to decisions:
 
 - Investigation summary with methodology
 - Findings with evidence and reproduction steps
 - Root cause analysis
 - Verified fix suggestions
 
-[:octicons-arrow-right-24: Learn more about QRs](qr.md)
+[:octicons-arrow-right-24: Learn more about reports](qr.md)
 
 ### Allow Suggestions
 
@@ -246,9 +246,9 @@ The opt-in workflow for demonstrating fixes:
 
 ## Next Steps
 
-- [What is SuperQE?](superqe.md) - Understanding SuperQE and SuperQode
+- [Release Validation](release-validation.md) - Understanding validation workflows and SuperQode
 - [Three Modes](modes.md) - Understanding BYOK, ACP, and Local
 - [Ephemeral Workspace](workspace.md) - How code isolation works
-- [QE Roles](roles.md) - The role-based testing model
-- [Quality Reports](qr.md) - Understanding QRs
+- [Role-Based Workflows](roles.md) - The role-based testing model
+- [Validation Reports](qr.md) - Understanding reports
 - [Allow Suggestions](suggestions.md) - The fix demonstration workflow

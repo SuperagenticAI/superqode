@@ -1,15 +1,15 @@
-# Quality Reports (QRs)
+# Validation Reports
 
-SuperQode produces **Quality Reports (QRs)** instead of traditional bug reports. QRs are research-grade forensic artifacts that document the complete investigation process.
+SuperQode produces **Validation Reports** instead of traditional bug reports. reports are research-grade forensic artifacts that document the complete investigation process.
 
 ---
 
-## What is a QR?
+## What is a report?
 
-A QR is a comprehensive quality document that includes:
+A report is a comprehensive quality document that includes:
 
 - **Investigation Summary**: Objective, scope, and methodology
-- **What QE Did**: Actions taken, experiments run
+- **What Validation Did**: Actions taken, experiments run
 - **What Was Found**: Issues discovered with evidence
 - **Root Cause Analysis**: Why issues exist
 - **Suggested Fixes**: Proposed solutions with validation
@@ -17,7 +17,7 @@ A QR is a comprehensive quality document that includes:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        QUALITY REPORT (QR)                   │
+│                        QUALITY REPORT (report)                   │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  ┌─────────────────────────────────────────────────────┐    │
@@ -46,7 +46,7 @@ A QR is a comprehensive quality document that includes:
 
 ---
 
-## QR vs Traditional Bug Reports
+## report vs Traditional Bug Reports
 
 | Aspect | Traditional Bug Report | Quality Report |
 |--------|------------------------|------------------------------|
@@ -60,7 +60,7 @@ A QR is a comprehensive quality document that includes:
 
 ---
 
-## QR Structure
+## report Structure
 
 ### Session Metadata
 
@@ -277,11 +277,11 @@ Each finding includes a confidence score (0.0 - 1.0):
 
 ---
 
-## Viewing QRs
+## Viewing reports
 
 ### Location
 
-QRs are saved to:
+reports are saved to:
 
 ```
 .superqode/qe-artifacts/
@@ -304,7 +304,7 @@ cat .superqode/qe-artifacts/qr/qr-*.md
 ### View in Browser
 
 ```bash
-superqe dashboard
+superqode qe dashboard
 ```
 
 ---
@@ -317,10 +317,10 @@ Help improve accuracy by providing feedback:
 
 ```bash
 # Mark as valid
-superqe feedback finding-001 --valid
+superqode qe feedback finding-001 --valid
 
 # Mark as false positive
-superqe feedback finding-002 --false-positive -r "This is expected behavior"
+superqode qe feedback finding-002 --false-positive -r "This is expected behavior"
 ```
 
 ### Apply Suggested Fixes
@@ -342,22 +342,22 @@ superqode suggestions apply finding-001
 
 ```bash
 # Export to JUnit XML
-superqe run . --junit results.xml
+superqode qe run . --junit results.xml
 
 # Export to JSONL (CI streaming)
-superqe run . --jsonl > qe-events.jsonl
+superqode qe run . --jsonl > qe-events.jsonl
 ```
 
 ---
 
-## QR for CI/CD
+## report for CI/CD
 
 ### Automated Quality Gates
 
 ```yaml
 # GitHub Actions example
-- name: Run QE
-  run: superqe run . --mode quick --junit results.xml
+- name: Run validation
+  run: superqode qe run . --mode quick --junit results.xml
 
 - name: Check for critical issues
   run: |
@@ -373,14 +373,14 @@ superqe run . --jsonl > qe-events.jsonl
 For real-time CI streaming:
 
 ```bash
-superqe run . --jsonl | while read event; do
+superqode qe run . --jsonl | while read event; do
   TYPE=$(echo $event | jq -r '.type')
   case $TYPE in
     "finding.detected")
       echo "Found: $(echo $event | jq -r '.data.title')"
       ;;
     "qe.completed")
-      echo "QE complete"
+      echo "validation complete"
       ;;
   esac
 done

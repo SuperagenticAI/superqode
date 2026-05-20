@@ -12,7 +12,7 @@ SuperQode looks for configuration in this order:
 2. `~/.superqode.yaml` (user)
 3. `/etc/superqode/superqode.yaml` (system)
 
-For most teams, use project config: `superqe init`.
+For most teams, use project config: `superqode config init`.
 
 ---
 
@@ -21,21 +21,21 @@ For most teams, use project config: `superqe init`.
 Create `superqode.yaml` in the current directory from the comprehensive role catalog template.
 
 ```bash
-superqe init [--force] [--guided]
+superqode config init [--force] [--guided]
 ```
 
 Examples:
 
 ```bash
-superqe init
-superqe init --force
+superqode config init
+superqode config init --force
 ```
 
 ---
 
 ## config init
 
-Initialize a default config (alternative to `superqe init`).
+Initialize a default config (alternative to `superqode config init`).
 
 ```bash
 superqode config init [--force]

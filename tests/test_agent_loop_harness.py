@@ -454,7 +454,9 @@ def test_non_ds4_session_keeps_generic_minimal_prompt():
 
 
 def test_no_tool_system_prompt_does_not_claim_tool_access():
-    prompt = _build_loop_system_prompt("anthropic", "claude-opus-4-7", level=SystemPromptLevel.NO_TOOL)
+    prompt = _build_loop_system_prompt(
+        "anthropic", "claude-opus-4-7", level=SystemPromptLevel.NO_TOOL
+    )
     lowered = prompt.lower()
 
     assert "do not have access to tools" in lowered

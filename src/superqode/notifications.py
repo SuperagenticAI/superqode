@@ -307,7 +307,7 @@ def notify_qe_complete(
         message = f"Run failed after {duration_str}. Check logs for details."
         level = NotificationLevel.ERROR
 
-    return notify(title, message, level, subtitle="SuperQE")
+    return notify(title, message, level, subtitle="validation workflow")
 
 
 def notify_task_complete(task_name: str, success: bool = True) -> bool:

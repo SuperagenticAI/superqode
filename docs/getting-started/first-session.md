@@ -1,21 +1,21 @@
-# Your First QE Session
+# Your First Session
 
-This guide walks you through a complete Quality Engineering session step-by-step, explaining each phase and output.
+This guide walks you through a complete validation and evaluation session step-by-step, explaining each phase and output.
 
 ---
 
 ## Overview
 
-A SuperQode QE session follows this lifecycle:
+A SuperQode validation session follows this lifecycle:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    QE SESSION LIFECYCLE                      │
+│                    VALIDATION SESSION LIFECYCLE                      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  1. SNAPSHOT         Original code preserved                 │
 │        ↓                                                     │
-│  2. QE SANDBOX       Agents freely modify, inject tests,    │
+│  2. SANDBOX       Agents freely modify, inject tests,    │
 │        │             run experiments, break things           │
 │        ↓                                                     │
 │  3. ANALYSIS         Role-specific quality investigation    │
@@ -69,10 +69,10 @@ git status
 === "Direct Command"
 
     ```bash
-    superqe run . --mode quick
+    superqode qe run . --mode quick
     ```
 
-    Runs QE directly without the TUI.
+    Runs validation directly without the TUI.
 
 ---
 
@@ -98,24 +98,24 @@ You'll see a connection confirmation:
 
 ---
 
-## Step 4: Start the QE Session
+## Step 4: Start the Validation Session
 
 ### Quick Scan
 
 For a fast 60-second analysis:
 
 ```bash
-superqe run . --mode quick
+superqode qe run . --mode quick
 ```
 
-**Note:** QE sessions are run via CLI commands. In the TUI, you interact directly with agents by typing natural language requests after switching to a QE role.
+**Note:** validation sessions are run via CLI commands. In the TUI, you interact directly with agents by typing natural language requests after switching to a validation role.
 
-### Deep QE
+### Deep validation
 
 For comprehensive 30-minute analysis:
 
 ```bash
-superqe run . --mode deep
+superqode qe run . --mode deep
 ```
 
 ---
@@ -126,7 +126,7 @@ During the session, you'll see real-time progress:
 
 ```
 ╭──────────────────────────────────────────────────────────────╮
-│                     QE Session in Progress                    │
+│                     Validation Session in Progress                    │
 ├──────────────────────────────────────────────────────────────┤
 │ Mode: quick_scan                                              │
 │ Started: 2024-01-18 14:30:22                                 │
@@ -179,7 +179,7 @@ These roles use AI to find issues:
 
 | Role | Focus |
 |------|-------|
-| `fullstack` | Senior QE comprehensive review |
+| `fullstack` | Senior validation comprehensive review |
 
 ---
 
@@ -189,7 +189,7 @@ When the session completes, you'll see a summary:
 
 ```
 ╭──────────────────────────────────────────────────────────────╮
-│                    QE Session Complete                        │
+│                    Validation Session Complete                        │
 ├──────────────────────────────────────────────────────────────┤
 │ Duration: 58.7s                                               │
 │ Mode: quick_scan                                              │
@@ -204,21 +204,21 @@ When the session completes, you'll see a summary:
 │   Critical: 1    High: 2    Medium: 2    Low: 1              │
 ├──────────────────────────────────────────────────────────────┤
 │ Artifacts Generated:                                          │
-│   • QR: .superqode/qe-artifacts/qr/qr-2024-01-18-1a2b3c4d.json │
+│   • report: .superqode/qe-artifacts/qr/qr-2024-01-18-1a2b3c4d.json │
 ╰──────────────────────────────────────────────────────────────╯
 ```
 
 ---
 
-## Step 8: Review the Quality Report (QR)
+## Step 8: Review the Quality Report (report)
 
-The QR is a research-grade forensic report. View it:
+The report is a research-grade forensic report. View it:
 
 ```bash
 cat .superqode/qe-artifacts/qr/qr-*.json | jq
 ```
 
-### QR Structure
+### report Structure
 
 ```json
 {
@@ -268,7 +268,7 @@ cat .superqode/qe-artifacts/qr/qr-*.json | jq
 
 ## Step 9: Review Individual Findings
 
-Each finding in the QR contains:
+Each finding in the report contains:
 
 | Field | Description |
 |-------|-------------|
@@ -312,10 +312,10 @@ Help improve SuperQode's accuracy by providing feedback:
 
 ```bash
 # Mark finding as valid
-superqe feedback finding-001 --valid
+superqode qe feedback finding-001 --valid
 
 # Mark as false positive
-superqe feedback finding-002 --false-positive -r "This is expected behavior"
+superqode qe feedback finding-002 --false-positive -r "This is expected behavior"
 ```
 
 Feedback improves the ML-based severity prediction for future sessions.
@@ -352,20 +352,20 @@ Here's a complete example from start to finish:
 # 1. Navigate to project
 cd ~/projects/my-api
 
-# 2. Run comprehensive QE
-superqe run . \
+# 2. Run comprehensive validation
+superqode qe run . \
   --mode deep \
   --timeout 1800 \
   --output .superqode/qe-artifacts
 
 # 3. Wait for session to complete...
 
-# 4. Review the QR
+# 4. Review the report
 cat .superqode/qe-artifacts/qr/qr-*.md
 
 # 5. Provide feedback on findings
-superqe feedback finding-001 --valid
-superqe feedback finding-003 --false-positive -r "Intentional behavior"
+superqode qe feedback finding-001 --valid
+superqode qe feedback finding-003 --false-positive -r "Intentional behavior"
 ```
 
 ---
@@ -375,9 +375,9 @@ superqe feedback finding-003 --false-positive -r "Intentional behavior"
 Now that you've completed your first session:
 
 1. **[Configure SuperQode](configuration.md)** - Customize roles and settings
-2. **[Understand QE Roles](../concepts/roles.md)** - Learn about each role
-3. **[Read QR Documentation](../concepts/qr.md)** - Deep dive into reports
-4. **[Set Up CI/CD](../integration/cicd.md)** - Automate QE in your pipeline
+2. **[Understand Role-Based Workflows](../concepts/roles.md)** - Learn about each role
+3. **[Read report Documentation](../concepts/qr.md)** - Deep dive into reports
+4. **[Set Up CI/CD](../integration/cicd.md)** - Automate validation in your pipeline
 5. **[Advanced Features](../advanced/index.md)** - Custom roles, MCP, harness
 
 ---
@@ -389,7 +389,7 @@ Now that you've completed your first session:
     Increase the timeout or use quick scan mode:
 
     ```bash
-    superqe run . --mode quick --timeout 120
+    superqode qe run . --mode quick --timeout 120
     ```
 
 ??? question "No findings detected"

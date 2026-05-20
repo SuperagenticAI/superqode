@@ -1,17 +1,17 @@
 # Guidance System
 
-Verification-first system prompts that guide QE agents to prevent false positives and time waste.
+Verification-first system prompts that guide validation agents to prevent false positives and time waste.
 
 ---
 
 ## Overview
 
-The Guidance System provides time-constrained, verification-first prompts for QE agents:
+The Guidance System provides time-constrained, verification-first prompts for validation agents:
 
 - **Prevents false positives**: Agents must verify before claiming success
 - **Reduces time waste**: Guides agents to get quick feedback first
-- **Mode-specific**: Different guidance for quick scan vs deep QE
-- **Anti-pattern detection**: Identifies common QE anti-patterns
+- **Mode-specific**: Different guidance for quick scan vs deep validation
+- **Anti-pattern detection**: Identifies common validation anti-patterns
 
 ---
 
@@ -30,7 +30,7 @@ Agents must **prove** their findings before claiming success:
 Guidance optimizes for time-constrained sessions:
 
 - **Quick Scan**: Fail fast, validate critical paths
-- **Deep QE**: Explore thoroughly, test edge cases
+- **Deep validation**: Explore thoroughly, test edge cases
 
 ### Anti-Pattern Prevention
 
@@ -119,7 +119,7 @@ quick_scan:
 - Extensive code generation
 - Deep exploration without feedback
 
-### Deep QE
+### Deep validation
 
 **Comprehensive analysis** (30 minutes):
 
@@ -148,11 +148,11 @@ deep_qe:
 
 ## Anti-Pattern Detection
 
-The guidance system detects and prevents common QE anti-patterns that lead to false positives and unreliable results.
+The guidance system detects and prevents common validation anti-patterns that lead to false positives and unreliable results.
 
 ### What Are Anti-Patterns?
 
-Anti-patterns are behaviors that undermine QE reliability:
+Anti-patterns are behaviors that undermine validation reliability:
 
 - Claiming success without evidence
 - Weakening tests to make them pass
@@ -295,8 +295,8 @@ anti_patterns:
 
 | Level | Behavior |
 |-------|----------|
-| `strict` | Block QR generation if anti-patterns detected |
-| `warn` | Include warning in QR |
+| `strict` | Block report generation if anti-patterns detected |
+| `warn` | Include warning in report |
 
 ### Detection in Practice
 
@@ -349,7 +349,7 @@ guidance:
 Generated from configuration:
 
 ```
-SYSTEM: SuperQode Quick Scan QE Mode - 60s
+SYSTEM: SuperQode Quick Scan validation Mode - 60s
 
 FOCUS AREAS:
   - Run smoke tests first
@@ -366,12 +366,12 @@ ANTI-PATTERNS (FORBIDDEN):
   ...
 ```
 
-### Deep QE Prompt
+### Deep validation Prompt
 
 Comprehensive guidance:
 
 ```
-SYSTEM: SuperQode Deep QE Mode - 1800s
+SYSTEM: SuperQode Deep validation Mode - 1800s
 
 FOCUS AREAS:
   - Comprehensive test coverage
@@ -405,16 +405,16 @@ Agents review their work:
 
 ## Integration
 
-### With QE Sessions
+### With Validation Sessions
 
-Guidance automatically applied during QE:
+Guidance automatically applied during validation:
 
 ```bash
 # Quick scan uses quick_scan guidance
-superqe run . --mode quick
+superqode qe run . --mode quick
 
-# Deep QE uses deep_qe guidance
-superqe run . --mode deep
+# Deep validation uses deep_qe guidance
+superqode qe run . --mode deep
 ```
 
 ### With CI/CD
@@ -423,10 +423,10 @@ Guidance configured in `superqode.yaml`:
 
 ```yaml
 # CI uses quick scan guidance
-- run: superqe run . --mode quick
+- run: superqode qe run . --mode quick
 
-# Nightly uses deep QE guidance
-- run: superqe run . --mode deep
+# Nightly uses deep validation guidance
+- run: superqode qe run . --mode deep
 ```
 
 ---
@@ -507,7 +507,7 @@ deep_qe:
 
 ## Related Features
 
-- [QE Features](../qe-features/index.md) - QE overview
+- [Validation Features](../qe-features/index.md) - validation overview
 - [Configuration](../configuration/yaml-reference.md) - Config reference
 - [Constitution](../qe-features/constitution.md) - Quality rules
 

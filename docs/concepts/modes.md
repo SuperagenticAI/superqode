@@ -277,11 +277,11 @@ providers:
 
 ### Recommended Local Models
 
-For QE tasks, these models work well:
+For validation tasks, these models work well:
 
 | Model | Size | Good For |
 |-------|------|----------|
-| qwen3:8b | 8B | General QE, fast |
+| qwen3:8b | 8B | General validation, fast |
 | llama3.2:8b | 8B | General purpose |
 | codellama:13b | 13B | Code analysis |
 | deepseek-coder:6.7b | 6.7B | Code generation |
@@ -325,7 +325,7 @@ For QE tasks, these models work well:
     - You want to use specific providers (Google Gemini, Anthropic, OpenAI)
     - You need extended thinking (Claude/Gemini)
     - Cost tracking is important
-    - You don't need file editing in QE
+    - You don't need file editing in validation
 
 === "Use Local When"
 
@@ -391,5 +391,5 @@ OpenResponses provides:
 ## Next Steps
 
 - [Ephemeral Workspace](workspace.md) - How code isolation works
-- [QE Roles](roles.md) - Understanding testing roles
+- [Role-Based Workflows](roles.md) - Understanding testing roles
 - [Providers](../providers/index.md) - Detailed provider documentation

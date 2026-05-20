@@ -72,7 +72,7 @@ internal call is implemented.
 It should cover:
 
 - harness flavor: `coding`, `no_tool`, or custom
-- runtime backend: `builtin`, `openai-agents`, `adk`, `deepagents`, or custom
+- runtime backend: `builtin`, `openai-agents`, `adk`, `deepagents`, `pydanticai`, or custom
 - model policy: primary model, fallbacks, local hardware hints, prompt profile, context budgets
 - agents: roles, tools, skills, delegation rules
 - workflow: single, chain, router, parallel, orchestrator, evaluator-optimizer
@@ -106,6 +106,7 @@ Backends are adapters behind the same harness contract.
 | `openai-agents` | OpenAI Agents SDK runtime |
 | `adk` | Google ADK runtime |
 | `deepagents` | Optional DeepAgents runtime for graph and middleware-heavy coding harnesses |
+| `pydanticai` | Optional PydanticAI runtime with SuperQode JSON-schema tool bridging |
 | custom | Bring-your-own backend implementation |
 
 No backend should become the product center. SuperQode owns the contract; backends provide execution.
@@ -203,7 +204,7 @@ Examples:
 | Workflow engine | Single, chain, parallel, router, orchestrator, and evaluator-optimizer modes |
 | Run store | File-backed session and run records with replayable events |
 | Sandbox contract | Local backend protocol for path, edit, shell, grep, glob, and command policy |
-| Runtime adapters | Builtin, Google ADK, OpenAI Agents SDK, optional DeepAgents, and future custom runtimes |
+| Runtime adapters | Builtin, Google ADK, OpenAI Agents SDK, optional DeepAgents, optional PydanticAI, and future custom runtimes |
 
 ---
 

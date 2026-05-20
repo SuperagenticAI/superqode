@@ -422,7 +422,7 @@ tools:
 
 ## Related Features
 
-- [QE Features](../qe-features/index.md) - QE tool usage
+- [Validation Features](../qe-features/index.md) - validation tool usage
 
 ---
 

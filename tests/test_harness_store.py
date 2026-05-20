@@ -1,6 +1,13 @@
 """Tests for the harness-native run/session store."""
 
-from superqode.harness import FileHarnessStore, HarnessEvent, get_harness_template
+import pytest
+
+from superqode.harness import (
+    FileHarnessStore,
+    HarnessEvent,
+    SQLiteHarnessStore,
+    get_harness_template,
+)
 
 
 def test_file_harness_store_persists_sessions_runs_and_events(tmp_path):
@@ -49,3 +56,35 @@ def test_file_harness_store_sanitizes_file_names(tmp_path):
 
     assert store.get_session("bad/session:id") is not None
     assert (tmp_path / "harness" / "sessions" / "bad_session:id.json").exists()
+
+
+@pytest.mark.parametrize("store_factory", [FileHarnessStore, SQLiteHarnessStore])
+def test_harness_store_contract_persists_runs_and_events(tmp_path, store_factory):
+    path = tmp_path / "store.sqlite3" if store_factory is SQLiteHarnessStore else tmp_path / "files"
+    store = store_factory(path)
+    spec = get_harness_template("coding")
+
+    store.open_session("session-1", spec, metadata={"team": "runtime"})
+    run = store.start_run(
+        session_id="session-1",
+        spec=spec,
+        provider="openai",
+        model="gpt-5",
+        runtime="builtin",
+        prompt="hello world",
+        metadata={"typed_output": True},
+    )
+    store.append_event(
+        run.run_id,
+        HarnessEvent(type="delta", data={"text": "ok"}, session_id="session-1", run_id=run.run_id),
+    )
+    store.end_run(run.run_id, status="succeeded", metadata={"iterations": 1})
+
+    loaded = store.get_run(run.run_id)
+    assert loaded is not None
+    assert loaded.status == "succeeded"
+    assert loaded.metadata["typed_output"] is True
+    assert loaded.metadata["iterations"] == 1
+    assert loaded.events[0].data == {"text": "ok"}
+    assert store.list_sessions()[0].metadata["team"] == "runtime"
+    assert store.list_runs(session_id="session-1")[0].run_id == run.run_id

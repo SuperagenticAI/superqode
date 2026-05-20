@@ -1,5 +1,5 @@
 """
-QE Roles - Agentic detection roles for quality engineering.
+Validation Roles - Agentic detection roles for validation and evaluation.
 
 Implements the PRD role model:
 
@@ -16,7 +16,7 @@ Agentic detection roles (AI-powered, discover issues):
 - performance_tester: Performance bottleneck detection
 
 Heuristic role:
-- fullstack: Senior QE/Tech Lead comprehensive review
+- fullstack: Senior validation/Tech Lead comprehensive review
  - lint_tester: Run linters across the codebase
 """
 
@@ -38,7 +38,7 @@ class RoleType(Enum):
 
     EXECUTION = "execution"  # Run existing tests only
     DETECTION = "detection"  # AI-driven issue detection
-    HEURISTIC = "heuristic"  # Senior QE review
+    HEURISTIC = "heuristic"  # Senior validation review
 
 
 @dataclass
@@ -233,7 +233,7 @@ class LintTestRole(QERole):
     Lint Test Role - Run fast linters for detected languages.
 
     Executes local linters (ruff, eslint/biome, golangci-lint, clippy, etc.)
-    and reports findings without failing the QE session.
+    and reports findings without failing the validation session.
     """
 
     async def run(self) -> RoleResult:
@@ -452,13 +452,13 @@ class PerformanceTestRole(QERole):
 
 
 # =============================================================================
-# Heuristic Role (Senior QE Review)
+# Heuristic Role (Senior validation Review)
 # =============================================================================
 
 
 class FullstackQERole(QERole):
     """
-    Fullstack QE Role - Senior QE/Tech Lead comprehensive review.
+    Fullstack QE Role - Senior validation/Tech Lead comprehensive review.
 
     The heuristic role that combines all detection capabilities using ACP:
     - Reviews code like a senior QE engineer

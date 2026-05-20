@@ -554,6 +554,14 @@ class SuperQodeGroup(click.Group):
 @click.option(
     "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-5.4", help="Model name"
 )
+@click.option(
+    "--harness",
+    "harness_path",
+    envvar="SUPERQODE_HARNESS",
+    default=None,
+    type=click.Path(exists=True),
+    help="HarnessSpec YAML/JSON for the interactive TUI",
+)
 @click.option("--resume", help="Resume a stored session by id or unique prefix")
 @click.option("--fork", "fork_from", help="Fork a stored session by id or unique prefix")
 @click.option(
@@ -620,6 +628,7 @@ def cli_main(
     plan_only,
     provider,
     model_name,
+    harness_path,
     resume,
     fork_from,
     sandbox_backend,
@@ -656,6 +665,8 @@ def cli_main(
     effective_runtime = runtime_name or yaml_runtime
     if effective_runtime:
         _os.environ["SUPERQODE_RUNTIME"] = effective_runtime
+    if harness_path:
+        _os.environ["SUPERQODE_HARNESS"] = str(harness_path)
     """SuperQode - coding agent harness for developer workflows.
 
     Use the TUI for interactive coding work or headless mode for one-shot tasks.
@@ -932,6 +943,316 @@ def sessions_delete(session_id):
     resolved = resolve_session_id(session_id)
     SessionManager(storage_dir=".superqode/sessions").delete_session(resolved)
     click.echo(f"Deleted session {resolved}")
+
+
+@cli_main.group()
+def harness():
+    """Create, validate, and run SuperQode harness specs."""
+    pass
+
+
+@harness.command("list-templates")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_list_templates(json_output):
+    """List built-in harness templates."""
+    from superqode.harness import BUILTIN_TEMPLATES, get_harness_template, harness_spec_to_dict
+
+    rows = []
+    for name in sorted(BUILTIN_TEMPLATES):
+        if "_" in name:
+            continue
+        spec = get_harness_template(name)
+        rows.append(
+            {
+                "name": name,
+                "flavor": spec.flavor.value,
+                "runtime": spec.runtime.backend,
+                "description": spec.description,
+            }
+        )
+
+    if json_output:
+        payload = [
+            {**row, "spec": harness_spec_to_dict(get_harness_template(row["name"]))} for row in rows
+        ]
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    for row in rows:
+        click.echo(f"{row['name']}  {row['flavor']}  {row['runtime']}  {row['description']}")
+
+
+@harness.command("list-backends")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_list_backends(json_output):
+    """List available harness runtime backends."""
+    from superqode.harness import backend_capabilities, known_harness_backend_names
+
+    rows = [backend_capabilities(name).to_dict() for name in known_harness_backend_names()]
+    if json_output:
+        click.echo(json.dumps(rows, indent=2))
+        return
+
+    for row in rows:
+        install = f" install: {row['install_hint']}" if row["install_hint"] else ""
+        click.echo(
+            f"{row['backend']}  {row['availability']}  "
+            f"coding={'yes' if row['supports_coding'] else 'no'}  "
+            f"no_tool={'yes' if row['supports_no_tool'] else 'no'}  "
+            f"streaming={'yes' if row['supports_streaming'] else 'no'}  "
+            f"approvals={'yes' if row['supports_approvals'] else 'no'}"
+            f"{install}"
+        )
+
+
+@harness.command("init")
+@click.argument("name", required=False, default="superqode-coding")
+@click.option("--template", "-t", default="coding", help="Built-in template name")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=Path("harness.yaml"),
+    show_default=True,
+    help="Harness spec file to write",
+)
+@click.option("--force", is_flag=True, help="Overwrite an existing spec file")
+def harness_init(name, template, output, force):
+    """Scaffold a harness spec and local agent directories."""
+    from dataclasses import replace
+
+    from superqode.harness import get_harness_template, save_harness_spec
+
+    if output.exists() and not force:
+        raise click.ClickException(f"{output} already exists. Use --force to overwrite.")
+
+    spec = replace(get_harness_template(template), name=name)
+    save_harness_spec(spec, output)
+    (Path(".agents") / "skills").mkdir(parents=True, exist_ok=True)
+    (Path(".agents") / "roles").mkdir(parents=True, exist_ok=True)
+    click.echo(f"Created {output}")
+    click.echo("Created .agents/skills and .agents/roles")
+
+
+@harness.command("validate")
+@click.argument("spec_path", type=click.Path(exists=True, path_type=Path))
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+@click.option("--schema", "schema_output", is_flag=True, help="Emit HarnessSpec JSON Schema")
+def harness_validate(spec_path, json_output, schema_output):
+    """Validate a harness spec file."""
+    from superqode.harness import harness_spec_json_schema, harness_spec_to_dict, load_harness_spec
+
+    if schema_output:
+        click.echo(json.dumps(harness_spec_json_schema(), indent=2))
+        return
+
+    try:
+        spec = load_harness_spec(spec_path)
+    except Exception as exc:
+        payload = {"valid": False, "error": str(exc)}
+        if json_output:
+            click.echo(json.dumps(payload, indent=2))
+            return
+        raise click.ClickException(str(exc)) from exc
+
+    payload = {
+        "valid": True,
+        "name": spec.name,
+        "flavor": spec.flavor.value,
+        "runtime": spec.runtime.backend,
+        "workflow": spec.workflow.mode.value,
+        "spec": harness_spec_to_dict(spec),
+    }
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    click.echo(
+        f"Valid harness: {spec.name} "
+        f"({spec.flavor.value}, runtime={spec.runtime.backend}, workflow={spec.workflow.mode.value})"
+    )
+
+
+@harness.command("inspect")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--runtime", "runtime_name", default=None, help="Override runtime or backend")
+@click.option("--sandbox", "sandbox_backend", default=None, help="Override sandbox backend")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_inspect(spec_path, runtime_name, sandbox_backend, json_output):
+    """Inspect a HarnessSpec and backend capability compatibility."""
+    from superqode.harness import (
+        harness_spec_to_dict,
+        inspect_harness_backend,
+        load_harness_spec,
+        resolve_harness_model_policy,
+    )
+
+    spec = load_harness_spec(spec_path)
+    backend_name = runtime_name or spec.runtime.backend
+    inspection = inspect_harness_backend(
+        backend_name,
+        spec,
+        sandbox_backend=sandbox_backend,
+    )
+    model_policy = resolve_harness_model_policy(
+        spec,
+        provider=spec.model_policy.config.get("provider", ""),
+        model=spec.model_policy.primary or "",
+    )
+    payload = {
+        "name": spec.name,
+        "flavor": spec.flavor.value,
+        "runtime": backend_name,
+        "workflow": spec.workflow.mode.value,
+        "sandbox": sandbox_backend or spec.execution_policy.sandbox,
+        "tools": sorted({tool for agent in spec.agents for tool in agent.tools}),
+        "model_policy": {
+            "profile": model_policy.profile,
+            "system_level": model_policy.system_level.value,
+            "tool_profile": model_policy.tool_profile,
+            "reasoning": model_policy.reasoning,
+            "temperature": model_policy.temperature,
+            "max_iterations": model_policy.max_iterations,
+            "parallel_tools": model_policy.parallel_tools,
+        },
+        "backend": inspection.to_dict(),
+        "spec": harness_spec_to_dict(spec),
+    }
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    click.echo(f"Harness: {spec.name}")
+    click.echo(f"Flavor: {spec.flavor.value}")
+    click.echo(f"Runtime: {backend_name}")
+    click.echo(f"Workflow: {spec.workflow.mode.value}")
+    click.echo(f"Sandbox: {payload['sandbox']}")
+    click.echo(f"Compatibility: {'ok' if inspection.ok else 'blocked'}")
+    click.echo("Capabilities:")
+    for key, value in inspection.capabilities.to_dict().items():
+        if key in {"backend", "notes"}:
+            continue
+        click.echo(f"  {key}: {'yes' if value else 'no'}")
+    if inspection.capabilities.notes:
+        click.echo("Notes:")
+        for note in inspection.capabilities.notes:
+            click.echo(f"  - {note}")
+    if inspection.issues:
+        click.echo("Issues:")
+        for issue in inspection.issues:
+            click.echo(f"  [{issue.severity}] {issue.code}: {issue.message}")
+
+
+@harness.command("run")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--prompt", "-p", required=True, help="Prompt to run")
+@click.option("--provider", envvar="SUPERQODE_PROVIDER", default="openai", show_default=True)
+@click.option(
+    "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-5.4", show_default=True
+)
+@click.option("--runtime", "runtime_name", default=None, help="Override runtime or backend")
+@click.option("--session", "session_id", default=None, help="Reuse a harness session id")
+@click.option(
+    "--working-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("."),
+    show_default=False,
+)
+@click.option("--sandbox", "sandbox_backend", default="local", show_default=True)
+@click.option("--stream", is_flag=True, help="Print normalized stream events")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_run(
+    spec_path,
+    prompt,
+    provider,
+    model_name,
+    runtime_name,
+    session_id,
+    working_dir,
+    sandbox_backend,
+    stream,
+    json_output,
+):
+    """Run one prompt through a HarnessSpec."""
+    import asyncio
+
+    from superqode.harness import FileHarnessStore, init_harness, load_harness_spec
+
+    async def _run():
+        spec = load_harness_spec(spec_path)
+        store = FileHarnessStore(Path(spec.context.session_storage))
+        kernel = await init_harness(spec, store=store)
+        session_obj = await kernel.session(session_id)
+        if stream:
+            events = []
+            async for event in session_obj.stream(
+                prompt,
+                provider=provider,
+                model=model_name,
+                runtime=runtime_name,
+                working_directory=working_dir,
+                sandbox_backend=sandbox_backend,
+            ):
+                item = {
+                    "type": event.type,
+                    "data": event.data,
+                    "session_id": event.session_id,
+                    "run_id": event.run_id,
+                }
+                events.append(item)
+                if json_output:
+                    click.echo(json.dumps(item))
+                elif event.type == "delta":
+                    click.echo(event.data.get("text", ""), nl=False)
+            if json_output:
+                return None
+            click.echo()
+            return {"events": events}
+        result = await session_obj.prompt(
+            prompt,
+            provider=provider,
+            model=model_name,
+            runtime=runtime_name,
+            working_directory=working_dir,
+            sandbox_backend=sandbox_backend,
+        )
+        pending_approvals = list(session_obj.pending_approvals())
+        if json_output:
+            click.echo(
+                json.dumps(
+                    {
+                        "content": result.content,
+                        "session_id": result.session_id,
+                        "run_id": result.run_id,
+                        "tool_calls_made": result.tool_calls_made,
+                        "iterations": result.iterations,
+                        "harness": result.spec.name,
+                        "stopped_reason": result.response.stopped_reason,
+                        "pending_approvals": pending_approvals,
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            click.echo(result.content)
+            if result.response.stopped_reason == "needs_approval" and pending_approvals:
+                click.echo("Approval required:")
+                for entry in pending_approvals:
+                    tool = entry.get("tool_name") or "<unknown>"
+                    args_preview = str(entry.get("arguments", {}))
+                    if len(args_preview) > 120:
+                        args_preview = args_preview[:117] + "..."
+                    click.echo(f"  [{entry.get('index', 0)}] {tool} {args_preview}")
+                click.echo("Use the TUI to approve or reject the paused tool call.")
+        return result
+
+    try:
+        asyncio.run(_run())
+    except Exception as exc:
+        if json_output:
+            click.echo(json.dumps({"error": str(exc), "success": False}, indent=2))
+        else:
+            click.echo(f"Error: {exc}", err=True)
+        raise click.Abort() from exc
 
 
 @cli_main.group()
@@ -1441,12 +1762,12 @@ team:
           Write clean, maintainable code. Follow best practices.
           Implement features end-to-end across frontend and backend.
 
-  # QE roles
+  # validation roles
   qe:
-    description: "Quality Engineering"
+    description: "validation and evaluation"
     roles:
       fullstack:
-        description: "Full-stack QE engineer"
+        description: "Full-stack validation engineer"
         mode: "acp"
         agent: "opencode"
         agent_config:
@@ -1454,7 +1775,7 @@ team:
           model: "nemotron-3-super-free"
         enabled: false
         job_description: |
-          You are a Senior QE Engineer.
+          You are a Senior validation Engineer.
           Review code for bugs, security issues, and best practices.
           Write and run tests. Validate requirements are met.
 
@@ -1489,8 +1810,8 @@ team:
     click.echo("")
     click.echo("  Quick start:")
     click.echo("    superqode               # Launch TUI")
-    click.echo("    superqe roles            # List configured QE roles")
-    click.echo("    superqe run .            # Run QE using your superqode.yaml")
+    click.echo("    superqode qe roles            # List configured validation roles")
+    click.echo("    superqode qe run .            # Run validation using your superqode.yaml")
     click.echo("")
     click.echo("  Edit superqode.yaml to add or enable roles as needed.")
 
@@ -1935,7 +2256,7 @@ cli_main.add_command(providers_cmd, name="providers")
 # Add auth commands (superqode auth info, superqode auth check, etc.)
 cli_main.add_command(auth_cmd, name="auth")
 
-# Add QE commands (superqode qe ...)
+# Add validation commands (superqode qe ...)
 cli_main.add_command(qe_cmd, name="qe")
 
 # Add roles commands (superqode roles list, superqode roles info, etc.)

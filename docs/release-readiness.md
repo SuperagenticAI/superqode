@@ -13,9 +13,9 @@ This release should present SuperQode as a coding agent harness first:
 - Dynamic OpenCode free model discovery
 - Local DS4 provider support
 - Optional Monty-backed `python_repl` tool
-- SuperQE workflows for release validation and quality engineering
+- validation workflows for release readiness and validation and evaluation
 
-SuperQE should remain documented as an important workflow, but not as the only purpose of SuperQode.
+Validation should remain documented as an important workflow, but not as the only purpose of SuperQode.
 
 ## Documentation Checklist
 

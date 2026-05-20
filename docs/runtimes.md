@@ -22,6 +22,7 @@ execution engine. When an engine cannot honor a policy, SuperQode reports that c
 | `adk` | `pip install superqode[adk]` | Google Agent Development Kit. Uses ADK's `Runner` and `LlmAgent`. |
 | `openai-agents` | `pip install superqode[openai-agents]` | OpenAI Agents SDK v0.17+. Includes SDK sessions, tool bridging, and HITL support. |
 | `deepagents` | `pip install superqode[deepagents]` | Optional DeepAgents 0.6 runtime for graph and middleware-heavy coding harnesses. |
+| `pydanticai` | `pip install superqode[pydanticai]` | Optional PydanticAI runtime with SuperQode JSON-schema tool bridging, approval resume, native MCP config loading, fallback chains, and typed-output-friendly harness support. |
 
 Runtime backends implement the same SuperQode harness contract where their underlying framework can honor it. If a backend cannot support a harness policy, it should fail clearly rather than silently degrading the run.
 
@@ -39,6 +40,7 @@ Precedence, highest first:
 ```bash
 superqode --runtime adk
 superqode --runtime openai-agents --print "summarize this repository"
+superqode harness run --spec harness.yaml --runtime pydanticai --prompt "reason about this design"
 ```
 
 ### YAML
@@ -120,13 +122,54 @@ Current behavior:
 - Uses SDK cancellation for streaming runs.
 - Persists SDK sessions through a SuperQode JSONL adapter.
 - Routes non-OpenAI providers through `LitellmModel(...)` when the `[litellm]` extra is installed.
+- Surfaces `needs_approval` interruptions through direct runtime sessions and HarnessSpec sessions.
+- Consumes the harness sandbox contract when SandboxAgent execution is requested.
 - Keeps tracing disabled by default for privacy.
 
 Current limits:
 
-- TUI approval dialog plumbing is still a follow-up.
 - Native SDK sandbox integrations remain a follow-up.
 - Native SDK MCP server objects are not yet the default bridge.
+
+### `pydanticai`
+
+Wraps `pydantic_ai.Agent` behind the SuperQode runtime contract and exposes the same engine through the `pydanticai` HarnessSpec backend.
+
+Current behavior:
+
+- Bridges SuperQode tools through PydanticAI's lower-level `ToolDefinition.parameters_json_schema` path.
+- Supports tool-capable coding specs and no-tool specs.
+- Streams text deltas through PydanticAI `run_stream`.
+- Surfaces PydanticAI deferred tool approvals through the same `:approve` and `:reject` harness flow used by other pausing runtimes.
+- Loads native PydanticAI MCP toolsets from `runtime.config.pydanticai.mcp_config_path`.
+- Uses PydanticAI `FallbackModel` when `model_policy.fallbacks` are present.
+- Enables Logfire/PydanticAI instrumentation when `observability.traces: true` or `runtime.config.pydanticai.logfire` is configured. Install `superqode[pydanticai-logfire]` for this path.
+- Can wrap the PydanticAI agent with Prefect or DBOS durable execution via `runtime.config.pydanticai.durable: prefect` or `dbos` when those packages are installed.
+- Applies SuperQode model policy settings such as temperature and reasoning effort where PydanticAI supports them.
+- Keeps PydanticAI available as an optional install, not a hard dependency.
+
+Current limits:
+
+- Temporal durable execution requires a Temporal workflow and worker, so SuperQode reports a clear setup error instead of pretending it can run Temporal in-process.
+- SuperQode's sandbox policy still owns local file and shell behavior.
+
+Example runtime config:
+
+```yaml
+runtime:
+  backend: pydanticai
+  config:
+    pydanticai:
+      mcp_config_path: .superqode/mcp.json
+      durable: prefect
+      logfire:
+        send_to_logfire: if-token-present
+observability:
+  traces: true
+model_policy:
+  fallbacks:
+    - anthropic:claude-sonnet-4-5
+```
 
 ### `deepagents`
 

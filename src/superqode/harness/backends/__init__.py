@@ -1,16 +1,37 @@
 """Harness backend registry."""
 
-from .base import HarnessBackend, HarnessBackendRequest, HarnessBackendResult
+from .base import (
+    HarnessBackend,
+    HarnessBackendCapabilities,
+    HarnessBackendInspection,
+    HarnessBackendIssue,
+    HarnessBackendRequest,
+    HarnessBackendResult,
+)
 from .deepagents import DeepAgentsHarnessBackend
-from .registry import create_harness_backend, known_harness_backend_names
-from .runtime import RuntimeHarnessBackend
+from .pydanticai import PydanticAIHarnessBackend
+from .registry import (
+    backend_capabilities,
+    create_harness_backend,
+    inspect_harness_backend,
+    known_harness_backend_names,
+)
+from .runtime import ADKHarnessBackend, OpenAIAgentsHarnessBackend, RuntimeHarnessBackend
 
 __all__ = [
     "HarnessBackend",
+    "HarnessBackendCapabilities",
+    "HarnessBackendInspection",
+    "HarnessBackendIssue",
     "HarnessBackendRequest",
     "HarnessBackendResult",
+    "ADKHarnessBackend",
     "DeepAgentsHarnessBackend",
+    "OpenAIAgentsHarnessBackend",
+    "PydanticAIHarnessBackend",
     "RuntimeHarnessBackend",
+    "backend_capabilities",
     "create_harness_backend",
+    "inspect_harness_backend",
     "known_harness_backend_names",
 ]

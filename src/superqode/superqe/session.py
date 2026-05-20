@@ -1,7 +1,7 @@
 """
 QE Session - Orchestrates a complete QE run.
 
-A QE session encompasses:
+A validation session encompasses:
 1. Workspace setup (ephemeral edit mode)
 2. Test execution (smoke/sanity/regression)
 3. Patch validation via harness
@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 
 class QEStatus(Enum):
-    """Status of a QE session."""
+    """Status of a validation session."""
 
     PENDING = "pending"
     RUNNING = "running"
@@ -56,7 +56,7 @@ class QEStatus(Enum):
 
 @dataclass
 class QESessionConfig:
-    """Configuration for a QE session."""
+    """Configuration for a validation session."""
 
     mode: QEMode = QEMode.QUICK_SCAN
 
@@ -121,7 +121,7 @@ class QESessionConfig:
 
 @dataclass
 class QESessionResult:
-    """Result of a QE session."""
+    """Result of a validation session."""
 
     session_id: str
     mode: QEMode
@@ -158,7 +158,7 @@ class QESessionResult:
 
     @property
     def success(self) -> bool:
-        """Did the QE session pass?"""
+        """Did the validation session pass?"""
         # Success requires completed status, no failed tests, AND at least some tests exist
         return self.status == QEStatus.COMPLETED and self.tests_failed == 0 and self.total_tests > 0
 
@@ -208,7 +208,7 @@ class QESessionResult:
 
 class QESession:
     """
-    Orchestrates a complete QE session.
+    Orchestrates a complete validation session.
 
     A session:
     1. Sets up ephemeral workspace
@@ -257,7 +257,7 @@ class QESession:
 
     async def run(self) -> QESessionResult:
         """
-        Run the complete QE session.
+        Run the complete validation session.
 
         Returns QESessionResult with all findings and artifacts.
         """
@@ -286,7 +286,7 @@ class QESession:
             self._session_id = self.workspace.start_session(config=workspace_config)
             self._result.session_id = self._session_id
 
-            logger.info(f"Started QE session: {self._session_id}")
+            logger.info(f"Started validation session: {self._session_id}")
 
             # Run test suites
             await self._run_tests()
@@ -319,12 +319,12 @@ class QESession:
         except asyncio.TimeoutError:
             self._result.status = QEStatus.FAILED
             self._result.errors.append(f"Session timed out after {self.config.timeout_seconds}s")
-            logger.error(f"QE session timed out: {self._session_id}")
+            logger.error(f"validation session timed out: {self._session_id}")
 
         except Exception as e:
             self._result.status = QEStatus.FAILED
             self._result.errors.append(str(e))
-            logger.exception(f"QE session failed: {self._session_id}")
+            logger.exception(f"validation session failed: {self._session_id}")
 
         finally:
             return self._finalize_result(start_time)
@@ -428,7 +428,7 @@ class QESession:
         self._result.errors.extend(result.errors)
 
     async def _run_agent_analysis(self) -> None:
-        """Run agent-driven QE analysis with specialized QE agents."""
+        """Run agent-driven QE analysis with specialized validation agents."""
         logger.info("Running AI-powered agent analysis...")
 
         if not self.config.agent_roles:
@@ -701,7 +701,7 @@ class QESession:
             logger.error(f"Failed to finalize session: {e}")
 
         logger.info(
-            f"QE session completed: {self._result.session_id} - "
+            f"validation session completed: {self._result.session_id} - "
             f"{self._result.verdict} ({duration:.1f}s)"
         )
 
@@ -710,4 +710,4 @@ class QESession:
     def cancel(self) -> None:
         """Cancel the running session."""
         self._cancelled = True
-        logger.info(f"QE session cancellation requested: {self._session_id}")
+        logger.info(f"validation session cancellation requested: {self._session_id}")

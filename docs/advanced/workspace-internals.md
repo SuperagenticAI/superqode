@@ -1,6 +1,6 @@
 # Workspace Internals
 
-The workspace system is the foundation of SuperQode's sandbox-first approach. This document explains how ephemeral workspaces provide safe, isolated environments for quality engineering.
+The workspace system is the foundation of SuperQode's sandbox-first approach. This document explains how ephemeral workspaces provide safe, isolated environments for validation and evaluation.
 
 Note: Workspace management commands shown in this document are available in SuperQode Enterprise only.
 
@@ -15,7 +15,7 @@ The workspace manager creates isolated environments where agents can freely modi
 │                    WORKSPACE LIFECYCLE                       │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  Original Code ──► Create Snapshot ──► Run QE Session       │
+│  Original Code ──► Create Snapshot ──► Run Validation Session       │
 │        │                                      │              │
 │        │                                      ▼              │
 │        │                              Agents Modify Code     │
@@ -66,7 +66,7 @@ Uses Git's worktree feature to create a separate working directory:
 - Efficient disk usage
 
 **When Used:**
-- Enabled with `superqe run . --worktree`
+- Enabled with `superqode qe run . --worktree`
 - Project is a git repository
 - Git version >= 2.15
 
@@ -103,10 +103,10 @@ Creates a complete copy of the project directory:
 Uses git stash to save and restore state:
 
 ```bash
-# Before QE:
+# Before validation:
 git stash push -m "superqode-backup-abc123"
 
-# After QE:
+# After validation:
 git stash pop
 ```
 
@@ -116,7 +116,7 @@ git stash pop
 - Preserves uncommitted changes
 
 **When Used:**
-- Simple QE sessions
+- Simple validation sessions
 - Quick rollback needed
 
 ---
@@ -203,7 +203,7 @@ class GitGuard:
 
 ```bash
 # Force allow git operations (use with caution)
-superqe run . --allow-git-operations
+superqode qe run . --allow-git-operations
 ```
 
 ---
@@ -337,7 +337,7 @@ SuperQode guarantees original code is preserved:
 
 ### Revert Process
 
-1. **Session Ends** - QE session completes (success or error)
+1. **Session Ends** - validation session completes (success or error)
 2. **Artifacts Saved** - All findings/patches stored
 3. **Changes Reverted** - Workspace changes undone
 4. **Worktree Removed** - Temporary worktree deleted
@@ -384,7 +384,7 @@ superqode workspace cleanup --force
 Keep the workspace after session for debugging:
 
 ```bash
-superqe run . --preserve-workspace
+superqode qe run . --preserve-workspace
 ```
 
 ### Skip Revert
@@ -392,7 +392,7 @@ superqe run . --preserve-workspace
 Don't revert changes (for applying fixes):
 
 ```bash
-superqe run . --no-revert
+superqode qe run . --no-revert
 ```
 
 ### Workspace Info

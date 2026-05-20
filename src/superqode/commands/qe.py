@@ -1,13 +1,13 @@
 """
-SuperQE (Super Quality Engineering) CLI commands.
+Validation and evaluation workflow commands.
 
-Main entry point for running QE automation with ephemeral workspace guarantees.
+Secondary workflow entry point for validation automation with ephemeral workspace guarantees.
 
 Features:
 - Git worktree-based isolation
 - Session coordination with locking
 - JSONL event streaming for CI
-- Structured QR with priorities
+- Structured report with priorities
 - Constitution system for guardrails
 - Patch harness for validation
 """
@@ -15,6 +15,7 @@ Features:
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
 import sys
 from datetime import datetime
@@ -40,12 +41,12 @@ def _enterprise_only(feature_name: str) -> bool:
 
 @click.group()
 def qe():
-    """Quality Engineering automation commands.
+    """Validation and evaluation workflow commands.
 
-    Run QE sessions with full ephemeral workspace guarantee:
+    Run validation sessions with full ephemeral workspace guarantee:
     - Agents can freely modify code for testing
     - All changes are automatically reverted
-    - Artifacts (patches, tests, QRs) are preserved
+    - Artifacts (patches, tests, reports) are preserved
     - Git operations are blocked
     """
     pass
@@ -58,9 +59,11 @@ def qe():
     "-m",
     type=click.Choice(["quick", "deep"]),
     default="quick",
-    help="QE mode: quick (fast scan) or deep (full investigation)",
+    help="Validation mode: quick (fast scan) or deep (full investigation)",
 )
-@click.option("--role", "-r", multiple=True, help="QE role(s) to run (e.g., qe.security_tester)")
+@click.option(
+    "--role", "-r", multiple=True, help="Validation role(s) to run (e.g., qe.security_tester)"
+)
 @click.option("--timeout", "-t", type=int, default=None, help="Timeout in seconds")
 @click.option("--no-revert", is_flag=True, help="Don't revert changes (for debugging)")
 @click.option("--output", "-o", type=click.Path(), help="Output directory for artifacts")
@@ -98,27 +101,27 @@ def qe_run(
     allow_suggestions: bool,
     verbose: bool,
 ):
-    """Run a QE session on the specified path.
+    """Run a validation session on the specified path.
 
     Examples:
 
-        superqe run .                  # Quick scan current directory
+        superqode qe run .                  # Quick scan current directory
 
-        superqe run ./src --mode deep  # Deep QE on src/ (verbose by default)
+        superqode qe run ./src --mode deep  # Deep validation on src/ (verbose by default)
 
-        superqe run . --verbose        # Show detailed agent work logs
+        superqode qe run . --verbose        # Show detailed agent work logs
 
-        superqe run . -r security_tester -r api_tester
+        superqode qe run . -r security_tester -r api_tester
 
-        superqe run . --junit results.xml  # Export for CI
+        superqode qe run . --junit results.xml  # Export for CI
 
-        superqe run . --jsonl             # Stream JSONL events for CI
+        superqode qe run . --jsonl             # Stream JSONL events for CI
 
-        superqe run . --worktree          # Use git worktree isolation
+        superqode qe run . --worktree          # Use git worktree isolation
 
-        superqe run . --generate          # Generate tests for issues
+        superqode qe run . --generate          # Generate tests for issues
 
-        superqe run . --allow-suggestions # Let agents suggest and verify fixes
+        superqode qe run . --allow-suggestions # Let agents suggest and verify fixes
     """
     if generate or allow_suggestions:
         if not _enterprise_only("Fix generation and suggestion mode"):
@@ -133,7 +136,7 @@ def qe_run(
 
     if not find_config_file() and not (project_root / "superqode.yaml").exists():
         console.print(
-            "[yellow]⚠️  No superqode.yaml found. Run `superqe init` to create one.[/yellow]"
+            "[yellow]⚠️  No superqode.yaml found. Run `superqode init` to create one.[/yellow]"
         )
         return 1
 
@@ -165,7 +168,7 @@ def qe_run(
     else:
         console_output = console
 
-    # Show safety warnings for QE sessions
+    # Show safety warnings for validation sessions
     if not jsonl_stream:
         safety_warnings = get_safety_warnings()
         show_safety_warnings(safety_warnings, console=console_output)
@@ -178,7 +181,7 @@ def qe_run(
     # Check for conflicting sessions using coordinator
     coordinator = QECoordinator(project_root)
     with coordinator.session(
-        f"qe-cli-{datetime.now().strftime('%Y%m%d%H%M%S')}", mode, "CLI QE session"
+        f"qe-cli-{datetime.now().strftime('%Y%m%d%H%M%S')}", mode, "CLI validation session"
     ) as lock:
         if lock is None:
             if jsonl_stream:
@@ -186,14 +189,16 @@ def qe_run(
                     json.dumps(
                         {
                             "type": "qe.blocked",
-                            "reason": "Another QE session is already running",
+                            "reason": "Another validation session is already running",
                             "timestamp": datetime.now().isoformat(),
                         }
                     )
                 )
             else:
-                console_output.print("[yellow]Another QE session is already running[/yellow]")
-                console_output.print("[dim]Use 'superqe status' to check session status[/dim]")
+                console_output.print(
+                    "[yellow]Another validation session is already running[/yellow]"
+                )
+                console_output.print("[dim]Use 'superqode qe status' to check session status[/dim]")
             return 1
 
         # Warn about worktree isolation touching git metadata
@@ -232,7 +237,9 @@ def qe_run(
             if role:
                 role_list = list(role)
                 if not jsonl_stream:
-                    console_output.print(f"[cyan]Running QE roles: {', '.join(role_list)}[/cyan]")
+                    console_output.print(
+                        f"[cyan]Running validation roles: {', '.join(role_list)}[/cyan]"
+                    )
                     console_output.print()
 
                 result = _run_async(orchestrator.run_roles(role_list))
@@ -278,11 +285,11 @@ def qe_run(
 
 @qe.command("roles")
 def qe_roles():
-    """List all available QE roles."""
+    """List all available validation roles."""
     from superqode.superqe import list_roles
 
     console.print()
-    console.print(Panel("[bold]Available QE Roles[/bold]", border_style="cyan"))
+    console.print(Panel("[bold]Available Validation Roles[/bold]", border_style="cyan"))
     console.print()
 
     roles = list_roles()
@@ -304,19 +311,19 @@ def qe_roles():
             console.print(f"    [dim]Focus: {', '.join(role['focus_areas'])}[/dim]")
     console.print()
 
-    console.print("[bold]Heuristic Roles[/bold] (senior QE review)")
+    console.print("[bold]Heuristic Roles[/bold] (senior validation review)")
     for role in heuristic_roles:
         console.print(f"  [green]{role['name']}[/green]: {role['description']}")
     console.print()
 
-    console.print("[dim]Usage: superqe run . -r <role_name> -r <role_name>[/dim]")
+    console.print("[dim]Usage: superqode qe run . -r <role_name> -r <role_name>[/dim]")
 
 
 @qe.command("behaviors")
 def qe_behaviors():
-    """List available basic QE behaviors."""
+    """List available basic validation behaviors."""
     console.print()
-    console.print(Panel("[bold]Basic QE Behaviors[/bold]", border_style="cyan"))
+    console.print(Panel("[bold]Basic Validation Behaviors[/bold]", border_style="cyan"))
     console.print()
 
     # Basic behaviors (always available)
@@ -332,15 +339,15 @@ def qe_behaviors():
 
     console.print()
     console.print("[yellow]🔬 For advanced CodeOptiX behaviors, use:[/yellow]")
-    console.print("  [cyan]superqe advanced behaviors[/cyan]")
+    console.print("  [cyan]superqode qe advanced behaviors[/cyan]")
 
 
 @qe.command("quick")
 @click.argument("path", type=click.Path(exists=True), default=".")
 def qe_quick(path: str):
-    """Run a quick scan QE session (alias for 'qe run --mode quick').
+    """Run a quick scan validation session (alias for 'qe run --mode quick').
 
-    Fast, time-boxed QE for pre-commit and developer feedback.
+    Fast, time-boxed validation for pre-commit and developer feedback.
     """
     from superqode.superqe import QEOrchestrator
 
@@ -361,7 +368,7 @@ def qe_quick(path: str):
 @qe.command("deep")
 @click.argument("path", type=click.Path(exists=True), default=".")
 def qe_deep(path: str):
-    """Run a deep QE session (alias for 'qe run --mode deep').
+    """Run a deep validation session (alias for 'qe run --mode deep').
 
     Full investigation for pre-release and nightly CI.
     """
@@ -384,8 +391,8 @@ def qe_deep(path: str):
 @qe.command("status")
 @click.argument("path", type=click.Path(exists=True), default=".")
 def qe_status(path: str):
-    """Show current QE workspace status."""
-    if not _enterprise_only("QE workspace status"):
+    """Show current validation workspace status."""
+    if not _enterprise_only("validation workspace status"):
         return 1
     from superqode.workspace import WorkspaceManager
 
@@ -393,14 +400,14 @@ def qe_status(path: str):
     workspace = WorkspaceManager(project_root)
 
     console.print()
-    console.print(Panel("[bold]QE Workspace Status[/bold]", border_style="cyan"))
+    console.print(Panel("[bold]Validation Workspace Status[/bold]", border_style="cyan"))
     console.print()
 
     # Check if .superqode exists
     superqode_dir = project_root / ".superqode"
     if not superqode_dir.exists():
         console.print("[dim]No .superqode directory found.[/dim]")
-        console.print("[dim]Run 'superqe run .' to start a QE session.[/dim]")
+        console.print("[dim]Run 'superqode qe run .' to start a validation session.[/dim]")
         return
 
     # Show state
@@ -468,8 +475,8 @@ def qe_status(path: str):
 @click.argument("path", type=click.Path(exists=True), default=".")
 @click.option("--type", "-t", "artifact_type", help="Filter by type (patch, test_unit, qr, etc.)")
 def qe_artifacts(path: str, artifact_type: str):
-    """List QE artifacts from previous sessions."""
-    if not _enterprise_only("QE artifacts"):
+    """List validation artifacts from previous sessions."""
+    if not _enterprise_only("validation artifacts"):
         return 1
     from superqode.workspace.artifacts import ArtifactManager
 
@@ -487,7 +494,7 @@ def qe_artifacts(path: str, artifact_type: str):
         return
 
     console.print()
-    console.print(Panel("[bold]QE Artifacts[/bold]", border_style="cyan"))
+    console.print(Panel("[bold]validation Artifacts[/bold]", border_style="cyan"))
     console.print()
 
     table = Table()
@@ -514,7 +521,7 @@ def qe_artifacts(path: str, artifact_type: str):
 @click.argument("path", type=click.Path(exists=True), default=".")
 def qe_show(artifact_id: str, path: str):
     """Show content of a specific artifact."""
-    if not _enterprise_only("QE artifact viewer"):
+    if not _enterprise_only("validation artifact viewer"):
         return 1
     from superqode.workspace.artifacts import ArtifactManager
 
@@ -554,12 +561,12 @@ def qe_show(artifact_id: str, path: str):
 
 @qe.command("clean")
 @click.argument("path", type=click.Path(exists=True), default=".")
-@click.option("--keep-qrs", is_flag=True, default=True, help="Keep QR files")
-@click.option("--all", "clean_all", is_flag=True, help="Remove all including QRs")
+@click.option("--keep-qrs", is_flag=True, default=True, help="Keep report files")
+@click.option("--all", "clean_all", is_flag=True, help="Remove all including reports")
 @click.confirmation_option(prompt="Are you sure you want to clean artifacts?")
 def qe_clean(path: str, keep_qrs: bool, clean_all: bool):
-    """Clean up QE artifacts."""
-    if not _enterprise_only("QE artifact cleanup"):
+    """Clean up validation artifacts."""
+    if not _enterprise_only("validation artifact cleanup"):
         return 1
     from superqode.workspace.artifacts import ArtifactManager
 
@@ -579,8 +586,8 @@ def qe_clean(path: str, keep_qrs: bool, clean_all: bool):
 )
 @click.option("--output", "-o", type=click.Path(), help="Output file path")
 def qe_report(path: str, format: str, output: str):
-    """View or export the latest QR."""
-    if not _enterprise_only("QE reports"):
+    """View or export the latest report."""
+    if not _enterprise_only("validation reports"):
         return 1
     from superqode.workspace.artifacts import ArtifactManager, ArtifactType
 
@@ -590,11 +597,11 @@ def qe_report(path: str, format: str, output: str):
 
     qrs = manager.list_qrs()
     if not qrs:
-        console.print("[dim]No QR reports found.[/dim]")
-        console.print("[dim]Run 'superqe run .' to generate a report.[/dim]")
+        console.print("[dim]No report reports found.[/dim]")
+        console.print("[dim]Run 'superqode qe run .' to generate a report.[/dim]")
         return
 
-    # Get latest QR
+    # Get latest report
     latest = qrs[-1]
     content = manager.get_artifact_content(latest.id)
 
@@ -611,11 +618,11 @@ def qe_report(path: str, format: str, output: str):
 
 
 def _display_session_summary(result):
-    """Display a summary of the completed QE session."""
+    """Display a summary of the completed validation session."""
     from superqode.workspace.manager import QESessionResult
 
     console.print()
-    console.print(Panel("[bold]QE Session Complete[/bold]", border_style="green"))
+    console.print(Panel("[bold]validation Session Complete[/bold]", border_style="green"))
     console.print()
 
     # Verdict
@@ -652,7 +659,7 @@ def _display_session_summary(result):
     # Show artifact location
     if result.qir_generated or result.patches_generated or result.tests_generated:
         console.print("[dim]Artifacts saved to:[/dim] .superqode/qe-artifacts/")
-        console.print("[dim]View report with:[/dim] superqe report")
+        console.print("[dim]View report with:[/dim] superqode qe report")
 
     # Errors
     if result.errors:
@@ -666,7 +673,7 @@ def _display_session_summary(result):
 @click.argument("session_id", required=False)
 @click.argument("path", type=click.Path(exists=True), default=".")
 def qe_logs(session_id: Optional[str], path: str):
-    """Show detailed agent work logs for QE sessions.
+    """Show detailed agent work logs for validation sessions.
 
     Shows the actual agent interaction logs, including connection attempts,
     prompts sent, responses received, and analysis steps. This provides
@@ -674,7 +681,7 @@ def qe_logs(session_id: Optional[str], path: str):
 
     If SESSION_ID is not provided, shows logs for the most recent session.
     """
-    if not _enterprise_only("QE logs"):
+    if not _enterprise_only("validation logs"):
         return 1
     from superqode.workspace.artifacts import ArtifactManager
 
@@ -689,35 +696,35 @@ def qe_logs(session_id: Optional[str], path: str):
     # Find the session
     superqode_dir = project_root / ".superqode"
     if not superqode_dir.exists():
-        console.print("[red]No QE sessions found. Run 'superqe run .' first.[/red]")
+        console.print("[red]No validation sessions found. Run 'superqode qe run .' first.[/red]")
         return 1
 
     # Get session ID if not provided
     if not session_id:
-        # Find most recent QE agent log
+        # Find most recent validation agent log
         qe_logs = manager.list_logs_by_type("qe_agent")
         if qe_logs:
             latest_log = max(qe_logs, key=lambda a: a.created_at)
-            console.print(f"[dim]Showing logs for latest QE agent session[/dim]")
+            console.print(f"[dim]Showing logs for latest validation agent session[/dim]")
             console.print()
         else:
-            # Fallback to finding most recent QR
+            # Fallback to finding most recent report
             qr_dir = superqode_dir / "qe-artifacts" / "qr"
             if qr_dir.exists():
                 qr_files = list(qr_dir.glob("*.md"))
                 if qr_files:
                     latest_qr = max(qr_files, key=lambda f: f.stat().st_mtime)
                     console.print(
-                        "[dim]No QE agent logs found, showing QR analysis for latest session[/dim]"
+                        "[dim]No validation agent logs found, showing report analysis for latest session[/dim]"
                     )
                     console.print()
                     _show_qr_work_logs(latest_qr)
                     return 0
 
-            console.print("[red]No QE sessions found with work logs.[/red]")
+            console.print("[red]No validation sessions found with work logs.[/red]")
             return 1
 
-    # Try to find QE agent logs for the session
+    # Try to find validation agent logs for the session
     qe_logs = manager.list_logs_by_type("qe_agent")
     if qe_logs:
         # Filter by session if provided
@@ -730,7 +737,7 @@ def qe_logs(session_id: Optional[str], path: str):
             # Show the most recent log
             latest_log = max(session_logs, key=lambda a: a.created_at)
 
-            console.print(f"[bold green]📋 QE Agent Session Log[/bold green]")
+            console.print(f"[bold green]📋 validation Agent Session Log[/bold green]")
             console.print(f"[dim]File: {latest_log.path}[/dim]")
             console.print(
                 f"[dim]Created: {latest_log.created_at.strftime('%Y-%m-%d %H:%M:%S')}[/dim]"
@@ -754,17 +761,19 @@ def qe_logs(session_id: Optional[str], path: str):
                 console.print("[red]Could not read log content[/red]")
                 return 1
         else:
-            console.print(f"[yellow]No QE agent logs found for session {session_id}[/yellow]")
-            # Try to show QR work logs as fallback
+            console.print(
+                f"[yellow]No validation agent logs found for session {session_id}[/yellow]"
+            )
+            # Try to show report work logs as fallback
             _show_qr_work_logs_for_session(session_id, project_root)
     else:
-        console.print("[yellow]No QE agent logs found[/yellow]")
-        console.print("[dim]QE agent logs are saved automatically during analysis.[/dim]")
-        # Try to show QR work logs as fallback
+        console.print("[yellow]No validation agent logs found[/yellow]")
+        console.print("[dim]validation agent logs are saved automatically during analysis.[/dim]")
+        # Try to show report work logs as fallback
         if session_id:
             _show_qr_work_logs_for_session(session_id, project_root)
         else:
-            # Find most recent QR
+            # Find most recent report
             qr_dir = superqode_dir / "qe-artifacts" / "qr"
             if qr_dir.exists():
                 qr_files = list(qr_dir.glob("*.md"))
@@ -774,7 +783,7 @@ def qe_logs(session_id: Optional[str], path: str):
 
 
 def _show_qr_work_logs_for_session(session_id: str, project_root: Path):
-    """Show work logs extracted from a QR for a specific session."""
+    """Show work logs extracted from a report for a specific session."""
     superqode_dir = project_root / ".superqode"
     qr_path = superqode_dir / "qe-artifacts" / "qr" / f"qr-*-qe-{session_id}.md"
     qr_files = list(qr_path.parent.glob(qr_path.name.replace("*", "*")))
@@ -782,7 +791,7 @@ def _show_qr_work_logs_for_session(session_id: str, project_root: Path):
     if qr_files:
         _show_qr_work_logs(qr_files[0])
     else:
-        console.print(f"[red]QR not found for session: {session_id}[/red]")
+        console.print(f"[red]report not found for session: {session_id}[/red]")
 
 
 @qe.command("dashboard")
@@ -791,33 +800,33 @@ def _show_qr_work_logs_for_session(session_id: str, project_root: Path):
 @click.option("--no-open", is_flag=True, help="Don't open browser automatically")
 @click.option("--export", "-e", type=click.Path(), help="Export as standalone HTML file")
 def qe_dashboard(path: str, port: int, no_open: bool, export: str):
-    """Open QR dashboard in web browser.
+    """Open report dashboard in web browser.
 
-    Provides an interactive web interface for viewing Quality Reports
+    Provides an interactive web interface for viewing Validation Reports
     with severity filtering, findings details, and verified fixes visualization.
 
     Examples:
 
-        superqe dashboard              # Open latest QR in browser
+        superqode qe dashboard              # Open latest report in browser
 
-        superqe dashboard --port 9000  # Use custom port
+        superqode qe dashboard --port 9000  # Use custom port
 
-        superqe dashboard --export report.html  # Export as HTML file
+        superqode qe dashboard --export report.html  # Export as HTML file
     """
-    if not _enterprise_only("QE dashboard"):
+    if not _enterprise_only("validation dashboard"):
         return 1
     from superqode.qr.dashboard import start_dashboard, find_latest_qr, export_html
 
     project_root = Path(path).resolve()
 
-    # Find latest QR
+    # Find latest report
     qr_path = find_latest_qr(project_root)
     if qr_path is None:
-        console.print("[red]No QR reports found.[/red]")
-        console.print("[dim]Run 'superqe run .' to generate a report first.[/dim]")
+        console.print("[red]No report reports found.[/red]")
+        console.print("[dim]Run 'superqode qe run .' to generate a report first.[/dim]")
         return 1
 
-    console.print(f"[dim]Using QR: {qr_path.name}[/dim]")
+    console.print(f"[dim]Using report: {qr_path.name}[/dim]")
 
     if export:
         # Export mode
@@ -837,21 +846,21 @@ def qe_dashboard(path: str, port: int, no_open: bool, export: str):
     except OSError as e:
         if "Address already in use" in str(e):
             console.print(f"[red]Port {port} is already in use.[/red]")
-            console.print(f"[dim]Try: superqe dashboard --port {port + 1}[/dim]")
+            console.print(f"[dim]Try: superqode qe dashboard --port {port + 1}[/dim]")
         else:
             console.print(f"[red]Error starting dashboard: {e}[/red]")
         return 1
 
 
 def _show_qr_work_logs(qir_file: Path):
-    """Show work logs extracted from a QR file."""
-    console.print("[bold yellow]📄 Analysis Summary from QR[/bold yellow]")
+    """Show work logs extracted from a report file."""
+    console.print("[bold yellow]📄 Analysis Summary from report[/bold yellow]")
     console.print(f"[dim]File: {qir_file}[/dim]")
     console.print()
 
     qir_content = qir_file.read_text()
 
-    # Extract work logs from QR
+    # Extract work logs from report
     work_logs_found = False
     current_section = None
     in_analysis_process = False
@@ -893,9 +902,9 @@ def _show_qr_work_logs(qir_file: Path):
                 console.print(f"  [dim]... and {steps_match} more detailed steps[/dim]")
 
     if not work_logs_found:
-        console.print("[yellow]No detailed work logs found in QR[/yellow]")
+        console.print("[yellow]No detailed work logs found in report[/yellow]")
         console.print(
-            "[dim]Work logs are available in QR reports for sessions with AI agent analysis.[/dim]"
+            "[dim]Work logs are available in report reports for sessions with AI agent analysis.[/dim]"
         )
 
     console.print()
@@ -940,7 +949,7 @@ def _show_qr_work_logs(qir_file: Path):
 def qe_feedback(
     finding_id: str, feedback_type: str, reason: str, scope: str, expires: int, path: str
 ):
-    """Provide feedback on a finding to improve future QE runs.
+    """Provide feedback on a finding to improve future validation runs.
 
     Feedback types:
     - --valid: Confirm finding is a true positive
@@ -950,15 +959,15 @@ def qe_feedback(
 
     Examples:
 
-        superqe feedback sec-001 --valid
+        superqode qe feedback sec-001 --valid
 
-        superqe feedback sec-002 --false-positive -r "Intentional for testing"
+        superqode qe feedback sec-002 --false-positive -r "Intentional for testing"
 
-        superqe feedback sec-003 --false-positive --scope team -r "Known limitation"
+        superqode qe feedback sec-003 --false-positive --scope team -r "Known limitation"
 
-        superqe feedback perf-001 --fixed -r "Optimized query"
+        superqode qe feedback perf-001 --fixed -r "Optimized query"
     """
-    if not _enterprise_only("QE feedback"):
+    if not _enterprise_only("validation feedback"):
         return 1
     from superqode.memory import FeedbackCollector, MemoryStore
 
@@ -970,10 +979,12 @@ def qe_feedback(
     project_root = Path(path).resolve()
     collector = FeedbackCollector(project_root)
 
-    # Find the finding in recent QRs
+    # Find the finding in recent reports
     finding_info = _find_finding_in_qrs(project_root, finding_id)
     if not finding_info:
-        console.print(f"[yellow]Warning:[/yellow] Finding '{finding_id}' not found in recent QRs")
+        console.print(
+            f"[yellow]Warning:[/yellow] Finding '{finding_id}' not found in recent reports"
+        )
         console.print("[dim]Proceeding with limited information[/dim]")
         finding_info = {
             "id": finding_id,
@@ -1041,7 +1052,9 @@ def qe_feedback(
             console.print("[green]✓[/green] Marked as won't fix")
 
         console.print()
-        console.print("[dim]Feedback recorded. Future QE runs will use this information.[/dim]")
+        console.print(
+            "[dim]Feedback recorded. Future validation runs will use this information.[/dim]"
+        )
 
     except Exception as e:
         console.print(f"[red]Error recording feedback:[/red] {e}")
@@ -1051,7 +1064,7 @@ def qe_feedback(
 
 
 def _find_finding_in_qrs(project_root: Path, finding_id: str) -> Optional[Dict]:
-    """Search recent QRs for a finding by ID."""
+    """Search recent reports for a finding by ID."""
     qr_dir = project_root / ".superqode" / "qe-artifacts" / "qr"
     if not qr_dir.exists():
         return None
@@ -1075,16 +1088,16 @@ def _find_finding_in_qrs(project_root: Path, finding_id: str) -> Optional[Dict]:
 def qe_suppressions(path: str, remove: str):
     """List or manage finding suppressions.
 
-    Suppressions prevent specific findings from appearing in future QE runs.
-    They are created via 'superqe feedback --false-positive'.
+    Suppressions prevent specific findings from appearing in future validation runs.
+    They are created via 'superqode qe feedback --false-positive'.
 
     Examples:
 
-        superqe suppressions           # List active suppressions
+        superqode qe suppressions           # List active suppressions
 
-        superqe suppressions -r abc123  # Remove suppression by ID
+        superqode qe suppressions -r abc123  # Remove suppression by ID
     """
-    if not _enterprise_only("QE suppressions"):
+    if not _enterprise_only("validation suppressions"):
         return 1
     from superqode.memory import MemoryStore
 
@@ -1110,7 +1123,7 @@ def qe_suppressions(path: str, remove: str):
         console.print("[dim]No active suppressions[/dim]")
         console.print()
         console.print("[dim]Create suppressions with:[/dim]")
-        console.print("  superqe feedback <finding-id> --false-positive -r 'reason'")
+        console.print("  superqode qe feedback <finding-id> --false-positive -r 'reason'")
         return
 
     table = Table()
@@ -1143,3 +1156,10 @@ def qe_suppressions(path: str, remove: str):
 def _run_async(coro):
     """Run a coroutine from sync CLI code with a compatible event loop."""
     return asyncio.run(coro)
+
+
+try:
+    advanced_validation_cmd = importlib.import_module("superqode.commands.superqe").superqe
+    qe.add_command(advanced_validation_cmd, name="advanced")
+except Exception:
+    pass

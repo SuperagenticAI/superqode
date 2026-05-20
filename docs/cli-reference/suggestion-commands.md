@@ -1,6 +1,6 @@
 # Suggestion Commands
 
-Commands for reviewing and applying verified fix suggestions from QE sessions.
+Commands for reviewing and applying verified fix suggestions from validation sessions.
 
 Note: Suggestion commands are available in SuperQode Enterprise only.
 
@@ -14,13 +14,13 @@ The `superqode suggestions` command group manages fix suggestions:
 superqode suggestions COMMAND [OPTIONS] [ARGS]
 ```
 
-Suggestions are generated when running QE with `--allow-suggestions` enabled.
+Suggestions are generated when running validation with `--allow-suggestions` enabled.
 
 ---
 
 ## suggestions list
 
-List all verified fix suggestions from QE sessions.
+List all verified fix suggestions from validation sessions.
 
 ```bash
 superqode suggestions list [PROJECT_ROOT] [OPTIONS]
@@ -61,7 +61,7 @@ Verified Fix Suggestions
 └────┴─────────────────────────────────────┴──────────────┴──────────────┘
 
 Total: 3 verified fix suggestions
-Use 'superqe logs' to see detailed agent work logs
+Use 'superqode qe logs' to see detailed agent work logs
 ```
 
 ---
@@ -177,8 +177,8 @@ superqode suggestions reject finding-003 -r "Intentional design choice"
 ### Complete Workflow
 
 ```bash
-# 1. Run QE with suggestions enabled
-superqe run . --mode deep --allow-suggestions
+# 1. Run validation with suggestions enabled
+superqode qe run . --mode deep --allow-suggestions
 
 # 2. List available suggestions
 superqode suggestions list
@@ -259,17 +259,17 @@ Patches use unified diff format:
 
 ## Providing Feedback
 
-After reviewing suggestions, provide feedback to improve future QE runs:
+After reviewing suggestions, provide feedback to improve future validation runs:
 
 ```bash
 # If the suggestion was helpful
-superqe feedback finding-001 --valid
+superqode qe feedback finding-001 --valid
 
 # If the suggestion was wrong
-superqe feedback finding-001 --false-positive -r "This is expected behavior"
+superqode qe feedback finding-001 --false-positive -r "This is expected behavior"
 
 # If you applied the fix
-superqe feedback finding-001 --fixed -r "Applied suggested patch"
+superqode qe feedback finding-001 --fixed -r "Applied suggested patch"
 ```
 
 ---
@@ -280,10 +280,10 @@ superqe feedback finding-001 --fixed -r "Applied suggested patch"
 
 ```
 No verified fixes found.
-Run 'superqe run . --mode deep --allow-suggestions' to generate fix suggestions.
+Run 'superqode qe run . --mode deep --allow-suggestions' to generate fix suggestions.
 ```
 
-**Solution**: Run QE with `--allow-suggestions` flag.
+**Solution**: Run validation with `--allow-suggestions` flag.
 
 ### Patch Doesn't Apply
 
@@ -291,11 +291,11 @@ Run 'superqe run . --mode deep --allow-suggestions' to generate fix suggestions.
 error: patch failed: src/api/users.py:42
 ```
 
-**Solution**: The code may have changed since the QE session. Try:
+**Solution**: The code may have changed since the validation session. Try:
 
 1. Check if the file was modified
 2. Apply the patch manually with context
-3. Run a new QE session
+3. Run a new validation session
 
 ### Applied Wrong Suggestion
 
@@ -310,5 +310,5 @@ git checkout -- src/api/users.py
 ## Next Steps
 
 - [Allow Suggestions](../concepts/suggestions.md) - Understand the suggestion workflow
-- [QR Documentation](../concepts/qr.md) - Quality Reports
-- [QE Commands](qe-commands.md) - Full QE command reference
+- [report Documentation](../concepts/qr.md) - Validation Reports
+- [Validation Commands](qe-commands.md) - Full validation command reference

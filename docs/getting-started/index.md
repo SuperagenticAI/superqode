@@ -1,6 +1,6 @@
 # Getting Started
 
-Welcome to SuperQode. This guide helps you get started with the coding-agent TUI, headless CLI, provider setup, local models, and optional SuperQE release validation workflows.
+Welcome to SuperQode. This guide helps you get started with the coding-agent TUI, headless CLI, HarnessSpec workflows, runtime backends, provider setup, local models, and optional validation workflows.
 
 ---
 
@@ -12,7 +12,7 @@ Welcome to SuperQode. This guide helps you get started with the coding-agent TUI
 
     ---
 
-    Install SuperQode via pip or from source (includes SuperQE). Set up your environment and verify installation.
+    Install SuperQode via pip or from source. Set up your environment and verify installation.
 
     [:octicons-arrow-right-24: Install now](installation.md)
 
@@ -36,7 +36,7 @@ Welcome to SuperQode. This guide helps you get started with the coding-agent TUI
 
     ---
 
-    SuperQE command-line interface for automation, CI/CD integration, and batch processing.
+    Validation commands for automation, CI/CD integration, and batch processing.
 
     [:octicons-arrow-right-24: CLI guide](#cli-workflow-recommended-for-automation)
 
@@ -126,7 +126,7 @@ Navigate to your project directory and initialize SuperQode:
 
 ```bash
 cd /path/to/your/project
-superqe init
+superqode config init
 ```
 
 This command will:
@@ -135,7 +135,7 @@ This command will:
 2. **Enable core, implemented roles** and leave the rest disabled
 3. **Let you edit or delete roles** you don’t need
 
-If you want the interactive wizard, use `superqe init --guided`.
+If you want the interactive wizard, use `superqode config init --guided`.
 
 ### Step 2: Choose Your Connection Mode
 
@@ -227,7 +227,7 @@ Edit `superqode.yaml` to set your preferred connection:
 ```yaml
 superqode:
   version: "2.0"
-  team_name: "My QE Team"
+  team_name: "My validation Team"
 
 # Choose your default mode
 default:
@@ -251,7 +251,7 @@ providers:
 
 ### Role-Based Multi-Agent System
 
-SuperQode uses a **role-based multi-agent architecture** where different AI agents specialize in different quality engineering tasks:
+SuperQode uses a **role-based multi-agent architecture** where different AI agents specialize in different validation and evaluation tasks:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -282,7 +282,7 @@ SuperQode uses a **role-based multi-agent architecture** where different AI agen
 - **Parallel Execution:** Multiple roles can run simultaneously for comprehensive analysis
 - **Artifact Preservation:** Findings, patches, and reports are saved even though code changes are reverted
 
-### QE Roles Explained
+### Role-Based Workflows Explained
 
 | Role | Purpose | Best For |
 |------|---------|----------|
@@ -291,7 +291,7 @@ SuperQode uses a **role-based multi-agent architecture** where different AI agen
 | `unit_tester` | Find coverage gaps and edge cases | Code coverage improvement |
 | `performance_tester` | Detect bottlenecks (N+1 queries, memory leaks) | Performance-critical apps |
 | `e2e_tester` | Test complete user workflows | Frontend/Fullstack apps |
-| `fullstack` | Senior QE comprehensive review | Overall quality assessment |
+| `fullstack` | Senior validation comprehensive review | Overall quality assessment |
 
 [Learn more about roles →](../concepts/roles.md)
 
@@ -335,7 +335,7 @@ superqode
 # or
 :connect local ollama qwen3:8b
 
-# 3. Switch to a QE role (in TUI)
+# 3. Switch to a validation role (in TUI)
 :qe security_tester
 
 # 4. Start exploring! Type natural language requests:
@@ -343,9 +343,9 @@ superqode
 # "Test the authentication flow"
 # "Find performance bottlenecks in the database queries"
 
-# Note: To run automated QE sessions, use CLI commands:
-# superqe run . --mode quick   # Quick 60-second scan
-# superqe run . --mode deep    # Comprehensive 30-minute analysis
+# Note: To run automated validation sessions, use CLI commands:
+# superqode qe run . --mode quick   # Quick 60-second scan
+# superqode qe run . --mode deep    # Comprehensive 30-minute analysis
 
 # 5. View findings interactively
 :view <file>    # View file content
@@ -361,7 +361,7 @@ superqode
 | `:connect acp <agent>` | Connect directly to ACP agent |
 | `:connect byok <provider> <model>` | Connect directly to BYOK provider |
 | `:connect local <provider> <model>` | Connect directly to local model |
-| `:qe <role>` | Switch to QE role mode (e.g., `:qe security_tester`) |
+| `:qe <role>` | Switch to validation role mode (e.g., `:qe security_tester`) |
 | `:view <file>` | View file content |
 | `:diff` | View suggested changes |
 | `:plan` | View agent's plan |
@@ -388,51 +388,51 @@ superqode
 
 ```bash
 # 1. Initialize project (first time)
-superqe init
+superqode config init
 
 # 2. Edit superqode.yaml with your model choice
 
-# 3. Run QE session
-superqe run . --mode quick
+# 3. Run validation session
+superqode qe run . --mode quick
 
 # 4. Run with specific roles
-superqe run . --mode deep -r security_tester -r api_tester
+superqode qe run . --mode deep -r security_tester -r api_tester
 
 # 5. CI/CD output
-superqe run . --mode quick --jsonl > results.jsonl
-superqe run . --mode quick --junit results.xml
+superqode qe run . --mode quick --jsonl > results.jsonl
+superqode qe run . --mode quick --junit results.xml
 
 # 6. View artifacts
-superqe artifacts .
-superqe dashboard
+superqode qe artifacts .
+superqode qe dashboard
 ```
 
 ### Common CLI Commands
 
 ```bash
 # Quick scan
-superqe run . --mode quick
+superqode qe run . --mode quick
 
 # Deep analysis
-superqe run . --mode deep
+superqode qe run . --mode deep
 
 # Specific roles
-superqe run . -r security_tester -r api_tester
+superqode qe run . -r security_tester -r api_tester
 
 # With test generation (Enterprise)
-superqe run . --mode deep --generate
+superqode qe run . --mode deep --generate
 
 # With fix suggestions (Enterprise)
-superqe run . --mode deep --allow-suggestions
+superqode qe run . --mode deep --allow-suggestions
 
 # CI-friendly output (Enterprise)
-superqe run . --mode quick --jsonl
-superqe run . --mode quick --junit results.xml
+superqode qe run . --mode quick --jsonl
+superqode qe run . --mode quick --junit results.xml
 
 # View results (Enterprise)
-superqe artifacts .
-superqe dashboard
-superqe status
+superqode qe artifacts .
+superqode qe dashboard
+superqode qe status
 ```
 
 [Full CLI reference →](../cli-reference/index.md)
@@ -473,7 +473,7 @@ pip install superqode
 cd ~/projects/my-api
 
 # 3. Initialize configuration
-superqe init
+superqode config init
 # This will:
 # - Detect framework (e.g., FastAPI)
 # - Create superqode.yaml
@@ -492,7 +492,7 @@ superqode
 # Then: Start asking questions!
 
 # Option B: CLI (automation)
-superqe run . --mode quick -r security_tester
+superqode qe run . --mode quick -r security_tester
 ```
 
 ---
@@ -500,10 +500,10 @@ superqe run . --mode quick -r security_tester
 ## Next Steps
 
 1. **[Project Setup Guide](quickstart.md)** - Detailed step-by-step setup
-2. **[Your First QE Session](first-session.md)** - Complete walkthrough
+2. **[Your First Session](first-session.md)** - Complete walkthrough
 3. **[Configuration Reference](configuration.md)** - Customize SuperQode
 4. **[Understanding Modes](../concepts/modes.md)** - Deep dive into ACP, BYOK, Local
-5. **[QE Roles](../concepts/roles.md)** - Learn about each role
+5. **[Role-Based Workflows](../concepts/roles.md)** - Learn about each role
 6. **[CI/CD Integration](../integration/cicd.md)** - Add to your pipeline
 
 ---

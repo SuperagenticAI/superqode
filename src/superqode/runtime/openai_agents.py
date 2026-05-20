@@ -289,7 +289,7 @@ class OpenAIAgentsRuntime:
         self.sandbox_backend = (sandbox_backend or "").strip().lower() or None
         self._sandbox_client = None
         if self.sandbox_backend:
-            from .openai_sandbox import (
+            from superqode.harness.sandbox import (
                 build_manifest,
                 build_sandbox_agent,
                 build_sandbox_client,

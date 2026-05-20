@@ -12,10 +12,10 @@ from superqode.dialogs.runtime import RuntimeDialog
 from superqode.runtime import list_runtimes
 
 
-def test_dialog_lists_all_three_runtimes():
+def test_dialog_lists_current_runtimes():
     dialog = RuntimeDialog(active="builtin")
     names = {info.name for info in dialog.runtimes}
-    assert names == {"builtin", "adk", "openai-agents"}
+    assert names == {"builtin", "adk", "openai-agents", "pydanticai"}
 
 
 def test_resolve_numeric_answer():
@@ -44,4 +44,4 @@ def test_resolve_unknown_answer_returns_none():
 def test_active_runtime_defaults_to_resolver():
     """When constructed without `active`, the dialog reads resolve_runtime_name()."""
     dialog = RuntimeDialog()
-    assert dialog.active in {"builtin", "adk", "openai-agents"}
+    assert dialog.active in {"builtin", "adk", "openai-agents", "pydanticai"}

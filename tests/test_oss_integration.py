@@ -122,7 +122,7 @@ code_agents:
         runner = click.testing.CliRunner()
         result = runner.invoke(superqe_cli, ["--help"])
         assert result.exit_code == 0
-        assert "quality" in result.output.lower()
+        assert "validation" in result.output.lower()
 
     def test_qe_run_help(self):
         """Test QE run command help."""

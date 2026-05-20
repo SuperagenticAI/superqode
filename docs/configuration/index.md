@@ -52,7 +52,7 @@ This section provides comprehensive documentation for configuring SuperQode thro
 
     ---
 
-    Configure QE guidance prompts, time constraints, and verification requirements.
+    Configure validation guidance prompts, time constraints, and verification requirements.
 
     [:octicons-arrow-right-24: Guidance Configuration](guidance-config.md)
 
@@ -79,7 +79,7 @@ Values in higher-priority files override lower ones.
 ### Initialize Project Configuration
 
 ```bash
-superqe init
+superqode config init
 ```
 
 Creates `superqode.yaml` in the current directory.
@@ -159,7 +159,7 @@ providers:
       - qwen3:8b
       - llama3.2:latest
 
-# QE settings
+# validation settings
 qe:
   output:
     directory: ".superqode"
@@ -297,7 +297,7 @@ Edit `superqode.yaml` with your preferred editor.
 ## Validating Configuration
 
 ```bash
-superqe run . --mode quick
+superqode qe run . --mode quick
 ```
 
 This will load your config and surface common configuration and dependency issues.
@@ -393,7 +393,7 @@ qe:
 
 ```
 No configuration found.
-Run 'superqe init' to create a configuration.
+Run 'superqode config init' to create a configuration.
 ```
 
 **Solution**: Create a configuration file.
@@ -422,4 +422,4 @@ Warning: Provider 'google': GOOGLE_API_KEY not set
 - [Team Configuration](team.md) - Advanced team setup
 - [MCP Configuration](mcp-config.md) - MCP server setup
 - [Noise Configuration](noise-config.md) - Filtering and deduplication
-- [Guidance Configuration](guidance-config.md) - QE guidance prompts
+- [Guidance Configuration](guidance-config.md) - validation guidance prompts

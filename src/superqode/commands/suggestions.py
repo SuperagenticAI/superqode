@@ -1,8 +1,8 @@
 """
-Suggestions command - Review verified fixes from QE sessions.
+Suggestions command - Review verified fixes from validation sessions.
 
 This command allows users to:
-- List all verified fixes from QE sessions
+- List all verified fixes from validation sessions
 - View suggestion details and evidence
 """
 
@@ -20,8 +20,8 @@ from superqode.enterprise import require_enterprise
 
 @click.group()
 def suggestions():
-    """Review verified fixes from QE sessions."""
-    if not require_enterprise("QE suggestions"):
+    """Review verified fixes from validation sessions."""
+    if not require_enterprise("validation suggestions"):
         raise SystemExit(1)
 
 
@@ -71,7 +71,7 @@ def load_verified_fixes(project_root: Path) -> list:
 
 
 def get_artifacts_dir(project_root: Path) -> Path:
-    """Get the QE artifacts directory."""
+    """Get the validation artifacts directory."""
     return project_root / ".superqode" / "qe-artifacts"
 
 
@@ -81,7 +81,7 @@ def get_artifacts_dir(project_root: Path) -> Path:
     "--all", "-a", "show_all", is_flag=True, help="Show all suggestions, not just improvements"
 )
 def list_suggestions(project_root, show_all):
-    """List all verified fix suggestions from QE sessions."""
+    """List all verified fix suggestions from validation sessions."""
 
     project_path = Path(project_root)
     fixes = load_verified_fixes(project_path)
@@ -89,7 +89,7 @@ def list_suggestions(project_root, show_all):
     if not fixes:
         console.print("[yellow]No verified fixes found.[/yellow]")
         console.print(
-            "[dim]Run 'superqe run . --mode deep --allow-suggestions' to generate fix suggestions.[/dim]"
+            "[dim]Run 'superqode qe run . --mode deep --allow-suggestions' to generate fix suggestions.[/dim]"
         )
         return
 
@@ -124,4 +124,4 @@ def list_suggestions(project_root, show_all):
     console.print(table)
     console.print()
     console.print(f"[dim]Total: {len(fixes)} verified fix suggestions[/dim]")
-    console.print(f"[dim]Use 'superqe logs' to see detailed agent work logs[/dim]")
+    console.print(f"[dim]Use 'superqode qe logs' to see detailed agent work logs[/dim]")

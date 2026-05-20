@@ -20,7 +20,7 @@ Advanced features, architecture documentation, and systems in SuperQode for powe
 
     ---
 
-How coding and QE sessions run from request to result.
+How coding and validation sessions run from request to result.
 
     [:octicons-arrow-right-24: Execution Pipeline](execution-pipeline.md)
 
@@ -44,7 +44,7 @@ How coding and QE sessions run from request to result.
 
     ---
 
-    Framework for testing QE capabilities with structured scenarios.
+    Framework for testing validation capabilities with structured scenarios.
 
     [:octicons-arrow-right-24: Evaluation Engine](evaluation-engine.md)
 
@@ -76,7 +76,7 @@ How coding and QE sessions run from request to result.
 
     ---
 
-Verification-first system prompts that guide coding and QE agents.
+Verification-first system prompts that guide coding and validation agents.
 
     [:octicons-arrow-right-24: Guidance System](guidance-system.md)
 
@@ -147,5 +147,5 @@ superqode:
 ## Next Steps
 
 - [Configuration Reference](../configuration/yaml-reference.md) - Full config options
-- [QE Features](../qe-features/index.md) - QE features overview
+- [Validation Features](../qe-features/index.md) - validation features overview
 - [CLI Reference](../cli-reference/index.md) - Command reference

@@ -9,14 +9,19 @@ connectors adapt them into this protocol.
 from __future__ import annotations
 
 import glob as globlib
+import importlib
+import logging
 import os
 import re
 import shlex
 import shutil
 import subprocess
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Optional, Protocol
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -28,6 +33,49 @@ class SandboxPolicy:
     allow_shell: bool = False
     allowed_commands: tuple[str, ...] = ()
     allow_compound_commands: bool = False
+
+
+class SandboxCapabilityBackend(str, Enum):
+    """Supported sandbox capability profiles."""
+
+    LOCAL = "local"
+    READ_ONLY = "read-only"
+    NO_SHELL = "no-shell"
+    GIT_WORKTREE = "git-worktree"
+    DOCKER = "docker"
+    E2B = "e2b"
+    DAYTONA = "daytona"
+    MODAL = "modal"
+    VERCEL = "vercel"
+    RUNLOOP = "runloop"
+    AGENTCORE = "agentcore"
+    LANGSMITH = "langsmith"
+    REMOTE = "remote"
+
+
+@dataclass(frozen=True)
+class SandboxCapabilities:
+    """Capabilities granted by a sandbox backend profile."""
+
+    backend: SandboxCapabilityBackend
+    can_read: bool
+    can_write: bool
+    can_shell: bool
+    can_network: bool
+    description: str
+
+
+_OPENAI_SANDBOX_CLIENTS: dict[str, tuple[str, str, Optional[str]]] = {
+    "local": ("agents.sandbox.sandboxes.unix_local", "UnixLocalSandboxClient", None),
+    "docker": ("agents.sandbox.sandboxes.docker", "DockerSandboxClient", None),
+    "e2b": ("agents_e2b", "E2BSandboxClient", "agents-e2b"),
+    "daytona": ("agents_daytona", "DaytonaSandboxClient", "agents-daytona"),
+    "modal": ("agents_modal", "ModalSandboxClient", "agents-modal"),
+    "vercel": ("agents_vercel", "VercelSandboxClient", "agents-vercel"),
+    "runloop": ("agents_runloop", "RunloopSandboxClient", "agents-runloop"),
+    "blaxel": ("agents_blaxel", "BlaxelSandboxClient", "agents-blaxel"),
+    "cloudflare": ("agents_cloudflare", "CloudflareSandboxClient", "agents-cloudflare"),
+}
 
 
 @dataclass(frozen=True)
@@ -105,6 +153,9 @@ class SandboxBackend(Protocol):
         cwd: str | None = None,
         env: dict[str, str] | None = None,
     ) -> SandboxShellResult: ...
+
+
+HarnessSandboxBackend = SandboxBackend
 
 
 class LocalSandboxBackend:
@@ -328,6 +379,249 @@ def sandbox_policy_from_execution_policy(policy: Any) -> SandboxPolicy:
         allowed_commands=tuple(getattr(policy, "allowed_commands", ()) or ()),
         allow_compound_commands=bool(getattr(policy, "allow_compound_commands", False)),
     )
+
+
+def get_sandbox_capabilities(
+    backend: str | SandboxCapabilityBackend,
+) -> SandboxCapabilities:
+    """Return capabilities for a sandbox backend profile."""
+    selected = SandboxCapabilityBackend(backend)
+    capabilities: dict[SandboxCapabilityBackend, SandboxCapabilities] = {
+        SandboxCapabilityBackend.LOCAL: SandboxCapabilities(
+            selected, True, True, True, True, "Local workspace with full tool access."
+        ),
+        SandboxCapabilityBackend.READ_ONLY: SandboxCapabilities(
+            selected,
+            True,
+            False,
+            False,
+            False,
+            "Read-only workspace; no writes, shell, or network.",
+        ),
+        SandboxCapabilityBackend.NO_SHELL: SandboxCapabilities(
+            selected, True, True, False, True, "Local workspace without shell execution."
+        ),
+        SandboxCapabilityBackend.GIT_WORKTREE: SandboxCapabilities(
+            selected, True, True, True, True, "Git worktree-isolated workspace."
+        ),
+        SandboxCapabilityBackend.DOCKER: SandboxCapabilities(
+            selected, True, True, True, True, "Container-isolated workspace."
+        ),
+        SandboxCapabilityBackend.E2B: SandboxCapabilities(
+            selected, True, True, True, True, "E2B remote sandbox workspace."
+        ),
+        SandboxCapabilityBackend.DAYTONA: SandboxCapabilities(
+            selected, True, True, True, True, "Daytona remote sandbox workspace."
+        ),
+        SandboxCapabilityBackend.MODAL: SandboxCapabilities(
+            selected, True, True, True, True, "Modal cloud sandbox workspace."
+        ),
+        SandboxCapabilityBackend.VERCEL: SandboxCapabilities(
+            selected, True, True, True, True, "Vercel Sandbox cloud workspace."
+        ),
+        SandboxCapabilityBackend.RUNLOOP: SandboxCapabilities(
+            selected, True, True, True, True, "Runloop remote devbox workspace."
+        ),
+        SandboxCapabilityBackend.AGENTCORE: SandboxCapabilities(
+            selected,
+            True,
+            True,
+            True,
+            True,
+            "Amazon Bedrock AgentCore Code Interpreter sandbox.",
+        ),
+        SandboxCapabilityBackend.LANGSMITH: SandboxCapabilities(
+            selected, True, True, True, True, "LangSmith remote sandbox workspace."
+        ),
+        SandboxCapabilityBackend.REMOTE: SandboxCapabilities(
+            selected, True, True, True, True, "Remote sandbox backend."
+        ),
+    }
+    return capabilities[selected]
+
+
+def apply_backend_permissions(config: Any, backend: str | SandboxCapabilityBackend) -> Any:
+    """Apply backend capability restrictions to an existing permission config."""
+    from ..tools.permissions import Permission, PermissionConfig, ToolGroup
+
+    caps = get_sandbox_capabilities(backend)
+    groups = dict(config.groups)
+    tools = dict(config.tools)
+
+    if not caps.can_read:
+        groups[ToolGroup.READ] = Permission.DENY
+        groups[ToolGroup.SEARCH] = Permission.DENY
+        groups[ToolGroup.DIAGNOSTICS] = Permission.DENY
+    if not caps.can_write:
+        groups[ToolGroup.WRITE] = Permission.DENY
+    if not caps.can_shell:
+        groups[ToolGroup.SHELL] = Permission.DENY
+        tools["bash"] = Permission.DENY
+    if not caps.can_network:
+        groups[ToolGroup.NETWORK] = Permission.DENY
+        tools["fetch"] = Permission.DENY
+        tools["download"] = Permission.DENY
+        tools["web_search"] = Permission.DENY
+        tools["web_fetch"] = Permission.DENY
+
+    return PermissionConfig(
+        default=config.default,
+        groups=groups,
+        tools=tools,
+        allow_patterns=list(config.allow_patterns),
+        deny_patterns=list(config.deny_patterns),
+    )
+
+
+def supported_openai_sandbox_backends() -> list[str]:
+    """Return OpenAI Agents SandboxAgent backend names understood by the harness."""
+    return list(_OPENAI_SANDBOX_CLIENTS.keys())
+
+
+def supported_sandbox_backends() -> list[str]:
+    """Compatibility alias for OpenAI Agents sandbox backend names."""
+    return supported_openai_sandbox_backends()
+
+
+def is_openai_sandbox_backend_available(name: str) -> bool:
+    """Return True when an OpenAI Agents sandbox client module imports."""
+    entry = _OPENAI_SANDBOX_CLIENTS.get(name.lower())
+    if entry is None:
+        return False
+    module_path, _class_name, _extra = entry
+    try:
+        importlib.import_module(module_path)
+        return True
+    except ImportError:
+        return False
+
+
+def is_sandbox_backend_available(name: str) -> bool:
+    """Compatibility alias for OpenAI Agents sandbox availability."""
+    return is_openai_sandbox_backend_available(name)
+
+
+def build_openai_sandbox_client(name: str) -> Any:
+    """Build an OpenAI Agents sandbox client for the selected backend."""
+    from ..runtime.errors import RuntimeNotInstalledError
+
+    key = name.lower().strip()
+    if key not in _OPENAI_SANDBOX_CLIENTS:
+        raise ValueError(
+            f"Unknown sandbox backend '{name}'. Known: {', '.join(sorted(_OPENAI_SANDBOX_CLIENTS))}"
+        )
+    module_path, class_name, extra = _OPENAI_SANDBOX_CLIENTS[key]
+    try:
+        module = importlib.import_module(module_path)
+    except ImportError as exc:
+        hint = f"pip install {extra}" if extra else "pip install superqode[openai-agents]"
+        raise RuntimeNotInstalledError(
+            f"Sandbox backend '{name}' requires '{module_path}'. Install with: {hint}"
+        ) from exc
+
+    cls = getattr(module, class_name, None)
+    if cls is None:
+        raise RuntimeNotInstalledError(
+            f"Module '{module_path}' has no class '{class_name}' for backend '{name}'"
+        )
+    return cls()
+
+
+def build_sandbox_client(name: str) -> Any:
+    """Compatibility alias for OpenAI Agents sandbox client construction."""
+    return build_openai_sandbox_client(name)
+
+
+def build_openai_sandbox_manifest(config: Any) -> Any:
+    """Translate an agent config into an OpenAI Agents sandbox Manifest."""
+    from ..runtime.errors import RuntimeNotInstalledError
+
+    try:
+        from agents.sandbox import Manifest
+        from agents.sandbox.entries import LocalDir
+    except ImportError as exc:
+        raise RuntimeNotInstalledError(
+            "openai-agents 0.14+ is required for sandbox manifests. "
+            "Install with: pip install 'superqode[openai-agents]'"
+        ) from exc
+
+    working_directory = Path(config.working_directory)
+    return Manifest(entries={"repo": LocalDir(src=working_directory)})
+
+
+def build_manifest(config: Any) -> Any:
+    """Compatibility alias for OpenAI Agents sandbox Manifest construction."""
+    return build_openai_sandbox_manifest(config)
+
+
+def build_openai_sandbox_agent(
+    *,
+    name: str,
+    instructions: str,
+    tools: list,
+    model: Any,
+    manifest: Any,
+) -> Any:
+    """Construct an OpenAI Agents SandboxAgent."""
+    from ..runtime.errors import RuntimeNotInstalledError
+
+    try:
+        from agents.sandbox import SandboxAgent
+    except ImportError as exc:
+        raise RuntimeNotInstalledError(
+            "openai-agents 0.14+ is required for SandboxAgent. "
+            "Install with: pip install 'superqode[openai-agents]'"
+        ) from exc
+
+    return SandboxAgent(
+        name=name,
+        instructions=instructions,
+        tools=tools,
+        model=model,
+        default_manifest=manifest,
+    )
+
+
+def build_sandbox_agent(
+    *,
+    name: str,
+    instructions: str,
+    tools: list,
+    model: Any,
+    manifest: Any,
+) -> Any:
+    """Compatibility alias for OpenAI Agents SandboxAgent construction."""
+    return build_openai_sandbox_agent(
+        name=name,
+        instructions=instructions,
+        tools=tools,
+        model=model,
+        manifest=manifest,
+    )
+
+
+def build_openai_sandbox_run_config(client: Any, base_run_config: Any) -> Any:
+    """Return an OpenAI Agents RunConfig with sandbox execution enabled."""
+    from ..runtime.errors import RuntimeNotInstalledError
+
+    try:
+        from agents.run import RunConfig
+        from agents.sandbox import SandboxRunConfig
+    except ImportError as exc:
+        raise RuntimeNotInstalledError(
+            "openai-agents 0.14+ is required for SandboxRunConfig. "
+            "Install with: pip install 'superqode[openai-agents]'"
+        ) from exc
+
+    return RunConfig(
+        tracing_disabled=getattr(base_run_config, "tracing_disabled", True),
+        sandbox=SandboxRunConfig(client=client),
+    )
+
+
+def build_sandbox_run_config(client: Any, base_run_config: Any) -> Any:
+    """Compatibility alias for OpenAI Agents sandbox RunConfig construction."""
+    return build_openai_sandbox_run_config(client, base_run_config)
 
 
 def _reject_unsafe_shell(command: str, policy: SandboxPolicy) -> None:

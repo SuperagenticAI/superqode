@@ -8,8 +8,8 @@ Programmatic API for SuperQode, enabling integration into Python applications, s
 
 The SuperQode Python SDK provides high-level interfaces for:
 
-- **QE Orchestration**: Run Quick Scan and Deep QE sessions
-- **Session Management**: Create, manage, and monitor QE sessions
+- **validation Orchestration**: Run Quick Scan and Deep validation sessions
+- **Session Management**: Create, manage, and monitor validation sessions
 - **Workspace Control**: Manage ephemeral workspaces and snapshots
 - **Event Handling**: Subscribe to JSONL events
 - **Result Processing**: Access findings, test results, and artifacts
@@ -27,21 +27,21 @@ pip install superqode
 Import the SDK:
 
 ```python
-from superqode.superqe import QEOrchestrator, QESession, QESessionConfig
+from superqode.evaluation import QEOrchestrator, QESession, QESessionConfig
 from superqode.workspace import WorkspaceManager, GitWorktreeManager
 ```
 
 ---
 
-## QE Orchestrator
+## validation Orchestrator
 
-High-level interface for running QE sessions.
+High-level interface for running validation sessions.
 
 ### Basic Usage
 
 ```python
 from pathlib import Path
-from superqode.superqe import QEOrchestrator
+from superqode.evaluation import QEOrchestrator
 
 # Initialize orchestrator
 orchestrator = QEOrchestrator(
@@ -55,7 +55,7 @@ orchestrator = QEOrchestrator(
 # Quick Scan
 result = await orchestrator.quick_scan()
 
-# Deep QE
+# Deep validation
 result = await orchestrator.deep_qe()
 
 # Run specific roles
@@ -80,11 +80,11 @@ print(f"Duration: {result.duration_seconds:.1f}s")
 - Fast (60 seconds default)
 - Shallow exploration
 - High-risk paths only
-- Minimal QR
+- Minimal report
 
 **Best for:** Pre-commit, developer laptop, fast CI feedback
 
-### Deep QE
+### Deep validation
 
 Comprehensive analysis:
 
@@ -102,7 +102,7 @@ for finding in result.findings:
 **Characteristics:**
 - Full sandbox
 - Destructive testing allowed
-- Comprehensive QR
+- Comprehensive report
 - Multi-agent analysis
 
 **Best for:** Pre-release, nightly CI, compliance evidence
@@ -110,7 +110,7 @@ for finding in result.findings:
 ### Custom Configuration
 
 ```python
-from superqode.superqe import QESessionConfig, QEMode
+from superqode.evaluation import QESessionConfig, QEMode
 
 config = QESessionConfig(
     mode=QEMode.QUICK_SCAN,
@@ -144,14 +144,14 @@ print(f"Tests: {result.tests_passed}/{result.total_tests} passed")
 
 ---
 
-## QE Session
+## Validation Session
 
 Lower-level session management for fine-grained control.
 
 ### Session Lifecycle
 
 ```python
-from superqode.superqe import QESession, QESessionConfig, QEMode
+from superqode.evaluation import QESession, QESessionConfig, QEMode
 
 config = QESessionConfig(
     mode=QEMode.DEEP_QE,
@@ -205,7 +205,7 @@ result.findings  # List[Dict[str, Any]]
 # Artifacts
 result.patches_generated
 result.tests_generated
-result.qr_path  # Path to QR JSON
+result.qr_path  # Path to report JSON
 
 # Errors
 result.errors  # List[str]
@@ -290,7 +290,7 @@ manager.add_finding(
     line_number=42
 )
 
-# End session (reverts changes, generates QR)
+# End session (reverts changes, generates report)
 ws_result = manager.end_session(generate_qr=True)
 print(f"Patches: {ws_result.patches_generated}")
 print(f"Tests: {ws_result.tests_generated}")
@@ -305,7 +305,7 @@ from superqode.workspace import GitWorktreeManager
 
 worktree_manager = GitWorktreeManager(project_root=Path("."))
 
-# Create QE worktree
+# Create validation worktree
 worktree = await worktree_manager.create_qe_worktree(
     session_id="qe-20250115",
     base_ref="HEAD",
@@ -316,7 +316,7 @@ worktree = await worktree_manager.create_qe_worktree(
 print(f"Worktree path: {worktree.path}")
 print(f"Base commit: {worktree.base_commit}")
 
-# ... run QE in worktree ...
+# ... run validation in worktree ...
 
 # Remove worktree
 await worktree_manager.remove_worktree(worktree)
@@ -333,7 +333,7 @@ snapshot_manager = GitSnapshotManager(project_root=Path("."))
 
 # Create snapshot
 snapshot_id = await snapshot_manager.create_snapshot(
-    message="Before QE session"
+    message="Before validation session"
 )
 
 # ... modify files ...
@@ -356,7 +356,7 @@ await snapshot_manager.restore_snapshot(snapshot_id)
 Subscribe to JSONL events:
 
 ```python
-from superqode.superqe.events import QEEventEmitter, EventType
+from superqode.evaluation.events import QEEventEmitter, EventType
 import sys
 
 emitter = QEEventEmitter(sys.stdout)
@@ -371,7 +371,7 @@ def handle_finding(event):
 emitter.add_handler(handle_finding)
 
 # Use with orchestrator
-# Events will be emitted automatically during QE sessions
+# Events will be emitted automatically during validation sessions
 ```
 
 ### Event Collector
@@ -379,14 +379,14 @@ emitter.add_handler(handle_finding)
 Collect events in memory:
 
 ```python
-from superqode.superqe.events import QEEventCollector
+from superqode.evaluation.events import QEEventCollector
 
 collector = QEEventCollector()
 
 # Register with emitter
 emitter.add_handler(collector.collect)
 
-# After QE session
+# After validation session
 findings = collector.get_findings()
 tests = collector.get_tests()
 summary = collector.get_summary()
@@ -403,7 +403,7 @@ collector.save(Path("events.jsonl"))
 ```python
 import asyncio
 from pathlib import Path
-from superqode.superqe import QEOrchestrator
+from superqode.evaluation import QEOrchestrator
 
 async def run_qe_in_ci():
     orchestrator = QEOrchestrator(
@@ -437,12 +437,12 @@ if __name__ == "__main__":
 
 ---
 
-## Example: Custom QE Workflow
+## Example: Custom validation Workflow
 
 ```python
 import asyncio
 from pathlib import Path
-from superqode.superqe import QESession, QESessionConfig, QEMode
+from superqode.evaluation import QESession, QESessionConfig, QEMode
 from superqode.workspace import GitWorktreeManager
 
 async def custom_qe_workflow():
@@ -473,9 +473,9 @@ async def custom_qe_workflow():
             if finding["severity"] in ["critical", "high"]:
                 print(f"WARNING: {finding['severity']}: {finding['title']}")
 
-        # Access QR
+        # Access report
         if result.qr_path:
-            print(f"QR: {result.qr_path}")
+            print(f"report: {result.qr_path}")
 
     finally:
         # Cleanup worktree
@@ -492,8 +492,8 @@ if __name__ == "__main__":
 ```python
 import asyncio
 from pathlib import Path
-from superqode.superqe import QEOrchestrator
-from superqode.superqe.events import QEEventCollector, EventType
+from superqode.evaluation import QEOrchestrator
+from superqode.evaluation.events import QEEventCollector, EventType
 
 async def monitor_qe_session():
     # Create collector
@@ -503,12 +503,12 @@ async def monitor_qe_session():
     orchestrator = QEOrchestrator(Path("."))
 
     # Register collector (if using global emitter)
-    from superqode.superqe.events import get_event_emitter
+    from superqode.evaluation.events import get_event_emitter
     emitter = get_event_emitter()
     if emitter:
         emitter.add_handler(collector.collect)
 
-    # Run QE
+    # Run validation
     result = await orchestrator.quick_scan()
 
     # Analyze events
@@ -529,14 +529,14 @@ if __name__ == "__main__":
 ## Error Handling
 
 ```python
-from superqode.superqe import QESession, QEStatus
+from superqode.evaluation import QESession, QEStatus
 
 try:
     session = QESession(Path("."))
     result = await session.run()
 
     if result.status == QEStatus.FAILED:
-        print("QE session failed:")
+        print("validation session failed:")
         for error in result.errors:
             print(f"  - {error}")
 
@@ -553,7 +553,7 @@ except Exception as e:
 
 ### 1. Use Async/Await
 
-All QE operations are async:
+All validation operations are async:
 
 ```python
 # [CORRECT] Correct
@@ -594,7 +594,7 @@ Use progress callbacks for long-running operations:
 
 ```python
 def on_progress(msg: str):
-    logger.info(f"QE Progress: {msg}")
+    logger.info(f"validation Progress: {msg}")
 
 result = await orchestrator.deep_qe(on_progress=on_progress)
 ```
@@ -651,4 +651,4 @@ result = await orchestrator.deep_qe(on_progress=on_progress)
 
 - [JSONL Events](jsonl-events.md) - Event streaming API
 - [Workspace Concepts](../concepts/workspace.md) - Workspace details
-- [QE Modes](../concepts/modes.md) - Quick Scan vs Deep QE
+- [validation Modes](../concepts/modes.md) - Quick Scan vs Deep validation

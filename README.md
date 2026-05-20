@@ -109,7 +109,7 @@ superqode --print "inspect this repository and suggest the smallest next step"
 |---------|-------------|
 | **HarnessSpec** | Define coding, no-tool, local-model, and custom harness behavior with one declarative contract |
 | **Harness kernel** | Run sessions with normalized events, run records, backend dispatch, typed outputs, and workflow execution |
-| **Pluggable runtimes** | Swap the agent loop: SuperQode native, Google ADK, OpenAI Agents SDK, or optional DeepAgents |
+| **Pluggable runtimes** | Swap the agent loop: SuperQode native, Google ADK, OpenAI Agents SDK, optional DeepAgents, or optional PydanticAI |
 | **Developer TUI** | Interactive sessions with wrapped prompts, quiet streaming logs, compact tool activity, and readable change summaries |
 | **Headless CLI** | Run coding tasks and provider checks from scripts or terminals |
 | **Tool system** | File, search, edit, shell, todo, MCP, and optional Monty Python REPL tools |

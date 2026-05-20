@@ -1,5 +1,5 @@
 """
-Core QE Skills - Essential quality engineering skills.
+Core validation skills - Essential validation and evaluation skills.
 
 Skills included:
 - testability-scoring: Assess code testability

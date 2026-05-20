@@ -13,7 +13,7 @@ The Constitution System provides a declarative way to define quality standards f
 - **Metrics**: Measurement definitions
 - **Thresholds**: Quality gates and blocking criteria
 
-Constitutions are defined in YAML/JSON and evaluated during QE sessions to ensure code meets your quality standards.
+Constitutions are defined in YAML/JSON and evaluated during validation sessions to ensure code meets your quality standards.
 
 ---
 
@@ -309,9 +309,9 @@ thresholds:
 
 ## Evaluation
 
-### During QE Sessions
+### During Validation Sessions
 
-Constitutions are evaluated automatically during QE sessions:
+Constitutions are evaluated automatically during validation sessions:
 
 1. **Findings checked**: Each finding checked against rules
 2. **Metrics calculated**: Metrics computed from session results
@@ -339,7 +339,7 @@ Constitutions are evaluated automatically during QE sessions:
 ### Loading Constitution
 
 ```python
-from superqode.superqe.constitution import load_constitution
+from superqode.evaluation.constitution import load_constitution
 
 constitution = load_constitution("constitution.yaml")
 ```
@@ -347,7 +347,7 @@ constitution = load_constitution("constitution.yaml")
 ### Default Constitution
 
 ```python
-from superqode.superqe.constitution import get_default_constitution
+from superqode.evaluation.constitution import get_default_constitution
 
 constitution = get_default_constitution()
 ```
@@ -465,12 +465,12 @@ Track constitution versions and changes over time.
 
 ## Related Features
 
-- [QE Roles](../concepts/roles.md) - Role-based quality engineering
+- [Role-Based Workflows](../concepts/roles.md) - Role-based validation and evaluation
 - [Noise Filtering](noise-filtering.md) - Filtering findings
 
 ---
 
 ## Next Steps
 
-- [QE Features Index](index.md) - All QE features
+- [Validation Features Index](index.md) - All validation features
 - [Configuration Reference](../configuration/yaml-reference.md) - Config options

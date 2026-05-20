@@ -1,7 +1,8 @@
-"""SuperQE CLI entrypoint.
+"""Legacy validation CLI entrypoint.
 
-Exposes the QE automation commands as a dedicated CLI while keeping
-SuperQode focused on the developer TUI experience.
+The package now exposes validation workflows through ``superqode qe``. This
+module remains importable for compatibility, but it is no longer installed as a
+standalone console script.
 """
 
 from __future__ import annotations
@@ -19,10 +20,7 @@ from superqode.commands.superqe import superqe as advanced_group
 @click.group()
 @click.version_option(version=__version__)
 def superqe() -> None:
-    """SuperQE - Quality Engineering automation CLI.
-
-    Use `superqode` for the interactive developer TUI.
-    """
+    """Compatibility wrapper for validation and evaluation commands."""
 
 
 def _attach_commands(target: click.Group, source: click.Group) -> None:
@@ -68,7 +66,7 @@ superqe.add_command(advanced_group, name="advanced")
 
 
 def main() -> None:
-    """Run the SuperQE CLI."""
+    """Run the compatibility validation CLI."""
     superqe()
 
 

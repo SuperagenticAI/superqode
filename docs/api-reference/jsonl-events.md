@@ -1,17 +1,17 @@
 # JSONL Events API
 
-SuperQode emits structured JSONL (JSON Lines) events during QE sessions for CI/CD integration, real-time monitoring, and programmatic access to QE results.
+SuperQode emits structured JSONL (JSON Lines) events during validation sessions for CI/CD integration, real-time monitoring, and programmatic access to validation results.
 
 ---
 
 ## Overview
 
-JSONL events provide a machine-readable stream of all QE activities:
+JSONL events provide a machine-readable stream of all validation activities:
 
 - **CI-friendly**: Pipe directly to CI/CD pipelines
 - **Real-time**: Stream events as they occur
 - **Structured**: Consistent JSON format for easy parsing
-- **Complete**: Covers all aspects of QE sessions
+- **Complete**: Covers all aspects of validation sessions
 
 ---
 
@@ -36,7 +36,7 @@ Each event is a single JSON object on one line:
 
 #### `qe.started`
 
-QE session started.
+validation session started.
 
 ```json
 {
@@ -51,7 +51,7 @@ QE session started.
 
 #### `qe.completed`
 
-QE session completed successfully.
+validation session completed successfully.
 
 ```json
 {
@@ -73,7 +73,7 @@ QE session completed successfully.
 
 #### `qe.failed`
 
-QE session failed with error.
+validation session failed with error.
 
 ```json
 {
@@ -316,7 +316,7 @@ Test file generated.
 
 #### `agent.started`
 
-QE agent started.
+validation agent started.
 
 ```json
 {
@@ -330,7 +330,7 @@ QE agent started.
 
 #### `agent.completed`
 
-QE agent completed.
+validation agent completed.
 
 ```json
 {
@@ -345,7 +345,7 @@ QE agent completed.
 
 #### `agent.failed`
 
-QE agent failed.
+validation agent failed.
 
 ```json
 {
@@ -471,19 +471,19 @@ Log message event.
 Stream events to stdout:
 
 ```bash
-superqe run . --jsonl
+superqode qe run . --jsonl
 ```
 
 Stream to file:
 
 ```bash
-superqe run . --jsonl > events.jsonl
+superqode qe run . --jsonl > events.jsonl
 ```
 
 ### Programmatic Usage
 
 ```python
-from superqode.superqe.events import QEEventEmitter
+from superqode.evaluation.events import QEEventEmitter
 import sys
 
 # Stream to stdout
@@ -502,14 +502,14 @@ emitter.emit_qe_started(
 Collect events in memory:
 
 ```python
-from superqode.superqe.events import QEEventCollector
+from superqode.evaluation.events import QEEventCollector
 
 collector = QEEventCollector()
 
 # Register with emitter
 emitter.add_handler(collector.collect)
 
-# After QE session
+# After validation session
 findings = collector.get_findings()
 tests = collector.get_tests()
 summary = collector.get_summary()
@@ -542,7 +542,7 @@ emitter.add_handler(handle_finding)
 ```yaml
 - name: Run SuperQode
   run: |
-    superqe run . --jsonl > qe-events.jsonl
+    superqode qe run . --jsonl > qe-events.jsonl
 
 - name: Parse Results
   run: |
@@ -559,7 +559,7 @@ emitter.add_handler(handle_finding)
 ```yaml
 qe:
   script:
-    - superqe run . --jsonl > qe-events.jsonl
+    - superqode qe run . --jsonl > qe-events.jsonl
     - |
       # Parse findings
       jq -r 'select(.type=="finding.detected") | "\(.severity): \(.title)"' qe-events.jsonl
@@ -571,8 +571,8 @@ qe:
 ### Jenkins
 
 ```groovy
-stage('Quality Engineering') {
-    sh 'superqe run . --jsonl > qe-events.jsonl'
+stage('validation and evaluation') {
+    sh 'superqode qe run . --jsonl > qe-events.jsonl'
 
     def events = readJSON file: 'qe-events.jsonl'
     def findings = events.findAll { it.type == 'finding.detected' }
@@ -701,7 +701,7 @@ def summarize_events(events):
 
 ## Event Flow Example
 
-Typical event sequence for a QE session:
+Typical event sequence for a validation session:
 
 ```
 qe.started
@@ -726,7 +726,7 @@ qe.started
 Access the global event emitter:
 
 ```python
-from superqode.superqe.events import (
+from superqode.evaluation.events import (
     get_event_emitter,
     set_event_emitter,
     emit_event,
@@ -774,4 +774,4 @@ done < events.jsonl
 
 - [Python SDK](python-sdk.md) - Programmatic API access
 - [CI/CD Integration](../integration/cicd.md) - CI/CD workflows
-- [QE Commands](../cli-reference/qe-commands.md) - CLI options
+- [Validation Commands](../cli-reference/qe-commands.md) - CLI options

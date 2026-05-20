@@ -1,6 +1,6 @@
 # Team Configuration
 
-Configure team modes, roles, and multi-agent settings for coordinated quality engineering.
+Configure team modes, roles, and multi-agent settings for coordinated validation and evaluation.
 
 ---
 
@@ -237,7 +237,7 @@ team:
 
 ---
 
-## QE Role Types
+## validation Role Types
 
 ### Execution Roles
 
@@ -308,12 +308,12 @@ roles:
 
 ### Heuristic Role
 
-Senior QE comprehensive review:
+Senior validation comprehensive review:
 
 ```yaml
 roles:
   fullstack:
-    description: "Senior QE comprehensive review"
+    description: "Senior validation comprehensive review"
     mode: byok
     provider: anthropic
     model: claude-sonnet-4
@@ -428,7 +428,7 @@ team:
 
         # Heuristic role
         fullstack:
-          description: "Senior QE comprehensive review"
+          description: "Senior validation comprehensive review"
           mode: byok
           provider: anthropic
           model: claude-sonnet-4
@@ -443,5 +443,5 @@ team:
 ## Next Steps
 
 - [Provider Configuration](../providers/index.md) - Provider-specific settings
-- [QE Settings](yaml-reference.md) - Quality engineering options
+- [validation Settings](yaml-reference.md) - Quality engineering options
 - [Role Configuration](yaml-reference.md) - Role configuration reference

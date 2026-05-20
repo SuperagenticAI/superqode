@@ -1,5 +1,5 @@
 """
-JSONL Event Streaming - CI-friendly event output for QE sessions.
+JSONL Event Streaming - CI-friendly event output for validation sessions.
 
 Code  `code exec --json` mode.
 
@@ -111,7 +111,7 @@ class QEEvent:
 
 class QEEventEmitter:
     """
-    Emits JSONL events for QE sessions.
+    Emits JSONL events for validation sessions.
 
     Provides CI-friendly streaming output that can be:
     - Piped to other tools
@@ -176,7 +176,7 @@ class QEEventEmitter:
         project_root: Optional[str] = None,
         roles: Optional[List[str]] = None,
     ) -> None:
-        """Emit QE session started event."""
+        """Emit validation session started event."""
         self.emit(
             QEEvent.create(
                 EventType.QE_STARTED,
@@ -196,7 +196,7 @@ class QEEventEmitter:
         tests_generated: int = 0,
         patches_generated: int = 0,
     ) -> None:
-        """Emit QE session completed event."""
+        """Emit validation session completed event."""
         self.emit(
             QEEvent.create(
                 EventType.QE_COMPLETED,
@@ -215,7 +215,7 @@ class QEEventEmitter:
         error: str,
         duration_seconds: float,
     ) -> None:
-        """Emit QE session failed event."""
+        """Emit validation session failed event."""
         self.emit(
             QEEvent.create(
                 EventType.QE_FAILED,

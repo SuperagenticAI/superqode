@@ -64,10 +64,10 @@ MODES = {
     ),
     AppMode.QE: ModeInfo(
         id="qe",
-        name="Quality Engineering",
+        name="validation and evaluation",
         icon="🔍",
         color="#22c55e",
-        description="Run QE sessions with multi-agent analysis",
+        description="Run validation sessions with multi-agent analysis",
         shortcut="q",
     ),
     AppMode.AGENT: ModeInfo(

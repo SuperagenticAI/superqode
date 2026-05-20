@@ -5,21 +5,41 @@ harness. ``HarnessSpec`` describes user-owned agent harnesses; ``PatchHarness``
 continues to provide project validation for generated changes.
 """
 
-from .validator import PatchHarness, HarnessFinding, HarnessResult
-from .config import HarnessConfig, ValidationCategory, load_harness_config
+from superqode.patch_harness import (
+    HarnessConfig,
+    HarnessFinding,
+    HarnessResult,
+    PatchHarness,
+    ValidationCategory,
+    load_harness_config,
+)
 from .compiler import compile_to_headless_profile, spec_from_headless_profile
 from .backends import (
+    ADKHarnessBackend,
     HarnessBackend,
+    HarnessBackendCapabilities,
+    HarnessBackendInspection,
+    HarnessBackendIssue,
     HarnessBackendRequest,
     HarnessBackendResult,
     DeepAgentsHarnessBackend,
+    OpenAIAgentsHarnessBackend,
+    PydanticAIHarnessBackend,
     RuntimeHarnessBackend,
+    backend_capabilities,
     create_harness_backend,
+    inspect_harness_backend,
     known_harness_backend_names,
 )
 from .events import HarnessEvent
 from .kernel import HarnessKernel, HarnessRunRequest, HarnessRunResult, HarnessSession, init_harness
-from .loader import harness_spec_from_dict, harness_spec_to_dict, load_harness_spec
+from .loader import (
+    harness_spec_from_dict,
+    harness_spec_json_schema,
+    harness_spec_to_dict,
+    load_harness_spec,
+    save_harness_spec,
+)
 from .model_policy import EffectiveModelPolicy, resolve_harness_model_policy
 from .output import (
     RESULT_END,
@@ -29,19 +49,31 @@ from .output import (
     parse_typed_output,
 )
 from .sandbox import (
+    SandboxCapabilities,
+    SandboxCapabilityBackend,
+    HarnessSandboxBackend,
     LocalSandboxBackend,
     SandboxBackend,
     SandboxFileInfo,
     SandboxPolicy,
     SandboxShellResult,
+    apply_backend_permissions,
+    build_openai_sandbox_agent,
+    build_openai_sandbox_client,
+    build_openai_sandbox_manifest,
+    build_openai_sandbox_run_config,
+    get_sandbox_capabilities,
+    is_openai_sandbox_backend_available,
     require_shell,
     require_write,
     sandbox_policy_from_execution_policy,
+    supported_openai_sandbox_backends,
 )
 from .store import (
     FileHarnessStore,
     HarnessRunRecord,
     HarnessSessionRecord,
+    SQLiteHarnessStore,
     generate_run_id,
 )
 from .spec import (
@@ -95,7 +127,11 @@ __all__ = [
     "EffectiveModelPolicy",
     "RESULT_END",
     "RESULT_START",
+    "ADKHarnessBackend",
     "HarnessBackend",
+    "HarnessBackendCapabilities",
+    "HarnessBackendInspection",
+    "HarnessBackendIssue",
     "HarnessBackendRequest",
     "HarnessBackendResult",
     "HarnessEvent",
@@ -106,28 +142,46 @@ __all__ = [
     "HarnessRunRecord",
     "HarnessSessionRecord",
     "FileHarnessStore",
+    "SQLiteHarnessStore",
     "DeepAgentsHarnessBackend",
+    "OpenAIAgentsHarnessBackend",
+    "PydanticAIHarnessBackend",
     "RuntimeHarnessBackend",
+    "HarnessSandboxBackend",
     "LocalSandboxBackend",
     "SandboxBackend",
+    "SandboxCapabilities",
+    "SandboxCapabilityBackend",
     "SandboxFileInfo",
     "SandboxPolicy",
     "SandboxShellResult",
     "TypedOutputError",
+    "apply_backend_permissions",
+    "backend_capabilities",
+    "build_openai_sandbox_agent",
+    "build_openai_sandbox_client",
+    "build_openai_sandbox_manifest",
+    "build_openai_sandbox_run_config",
     "build_typed_output_prompt",
     "compile_to_headless_profile",
     "create_harness_backend",
     "get_harness_template",
+    "get_sandbox_capabilities",
     "generate_run_id",
     "harness_spec_from_dict",
+    "harness_spec_json_schema",
     "harness_spec_to_dict",
     "init_harness",
+    "inspect_harness_backend",
+    "is_openai_sandbox_backend_available",
     "known_harness_backend_names",
     "parse_typed_output",
     "require_shell",
     "require_write",
     "sandbox_policy_from_execution_policy",
+    "supported_openai_sandbox_backends",
     "load_harness_spec",
+    "save_harness_spec",
     "run_workflow",
     "resolve_harness_model_policy",
     "spec_from_headless_profile",

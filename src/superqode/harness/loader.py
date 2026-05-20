@@ -37,6 +37,18 @@ def load_harness_spec(path: str | Path) -> HarnessSpec:
     return harness_spec_from_dict(data)
 
 
+def save_harness_spec(spec: HarnessSpec, path: str | Path) -> Path:
+    """Write a harness spec to YAML or JSON and return the resolved path."""
+    spec_path = Path(path).expanduser()
+    spec_path.parent.mkdir(parents=True, exist_ok=True)
+    data = harness_spec_to_dict(spec)
+    if spec_path.suffix.lower() == ".json":
+        spec_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    else:
+        spec_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    return spec_path
+
+
 def harness_spec_from_dict(data: dict[str, Any]) -> HarnessSpec:
     """Build a ``HarnessSpec`` from a Python mapping.
 
@@ -159,6 +171,140 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
     }
 
 
+def harness_spec_json_schema() -> dict[str, Any]:
+    """Return a JSON Schema for HarnessSpec YAML/JSON files."""
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "SuperQode HarnessSpec",
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "version": {"type": "integer", "minimum": 1},
+            "name": {"type": "string", "minLength": 1},
+            "description": {"type": "string"},
+            "flavor": {"type": "string", "enum": [item.value for item in HarnessFlavor]},
+            "runtime": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "backend": {"type": "string"},
+                    "fallback_backends": {"type": "array", "items": {"type": "string"}},
+                    "fallbacks": {"type": "array", "items": {"type": "string"}},
+                    "config": {"type": "object"},
+                },
+            },
+            "model_policy": {
+                "type": "object",
+                "additionalProperties": True,
+                "properties": {
+                    "primary": {"type": "string"},
+                    "fallbacks": {"type": "array", "items": {"type": "string"}},
+                    "fallback": {"type": "array", "items": {"type": "string"}},
+                    "profile": {"type": "string"},
+                    "temperature": {"type": "number"},
+                    "context_window": {"type": "integer"},
+                    "reasoning": {"type": "string"},
+                    "local_hardware": {"type": "string"},
+                    "tool_call_format": {"type": "string"},
+                    "config": {"type": "object"},
+                },
+            },
+            "execution_policy": {
+                "type": "object",
+                "additionalProperties": True,
+                "properties": {
+                    "sandbox": {"type": "string"},
+                    "approval_profile": {"type": "string"},
+                    "allow_read": {"type": "boolean"},
+                    "allow_write": {"type": "boolean"},
+                    "allow_shell": {"type": "boolean"},
+                    "allow_network": {"type": "boolean"},
+                    "allowed_commands": {"type": "array", "items": {"type": "string"}},
+                    "blocked_categories": {"type": "array", "items": {"type": "string"}},
+                    "config": {"type": "object"},
+                },
+            },
+            "agents": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["id"],
+                    "additionalProperties": True,
+                    "properties": {
+                        "id": {"type": "string", "minLength": 1},
+                        "role": {"type": "string"},
+                        "model": {"type": "string"},
+                        "system_prompt": {"type": "string"},
+                        "tools": {"type": "array", "items": {"type": "string"}},
+                        "skills": {"type": "array", "items": {"type": "string"}},
+                        "delegates_to": {"type": "array", "items": {"type": "string"}},
+                        "max_iterations": {"type": "integer"},
+                        "output_schema": {"type": "object"},
+                        "config": {"type": "object"},
+                    },
+                },
+            },
+            "workflow": {
+                "type": "object",
+                "additionalProperties": True,
+                "properties": {
+                    "mode": {"type": "string", "enum": [item.value for item in WorkflowMode]},
+                    "max_task_depth": {"type": "integer"},
+                    "parallelism": {"type": "integer"},
+                    "merge_strategy": {"type": "string"},
+                    "config": {"type": "object"},
+                },
+            },
+            "context": {
+                "type": "object",
+                "additionalProperties": True,
+                "properties": {
+                    "instruction_files": {"type": "array", "items": {"type": "string"}},
+                    "skills_dir": {"type": "string"},
+                    "roles_dir": {"type": "string"},
+                    "session_storage": {"type": "string"},
+                    "compaction": {"type": "object"},
+                    "memory": {"type": "object"},
+                },
+            },
+            "validation": {
+                "type": "object",
+                "additionalProperties": True,
+                "properties": {
+                    "enabled": {"type": "boolean"},
+                    "fail_on_error": {"type": "boolean"},
+                    "timeout_seconds": {"type": "integer"},
+                    "custom_steps": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["name", "command"],
+                            "properties": {
+                                "name": {"type": "string"},
+                                "command": {"type": "string"},
+                                "enabled": {"type": "boolean"},
+                                "timeout": {"type": "integer"},
+                            },
+                        },
+                    },
+                },
+            },
+            "observability": {
+                "type": "object",
+                "additionalProperties": True,
+                "properties": {
+                    "events": {"type": "boolean"},
+                    "traces": {"type": "boolean"},
+                    "run_store": {"type": "string"},
+                    "config": {"type": "object"},
+                },
+            },
+            "metadata": {"type": "object"},
+        },
+        "required": ["name"],
+    }
+
+
 def _runtime(value: Any) -> RuntimeSpec:
     data = value if isinstance(value, dict) else {}
     return RuntimeSpec(
@@ -222,7 +368,9 @@ def _agents(value: Any) -> tuple[AgentSpec, ...]:
                 output_schema=dict(item["output_schema"])
                 if isinstance(item.get("output_schema"), dict)
                 else None,
-                config=dict(item.get("config") or {}) if isinstance(item.get("config"), dict) else {},
+                config=dict(item.get("config") or {})
+                if isinstance(item.get("config"), dict)
+                else {},
             )
         )
     return tuple(out)
@@ -274,7 +422,11 @@ def _validation(value: Any) -> ValidationSpec:
         fail_on_error=bool(data.get("fail_on_error", False)),
         timeout_seconds=int(data.get("timeout_seconds", 300) or 0),
         custom_steps=tuple(steps),
-        config={k: v for k, v in data.items() if k not in {"enabled", "fail_on_error", "timeout_seconds", "custom_steps"}},
+        config={
+            k: v
+            for k, v in data.items()
+            if k not in {"enabled", "fail_on_error", "timeout_seconds", "custom_steps"}
+        },
     )
 
 

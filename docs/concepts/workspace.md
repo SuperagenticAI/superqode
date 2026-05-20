@@ -1,6 +1,6 @@
 # Ephemeral Workspace
 
-SuperQode uses ephemeral workspaces to ensure your code is never modified without consent. This page explains how workspace isolation works and why it's critical for safe QE.
+SuperQode uses ephemeral workspaces to ensure your code is never modified without consent. This page explains how workspace isolation works and why it's critical for safe validation.
 
 ---
 
@@ -11,12 +11,12 @@ SuperQode uses ephemeral workspaces to ensure your code is never modified withou
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    QE SESSION LIFECYCLE                      │
+│                    VALIDATION SESSION LIFECYCLE                      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  1. SNAPSHOT         Original code preserved                 │
 │        ↓                                                     │
-│  2. QE SANDBOX       Agents freely modify, inject tests,    │
+│  2. SANDBOX       Agents freely modify, inject tests,    │
 │        │             run experiments, break things           │
 │        ↓                                                     │
 │  3. REPORT           Document what was done, what was found │
@@ -83,10 +83,10 @@ Uses Git worktrees for lightweight isolation when enabled with `--worktree`:
 # SuperQode creates a worktree internally
 git worktree add ~/.superqode/working/<repo>/qe/<session-id> HEAD
 
-# QE runs in the worktree
+# validation runs in the worktree
 # Original repository is untouched
 
-# After QE, worktree is cleaned up
+# After validation, worktree is cleaned up
 git worktree remove ~/.superqode/working/<repo>/qe/<session-id>
 ```
 
@@ -95,7 +95,7 @@ git worktree remove ~/.superqode/working/<repo>/qe/<session-id>
 - Low disk usage (uses Git's COW)
 - Perfect isolation for Git repositories
 
-**Usage:** Enable with `superqe run . --worktree` in Git repositories.
+**Usage:** Enable with `superqode qe run . --worktree` in Git repositories.
 **Note:** Worktree isolation writes to `.git/worktrees`. Use it only if you are comfortable with git metadata changes.
 
 ### 2. Directory Snapshot
@@ -106,10 +106,10 @@ For non-Git projects, creates a directory copy:
 # SuperQode snapshots the directory
 cp -r . .superqode/sandbox
 
-# QE runs in the sandbox
+# validation runs in the sandbox
 # Original directory is untouched
 
-# After QE, sandbox is removed
+# After validation, sandbox is removed
 rm -rf .superqode/sandbox
 ```
 
@@ -151,7 +151,7 @@ Each snapshot includes:
 
 ## Change Tracking
 
-During QE, all changes are tracked:
+During validation, all changes are tracked:
 
 ### File Changes
 
@@ -179,7 +179,7 @@ During QE, all changes are tracked:
 
 ## Git Guard
 
-During QE sessions, dangerous Git operations are blocked:
+During validation sessions, dangerous Git operations are blocked:
 
 ### Blocked Operations
 
@@ -218,7 +218,7 @@ qe:
 
 ### Automatic Revert
 
-After every QE session:
+After every validation session:
 
 1. **Change Detection**: All modifications identified
 2. **Artifact Extraction**: Patches and tests saved
@@ -231,10 +231,10 @@ If needed, manually trigger revert:
 
 ```bash
 # View pending changes
-superqe status
+superqode qe status
 
 # Force revert
-superqe revert --force
+superqode qe revert --force
 ```
 
 ### Revert Verification
@@ -313,7 +313,7 @@ If a session is interrupted:
 SuperQode detects incomplete sessions:
 
 ```
-WARNING:  Incomplete QE session detected
+WARNING:  Incomplete validation session detected
     Session: qe-session-20240118-143022
     Status: interrupted
 
@@ -329,13 +329,13 @@ Choice: _
 
 ```bash
 # List sessions
-superqe status --all
+superqode qe status --all
 
 # Recover specific session
-superqe recover qe-session-20240118-143022
+superqode qe recover qe-session-20240118-143022
 
 # Force clean (discard session)
-superqe clean --force
+superqode qe clean --force
 ```
 
 ---
@@ -406,7 +406,7 @@ Periodically clean old artifacts:
 
 ```bash
 # Clean artifacts older than 7 days
-superqe artifacts --clean --older-than 7d
+superqode qe artifacts --clean --older-than 7d
 ```
 
 ### 4. Verify Reverts
@@ -433,7 +433,7 @@ git diff
     git clean -fd
 
     # Or use SuperQode recovery
-    superqe revert --force
+    superqode qe revert --force
     ```
 
 ??? question "Snapshot taking too long"
@@ -471,7 +471,7 @@ Detailed worktree-based isolation for Git repositories.
 
 - **Preserves build caches**: `node_modules/`, `target/`, `__pycache__/` shared between worktrees
 - **Fast setup**: Git handles copying efficiently (copy-on-write)
-- **Multiple parallel sessions**: Create multiple worktrees for parallel QE
+- **Multiple parallel sessions**: Create multiple worktrees for parallel validation
 - **Commit testing**: Test specific commits without affecting working tree
 - **Native Git integration**: Works seamlessly with Git workflows
 
@@ -481,7 +481,7 @@ Worktrees stored in: `~/.superqode/working/{repo-name}/qe/{session-id}`
 
 - Isolated from main repository
 - Session-specific directories
-- Automatic cleanup after QE
+- Automatic cleanup after validation
 
 #### Creating Worktrees
 
@@ -510,7 +510,7 @@ worktree = await manager.create_qe_worktree(
 await manager.remove_worktree(worktree)
 ```
 
-Automatically cleaned up after QE session completion.
+Automatically cleaned up after validation session completion.
 
 ---
 
@@ -535,7 +535,7 @@ from superqode.workspace import GitSnapshotManager
 manager = GitSnapshotManager(project_root)
 
 snapshot_id = await manager.create_snapshot(
-    message="Before QE session",
+    message="Before validation session",
     files=None  # None = all tracked files
 )
 ```
@@ -546,7 +546,7 @@ snapshot_id = await manager.create_snapshot(
 {
   "id": "snap-20250115-143022-abc123",
   "timestamp": "2025-01-15T14:30:22",
-  "message": "Before QE session",
+  "message": "Before validation session",
   "file_hashes": {
     "src/api/users.py": "sha256:abc...",
     "src/api/orders.py": "sha256:def..."
@@ -571,15 +571,15 @@ await manager.restore_snapshot(snapshot_id)
 
 ---
 
-### QE Coordinator
+### validation Coordinator
 
 Session coordination with locking and epoch system.
 
 #### Locking System
 
-Prevents concurrent deep QE runs:
+Prevents concurrent deep validation runs:
 
-- **Deep QE**: Exclusive lock (blocks other sessions)
+- **Deep validation**: Exclusive lock (blocks other sessions)
 - **Quick Scan**: Shared lock (multiple can run)
 - **Automatic cleanup**: Stale locks from dead processes removed
 
@@ -601,7 +601,7 @@ if lock is None:
     return
 
 try:
-    # Run QE...
+    # Run validation...
 finally:
     coordinator.release_lock(lock)
 ```
@@ -611,18 +611,18 @@ finally:
 ```python
 with coordinator.session("qe-20250115", mode="deep") as lock:
     if lock:
-        # Run QE...
+        # Run validation...
     # Lock automatically released
 ```
 
 #### Epoch System
 
-Detects if code changed during QE:
+Detects if code changed during validation:
 
 ```python
 # Check if results are stale
 if coordinator.is_result_stale(lock):
-    print("Warning: Code changed during QE")
+    print("Warning: Code changed during validation")
 
 # Bump epoch when files change
 coordinator.bump_snapshot_epoch()
@@ -880,7 +880,7 @@ Always coordinate sessions:
 ```python
 with coordinator.session("my-session") as lock:
     if lock:
-        # Safe to run QE
+        # Safe to run validation
 ```
 
 ### 4. Check Stale Results
@@ -928,6 +928,6 @@ pip install watchdog
 
 ## Next Steps
 
-- [QE Roles](roles.md) - Understanding testing roles
-- [Quality Reports](qr.md) - Report format and structure
+- [Role-Based Workflows](roles.md) - Understanding testing roles
+- [Validation Reports](qr.md) - Report format and structure
 - [Allow Suggestions](suggestions.md) - Fix demonstration workflow

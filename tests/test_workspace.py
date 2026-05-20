@@ -383,7 +383,7 @@ class TestQRGenerator:
         generator = QRGenerator(data)
         markdown = generator.generate_markdown()
 
-        assert "Quality Report (QR)" in markdown
+        assert "Validation Report" in markdown
         assert "test-123" in markdown
         assert "SQL Injection" in markdown
         assert "FAIL" in markdown  # Critical finding = fail

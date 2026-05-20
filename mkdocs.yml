@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
-site_description: "Super Quality Engineering for Agentic Coding Teams - Let agents break the code. Prove the fix. Ship with confidence."
+site_description: "Harness-first coding agents with pluggable runtimes, model policy, sandbox policy, and validation workflows."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode
@@ -158,17 +158,17 @@ nav:
     - getting-started/index.md
     - 📦 Installation: getting-started/installation.md
     - ⚡ Quick Start: getting-started/quickstart.md
-    - 🎯 Your First QE Session: getting-started/first-session.md
+    - 🎯 Your First Session: getting-started/first-session.md
     - ⚙️ Configuration: getting-started/configuration.md
     - 🧭 Troubleshooting: getting-started/troubleshooting.md
 
   - 📚 Concepts:
     - concepts/index.md
-    - 🤖 What is SuperQE?: concepts/superqe.md
+    - 🧪 Release Validation: concepts/release-validation.md
     - 🔌 Three Modes: concepts/modes.md
     - 📁 Ephemeral Workspace: concepts/workspace.md
-    - 👥 QE Roles: concepts/roles.md
-    - 📊 Quality Reports: concepts/qr.md
+    - 👥 Role-Based Workflows: concepts/roles.md
+    - 📊 Validation Reports: concepts/qr.md
     - 💡 Allow Suggestions: concepts/suggestions.md
     - 🔐 Authentication: concepts/authentication.md
 
@@ -181,10 +181,10 @@ nav:
     - 🔇 Noise Configuration: configuration/noise-config.md
     - 📖 Guidance Configuration: configuration/guidance-config.md
 
-  - 🛡️ QE Features:
-    - qe-features/index.md
+  - 🧭 Workflows:
+    - Validation & Evaluation: qe-features/index.md
     - 🔇 Noise Filtering: qe-features/noise-filtering.md
-    - 💬 Natural Language QE: qe-features/natural-language-qe.md
+    - 💬 Natural Language Validation: qe-features/natural-language-qe.md
     - 📜 Constitution System: qe-features/constitution.md
     - ✅ Fix Verifier: qe-features/fix-verifier.md
     - 🔧 MCP Tools: qe-features/mcp-tools.md
@@ -220,11 +220,12 @@ nav:
     - 🐍 Monty Python REPL: advanced/monty-python-repl.md
     - 📖 Guidance System: advanced/guidance-system.md
     - ⚓ Harness System: advanced/harness-system.md
+    - 🔌 Runtime Backends: runtimes.md
     - 📋 Session Management: advanced/session-management.md
     - 🧭 TUI Reference: advanced/tui.md
     - 💻 CLI Reference:
       - cli-reference/index.md
-      - 🔍 QE Commands: cli-reference/qe-commands.md
+      - 🔍 Validation Commands: cli-reference/qe-commands.md
       - ⚙️ Config Commands: cli-reference/config-commands.md
       - 🔌 Provider Commands: cli-reference/provider-commands.md
       - 💡 Suggestion Commands: cli-reference/suggestion-commands.md
@@ -233,7 +234,7 @@ nav:
       - 👥 Roles Commands: cli-reference/roles-commands.md
       - 🌐 Serve Commands: cli-reference/serve-commands.md
       - 🎬 Init Commands: cli-reference/init-commands.md
-      - 🧪 SuperQE Commands: cli-reference/superqe-commands.md
+      - 🧪 Validation Commands: cli-reference/advanced-validation-commands.md
     - 📖 API Reference:
       - api-reference/index.md
       - 📊 JSONL Events: api-reference/jsonl-events.md
@@ -241,7 +242,7 @@ nav:
 
   - 🏢 Enterprise:
     - enterprise/index.md
-    - 💬 Natural Language QE: qe-features/natural-language-qe.md
+    - 💬 Natural Language Validation: qe-features/natural-language-qe.md
     - ✅ Fix Verifier: qe-features/fix-verifier.md
     - 🧪 Test Generation: qe-features/test-generation.md
     - 🔄 CI Outputs: integration/cicd.md

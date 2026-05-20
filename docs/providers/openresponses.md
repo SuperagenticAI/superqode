@@ -346,7 +346,7 @@ gateway = OpenResponsesGateway(
 ```
 
 **Use when:**
-- General QE tasks
+- General validation tasks
 - Need some insight
 - Balance of speed and detail
 
@@ -420,7 +420,7 @@ except GatewayError as e:
 # Quick tasks
 gateway = OpenResponsesGateway(reasoning_effort="low")
 
-# QE analysis
+# validation analysis
 gateway = OpenResponsesGateway(reasoning_effort="medium")
 
 # Deep investigation

@@ -44,7 +44,7 @@ SuperQode supports multiple provider types for connecting to AI models and agent
 
     ---
 
-    Per-provider and per-model tuning — prompt suffixes, tool exclusions, init kwargs, pre-init hooks.
+    Per-provider and per-model tuning: prompt suffixes, tool exclusions, init kwargs, pre-init hooks.
 
     [:octicons-arrow-right-24: Model Profiles](profiles.md)
 

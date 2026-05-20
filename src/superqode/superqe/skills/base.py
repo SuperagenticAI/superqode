@@ -1,8 +1,8 @@
 """
-Base classes for QE Skills.
+Base classes for validation skills.
 
 Skills are reusable capabilities that can be applied
-to quality engineering tasks.
+to validation and evaluation tasks.
 """
 
 from abc import ABC, abstractmethod
@@ -48,7 +48,7 @@ class Skill(ABC):
     """
     Base class for QE skills.
 
-    Skills encapsulate reusable quality engineering capabilities
+    Skills encapsulate reusable validation and evaluation capabilities
     that can be applied to code, tests, or processes.
     """
 

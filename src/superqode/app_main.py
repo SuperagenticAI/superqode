@@ -91,7 +91,7 @@ from superqode.app.widgets import (
 from superqode.widgets.leader_key import LeaderKeyPopup
 from superqode.widgets.command_palette import CommandPalette, PaletteCommand
 
-# QE roles that should be highlighted as power roles in the TUI.
+# validation roles that should be highlighted as power roles in the TUI.
 POWER_QE_ROLES = {
     "unit_tester",
     "integration_tester",
@@ -3740,7 +3740,7 @@ class SuperQodeApp(App):
             self._agents_cmd(args, log)
         elif c == "team":
             self._show_team(log)
-        elif c == "superqe":
+        elif c in ("validation", "superqe"):
             self._handle_superqe_command(args, log)
         elif c == "handoff":
             self._handoff(args, log)
@@ -3756,8 +3756,10 @@ class SuperQodeApp(App):
             self.run_worker(self._mcp_cmd(args, log))
         elif c == "context":
             self._show_context(log)
-        elif c in ("status", "harness"):
+        elif c == "status":
             self._show_harness_status(log)
+        elif c == "harness":
+            self._harness_cmd(args, log)
         elif c == "retry":
             self._retry_last_message(log)
         elif c in ("doctor", "doctor-current"):
@@ -4259,6 +4261,87 @@ class SuperQodeApp(App):
             f"Runtime swapped: {current} → {sub}. Next message will reconnect with the new backend."
         )
 
+    def _harness_cmd(self, args: str, log) -> None:
+        """Handle :harness status/list/templates/off/<path>."""
+        import os as _os
+
+        parts = args.split(maxsplit=1)
+        sub = parts[0].strip() if parts else "status"
+        subargs = parts[1].strip() if len(parts) > 1 else ""
+        if not sub:
+            sub = "status"
+
+        try:
+            from superqode.harness import BUILTIN_TEMPLATES, get_harness_template, load_harness_spec
+        except Exception as exc:
+            log.add_error(f"Harness support is unavailable: {exc}")
+            return
+
+        if sub in ("status", "current"):
+            pure = getattr(self, "_pure_mode", None)
+            status = pure.get_status().get("harness", {}) if pure else {}
+            if status.get("enabled"):
+                log.add_info(
+                    f"Harness: {status.get('name')} "
+                    f"({status.get('flavor')}, runtime={status.get('runtime')})"
+                )
+                if status.get("path"):
+                    log.add_info(f"Spec: {status.get('path')}")
+            else:
+                env_path = _os.getenv("SUPERQODE_HARNESS", "").strip()
+                if env_path:
+                    log.add_info(f"Harness configured for next connection: {env_path}")
+                else:
+                    log.add_info("No HarnessSpec is active. Use :harness <path> to load one.")
+            return
+
+        if sub in ("templates", "list-templates"):
+            for name in sorted(BUILTIN_TEMPLATES):
+                if "_" in name:
+                    continue
+                spec = get_harness_template(name)
+                log.add_info(
+                    f"  {name:18} {spec.flavor.value:8} {spec.runtime.backend:14} {spec.description}"
+                )
+            return
+
+        if sub in ("off", "disable", "none"):
+            _os.environ.pop("SUPERQODE_HARNESS", None)
+            if hasattr(self, "_pure_mode") and self._pure_mode is not None:
+                self._pure_mode.clear_harness()
+                if self._pure_mode.session.connected:
+                    self._pure_mode.disconnect()
+            log.add_info("HarnessSpec disabled. Reconnect with :connect byok or :connect local.")
+            return
+
+        if sub in ("load", "use"):
+            path = subargs
+        else:
+            path = args.strip()
+
+        if not path:
+            log.add_info("Usage: :harness <spec.yaml> | :harness templates | :harness off")
+            return
+
+        try:
+            spec = load_harness_spec(path)
+        except Exception as exc:
+            log.add_error(f"Could not load harness spec: {exc}")
+            return
+
+        _os.environ["SUPERQODE_HARNESS"] = path
+        pure = self._ensure_pure_mode()
+        pure.set_harness(spec, path=path)
+        if pure.session.connected:
+            pure.disconnect()
+
+        log.add_success(
+            f"✓ Loaded harness {spec.name} ({spec.flavor.value}, runtime={spec.runtime.backend})"
+        )
+        log.add_info(
+            "Reconnect with :connect byok or :connect local to run the TUI through this spec."
+        )
+
     async def _approval_cmd(self, action: str, args: str, log) -> None:
         """Handle :approve / :reject for the OpenAI Agents HITL flow.
 
@@ -4270,12 +4353,11 @@ class SuperQodeApp(App):
             :reject 1 "<msg>"     # reject pending #1 with explicit message
         """
         pure = getattr(self, "_pure_mode", None)
-        runtime = getattr(pure, "_runtime", None) if pure is not None else None
-        if runtime is None or not hasattr(runtime, "get_pending_approvals"):
-            log.add_error("No active runtime supports interactive approvals.")
+        if pure is None or not hasattr(pure, "get_pending_approvals"):
+            log.add_error("No active session supports interactive approvals.")
             return
 
-        pending = runtime.get_pending_approvals()
+        pending = pure.get_pending_approvals()
         if not pending:
             log.add_info("No pending approvals.")
             return
@@ -4311,14 +4393,12 @@ class SuperQodeApp(App):
         choice = pending[index]
         try:
             if action == "approve":
-                response = await runtime.approve_and_resume(index=index, always=always)
+                response = await pure.approve_and_resume(index=index, always=always)
                 log.add_info(
                     f"Approved tool '{choice['tool_name']}'" + (" (always)" if always else "") + "."
                 )
             else:
-                response = await runtime.reject_and_resume(
-                    index=index, message=message, always=always
-                )
+                response = await pure.reject_and_resume(index=index, message=message, always=always)
                 log.add_info(
                     f"Rejected tool '{choice['tool_name']}'"
                     + (f": {message}" if message else "")
@@ -4330,16 +4410,16 @@ class SuperQodeApp(App):
 
         # Show resumed run result.
         if getattr(response, "stopped_reason", "") == "needs_approval":
-            self._announce_pending_approvals(runtime, log)
+            self._announce_pending_approvals(pure, log)
         elif response.error:
             log.add_error(f"Run failed: {response.error}")
         elif response.content:
             log.add_info(response.content)
 
-    def _announce_pending_approvals(self, runtime, log) -> None:
-        """Surface pending approvals from an OpenAI Agents runtime in the conversation log."""
+    def _announce_pending_approvals(self, source, log) -> None:
+        """Surface pending approvals from an active runtime or HarnessSpec session."""
         try:
-            pending = runtime.get_pending_approvals()
+            pending = source.get_pending_approvals()
         except Exception:  # noqa: BLE001
             return
         if not pending:
@@ -4636,7 +4716,7 @@ class SuperQodeApp(App):
             shutil.copy2(template_path, config_path)
             log.add_success(f"Created {config_path} with all roles available")
             log.add_info(
-                "⚡ Power QE roles: unit, integration, api, ui, accessibility, security, usability"
+                "⚡ Power validation roles: unit, integration, api, ui, accessibility, security, usability"
             )
             log.add_info(
                 "💡 Update each role's job_description in superqode.yaml for best results."
@@ -4724,12 +4804,12 @@ team:
           - Authentication and security
           - API design and documentation
 
-  # QE roles
+  # validation roles
   qe:
-    description: "Quality Engineering"
+    description: "validation and evaluation"
     roles:
       fullstack:
-        description: "Full-stack QE engineer"
+        description: "Full-stack validation engineer"
         mode: "acp"
         agent: "opencode"
         agent_config:
@@ -4783,7 +4863,7 @@ team:
                 f.write(default_config)
             log.add_success(f"Created {config_path} with basic roles available")
             log.add_info(
-                "⚡ Power QE roles: unit, integration, api, ui, accessibility, security, usability"
+                "⚡ Power validation roles: unit, integration, api, ui, accessibility, security, usability"
             )
             log.add_info(
                 "💡 Update each role's job_description in superqode.yaml for best results."
@@ -4792,7 +4872,7 @@ team:
         t = Text()
         t.append("\n  Quick start:\n", style=THEME["muted"])
         t.append("    :qe fullstack     ", style=f"bold {THEME['orange']}")
-        t.append("Start QE (requires superqode.yaml)\n", style=THEME["dim"])
+        t.append("Start validation (requires superqode.yaml)\n", style=THEME["dim"])
         t.append("    :roles            ", style=f"bold {THEME['cyan']}")
         t.append("List available roles\n", style=THEME["dim"])
         t.append("    :connect acp <name> ", style=f"bold {THEME['success']}")
@@ -5366,7 +5446,7 @@ team:
             self.is_busy = False
             return
 
-        if not self._pure_mode._agent:
+        if not self._pure_mode._agent and not getattr(self._pure_mode, "harness_enabled", False):
             log.add_error("Agent not initialized. Please reconnect using :connect byok")
             log.add_system("Example: :connect byok ollama/llama3.2")
             self.is_busy = False
@@ -5570,10 +5650,16 @@ team:
             self._stop_thinking()
             self._start_stream_animation(log)
 
+            harness_name = ""
+            try:
+                harness_name = self._pure_mode.get_status().get("harness", {}).get("name", "")
+            except Exception:
+                harness_name = ""
+
             # Use enhanced agent session header (always visible)
             _safe_call(
                 log.start_agent_session,
-                f"BYOK {provider}",
+                f"Harness {harness_name}" if harness_name else f"BYOK {provider}",
                 model,
                 "byok" if not is_local else "local",
                 self.approval_mode,
@@ -5654,11 +5740,8 @@ team:
                     stats.get("thinking_tokens", 0),
                     stats.get("total_cost", 0.0),
                 )
-                # Phase 6 — if the OpenAI Agents runtime paused for HITL,
-                # surface pending approvals here.
-                runtime = getattr(self._pure_mode, "_runtime", None)
-                if runtime is not None and hasattr(runtime, "get_pending_approvals"):
-                    self._announce_pending_approvals(runtime, log)
+                if hasattr(self._pure_mode, "get_pending_approvals"):
+                    self._announce_pending_approvals(self._pure_mode, log)
                 pass
             except Exception as stream_error:
                 # Error during streaming
@@ -11803,7 +11886,7 @@ team:
                         "Please review the tool outputs above.",
                     )
 
-                # Reset mode badge to HOME after QE testing completes
+                # Reset mode badge to HOME after validation testing completes
                 self._call_ui(self._reset_mode_badge_after_qe)
             else:
                 # Fallback to non-streaming with timeout to prevent hanging
@@ -11855,7 +11938,7 @@ team:
                         error_msg = "No response from agent"
                     self._call_ui(log.add_error, error_msg)
 
-                # Reset mode badge to HOME after QE testing completes
+                # Reset mode badge to HOME after validation testing completes
                 self._call_ui(self._reset_mode_badge_after_qe)
 
             # Cleanup
@@ -11877,7 +11960,7 @@ team:
         try:
             from superqode.config import load_config, resolve_role
 
-            # Show safety warnings for QE mode
+            # Show safety warnings for validation mode
             if mode == "qe":
                 safety_warnings = get_safety_warnings()
 
@@ -11938,31 +12021,31 @@ team:
             # Try to resolve role from team config first
             resolved = resolve_role(mode, role, load_config())
 
-            # For QE mode, if team config doesn't have the role, try to create a default QE role
+            # For validation mode, if team config doesn't have the role, try to create a default validation role
             if not resolved and mode == "qe":
                 from superqode.superqe.roles import get_role
 
                 try:
-                    # Check if this is a valid QE role
+                    # Check if this is a valid validation role
                     qe_role = get_role(role, Path.cwd())
-                    # Create a synthetic ResolvedRole for QE roles
+                    # Create a synthetic ResolvedRole for validation roles
                     from superqode.config.schema import ResolvedRole
 
                     resolved = ResolvedRole(
                         mode=mode,
                         role=role,
-                        description=f"QE {role.replace('_', ' ')}",
-                        coding_agent="superqode",  # QE roles use superqode agent
-                        agent_type="superqode",  # QE roles use superqode agent type
+                        description=f"Validation {role.replace('_', ' ')}",
+                        coding_agent="superqode",  # validation roles use superqode agent
+                        agent_type="superqode",  # validation roles use superqode agent type
                         agent_id="",
                         provider="",
                         model="",
-                        execution_mode="byok",  # QE roles run locally
+                        execution_mode="byok",  # validation roles run locally
                         job_description="",
                         mcp_servers=[],
                     )
                 except ValueError:
-                    # Not a valid QE role, resolved remains None
+                    # Not a valid validation role, resolved remains None
                     pass
 
             if resolved:
@@ -11979,7 +12062,7 @@ team:
                     and role in POWER_QE_ROLES
                     and not getattr(self, "_power_roles_hint_shown", False)
                 ):
-                    log.add_info(f"⚡ Power QE role selected: {role}")
+                    log.add_info(f"⚡ Power validation role selected: {role}")
                     log.add_info(
                         "💡 Tip: Update this role's job_description in superqode.yaml for best results."
                     )
@@ -12028,13 +12111,13 @@ team:
                     self._clear_for_workspace(log, f"{mode.upper()}.{role.upper()}")
             else:
                 if mode == "qe":
-                    # Show available QE roles for better user experience
+                    # Show available validation roles for better user experience
                     from superqode.superqe.roles import list_roles
 
                     available_qe_roles = [r["name"] for r in list_roles()]
-                    log.add_error(f"QE role '{role}' not found.")
-                    log.write(f"Available QE roles: {', '.join(available_qe_roles)}")
-                    log.write("Use :qe <role_name> to start a QE session.")
+                    log.add_error(f"validation role '{role}' not found.")
+                    log.write(f"Available validation roles: {', '.join(available_qe_roles)}")
+                    log.write("Use :qe <role_name> to start a validation session.")
                 else:
                     log.add_error(f"Role {mode}.{role} not found")
         except Exception as e:
@@ -12103,7 +12186,7 @@ team:
         self.action_clear_screen()
 
     def _reset_mode_badge_after_qe(self):
-        """Reset mode badge to HOME after QE testing completes."""
+        """Reset mode badge to HOME after validation testing completes."""
         try:
             badge = self.query_one("#mode-badge", ModeBadge)
             badge.mode = "home"
@@ -12161,30 +12244,30 @@ team:
         self._clear_for_workspace(log, f"PURE • {provider}")
 
     # ========================================================================
-    # SuperQE Commands
+    # validation workflow Commands
     # ========================================================================
 
     def _handle_superqe_command(self, args: str, log: ConversationLog):
-        """Handle :superqe commands in TUI."""
+        """Handle secondary validation commands in TUI."""
         from superqode.evaluation import CODEOPTIX_AVAILABLE
 
         if not CODEOPTIX_AVAILABLE:
             self._show_command_output(
                 log,
                 Panel(
-                    "🔄 [bold yellow]SuperQE is initializing...[/bold yellow]\n\n"
+                    "🔄 [bold yellow]validation workflow is initializing...[/bold yellow]\n\n"
                     "CodeOptiX integration is being loaded.\n"
                     "Please wait a moment and try again.\n\n"
-                    "💡 Meanwhile, you can use basic QE:\n"
-                    "[cyan]:qe run .[/cyan] - Quality engineering with any LLM provider\n\n"
-                    "SuperQE supports: Ollama, OpenAI, Anthropic, Google",
-                    title="⏳ Loading SuperQE",
+                    "💡 Meanwhile, you can use basic validation:\n"
+                    "[cyan]:qe run .[/cyan] - Validation workflow with any LLM provider\n\n"
+                    "validation workflow supports: Ollama, OpenAI, Anthropic, Google",
+                    title="⏳ Loading validation workflow",
                     border_style="yellow",
                 ),
             )
             return
 
-        # Parse superqe subcommand
+        # Parse validation subcommand
         parts = args.split(maxsplit=1)
         subcmd = parts[0].lower() if parts else "help"
         subargs = parts[1] if len(parts) > 1 else ""
@@ -12200,10 +12283,12 @@ team:
         elif subcmd in ("help", ""):
             self._superqe_help(log)
         else:
-            self._show_command_output(log, f"[red]Unknown SuperQE command: {subcmd}[/red]")
+            self._show_command_output(
+                log, f"[red]Unknown validation workflow command: {subcmd}[/red]"
+            )
 
     def _superqe_run(self, args: str, log: ConversationLog):
-        """Handle :superqe run command."""
+        """Handle validation run command."""
         # Parse arguments similar to CLI
         behaviors = None
         use_bloom = False
@@ -12219,11 +12304,11 @@ team:
             if "--use-bloom" in args:
                 use_bloom = True
 
-        # Show SuperQE evaluation in progress
+        # Show validation workflow evaluation in progress
         self._show_command_output(
             log,
             Panel(
-                f"🚀 [bold cyan]SuperQE Enhanced Evaluation[/bold cyan]\n\n"
+                f"🚀 [bold cyan]validation workflow Enhanced Evaluation[/bold cyan]\n\n"
                 f"Behaviors: {behaviors or 'default'}\n"
                 f"Bloom Scenarios: {'Enabled' if use_bloom else 'Disabled'}\n\n"
                 "Running advanced CodeOptiX evaluation...",
@@ -12235,20 +12320,20 @@ team:
         self._show_command_output(
             log,
             Panel(
-                "🔧 [yellow]SuperQE requires Ollama[/yellow]\n\n"
-                "SuperQE uses Ollama for advanced AI-powered evaluation.\n\n"
-                "To run SuperQE evaluations:\n"
+                "🔧 [yellow]validation workflow requires Ollama[/yellow]\n\n"
+                "validation workflow uses Ollama for advanced AI-powered evaluation.\n\n"
+                "To run validation workflow evaluations:\n"
                 "1. Install Ollama: [link=https://ollama.ai]https://ollama.ai[/link]\n"
                 "2. Start Ollama: [cyan]ollama serve[/cyan]\n"
                 "3. Pull a model: [cyan]ollama pull llama3.1[/cyan]\n"
-                "4. Run: [cyan]:superqe run . --behaviors security-vulnerabilities[/cyan]\n\n"
-                "For basic QE without Ollama: [cyan]:qe run .[/cyan]",
+                "4. Run: [cyan]:validation run . --behaviors security-vulnerabilities[/cyan]\n\n"
+                "For basic validation without Ollama: [cyan]:qe run .[/cyan]",
                 border_style="yellow",
             ),
         )
 
     def _superqe_behaviors(self, log: ConversationLog):
-        """Handle :superqe behaviors command."""
+        """Handle validation behaviors command."""
         from superqode.evaluation.behaviors import get_enhanced_behaviors
 
         behaviors = get_enhanced_behaviors()
@@ -12268,32 +12353,32 @@ team:
             self._show_command_output(log, "[yellow]No enhanced behaviors available[/yellow]")
 
     def _superqe_agent_eval(self, args: str, log: ConversationLog):
-        """Handle :superqe agent-eval command."""
+        """Handle validation agent-eval command."""
         self._show_command_output(
             log, "[yellow]Agent evaluation not yet implemented in TUI[/yellow]"
         )
 
     def _superqe_scenarios(self, args: str, log: ConversationLog):
-        """Handle :superqe scenarios command."""
+        """Handle validation scenarios command."""
         self._show_command_output(
             log, "[yellow]Scenario generation not yet implemented in TUI[/yellow]"
         )
 
     def _superqe_help(self, log: ConversationLog):
-        """Show SuperQE help."""
+        """Show validation workflow help."""
         help_text = """
-[bold cyan]🚀 SuperQE Commands[/bold cyan]
+[bold cyan]🚀 validation workflow Commands[/bold cyan]
 
-[cyan]:superqe run [options][/cyan] - Run enhanced evaluation
+[cyan]:validation run [options][/cyan] - Run enhanced evaluation
   Options: --behaviors security-vulnerabilities,test-quality --use-bloom
 
-[cyan]:superqe behaviors[/cyan] - List available enhanced behaviors
+[cyan]:validation behaviors[/cyan] - List available enhanced behaviors
 
-[cyan]:superqe agent-eval[/cyan] - Compare multiple AI agents
+[cyan]:validation agent-eval[/cyan] - Compare multiple AI agents
 
-[cyan]:superqe scenarios[/cyan] - Manage Bloom scenario generation
+[cyan]:validation scenarios[/cyan] - Manage Bloom scenario generation
 
-[green]✨ SuperQE features are fully integrated with SuperQode![/green]
+[green]✨ validation workflow features are fully integrated with SuperQode![/green]
         """.strip()
 
         self._show_command_output(log, help_text)
@@ -18334,7 +18419,7 @@ team:
             enabled = config.enabled_count
             t.append(f"\n  💡 {enabled}/{total} roles enabled\n", style=THEME["muted"])
             t.append(
-                "  ⚡ Power QE roles: unit, integration, api, ui, accessibility, security, usability\n",
+                "  ⚡ Power validation roles: unit, integration, api, ui, accessibility, security, usability\n",
                 style=THEME["muted"],
             )
             t.append(

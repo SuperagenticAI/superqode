@@ -1,6 +1,6 @@
 # Evaluation Engine
 
-The evaluation engine provides a framework for testing SuperQode's QE capabilities through structured scenarios and behavior verification. This is used for benchmarking, regression testing, and validating QE role effectiveness.
+The evaluation engine provides a framework for testing SuperQode's validation capabilities through structured scenarios and behavior verification. This is used for benchmarking, regression testing, and validating validation role effectiveness.
 
 ---
 
@@ -8,7 +8,7 @@ The evaluation engine provides a framework for testing SuperQode's QE capabiliti
 
 The evaluation engine (`evaluation/`) enables systematic testing of:
 
-- QE role effectiveness
+- validation role effectiveness
 - Finding accuracy
 - Fix quality
 - False positive rates
@@ -119,7 +119,7 @@ class EvaluationEngine:
         # Setup test environment
         workspace = await self.setup_workspace(scenario.setup)
 
-        # Run QE session
+        # Run validation session
         qe_result = await self.run_qe(
             workspace=workspace,
             roles=scenario.roles,
@@ -341,5 +341,5 @@ class CustomAdapter(OutputAdapter):
 ## Related Documentation
 
 - [Architecture Overview](architecture.md) - System architecture
-- [QE Roles](../concepts/roles.md) - Role definitions
+- [Role-Based Workflows](../concepts/roles.md) - Role definitions
 - [CI/CD Integration](../integration/cicd.md) - Pipeline integration

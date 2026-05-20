@@ -1,5 +1,5 @@
 """
-QIR Templates for different QE modes and scenarios.
+QIR Templates for different validation modes and scenarios.
 """
 
 from enum import Enum
@@ -31,7 +31,7 @@ TEMPLATES: Dict[QRTemplate, Dict] = {
         ],
     },
     QRTemplate.DEEP_QE: {
-        "name": "Deep QE Investigation Report",
+        "name": "Deep validation Investigation Report",
         "sections": [
             "executive_summary",
             "scope",

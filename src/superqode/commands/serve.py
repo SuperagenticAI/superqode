@@ -40,7 +40,7 @@ def serve():
 def serve_lsp(transport: str, port: int, project: str, verbose: bool):
     """Start the LSP server for IDE integration.
 
-    The LSP server exposes QE findings as diagnostics in your IDE.
+    The LSP server exposes validation findings as diagnostics in your IDE.
     Supports VSCode, Neovim, and other LSP-compatible editors.
 
     Examples:
