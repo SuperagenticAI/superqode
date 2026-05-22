@@ -1,60 +1,24 @@
 # Harness System
 
-SuperQode separates the harness from the runtime that executes it.
+SuperQode is your pluggable multi-agent coding harness.
 
-The harness is the product contract. It defines what a run is allowed to do, how model behavior is shaped,
-which tools are available, how sessions and events are stored, and what output must be returned.
-
-The runtime is the execution engine behind that contract. It can be the native SuperQode loop, an SDK adapter,
-or an external agent framework adapter.
-
-SuperQode uses the word harness in two related ways:
-
-- **Agent harness**: the runtime that turns a request into model calls, tools, sessions, sandbox access,
-  events, and validated output.
-- **Validation harness**: the patch and project checks that prove generated changes before they are surfaced
-  to users or downstream automation.
-
-The production harness now has a v2 foundation: `HarnessSpec`, built-in templates, a kernel, backend
-adapters, run storage, typed outputs, sandbox policy, model policy, and workflow execution. The validation
-harness remains a lifecycle hook that can be used by coding harnesses.
+SuperQode separates the harness you configure from the runtime that executes it. The harness defines what a
+run is allowed to do, which model policy to use, which tools are available, how approvals work, where events
+are stored, and what output should be returned.
 
 ---
 
-## Production Harness Vision
+## What A Harness Gives You
 
-SuperQode should be a small framework kernel rather than a single agent loop. The kernel owns stable contracts
-for sessions, events, tool policy, sandbox access, model policy, skills, roles, typed outputs, validation,
-workflows, and backend adapters. Individual harnesses are user-owned specs compiled into that kernel.
-
-This keeps the existing coding harness as the default while making room for other styles.
-
-### Built In Pieces
-
-| Piece | Production role |
+| Capability | What you control |
 | --- | --- |
-| `HarnessSpec` | Declarative contract for flavor, runtime, model policy, agents, workflow, context, validation, and observability |
-| Templates | Built-in starts for `coding`, `no-tool`, `gemma4-coding`, `gemma4-no-tool`, `ds4-coding`, and `ds4-fast-local` |
-| Kernel | Opens sessions, starts runs, emits events, stores records, and dispatches to backends |
-| Backend adapters | Native runtime, Google ADK, OpenAI Agents SDK, optional DeepAgents, optional PydanticAI, and future custom runtimes |
-| Sandbox contract | Local read, write, shell, grep, glob, edit, and command policy behind a stable backend protocol |
-| Typed outputs | Pydantic-backed result parsing with explicit delimiters and validation failure reporting |
-| Workflow engine | Single, chain, parallel, router, orchestrator, and evaluator-optimizer execution |
-| Model policy | Explicit prompt, tool, reasoning, temperature, history, and iteration defaults per model family |
-
-The harness sandbox contract is the source of truth for capability profiles. Runtime adapters consume that
-contract when they need backend-specific execution, including OpenAI Agents SDK SandboxAgent wiring. Legacy
-runtime and sandbox modules keep compatibility imports, but policy decisions live with the harness.
-`HarnessSandboxBackend` is the file and shell protocol used by local and future remote harness sandboxes.
-OpenAI SandboxAgent clients are exposed through the same harness module as SDK execution clients, not as
-direct file-protocol implementations.
-
-Backend adapters also advertise a capability matrix. SuperQode uses it to flag unsupported combinations early,
-such as a no-tool spec with DeepAgents or a remote sandbox request against a backend that only supports local policy.
-
-Patch validation primitives are exposed through `superqode.patch_harness`. The `superqode.harness` package
-keeps compatibility re-exports, but new agent-harness work should use the HarnessSpec types in this module and
-new patch-validation work should use `superqode.patch_harness`.
+| Runtime | Use `builtin`, Google ADK, OpenAI Agents SDK, DeepAgents, PydanticAI, or another supported backend |
+| Model policy | Pick primary models, fallbacks, reasoning, temperature, history, and iteration limits |
+| Tools | Enable repository tools, shell, MCP, validation, or no tools |
+| Sandbox policy | Set read, write, shell, command, and network boundaries |
+| Approvals | Pause risky tool calls for review before they run |
+| Events | Store run timelines and graph views for debugging |
+| Output | Return plain text, typed results, validation state, and run records |
 
 ### What Users Configure
 
@@ -155,7 +119,7 @@ Runtime backends are interchangeable execution adapters behind the same harness 
 | `adk` | optional | You want to run through Google ADK while keeping SuperQode harness configuration |
 | `openai-agents` | optional | You want OpenAI Agents SDK behavior, sessions, and tool plumbing |
 | `deepagents` | optional | You want DeepAgents graph, middleware, and subagent behavior for tool-capable coding harnesses |
-| `pydanticai` | optional | You want PydanticAI's agent kernel with SuperQode tools and HarnessSpec policy |
+| `pydanticai` | optional | You want PydanticAI behavior with SuperQode tools and HarnessSpec policy |
 
 The `deepagents` backend is intentionally not used for no-tool harnesses. DeepAgents 0.6 is built around a
 tool-capable deep-agent stack, so SuperQode rejects no-tool specs for that backend and directs users to the
@@ -176,9 +140,10 @@ Harness specs are usable from the command line:
 superqode harness list-templates
 superqode harness list-backends
 superqode harness init my-coder --template coding --output harness.yaml
-superqode harness validate harness.yaml
-superqode harness validate harness.yaml --schema
+superqode harness validate --spec harness.yaml
+superqode harness validate --spec harness.yaml --schema
 superqode harness inspect --spec harness.yaml
+superqode harness compile --spec harness.yaml --json
 superqode harness doctor --spec harness.yaml
 superqode harness run --spec harness.yaml --prompt "summarize this repository"
 ```
@@ -195,9 +160,23 @@ capability warnings before running a spec. Use `--runtime` and `--sandbox` on `i
 Inspection also warns when a backend may not honor model-side constraints such as reasoning effort,
 temperature, or max iterations.
 
+Use `harness compile` to dump the loaded HarnessSpec, effective model policy, and compatibility headless
+profile after defaults and policy resolution.
+
+Use `harness diff` to compare two specs before replacing a team harness:
+
+```bash
+superqode harness diff old-harness.yaml new-harness.yaml
+superqode harness diff old-harness.yaml new-harness.yaml --json
+```
+
 Use `harness doctor` before sharing or committing a spec. It checks spec loading, backend installation,
 backend/spec compatibility, sandbox policy, event-store writability, rich-event graph support, approval
 support, and MCP config paths.
+
+The default `builtin` backend supports approval pauses for ASK-permission tool calls. `pydanticai` and
+`openai-agents` also support approval pauses through their runtime adapters. Backends that cannot pause for
+approval are reported by `harness doctor`.
 
 Use `--runtime`, `--provider`, `--model`, `--session`, `--working-dir`, and `--sandbox` on `harness run` to
 override the spec for one run. Use `--stream` to print normalized stream events and `--json` for machine
@@ -218,9 +197,9 @@ superqode harness graph <run-id>
 superqode harness graph <run-id> --json
 ```
 
-This is the common inspection layer for builtin, OpenAI Agents SDK, Google ADK, DeepAgents, PydanticAI, and
-future custom backends. Runtime-specific adapters can emit richer events, but the stored graph stays stable.
-PydanticAI, OpenAI Agents, and DeepAgents are rich-event backends. PydanticAI maps `run_stream_events` into
+This is the common inspection layer for builtin, OpenAI Agents SDK, Google ADK, DeepAgents, and PydanticAI.
+Runtime-specific adapters can emit richer events, but the stored graph stays stable.
+The builtin backend records model, tool, result, and approval events. PydanticAI maps `run_stream_events` into
 model, tool, result, and approval nodes. OpenAI Agents maps SDK stream events into model, tool, approval, and
 sandbox markers. DeepAgents maps graph streams into model, tool, subagent, memory, sandbox, and result nodes.
 
@@ -287,8 +266,15 @@ The workflow engine lets a harness describe more than one prompt call without re
 
 Harness sessions can use a file store or SQLite store:
 
-- `FileHarnessStore`: simple JSON files for local development and easy inspection
-- `SQLiteHarnessStore`: indexed session, run, and event history for concurrent readers and larger run sets
+- `file`: simple JSON files for local development and easy inspection
+- `sqlite`: indexed session, run, and event history for concurrent readers and larger run sets
+- `memory`: temporary run storage for tests and short-lived automation
+
+Set the default in `observability.run_store`, or override a single CLI run:
+
+```bash
+superqode harness run --spec harness.yaml --store sqlite --prompt "summarize this repository"
+```
 
 ### Example Specs
 
@@ -301,7 +287,7 @@ harness:
   runtime:
     backend: builtin
   model_policy:
-    primary: gpt-5.5
+    primary: gpt-4o-mini
     fallbacks: [gemma4-local, ds4-local]
   execution_policy:
     sandbox: local
@@ -339,17 +325,14 @@ harness:
     typed: true
 ```
 
-### Implementation Notes
+### Practical Guidance
 
-- Preserve the current native loop as the `coding` + `builtin` backend.
-- Add `no_tool` as a separate profile with its own system prompt and model policy.
-- Do not route no-tool runs through empty tool registries only; the prompt, stop conditions, output parsing,
-  and evaluation rules should be tuned for tool-free reasoning.
-- Keep validation as a lifecycle hook that the coding harness can call after changes.
-- Rename the current patch harness internally to validation harness when the broader agent harness lands.
-- Gemma4 should get both coding and no-tool templates so local-model behavior is measurable through the harness.
-- Keep DeepAgents as an optional peer backend, not as the core harness foundation.
-- Prefer explicit rejection over silent degradation when a runtime cannot honor a harness policy.
+- Use `coding` with `builtin` for the default repository workflow.
+- Use `no_tool` when you want model-only planning, explanation, or review from supplied context.
+- Use `doctor` before sharing a spec, especially when it depends on an optional runtime.
+- Use `compile` when you want to see the effective policy after defaults are applied.
+- Use `diff` before replacing a shared harness so reviewers can see policy, tool, and agent changes.
+- Keep DeepAgents for tool-capable coding harnesses; use `builtin` for no-tool specs.
 
 ---
 
@@ -732,7 +715,7 @@ harness:
 ### Bring Your Own Harness (BYOH)
 
 Use `custom_steps` to run project-specific validation commands as part of the harness. Each step runs in the
-repo root, uses the shell, and a non-zero exit code is reported as a harness error.
+repo root, and a non-zero exit code is reported as a harness error.
 
 ```yaml
 harness:

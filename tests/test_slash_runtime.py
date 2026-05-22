@@ -12,6 +12,7 @@ def test_runtime_command_is_in_builtins():
     commands = create_builtin_commands(handlers={})
     names = {c.name for c in commands}
     assert "runtime" in names
+    assert "harness" in names
 
 
 def test_runtime_command_has_description():
@@ -43,3 +44,14 @@ def test_parse_runtime_colon_input():
     command, args = parsed
     assert command.name == "runtime"
     assert args == ""
+
+
+def test_parse_harness_slash_input():
+    handler = SlashCommandHandler()
+    for cmd in create_builtin_commands(handlers={"harness": lambda _: None}):
+        handler.register(cmd)
+    parsed = handler.parse_input("/harness specs/coding.yaml")
+    assert parsed is not None
+    command, args = parsed
+    assert command.name == "harness"
+    assert args == "specs/coding.yaml"

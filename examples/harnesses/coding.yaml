@@ -5,9 +5,9 @@ flavor: coding
 runtime:
   backend: builtin
 model_policy:
-  primary: gpt-5.4
+  primary: gpt-4o-mini
   fallbacks:
-    - gpt-5.4-mini
+    - gpt-4o-mini
   profile: balanced-coding
   temperature: 0.2
   reasoning: medium
@@ -83,4 +83,3 @@ observability:
 metadata:
   example: coding
   best_for: general repository coding
-

@@ -15,7 +15,29 @@ from superqode.providers.gateway.base import (
     ToolDefinition,
 )
 from superqode.runtime import AgentRuntime, BuiltinRuntime, create_runtime
-from superqode.tools.base import ToolRegistry
+from superqode.tools.base import Tool, ToolContext, ToolRegistry, ToolResult
+from superqode.tools.permissions import Permission, PermissionConfig, PermissionManager
+
+
+class EchoTool(Tool):
+    @property
+    def name(self) -> str:
+        return "echo"
+
+    @property
+    def description(self) -> str:
+        return "Echo text."
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {"text": {"type": "string"}},
+            "required": ["text"],
+        }
+
+    async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        return ToolResult(success=True, output=str(args.get("text", "")))
 
 
 class ScriptedGateway(GatewayInterface):
@@ -74,6 +96,21 @@ def _make_runtime(gateway: GatewayInterface) -> AgentRuntime:
     )
 
 
+def _approval_runtime(gateway: GatewayInterface) -> BuiltinRuntime:
+    registry = ToolRegistry()
+    registry.register(EchoTool())
+    runtime = create_runtime(
+        "builtin",
+        gateway=gateway,
+        tools=registry,
+        config=_config(),
+        parallel_tools=False,
+        permission_manager=PermissionManager(PermissionConfig(default=Permission.ASK)),
+    )
+    assert isinstance(runtime, BuiltinRuntime)
+    return runtime
+
+
 def test_create_runtime_builtin_returns_builtin_runtime():
     runtime = _make_runtime(ScriptedGateway([]))
     assert isinstance(runtime, BuiltinRuntime)
@@ -120,3 +157,70 @@ def test_builtin_runtime_cancel_propagates_to_loop():
     assert runtime.loop._cancelled is True
     runtime.reset_cancellation()
     assert runtime.loop._cancelled is False
+
+
+@pytest.mark.asyncio
+async def test_builtin_runtime_pauses_and_approves_tool_call():
+    gateway = ScriptedGateway(
+        [
+            GatewayResponse(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "call-1",
+                        "function": {
+                            "name": "echo",
+                            "arguments": '{"text": "approved"}',
+                        },
+                    }
+                ],
+            )
+        ]
+    )
+    runtime = _approval_runtime(gateway)
+
+    response = await runtime.run("use echo")
+
+    assert response.stopped_reason == "needs_approval"
+    assert runtime.get_pending_approvals() == [
+        {
+            "index": 0,
+            "tool_name": "echo",
+            "arguments": {"text": "approved"},
+            "tool_call_id": "call-1",
+        }
+    ]
+
+    resumed = await runtime.approve_and_resume()
+
+    assert resumed.stopped_reason == "complete"
+    assert resumed.content == "approved"
+    assert runtime.get_pending_approvals() == []
+
+
+@pytest.mark.asyncio
+async def test_builtin_runtime_rejects_pending_tool_call():
+    gateway = ScriptedGateway(
+        [
+            GatewayResponse(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "call-1",
+                        "function": {
+                            "name": "echo",
+                            "arguments": '{"text": "blocked"}',
+                        },
+                    }
+                ],
+            )
+        ]
+    )
+    runtime = _approval_runtime(gateway)
+
+    response = await runtime.run("use echo")
+    resumed = await runtime.reject_and_resume(message="not allowed")
+
+    assert response.stopped_reason == "needs_approval"
+    assert resumed.content == "not allowed"
+    assert runtime.get_pending_approvals() == []

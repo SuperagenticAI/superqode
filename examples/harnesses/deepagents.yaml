@@ -11,9 +11,9 @@ runtime:
       - repo-navigation
       - implementation
 model_policy:
-  primary: gpt-5.4
+  primary: gpt-4o-mini
   fallbacks:
-    - gpt-5.4-mini
+    - gpt-4o-mini
   profile: deepagents-coding
   temperature: 0.2
   reasoning: medium
@@ -96,4 +96,3 @@ metadata:
   example: deepagents
   install: pip install "superqode[deepagents]"
   best_for: long-running coding tasks
-

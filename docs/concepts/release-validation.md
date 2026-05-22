@@ -77,5 +77,4 @@ These outputs are meant to support release decisions. They do not replace the co
 
 - [Harness System](../advanced/harness-system.md) for the harness and runtime model
 - [Validation Commands](../cli-reference/qe-commands.md) for validation command details
-- [Release Readiness](../release-readiness.md) for release checks
 - [CI/CD Integration](../integration/cicd.md) for automation examples

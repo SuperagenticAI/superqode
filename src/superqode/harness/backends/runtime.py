@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 from ...agent.loop import AgentConfig
 from ...providers.gateway.litellm_gateway import LiteLLMGateway
 from ...runtime import create_runtime
+from ...tools.base import ToolResult
 from ...tools.base import ToolRegistry
 from ...tools.permissions import PermissionManager
 from ..compiler import compile_to_headless_profile
@@ -26,14 +27,34 @@ class RuntimeHarnessBackend:
         self.capabilities = _runtime_capabilities(runtime_name)
 
     async def run(self, request: HarnessBackendRequest) -> HarnessBackendResult:
-        runtime_name, runtime_obj = _create_runtime_for_request(request, self.runtime_name)
+        runtime_events: list[HarnessEvent] = []
+        runtime_name, runtime_obj = _create_runtime_for_request(
+            request,
+            self.runtime_name,
+            event_sink=runtime_events,
+        )
+        runtime_events.insert(
+            0,
+            HarnessEvent(type="model_request", data={"runtime": runtime_name}),
+        )
         response = await runtime_obj.run(request.prompt)
+        runtime_events.append(
+            HarnessEvent(
+                type="model_result",
+                data={
+                    "stopped_reason": response.stopped_reason,
+                    "tool_calls_made": response.tool_calls_made,
+                    "iterations": response.iterations,
+                },
+            )
+        )
         pending_approvals = _pending_approvals(runtime_obj)
         return HarnessBackendResult(
             response=response,
             backend=self.name,
             runtime=runtime_name,
             metadata={
+                **({"events": runtime_events} if runtime_events else {}),
                 **({"pending_approvals": pending_approvals} if pending_approvals else {}),
                 **({"pending_runtime": runtime_obj} if pending_approvals else {}),
             },
@@ -132,6 +153,19 @@ def _runtime_capabilities(runtime_name: str) -> HarnessBackendCapabilities:
             supports_typed_output=True,
             notes=("PydanticAI uses SuperQode JSON-schema tool bridging.",),
         )
+    if runtime_name == "builtin":
+        return HarnessBackendCapabilities(
+            backend=runtime_name,
+            supports_coding=True,
+            supports_no_tool=True,
+            supports_streaming=True,
+            supports_approvals=True,
+            supports_sandbox=True,
+            supports_shell=True,
+            supports_mcp=True,
+            supports_typed_output=True,
+            notes=("Builtin runtime pauses ASK-permission tool calls through HarnessKernel.",),
+        )
     return HarnessBackendCapabilities(
         backend=runtime_name,
         supports_coding=True,
@@ -146,7 +180,12 @@ def _runtime_capabilities(runtime_name: str) -> HarnessBackendCapabilities:
     )
 
 
-def _create_runtime_for_request(request: HarnessBackendRequest, default_runtime_name: str):
+def _create_runtime_for_request(
+    request: HarnessBackendRequest,
+    default_runtime_name: str,
+    *,
+    event_sink: list[HarnessEvent] | None = None,
+):
     profile = compile_to_headless_profile(request.spec)
     model_policy = resolve_harness_model_policy(
         request.spec,
@@ -170,13 +209,24 @@ def _create_runtime_for_request(request: HarnessBackendRequest, default_runtime_
         session_id=request.session_id,
         session_history_limit=model_policy.session_history_limit,
     )
+    callbacks = {}
+    if event_sink is not None and runtime_name == "builtin":
+        callbacks = _builtin_event_callbacks(event_sink)
+
     return runtime_name, create_runtime(
         runtime_name,
         gateway=LiteLLMGateway(),
         tools=_tool_registry_for_spec(request.spec, profile, model_policy),
         config=config,
         harness_spec=request.spec,
-        parallel_tools=model_policy.parallel_tools,
+        parallel_tools=(
+            model_policy.parallel_tools
+            and not (
+                runtime_name == "builtin"
+                and request.spec.execution_policy.approval_profile != "deny"
+            )
+        ),
+        **callbacks,
         permission_manager=PermissionManager(
             apply_backend_permissions(profile.permissions, request.sandbox_backend)
         ),
@@ -190,6 +240,40 @@ def _pending_approvals(runtime_obj) -> list[dict]:
     if not pending:
         return []
     return [dict(item) for item in pending]
+
+
+def _builtin_event_callbacks(event_sink: list[HarnessEvent]) -> dict:
+    def on_tool_call(name: str, args: dict) -> None:
+        event_sink.append(
+            HarnessEvent(
+                type="tool_call",
+                data={"tool_name": name, "arguments": args},
+            )
+        )
+
+    def on_tool_result(name: str, result: ToolResult) -> None:
+        event_sink.append(
+            HarnessEvent(
+                type="tool_result",
+                data={
+                    "tool_name": name,
+                    "success": result.success,
+                    "output": result.output,
+                    "error": result.error,
+                    "metadata": dict(result.metadata),
+                },
+            )
+        )
+
+    async def on_thinking(text: str) -> None:
+        if text:
+            event_sink.append(HarnessEvent(type="thinking", data={"text": text}))
+
+    return {
+        "on_tool_call": on_tool_call,
+        "on_tool_result": on_tool_result,
+        "on_thinking": on_thinking,
+    }
 
 
 def _tool_registry_for_spec(

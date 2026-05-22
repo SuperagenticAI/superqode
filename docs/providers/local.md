@@ -105,7 +105,7 @@ Direct model selection is still supported:
 ### Notes
 
 - DS4 is local, so no API key is required.
-- SuperQode uses a dummy OpenAI API key internally for OpenAI-compatible client libraries that require one.
+- SuperQode supplies a placeholder OpenAI API key for OpenAI-compatible local clients that require one.
 - DS4 uses a smaller DS4-specific tool profile and disables parallel tool execution by default.
 - DS4 uses direct tool gating by default: SuperQode sends tools for repo, file, test, command, and code-change requests, but skips tools for ordinary questions and standalone code-generation prompts. This reduces unnecessary agent iterations.
 - `deepseek-v4-flash` is the recommended default for coding and long-context local work.

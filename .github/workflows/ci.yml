@@ -42,6 +42,11 @@ jobs:
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: pytest -p pytest_asyncio.plugin
+      - name: Harness example doctor
+        run: |
+          for spec in examples/harnesses/*.yaml; do
+            superqode harness doctor --spec "$spec" --runtime builtin --json >/dev/null
+          done
 
   build:
     runs-on: ubuntu-latest

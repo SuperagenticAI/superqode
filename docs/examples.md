@@ -1,11 +1,11 @@
 # Harness Examples
 
-SuperQode ships ready-to-run HarnessSpec examples in `examples/harnesses/`.
+SuperQode is your pluggable multi-agent coding harness. It ships ready-to-run HarnessSpec examples in `examples/harnesses/`.
 
 Use them when you want a complete starting point instead of generating a minimal template.
 
 ```bash
-superqode harness validate examples/harnesses/coding.yaml
+superqode harness validate --spec examples/harnesses/coding.yaml
 superqode harness doctor --spec examples/harnesses/coding.yaml
 superqode harness run --spec examples/harnesses/coding.yaml --prompt "summarize this repository"
 ```
@@ -29,7 +29,7 @@ From the repository root:
 
 ```bash
 for spec in examples/harnesses/*.yaml; do
-  superqode harness validate "$spec"
+  superqode harness validate --spec "$spec"
 done
 ```
 
@@ -86,7 +86,6 @@ The safest changes are:
 Run this before committing a customized spec:
 
 ```bash
-superqode harness validate my-harness.yaml
+superqode harness validate --spec my-harness.yaml
 superqode harness doctor --spec my-harness.yaml
 ```
-

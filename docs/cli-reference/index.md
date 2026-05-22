@@ -1,6 +1,6 @@
 # CLI Reference
 
-SuperQode provides a harness-first CLI for coding sessions, runtime management, provider setup, validation workflows, agents, and configuration. This reference documents the available commands, options, and usage patterns.
+SuperQode provides a CLI for your pluggable multi-agent coding harness: coding sessions, runtime management, provider setup, validation workflows, agents, and configuration. This reference documents the available commands, options, and usage patterns.
 
 ---
 
@@ -242,7 +242,7 @@ superqode sandbox run e2b -- "pytest -q"
 | Command | Description |
 |---------|-------------|
 | `superqode qe run . --mode quick` | Fast validation pass |
-| `superqode qe run . --mode deep` | Broader release-readiness pass |
+| `superqode qe run . --mode deep` | Broader validation pass |
 | `superqode qe run . -r security_tester` | Focused security validation |
 | `superqode qe roles` | List validation roles |
 | `superqode qe artifacts` | List validation artifacts |

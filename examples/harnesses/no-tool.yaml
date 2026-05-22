@@ -5,9 +5,9 @@ flavor: no_tool
 runtime:
   backend: builtin
 model_policy:
-  primary: gpt-5.4
+  primary: gpt-4o-mini
   fallbacks:
-    - gpt-5.4-mini
+    - gpt-4o-mini
   profile: no-tool-reasoning
   temperature: 0.1
   reasoning: high
@@ -63,4 +63,3 @@ observability:
 metadata:
   example: no-tool
   best_for: planning without tools
-

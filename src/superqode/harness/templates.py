@@ -88,6 +88,7 @@ def gemma4_coding_template() -> HarnessSpec:
     return HarnessSpec(
         **{
             **base.__dict__,
+            "description": "Gemma4 local coding harness tuned for strict JSON tool calls.",
             "model_policy": ModelPolicySpec(
                 primary="gemma4-local",
                 fallbacks=("ds4-local",),
@@ -107,6 +108,7 @@ def gemma4_no_tool_template() -> HarnessSpec:
     return HarnessSpec(
         **{
             **base.__dict__,
+            "description": "Gemma4 local reasoning harness with no repository tools.",
             "model_policy": ModelPolicySpec(
                 primary="gemma4-local",
                 fallbacks=("ds4-local",),
@@ -125,6 +127,7 @@ def ds4_coding_template() -> HarnessSpec:
     return HarnessSpec(
         **{
             **base.__dict__,
+            "description": "DS4 local coding harness tuned for compact JSON tool calls.",
             "model_policy": ModelPolicySpec(
                 primary="ds4-local",
                 profile="ds4-coding",

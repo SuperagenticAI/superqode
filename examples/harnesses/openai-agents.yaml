@@ -8,9 +8,9 @@ runtime:
     openai_agents:
       stream_events: true
 model_policy:
-  primary: gpt-5.4
+  primary: gpt-4o-mini
   fallbacks:
-    - gpt-5.4-mini
+    - gpt-4o-mini
   profile: openai-agents-coding
   temperature: 0.2
   reasoning: medium
@@ -78,4 +78,3 @@ metadata:
   example: openai-agents
   install: pip install "superqode[openai-agents]"
   best_for: OpenAI Agents SDK approvals and sandbox events
-

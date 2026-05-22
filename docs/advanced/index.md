@@ -1,36 +1,12 @@
 # Advanced Features
 
-Advanced features, architecture documentation, and systems in SuperQode for power users, developers, and custom workflows.
+Advanced SuperQode features for users who want more control over tools, safety, sessions, harnesses, and the TUI.
 
 ---
 
-## Architecture & Internals
+## User Controls
 
 <div class="grid cards" markdown>
-
--   **Architecture Overview**
-
-    ---
-
-    High-level system architecture and how components work together.
-
-    [:octicons-arrow-right-24: Architecture](architecture.md)
-
--   **Execution Pipeline**
-
-    ---
-
-How coding and validation sessions run from request to result.
-
-    [:octicons-arrow-right-24: Execution Pipeline](execution-pipeline.md)
-
--   **Workspace Internals**
-
-    ---
-
-    Ephemeral workspace isolation, snapshots, and revert guarantees.
-
-    [:octicons-arrow-right-24: Workspace Internals](workspace-internals.md)
 
 -   **Safety & Permissions**
 
@@ -39,14 +15,6 @@ How coding and validation sessions run from request to result.
     Security model, permission rules, and dangerous operation handling.
 
     [:octicons-arrow-right-24: Safety & Permissions](safety-permissions.md)
-
--   **Evaluation Engine**
-
-    ---
-
-    Framework for testing validation capabilities with structured scenarios.
-
-    [:octicons-arrow-right-24: Evaluation Engine](evaluation-engine.md)
 
 </div>
 
@@ -72,19 +40,11 @@ How coding and validation sessions run from request to result.
 
     [:octicons-arrow-right-24: Tools System](tools-system.md)
 
--   **Guidance System**
-
-    ---
-
-Verification-first system prompts that guide coding and validation agents.
-
-    [:octicons-arrow-right-24: Guidance System](guidance-system.md)
-
 -   **Harness System**
 
     ---
 
-Fast validation for generated patches before inclusion in reports, including BYOH custom steps.
+    Reusable specs for runtime, model, tool, approval, event, and output policy.
 
     [:octicons-arrow-right-24: Harness System](harness-system.md)
 
@@ -108,13 +68,12 @@ Fast validation for generated patches before inclusion in reports, including BYO
 
 ---
 
-## System Architecture
+## How These Features Work Together
 
-These advanced features work together to provide a complete coding-agent harness:
+These advanced features help you run controlled coding-agent sessions:
 
 - **Memory & Learning**: Learns from feedback
-- **Guidance System**: Guides agent behavior
-- **Harness System**: Validates suggestions
+- **Harness System**: Defines reusable runtime, model, tool, approval, and event policy
 - **Session Management**: Persists work
 - **Tools System**: Provides capabilities
 
@@ -126,20 +85,12 @@ Most advanced features are configured in `superqode.yaml`:
 
 ```yaml
 superqode:
-  qe:
-    # Guidance
-    guidance:
-      enabled: true
-      enabled: true
-
-    # Harness
-    harness:
-      enabled: true
-      steps: []
-
-    # Memory (automatic)
-    # ML (automatic)
-    # Session (automatic)
+  permissions:
+    default: ask
+  session:
+    storage: file
+  memory:
+    enabled: true
 ```
 
 ---

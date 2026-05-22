@@ -2,7 +2,7 @@
 
 Get a SuperQode harness running in a few minutes.
 
-SuperQode is a harness-first coding agent. A harness defines the run contract: model policy, runtime backend, tool access, sandbox policy, workflow shape, events, and output handling.
+SuperQode is your pluggable multi-agent coding harness. A harness defines the run contract: model policy, runtime backend, tool access, sandbox policy, workflow shape, events, and output handling.
 
 !!! note "Safe first run"
     Start in a low-risk repository, throwaway branch, sandbox, or VM. Coding harnesses can read files, edit files, and run shell commands when policy allows it.
@@ -121,10 +121,11 @@ Use this when a run behaves unexpectedly. The graph gives one inspection model a
 
 | Backend | Rich graph events |
 | --- | --- |
+| `builtin` | Model requests, model deltas, tools, results, approvals |
 | `pydanticai` | Model deltas, tools, results, approvals |
 | `openai-agents` | Model deltas, tools, approvals, sandbox markers |
 | `deepagents` | Model deltas, tools, subagents, memory, sandbox activity, results |
-| `builtin`, `adk` | Coarse run and stream events |
+| `adk` | Run and stream events |
 
 ---
 
@@ -178,9 +179,11 @@ superqode harness doctor --spec harness.yaml --runtime pydanticai
 | `superqode` | Launch the interactive TUI |
 | `superqode --print "..."` | Run one headless task |
 | `superqode harness init ...` | Create a HarnessSpec |
-| `superqode harness validate harness.yaml` | Validate spec syntax |
+| `superqode harness validate --spec harness.yaml` | Validate spec syntax |
 | `superqode harness doctor --spec harness.yaml` | Preflight a spec and backend |
 | `superqode harness inspect --spec harness.yaml` | Show resolved policy and compatibility |
+| `superqode harness compile --spec harness.yaml --json` | Show effective spec and model policy |
+| `superqode harness diff old.yaml new.yaml` | Compare two harness specs |
 | `superqode harness run --spec harness.yaml --prompt "..."` | Run a harness task |
 | `superqode harness events <run-id>` | Show normalized run events |
 | `superqode harness graph <run-id>` | Show the persisted event graph |

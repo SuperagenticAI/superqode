@@ -15,6 +15,7 @@ from superqode.harness import (
     spec_from_headless_profile,
 )
 from superqode.patch_harness import PatchHarness
+from superqode.harness.config import CustomHarnessStep, HarnessConfig
 from superqode.tools.permissions import Permission
 
 
@@ -115,6 +116,37 @@ def test_harness_spec_round_trip_preserves_core_fields():
 
 def test_patch_harness_namespace_exports_legacy_validator():
     assert PatchHarness.__name__ == "PatchHarness"
+
+
+@pytest.mark.asyncio
+async def test_patch_harness_runs_custom_steps_without_shell(tmp_path: Path, monkeypatch):
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return Result()
+
+    monkeypatch.setattr("superqode.harness.validator.subprocess.run", fake_run)
+    harness = PatchHarness(
+        tmp_path,
+        HarnessConfig(
+            custom_steps=[
+                CustomHarnessStep(name="lint", command='uv run ruff check "src tests"')
+            ]
+        ),
+    )
+
+    result = await harness.validate_changes({})
+
+    assert result.success is True
+    assert calls[0][0] == ["uv", "run", "ruff", "check", "src tests"]
+    assert calls[0][1]["shell"] is False
 
 
 @pytest.mark.parametrize("profile_name", ["build", "plan", "review", "no-tool"])

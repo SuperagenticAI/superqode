@@ -11,7 +11,7 @@ A2A is an open protocol backed by Google, IBM, and other major AI providers. It 
 - Discover each other's capabilities through AgentCards
 - Exchange messages and artifacts
 - Coordinate on long-running tasks
-- Work together without exposing internal implementations
+- Work together without exposing private implementation details
 
 SuperQode implements both A2A client and server capabilities, allowing you to call external agents or expose SuperQode as an A2A agent.
 

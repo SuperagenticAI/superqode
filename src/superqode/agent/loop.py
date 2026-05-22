@@ -408,6 +408,16 @@ class AgentResponse:
     error: Optional[str] = None
 
 
+class ToolApprovalRequired(RuntimeError):
+    """Raised internally when a tool call must pause for HITL approval."""
+
+    def __init__(self, tool_name: str, arguments: Dict[str, Any], tool_call_id: str | None):
+        super().__init__(f"Approval required for tool: {tool_name}")
+        self.tool_name = tool_name
+        self.arguments = dict(arguments)
+        self.tool_call_id = tool_call_id
+
+
 class AgentLoop:
     """Minimal agent loop for fair model testing.
 
@@ -491,6 +501,9 @@ class AgentLoop:
 
         # Cancellation support
         self._cancelled = False
+        self.pause_on_approval = False
+        self._pending_approval: Optional[Dict[str, Any]] = None
+        self._approved_tool_call_ids: set[str] = set()
 
     def _build_system_prompt(self) -> str:
         """Build the system prompt based on config (uses cached function)."""
@@ -667,7 +680,7 @@ class AgentLoop:
         raise RuntimeError(f"Sub-agent stopped: {result.stopped_reason}")
 
     async def _check_tool_permission(
-        self, name: str, arguments: Dict[str, Any]
+        self, name: str, arguments: Dict[str, Any], tool_call_id: Optional[str] = None
     ) -> Optional[ToolResult]:
         """Apply central permission checks before any local tool executes."""
         permission = self.permission_manager.check_permission(name, arguments)
@@ -680,6 +693,17 @@ class AgentLoop:
                 error=f"Permission denied for tool: {name}",
                 metadata={"permission": "deny", "tool": name},
             )
+        if tool_call_id and tool_call_id in self._approved_tool_call_ids:
+            return None
+
+        if self.pause_on_approval:
+            self._pending_approval = {
+                "index": 0,
+                "tool_name": name,
+                "arguments": dict(arguments),
+                "tool_call_id": tool_call_id,
+            }
+            raise ToolApprovalRequired(name, arguments, tool_call_id)
 
         approved = await self.permission_manager.request_permission(
             name,
@@ -716,7 +740,7 @@ class AgentLoop:
         if not tool:
             # Check if it's an MCP tool (format: mcp_serverid_toolname)
             if self.mcp_executor and name.startswith("mcp_"):
-                denied = await self._check_tool_permission(name, arguments)
+                denied = await self._check_tool_permission(name, arguments, tool_call_id)
                 if denied:
                     return denied
                 parts = name.split(
@@ -734,7 +758,7 @@ class AgentLoop:
                         )
             return ToolResult(success=False, output="", error=f"Unknown tool: {name}")
 
-        denied = await self._check_tool_permission(name, arguments)
+        denied = await self._check_tool_permission(name, arguments, tool_call_id)
         if denied:
             return denied
 
@@ -856,6 +880,8 @@ class AgentLoop:
         # Handle any exceptions
         processed = []
         for i, r in enumerate(results):
+            if isinstance(r, ToolApprovalRequired):
+                raise r
             if isinstance(r, Exception):
                 tc = tool_calls[i]
                 tool_name = tc.get("function", {}).get("name", "unknown")
@@ -1046,7 +1072,16 @@ class AgentLoop:
                 # PERFORMANCE: Execute tools in parallel or sequential
                 if self.parallel_tools and len(response.tool_calls) > 1:
                     # Parallel execution for multiple tools
-                    results = await self._execute_tools_parallel(response.tool_calls)
+                    try:
+                        results = await self._execute_tools_parallel(response.tool_calls)
+                    except ToolApprovalRequired:
+                        return AgentResponse(
+                            content="",
+                            messages=messages,
+                            tool_calls_made=tool_calls_made,
+                            iterations=iterations,
+                            stopped_reason="needs_approval",
+                        )
                     for tool_name, tool_call_id, tool_args, result in results:
                         tool_calls_made += 1
                         messages.append(
@@ -1078,9 +1113,18 @@ class AgentLoop:
                         if self.on_tool_call:
                             self.on_tool_call(tool_name, tool_args)
 
-                        result = await self._execute_tool(
-                            tool_name, tool_args, tool_call_id=tool_call_id
-                        )
+                        try:
+                            result = await self._execute_tool(
+                                tool_name, tool_args, tool_call_id=tool_call_id
+                            )
+                        except ToolApprovalRequired:
+                            return AgentResponse(
+                                content="",
+                                messages=messages,
+                                tool_calls_made=tool_calls_made,
+                                iterations=iterations,
+                                stopped_reason="needs_approval",
+                            )
                         tool_calls_made += 1
 
                         if self.on_tool_result:
@@ -1369,7 +1413,10 @@ class AgentLoop:
 
                 # PERFORMANCE: Execute tools in parallel or sequential
                 if self.parallel_tools and len(tool_calls) > 1:
-                    results = await self._execute_tools_parallel(tool_calls)
+                    try:
+                        results = await self._execute_tools_parallel(tool_calls)
+                    except ToolApprovalRequired:
+                        return
                     for tool_name, tool_call_id, tool_args, result in results:
                         tool_calls_made += 1
                         messages.append(
@@ -1398,9 +1445,12 @@ class AgentLoop:
                         if self.on_tool_call:
                             self.on_tool_call(tool_name, tool_args)
 
-                        result = await self._execute_tool(
-                            tool_name, tool_args, tool_call_id=tool_call_id
-                        )
+                        try:
+                            result = await self._execute_tool(
+                                tool_name, tool_args, tool_call_id=tool_call_id
+                            )
+                        except ToolApprovalRequired:
+                            return
                         tool_calls_made += 1
 
                         if self.on_tool_result:

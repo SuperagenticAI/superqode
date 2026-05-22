@@ -180,9 +180,15 @@ async def test_no_tool_kernel_runs_with_empty_registry(monkeypatch, tmp_path: Pa
     assert events[1].data["status"] == "succeeded"
     assert events[1].data["backend"] == "fake-backend"
     assert events[1].data["runtime"] == "fake-runtime"
+    assert isinstance(events[1].data["latency_ms"], int)
+    assert events[1].data["tokens_in"] is None
+    assert events[1].data["tokens_out"] is None
     stored_run = store.get_run(result.run_id)
     assert stored_run is not None
     assert stored_run.status == "succeeded"
+    assert isinstance(stored_run.metadata["latency_ms"], int)
+    assert stored_run.metadata["tokens_in"] is None
+    assert stored_run.metadata["tokens_out"] is None
     assert [event.type for event in stored_run.events] == ["run_start", "run_end"]
 
 

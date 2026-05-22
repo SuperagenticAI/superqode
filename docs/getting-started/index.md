@@ -1,6 +1,6 @@
 # Getting Started
 
-Welcome to SuperQode. This guide helps you get started with the coding-agent TUI, headless CLI, HarnessSpec workflows, runtime backends, provider setup, local models, and optional validation workflows.
+Welcome to SuperQode, your pluggable multi-agent coding harness. This guide helps you get started with the coding-agent TUI, headless CLI, HarnessSpec workflows, runtime backends, provider setup, local models, and optional validation workflows.
 
 ---
 
@@ -28,9 +28,9 @@ Welcome to SuperQode. This guide helps you get started with the coding-agent TUI
 
     ---
 
-    Interactive Terminal UI for coding-agent sessions, provider selection, tool use, and exploratory validation.
+    Interactive Terminal UI for coding-agent sessions, provider selection, tool use, approvals, and harnesses.
 
-    [:octicons-arrow-right-24: TUI guide](#tui-workflow-recommended-for-exploratory-testing)
+    [:octicons-arrow-right-24: TUI guide](#tui-workflow-recommended-for-coding-sessions)
 
 -   **CLI Workflow**
 
@@ -189,9 +189,9 @@ export ANTHROPIC_API_KEY=your-api-key-here
 
 **In TUI:**
 - Type `:connect` (or `:c` for short) for an interactive picker
-- Or directly: `:connect byok google gemini-3-pro`
+- Or directly: `:connect byok openai gpt-4o-mini`
 
-**In CLI:** `superqode connect byok google gemini-3-pro`
+**In CLI:** `superqode connect byok openai gpt-4o-mini`
 
 #### Local Models
 
@@ -234,7 +234,7 @@ default:
   mode: acp  # or "byok" or "local"
   coding_agent: opencode  # for ACP
   # provider: google        # for BYOK
-  # model: gemini-3-pro      # for BYOK
+  # model: gpt-4o-mini      # for BYOK
   # provider: ollama         # for Local
   # model: qwen3:8b          # for Local
 
@@ -303,18 +303,18 @@ SuperQode offers two distinct workflows designed for different use cases:
 
 ---
 
-## TUI Workflow (Recommended for Exploratory Testing)
+## TUI Workflow (Recommended For Coding Sessions)
 
-**Best for:** Interactive exploration, ad-hoc testing, learning, and real-time feedback
+**Best for:** Interactive repository work, focused coding tasks, approvals, and real-time feedback
 
 ### Characteristics
 
 - ✅ **Interactive Terminal UI** - Rich, visual interface
 - ✅ **Real-time feedback** - See results as they happen
-- ✅ **Exploratory testing** - Chat with agents, ask questions
+- ✅ **Focused coding** - Ask for small changes and review what happened
 - ✅ **Visual navigation** - Browse files, view diffs, explore findings
 - ✅ **Session management** - Save and resume sessions
-- ✅ **Multi-agent handoff** - Switch between roles interactively
+- ✅ **Harness control** - Load reusable specs for tools, runtime, approvals, and events
 
 ### Quick Start
 
@@ -331,26 +331,26 @@ superqode
 # Option B: Direct connection (if you know exactly what you want)
 :connect acp opencode
 # or
-:connect byok google gemini-3-pro
+:connect byok openai gpt-4o-mini
 # or
 :connect local ollama qwen3:8b
 
-# 3. Switch to a validation role (in TUI)
-:qe security_tester
+# 3. Load a harness when you want reusable policy
+:harness harness.yaml
+:status
 
-# 4. Start exploring! Type natural language requests:
-# "Check for SQL injection vulnerabilities in the API"
-# "Test the authentication flow"
-# "Find performance bottlenecks in the database queries"
+# 4. Start coding with natural language requests:
+# "Summarize this repository and suggest the smallest safe improvement."
+# "Find one low-risk cleanup, make the smallest fix, and run the narrowest useful test."
+# "Summarize what changed and which tests you ran."
 
-# Note: To run automated validation sessions, use CLI commands:
+# 5. Approve or reject pending tool calls when policy asks
+:approve
+:reject
+
+# Note: automated validation sessions are separate CLI workflows:
 # superqode qe run . --mode quick   # Quick 60-second scan
 # superqode qe run . --mode deep    # Comprehensive 30-minute analysis
-
-# 5. View findings interactively
-:view <file>    # View file content
-:diff           # See suggested changes
-:plan           # View agent's plan
 ```
 
 ### TUI Commands Reference
@@ -361,10 +361,13 @@ superqode
 | `:connect acp <agent>` | Connect directly to ACP agent |
 | `:connect byok <provider> <model>` | Connect directly to BYOK provider |
 | `:connect local <provider> <model>` | Connect directly to local model |
+| `:harness <path>` | Load a HarnessSpec |
+| `:harness status` | Show active harness state |
+| `:runtime list` | Show runtime backends |
+| `:approve` | Approve a pending tool call |
+| `:reject` | Reject a pending tool call |
 | `:qe <role>` | Switch to validation role mode (e.g., `:qe security_tester`) |
 | `:view <file>` | View file content |
-| `:diff` | View suggested changes |
-| `:plan` | View agent's plan |
 | `:help` | Show all commands |
 | `:quit` | Exit TUI |
 

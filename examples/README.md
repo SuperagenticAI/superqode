@@ -5,7 +5,7 @@ These examples are small HarnessSpec files you can copy, edit, and run.
 Start with `coding.yaml` unless you already know which backend you want.
 
 ```bash
-superqode harness validate examples/harnesses/coding.yaml
+superqode harness validate --spec examples/harnesses/coding.yaml
 superqode harness doctor --spec examples/harnesses/coding.yaml
 superqode harness run --spec examples/harnesses/coding.yaml --prompt "summarize this repository"
 ```
@@ -42,4 +42,3 @@ pip install "superqode[adk]"
 ```
 
 Use `superqode harness list-backends` to see what is installed in your environment.
-

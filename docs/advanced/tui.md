@@ -23,8 +23,34 @@ SuperQode includes a rich Terminal User Interface (TUI) for interactive coding-a
 # Start TUI mode
 superqode
 
+# Start with a harness spec
+superqode --harness harness.yaml
+
 # Start with specific role
 superqode --role qe.security_tester
+```
+
+## Common TUI Workflow
+
+Use this flow for a normal coding session:
+
+1. Launch from the project root.
+2. Connect a provider, ACP agent, or local model with `:connect`.
+3. Load a harness with `:harness harness.yaml` when you want portable policy.
+4. Type a focused prompt and press `Enter`.
+5. Approve or reject pending tool calls.
+6. Ask for a summary of changed files and tests.
+
+Example:
+
+```text
+:connect
+:harness harness.yaml
+:status
+Summarize this repository and suggest the smallest safe improvement.
+Find one low-risk cleanup, make the smallest fix, and run the narrowest useful test.
+:approve
+Summarize what changed.
 ```
 
 ## TUI Layout
@@ -74,6 +100,14 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:connect` - Connect to provider/agent
 - `:connect local` - Open the local provider picker
 - `:connect byok` - Open the BYOK provider picker
+- `:harness <path>` - Load a HarnessSpec
+- `:harness status` - Show the active harness
+- `:harness templates` - List built-in harness templates
+- `:harness off` - Disable the active harness
+- `:runtime list` - Show available runtime backends
+- `:runtime <name>` - Switch runtime where available
+- `:approve` - Approve a pending tool call
+- `:reject` - Reject a pending tool call
 - `:log` - Show current output verbosity
 - `:log minimal` - Show status-only tool activity
 - `:log normal` - Show compact tool summaries
@@ -125,6 +159,43 @@ The BYOK model view includes capability labels:
 Local providers include DS4, Ollama, LM Studio, MLX, vLLM, and SGLang when supported by the current installation.
 
 Note: validation analysis sessions are run via CLI, not TUI commands. Use `superqode qe run .` in your terminal to start validation sessions.
+
+## Harnesses In The TUI
+
+Harness specs make TUI sessions repeatable. A harness controls runtime, model policy, tools, sandbox behavior, approvals, event storage, and output handling.
+
+Create and check a harness before loading it:
+
+```bash
+superqode harness init my-coder --template coding --output harness.yaml
+superqode harness doctor --spec harness.yaml
+```
+
+Load it in the TUI:
+
+```text
+:harness harness.yaml
+```
+
+Use a no-tool harness for planning or architecture review without file, shell, or repository tools:
+
+```bash
+superqode harness init planner --template no-tool --output planner.yaml
+superqode --harness planner.yaml
+```
+
+## Approvals
+
+When the active policy requires approval, the TUI shows the pending operation before it runs.
+
+```text
+:approve
+:approve 1 always
+:reject
+:reject 1 "use a safer command"
+```
+
+Use `always` only when you want to allow matching requests for the rest of the session.
 
 ## Configuration
 

@@ -555,6 +555,5 @@ qe:
 
 ## Next Steps
 
-- [Guidance System](../advanced/guidance-system.md) - How guidance works
 - [YAML Reference](yaml-reference.md) - Complete configuration reference
 - [validation Modes](../concepts/modes.md) - Quick Scan vs Deep validation

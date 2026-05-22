@@ -1,415 +1,267 @@
 # Your First Session
 
-This guide walks you through a complete validation and evaluation session step-by-step, explaining each phase and output.
+This guide walks through a normal SuperQode TUI session: connect a model or agent, load a harness, ask for a repository task, approve tool calls when needed, and inspect what happened.
+
+SuperQode is your pluggable multi-agent coding harness. The TUI is the best place to explore a project because it keeps prompts, tool activity, approvals, file changes, and session state visible in one terminal.
 
 ---
 
-## Overview
+## Before You Start
 
-A SuperQode validation session follows this lifecycle:
+You need:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    VALIDATION SESSION LIFECYCLE                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  1. SNAPSHOT         Original code preserved                 │
-│        ↓                                                     │
-│  2. SANDBOX       Agents freely modify, inject tests,    │
-│        │             run experiments, break things           │
-│        ↓                                                     │
-│  3. ANALYSIS         Role-specific quality investigation    │
-│        ↓                                                     │
-│  4. REPORT           Document what was done, what was found │
-│        ↓                                                     │
-│  5. REVERT           All changes removed, original restored │
-│        ↓                                                     │
-│  6. ARTIFACTS        Patches, tests, reports preserved      │
-│                      (in .superqode/qe-artifacts/)          │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
+- SuperQode installed: `superqode --version`
+- A project directory
+- One configured provider, ACP agent, or local model
 
----
-
-## Prerequisites
-
-Before starting, ensure you have:
-
-- [x] SuperQode installed (`superqode --version`)
-- [x] At least one provider configured (API key or local model)
-- [x] A project directory to analyze
-
----
-
-## Step 1: Navigate to Your Project
+Start in a Git repository when possible:
 
 ```bash
 cd /path/to/your/project
-```
-
-Ensure you're in a Git repository (recommended for full workspace isolation):
-
-```bash
 git status
 ```
 
----
-
-## Step 2: Launch SuperQode
-
-=== "Interactive Mode (TUI)"
-
-    ```bash
-    superqode
-    ```
-
-    The TUI launches with the SuperQode interface.
-
-=== "Direct Command"
-
-    ```bash
-    superqode qe run . --mode quick
-    ```
-
-    Runs validation directly without the TUI.
+If this is your first run in a valuable repository, use a throwaway branch.
 
 ---
 
-## Step 3: Connect to a Provider
+## 1. Launch The TUI
 
-In the TUI, connect to your preferred provider:
-
+```bash
+superqode
 ```
-# ACP mode (recommended)
+
+The TUI opens with a prompt at the top and the conversation area below it. Type natural-language requests in the prompt and press `Enter` to submit.
+
+Useful keys:
+
+| Key | Action |
+| --- | --- |
+| `Ctrl+K` | Open the command palette |
+| `:` | Enter command mode |
+| `Ctrl+T` | Toggle thinking/session logs |
+| `Ctrl+Q` | Quit |
+| `Escape` | Close a modal or picker |
+
+---
+
+## 2. Connect A Model Or Agent
+
+Open the connection picker:
+
+```text
+:connect
+```
+
+You can also connect directly:
+
+```text
 :connect acp opencode
-
-# Or BYOK mode with Google
-:connect byok google gemini-3-pro
+:connect byok openai gpt-4o-mini
+:connect local ollama qwen3:8b
 ```
 
-You'll see a connection confirmation:
+Check the current state:
 
+```text
+:status
 ```
-✓ Connected to opencode
-  Mode: ACP
-  Capabilities: chat, streaming, tools, file_editing, shell
+
+Use ACP when you want an external coding agent, BYOK when you want a hosted model with your API key, and local when you want Ollama, LM Studio, DS4, MLX, vLLM, or another local server.
+
+---
+
+## 3. Load Or Create A Harness
+
+A harness defines the run contract: runtime, model policy, tools, sandbox policy, approvals, events, and output handling.
+
+For the default coding setup:
+
+```bash
+superqode harness init my-coder --template coding --output harness.yaml
+superqode harness doctor --spec harness.yaml
+```
+
+Then load it in the TUI:
+
+```text
+:harness harness.yaml
+```
+
+Other harness commands:
+
+| Command | Purpose |
+| --- | --- |
+| `:harness status` | Show the active harness |
+| `:harness templates` | List available templates |
+| `:harness off` | Return to the non-harness runtime path |
+
+You can also start the TUI with a harness:
+
+```bash
+superqode --harness harness.yaml
 ```
 
 ---
 
-## Step 4: Start the Validation Session
+## 4. Ask A Small First Task
 
-### Quick Scan
+Start with a low-risk prompt:
 
-For a fast 60-second analysis:
+```text
+Summarize this repository and identify the smallest safe improvement.
+```
+
+Then try a focused coding task:
+
+```text
+Find one low-risk bug or cleanup, make the smallest fix, and run the narrowest useful test.
+```
+
+The TUI keeps successful tool activity compact by default:
+
+```text
+read_file(pyproject.toml)
+grep("TODO", src)
+bash("uv run pytest tests/test_config.py")
+```
+
+Use verbose logs only when you need detail:
+
+```text
+:log verbose
+```
+
+---
+
+## 5. Handle Approvals
+
+When policy requires approval, the TUI shows the pending tool call before it runs. Review the command or file operation, then approve or reject it:
+
+```text
+:approve
+:approve 1 always
+:reject
+:reject 1 "use a safer command"
+```
+
+Use `always` only when you want to allow the same kind of request for the rest of the session.
+
+---
+
+## 6. Inspect Changes
+
+Ask SuperQode what changed:
+
+```text
+Summarize the files changed and the tests you ran.
+```
+
+You can also use normal Git commands in another terminal:
+
+```bash
+git status --short
+git diff
+```
+
+If you ran through a harness, JSON runs include a `run_id`. Use it to inspect events and the graph:
+
+```bash
+superqode harness events <run-id>
+superqode harness graph <run-id>
+superqode harness graph <run-id> --json
+```
+
+---
+
+## 7. Switch Runtime Or Provider
+
+List available runtimes:
+
+```text
+:runtime list
+```
+
+Switch runtime when available:
+
+```text
+:runtime builtin
+:runtime pydanticai
+:runtime openai-agents
+```
+
+Use `:connect` again if you want to switch provider or model.
+
+---
+
+## 8. Run Validation When Needed
+
+Validation workflows are separate from normal TUI coding sessions. Run them from the terminal when you want role-based project checks, generated reports, or release validation:
 
 ```bash
 superqode qe run . --mode quick
-```
-
-**Note:** validation sessions are run via CLI commands. In the TUI, you interact directly with agents by typing natural language requests after switching to a validation role.
-
-### Deep validation
-
-For comprehensive 30-minute analysis:
-
-```bash
 superqode qe run . --mode deep
 ```
 
----
-
-## Step 5: Watch the Session Progress
-
-During the session, you'll see real-time progress:
-
-```
-╭──────────────────────────────────────────────────────────────╮
-│                     Validation Session in Progress                    │
-├──────────────────────────────────────────────────────────────┤
-│ Mode: quick_scan                                              │
-│ Started: 2024-01-18 14:30:22                                 │
-│ Elapsed: 23.4s / 60s                                         │
-├──────────────────────────────────────────────────────────────┤
-│ Current Role: security_tester                                │
-│ Status: Analyzing authentication patterns...                 │
-├──────────────────────────────────────────────────────────────┤
-│ Roles Completed: 1/3                                         │
-│   ✓ api_tester (15.2s) - 2 findings                         │
-│   ◐ security_tester (in progress)                           │
-│   ○ fullstack (pending)                                      │
-├──────────────────────────────────────────────────────────────┤
-│ Findings So Far: 2                                           │
-│   • [HIGH] SQL Injection vulnerability in /api/users        │
-│   • [MEDIUM] Missing rate limiting on /api/auth             │
-╰──────────────────────────────────────────────────────────────╯
-```
+For day-to-day implementation, stay in the TUI and use focused prompts plus harness policy.
 
 ---
 
-## Step 6: Understanding Role Execution
-
-Each role runs with a specific focus:
-
-### Execution Roles (Deterministic)
-
-These roles run existing tests:
-
-| Role | Focus | Duration |
-|------|-------|----------|
-| `smoke_tester` | Critical paths | Fast (seconds) |
-| `sanity_tester` | Core functionality | Quick (< 1 min) |
-| `regression_tester` | Full test suite | Thorough (varies) |
-| `lint_tester` | Static lint checks | Fast (seconds) |
-
-### Detection Roles (AI-Powered)
-
-These roles use AI to find issues:
-
-| Role | Focus | Typical Findings |
-|------|-------|------------------|
-| `security_tester` | Vulnerabilities | Injection, auth bypass, secrets |
-| `api_tester` | API contracts | Schema violations, missing validation |
-| `unit_tester` | Coverage gaps | Untested paths, edge cases |
-| `performance_tester` | Bottlenecks | N+1 queries, memory leaks |
-| `e2e_tester` | Workflows | Integration issues |
-
-### Heuristic Role
-
-| Role | Focus |
-|------|-------|
-| `fullstack` | Senior validation comprehensive review |
-
----
-
-## Step 7: Session Completion
-
-When the session completes, you'll see a summary:
-
-```
-╭──────────────────────────────────────────────────────────────╮
-│                    Validation Session Complete                        │
-├──────────────────────────────────────────────────────────────┤
-│ Duration: 58.7s                                               │
-│ Mode: quick_scan                                              │
-│ Workspace: Reverted to original state                        │
-├──────────────────────────────────────────────────────────────┤
-│ Roles Executed: 3                                             │
-│   ✓ api_tester         15.2s    2 findings                   │
-│   ✓ security_tester    28.1s    3 findings                   │
-│   ✓ fullstack          15.4s    1 finding                    │
-├──────────────────────────────────────────────────────────────┤
-│ Total Findings: 6                                             │
-│   Critical: 1    High: 2    Medium: 2    Low: 1              │
-├──────────────────────────────────────────────────────────────┤
-│ Artifacts Generated:                                          │
-│   • report: .superqode/qe-artifacts/qr/qr-2024-01-18-1a2b3c4d.json │
-╰──────────────────────────────────────────────────────────────╯
-```
-
----
-
-## Step 8: Review the Quality Report (report)
-
-The report is a research-grade forensic report. View it:
+## Complete First Session
 
 ```bash
-cat .superqode/qe-artifacts/qr/qr-*.json | jq
+cd ~/projects/my-app
+superqode harness init my-coder --template coding --output harness.yaml
+superqode harness doctor --spec harness.yaml
+superqode --harness harness.yaml
 ```
 
-### report Structure
+Inside the TUI:
 
-```json
-{
-  "session": {
-    "id": "qe-session-20240118-143022",
-    "mode": "quick_scan",
-    "duration_seconds": 58.7,
-    "started_at": "2024-01-18T14:30:22Z",
-    "completed_at": "2024-01-18T14:31:21Z"
-  },
-  "findings": [
-    {
-      "id": "finding-001",
-      "title": "SQL Injection in User Search",
-      "severity": "critical",
-      "category": "security",
-      "confidence": 0.95,
-      "file_path": "src/api/users.py",
-      "line_number": 42,
-      "description": "User input is directly interpolated into SQL query without sanitization.",
-      "reproduction_steps": [
-        "1. Send GET request to /api/users?search='; DROP TABLE users; --",
-        "2. Observe SQL error in response"
-      ],
-      "recommendation": "Use parameterized queries or ORM methods",
-      "evidence": {
-        "code_snippet": "query = f\"SELECT * FROM users WHERE name LIKE '%{search}%'\"",
-        "test_result": "SQL syntax error returned, confirming injection"
-      }
-    }
-  ],
-  "summary": {
-    "total_findings": 6,
-    "by_severity": {
-      "critical": 1,
-      "high": 2,
-      "medium": 2,
-      "low": 1
-    },
-    "production_ready": false,
-    "recommendation": "Address critical SQL injection before deployment"
-  }
-}
+```text
+:connect
+:status
+Summarize this repository and suggest the smallest safe improvement.
+Find one low-risk cleanup, make the smallest fix, and run the narrowest useful test.
+:approve
+Summarize what changed.
 ```
 
 ---
 
-## Step 9: Review Individual Findings
+## Troubleshooting
 
-Each finding in the report contains:
+??? question "The TUI starts but no model is connected"
 
-| Field | Description |
-|-------|-------------|
-| `id` | Unique identifier |
-| `title` | Brief description |
-| `severity` | critical, high, medium, low |
-| `category` | security, performance, correctness, etc. |
-| `confidence` | 0.0 - 1.0 confidence score |
-| `file_path` | Location of the issue |
-| `line_number` | Specific line (if applicable) |
-| `description` | Detailed explanation |
-| `reproduction_steps` | How to reproduce |
-| `recommendation` | Suggested fix |
-| `evidence` | Supporting data |
+    Run `:connect` and choose ACP, BYOK, or local. Then check `:status`.
 
----
+??? question "A tool call is waiting for approval"
 
-## Step 10: Apply Suggested Fixes (Optional, Enterprise)
+    Review the pending operation. Use `:approve` to allow it once, `:approve 1 always` to allow similar requests for the session, or `:reject` to block it.
 
-If you ran with `--allow-suggestions`, patches are available:
+??? question "The output is too noisy"
 
-```bash
-# List available suggestions
-superqode suggestions list
+    Use `:log minimal` or keep the default normal mode. Use `Ctrl+T` to hide thinking/session logs.
 
-# View a specific patch
-cat .superqode/qe-artifacts/patches/fix-sql-injection.patch
+??? question "I want to see every tool result"
 
-# Apply a suggestion
-superqode suggestions apply suggestion-001
-```
+    Use `:log verbose` before running the task.
 
-!!! warning "Review Before Applying"
-    Always review patches before applying. SuperQode suggests fixes but you make the final decision.
+??? question "I want a no-tool planning session"
 
----
+    Create and load a no-tool harness:
 
-## Step 11: Provide Feedback (Enterprise)
-
-Help improve SuperQode's accuracy by providing feedback:
-
-```bash
-# Mark finding as valid
-superqode qe feedback finding-001 --valid
-
-# Mark as false positive
-superqode qe feedback finding-002 --false-positive -r "This is expected behavior"
-```
-
-Feedback improves the ML-based severity prediction for future sessions.
-
----
-
-## Step 12: View Session Artifacts
-
-All artifacts are preserved in `.superqode/qe-artifacts/`:
-
-```
-.superqode/qe-artifacts/
-├── qr-20240118-143022.json       # Quality Report
-├── patches/
-│   ├── fix-sql-injection.patch    # Suggested fix patches
-│   └── fix-rate-limiting.patch
-├── tests/
-│   └── generated/
-│       ├── test_sql_injection.py  # Generated regression tests
-│       └── test_api_security.py
-├── reports/
-└── qr/
-    ├── qr-<date>-<session>.md
-    └── qr-<date>-<session>.json
-```
-
----
-
-## Complete Session Example
-
-Here's a complete example from start to finish:
-
-```bash
-# 1. Navigate to project
-cd ~/projects/my-api
-
-# 2. Run comprehensive validation
-superqode qe run . \
-  --mode deep \
-  --timeout 1800 \
-  --output .superqode/qe-artifacts
-
-# 3. Wait for session to complete...
-
-# 4. Review the report
-cat .superqode/qe-artifacts/qr/qr-*.md
-
-# 5. Provide feedback on findings
-superqode qe feedback finding-001 --valid
-superqode qe feedback finding-003 --false-positive -r "Intentional behavior"
-```
+    ```bash
+    superqode harness init planner --template no-tool --output planner.yaml
+    superqode --harness planner.yaml
+    ```
 
 ---
 
 ## Next Steps
 
-Now that you've completed your first session:
-
-1. **[Configure SuperQode](configuration.md)** - Customize roles and settings
-2. **[Understand Role-Based Workflows](../concepts/roles.md)** - Learn about each role
-3. **[Read report Documentation](../concepts/qr.md)** - Deep dive into reports
-4. **[Set Up CI/CD](../integration/cicd.md)** - Automate validation in your pipeline
-5. **[Advanced Features](../advanced/index.md)** - Custom roles, MCP, harness
-
----
-
-## Troubleshooting First Session
-
-??? question "Session times out before completion"
-
-    Increase the timeout or use quick scan mode:
-
-    ```bash
-    superqode qe run . --mode quick --timeout 120
-    ```
-
-??? question "No findings detected"
-
-    - Ensure the project has analyzable code
-    - Try running specific roles: `-r security_tester -r api_tester`
-    - Check that the provider is properly connected
-
-??? question "Too many false positives"
-
-    Configure noise filters:
-
-    ```yaml
-    # superqode.yaml
-    qe:
-      noise:
-        min_confidence: 0.8
-        min_severity: "medium"
-    ```
-
-??? question "Workspace not reverting"
-
-    Check that you're in a Git repository. For non-Git projects, snapshot isolation is used by default (worktree mode requires Git).
+1. [Quick Start](quickstart.md)
+2. [Harness System](../advanced/harness-system.md)
+3. [Terminal User Interface](../advanced/tui.md)
+4. [Runtime Backends](../runtimes.md)
+5. [Configuration Guide](configuration.md)

@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
-site_description: "Harness-first coding agents with pluggable runtimes, model policy, sandbox policy, and validation workflows."
+site_description: "Your pluggable multi-agent coding harness."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode
@@ -152,7 +152,6 @@ extra_javascript:
 
 nav:
   - 🏠 Home: index.md
-  - ✅ Release Readiness: release-readiness.md
 
   - 🚀 Getting Started:
     - getting-started/index.md
@@ -211,15 +210,10 @@ nav:
 
   - 🔬 Advanced:
     - advanced/index.md
-    - 🏗️ Architecture Overview: advanced/architecture.md
-    - ⚙️ Execution Pipeline: advanced/execution-pipeline.md
-    - 📁 Workspace Internals: advanced/workspace-internals.md
     - 🔒 Safety & Permissions: advanced/safety-permissions.md
-    - 🧪 Evaluation Engine: advanced/evaluation-engine.md
     - 🧠 Memory & Learning: advanced/memory.md
     - 🔧 Tools System: advanced/tools-system.md
     - 🐍 Monty Python REPL: advanced/monty-python-repl.md
-    - 📖 Guidance System: advanced/guidance-system.md
     - ⚓ Harness System: advanced/harness-system.md
     - 🔌 Runtime Backends: runtimes.md
     - 📋 Session Management: advanced/session-management.md

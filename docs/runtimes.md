@@ -1,6 +1,6 @@
 # Agent Runtimes
 
-SuperQode's runtime layer is pluggable. You can keep the default native loop, or opt into a different backend with one flag. Runtime adapters are peers behind the same harness contract.
+SuperQode is your pluggable multi-agent coding harness. You can keep the default native loop, or opt into a different backend with one flag. Runtime adapters are peers behind the same harness contract.
 
 ## Runtime Versus Harness
 
@@ -100,6 +100,8 @@ Use `builtin` for:
 - Gemma4 and DS4 policy experiments
 - exact SuperQode sandbox behavior
 - typed outputs and workflow execution through the native harness path
+- approval pauses for ASK-permission tool calls
+- rich harness graph events for model requests, streamed deltas, tool calls, tool results, and approvals
 
 ### `adk`
 
@@ -189,7 +191,7 @@ Current limits:
 
 - No-tool specs are rejected. Use `builtin` for model-only harnesses.
 - Specs with `allow_shell=false` are rejected for now because DeepAgents exposes `execute` when using the filesystem backend.
-- DeepAgents remains optional and peer-level. It does not replace the SuperQode harness kernel.
+- DeepAgents remains optional. Use it when you want DeepAgents behavior behind a SuperQode harness.
 
 ## Embedding
 

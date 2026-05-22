@@ -232,7 +232,7 @@ gateway = OpenResponsesGateway(
 
 ## Message ↔ Item Conversion
 
-OpenResponses uses an items-based format internally. SuperQode automatically converts:
+OpenResponses uses an items-based format. SuperQode automatically converts:
 
 ### Messages to Items
 

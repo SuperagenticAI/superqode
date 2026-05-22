@@ -8,9 +8,8 @@
 <h1 align="center">SuperQode</h1>
 
 <p align="center">
-  <strong>Production coding harness for local models, BYOK providers, and pluggable agent runtimes</strong><br>
-  <em>Define the harness, choose the runtime, control the tools, and keep coding sessions readable.</em><br>
-  <strong>Bring your own model, runtime, tools, and harness.</strong>
+  <strong>Your pluggable multi-agent coding harness.</strong><br>
+  <em>Run coding agents with portable specs, controlled tools, and readable sessions.</em>
 </p>
 
 <p align="center">
@@ -36,9 +35,9 @@
 
 ## What is SuperQode?
 
-**SuperQode** is a production coding-agent harness for interactive development, local model workflows, BYOK providers, ACP coding agents, and tool-based repository work. It provides a TUI and CLI so developers can connect to the model or agent runtime they prefer, run file/search/edit/shell tools under policy, and get concise summaries of what changed.
+**SuperQode** is your pluggable multi-agent coding harness for interactive development, local model workflows, BYOK providers, ACP coding agents, and tool-based repository work. It provides a TUI and CLI so developers can connect to the model or agent runtime they prefer, run file/search/edit/shell tools under policy, and get concise summaries of what changed.
 
-The v2 direction is harness-first: SuperQode owns the kernel for sessions, tools, runtimes, model policies, sandboxing, typed outputs, workflow execution, validation, events, and backend adapters. Higher-level workflows can be built on top through A2A later without changing the core identity.
+Use one harness spec to choose the runtime, model policy, tools, sandbox rules, approvals, event storage, and output shape for a coding-agent run.
 
 **Note (Enterprise):** Enterprise adds deeper automation, evaluation testing, and enterprise integrations.
 
@@ -156,7 +155,7 @@ superqode harness run --spec harness.yaml --runtime openai-agents --prompt "make
 | Feature | Description |
 |---------|-------------|
 | **HarnessSpec** | Define coding, no-tool, local-model, and custom harness behavior with one declarative contract |
-| **Harness kernel** | Run sessions with normalized events, run records, backend dispatch, typed outputs, and workflow execution |
+| **Harness runs** | Run sessions with normalized events, run records, typed outputs, and workflow execution |
 | **Pluggable runtimes** | Swap the agent loop: SuperQode native, Google ADK, OpenAI Agents SDK, optional DeepAgents, or optional PydanticAI |
 | **Event graph** | Inspect model, tool, approval, sandbox, subagent, memory, and result events across supported runtimes |
 | **Harness doctor** | Preflight backend installation, spec compatibility, sandbox policy, MCP config, approvals, and graph readiness |
@@ -191,10 +190,11 @@ SuperQode normalizes runtime-specific streams into one harness event graph:
 
 | Backend | Rich graph events |
 |---------|-------------------|
+| `builtin` | Model requests, model deltas, tool calls, tool results, approval pauses, final results |
 | `pydanticai` | Model deltas, tool calls, tool results, final results, approval pauses |
 | `openai-agents` | Model deltas, tool calls, tool results, approval pauses, sandbox markers |
 | `deepagents` | Model deltas, tool calls, subagent activity, memory reads/writes, sandbox file/command events, final results |
-| `builtin` and `adk` | Coarse run and stream events, with the same graph storage contract |
+| `adk` | Run and stream events with the same graph storage contract |
 
 This gives teams one way to debug runs even when they use different agent frameworks.
 

@@ -7,6 +7,7 @@ Runs user-provided commands from superqode.yaml (BYOH).
 from __future__ import annotations
 
 import subprocess
+import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -104,10 +105,11 @@ class PatchHarness:
             tools_run.append(step.name)
             timeout = timeout_override or step.timeout_seconds
             try:
+                command = shlex.split(step.command)
                 result = subprocess.run(
-                    step.command,
+                    command,
                     cwd=self.project_root,
-                    shell=True,
+                    shell=False,
                     capture_output=True,
                     text=True,
                     timeout=timeout,
@@ -132,6 +134,16 @@ class PatchHarness:
                         file=None,
                         message=f"Command timed out after {timeout}s",
                         severity="warning",
+                    )
+                )
+            except (OSError, ValueError) as exc:
+                findings.append(
+                    HarnessFinding(
+                        tool=step.name,
+                        category=ValidationCategory.FUNCTIONAL,
+                        file=None,
+                        message=f"Command could not be executed: {exc}",
+                        severity="error",
                     )
                 )
 

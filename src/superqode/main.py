@@ -26,6 +26,15 @@ import click
 
 from superqode import __version__
 
+HARNESS_TEMPLATE_CHOICES = (
+    "coding",
+    "no-tool",
+    "gemma4-coding",
+    "gemma4-no-tool",
+    "ds4-coding",
+    "ds4-fast-local",
+)
+
 # Global variables for interactive mode
 current_mode: str = "home"  # Start in neutral home state
 interactive_modes: dict[str, dict[str, object]] = {}
@@ -1007,7 +1016,14 @@ def harness_list_backends(json_output):
 
 @harness.command("init")
 @click.argument("name", required=False, default="superqode-coding")
-@click.option("--template", "-t", default="coding", help="Built-in template name")
+@click.option(
+    "--template",
+    "-t",
+    type=click.Choice(HARNESS_TEMPLATE_CHOICES),
+    default="coding",
+    show_default=True,
+    help="Built-in template name",
+)
 @click.option(
     "--output",
     "-o",
@@ -1035,16 +1051,22 @@ def harness_init(name, template, output, force):
 
 
 @harness.command("validate")
-@click.argument("spec_path", type=click.Path(exists=True, path_type=Path))
+@click.argument("spec_arg", required=False, type=click.Path(exists=True, path_type=Path))
+@click.option("--spec", "spec_option", type=click.Path(exists=True, path_type=Path), help="Harness spec file")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 @click.option("--schema", "schema_output", is_flag=True, help="Emit HarnessSpec JSON Schema")
-def harness_validate(spec_path, json_output, schema_output):
+def harness_validate(spec_arg, spec_option, json_output, schema_output):
     """Validate a harness spec file."""
     from superqode.harness import harness_spec_json_schema, harness_spec_to_dict, load_harness_spec
 
     if schema_output:
         click.echo(json.dumps(harness_spec_json_schema(), indent=2))
         return
+    spec_path = spec_option or spec_arg
+    if spec_path is None:
+        raise click.ClickException("Missing harness spec. Pass --spec <path>.")
+    if spec_option is not None and spec_arg is not None and spec_option != spec_arg:
+        raise click.ClickException("Pass the harness spec either as --spec or positional path, not both.")
 
     try:
         spec = load_harness_spec(spec_path)
@@ -1142,6 +1164,85 @@ def harness_inspect(spec_path, runtime_name, sandbox_backend, json_output):
             click.echo(f"  [{issue.severity}] {issue.code}: {issue.message}")
 
 
+@harness.command("compile")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--provider", default=None, help="Provider used to resolve model policy")
+@click.option("--model", "model_name", default=None, help="Model used to resolve model policy")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_compile(spec_path, provider, model_name, json_output):
+    """Print the effective HarnessSpec and resolved runtime policy."""
+    from superqode.harness import (
+        compile_to_headless_profile,
+        harness_spec_to_dict,
+        load_harness_spec,
+        resolve_harness_model_policy,
+    )
+
+    spec = load_harness_spec(spec_path)
+    effective_policy = resolve_harness_model_policy(
+        spec,
+        provider=provider or spec.model_policy.config.get("provider", ""),
+        model=model_name or spec.model_policy.primary or "",
+    )
+    profile = compile_to_headless_profile(spec)
+    payload = {
+        "spec": harness_spec_to_dict(spec),
+        "effective_model_policy": {
+            "profile": effective_policy.profile,
+            "family": effective_policy.family,
+            "temperature": effective_policy.temperature,
+            "system_level": effective_policy.system_level.value,
+            "tool_profile": effective_policy.tool_profile,
+            "tool_call_format": effective_policy.tool_call_format,
+            "reasoning": effective_policy.reasoning,
+            "parallel_tools": effective_policy.parallel_tools,
+            "max_iterations": effective_policy.max_iterations,
+            "session_history_limit": effective_policy.session_history_limit,
+        },
+        "headless_profile": {
+            "name": profile.name,
+            "description": profile.description,
+            "system_level": profile.system_level.value,
+            "tools": profile.tools,
+            "permissions": _permission_config_to_dict(profile.permissions),
+            "job_description": profile.job_description,
+        },
+    }
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    click.echo(json.dumps(payload, indent=2))
+
+
+@harness.command("diff")
+@click.argument("left", type=click.Path(exists=True, path_type=Path))
+@click.argument("right", type=click.Path(exists=True, path_type=Path))
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_diff(left, right, json_output):
+    """Show policy, tool, and agent differences between two HarnessSpecs."""
+    from superqode.harness import harness_spec_to_dict, load_harness_spec
+
+    left_payload = harness_spec_to_dict(load_harness_spec(left))
+    right_payload = harness_spec_to_dict(load_harness_spec(right))
+    changes = _diff_dicts(left_payload, right_payload)
+    payload = {
+        "left": str(left),
+        "right": str(right),
+        "changed": bool(changes),
+        "changes": changes,
+    }
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    if not changes:
+        click.echo("No differences.")
+        return
+    for change in changes:
+        click.echo(
+            f"{change['path']}: {change.get('left')!r} -> {change.get('right')!r}"
+        )
+
+
 @harness.command("doctor")
 @click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
 @click.option("--runtime", "runtime_name", default=None, help="Override runtime or backend")
@@ -1157,7 +1258,7 @@ def harness_inspect(spec_path, runtime_name, sandbox_backend, json_output):
 def harness_doctor(spec_path, runtime_name, sandbox_backend, store_path, json_output):
     """Diagnose a harness spec before running it."""
     from superqode.harness import (
-        FileHarnessStore,
+        create_harness_store,
         backend_capabilities,
         get_sandbox_capabilities,
         inspect_harness_backend,
@@ -1197,6 +1298,15 @@ def harness_doctor(spec_path, runtime_name, sandbox_backend, store_path, json_ou
         "Backend can run this spec." if inspection.ok else "Backend/spec compatibility is blocked.",
         issues=[issue.to_dict() for issue in inspection.issues],
     )
+    model_check = _harness_model_registry_check(spec)
+    add_check(
+        "model_registry",
+        model_check["status"],
+        model_check["message"],
+        provider=model_check["provider"],
+        models=model_check["models"],
+        unknown_models=model_check["unknown_models"],
+    )
 
     if selected_sandbox in {"", "none", None}:
         add_check(
@@ -1234,23 +1344,29 @@ def harness_doctor(spec_path, runtime_name, sandbox_backend, store_path, json_ou
                 },
             )
 
+    store_kind = spec.observability.run_store
     try:
-        FileHarnessStore(store_root)
+        create_harness_store(store_kind, store_root)
     except Exception as exc:  # noqa: BLE001
         add_check(
             "event_store",
             "error",
-            f"Cannot initialize harness event store at {store_root}: {exc}",
+            f"Cannot initialize harness event store '{store_kind}' at {store_root}: {exc}",
         )
     else:
         add_check(
             "event_store",
             "ok",
-            f"Harness event store is writable at {store_root}.",
+            (
+                "Harness event store 'memory' initialized."
+                if store_kind == "memory"
+                else f"Harness event store '{store_kind}' is writable at {store_root}."
+            ),
             graph=True,
+            store=store_kind,
         )
 
-    rich_event_backends = {"pydanticai", "openai-agents", "deepagents"}
+    rich_event_backends = {"builtin", "pydanticai", "openai-agents", "deepagents"}
     add_check(
         "event_graph",
         "ok" if backend_name in rich_event_backends else "warning",
@@ -1324,10 +1440,17 @@ def harness_doctor(spec_path, runtime_name, sandbox_backend, store_path, json_ou
 @click.option("--prompt", "-p", required=True, help="Prompt to run")
 @click.option("--provider", envvar="SUPERQODE_PROVIDER", default="openai", show_default=True)
 @click.option(
-    "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-5.4", show_default=True
+    "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-4o-mini", show_default=True
 )
 @click.option("--runtime", "runtime_name", default=None, help="Override runtime or backend")
 @click.option("--session", "session_id", default=None, help="Reuse a harness session id")
+@click.option(
+    "--store",
+    "store_kind",
+    type=click.Choice(["memory", "file", "sqlite"]),
+    default=None,
+    help="Override observability.run_store",
+)
 @click.option(
     "--working-dir",
     type=click.Path(file_okay=False, path_type=Path),
@@ -1344,6 +1467,7 @@ def harness_run(
     model_name,
     runtime_name,
     session_id,
+    store_kind,
     working_dir,
     sandbox_backend,
     stream,
@@ -1352,11 +1476,18 @@ def harness_run(
     """Run one prompt through a HarnessSpec."""
     import asyncio
 
-    from superqode.harness import FileHarnessStore, init_harness, load_harness_spec
+    from superqode.harness import create_harness_store, init_harness, load_harness_spec
 
     async def _run():
         spec = load_harness_spec(spec_path)
-        store = FileHarnessStore(Path(spec.context.session_storage))
+        store = create_harness_store(
+            store_kind or spec.observability.run_store,
+            (
+                Path(spec.context.session_storage) / "store.sqlite3"
+                if (store_kind or spec.observability.run_store) == "sqlite"
+                else Path(spec.context.session_storage)
+            ),
+        )
         kernel = await init_harness(spec, store=store)
         session_obj = await kernel.session(session_id)
         if stream:
@@ -1514,6 +1645,122 @@ def _harness_mcp_config_path(spec) -> Path | None:
             return Path(configured)
     configured = runtime_config.get("mcp_config_path") or runtime_config.get("mcp_config")
     return Path(configured) if configured else None
+
+
+def _harness_model_registry_check(spec) -> dict:
+    provider = str(spec.model_policy.config.get("provider") or "").strip().lower()
+    models = [item for item in (spec.model_policy.primary, *spec.model_policy.fallbacks) if item]
+    if not models:
+        return {
+            "status": "ok",
+            "message": "No model policy models are configured.",
+            "provider": provider,
+            "models": [],
+            "unknown_models": [],
+        }
+
+    from superqode.providers.registry import PROVIDERS
+
+    normalized = [_normalize_harness_model_id(model) for model in models]
+    if not provider and ":" in str(models[0]):
+        provider = str(models[0]).split(":", 1)[0].lower()
+    if provider == "local":
+        unknown = [
+            model
+            for model, normalized_model in zip(models, normalized)
+            if not (
+                normalized_model.endswith("-local")
+                or normalized_model == "local-model"
+                or "/" in normalized_model
+            )
+        ]
+        status = "warning" if unknown else "ok"
+        return {
+            "status": status,
+            "message": (
+                "Local model aliases look usable."
+                if not unknown
+                else "Some local model aliases are not recognized by SuperQode's static hints."
+            ),
+            "provider": provider,
+            "models": models,
+            "unknown_models": unknown,
+        }
+    provider_def = PROVIDERS.get(provider)
+    if provider_def is None:
+        return {
+            "status": "warning",
+            "message": (
+                "Model availability was not checked because no known provider is configured."
+            ),
+            "provider": provider,
+            "models": models,
+            "unknown_models": [],
+        }
+    known = {
+        _normalize_harness_model_id(model)
+        for model in (*provider_def.example_models, *provider_def.free_models)
+    }
+    unknown = [
+        model for model, normalized_model in zip(models, normalized) if normalized_model not in known
+    ]
+    return {
+        "status": "warning" if unknown else "ok",
+        "message": (
+            f"Model policy models are listed for provider '{provider}'."
+            if not unknown
+            else f"Some model policy models are not listed for provider '{provider}'."
+        ),
+        "provider": provider,
+        "models": models,
+        "unknown_models": unknown,
+    }
+
+
+def _normalize_harness_model_id(model: str) -> str:
+    value = str(model).strip()
+    if ":" in value and "/" not in value.split(":", 1)[0]:
+        value = value.split(":", 1)[1]
+    if "/" in value:
+        prefix, rest = value.split("/", 1)
+        if prefix in {"openai", "anthropic", "google", "gemini", "ollama"}:
+            return rest
+    return value
+
+
+def _diff_dicts(left: object, right: object, path: str = "") -> list[dict]:
+    if isinstance(left, dict) and isinstance(right, dict):
+        changes: list[dict] = []
+        for key in sorted(set(left) | set(right)):
+            child_path = f"{path}.{key}" if path else str(key)
+            if key not in left:
+                changes.append({"path": child_path, "left": None, "right": right[key]})
+            elif key not in right:
+                changes.append({"path": child_path, "left": left[key], "right": None})
+            else:
+                changes.extend(_diff_dicts(left[key], right[key], child_path))
+        return changes
+    if isinstance(left, list) and isinstance(right, list):
+        if left == right:
+            return []
+        if all(isinstance(item, dict) and "id" in item for item in left + right):
+            left_by_id = {item["id"]: item for item in left}
+            right_by_id = {item["id"]: item for item in right}
+            return _diff_dicts(left_by_id, right_by_id, path)
+        return [{"path": path, "left": left, "right": right}]
+    if left != right:
+        return [{"path": path, "left": left, "right": right}]
+    return []
+
+
+def _permission_config_to_dict(config) -> dict:
+    return {
+        "default": config.default.value,
+        "groups": {group.value: permission.value for group, permission in config.groups.items()},
+        "tools": {tool: permission.value for tool, permission in config.tools.items()},
+        "allow_patterns": list(config.allow_patterns),
+        "deny_patterns": list(config.deny_patterns),
+    }
 
 
 @cli_main.group()

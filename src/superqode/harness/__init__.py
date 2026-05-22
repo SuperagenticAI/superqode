@@ -76,7 +76,9 @@ from .store import (
     HarnessGraphNode,
     HarnessRunRecord,
     HarnessSessionRecord,
+    MemoryHarnessStore,
     SQLiteHarnessStore,
+    create_harness_store,
     generate_run_id,
 )
 from .spec import (
@@ -148,6 +150,7 @@ __all__ = [
     "HarnessRunRecord",
     "HarnessSessionRecord",
     "FileHarnessStore",
+    "MemoryHarnessStore",
     "SQLiteHarnessStore",
     "DeepAgentsHarnessBackend",
     "OpenAIAgentsHarnessBackend",
@@ -170,6 +173,7 @@ __all__ = [
     "build_openai_sandbox_run_config",
     "build_typed_output_prompt",
     "compile_to_headless_profile",
+    "create_harness_store",
     "create_harness_backend",
     "get_harness_template",
     "get_sandbox_capabilities",

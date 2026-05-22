@@ -368,6 +368,4 @@ sandbox:
 
 ## Related Documentation
 
-- [Architecture Overview](architecture.md) - System architecture
-- [Workspace Internals](workspace-internals.md) - Isolation details
 - [Configuration Reference](../configuration/yaml-reference.md) - Full config options

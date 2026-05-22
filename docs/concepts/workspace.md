@@ -80,7 +80,7 @@ SuperQode supports multiple isolation methods:
 Uses Git worktrees for lightweight isolation when enabled with `--worktree`:
 
 ```bash
-# SuperQode creates a worktree internally
+# SuperQode creates a temporary worktree
 git worktree add ~/.superqode/working/<repo>/qe/<session-id> HEAD
 
 # validation runs in the worktree

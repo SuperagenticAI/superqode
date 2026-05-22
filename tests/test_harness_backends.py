@@ -7,6 +7,7 @@ from dataclasses import replace
 import pytest
 
 from superqode.agent.loop import AgentResponse
+from superqode.tools.base import ToolResult
 from superqode.harness import (
     ADKHarnessBackend,
     DeepAgentsHarnessBackend,
@@ -61,6 +62,22 @@ class FakeEventRuntime(FakeRuntime):
     async def run_harness_events(self, prompt: str):
         yield HarnessEvent(type="model_delta", data={"text": prompt})
         yield HarnessEvent(type="tool_call", data={"tool_name": "echo"})
+
+
+class FakeCallbackRuntime(FakeRuntime):
+    async def run(self, prompt: str) -> AgentResponse:
+        self.kwargs["on_tool_call"]("bash", {"command": "echo hi"})
+        self.kwargs["on_tool_result"](
+            "bash",
+            ToolResult(success=True, output="hi\n"),
+        )
+        return AgentResponse(
+            content=f"done:{prompt}",
+            messages=[],
+            tool_calls_made=1,
+            iterations=1,
+            stopped_reason="complete",
+        )
 
 
 def install_fake_deepagents(monkeypatch, agent):
@@ -125,6 +142,7 @@ def test_create_harness_backend_rejects_unknown():
 
 def test_backend_capabilities_are_advertised():
     assert create_harness_backend("builtin").capabilities.supports_no_tool is True
+    assert create_harness_backend("builtin").capabilities.supports_approvals is True
     assert create_harness_backend("openai-agents").capabilities.supports_approvals is True
     assert create_harness_backend("deepagents").capabilities.supports_no_tool is False
     assert create_harness_backend("pydanticai").capabilities.supports_coding is True
@@ -231,6 +249,29 @@ async def test_runtime_harness_backend_surfaces_pending_approvals(monkeypatch, t
         {"index": 0, "tool_name": "bash", "arguments": {"command": "ls"}}
     ]
     assert isinstance(result.metadata["pending_runtime"], FakeApprovalRuntime)
+
+
+@pytest.mark.asyncio
+async def test_builtin_runtime_backend_collects_rich_run_events(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "superqode.harness.backends.runtime.create_runtime",
+        lambda name, **kwargs: FakeCallbackRuntime(**kwargs),
+    )
+    backend = RuntimeHarnessBackend("builtin")
+    request = HarnessBackendRequest(
+        spec=get_harness_template("coding"),
+        prompt="code",
+        provider="openai",
+        model="gpt-4o-mini",
+        working_directory=tmp_path,
+        session_id="s",
+    )
+
+    result = await backend.run(request)
+
+    event_types = [event.type for event in result.metadata["events"]]
+    assert event_types == ["model_request", "tool_call", "tool_result", "model_result"]
+    assert result.metadata["events"][1].data["tool_name"] == "bash"
 
 
 @pytest.mark.asyncio

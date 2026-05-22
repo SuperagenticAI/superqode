@@ -8,6 +8,7 @@ larger session/event/sandbox internals are replaced.
 from __future__ import annotations
 
 import uuid
+import time
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,7 +21,9 @@ from .backends.registry import create_harness_backend
 from .events import HarnessEvent
 from .output import build_typed_output_prompt, parse_typed_output
 from .spec import HarnessSpec
-from .store import FileHarnessStore
+from .store import FileHarnessStore, MemoryHarnessStore, SQLiteHarnessStore, create_harness_store
+
+HarnessStore = MemoryHarnessStore | FileHarnessStore | SQLiteHarnessStore
 
 
 @dataclass(frozen=True)
@@ -68,11 +71,11 @@ class HarnessKernel:
         spec: HarnessSpec,
         *,
         event_callback: Callable[[HarnessEvent], None] | None = None,
-        store: FileHarnessStore | None = None,
+        store: HarnessStore | None = None,
     ) -> None:
         self.spec = spec
         self.event_callback = event_callback
-        self.store = store or FileHarnessStore()
+        self.store = store or create_harness_store(spec.observability.run_store)
 
     async def session(self, session_id: str | None = None) -> "HarnessSession":
         """Open a harness session."""
@@ -168,6 +171,7 @@ class HarnessSession:
             metadata=dict(metadata or {}),
         )
         run_id = run_record.run_id
+        started_at = time.monotonic()
         self._emit(
             "run_start",
             run_id,
@@ -210,12 +214,16 @@ class HarnessSession:
             )
             raise
         status = "needs_approval" if self._pending_approvals else "succeeded"
+        latency_ms = int((time.monotonic() - started_at) * 1000)
         self._emit(
             "run_end",
             run_id,
             {
                 "status": status,
                 "stream": True,
+                "latency_ms": latency_ms,
+                "tokens_in": None,
+                "tokens_out": None,
                 **(
                     {"pending_approvals": self._pending_approvals}
                     if self._pending_approvals
@@ -228,6 +236,9 @@ class HarnessSession:
             status=status,
             metadata={
                 "stream": True,
+                "latency_ms": latency_ms,
+                "tokens_in": None,
+                "tokens_out": None,
                 **(
                     {"pending_approvals": self._pending_approvals}
                     if self._pending_approvals
@@ -258,6 +269,7 @@ class HarnessSession:
             },
         )
         run_id = run_record.run_id
+        started_at = time.monotonic()
         self._emit(
             "run_start",
             run_id,
@@ -296,6 +308,7 @@ class HarnessSession:
                 metadata={"error": str(exc), "error_type": type(exc).__name__},
             )
             raise
+        latency_ms = int((time.monotonic() - started_at) * 1000)
         response = backend_result.response
         self._capture_pending_approval_state(
             backend_result.metadata,
@@ -315,6 +328,8 @@ class HarnessSession:
                 metadata={"error": str(exc), "error_type": type(exc).__name__},
             )
             raise
+        for backend_event in backend_result.metadata.get("events", []):
+            self._emit_backend_event(run_id, backend_event)
         if response.stopped_reason == "needs_approval":
             self._emit(
                 "approval_required",
@@ -337,6 +352,9 @@ class HarnessSession:
                 "tool_calls_made": response.tool_calls_made,
                 "iterations": response.iterations,
                 "stopped_reason": response.stopped_reason,
+                "latency_ms": latency_ms,
+                "tokens_in": None,
+                "tokens_out": None,
                 "typed_output": request.result_schema is not None,
                 **(
                     {"pending_approvals": self._pending_approvals}
@@ -352,6 +370,9 @@ class HarnessSession:
                 "tool_calls_made": response.tool_calls_made,
                 "iterations": response.iterations,
                 "stopped_reason": response.stopped_reason,
+                "latency_ms": latency_ms,
+                "tokens_in": None,
+                "tokens_out": None,
                 "typed_output": request.result_schema is not None,
                 **(
                     {"pending_approvals": self._pending_approvals}
@@ -474,6 +495,18 @@ class HarnessSession:
         self.kernel.store.append_event(run_id, event)
         self.kernel.emit(event)
 
+    def _emit_backend_event(self, run_id: str, backend_event: HarnessEvent) -> None:
+        event = HarnessEvent(
+            type=backend_event.type,
+            data=dict(backend_event.data),
+            timestamp=backend_event.timestamp,
+            session_id=self.session_id,
+            run_id=run_id,
+        )
+        self._events.append(event)
+        self.kernel.store.append_event(run_id, event)
+        self.kernel.emit(event)
+
 
 def _status_from_stopped_reason(stopped_reason: str) -> str:
     if stopped_reason == "needs_approval":
@@ -487,7 +520,7 @@ async def init_harness(
     spec: HarnessSpec,
     *,
     event_callback: Callable[[HarnessEvent], None] | None = None,
-    store: FileHarnessStore | None = None,
+    store: HarnessStore | None = None,
 ) -> HarnessKernel:
     """Create a HarnessKernel for a spec."""
     return HarnessKernel(spec, event_callback=event_callback, store=store)

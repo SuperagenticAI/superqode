@@ -79,6 +79,8 @@ class TestHarnessCommand:
         assert "list-templates" in result.output
         assert "validate" in result.output
         assert "inspect" in result.output
+        assert "compile" in result.output
+        assert "diff" in result.output
         assert "doctor" in result.output
         assert "run" in result.output
 
@@ -99,6 +101,9 @@ class TestHarnessCommand:
         payload = json.loads(result.output)
         names = {item["name"] for item in payload}
         assert {"coding", "no-tool", "gemma4-coding"} <= names
+        descriptions = {item["name"]: item["description"] for item in payload}
+        assert descriptions["coding"] != descriptions["gemma4-coding"]
+        assert descriptions["coding"] != descriptions["ds4-coding"]
 
     def test_harness_init_and_validate(self, runner):
         with runner.isolated_filesystem():
@@ -117,6 +122,15 @@ class TestHarnessCommand:
             assert payload["valid"] is True
             assert payload["name"] == "demo"
             assert payload["flavor"] == "no_tool"
+
+            validate_option = runner.invoke(
+                cli_main,
+                ["harness", "validate", "--spec", "harness.yaml", "--json"],
+            )
+            assert validate_option.exit_code == 0
+            option_payload = json.loads(validate_option.output)
+            assert option_payload["valid"] is True
+            assert option_payload["name"] == "demo"
 
             schema = runner.invoke(cli_main, ["harness", "validate", "harness.yaml", "--schema"])
             assert schema.exit_code == 0
@@ -181,7 +195,83 @@ class TestHarnessCommand:
             assert by_check["spec"]["status"] == "ok"
             assert by_check["backend"]["status"] == "ok"
             assert by_check["event_store"]["graph"] is True
-            assert by_check["event_graph"]["rich_events"] is False
+            assert by_check["event_graph"]["rich_events"] is True
+            assert by_check["model_registry"]["status"] == "ok"
+            assert by_check["model_registry"]["unknown_models"] == []
+
+    def test_harness_compile_json_reports_effective_policy(self, runner):
+        with runner.isolated_filesystem():
+            init = runner.invoke(
+                cli_main,
+                ["harness", "init", "demo", "--template", "no-tool", "--output", "harness.yaml"],
+            )
+            assert init.exit_code == 0
+
+            result = runner.invoke(
+                cli_main,
+                ["harness", "compile", "--spec", "harness.yaml", "--json"],
+            )
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["spec"]["name"] == "demo"
+            assert payload["effective_model_policy"]["system_level"] == "no_tool"
+            assert payload["headless_profile"]["permissions"]["default"] == "deny"
+
+    def test_harness_diff_json_reports_changes(self, runner):
+        with runner.isolated_filesystem():
+            left = runner.invoke(
+                cli_main,
+                ["harness", "init", "left", "--template", "no-tool", "--output", "left.yaml"],
+            )
+            assert left.exit_code == 0
+            right = runner.invoke(
+                cli_main,
+                ["harness", "init", "right", "--template", "coding", "--output", "right.yaml"],
+            )
+            assert right.exit_code == 0
+
+            result = runner.invoke(
+                cli_main,
+                ["harness", "diff", "left.yaml", "right.yaml", "--json"],
+            )
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["changed"] is True
+            paths = {change["path"] for change in payload["changes"]}
+            assert "flavor" in paths
+            assert any(path.startswith("agents.") for path in paths)
+
+    def test_harness_init_help_lists_templates_and_accepts_ds4_fast_local(self, runner):
+        help_result = runner.invoke(cli_main, ["harness", "init", "--help"])
+        assert help_result.exit_code == 0
+        assert "ds4-fast-local" in help_result.output
+        assert "gemma4-coding" in help_result.output
+
+        with runner.isolated_filesystem():
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "init",
+                    "demo",
+                    "--template",
+                    "ds4-fast-local",
+                    "--output",
+                    "harness.yaml",
+                ],
+            )
+
+            assert result.exit_code == 0
+            validate = runner.invoke(
+                cli_main,
+                ["harness", "validate", "--spec", "harness.yaml", "--json"],
+            )
+            assert validate.exit_code == 0
+            payload = json.loads(validate.output)
+            assert payload["valid"] is True
+            assert payload["spec"]["model_policy"]["primary"].endswith("-local")
 
     def test_harness_doctor_json_blocks_incompatible_backend(self, runner):
         with runner.isolated_filesystem():
@@ -267,6 +357,59 @@ class TestHarnessCommand:
             payload = json.loads(result.output)
             assert payload["content"] == "ran:hello"
             assert payload["harness"] == "demo"
+
+    def test_harness_run_store_sqlite_override(self, runner, monkeypatch):
+        class FakeRuntime:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            async def run(self, prompt):
+                return AgentResponse(
+                    content=f"ran:{prompt}",
+                    messages=[],
+                    tool_calls_made=0,
+                    iterations=1,
+                    stopped_reason="complete",
+                )
+
+            def cancel(self):
+                pass
+
+            def reset_cancellation(self):
+                pass
+
+        monkeypatch.setattr(
+            "superqode.harness.backends.runtime.create_runtime",
+            lambda name, **kwargs: FakeRuntime(**kwargs),
+        )
+        with runner.isolated_filesystem():
+            init = runner.invoke(
+                cli_main,
+                ["harness", "init", "demo", "--template", "no-tool", "--output", "harness.yaml"],
+            )
+            assert init.exit_code == 0
+
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "run",
+                    "--spec",
+                    "harness.yaml",
+                    "--prompt",
+                    "hello",
+                    "--provider",
+                    "test",
+                    "--model",
+                    "model",
+                    "--store",
+                    "sqlite",
+                    "--json",
+                ],
+            )
+
+            assert result.exit_code == 0
+            assert Path(".superqode/sessions/store.sqlite3").exists()
 
 
 class TestAgentsCommand:

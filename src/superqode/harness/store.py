@@ -190,6 +190,149 @@ class HarnessEventGraph:
         }
 
 
+class MemoryHarnessStore:
+    """In-memory harness store for ephemeral runs."""
+
+    def __init__(self) -> None:
+        self._sessions: dict[str, HarnessSessionRecord] = {}
+        self._runs: dict[str, HarnessRunRecord] = {}
+        self._graphs: dict[str, HarnessEventGraph] = {}
+
+    def open_session(
+        self,
+        session_id: str,
+        spec: HarnessSpec,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> HarnessSessionRecord:
+        now = time.time()
+        existing = self.get_session(session_id)
+        created_at = existing.created_at if existing else now
+        merged_metadata = dict(existing.metadata if existing else {})
+        merged_metadata.update(metadata or {})
+        record = HarnessSessionRecord(
+            session_id=session_id,
+            harness=spec.name,
+            flavor=spec.flavor.value,
+            created_at=created_at,
+            updated_at=now,
+            metadata=merged_metadata,
+        )
+        self._sessions[session_id] = record
+        return record
+
+    def get_session(self, session_id: str) -> HarnessSessionRecord | None:
+        return self._sessions.get(session_id)
+
+    def list_sessions(self) -> list[HarnessSessionRecord]:
+        records = list(self._sessions.values())
+        records.sort(key=lambda item: item.updated_at, reverse=True)
+        return records
+
+    def start_run(
+        self,
+        *,
+        session_id: str,
+        spec: HarnessSpec,
+        provider: str,
+        model: str,
+        runtime: str,
+        prompt: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> HarnessRunRecord:
+        record = HarnessRunRecord(
+            run_id=generate_run_id(),
+            session_id=session_id,
+            harness=spec.name,
+            flavor=spec.flavor.value,
+            provider=provider,
+            model=model,
+            runtime=runtime,
+            status="running",
+            started_at=time.time(),
+            prompt_preview=_preview(prompt),
+            metadata=dict(metadata or {}),
+        )
+        self._runs[record.run_id] = record
+        self._graphs[record.run_id] = HarnessEventGraph(run_id=record.run_id)
+        return record
+
+    def append_event(self, run_id: str, event: HarnessEvent) -> HarnessRunRecord:
+        record = self._require_run(run_id)
+        event_index = len(record.events)
+        node = _graph_node_from_event(run_id, event_index, event)
+        graph = self.get_event_graph(run_id)
+        edges = list(graph.edges)
+        if graph.nodes:
+            edges.append(
+                HarnessGraphEdge(
+                    source=graph.nodes[-1].node_id,
+                    target=node.node_id,
+                    type=_edge_type(graph.nodes[-1], node),
+                )
+            )
+        updated = HarnessRunRecord(
+            **{
+                **record.__dict__,
+                "events": (*record.events, event),
+            }
+        )
+        self._runs[run_id] = updated
+        self._graphs[run_id] = HarnessEventGraph(
+            run_id=run_id,
+            nodes=(*graph.nodes, node),
+            edges=tuple(edges),
+        )
+        return updated
+
+    def end_run(
+        self,
+        run_id: str,
+        *,
+        status: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> HarnessRunRecord:
+        record = self._require_run(run_id)
+        merged_metadata = dict(record.metadata)
+        merged_metadata.update(metadata or {})
+        updated = HarnessRunRecord(
+            **{
+                **record.__dict__,
+                "status": status,
+                "ended_at": time.time(),
+                "metadata": merged_metadata,
+            }
+        )
+        self._runs[run_id] = updated
+        return updated
+
+    def get_run(self, run_id: str) -> HarnessRunRecord | None:
+        return self._runs.get(run_id)
+
+    def list_runs(self, *, session_id: str | None = None) -> list[HarnessRunRecord]:
+        records = [
+            record
+            for record in self._runs.values()
+            if session_id is None or record.session_id == session_id
+        ]
+        records.sort(key=lambda item: item.started_at, reverse=True)
+        return records
+
+    def get_events(self, run_id: str, *, after: int = 0) -> list[HarnessEvent]:
+        record = self._require_run(run_id)
+        return list(record.events[after:])
+
+    def get_event_graph(self, run_id: str) -> HarnessEventGraph:
+        self._require_run(run_id)
+        return self._graphs.get(run_id) or HarnessEventGraph(run_id=run_id)
+
+    def _require_run(self, run_id: str) -> HarnessRunRecord:
+        record = self.get_run(run_id)
+        if record is None:
+            raise KeyError(f"Unknown harness run: {run_id}")
+        return record
+
+
 class FileHarnessStore:
     """File-backed harness store.
 
@@ -713,6 +856,24 @@ class SQLiteHarnessStore:
                 );
                 """
             )
+
+
+def create_harness_store(
+    store: str | None = None,
+    path: str | Path | None = None,
+) -> MemoryHarnessStore | FileHarnessStore | SQLiteHarnessStore:
+    """Create a harness run store from a spec/CLI setting."""
+    store_name = (store or "memory").strip().lower()
+    if store_name == "memory":
+        return MemoryHarnessStore()
+    if store_name == "file":
+        return FileHarnessStore(path or ".superqode/harness")
+    if store_name == "sqlite":
+        sqlite_path = Path(path or ".superqode/harness/store.sqlite3")
+        if sqlite_path.exists() and sqlite_path.is_dir():
+            sqlite_path = sqlite_path / "store.sqlite3"
+        return SQLiteHarnessStore(sqlite_path)
+    raise ValueError(f"Unknown harness run store: {store!r}. Expected memory, file, or sqlite.")
 
 
 def _encode_base32(value: int, length: int) -> str:

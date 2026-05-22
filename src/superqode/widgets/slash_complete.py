@@ -48,6 +48,8 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand("/handoff", "Hand off work to another role", "Ctrl+H", category="workflow"),
     SlashCommand("/context", "View/update work context", "Ctrl+I", category="workflow"),
     SlashCommand("/approve", "Approve work for deployment", category="workflow"),
+    SlashCommand("/harness", "Load or inspect a HarnessSpec", category="workflow"),
+    SlashCommand("/harness templates", "List HarnessSpec templates", category="workflow"),
     # System commands
     SlashCommand("/settings", "Open settings", "Ctrl+,", category="system"),
     SlashCommand("/help", "Show help", "?", category="system"),

@@ -8,11 +8,9 @@
 
 # **SuperQode**
 
-### Production coding harness for local models, BYOK providers, ACP, ADK, OpenAI Agents, DeepAgents, and custom runtimes.
+### Your pluggable multi-agent coding harness.
 
-Connect coding agents and models, run repository tools, inspect changes, and keep interactive coding sessions readable.
-
-<p class="tagline">Bring your own model, runtime, tools, and harness.</p>
+<p class="tagline">Run coding agents with portable specs, controlled tools, and readable sessions.</p>
 
 [:octicons-rocket-24: Get Started](getting-started/installation.md){ .md-button .md-button--primary }
 [:octicons-book-24: Learn Concepts](concepts/index.md){ .md-button }
@@ -26,19 +24,11 @@ Connect coding agents and models, run repository tools, inspect changes, and kee
 
 ## What Is SuperQode?
 
-SuperQode is a programmable coding-agent harness. It gives developers one kernel for model calls,
+SuperQode is your pluggable multi-agent coding harness. It gives developers one contract for model calls,
 tool execution, sessions, sandbox policy, model routing, runtime adapters, workflow execution,
 typed outputs, validation, and readable interactive output.
 
-The v2 direction is harness-first:
-
-- keep the existing tool-rich coding harness as the default
-- add a first-class no-tool harness for model-only reasoning and evaluation
-- support local models, BYOK providers, ACP agents, OpenAI Agents, Google ADK, DeepAgents, and custom backends
-- optimize local model policy for Gemma4 and DS4 without hiding those choices in runtime conditionals
-- make typed outputs, workflow runs, sandbox policy, and run records part of the harness contract
-- make project validation a reusable lifecycle hook instead of the product identity
-- use A2A later for higher-level application workflows
+Use one harness spec to choose the runtime, model policy, tools, sandbox rules, approvals, event storage, and output shape for a coding-agent run.
 
 ## Core Concepts
 

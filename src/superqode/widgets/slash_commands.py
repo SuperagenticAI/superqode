@@ -267,6 +267,14 @@ def create_builtin_commands(handlers: dict) -> list[SlashCommand]:
             category="session",
         )
     )
+    commands.append(
+        SlashCommand(
+            name="harness",
+            description="Load, list, or disable a HarnessSpec",
+            handler=handlers.get("harness", lambda _: None),
+            category="session",
+        )
+    )
 
     # HITL approval / rejection for the OpenAI Agents runtime. Bare :approve
     # acts on the first pending approval; :approve <index> picks one; trailing
