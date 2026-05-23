@@ -40,23 +40,22 @@ superqode<span class=w> </span>connect<span class=w> </span>acp<span class=w> </
 <span class=nb>export</span><span class=w> </span><span class=nv>GOOGLE_API_KEY</span><span class=o>=</span>your-api-key-here
 
 <span class=c1># Connect via TUI</span>
-:connect<span class=w> </span>byok<span class=w> </span>google<span class=w> </span>gemini-3-pro
+:connect<span class=w> </span>byok<span class=w> </span>google<span class=w> </span>gemini-3.1-pro-preview
 
 <span class=c1># Connect via CLI</span>
-superqode<span class=w> </span>connect<span class=w> </span>byok<span class=w> </span>google<span class=w> </span>gemini-3-pro
+superqode<span class=w> </span>connect<span class=w> </span>byok<span class=w> </span>google<span class=w> </span>gemini-3.1-pro-preview
 </code></pre></div> <h3 id=configuration_1>Configuration<a class=headerlink href=#configuration_1 title="Permanent link">&para;</a></h3> <div class=highlight><pre><span></span><code><span class=c1># superqode.yaml</span>
 <span class=nt>default</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>mode</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">byok</span>
 <span class=w>  </span><span class=nt>provider</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">google</span>
-<span class=w>  </span><span class=nt>model</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3-pro</span>
+<span class=w>  </span><span class=nt>model</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3.1-pro-preview</span>
 
 <span class=nt>providers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>google</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>api_key_env</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">GOOGLE_API_KEY</span>
 <span class=w>    </span><span class=nt>recommended_models</span><span class=p>:</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3-pro</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-2.5-flash</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3.1-pro-preview</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-flash-latest</span>
 </code></pre></div> <h2 id=local-mode>Local Mode<a class=headerlink href=#local-mode title="Permanent link">&para;</a></h2> <h3 id=what-is-local-mode>What is Local Mode?<a class=headerlink href=#what-is-local-mode title="Permanent link">&para;</a></h3> <p>Local mode connects to self-hosted LLM servers running on your infrastructure. No API keys required-models run locally.</p> <h3 id=how-it-works_2>How It Works<a class=headerlink href=#how-it-works_2 title="Permanent link">&para;</a></h3> <ol> <li>You run a local model server (Ollama, vLLM, etc.)</li> <li>SuperQode connects to the local endpoint</li> <li>All inference happens on your hardware</li> <li>Complete privacy-no data leaves your machine</li> </ol> <h3 id=capabilities_2>Capabilities<a class=headerlink href=#capabilities_2 title="Permanent link">&para;</a></h3> <table> <thead> <tr> <th>Capability</th> <th>Supported</th> </tr> </thead> <tbody> <tr> <td>Chat completion</td> <td>✓</td> </tr> <tr> <td>Streaming</td> <td>✓</td> </tr> <tr> <td>Tool calling</td> <td>✓ (if model supports)</td> </tr> <tr> <td>File editing</td> <td>✗ (no agent)</td> </tr> <tr> <td>Shell execution</td> <td>✗ (no agent)</td> </tr> <tr> <td>MCP tools</td> <td>✗ (no agent)</td> </tr> <tr> <td>Cost tracking</td> <td>✗ (free)</td> </tr> </tbody> </table> <h3 id=supported-providers_1>Supported Providers<a class=headerlink href=#supported-providers_1 title="Permanent link">&para;</a></h3> <table> <thead> <tr> <th>Provider</th> <th>Default Port</th> <th>Description</th> </tr> </thead> <tbody> <tr> <td><strong>Ollama</strong></td> <td>11434</td> <td>Easy local deployment</td> </tr> <tr> <td><strong>LM Studio</strong></td> <td>1234</td> <td>GUI-based local models</td> </tr> <tr> <td><strong>vLLM</strong></td> <td>8000</td> <td>High-performance inference</td> </tr> <tr> <td><strong>SGLang</strong></td> <td>30000</td> <td>Structured generation</td> </tr> <tr> <td><strong>MLX-LM</strong></td> <td>8000</td> <td>Apple Silicon optimized</td> </tr> <tr> <td><strong>TGI</strong></td> <td>80</td> <td>Text Generation Inference</td> </tr> <tr> <td><strong>llama.cpp</strong></td> <td>8080</td> <td>C++ inference</td> </tr> </tbody> </table> <h3 id=usage_2>Usage<a class=headerlink href=#usage_2 title="Permanent link">&para;</a></h3> <div class=highlight><pre><span></span><code><span class=c1># Start Ollama</span>
 ollama<span class=w> </span>serve
 
@@ -97,7 +96,7 @@ superqode<span class=w> </span>connect<span class=w> </span><span class=nb>local
 <span class=w>        </span><span class=nt>api_tester</span><span class=p>:</span>
 <span class=w>          </span><span class=nt>mode</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">byok</span><span class=w>  </span><span class=c1># Cloud model for API analysis</span>
 <span class=w>          </span><span class=nt>provider</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">google</span>
-<span class=w>          </span><span class=nt>model</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3-pro</span>
+<span class=w>          </span><span class=nt>model</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3.1-pro-preview</span>
 
 <span class=w>        </span><span class=nt>unit_tester</span><span class=p>:</span>
 <span class=w>          </span><span class=nt>mode</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">local</span><span class=w>  </span><span class=c1># Local model for cost-effective testing</span>

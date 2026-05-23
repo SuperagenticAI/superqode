@@ -13,7 +13,7 @@
 <span class=nt>default</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>mode</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">byok</span>
 <span class=w>  </span><span class=nt>provider</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">google</span>
-<span class=w>  </span><span class=nt>model</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3-pro</span>
+<span class=w>  </span><span class=nt>model</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3.1-pro-preview</span>
 </code></pre></div> <hr> <h2 id=standard-configuration>Standard Configuration<a class=headerlink href=#standard-configuration title="Permanent link">&para;</a></h2> <p>A typical project configuration:</p> <div class=highlight><pre><span></span><code><span class=nt>superqode</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>version</span><span class=p>:</span><span class=w> </span><span class=s>&quot;2.0&quot;</span>
 <span class=w>  </span><span class=nt>team_name</span><span class=p>:</span><span class=w> </span><span class=s>&quot;My</span><span class=nv> </span><span class=s>Project&quot;</span>
@@ -31,16 +31,15 @@
 <span class=nt>default</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>mode</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">byok</span>
 <span class=w>  </span><span class=nt>provider</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">google</span>
-<span class=w>  </span><span class=nt>model</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3-pro</span>
+<span class=w>  </span><span class=nt>model</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3.1-pro-preview</span>
 
 <span class=c1># Provider settings</span>
 <span class=nt>providers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>google</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>api_key_env</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">GOOGLE_API_KEY</span>
 <span class=w>    </span><span class=nt>recommended_models</span><span class=p>:</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3-pro</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-2.5-flash</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3.1-pro-preview</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-flash-latest</span>
 
 <span class=w>  </span><span class=nt>ollama</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>base_url</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">http://localhost:11434</span>
@@ -84,14 +83,13 @@
 <span class=w>  </span><span class=c1># Or for BYOK:</span>
 <span class=w>  </span><span class=c1># mode: byok</span>
 <span class=w>  </span><span class=c1># provider: google  # Provider ID</span>
-<span class=w>  </span><span class=c1># model: gemini-3-pro  # Model ID</span>
+<span class=w>  </span><span class=c1># model: gemini-3.1-pro-preview  # Model ID</span>
 </code></pre></div> <h3 id=providers-section>providers Section<a class=headerlink href=#providers-section title="Permanent link">&para;</a></h3> <p>Provider-specific settings:</p> <div class=highlight><pre><span></span><code><span class=nt>providers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>google</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>api_key_env</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">GOOGLE_API_KEY</span>
 <span class=w>    </span><span class=nt>recommended_models</span><span class=p>:</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3-pro</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-2.5-flash</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3.1-pro-preview</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-flash-latest</span>
 </code></pre></div> <h3 id=qe-section>qe Section<a class=headerlink href=#qe-section title="Permanent link">&para;</a></h3> <p>Quality engineering settings:</p> <div class=highlight><pre><span></span><code><span class=nt>qe</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>allow_suggestions</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
 <span class=w>  </span><span class=nt>noise</span><span class=p>:</span>
@@ -136,7 +134,7 @@ superqode<span class=w> </span>config<span class=w> </span>disable-role<span cla
 <span class=w>        </span><span class=nt>api_tester</span><span class=p>:</span>
 <span class=w>          </span><span class=nt>mode</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">byok</span>
 <span class=w>          </span><span class=nt>provider</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">google</span>
-<span class=w>          </span><span class=nt>model</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3-pro</span>
+<span class=w>          </span><span class=nt>model</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3.1-pro-preview</span>
 <span class=w>        </span><span class=nt>unit_tester</span><span class=p>:</span>
 <span class=w>          </span><span class=nt>mode</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">local</span>
 <span class=w>          </span><span class=nt>provider</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">ollama</span>

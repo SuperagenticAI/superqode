@@ -28,16 +28,15 @@ superqode<span class=w> </span>config<span class=w> </span>init
 <span class=nt>default</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>mode</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">byok</span>
 <span class=w>  </span><span class=nt>provider</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">google</span>
-<span class=w>  </span><span class=nt>model</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3-pro</span>
+<span class=w>  </span><span class=nt>model</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3.1-pro-preview</span>
 
 <span class=c1># Provider-specific settings</span>
 <span class=nt>providers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>google</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>api_key_env</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">GOOGLE_API_KEY</span>
 <span class=w>    </span><span class=nt>recommended_models</span><span class=p>:</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3-pro</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-2.5-flash</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3.1-pro-preview</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-flash-latest</span>
 
 <span class=w>  </span><span class=nt>openai</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>api_key_env</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">OPENAI_API_KEY</span>
@@ -86,7 +85,7 @@ superqode<span class=w> </span>config<span class=w> </span>init
 <span class=w>          </span><span class=nt>description</span><span class=p>:</span><span class=w> </span><span class=s>&quot;API</span><span class=nv> </span><span class=s>contract</span><span class=nv> </span><span class=s>and</span><span class=nv> </span><span class=s>security</span><span class=nv> </span><span class=s>testing&quot;</span>
 <span class=w>          </span><span class=nt>mode</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">byok</span>
 <span class=w>          </span><span class=nt>provider</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">google</span>
-<span class=w>          </span><span class=nt>model</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3-pro</span>
+<span class=w>          </span><span class=nt>model</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3.1-pro-preview</span>
 <span class=w>          </span><span class=nt>enabled</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class=w>          </span><span class=nt>job_description</span><span class=p>:</span><span class=w> </span><span class="p p-Indicator">|</span>
 <span class=w>            </span><span class=no>Test API endpoints for schema compliance,</span>
@@ -194,8 +193,8 @@ superqode<span class=w> </span>config<span class=w> </span>init
 <span class=w>    </span><span class=nt>api_key_env</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">GOOGLE_API_KEY</span>
 <span class=w>    </span><span class=nt>description</span><span class=p>:</span><span class=w> </span><span class=s>&quot;Gemini</span><span class=nv> </span><span class=s>models</span><span class=nv> </span><span class=s>by</span><span class=nv> </span><span class=s>Google&quot;</span>
 <span class=w>    </span><span class=nt>recommended_models</span><span class=p>:</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-2.5-pro</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-2.5-flash</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-3.1-pro-preview</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">gemini-flash-latest</span>
 
 <span class=w>  </span><span class=c1># Deepseek</span>
 <span class=w>  </span><span class=nt>deepseek</span><span class=p>:</span>
@@ -212,7 +211,7 @@ superqode<span class=w> </span>config<span class=w> </span>init
 <span class=w>    </span><span class=nt>recommended_models</span><span class=p>:</span>
 <span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">anthropic/claude-sonnet-4</span>
 <span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">openai/gpt-4o</span>
-<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">google/gemini-2.5-pro</span>
+<span class=w>      </span><span class="p p-Indicator">-</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">google/gemini-3.1-pro-preview</span>
 </code></pre></div> <h3 id=local-providers>Local Providers<a class=headerlink href=#local-providers title="Permanent link">&para;</a></h3> <div class=highlight><pre><span></span><code><span class=nt>providers</span><span class=p>:</span>
 <span class=w>  </span><span class=nt>ollama</span><span class=p>:</span>
 <span class=w>    </span><span class=nt>base_url</span><span class=p>:</span><span class=w> </span><span class="l l-Scalar l-Scalar-Plain">http://localhost:11434</span>
