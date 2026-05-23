@@ -127,10 +127,10 @@ Self-hosted options:
 
 | Provider | Description |
 |----------|-------------|
-| DS4 | DeepSeek V4 Flash through a local OpenAI-compatible server |
+| DS4 | Purpose-built DeepSeek V4 Flash server for local coding and long-context work |
 | Ollama | Easy local deployment |
 | LM Studio | GUI-based local models |
-| MLX | Apple Silicon optimized |
+| MLX | General Apple Silicon model serving |
 | vLLM | High-performance inference |
 
 ---
@@ -256,7 +256,7 @@ superqode providers list --category free
 
 | Provider | Free Models |
 |----------|------------|
-| Google AI | gemini-2.5-flash (limited) |
+| Google AI | gemini-flash-latest (limited) |
 | Groq | llama-3.3-70b (rate limited) |
 | OpenRouter | Some open models |
 

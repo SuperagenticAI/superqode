@@ -22,6 +22,7 @@ from .schema import (
     CostTrackingConfig,
     ErrorConfig,
 )
+from ..providers.models import LATEST_GOOGLE_FLASH_MODEL, LATEST_GOOGLE_PRO_MODEL
 
 
 class ConfigError(Exception):
@@ -675,7 +676,10 @@ Critique and improve code quality from development.""",
         "google": ProviderConfig(
             api_key_env="GOOGLE_API_KEY",
             description="Google Gemini models via Vertex AI",
-            recommended_models=["gemini-3-pro-preview", "gemini-2.5-pro", "gemini-2.5-flash"],
+            recommended_models=[
+                LATEST_GOOGLE_PRO_MODEL,
+                LATEST_GOOGLE_FLASH_MODEL,
+            ],
             custom_models_allowed=True,
         ),
         "zhipuai": ProviderConfig(
@@ -712,7 +716,7 @@ Critique and improve code quality from development.""",
             recommended_models=[
                 "anthropic/claude-sonnet-4-5",
                 "openai/gpt-4o",
-                "google/gemini-3-pro-preview",
+                f"google/{LATEST_GOOGLE_PRO_MODEL}",
                 "zhipuai/glm-4.7",
             ],
             custom_models_allowed=True,
@@ -804,7 +808,8 @@ Critique and improve code quality from development.""",
     config.model_aliases = {
         "latest-sonnet": "claude-sonnet-4-5-20250929",
         "latest-gpt": "gpt-5.4",
-        "latest-gemini": "gemini-3-pro-preview",
+        "latest-gemini": LATEST_GOOGLE_PRO_MODEL,
+        "latest-gemini-flash": LATEST_GOOGLE_FLASH_MODEL,
         "latest-glm": "glm-4.7",
         "fast": "claude-haiku-4-5-20251001",
         "balanced": "claude-sonnet-4-5-20250929",

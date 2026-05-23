@@ -397,7 +397,7 @@ superqode connect byok anthropic claude-sonnet-4
 superqode connect byok openai gpt-4o
 
 # Connect to Google AI
-superqode connect byok google gemini-2.5-pro
+superqode connect byok google gemini-3.1-pro-preview
 ```
 
 ---
@@ -497,9 +497,10 @@ superqode connect local mlx mlx-community/Qwen2.5-Coder-3B-4bit
 
 | Provider | Default Port | Notes |
 |----------|--------------|-------|
+| `ds4` | 8000 | Purpose-built DeepSeek V4 Flash server |
 | `ollama` | 11434 | Easy local deployment |
 | `lmstudio` | 1234 | GUI-based local models |
-| `mlx` | 8080 | Apple Silicon optimized |
+| `mlx` | 8080 | General Apple Silicon model serving |
 | `vllm` | 8000 | High-performance inference |
 
 ---

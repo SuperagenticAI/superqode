@@ -29,6 +29,7 @@ import asyncio
 import json
 import logging
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 
@@ -660,6 +661,15 @@ def _events_from_openai_agents_event(event: Any) -> list[HarnessEvent]:
             )
         )
 
+    mcp_event = _mcp_event_data(item)
+    if mcp_event is not None:
+        events.append(
+            HarnessEvent(
+                type="mcp_list_tools",
+                data={**mcp_event, "source_event": event_name},
+            )
+        )
+
     if _is_sandbox_item(item):
         events.append(
             HarnessEvent(
@@ -682,6 +692,13 @@ def _tool_call_event_data(item: Any) -> dict[str, Any] | None:
     if item is None:
         return None
     item_type = getattr(item, "type", "")
+    if item_type == "tool_search_call_item":
+        raw = _raw_item_payload(item)
+        return {
+            "tool_name": "tool_search",
+            "tool_call_id": _raw_get(raw, "id") or _raw_get(raw, "call_id"),
+            "arguments": raw,
+        }
     if item_type not in {"tool_call_item", "handoff_call_item"}:
         return None
     return {
@@ -694,6 +711,13 @@ def _tool_result_event_data(item: Any) -> dict[str, Any] | None:
     if item is None:
         return None
     item_type = getattr(item, "type", "")
+    if item_type == "tool_search_output_item":
+        raw = _raw_item_payload(item)
+        return {
+            "tool_name": "tool_search",
+            "tool_call_id": _raw_get(raw, "id") or _raw_get(raw, "call_id"),
+            "content": _raw_get(raw, "output") or _raw_get(raw, "results") or raw,
+        }
     if item_type not in {"tool_call_output_item", "handoff_output_item"}:
         return None
     raw = getattr(item, "raw_item", None)
@@ -702,6 +726,61 @@ def _tool_result_event_data(item: Any) -> dict[str, Any] | None:
         "tool_name": _tool_name_from_item(item),
         "content": output,
     }
+
+
+def _mcp_event_data(item: Any) -> dict[str, Any] | None:
+    if item is None or getattr(item, "type", "") != "mcp_list_tools_item":
+        return None
+    raw = _raw_item_payload(item)
+    tools = _raw_get(raw, "tools") or []
+    normalized_tools: list[dict[str, Any]] = []
+    if isinstance(tools, list):
+        for tool in tools:
+            name = _raw_get(tool, "name")
+            if not name:
+                continue
+            normalized_tools.append(
+                {
+                    "name": name,
+                    **({"title": title} if (title := _raw_get(tool, "title")) else {}),
+                    **(
+                        {"description": description}
+                        if (description := _raw_get(tool, "description"))
+                        else {}
+                    ),
+                }
+            )
+    return {
+        "server_label": _raw_get(raw, "server_label"),
+        "tool_count": len(normalized_tools),
+        "tools": normalized_tools,
+    }
+
+
+def _raw_item_payload(item: Any) -> dict[str, Any]:
+    raw = getattr(item, "raw_item", item)
+    if isinstance(raw, Mapping):
+        return dict(raw)
+    model_dump = getattr(raw, "model_dump", None)
+    if callable(model_dump):
+        try:
+            dumped = model_dump(exclude_unset=True)
+        except TypeError:
+            dumped = model_dump()
+        if isinstance(dumped, Mapping):
+            return dict(dumped)
+    data: dict[str, Any] = {}
+    for name in ("id", "call_id", "type", "server_label", "tools", "query", "output", "results"):
+        value = getattr(raw, name, None)
+        if value is not None:
+            data[name] = value
+    return data
+
+
+def _raw_get(value: Any, key: str) -> Any:
+    if isinstance(value, Mapping):
+        return value.get(key)
+    return getattr(value, key, None)
 
 
 def _is_sandbox_item(item: Any) -> bool:
@@ -726,7 +805,7 @@ def _sandbox_event_type(item: Any) -> str:
 
 def _should_keep_runtime_event(event: Any) -> bool:
     name = event.__class__.__name__.lower()
-    return any(token in name for token in ("handoff", "tool", "sandbox", "approval"))
+    return any(token in name for token in ("handoff", "tool", "sandbox", "approval", "mcp"))
 
 
 def _text_from_message_item(item: Any) -> str:

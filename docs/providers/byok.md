@@ -72,13 +72,13 @@ superqode connect byok openai gpt-4o-mini
 
 ```bash
 export GOOGLE_API_KEY=AIza...
-superqode connect byok google gemini-2.5-pro
+superqode connect byok google gemini-3.1-pro-preview
 ```
 
 | Model | Best For |
 |-------|----------|
-| `gemini-2.5-pro` | Complex tasks |
-| `gemini-2.5-flash` | Fast, cost-effective |
+| `gemini-3.1-pro-preview` | Latest Pro model from models.dev |
+| `gemini-flash-latest` | Latest Flash model from models.dev |
 
 **Documentation**: [ai.google.dev](https://ai.google.dev)
 

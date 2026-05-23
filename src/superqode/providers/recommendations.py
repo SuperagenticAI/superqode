@@ -7,7 +7,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional
 
-from .models import ModelCapability, ModelInfo, get_all_models, get_model_info
+from .models import ModelCapability, ModelInfo, get_all_models, get_models_for_provider
 from .registry import PROVIDERS, ProviderCategory, ProviderDef, ProviderTier
 
 
@@ -285,23 +285,23 @@ def recommend_models(task: str | None = None, limit: int = 8) -> List[ModelRecom
 
 def provider_model_cards(provider_id: str) -> List[Dict[str, object]]:
     """Return model cards with labels for one provider."""
-    provider = PROVIDERS[provider_id]
     cards = []
-    for model_id in provider.example_models:
-        model = get_model_info(provider_id, model_id)
-        if model:
-            cards.append(
-                {
-                    "model": model.id,
-                    "name": model.name,
-                    "price": model.price_display,
-                    "context": model.context_display,
-                    "tool_support": model.supports_tools,
-                    "labels": model_quality_labels(model),
-                    "recommended_for": model.recommended_for,
-                }
-            )
-        else:
+    for model in get_models_for_provider(provider_id).values():
+        cards.append(
+            {
+                "model": model.id,
+                "name": model.name,
+                "price": model.price_display,
+                "context": model.context_display,
+                "tool_support": model.supports_tools,
+                "labels": model_quality_labels(model),
+                "recommended_for": model.recommended_for,
+            }
+        )
+
+    if not cards:
+        provider = PROVIDERS[provider_id]
+        for model_id in provider.example_models:
             cards.append(
                 {
                     "model": model_id,

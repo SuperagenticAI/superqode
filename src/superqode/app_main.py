@@ -197,6 +197,7 @@ from superqode.design_system import (
     render_gradient_text,
     render_status_indicator,
 )
+from superqode.providers.models import LATEST_GOOGLE_FLASH_MODEL, LATEST_GOOGLE_PRO_MODEL
 from superqode.undo_manager import UndoManager
 from superqode.safety import (
     get_safety_warnings,
@@ -796,30 +797,18 @@ class SuperQodeApp(App):
         """Get Gemini models list - synced with providers/models.py."""
         return [
             {
-                "id": "gemini-3-pro-preview",
-                "name": "Gemini 3 Pro Preview",
+                "id": LATEST_GOOGLE_PRO_MODEL,
+                "name": "Gemini 3.1 Pro Preview",
                 "context": 2000000,
-                "desc": "Latest Gemini 3 flagship - 2M context",
+                "desc": "Latest Gemini Pro from models.dev - 2M context",
                 "recommended": True,
             },
             {
-                "id": "gemini-3-flash-preview",
-                "name": "Gemini 3 Flash Preview",
+                "id": LATEST_GOOGLE_FLASH_MODEL,
+                "name": "Gemini Flash Latest",
                 "context": 1000000,
-                "desc": "Fast Gemini 3 - 1M context",
+                "desc": "Latest Gemini Flash alias from models.dev - 1M context",
                 "recommended": True,
-            },
-            {
-                "id": "gemini-2.5-pro",
-                "name": "Gemini 2.5 Pro",
-                "context": 2000000,
-                "desc": "Previous Pro with 2M context",
-            },
-            {
-                "id": "gemini-2.5-flash",
-                "name": "Gemini 2.5 Flash",
-                "context": 1000000,
-                "desc": "Previous Flash model",
             },
         ]
 
@@ -920,13 +909,13 @@ class SuperQodeApp(App):
                 "context": 200000,
             },
             {
-                "id": "gemini-3-pro-preview",
-                "name": "Gemini 3 Pro Preview (Latest)",
+                "id": LATEST_GOOGLE_PRO_MODEL,
+                "name": "Gemini 3.1 Pro Preview (Latest Pro)",
                 "context": 2000000,
             },
             {
-                "id": "gemini-3-flash-preview",
-                "name": "Gemini 3 Flash Preview (Latest)",
+                "id": LATEST_GOOGLE_FLASH_MODEL,
+                "name": "Gemini Flash Latest",
                 "context": 1000000,
             },
             {"id": "gpt-4o", "name": "GPT-4o", "context": 128000},
@@ -14070,9 +14059,10 @@ team:
                     "gpt-5.3-codex",
                     "gpt-5.2",
                     "gpt-5.1",
-                    "gemini-3",
-                    "gemini 3",
-                    "gemini3",
+                    "gemini-flash-latest",
+                    "gemini-3.1-pro",
+                    "gemini 3.5",
+                    "gemini 3.1",
                     "claude-opus-4-6",
                     "claude-opus-4-5",
                     "claude-sonnet-4-5",
@@ -14162,9 +14152,10 @@ team:
                     # Latest flagship models (2025-12 releases)
                     ("gpt-5.2", -10),
                     ("5.2", -10),
-                    ("gemini-3", -10),
-                    ("gemini 3", -10),
-                    ("gemini3", -10),
+                    ("gemini-flash-latest", -10),
+                    ("gemini-3.1-pro", -10),
+                    ("gemini 3.5", -10),
+                    ("gemini 3.1", -10),
                     # Latest major versions (2025 releases)
                     ("glm-4.7", -9),
                     ("glm-4-plus", -9),
@@ -14544,9 +14535,10 @@ team:
                 "5.3",
                 "gpt-5.2",
                 "5.2",
-                "gemini-3",
-                "gemini 3",
-                "gemini3",
+                "gemini-flash-latest",
+                "gemini-3.1-pro",
+                "gemini 3.5",
+                "gemini 3.1",
                 "glm-4.7",
                 "glm-4-plus",
                 "deepseek-v3.2",

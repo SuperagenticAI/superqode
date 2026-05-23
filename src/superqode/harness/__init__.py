@@ -13,26 +13,7 @@ from superqode.patch_harness import (
     ValidationCategory,
     load_harness_config,
 )
-from .compiler import compile_to_headless_profile, spec_from_headless_profile
-from .backends import (
-    ADKHarnessBackend,
-    HarnessBackend,
-    HarnessBackendCapabilities,
-    HarnessBackendInspection,
-    HarnessBackendIssue,
-    HarnessBackendRequest,
-    HarnessBackendResult,
-    DeepAgentsHarnessBackend,
-    OpenAIAgentsHarnessBackend,
-    PydanticAIHarnessBackend,
-    RuntimeHarnessBackend,
-    backend_capabilities,
-    create_harness_backend,
-    inspect_harness_backend,
-    known_harness_backend_names,
-)
 from .events import HarnessEvent
-from .kernel import HarnessKernel, HarnessRunRequest, HarnessRunResult, HarnessSession, init_harness
 from .loader import (
     harness_spec_from_dict,
     harness_spec_json_schema,
@@ -47,27 +28,6 @@ from .output import (
     TypedOutputError,
     build_typed_output_prompt,
     parse_typed_output,
-)
-from .sandbox import (
-    SandboxCapabilities,
-    SandboxCapabilityBackend,
-    HarnessSandboxBackend,
-    LocalSandboxBackend,
-    SandboxBackend,
-    SandboxFileInfo,
-    SandboxPolicy,
-    SandboxShellResult,
-    apply_backend_permissions,
-    build_openai_sandbox_agent,
-    build_openai_sandbox_client,
-    build_openai_sandbox_manifest,
-    build_openai_sandbox_run_config,
-    get_sandbox_capabilities,
-    is_openai_sandbox_backend_available,
-    require_shell,
-    require_write,
-    sandbox_policy_from_execution_policy,
-    supported_openai_sandbox_backends,
 )
 from .store import (
     FileHarnessStore,
@@ -96,14 +56,76 @@ from .spec import (
     WorkflowSpec,
 )
 from .templates import BUILTIN_TEMPLATES, get_harness_template
-from .workflow import WorkflowResult, WorkflowStep, run_workflow
-from .accelerator import (
-    Accelerator,
-    AcceleratorConfig,
-    get_accelerator,
-    prewarm,
-    cached_system_prompt,
-)
+
+_LAZY_IMPORTS = {
+    # Compiler
+    "compile_to_headless_profile": (".compiler", "compile_to_headless_profile"),
+    "spec_from_headless_profile": (".compiler", "spec_from_headless_profile"),
+    # Runtime backends
+    "ADKHarnessBackend": (".backends", "ADKHarnessBackend"),
+    "HarnessBackend": (".backends", "HarnessBackend"),
+    "HarnessBackendCapabilities": (".backends", "HarnessBackendCapabilities"),
+    "HarnessBackendInspection": (".backends", "HarnessBackendInspection"),
+    "HarnessBackendIssue": (".backends", "HarnessBackendIssue"),
+    "HarnessBackendRequest": (".backends", "HarnessBackendRequest"),
+    "HarnessBackendResult": (".backends", "HarnessBackendResult"),
+    "DeepAgentsHarnessBackend": (".backends", "DeepAgentsHarnessBackend"),
+    "OpenAIAgentsHarnessBackend": (".backends", "OpenAIAgentsHarnessBackend"),
+    "PydanticAIHarnessBackend": (".backends", "PydanticAIHarnessBackend"),
+    "RuntimeHarnessBackend": (".backends", "RuntimeHarnessBackend"),
+    "backend_capabilities": (".backends", "backend_capabilities"),
+    "create_harness_backend": (".backends", "create_harness_backend"),
+    "inspect_harness_backend": (".backends", "inspect_harness_backend"),
+    "known_harness_backend_names": (".backends", "known_harness_backend_names"),
+    # Kernel
+    "HarnessKernel": (".kernel", "HarnessKernel"),
+    "HarnessRunRequest": (".kernel", "HarnessRunRequest"),
+    "HarnessRunResult": (".kernel", "HarnessRunResult"),
+    "HarnessSession": (".kernel", "HarnessSession"),
+    "init_harness": (".kernel", "init_harness"),
+    # Sandbox
+    "SandboxCapabilities": (".sandbox", "SandboxCapabilities"),
+    "SandboxCapabilityBackend": (".sandbox", "SandboxCapabilityBackend"),
+    "HarnessSandboxBackend": (".sandbox", "HarnessSandboxBackend"),
+    "LocalSandboxBackend": (".sandbox", "LocalSandboxBackend"),
+    "SandboxBackend": (".sandbox", "SandboxBackend"),
+    "SandboxFileInfo": (".sandbox", "SandboxFileInfo"),
+    "SandboxPolicy": (".sandbox", "SandboxPolicy"),
+    "SandboxShellResult": (".sandbox", "SandboxShellResult"),
+    "apply_backend_permissions": (".sandbox", "apply_backend_permissions"),
+    "build_openai_sandbox_agent": (".sandbox", "build_openai_sandbox_agent"),
+    "build_openai_sandbox_client": (".sandbox", "build_openai_sandbox_client"),
+    "build_openai_sandbox_manifest": (".sandbox", "build_openai_sandbox_manifest"),
+    "build_openai_sandbox_run_config": (".sandbox", "build_openai_sandbox_run_config"),
+    "get_sandbox_capabilities": (".sandbox", "get_sandbox_capabilities"),
+    "is_openai_sandbox_backend_available": (".sandbox", "is_openai_sandbox_backend_available"),
+    "require_shell": (".sandbox", "require_shell"),
+    "require_write": (".sandbox", "require_write"),
+    "sandbox_policy_from_execution_policy": (".sandbox", "sandbox_policy_from_execution_policy"),
+    "supported_openai_sandbox_backends": (".sandbox", "supported_openai_sandbox_backends"),
+    # Workflow
+    "WorkflowResult": (".workflow", "WorkflowResult"),
+    "WorkflowStep": (".workflow", "WorkflowStep"),
+    "run_workflow": (".workflow", "run_workflow"),
+    # Performance
+    "Accelerator": (".accelerator", "Accelerator"),
+    "AcceleratorConfig": (".accelerator", "AcceleratorConfig"),
+    "get_accelerator": (".accelerator", "get_accelerator"),
+    "prewarm": (".accelerator", "prewarm"),
+    "cached_system_prompt": (".accelerator", "cached_system_prompt"),
+}
+
+
+def __getattr__(name: str):
+    if name not in _LAZY_IMPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    import importlib
+
+    module_name, attr_name = _LAZY_IMPORTS[name]
+    value = getattr(importlib.import_module(module_name, __name__), attr_name)
+    globals()[name] = value
+    return value
+
 
 __all__ = [
     # Validation

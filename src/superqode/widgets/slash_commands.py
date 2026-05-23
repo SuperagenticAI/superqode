@@ -220,6 +220,15 @@ def create_builtin_commands(handlers: dict) -> list[SlashCommand]:
             name="sessions",
             description="List session history",
             handler=handlers.get("sessions", lambda _: None),
+            aliases=["session"],
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="resume",
+            description="Resume a saved session (:resume latest or :resume <id>)",
+            handler=handlers.get("resume", lambda _: None),
             category="session",
         )
     )
@@ -275,6 +284,30 @@ def create_builtin_commands(handlers: dict) -> list[SlashCommand]:
             category="session",
         )
     )
+    commands.append(
+        SlashCommand(
+            name="status",
+            description="Show current runtime, model, harness, and session state",
+            handler=handlers.get("status", lambda _: None),
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="usage",
+            description="Show latest run latency and token usage when available",
+            handler=handlers.get("usage", lambda _: None),
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="mcp",
+            description="Show MCP status and configured tools",
+            handler=handlers.get("mcp", lambda _: None),
+            category="session",
+        )
+    )
 
     # HITL approval / rejection for the OpenAI Agents runtime. Bare :approve
     # acts on the first pending approval; :approve <index> picks one; trailing
@@ -308,4 +341,6 @@ def get_command_handler() -> SlashCommandHandler:
     global _command_handler
     if _command_handler is None:
         _command_handler = SlashCommandHandler()
+        for command in create_builtin_commands({}):
+            _command_handler.register(command)
     return _command_handler

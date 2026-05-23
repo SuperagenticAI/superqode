@@ -20,6 +20,35 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Optional, Tuple
 
+LATEST_GOOGLE_PRO_MODEL = "gemini-3.1-pro-preview"
+LATEST_GOOGLE_FLASH_MODEL = "gemini-flash-latest"
+LATEST_GOOGLE_MODEL_IDS = (LATEST_GOOGLE_PRO_MODEL, LATEST_GOOGLE_FLASH_MODEL)
+CURRENT_MODEL_LIMIT = 6
+LOCAL_MODEL_PROVIDERS = {
+    "ds4",
+    "ollama",
+    "lmstudio",
+    "mlx",
+    "vllm",
+    "sglang",
+    "tgi",
+    "llamacpp",
+    "huggingface-local",
+    "openai-compatible",
+}
+NON_CHAT_MODEL_MARKERS = (
+    "audio",
+    "caption",
+    "classif",
+    "embed",
+    "image",
+    "moderation",
+    "rerank",
+    "speech",
+    "tts",
+    "vision-preview",
+)
+
 
 # ============================================================================
 # MODEL INFO
@@ -542,14 +571,14 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
     # GOOGLE
     # =========================================================================
     "google": {
-        "gemini-3-pro-preview": ModelInfo(
-            id="gemini-3-pro-preview",
-            name="Gemini 3 Pro Preview",
+        "gemini-3.1-pro-preview": ModelInfo(
+            id="gemini-3.1-pro-preview",
+            name="Gemini 3.1 Pro Preview",
             provider="google",
             input_price=2.0,
             output_price=8.0,
             context_window=2000000,
-            max_output=16384,
+            max_output=65536,
             capabilities=[
                 ModelCapability.TOOLS,
                 ModelCapability.VISION,
@@ -559,18 +588,18 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
                 ModelCapability.CODE,
                 ModelCapability.LONG_CONTEXT,
             ],
-            description="Latest Gemini 3 flagship - most capable (2M context)",
+            description="Latest general Gemini Pro model listed by models.dev",
             recommended_for=["complex reasoning", "large codebases", "research"],
-            released="2025-12",
+            released="2026-02",
         ),
-        "gemini-3-flash-preview": ModelInfo(
-            id="gemini-3-flash-preview",
-            name="Gemini 3 Flash Preview",
+        "gemini-flash-latest": ModelInfo(
+            id="gemini-flash-latest",
+            name="Gemini Flash Latest",
             provider="google",
             input_price=0.15,
             output_price=0.60,
             context_window=1000000,
-            max_output=8192,
+            max_output=65536,
             capabilities=[
                 ModelCapability.TOOLS,
                 ModelCapability.VISION,
@@ -579,70 +608,9 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
                 ModelCapability.CODE,
                 ModelCapability.LONG_CONTEXT,
             ],
-            description="Gemini 3 fast model - 1M context (Latest)",
+            description="Latest Gemini Flash alias listed by models.dev",
             recommended_for=["quick tasks", "high volume", "coding"],
-            released="2025-12",
-        ),
-        "gemini-2.5-pro": ModelInfo(
-            id="gemini-2.5-pro",
-            name="Gemini 2.5 Pro",
-            provider="google",
-            input_price=1.25,
-            output_price=5.0,
-            context_window=2000000,
-            max_output=8192,
-            capabilities=[
-                ModelCapability.TOOLS,
-                ModelCapability.VISION,
-                ModelCapability.STREAMING,
-                ModelCapability.JSON_MODE,
-                ModelCapability.REASONING,
-                ModelCapability.CODE,
-                ModelCapability.LONG_CONTEXT,
-            ],
-            description="Gemini 2.5 Pro with 2M context",
-            recommended_for=["large codebases", "long documents"],
-            released="2025-01",
-        ),
-        "gemini-2.5-flash": ModelInfo(
-            id="gemini-2.5-flash",
-            name="Gemini 2.5 Flash",
-            provider="google",
-            input_price=0.075,
-            output_price=0.30,
-            context_window=1000000,
-            max_output=8192,
-            capabilities=[
-                ModelCapability.TOOLS,
-                ModelCapability.VISION,
-                ModelCapability.STREAMING,
-                ModelCapability.JSON_MODE,
-                ModelCapability.CODE,
-                ModelCapability.LONG_CONTEXT,
-            ],
-            description="Fast and efficient with 1M context",
-            recommended_for=["quick tasks", "high volume"],
-            released="2025-01",
-        ),
-        "gemini-2.0-flash": ModelInfo(
-            id="gemini-2.0-flash",
-            name="Gemini 2.0 Flash",
-            provider="google",
-            input_price=0.10,
-            output_price=0.40,
-            context_window=1000000,
-            max_output=8192,
-            capabilities=[
-                ModelCapability.TOOLS,
-                ModelCapability.VISION,
-                ModelCapability.STREAMING,
-                ModelCapability.JSON_MODE,
-                ModelCapability.CODE,
-                ModelCapability.LONG_CONTEXT,
-            ],
-            description="Previous Flash generation",
-            recommended_for=["general tasks"],
-            released="2024-12",
+            released="2025-09",
         ),
     },
     # =========================================================================
@@ -821,21 +789,21 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
             description="GPT-4o via OpenRouter",
             recommended_for=["general", "coding"],
         ),
-        "google/gemini-2.0-flash": ModelInfo(
-            id="google/gemini-2.0-flash",
-            name="Gemini 2.0 Flash (via OpenRouter)",
+        "google/gemini-flash-latest": ModelInfo(
+            id="google/gemini-flash-latest",
+            name="Gemini Flash Latest (via OpenRouter)",
             provider="openrouter",
-            input_price=0.10,
-            output_price=0.40,
+            input_price=0.15,
+            output_price=0.60,
             context_window=1000000,
-            max_output=8192,
+            max_output=65536,
             capabilities=[
                 ModelCapability.TOOLS,
                 ModelCapability.VISION,
                 ModelCapability.STREAMING,
                 ModelCapability.LONG_CONTEXT,
             ],
-            description="Gemini via OpenRouter",
+            description="Latest Gemini Flash via OpenRouter",
             recommended_for=["long context"],
         ),
     },
@@ -958,14 +926,11 @@ def get_effective_models() -> Dict[str, Dict[str, ModelInfo]]:
     Returns live data if available, otherwise falls back to hardcoded MODELS.
     """
     if _use_live_data and _live_models:
-        # Merge: live data takes precedence, but keep hardcoded for missing providers
+        # Live data replaces provider model lists. Keep built-ins only for providers
+        # absent from models.dev/cache so stale built-in models do not leak into BYOK.
         merged = MODELS.copy()
         for provider_id, models in _live_models.items():
-            if provider_id in merged:
-                # Merge models within provider (live takes precedence)
-                merged[provider_id] = {**merged[provider_id], **models}
-            else:
-                merged[provider_id] = models
+            merged[provider_id] = models
         return merged
     return MODELS
 
@@ -1015,14 +980,92 @@ def get_models_for_provider(provider_id: str) -> Dict[str, ModelInfo]:
             ):
                 filtered[model_id] = model_info
 
+    if provider_id == "google":
+        return _latest_google_models(filtered)
+    if provider_id not in LOCAL_MODEL_PROVIDERS:
+        return _current_hosted_models(filtered)
+
     return filtered
+
+
+def _latest_google_models(models: Dict[str, ModelInfo]) -> Dict[str, ModelInfo]:
+    """Keep BYOK Google model lists focused on the current Pro and Flash choices."""
+    latest: Dict[str, ModelInfo] = {}
+
+    pro = _select_google_model(models, kind="pro")
+    flash = _select_google_model(models, kind="flash")
+
+    if pro:
+        latest[pro.id] = pro
+    if flash and flash.id not in latest:
+        latest[flash.id] = flash
+    return latest
+
+
+def _select_google_model(models: Dict[str, ModelInfo], *, kind: str) -> ModelInfo | None:
+    alias = "gemini-pro-latest" if kind == "pro" else LATEST_GOOGLE_FLASH_MODEL
+    if alias in models:
+        return models[alias]
+
+    candidates: list[ModelInfo] = []
+    for model in models.values():
+        model_id = model.id.lower()
+        name = model.name.lower()
+        text = f"{model_id} {name}"
+        if "gemini" not in text or kind not in text:
+            continue
+        if any(skip in text for skip in ("lite", "image", "tts", "customtools")):
+            continue
+        candidates.append(model)
+
+    if not candidates:
+        fallback = LATEST_GOOGLE_PRO_MODEL if kind == "pro" else LATEST_GOOGLE_FLASH_MODEL
+        return models.get(fallback)
+
+    return max(candidates, key=_model_recency_key)
+
+
+def _model_recency_key(model: ModelInfo) -> tuple[str, str]:
+    return (model.released or "", model.id)
+
+
+def _current_hosted_models(models: Dict[str, ModelInfo]) -> Dict[str, ModelInfo]:
+    """Derive compact current hosted-model lists from models.dev metadata."""
+    chat_models = [model for model in models.values() if _is_chat_model(model)]
+    if not chat_models:
+        chat_models = list(models.values())
+
+    latest_aliases = [model for model in chat_models if _is_latest_alias(model)]
+    selected = latest_aliases or chat_models
+    selected = sorted(selected, key=_hosted_model_sort_key, reverse=True)[:CURRENT_MODEL_LIMIT]
+    return {model.id: model for model in selected}
+
+
+def _is_chat_model(model: ModelInfo) -> bool:
+    text = f"{model.id} {model.name}".lower()
+    return not any(marker in text for marker in NON_CHAT_MODEL_MARKERS)
+
+
+def _is_latest_alias(model: ModelInfo) -> bool:
+    text = f"{model.id} {model.name}".lower()
+    return "latest" in text
+
+
+def _hosted_model_sort_key(model: ModelInfo) -> tuple[str, int, int, float, str]:
+    return (
+        model.released or "",
+        1 if model.supports_tools else 0,
+        model.context_window,
+        -(model.input_price + model.output_price),
+        model.id,
+    )
 
 
 def get_all_models() -> List[ModelInfo]:
     """Get all models across all providers."""
     all_models = []
-    for provider_models in get_effective_models().values():
-        all_models.extend(provider_models.values())
+    for provider_id in get_effective_models().keys():
+        all_models.extend(get_models_for_provider(provider_id).values())
     return all_models
 
 

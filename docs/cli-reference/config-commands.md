@@ -64,7 +64,7 @@ superqode config set-model MODE.ROLE MODEL
 Example:
 
 ```bash
-superqode config set-model qe.security_tester gemini-2.5-flash
+superqode config set-model qe.security_tester gemini-flash-latest
 ```
 
 Note: ACP agents manage their own models; use this for non-ACP roles.

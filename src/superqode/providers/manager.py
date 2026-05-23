@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 from enum import Enum
 
+from .models import LATEST_GOOGLE_FLASH_MODEL, LATEST_GOOGLE_PRO_MODEL
+
 # litellm is imported lazily to avoid import errors when CWD doesn't exist
 # (litellm tries to resolve current directory during import via pydantic plugins)
 
@@ -659,28 +661,21 @@ class ProviderManager:
             ProviderInfo(
                 id="google",
                 name="Google",
-                description="Latest Gemini 3.x models from models.dev",
+                description="Latest Gemini Pro and Flash models from models.dev",
                 requires_api_key=True,
                 configured=self._is_provider_configured("google"),
                 models=[
                     ModelInfo(
-                        "gemini-3-pro-preview",
-                        "Gemini 3 Pro Preview (Latest)",
+                        LATEST_GOOGLE_PRO_MODEL,
+                        "Gemini 3.1 Pro Preview (Latest Pro)",
                         "google",
                         context_size=2000000,
                     ),
                     ModelInfo(
-                        "gemini-3-flash-preview",
-                        "Gemini 3 Flash Preview (Latest)",
+                        LATEST_GOOGLE_FLASH_MODEL,
+                        "Gemini Flash Latest",
                         "google",
                         context_size=1000000,
-                    ),
-                    ModelInfo("gemini-2.5-pro", "Gemini 2.5 Pro", "google", context_size=2000000),
-                    ModelInfo(
-                        "gemini-2.5-flash", "Gemini 2.5 Flash", "google", context_size=1000000
-                    ),
-                    ModelInfo(
-                        "gemini-2.0-flash", "Gemini 2.0 Flash", "google", context_size=1000000
                     ),
                 ],
             )
@@ -765,8 +760,8 @@ class ProviderManager:
                         context_size=131072,
                     ),
                     ModelInfo(
-                        "google/gemini-pro-1.5",
-                        "Gemini Pro 1.5",
+                        f"google/{LATEST_GOOGLE_FLASH_MODEL}",
+                        "Gemini Flash Latest",
                         "openrouter",
                         context_size=2097152,
                     ),
@@ -1194,12 +1189,17 @@ class ProviderManager:
                 requires_api_key=True,
                 configured=self._is_provider_configured("vertex-ai"),
                 models=[
-                    ModelInfo("gemini-pro", "Gemini Pro (Vertex)", "vertex-ai", context_size=32768),
                     ModelInfo(
-                        "gemini-pro-vision",
-                        "Gemini Pro Vision (Vertex)",
+                        LATEST_GOOGLE_PRO_MODEL,
+                        "Gemini 3.1 Pro Preview (Vertex)",
                         "vertex-ai",
-                        context_size=16384,
+                        context_size=2000000,
+                    ),
+                    ModelInfo(
+                        LATEST_GOOGLE_FLASH_MODEL,
+                        "Gemini Flash Latest (Vertex)",
+                        "vertex-ai",
+                        context_size=1000000,
                     ),
                     ModelInfo(
                         "palm-2-chat-bison", "PaLM 2 Chat Bison", "vertex-ai", context_size=8192

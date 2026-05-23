@@ -24,6 +24,7 @@ from ..providers.registry import (
     get_free_providers,
     get_local_providers,
 )
+from ..providers.models import get_models_for_provider
 from ..providers.gateway import LiteLLMGateway
 from ..providers.local.mlx import get_mlx_client
 
@@ -223,13 +224,14 @@ def show_provider(provider_id: str):
         info_lines.append(f"[bold]Base URL Env:[/bold] {provider_def.base_url_env}")
         info_lines.append("")
 
-    # Example models
-    if provider_def.example_models:
-        info_lines.append("[bold]Example Models:[/bold]")
-        for model in provider_def.example_models[:8]:
+    # Current models
+    current_models = list(get_models_for_provider(provider_id).keys())
+    if current_models:
+        info_lines.append("[bold]Current Models:[/bold]")
+        for model in current_models[:8]:
             info_lines.append(f"  • {model}")
-        if len(provider_def.example_models) > 8:
-            info_lines.append(f"  [dim]... and {len(provider_def.example_models) - 8} more[/dim]")
+        if len(current_models) > 8:
+            info_lines.append(f"  [dim]... and {len(current_models) - 8} more[/dim]")
         info_lines.append("")
 
     # Free models
@@ -287,8 +289,8 @@ def test_provider(provider_id: str, model: Optional[str]):
         console.print(f"Get your API key at: {provider_def.docs_url}")
         return
 
-    # Use first example model if not specified
-    test_model = model or (provider_def.example_models[0] if provider_def.example_models else None)
+    current_models = list(get_models_for_provider(provider_id))
+    test_model = model or (current_models[0] if current_models else None)
 
     if not test_model:
         console.print("[red]Error: No model specified and no example models available[/red]")

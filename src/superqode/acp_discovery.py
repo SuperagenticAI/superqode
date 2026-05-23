@@ -62,6 +62,8 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from superqode.providers.models import LATEST_GOOGLE_FLASH_MODEL, LATEST_GOOGLE_PRO_MODEL
+
 
 # ============================================================================
 # ENUMS
@@ -574,31 +576,17 @@ class ACPDiscovery:
             # Gemini CLI - Google's models
             "gemini": [
                 AgentModel(
-                    id="gemini-2.5-pro",
-                    name="Gemini 2.5 Pro",
+                    id=LATEST_GOOGLE_PRO_MODEL,
+                    name="Gemini 3.1 Pro Preview",
                     provider="google",
-                    description="Latest Gemini Pro with 2M context",
+                    description="Latest Gemini Pro from models.dev",
                     context_window=2000000,
                 ),
                 AgentModel(
-                    id="gemini-2.5-flash",
-                    name="Gemini 2.5 Flash",
+                    id=LATEST_GOOGLE_FLASH_MODEL,
+                    name="Gemini Flash Latest",
                     provider="google",
-                    description="Fast Gemini with 1M context",
-                    context_window=1000000,
-                ),
-                AgentModel(
-                    id="gemini-2.0-flash",
-                    name="Gemini 2.0 Flash",
-                    provider="google",
-                    description="Previous generation flash model",
-                    context_window=1000000,
-                ),
-                AgentModel(
-                    id="gemini-2.0-flash-thinking",
-                    name="Gemini 2.0 Flash Thinking",
-                    provider="google",
-                    description="Flash model with extended thinking",
+                    description="Latest Gemini Flash alias from models.dev",
                     context_window=1000000,
                 ),
                 AgentModel(
@@ -678,7 +666,11 @@ class ACPDiscovery:
                 AgentModel(id="auto", name="Auto", description="Automatic model selection"),
                 AgentModel(id="claude-3-5-sonnet", name="Claude 3.5 Sonnet", provider="anthropic"),
                 AgentModel(id="gpt-4o", name="GPT-4o", provider="openai"),
-                AgentModel(id="gemini-2.5-pro", name="Gemini 2.5 Pro", provider="google"),
+                AgentModel(
+                    id=LATEST_GOOGLE_PRO_MODEL,
+                    name="Gemini 3.1 Pro Preview",
+                    provider="google",
+                ),
             ],
             # Kimi CLI
             "kimi": [
@@ -708,7 +700,7 @@ class ACPDiscovery:
                 ),
                 AgentModel(id="claude-3-5-sonnet", name="Claude 3.5 Sonnet", is_free=True),
                 AgentModel(id="gpt-4o", name="GPT-4o", is_free=True),
-                AgentModel(id="gemini-2.5-pro", name="Gemini 2.5 Pro", is_free=True),
+                AgentModel(id=LATEST_GOOGLE_PRO_MODEL, name="Gemini 3.1 Pro Preview", is_free=True),
                 # OpenCode Zen free models
                 AgentModel(
                     id="big-pickle", name="Big Pickle (Free)", is_free=True, context_window=200000

@@ -136,9 +136,7 @@ async def test_patch_harness_runs_custom_steps_without_shell(tmp_path: Path, mon
     harness = PatchHarness(
         tmp_path,
         HarnessConfig(
-            custom_steps=[
-                CustomHarnessStep(name="lint", command='uv run ruff check "src tests"')
-            ]
+            custom_steps=[CustomHarnessStep(name="lint", command='uv run ruff check "src tests"')]
         ),
     )
 

@@ -132,6 +132,13 @@ Use `doctor` before sharing a harness with a team. It checks backend availabilit
 | Optimize for local Gemma4 coding | `superqode harness init local --template gemma4-coding` |
 | Optimize for fast DS4 local iteration | `superqode harness init fast --template ds4-fast-local` |
 
+For DeepSeek V4 Flash on local hardware, prefer the DS4 provider over a generic MLX server:
+
+```bash
+superqode providers ds4 server
+superqode -p --provider ds4 --model deepseek-v4-flash "review this repo"
+```
+
 ### Optional Runtime Backends
 
 Install only the runtimes you need:

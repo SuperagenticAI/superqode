@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional
 
+from .models import LATEST_GOOGLE_FLASH_MODEL, LATEST_GOOGLE_PRO_MODEL
+
 
 class ProviderTier(Enum):
     """Provider support tier."""
@@ -118,14 +120,10 @@ PROVIDERS: Dict[str, ProviderDef] = {
         litellm_prefix="gemini/",
         docs_url="https://aistudio.google.com/",
         example_models=[
-            "gemini-3-pro-preview",
-            "gemini-3-flash-preview",
-            "gemini-2.5-pro",
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
-            "gemini-flash-latest",
+            LATEST_GOOGLE_PRO_MODEL,
+            LATEST_GOOGLE_FLASH_MODEL,
         ],
-        notes="2M token context. Gemini 3 is the latest. Great for large codebases.",
+        notes="Latest Gemini Pro and Flash models from models.dev. Great for large codebases.",
     ),
     "xai": ProviderDef(
         id="xai",
@@ -305,7 +303,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
         example_models=[
             "anthropic/claude-sonnet-4",
             "openai/gpt-4o",
-            "google/gemini-2.0-flash",
+            f"google/{LATEST_GOOGLE_FLASH_MODEL}",
             "meta-llama/llama-3.3-70b-instruct",
         ],
         notes="Access 200+ models. Single API key. Auto-fallback.",
@@ -500,8 +498,8 @@ PROVIDERS: Dict[str, ProviderDef] = {
         litellm_prefix="vertex_ai/",
         docs_url="https://cloud.google.com/vertex-ai",
         example_models=[
-            "gemini-1.5-pro",
-            "gemini-1.5-flash",
+            LATEST_GOOGLE_PRO_MODEL,
+            LATEST_GOOGLE_FLASH_MODEL,
             "claude-3-5-sonnet@20241022",
         ],
         notes="GCP managed. Supports Gemini and Claude.",

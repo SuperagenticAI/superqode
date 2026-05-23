@@ -833,9 +833,25 @@ class SuperQodeCompleter(Completer):
             (":bookmark", "Manage bookmarks"),
             (":handoff", "Hand off to another role"),
             (":context", "Show work context"),
-            (":approve", "Approve work"),
+            (":approve", "Approve a pending tool call"),
+            (":approve 0 always", "Approve pending tool call and remember decision"),
+            (":reject", "Reject a pending tool call"),
             (":help", "Show help"),
             (":h", "Alias for :help"),
+            (":runtime", "Show runtime status"),
+            (":runtime list", "List runtime backends"),
+            (":runtime builtin", "Switch to builtin runtime"),
+            (":runtime pydanticai", "Switch to PydanticAI runtime"),
+            (":runtime openai-agents", "Switch to OpenAI Agents runtime"),
+            (":harness", "Show harness status"),
+            (":harness templates", "List harness templates"),
+            (":harness doctor", "Check active or selected harness"),
+            (":harness off", "Disable active harness"),
+            (":status", "Show current runtime, model, harness, and session"),
+            (":usage", "Show latest run latency and token usage"),
+            (":sessions", "List saved sessions"),
+            (":resume latest", "Resume most recent saved session"),
+            (":mcp status", "Show MCP status"),
             (":init", "Initialize SuperQode configuration"),
             (":i", "Alias for :init"),
             (":sidebar", "Show/hide sidebar"),
@@ -874,12 +890,19 @@ class SuperQodeCompleter(Completer):
 
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor.lower()
-        if not text.startswith(":"):
+        if not text.startswith(("/", ":")):
             return
 
+        prefix = text[0]
         for cmd, desc in self.commands:
-            if cmd.lower().startswith(text):
-                yield Completion(cmd, start_position=-len(text), display=cmd, display_meta=desc)
+            candidate = prefix + cmd[1:] if prefix == "/" else cmd
+            if candidate.lower().startswith(text):
+                yield Completion(
+                    candidate,
+                    start_position=-len(text),
+                    display=candidate,
+                    display_meta=desc,
+                )
 
 
 # Alias for backward compatibility
@@ -1056,6 +1079,15 @@ class SuperQodeUI:
         self.response_panel = ResponsePanel(self.console)
         self.output_filter = output_filter
         self._team_config: Optional[TeamConfig] = None
+        self.active_runtime = "builtin"
+        self.active_harness_path: Optional[Path] = None
+        self.active_harness_name = ""
+        self.active_provider = ""
+        self.active_model = ""
+        self.active_session_id = ""
+        self.last_usage: Dict[str, Any] = {}
+        self.pending_runtime: Any = None
+        self.pending_approvals: List[Dict[str, Any]] = []
 
     @property
     def team_config(self) -> TeamConfig:
@@ -1102,6 +1134,9 @@ class SuperQodeUI:
             execution_mode: "acp" for coding agent, "byok" for direct LLM
         """
         self.prompt.set_connected(name, connected, execution_mode)
+        if connected:
+            self.active_provider = execution_mode
+            self.active_model = name
 
     def show_thinking(self, message: str = "Thinking..."):
         """Show thinking animation (context manager)."""
@@ -1115,6 +1150,21 @@ class SuperQodeUI:
         """Filter agent output."""
         return self.output_filter.filter(text)
 
+    def set_pending_approvals(
+        self,
+        approvals: List[Dict[str, Any]],
+        pending_runtime: Any = None,
+    ) -> None:
+        """Update pending approval state displayed and acted on by TUI commands."""
+        self.pending_approvals = approvals
+        self.pending_runtime = pending_runtime
+        if approvals:
+            self._print_pending_approvals()
+
+    def record_usage(self, **usage: Any) -> None:
+        """Record latest run usage/latency for :usage and :status."""
+        self.last_usage = {key: value for key, value in usage.items() if value is not None}
+
     def print(self, *args, **kwargs):
         """Print to console."""
         self.console.print(*args, **kwargs)
@@ -1122,6 +1172,285 @@ class SuperQodeUI:
     def clear(self):
         """Clear the console."""
         self.console.clear()
+
+    def _print_help(self) -> None:
+        """Show user-facing command help grouped around TUI workflows."""
+        handler = get_command_handler()
+        table = Table(title="SuperQode TUI Commands", border_style="cyan")
+        table.add_column("Command", style="yellow", no_wrap=True)
+        table.add_column("Use")
+        table.add_column("Example", style="dim")
+        examples = {
+            "harness": ":harness examples/harnesses/coding.yaml",
+            "runtime": ":runtime list",
+            "approve": ":approve 0 always",
+            "reject": ':reject 0 "use a safer command"',
+            "sessions": ":sessions",
+            "resume": ":resume latest",
+            "status": ":status",
+            "usage": ":usage",
+            "mcp": ":mcp status",
+            "help": ":help",
+            "exit": ":q",
+        }
+        shown = set()
+        for command in handler.list_commands():
+            if command.name in shown:
+                continue
+            shown.add(command.name)
+            if command.category not in {"session", "general"}:
+                continue
+            table.add_row(
+                f":{command.name}",
+                command.description,
+                examples.get(command.name, ""),
+            )
+        self.console.print(table)
+        self.console.print(
+            "[dim]Tip: every ':' command also works with '/', for example /harness templates.[/dim]"
+        )
+
+    def _print_status(self) -> None:
+        """Render current runtime, harness, model, and session state."""
+        table = Table(title="SuperQode Status", border_style="cyan")
+        table.add_column("Field", style="bold")
+        table.add_column("Value")
+        table.add_row("Runtime", self.active_runtime or "builtin")
+        table.add_row("Harness", self.active_harness_name or "none")
+        table.add_row(
+            "Harness path", str(self.active_harness_path) if self.active_harness_path else "-"
+        )
+        table.add_row("Provider", self.active_provider or "-")
+        table.add_row("Model", self.active_model or "-")
+        table.add_row("Session", self.active_session_id or "-")
+        table.add_row("Pending approvals", str(len(self.pending_approvals)))
+        if self.last_usage:
+            usage = ", ".join(f"{key}={value}" for key, value in self.last_usage.items())
+            table.add_row("Latest usage", usage)
+        self.console.print(table)
+
+    def _print_usage(self) -> None:
+        """Render latest run usage, or a clear empty state."""
+        if not self.last_usage:
+            self.print_info("No run usage recorded yet.")
+            return
+        table = Table(title="Latest Run Usage", border_style="cyan")
+        table.add_column("Metric", style="bold")
+        table.add_column("Value")
+        for key in (
+            "latency_ms",
+            "tokens_in",
+            "tokens_out",
+            "total_tokens",
+            "tool_calls_made",
+            "iterations",
+            "runtime",
+            "model",
+        ):
+            if key in self.last_usage:
+                table.add_row(key, str(self.last_usage[key]))
+        self.console.print(table)
+
+    def _print_runtime_list(self) -> None:
+        from .runtime import list_runtimes
+
+        table = Table(title="Runtime Backends", border_style="cyan")
+        table.add_column("Runtime", style="yellow")
+        table.add_column("Installed")
+        table.add_column("Implemented")
+        table.add_column("Notes", style="dim")
+        for runtime in list_runtimes():
+            table.add_row(
+                runtime.name,
+                "yes" if runtime.installed else "no",
+                "yes" if runtime.implemented else "no",
+                runtime.install_hint or "",
+            )
+        self.console.print(table)
+
+    def _handle_runtime_command(self, args: str) -> None:
+        value = args.strip()
+        if not value or value == "status":
+            self._print_status()
+            return
+        if value == "list":
+            self._print_runtime_list()
+            return
+
+        from .runtime import resolve_runtime_name
+
+        runtime_name = resolve_runtime_name(value)
+        self.active_runtime = runtime_name
+        self.print_success(f"Runtime set to [bold]{runtime_name}[/bold].")
+
+    def _handle_harness_command(self, args: str) -> None:
+        value = args.strip()
+        if not value or value == "status":
+            self._print_status()
+            return
+        if value in {"off", "disable", "none"}:
+            self.active_harness_path = None
+            self.active_harness_name = ""
+            self.print_success("Harness disabled for this TUI session.")
+            return
+        if value in {"templates", "list-templates"}:
+            from .harness import BUILTIN_TEMPLATES
+
+            table = Table(title="Harness Templates", border_style="cyan")
+            table.add_column("Name", style="yellow")
+            table.add_column("Runtime")
+            table.add_column("Description")
+            for name, spec in BUILTIN_TEMPLATES.items():
+                table.add_row(name, spec.runtime.backend, spec.description)
+            self.console.print(table)
+            return
+
+        if value.startswith("doctor"):
+            spec_text = value.removeprefix("doctor").strip()
+            path = Path(spec_text) if spec_text else self.active_harness_path
+            if path is None:
+                self.print_warning("No harness selected. Use :harness <path> first.")
+                return
+            self._doctor_harness(path)
+            return
+
+        if value.startswith("use "):
+            value = value[4:].strip()
+        path = Path(value)
+        try:
+            from .harness import load_harness_spec
+
+            spec = load_harness_spec(path)
+        except Exception as exc:
+            self.print_error(f"Failed to load harness: {exc}")
+            return
+        self.active_harness_path = path
+        self.active_harness_name = spec.name
+        self.active_runtime = spec.runtime.backend
+        self.print_success(
+            f"Loaded harness [bold]{spec.name}[/bold] using runtime [bold]{spec.runtime.backend}[/bold]."
+        )
+
+    def _doctor_harness(self, path: Path) -> None:
+        try:
+            from .harness import inspect_harness_backend, load_harness_spec
+
+            spec = load_harness_spec(path)
+            inspection = inspect_harness_backend(
+                spec.runtime.backend,
+                spec,
+                sandbox_backend=spec.execution_policy.sandbox,
+            )
+        except Exception as exc:
+            self.print_error(f"Harness doctor failed: {exc}")
+            return
+        table = Table(title=f"Harness Doctor: {spec.name}", border_style="cyan")
+        table.add_column("Check")
+        table.add_column("Status")
+        table.add_column("Message")
+        table.add_row("backend", "ok" if inspection.ok else "error", inspection.backend)
+        for issue in inspection.issues:
+            table.add_row(issue.code, issue.severity, issue.message)
+        if not inspection.issues:
+            table.add_row("compatibility", "ok", "No compatibility issues found.")
+        self.console.print(table)
+
+    def _handle_resume_command(self, args: str) -> None:
+        from .agent.session_manager import create_session_manager
+
+        sm = create_session_manager()
+        target = args.strip() or "latest"
+        sessions = sm.list_all_sessions()
+        if target == "latest":
+            if not sessions:
+                self.print_info("No saved sessions found.")
+                return
+            target = sessions[0].session_id
+        if sm.get_session_info(target) is None:
+            self.print_error(f"Session not found: {target}")
+            return
+        self.active_session_id = sm.start_session(target)
+        self.print_success(f"Resumed session [bold]{self.active_session_id}[/bold].")
+
+    def _print_mcp_status(self) -> None:
+        try:
+            from .mcp.config import get_acp_mcp_servers
+
+            servers = get_acp_mcp_servers()
+        except Exception as exc:
+            self.print_error(f"Could not load MCP config: {exc}")
+            return
+        if not servers:
+            self.print_info("No MCP servers configured.")
+            return
+        table = Table(title="Configured MCP Servers", border_style="cyan")
+        table.add_column("Name", style="yellow")
+        table.add_column("Command/URL")
+        for server in servers:
+            if isinstance(server, dict):
+                name = str(server.get("name") or server.get("id") or "-")
+                target = str(server.get("command") or server.get("url") or "-")
+            else:
+                name = str(getattr(server, "name", "-"))
+                target = str(getattr(server, "command", None) or getattr(server, "url", "-"))
+            table.add_row(name, target)
+        self.console.print(table)
+
+    def _print_pending_approvals(self) -> None:
+        table = Table(title="Pending Tool Approval", border_style="yellow")
+        table.add_column("#", justify="right")
+        table.add_column("Tool", style="yellow")
+        table.add_column("Arguments")
+        for index, approval in enumerate(self.pending_approvals):
+            table.add_row(
+                str(approval.get("index", index)),
+                str(approval.get("tool_name", "")),
+                str(approval.get("arguments", {})),
+            )
+        self.console.print(table)
+        self.console.print(
+            '[dim]Use :approve, :approve 0 always, :reject, or :reject 0 "reason".[/dim]'
+        )
+
+    def _parse_approval_args(self, args: str) -> tuple[int, bool, str | None]:
+        parts = args.strip().split()
+        index = 0
+        always = False
+        message: str | None = None
+        if parts and parts[0].isdigit():
+            index = int(parts.pop(0))
+        if parts and parts[0].lower() == "always":
+            always = True
+            parts.pop(0)
+        if parts:
+            message = " ".join(parts).strip().strip('"')
+        return index, always, message
+
+    def _handle_approval_command(self, *, approve: bool, args: str) -> None:
+        if not self.pending_approvals or self.pending_runtime is None:
+            self.print_info("No pending tool approval.")
+            return
+        index, always, message = self._parse_approval_args(args)
+        action = (
+            self.pending_runtime.approve_and_resume
+            if approve
+            else self.pending_runtime.reject_and_resume
+        )
+        try:
+            import asyncio
+
+            if approve:
+                response = asyncio.run(action(index=index, always=always))
+            else:
+                response = asyncio.run(action(index=index, message=message, always=always))
+        except Exception as exc:
+            self.print_error(f"Approval action failed: {exc}")
+            return
+        self.pending_approvals = []
+        self.pending_runtime = None
+        if getattr(response, "content", ""):
+            self.display_response(response.content, agent_name=self.active_runtime)
+        self.print_success("Approval handled.")
 
     def _run_shell(self, cmd: str):
         """Run a shell command with danger analysis."""
@@ -1181,12 +1510,28 @@ class SuperQodeUI:
 
             # Execute standard slash/colon command
             if command.name == "help":
-                self.print_roles()
+                self._print_help()
             elif command.name in ("exit", "quit", "q"):
                 self.print_exit()
                 sys.exit(0)
             elif command.name == "clear":
                 self.clear()
+            elif command.name == "status":
+                self._print_status()
+            elif command.name == "usage":
+                self._print_usage()
+            elif command.name == "runtime":
+                self._handle_runtime_command(args)
+            elif command.name == "harness":
+                self._handle_harness_command(args)
+            elif command.name == "resume":
+                self._handle_resume_command(args)
+            elif command.name == "mcp":
+                self._print_mcp_status()
+            elif command.name == "approve":
+                self._handle_approval_command(approve=True, args=args)
+            elif command.name == "reject":
+                self._handle_approval_command(approve=False, args=args)
             elif command.name == "fork":
                 try:
                     from .agent.session_manager import create_session_manager
@@ -1196,7 +1541,7 @@ class SuperQodeUI:
                     self.print_success(f"Session forked! New session: [bold]{new_id}[/bold]")
                 except Exception as e:
                     self.print_error(f"Fork failed: {str(e)}")
-            elif command.name == "sessions":
+            elif command.name in {"sessions", "session"}:
                 try:
                     from .agent.session_manager import create_session_manager
 

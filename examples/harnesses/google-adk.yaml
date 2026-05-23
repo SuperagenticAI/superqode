@@ -5,9 +5,9 @@ flavor: coding
 runtime:
   backend: adk
 model_policy:
-  primary: gemini-2.5-pro
+  primary: gemini-3.1-pro-preview
   fallbacks:
-    - gemini-2.5-flash
+    - gemini-flash-latest
   profile: adk-coding
   temperature: 0.2
   reasoning: medium
@@ -74,4 +74,3 @@ metadata:
   example: google-adk
   install: pip install "superqode[adk]"
   best_for: Google ADK integration
-

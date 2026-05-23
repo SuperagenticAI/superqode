@@ -14,7 +14,10 @@ from superqode.tools.base import Tool, ToolContext, ToolRegistry, ToolResult
 
 pytest.importorskip("agents", reason="openai-agents not installed")
 
-from superqode.runtime.openai_agents import OpenAIAgentsRuntime  # noqa: E402
+from superqode.runtime.openai_agents import (  # noqa: E402
+    OpenAIAgentsRuntime,
+    _events_from_openai_agents_event,
+)
 
 
 class _EchoTool(Tool):
@@ -190,3 +193,65 @@ def test_list_runtimes_reports_openai_installed_when_available():
     info = {r.name: r for r in list_runtimes()}
     assert info["openai-agents"].installed is True
     assert info["openai-agents"].implemented is True
+
+
+def test_openai_agents_tool_search_items_emit_tool_graph_events():
+    class _Item:
+        type = "tool_search_call_item"
+        raw_item = {"id": "search_1", "type": "tool_search_call", "query": "latest docs"}
+
+    class _Event:
+        item = _Item()
+
+    events = _events_from_openai_agents_event(_Event())
+
+    assert len(events) == 1
+    assert events[0].type == "tool_call"
+    assert events[0].data["tool_name"] == "tool_search"
+    assert events[0].data["tool_call_id"] == "search_1"
+    assert events[0].data["arguments"]["query"] == "latest docs"
+
+
+def test_openai_agents_tool_search_output_items_emit_tool_result_events():
+    class _Item:
+        type = "tool_search_output_item"
+        raw_item = {
+            "id": "search_1",
+            "type": "tool_search_output",
+            "results": [{"title": "Docs"}],
+        }
+
+    class _Event:
+        item = _Item()
+
+    events = _events_from_openai_agents_event(_Event())
+
+    assert len(events) == 1
+    assert events[0].type == "tool_result"
+    assert events[0].data["tool_name"] == "tool_search"
+    assert events[0].data["tool_call_id"] == "search_1"
+    assert events[0].data["content"] == [{"title": "Docs"}]
+
+
+def test_openai_agents_mcp_list_tools_items_emit_mcp_graph_events():
+    class _Item:
+        type = "mcp_list_tools_item"
+        raw_item = {
+            "type": "mcp_list_tools",
+            "server_label": "repo",
+            "tools": [
+                {"name": "read_file", "title": "Read file"},
+                {"name": "search", "description": "Search repository"},
+            ],
+        }
+
+    class _Event:
+        item = _Item()
+
+    events = _events_from_openai_agents_event(_Event())
+
+    assert len(events) == 1
+    assert events[0].type == "mcp_list_tools"
+    assert events[0].data["server_label"] == "repo"
+    assert events[0].data["tool_count"] == 2
+    assert events[0].data["tools"][0] == {"name": "read_file", "title": "Read file"}

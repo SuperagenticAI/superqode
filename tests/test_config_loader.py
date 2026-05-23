@@ -11,3 +11,14 @@ def test_default_openai_recommendations_and_aliases():
 
     assert openai.recommended_models[:3] == ["gpt-5.4", "gpt-5.4-pro", "gpt-5.3-codex"]
     assert config.model_aliases["latest-gpt"] == "gpt-5.4"
+
+
+def test_default_google_recommendations_and_aliases():
+    """Google BYOK defaults should track current models.dev Gemini IDs."""
+    config = create_default_config()
+
+    google = config.providers["google"]
+
+    assert google.recommended_models[:2] == ["gemini-3.1-pro-preview", "gemini-flash-latest"]
+    assert config.model_aliases["latest-gemini"] == "gemini-3.1-pro-preview"
+    assert config.model_aliases["latest-gemini-flash"] == "gemini-flash-latest"

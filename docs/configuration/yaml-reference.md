@@ -159,8 +159,8 @@ providers:
   google:
     api_key_env: GOOGLE_API_KEY
     recommended_models:
-      - gemini-2.5-pro
-      - gemini-2.5-flash
+      - gemini-3.1-pro-preview
+      - gemini-flash-latest
 
   deepseek:
     api_key_env: DEEPSEEK_API_KEY

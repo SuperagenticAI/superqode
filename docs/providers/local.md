@@ -19,17 +19,19 @@ Local providers offer:
 
 | Provider | Best For | Setup Complexity |
 |----------|----------|------------------|
-| **DS4** | Local DeepSeek V4 Flash, coding, long-context work | Medium |
+| **DS4** | DeepSeek V4 Flash, coding agents, long-context work | Medium |
 | **Ollama** | Easy setup, many models | Easy |
 | **LM Studio** | GUI interface, beginners | Easy |
-| **MLX** | Apple Silicon, performance | Medium |
+| **MLX** | General Apple Silicon model serving | Medium |
 | **vLLM** | Production, high throughput | Advanced |
 
 ---
 
 ## DS4 / DwarfStar 4
 
-DS4 runs DeepSeek V4 Flash locally and exposes OpenAI-compatible endpoints. SuperQode treats it as a local provider named `ds4`, so it can be used from the CLI, TUI, provider doctor, and model recommendation flow.
+DS4 runs DeepSeek V4 Flash locally and exposes OpenAI-compatible, Responses, and Anthropic-style endpoints. SuperQode treats it as a local provider named `ds4`, so it can be used from the CLI, TUI, provider doctor, and model recommendation flow.
+
+Use DS4 instead of MLX when your target model is DeepSeek V4 Flash. MLX is a good general Apple Silicon runner; DS4 is a purpose-built DeepSeek V4 Flash engine with DS4-specific prompt rendering, tool-call handling, long-context behavior, and disk KV cache support.
 
 ### Prerequisites
 
@@ -45,6 +47,12 @@ From the directory that contains `ds4-server` and the model file:
 
 ```bash
 ./ds4-server --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192
+```
+
+If you launch the server from another directory, pass the DS4 checkout path so runtime files resolve correctly:
+
+```bash
+./ds4-server --chdir /path/to/ds4 --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192
 ```
 
 By default, SuperQode expects DS4 at:
@@ -74,6 +82,13 @@ superqode doctor
 
 ```bash
 superqode -p --provider ds4 --model deepseek-v4-flash "summarize this repository"
+```
+
+For a harness run, use the DS4 example or template:
+
+```bash
+superqode harness run --spec examples/harnesses/ds4.yaml --prompt "review this repository"
+superqode harness init my-ds4 --template ds4-fast-local
 ```
 
 Use `deepseek-chat` when you want the DS4 non-thinking/direct alias:
@@ -106,6 +121,7 @@ Direct model selection is still supported:
 
 - DS4 is local, so no API key is required.
 - SuperQode supplies a placeholder OpenAI API key for OpenAI-compatible local clients that require one.
+- SuperQode uses DS4's Anthropic-style `/v1/messages` path for direct local runs so tool and thinking blocks stay in the shape DS4 expects.
 - DS4 uses a smaller DS4-specific tool profile and disables parallel tool execution by default.
 - DS4 uses direct tool gating by default: SuperQode sends tools for repo, file, test, command, and code-change requests, but skips tools for ordinary questions and standalone code-generation prompts. This reduces unnecessary agent iterations.
 - `deepseek-v4-flash` is the recommended default for coding and long-context local work.
@@ -639,9 +655,10 @@ mlx_lm.download mlx-community/Qwen2.5-Coder-3B-4bit
 
 | Provider | Setup | Speed | GUI | Best For |
 |----------|-------|-------|-----|----------|
+| DS4 | Medium | Fast | No | DeepSeek V4 Flash coding and long context |
 | Ollama | Easy | Fast | No | General use |
 | LM Studio | Easy | Medium | Yes | Beginners |
-| MLX | Medium | Fast | No | Apple Silicon |
+| MLX | Medium | Fast | No | General Apple Silicon models |
 | vLLM | Advanced | Very Fast | No | Production |
 | SGLang | Medium | Very Fast | No | Structured generation |
 | TGI | Advanced | Very Fast | No | Multi-GPU production |

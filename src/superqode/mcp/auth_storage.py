@@ -26,6 +26,7 @@ from typing import Any, Dict, Optional, Protocol
 from .oauth import OAuthTokens
 
 logger = logging.getLogger(__name__)
+_KEYRING_AVAILABLE: bool | None = None
 
 
 @dataclass
@@ -109,7 +110,7 @@ class MCPAuthStorage:
     DEFAULT_DIR = Path.home() / ".superqode" / "mcp-auth"
 
     def __init__(self, storage_dir: Optional[Path] = None):
-        self.storage_dir = storage_dir or self.DEFAULT_DIR
+        self.storage_dir = storage_dir or (Path.home() / ".superqode" / "mcp-auth")
         self._ensure_storage_dir()
 
     def _ensure_storage_dir(self) -> None:
@@ -397,14 +398,28 @@ class TokenStorage(Protocol):
 def _has_keyring() -> bool:
     """True if the ``keyring`` package is importable AND has a usable
     backend (some envs install the lib but no daemon)."""
+    global _KEYRING_AVAILABLE
+    if _KEYRING_AVAILABLE is not None:
+        return _KEYRING_AVAILABLE
     try:
         import keyring  # type: ignore
 
         # ``get_keyring()`` raises on environments where no backend is
         # available rather than returning None — guard with broad except.
         keyring.get_keyring()
-        return True
+        service = f"superqode-mcp-probe-{os.getpid()}"
+        identity = "probe"
+        keyring.set_password(service, identity, "ok")
+        try:
+            _KEYRING_AVAILABLE = keyring.get_password(service, identity) == "ok"
+        finally:
+            try:
+                keyring.delete_password(service, identity)
+            except Exception:
+                pass
+        return bool(_KEYRING_AVAILABLE)
     except Exception:
+        _KEYRING_AVAILABLE = False
         return False
 
 

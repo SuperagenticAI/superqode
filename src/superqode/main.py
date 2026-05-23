@@ -1052,7 +1052,9 @@ def harness_init(name, template, output, force):
 
 @harness.command("validate")
 @click.argument("spec_arg", required=False, type=click.Path(exists=True, path_type=Path))
-@click.option("--spec", "spec_option", type=click.Path(exists=True, path_type=Path), help="Harness spec file")
+@click.option(
+    "--spec", "spec_option", type=click.Path(exists=True, path_type=Path), help="Harness spec file"
+)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 @click.option("--schema", "schema_output", is_flag=True, help="Emit HarnessSpec JSON Schema")
 def harness_validate(spec_arg, spec_option, json_output, schema_output):
@@ -1066,7 +1068,9 @@ def harness_validate(spec_arg, spec_option, json_output, schema_output):
     if spec_path is None:
         raise click.ClickException("Missing harness spec. Pass --spec <path>.")
     if spec_option is not None and spec_arg is not None and spec_option != spec_arg:
-        raise click.ClickException("Pass the harness spec either as --spec or positional path, not both.")
+        raise click.ClickException(
+            "Pass the harness spec either as --spec or positional path, not both."
+        )
 
     try:
         spec = load_harness_spec(spec_path)
@@ -1238,9 +1242,7 @@ def harness_diff(left, right, json_output):
         click.echo("No differences.")
         return
     for change in changes:
-        click.echo(
-            f"{change['path']}: {change.get('left')!r} -> {change.get('right')!r}"
-        )
+        click.echo(f"{change['path']}: {change.get('left')!r} -> {change.get('right')!r}")
 
 
 @harness.command("doctor")
@@ -1702,7 +1704,9 @@ def _harness_model_registry_check(spec) -> dict:
         for model in (*provider_def.example_models, *provider_def.free_models)
     }
     unknown = [
-        model for model, normalized_model in zip(models, normalized) if normalized_model not in known
+        model
+        for model, normalized_model in zip(models, normalized)
+        if normalized_model not in known
     ]
     return {
         "status": "warning" if unknown else "ok",
@@ -2552,25 +2556,30 @@ from superqode.commands.serve import serve as serve_cmd
 @click.argument("provider_id")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def providers_models(provider_id, json_output):
-    """List example models for a provider."""
+    """List current models for a provider."""
     from superqode.providers.registry import PROVIDERS
+    from superqode.providers.models import get_models_for_provider
 
     provider_def = PROVIDERS.get(provider_id)
     if not provider_def:
         raise click.ClickException(f"Provider not found: {provider_id}")
 
+    models = list(get_models_for_provider(provider_id).keys())
+    if not models:
+        models = list(provider_def.example_models)
+
     payload = {
         "provider": provider_id,
         "name": provider_def.name,
-        "models": provider_def.example_models,
-        "recommended_models": getattr(provider_def, "recommended_models", []),
+        "models": models,
+        "recommended_models": models,
         "env_vars": provider_def.env_vars,
     }
     if json_output:
         click.echo(json.dumps(payload, indent=2))
         return
     click.echo(f"{provider_def.name} ({provider_id})")
-    for model in provider_def.example_models:
+    for model in models:
         click.echo(f"  {model}")
 
 
@@ -2583,6 +2592,7 @@ def providers_doctor(provider_id, live, json_output):
     import asyncio
     import os
     from superqode.providers.registry import PROVIDERS, ProviderCategory
+    from superqode.providers.models import get_models_for_provider
 
     selected = {provider_id: PROVIDERS[provider_id]} if provider_id else PROVIDERS
     if provider_id and provider_id not in PROVIDERS:
@@ -2595,6 +2605,9 @@ def providers_doctor(provider_id, live, json_output):
     results = []
     for pid, provider_def in selected.items():
         configured_vars = [var for var in provider_def.env_vars if os.environ.get(var)]
+        current_models = list(get_models_for_provider(pid))
+        if not current_models:
+            current_models = provider_def.example_models[:5]
         item = {
             "provider": pid,
             "name": provider_def.name,
@@ -2602,7 +2615,7 @@ def providers_doctor(provider_id, live, json_output):
             "configured_env_vars": configured_vars,
             "required_env_vars": provider_def.env_vars,
             "base_url_env": provider_def.base_url_env,
-            "example_models": provider_def.example_models[:5],
+            "example_models": current_models[:5],
             "docs_url": provider_def.docs_url,
         }
         if live:

@@ -5,6 +5,24 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.27] - 2026-05-23
+
+### Added
+
+- SuperTUI slash-command improvements for runtime, harness, status, usage, sessions, MCP, and approval workflows.
+- OpenAI Agents runtime event mapping for richer tool-search, MCP, and result graph events.
+
+### Changed
+
+- BYOK provider model lists now prefer current models.dev data and replace stale built-in model lists when live data is available.
+- Google BYOK defaults now expose only the current Gemini Pro and Flash choices: `gemini-3.1-pro-preview` and `gemini-flash-latest`.
+- DS4 documentation now positions DS4 as the preferred local DeepSeek V4 Flash path over generic MLX serving.
+
+### Fixed
+
+- MCP auth storage now respects runtime `HOME` changes and skips unusable keyring backends cleanly.
+- CI formatting drift in harness, main CLI, TUI, and harness spec tests.
+
 ## [0.1.26] - 2026-05-20
 
 ### Added

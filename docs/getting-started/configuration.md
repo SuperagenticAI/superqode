@@ -65,16 +65,15 @@ superqode:
 default:
   mode: byok
   provider: google
-  model: gemini-3-pro
+  model: gemini-3.1-pro-preview
 
 # Provider-specific settings
 providers:
   google:
     api_key_env: GOOGLE_API_KEY
     recommended_models:
-      - gemini-3-pro
-      - gemini-3
-      - gemini-2.5-flash
+      - gemini-3.1-pro-preview
+      - gemini-flash-latest
 
   openai:
     api_key_env: OPENAI_API_KEY
@@ -132,7 +131,7 @@ team:
           description: "API contract and security testing"
           mode: byok
           provider: google
-          model: gemini-3-pro
+          model: gemini-3.1-pro-preview
           enabled: true
           job_description: |
             Test API endpoints for schema compliance,
@@ -258,8 +257,8 @@ providers:
     api_key_env: GOOGLE_API_KEY
     description: "Gemini models by Google"
     recommended_models:
-      - gemini-2.5-pro
-      - gemini-2.5-flash
+      - gemini-3.1-pro-preview
+      - gemini-flash-latest
 
   # Deepseek
   deepseek:
@@ -276,7 +275,7 @@ providers:
     recommended_models:
       - anthropic/claude-sonnet-4
       - openai/gpt-4o
-      - google/gemini-2.5-pro
+      - google/gemini-3.1-pro-preview
 ```
 
 ### Local Providers

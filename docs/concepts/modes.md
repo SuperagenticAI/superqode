@@ -175,10 +175,10 @@ BYOK mode allows you to use cloud AI providers by providing your own API keys. S
 export GOOGLE_API_KEY=your-api-key-here
 
 # Connect via TUI
-:connect byok google gemini-3-pro
+:connect byok google gemini-3.1-pro-preview
 
 # Connect via CLI
-superqode connect byok google gemini-3-pro
+superqode connect byok google gemini-3.1-pro-preview
 ```
 
 ### Configuration
@@ -188,15 +188,14 @@ superqode connect byok google gemini-3-pro
 default:
   mode: byok
   provider: google
-  model: gemini-3-pro
+  model: gemini-3.1-pro-preview
 
 providers:
   google:
     api_key_env: GOOGLE_API_KEY
     recommended_models:
-      - gemini-3-pro
-      - gemini-3
-      - gemini-2.5-flash
+      - gemini-3.1-pro-preview
+      - gemini-flash-latest
 ```
 
 ## Local Mode
@@ -353,7 +352,7 @@ team:
         api_tester:
           mode: byok  # Cloud model for API analysis
           provider: google
-          model: gemini-3-pro
+          model: gemini-3.1-pro-preview
 
         unit_tester:
           mode: local  # Local model for cost-effective testing

@@ -115,7 +115,7 @@ superqode:
 default:
   mode: byok
   provider: google
-  model: gemini-3-pro
+  model: gemini-3.1-pro-preview
 ```
 
 ---
@@ -142,16 +142,15 @@ superqode:
 default:
   mode: byok
   provider: google
-  model: gemini-3-pro
+  model: gemini-3.1-pro-preview
 
 # Provider settings
 providers:
   google:
     api_key_env: GOOGLE_API_KEY
     recommended_models:
-      - gemini-3-pro
-      - gemini-3
-      - gemini-2.5-flash
+      - gemini-3.1-pro-preview
+      - gemini-flash-latest
 
   ollama:
     base_url: http://localhost:11434
@@ -221,7 +220,7 @@ default:
   # Or for BYOK:
   # mode: byok
   # provider: google  # Provider ID
-  # model: gemini-3-pro  # Model ID
+  # model: gemini-3.1-pro-preview  # Model ID
 ```
 
 ### providers Section
@@ -233,9 +232,8 @@ providers:
   google:
     api_key_env: GOOGLE_API_KEY
     recommended_models:
-      - gemini-3-pro
-      - gemini-3
-      - gemini-2.5-flash
+      - gemini-3.1-pro-preview
+      - gemini-flash-latest
 ```
 
 ### qe Section
@@ -349,7 +347,7 @@ team:
         api_tester:
           mode: byok
           provider: google
-          model: gemini-3-pro
+          model: gemini-3.1-pro-preview
         unit_tester:
           mode: local
           provider: ollama
