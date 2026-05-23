@@ -162,10 +162,11 @@ class SuperQodeAgent(UnifiedAgent):
             session_history_limit = int(os.getenv("DS4_SESSION_HISTORY_LIMIT", "8"))
             parallel_tools = False
         else:
-            max_iterations = (
-                8 if provider_def and provider_def.category == ProviderCategory.LOCAL else 12
+            default_max = (
+                30 if provider_def and provider_def.category == ProviderCategory.LOCAL else 50
             )
-            session_history_limit = 20
+            max_iterations = int(os.getenv("SUPERQODE_MAX_ITERATIONS", str(default_max)))
+            session_history_limit = int(os.getenv("SUPERQODE_SESSION_HISTORY_LIMIT", "20"))
             parallel_tools = True
 
         # Create agent config with merged job description

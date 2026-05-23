@@ -235,6 +235,7 @@ class ToolRegistry:
         from .batch_tool import BatchTool
         from .compact_tool import CompactTool
         from .monty_tool import MontyPythonReplTool, is_monty_available
+        from .web_tools import WebSearchTool, WebFetchTool
 
         registry = cls()
 
@@ -259,6 +260,9 @@ class ToolRegistry:
 
         if is_monty_available():
             registry.register(MontyPythonReplTool())
+
+        registry.register(WebSearchTool())
+        registry.register(WebFetchTool())
 
         registry.register(QuestionTool())
         registry.register(ConfirmTool())

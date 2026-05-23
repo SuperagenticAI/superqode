@@ -202,10 +202,11 @@ class PureMode:
             os.environ["DS4_KV_DISK_DIR"] = kv_disk_dir
             os.environ["DS4_KV_DISK_SPACE_MB"] = str(kv_disk_space)
         else:
-            max_iterations = (
-                8 if provider_def and provider_def.category == ProviderCategory.LOCAL else 12
+            default_max = (
+                30 if provider_def and provider_def.category == ProviderCategory.LOCAL else 50
             )
-            session_history_limit = 20
+            max_iterations = int(os.getenv("SUPERQODE_MAX_ITERATIONS", str(default_max)))
+            session_history_limit = int(os.getenv("SUPERQODE_SESSION_HISTORY_LIMIT", "20"))
             parallel_tools = True
 
         # Create agent loop with job description if provided

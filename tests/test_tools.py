@@ -70,7 +70,8 @@ class TestToolRegistry:
         assert "read_file" in coding_names
         assert "patch" in coding_names
         assert "ask_user" in coding_names
-        assert "web_search" not in coding_names
+        assert "web_fetch" in coding_names
+        assert "web_search" in coding_names
         assert "agent" not in coding_names
         assert "lsp" not in coding_names
         assert len(coding.to_openai_format()) < len(full.to_openai_format())
@@ -81,7 +82,7 @@ class TestToolRegistry:
         names = {tool.name for tool in registry.list()}
 
         assert "patch" in names
-        assert "web_fetch" not in names
+        assert "web_fetch" in names
 
     def test_ds4_profile_is_smaller_and_avoids_parallel_meta_tools(self):
         registry = ToolRegistry.for_profile("ds4")

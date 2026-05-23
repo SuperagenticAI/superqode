@@ -30,4 +30,4 @@ __all__ = [
     "sidebar",
 ]
 
-__version__ = "0.1.27"
+__version__ = "0.1.28"

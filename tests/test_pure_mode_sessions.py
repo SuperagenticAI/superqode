@@ -27,7 +27,7 @@ def test_pure_mode_uses_coding_tool_profile_by_default(monkeypatch):
 
     assert status["tool_profile"] == "coding"
     assert "patch" in status["tools"]
-    assert "web_search" not in status["tools"]
+    assert "web_fetch" in status["tools"]
 
 
 def test_pure_mode_switches_to_ds4_profile_on_connect(tmp_path, monkeypatch):
