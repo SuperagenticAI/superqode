@@ -19,7 +19,7 @@ Tool Categories:
 """
 
 from .base import Tool, ToolResult, ToolContext, ToolRegistry
-from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
+from .file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
 from .edit_tools import EditFileTool, InsertTextTool, PatchTool, MultiEditTool
 from .todo_tools import TodoWriteTool, TodoReadTool
 from .batch_tool import BatchTool
@@ -52,6 +52,7 @@ __all__ = [
     # File tools
     "ReadFileTool",
     "WriteFileTool",
+    "CreateFileTool",
     "ListDirectoryTool",
     # Edit tools
     "EditFileTool",

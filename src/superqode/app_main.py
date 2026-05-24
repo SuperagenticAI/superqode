@@ -17,6 +17,7 @@ Note: This module imports from superqode.app/ package for modular components.
 from __future__ import annotations
 
 import asyncio
+import asyncio.base_subprocess as _asyncio_base_subprocess
 import os
 import subprocess
 import shutil
@@ -210,6 +211,23 @@ from superqode.safety import (
 
 # Constants, models, CSS, widgets are imported from superqode.app package
 # See imports above for what's available
+
+
+# Silence the "Event loop is closed" RuntimeError raised by
+# BaseSubprocessTransport.__del__ when an asyncio subprocess transport is
+# garbage-collected after its loop has been closed on app shutdown
+# (https://bugs.python.org/issue39232).
+_original_subprocess_transport_del = _asyncio_base_subprocess.BaseSubprocessTransport.__del__
+
+
+def _safe_subprocess_transport_del(self, *args, **kwargs):
+    try:
+        _original_subprocess_transport_del(self, *args, **kwargs)
+    except (RuntimeError, AttributeError):
+        pass
+
+
+_asyncio_base_subprocess.BaseSubprocessTransport.__del__ = _safe_subprocess_transport_del
 
 
 class _AsyncLoopThread:
@@ -1824,6 +1842,17 @@ class SuperQodeApp(App):
 
     def on_key(self, event: events.Key) -> None:
         """Handle key events globally - intercept arrow keys during selection modes."""
+        # Inline permission prompt: while a permission decision is pending,
+        # y/n/a resolve it and escape cancels. Intercepted before the Input
+        # widget so the keystroke never lands in the prompt buffer.
+        if getattr(self, "_permission_pending", False):
+            if event.key in ("y", "n", "a", "escape"):
+                event.stop()
+                mapping = {"y": "y", "n": "n", "a": "a", "escape": "n"}
+                self._handle_permission_input(mapping[event.key])
+                self.set_timer(0.05, self._ensure_input_focus)
+                return
+
         # During selection modes, intercept arrow keys and Enter before Input widget gets them
         if event.key in ("up", "down", "enter"):
             handled = False
@@ -9610,7 +9639,11 @@ team:
         return True
 
     def _show_permission_prompt(self, tool_name: str, tool_input: dict, log: ConversationLog):
-        """Show interactive permission prompt for ASK mode."""
+        """Render an inline permission request in the conversation log.
+
+        Keys y / n / a / Esc are handled in App.on_key while
+        ``self._permission_pending`` is True (callers set this before invoking).
+        """
         # Store the pending tool info for later use when approved
         self._pending_tool_name = tool_name
         self._pending_tool_input = tool_input
@@ -9619,14 +9652,43 @@ team:
         reason = ""
         file_path = tool_input.get("filePath", tool_input.get("path", tool_input.get("file", "")))
         if file_path and not os.path.abspath(file_path).startswith(os.getcwd()):
-            reason = "Outside project directory"
+            reason = "outside project"
         elif tool_name.lower() in ("web", "fetch", "http", "curl", "wget", "browser"):
-            reason = "External network access"
+            reason = "external network"
         elif tool_name.lower() in ("bash", "shell", "terminal"):
-            reason = "System command"
+            reason = "system command"
 
-        # Show modal permission dialog instead of inline prompt
-        self._show_permission_modal(tool_name, tool_input, reason)
+        prompt = Text()
+        prompt.append("  ⚠ ", style=f"bold {THEME['warning']}")
+        prompt.append("approve ", style=THEME["text"])
+        prompt.append(tool_name, style=f"bold {THEME['text']}")
+        if reason:
+            prompt.append("  •  ", style=THEME["muted"])
+            prompt.append(reason, style=THEME["muted"])
+        prompt.append("\n")
+
+        # One concise argument line for context.
+        if tool_input:
+            first_key, first_val = next(iter(tool_input.items()))
+            val_str = str(first_val)
+            if len(val_str) > 120:
+                val_str = val_str[:117] + "…"
+            prompt.append("    ")
+            prompt.append(f"{first_key}: ", style=THEME["muted"])
+            prompt.append(val_str, style=THEME["text"])
+            prompt.append("\n")
+
+        prompt.append("    ")
+        prompt.append("[y]", style=f"bold {THEME['success']}")
+        prompt.append("es  ", style=THEME["muted"])
+        prompt.append("[n]", style=f"bold {THEME['error']}")
+        prompt.append("o  ", style=THEME["muted"])
+        prompt.append("[a]", style=f"bold {THEME['cyan']}")
+        prompt.append("lways  ", style=THEME["muted"])
+        prompt.append("[esc]", style=f"bold {THEME['muted']}")
+        prompt.append(" cancel\n", style=THEME["muted"])
+
+        log.write(prompt)
 
     def _show_permission_modal(self, tool_name: str, tool_input: dict, reason: str):
         """Show a modal permission dialog for ASK mode."""
@@ -10254,37 +10316,14 @@ team:
                 self._display_plan(data, log)
                 return True
 
-            # Handle generic success/result dicts
-            if isinstance(data, dict) and ("success" in data or "result" in data or "ok" in data):
-                self._display_success_result(data, tool_name, log)
-                return True
-
-            # For other JSON, show formatted
-            if isinstance(data, list):
-                if len(data) <= 10:
-                    self._display_generic_list(data, tool_name, log)
-                else:
-                    # Truncate large lists
-                    summary = f"[{len(data)} items] " + str(data[:3])[:-1] + ", ...]"
-                    self._call_ui(log.add_tool_call, tool_name, "success", "", "", summary)
-                return True
-            elif isinstance(data, dict):
-                if len(data) <= 6:
-                    self._display_generic_dict(data, tool_name, log)
-                else:
-                    # Truncate large dicts
-                    summary = f"{{... {len(data)} keys ...}}"
-                    self._call_ui(log.add_tool_call, tool_name, "success", "", "", summary)
-                return True
+            # Generic success/result dicts and ordinary JSON list/dict payloads now
+            # fall through to add_tool_call, which renders a single compact line with
+            # a one-line summary - much less noisy than the per-field panel.
+            # (Errors, todos, plans, and file search results above still take the
+            # custom paths since their structure is genuinely useful to see.)
 
         except (json.JSONDecodeError, TypeError, KeyError):
             pass
-
-        # If we got here and it's a long string that looks like data, truncate it
-        if len(output_str) > 500:
-            summary = output_str[:500] + "... (truncated)"
-            self._call_ui(log.add_tool_call, tool_name, "success", "", "", summary)
-            return True
 
         return False
 
@@ -10683,14 +10722,12 @@ team:
         if "extended thinking" in text_lower or text_lower.startswith("[extended thinking]"):
             return False
 
-        # Keep tool-related status messages (formatted by _format_tool_message_rich)
+        # Keep tool-related status messages (formatted by _format_tool_message_rich).
+        # These now lead with a minimal icon glyph; recognize them directly.
+        if text_stripped[:1] in ("↳", "↲", "⟳", "▸", "⌕", "⋮", "◎", "✕", "•"):
+            return True
+        # Legacy label patterns kept as a belt-and-braces fallback.
         tool_status_patterns = [
-            "reading:",
-            "modifying:",
-            "running:",
-            "searching:",
-            "listing:",
-            "creating:",
             "tool completed",
             "tool failed",
         ]
@@ -11387,88 +11424,85 @@ team:
         self._show_final_response(response_text, name, duration, log)
 
     def _format_tool_message_rich(self, tool_name: str, tool_input: dict) -> str:
-        """Format a tool use message with SuperQode quantum-inspired icons.
+        """Format a tool use message as a single compact line.
 
-        Uses minimal icons: ↳ (read), ↲ (write), ▸ (shell), ⌕ (search), ⋮ (list)
+        Style: `<icon> <target>` - icon conveys the action, target shows what
+        is being acted on. Paths are made relative to cwd. No "Reading:" /
+        "Modifying:" labels because the icon already says so.
         """
         tool_lower = tool_name.lower()
 
-        # SuperQode icon mapping (minimal, no emoji)
         tool_icons = {
-            "read": "↳",  # Arrow in - reading
-            "write": "↲",  # Arrow out - writing
-            "edit": "⟳",  # Rotate - editing
-            "patch": "⟳",  # Rotate - patching
-            "bash": "▸",  # Play - shell
+            "read": "↳",
+            "write": "↲",
+            "edit": "⟳",
+            "patch": "⟳",
+            "bash": "▸",
             "shell": "▸",
             "terminal": "▸",
             "exec": "▸",
-            "search": "⌕",  # Magnifier - search
+            "search": "⌕",
             "grep": "⌕",
             "find": "⌕",
-            "glob": "⋮",  # Vertical dots - glob
+            "glob": "⋮",
             "list": "⋮",
             "ls": "⋮",
             "tree": "⋮",
-            "git": "◎",  # Target - git
+            "git": "◎",
             "fetch": "◎",
             "web": "◎",
             "http": "◎",
-            "create": "↲",  # Arrow out - creating
+            "create": "↲",
             "mkdir": "⋮",
-            "delete": "✕",  # X - delete
+            "delete": "✕",
             "rm": "✕",
         }
-
-        # Find matching icon
-        icon = "•"  # Default bullet
+        icon = "•"
         for key, ic in tool_icons.items():
             if key in tool_lower:
                 icon = ic
                 break
 
-        # Format based on tool type - NO TRUNCATION, show full content
-        file_path = tool_input.get("filePath", tool_input.get("path", tool_input.get("file", "")))
+        def _relpath(p: str) -> str:
+            if not p:
+                return p
+            try:
+                if os.path.isabs(p):
+                    rel = os.path.relpath(p, os.getcwd())
+                    if not rel.startswith(".."):
+                        return rel
+            except Exception:
+                pass
+            return p
 
-        if tool_lower == "read" and file_path:
-            # Show full path, no truncation
-            return f"{icon} Reading: {file_path}"
-        elif tool_lower in ("write", "edit", "patch") and file_path:
-            # Show full path, no truncation
-            return f"{icon} Modifying: {file_path}"
-        elif tool_lower in ("bash", "shell", "terminal", "exec"):
+        file_path = _relpath(
+            tool_input.get("filePath", tool_input.get("path", tool_input.get("file", "")))
+        )
+
+        if tool_lower in ("read", "write", "edit", "patch", "create") and file_path:
+            return f"{icon} {file_path}"
+        if tool_lower in ("bash", "shell", "terminal", "exec"):
             cmd = tool_input.get("command", "")
-            # Show full command, no truncation
-            return f"{icon} Running: {cmd}"
-        elif tool_lower in ("search", "grep", "find"):
+            return f"{icon} {cmd}"
+        if tool_lower in ("search", "grep", "find"):
             query = tool_input.get("pattern", tool_input.get("query", tool_input.get("search", "")))
-            # Show full query, no truncation
-            return f"{icon} Searching: {query}"
-        elif tool_lower in ("list", "ls", "glob"):
-            path = tool_input.get("path", tool_input.get("directory", "."))
-            return f"{icon} Listing: {path}"
-        elif tool_lower == "create" and file_path:
-            # Show full path, no truncation
-            return f"{icon} Creating: {file_path}"
-        elif tool_lower == "todo_write":
-            # Special handling for todo_write - show clean summary instead of JSON
+            return f"{icon} {query}"
+        if tool_lower in ("list", "ls", "glob"):
+            path = _relpath(tool_input.get("path", tool_input.get("directory", ".")))
+            return f"{icon} {path}"
+        if tool_lower == "todo_write":
             todos = tool_input.get("todos", [])
-            todo_count = len(todos) if todos else 0
-            return f"{icon} Creating todo list with {todo_count} items"
-        else:
-            # Generic format - show full tool_input as JSON string, no truncation
-            if tool_input:
-                import json
+            return f"{icon} todo list ({len(todos)} items)"
 
-                try:
-                    # Try to format as JSON for readability
-                    tool_input_str = json.dumps(tool_input, indent=None, ensure_ascii=False)
-                except Exception:
-                    # Fallback to string representation if not JSON-serializable
-                    tool_input_str = str(tool_input)
-                # Show full JSON/string, no truncation
-                return f"{icon} {tool_name}: {tool_input_str}"
-            return f"{icon} {tool_name}"
+        # Generic: show a short hint of the first argument value, not full JSON.
+        if tool_input:
+            first_key = next(iter(tool_input), None)
+            if first_key:
+                val_str = str(tool_input[first_key])
+                if len(val_str) > 80:
+                    val_str = val_str[:77] + "…"
+                return f"{icon} {tool_name} {val_str}"
+        return f"{icon} {tool_name}"
 
     def _show_final_outcome(
         self, response_text: str, name: str, summary: dict, log: ConversationLog
@@ -11538,12 +11572,11 @@ team:
                 self._render_plain_text(clean_text, log)
             log.write(Text("\n"))
 
-        # File Changes Section with visual indicators and inline diffs.
-        # Mirroring fast-agent's apply_patch preview: show the actual diff inline
-        # by default after edits/recommendations, not hidden behind a verbose flag.
-        # `:work minimal` or SUPERQODE_LOG_VERBOSITY=minimal still suppresses it.
-        minimal_changes = getattr(log, "tool_output_mode", "normal") == "minimal"
-        if files_modified and not minimal_changes:
+        # File changes are summarized in normal mode and expanded in verbose mode.
+        # This keeps the transcript compact while preserving the fast-agent-style
+        # inline preview when the user opts into detailed work output.
+        change_mode = getattr(log, "tool_output_mode", "normal")
+        if files_modified and change_mode != "minimal":
             from superqode.widgets.response_changes import (
                 render_file_changes_section,
                 render_inline_file_diffs,
@@ -11554,15 +11587,25 @@ team:
             changes_section = render_file_changes_section(
                 files_modified, file_diffs, max_files=10
             )
-            inline_diffs = render_inline_file_diffs(
-                files_modified, file_diffs, max_files=10
-            )
 
             console = Console(file=StringIO(), width=120, legacy_windows=False)
             console.print(changes_section)
-            console.print(inline_diffs)
+            if change_mode == "verbose":
+                inline_diffs = render_inline_file_diffs(
+                    files_modified, file_diffs, max_files=10
+                )
+                console.print(inline_diffs)
             log.write(console.file.getvalue())
-        elif files_modified and minimal_changes:
+
+            if change_mode != "verbose":
+                compact = Text()
+                compact.append("  Diffs collapsed. Use ", style=SQ_COLORS.text_muted)
+                compact.append(":work verbose", style=f"bold {SQ_COLORS.info}")
+                compact.append(" or ", style=SQ_COLORS.text_muted)
+                compact.append(":diff", style=f"bold {SQ_COLORS.info}")
+                compact.append(" to inspect changes.\n\n", style=SQ_COLORS.text_muted)
+                log.write(compact)
+        elif files_modified and change_mode == "minimal":
             compact = Text()
             compact.append("  File details hidden (minimal mode). Use ", style=SQ_COLORS.text_muted)
             compact.append(":work normal", style=f"bold {SQ_COLORS.info}")
@@ -11660,10 +11703,8 @@ team:
         t.append("\n", style="")
         log.write(t)
 
-        # Show inline diffs by default (fast-agent style). Only hide under
-        # explicit minimal mode.
-        minimal_changes = getattr(log, "tool_output_mode", "normal") == "minimal"
-        if files_modified and not minimal_changes:
+        change_mode = getattr(log, "tool_output_mode", "normal")
+        if files_modified and change_mode != "minimal":
             from rich.console import Console
             from io import StringIO
             from superqode.widgets.response_changes import render_inline_file_diffs
@@ -11671,15 +11712,25 @@ team:
             changes_section = render_file_changes_section(
                 files_modified, file_diffs, max_files=10
             )
-            inline_diffs = render_inline_file_diffs(
-                files_modified, file_diffs, max_files=10
-            )
 
             console = Console(file=StringIO(), width=120, legacy_windows=False)
             console.print(changes_section)
-            console.print(inline_diffs)
+            if change_mode == "verbose":
+                inline_diffs = render_inline_file_diffs(
+                    files_modified, file_diffs, max_files=10
+                )
+                console.print(inline_diffs)
             log.write(console.file.getvalue())
-        elif files_modified and minimal_changes:
+
+            if change_mode != "verbose":
+                compact = Text()
+                compact.append("  Diffs collapsed. Use ", style=SQ_COLORS.text_muted)
+                compact.append(":work verbose", style=f"bold {SQ_COLORS.info}")
+                compact.append(" or ", style=SQ_COLORS.text_muted)
+                compact.append(":diff", style=f"bold {SQ_COLORS.info}")
+                compact.append(" to inspect changes.\n", style=SQ_COLORS.text_muted)
+                log.write(compact)
+        elif files_modified and change_mode == "minimal":
             compact = Text()
             compact.append("  File details hidden (minimal mode). Use ", style=SQ_COLORS.text_muted)
             compact.append(":work normal", style=f"bold {SQ_COLORS.info}")

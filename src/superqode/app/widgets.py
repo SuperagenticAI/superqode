@@ -1420,9 +1420,18 @@ class ConversationLog(RichLog):
             and status == "success"
             and getattr(self, "tool_output_mode", "normal") != "minimal"
         ):
-            from superqode.widgets.response_changes import render_diff_text
+            if getattr(self, "tool_output_mode", "normal") == "verbose":
+                from superqode.widgets.response_changes import render_diff_text
 
-            self.write(render_diff_text(diff_text))
+                self.write(render_diff_text(diff_text))
+            else:
+                notice = Text()
+                notice.append("    diff collapsed. Use ", style=THEME["dim"])
+                notice.append(":work verbose", style=f"bold {THEME['cyan']}")
+                notice.append(" or ", style=THEME["dim"])
+                notice.append(":diff", style=f"bold {THEME['cyan']}")
+                notice.append(" to inspect changes.\n", style=THEME["dim"])
+                self.write(notice)
 
     def _format_tool_name(self, tool_name: str) -> str:
         """Make common tool names read like concise actions."""

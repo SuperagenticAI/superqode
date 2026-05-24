@@ -1232,6 +1232,8 @@ class AgentLoop:
         messages.extend(self._load_stored_messages())
 
         messages.append(AgentMessage(role="user", content=user_message))
+        if self._session_manager:
+            self._session_manager.add_user_message(user_message)
 
         iterations = 0
         tool_calls_made = 0
@@ -1418,6 +1420,8 @@ class AgentLoop:
                         tool_calls=tool_calls,
                     )
                 )
+                if self._session_manager:
+                    self._session_manager.add_assistant_message(full_content, tool_calls)
 
                 # Emit tool execution log
                 if self.on_thinking:
@@ -1442,6 +1446,8 @@ class AgentLoop:
                                 name=tool_name,
                             )
                         )
+                        if self._session_manager:
+                            self._session_manager.add_tool_result(tool_name, result.to_message())
                 else:
                     for tool_call in tool_calls:
                         tool_name = tool_call.get("function", {}).get("name", "")
@@ -1479,6 +1485,8 @@ class AgentLoop:
                                 name=tool_name,
                             )
                         )
+                        if self._session_manager:
+                            self._session_manager.add_tool_result(tool_name, result.to_message())
 
                 # Emit iteration complete log
                 if self.on_thinking:
@@ -1493,6 +1501,8 @@ class AgentLoop:
                 # the model should still provide a summary
                 if self.on_thinking:
                     await self.on_thinking("Response complete")
+                if self._session_manager and full_content.strip():
+                    self._session_manager.add_assistant_message(full_content)
                 if full_content:
                     # Content was already yielded during streaming
                     pass

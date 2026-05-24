@@ -220,72 +220,66 @@ def compute_diff(old_content: str, new_content: str, path: str = "file") -> File
 
 
 def render_diff_header(diff: FileDiff, console: Console) -> None:
-    """Render a beautiful diff header."""
-    # Determine icon and status
+    """Render a one-line diff header: filename + add/del counts."""
     if diff.is_new:
-        icon = DIFF_ICONS["new_file"]
-        status = "New File"
-        status_color = DIFF_COLORS["addition"]
+        tag = "new"
+        tag_color = DIFF_COLORS["addition"]
     elif diff.is_deleted:
-        icon = DIFF_ICONS["deleted_file"]
-        status = "Deleted"
-        status_color = DIFF_COLORS["deletion"]
+        tag = "deleted"
+        tag_color = DIFF_COLORS["deletion"]
     else:
-        icon = DIFF_ICONS["modified"]
-        status = "Modified"
-        status_color = "#f97316"
+        tag = None
+        tag_color = None
 
-    # Build header text
     header = Text()
-    header.append(f" {icon} ", style="bold")
-    header.append(diff.path, style="bold white")
-    header.append("  ", style="")
-    header.append(f"[{status}]", style=f"bold {status_color}")
-    header.append("  ", style="")
-    header.append(f"+{diff.additions}", style=f"bold {DIFF_COLORS['addition']}")
-    header.append(" / ", style="dim")
-    header.append(f"-{diff.deletions}", style=f"bold {DIFF_COLORS['deletion']}")
-
-    console.print(Panel(header, border_style=DIFF_COLORS["border"], box=ROUNDED, padding=(0, 1)))
+    header.append(diff.path, style="bold")
+    if tag:
+        header.append("  ")
+        header.append(tag, style=f"bold {tag_color}")
+    header.append("  ")
+    header.append(f"+{diff.additions}", style=DIFF_COLORS["addition"])
+    header.append(" ")
+    header.append(f"-{diff.deletions}", style=DIFF_COLORS["deletion"])
+    console.print(header)
 
 
 def render_diff_unified(diff: FileDiff, console: Console, context_lines: int = 3) -> None:
-    """Render diff in unified format."""
+    """Render diff in unified format: filename header, then `lineNo │ +/- content` rows."""
     render_diff_header(diff, console)
 
     if not diff.hunks:
-        console.print("  [dim]No changes[/dim]")
+        console.print(Text("  no changes", style="dim"))
         return
 
+    # Compute width for the line-number column from the largest line number across hunks.
+    max_line_no = 1
     for hunk in diff.hunks:
-        # Hunk separator
-        hunk_header = Text()
-        hunk_header.append(f" {DIFF_ICONS['hunk']} ", style="dim cyan")
-        hunk_header.append(
-            f"@@ -{hunk.old_start},{hunk.old_count} +{hunk.new_start},{hunk.new_count} @@",
-            style="dim cyan",
-        )
-        console.print(hunk_header)
+        for line in hunk.lines:
+            n = line.line_no_new or line.line_no_old or 0
+            if n > max_line_no:
+                max_line_no = n
+    no_width = max(3, len(str(max_line_no)))
 
-        # Render lines
+    for hunk_idx, hunk in enumerate(diff.hunks):
+        if hunk_idx > 0:
+            # Subtle separator between hunks - one blank line.
+            console.print()
+
         for line in hunk.lines:
             line_text = Text()
+            line_no = line.line_no_new if line.change_type != "-" else line.line_no_old
+            line_no_str = f"{line_no:>{no_width}}" if line_no else " " * no_width
+            line_text.append(line_no_str + " ", style=DIFF_COLORS["line_no"])
 
-            # Line numbers
-            old_no = f"{line.line_no_old:>4}" if line.line_no_old else "    "
-            new_no = f"{line.line_no_new:>4}" if line.line_no_new else "    "
-            line_text.append(f" {old_no} {new_no} ", style=DIFF_COLORS["line_no"])
-
-            # Change indicator and content
             if line.change_type == "+":
-                line_text.append("│", style=DIFF_COLORS["addition"])
-                line_text.append(f" {line.content}", style=f"on {DIFF_COLORS['addition_bg']}")
+                line_text.append("+ ", style=f"bold {DIFF_COLORS['addition']}")
+                line_text.append(line.content, style=DIFF_COLORS["addition"])
             elif line.change_type == "-":
-                line_text.append("│", style=DIFF_COLORS["deletion"])
-                line_text.append(f" {line.content}", style=f"on {DIFF_COLORS['deletion_bg']}")
+                line_text.append("- ", style=f"bold {DIFF_COLORS['deletion']}")
+                line_text.append(line.content, style=DIFF_COLORS["deletion"])
             else:
-                line_text.append("│", style="dim")
-                line_text.append(f" {line.content}", style="")
+                line_text.append("  ")
+                line_text.append(line.content, style="dim")
 
             console.print(line_text)
 
@@ -367,26 +361,19 @@ def render_diff_split(diff: FileDiff, console: Console, width: int = 80) -> None
 
 
 def render_diff_compact(diff: FileDiff, console: Console) -> None:
-    """Render a compact summary of changes."""
-    # Determine icon and status
-    if diff.is_new:
-        icon = DIFF_ICONS["new_file"]
-        status_style = f"bold {DIFF_COLORS['addition']}"
-    elif diff.is_deleted:
-        icon = DIFF_ICONS["deleted_file"]
-        status_style = f"bold {DIFF_COLORS['deletion']}"
-    else:
-        icon = DIFF_ICONS["modified"]
-        status_style = "bold #f97316"
-
+    """Render a one-line summary: `path  +N -N` (with `new`/`deleted` tag if applicable)."""
     line = Text()
-    line.append(f"  {icon} ", style="")
-    line.append(diff.path, style=status_style)
-    line.append("  ", style="")
-    line.append(f"+{diff.additions}", style=f"bold {DIFF_COLORS['addition']}")
-    line.append("/", style="dim")
-    line.append(f"-{diff.deletions}", style=f"bold {DIFF_COLORS['deletion']}")
-
+    line.append(diff.path, style="bold")
+    if diff.is_new:
+        line.append("  ")
+        line.append("new", style=f"bold {DIFF_COLORS['addition']}")
+    elif diff.is_deleted:
+        line.append("  ")
+        line.append("deleted", style=f"bold {DIFF_COLORS['deletion']}")
+    line.append("  ")
+    line.append(f"+{diff.additions}", style=DIFF_COLORS["addition"])
+    line.append(" ")
+    line.append(f"-{diff.deletions}", style=DIFF_COLORS["deletion"])
     console.print(line)
 
 

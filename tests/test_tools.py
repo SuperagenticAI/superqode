@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 
 from superqode.tools.base import ToolRegistry, ToolContext
-from superqode.tools.file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
+from superqode.tools.file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
 from superqode.tools.edit_tools import EditFileTool, InsertTextTool, MultiEditTool, PatchTool
 from superqode.tools.search_tools import GlobTool, RepoSearchTool
 
@@ -40,6 +40,7 @@ class TestToolRegistry:
 
         assert "read_file" in tool_names
         assert "write_file" in tool_names
+        assert "create_file" in tool_names
         assert "list_directory" in tool_names
         assert "edit_file" in tool_names
         assert "bash" in tool_names
@@ -68,6 +69,7 @@ class TestToolRegistry:
         coding_names = {tool.name for tool in coding.list()}
 
         assert "read_file" in coding_names
+        assert "create_file" in coding_names
         assert "patch" in coding_names
         assert "ask_user" in coding_names
         assert "web_fetch" in coding_names
@@ -89,6 +91,7 @@ class TestToolRegistry:
         names = {tool.name for tool in registry.list()}
 
         assert "read_file" in names
+        assert "create_file" in names
         assert "patch" in names
         assert "bash" in names
         assert "repo_search" in names
@@ -173,6 +176,33 @@ class TestWriteFileTool:
 
         assert result.success
         assert (temp_dir / "subdir/nested/file.txt").read_text() == "Nested content"
+
+
+class TestCreateFileTool:
+    """Test the create file tool."""
+
+    @pytest.mark.asyncio
+    async def test_create_new_file(self, temp_dir, tool_context):
+        """Test creating a new file without overwriting anything."""
+        tool = CreateFileTool()
+        result = await tool.execute({"path": "new.txt", "content": "created"}, tool_context)
+
+        assert result.success
+        assert (temp_dir / "new.txt").read_text() == "created"
+        assert result.metadata["additions"] == 1
+        assert result.metadata["deletions"] == 0
+        assert "+created" in result.metadata["diff_text"]
+
+    @pytest.mark.asyncio
+    async def test_create_existing_file_fails(self, temp_dir, tool_context):
+        """Test create_file refuses to overwrite existing content."""
+        (temp_dir / "exists.txt").write_text("old")
+
+        tool = CreateFileTool()
+        result = await tool.execute({"path": "exists.txt", "content": "new"}, tool_context)
+
+        assert not result.success
+        assert "already exists" in (result.error or "")
 
 
 class TestEditFileTool:

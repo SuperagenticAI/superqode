@@ -193,7 +193,7 @@ class ToolRegistry:
     @classmethod
     def default(cls) -> "ToolRegistry":
         """Create registry with default minimal tools."""
-        from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
+        from .file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
         from .edit_tools import EditFileTool, InsertTextTool
         from .shell_tools import BashTool
         from .search_tools import GrepTool, GlobTool, RepoSearchTool
@@ -203,6 +203,7 @@ class ToolRegistry:
         # Core file operations
         registry.register(ReadFileTool())
         registry.register(WriteFileTool())
+        registry.register(CreateFileTool())
         registry.register(ListDirectoryTool())
 
         # Editing
@@ -226,7 +227,7 @@ class ToolRegistry:
         This keeps the model focused on local code work and avoids sending
         web, network, sub-agent, A2A, skill, and LSP tools on every turn.
         """
-        from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
+        from .file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
         from .edit_tools import EditFileTool, InsertTextTool, PatchTool, MultiEditTool
         from .shell_tools import BashTool
         from .search_tools import GrepTool, GlobTool, CodeSearchTool, RepoSearchTool
@@ -241,6 +242,7 @@ class ToolRegistry:
 
         registry.register(ReadFileTool())
         registry.register(WriteFileTool())
+        registry.register(CreateFileTool())
         registry.register(ListDirectoryTool())
 
         registry.register(EditFileTool())
@@ -278,7 +280,7 @@ class ToolRegistry:
         intact while avoiding parallel/meta tools that tend to add latency or
         extra planning turns on local models.
         """
-        from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
+        from .file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
         from .edit_tools import EditFileTool, PatchTool
         from .shell_tools import BashTool
         from .search_tools import GrepTool, GlobTool, RepoSearchTool
@@ -289,6 +291,7 @@ class ToolRegistry:
 
         registry.register(ReadFileTool())
         registry.register(WriteFileTool())
+        registry.register(CreateFileTool())
         registry.register(ListDirectoryTool())
 
         registry.register(EditFileTool())
@@ -326,7 +329,7 @@ class ToolRegistry:
     @classmethod
     def full(cls) -> "ToolRegistry":
         """Create registry with all available tools."""
-        from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
+        from .file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
         from .edit_tools import EditFileTool, InsertTextTool, PatchTool, MultiEditTool
         from .shell_tools import BashTool
         from .search_tools import GrepTool, GlobTool, CodeSearchTool, RepoSearchTool
@@ -345,6 +348,7 @@ class ToolRegistry:
         # Core file operations
         registry.register(ReadFileTool())
         registry.register(WriteFileTool())
+        registry.register(CreateFileTool())
         registry.register(ListDirectoryTool())
 
         # Editing (basic + advanced)
@@ -429,7 +433,7 @@ class ToolRegistry:
     @classmethod
     def standard(cls) -> "ToolRegistry":
         """Create registry with standard tools (no network/agent)."""
-        from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
+        from .file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
         from .edit_tools import EditFileTool, InsertTextTool, PatchTool, MultiEditTool
         from .shell_tools import BashTool
         from .search_tools import GrepTool, GlobTool, CodeSearchTool, RepoSearchTool
@@ -445,6 +449,7 @@ class ToolRegistry:
         # Core file operations
         registry.register(ReadFileTool())
         registry.register(WriteFileTool())
+        registry.register(CreateFileTool())
         registry.register(ListDirectoryTool())
 
         # Editing

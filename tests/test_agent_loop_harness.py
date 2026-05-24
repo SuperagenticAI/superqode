@@ -219,6 +219,32 @@ async def test_ds4_keeps_tools_on_simple_query_for_kv_cache_stability():
 
 
 @pytest.mark.asyncio
+async def test_streaming_run_persists_session_history(tmp_path):
+    gateway = ScriptedGateway([])
+    loop = AgentLoop(
+        gateway=gateway,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(
+            provider="test",
+            model="test-model",
+            enable_session_storage=True,
+            session_storage_dir=str(tmp_path / "sessions"),
+            session_id="stream-session",
+        ),
+    )
+
+    chunks = [chunk async for chunk in loop.run_streaming("remember this")]
+
+    assert chunks == ["streamed"]
+    assert loop._session_manager is not None
+    stored = loop._session_manager.get_messages()
+    assert [(message.role, message.content) for message in stored] == [
+        ("user", "remember this"),
+        ("assistant", "streamed"),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_ds4_keeps_tools_on_direct_code_request():
     """DS4 must keep tools attached even for chatty coding asks; the
     session-stable contract is what makes the rendered prefix reusable."""

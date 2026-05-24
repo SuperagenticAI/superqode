@@ -185,6 +185,80 @@ class WriteFileTool(Tool):
             return ToolResult(success=False, output="", error=str(e))
 
 
+class CreateFileTool(Tool):
+    """Create a new file without overwriting an existing one."""
+
+    @property
+    def name(self) -> str:
+        return "create_file"
+
+    @property
+    def description(self) -> str:
+        return "Create a new file. Fails if the file already exists."
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path to the file to create"},
+                "content": {"type": "string", "description": "Content to write to the file"},
+            },
+            "required": ["path", "content"],
+        }
+
+    async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        path = args.get("path", "")
+        content = args.get("content", "")
+
+        try:
+            file_path = validate_path_in_working_directory(path, ctx.working_directory)
+            if file_path.exists():
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"File already exists: {path}. Use write_file or edit_file to modify it.",
+                )
+
+            diff_text = build_unified_diff("", content, path=path)
+            additions, deletions = diff_stats(diff_text)
+            diff_metadata = {
+                "diff_text": diff_text,
+                "additions": additions,
+                "deletions": deletions,
+            }
+
+            workspace = _get_workspace()
+            if workspace:
+                try:
+                    rel_path = file_path.relative_to(workspace.project_root)
+                    workspace.write_file(str(rel_path), content)
+                    return ToolResult(
+                        success=True,
+                        output=f"Successfully created {path} ({len(content)} bytes, tracked for QE revert)",
+                        metadata={
+                            "path": str(file_path),
+                            "size": len(content),
+                            "qe_tracked": True,
+                            **diff_metadata,
+                        },
+                    )
+                except ValueError:
+                    pass
+
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text(content)
+
+            return ToolResult(
+                success=True,
+                output=f"Successfully created {path} ({len(content)} bytes)",
+                metadata={"path": str(file_path), "size": len(content), **diff_metadata},
+            )
+
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+
+
 class ListDirectoryTool(Tool):
     """List directory contents."""
 
