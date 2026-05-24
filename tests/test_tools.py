@@ -8,7 +8,7 @@ from pathlib import Path
 
 from superqode.tools.base import ToolRegistry, ToolContext
 from superqode.tools.file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool
-from superqode.tools.edit_tools import EditFileTool
+from superqode.tools.edit_tools import EditFileTool, InsertTextTool, MultiEditTool, PatchTool
 from superqode.tools.search_tools import GlobTool, RepoSearchTool
 
 
@@ -158,6 +158,10 @@ class TestWriteFileTool:
 
         assert result.success
         assert (temp_dir / "new_file.txt").read_text() == "New content"
+        assert result.metadata["additions"] == 1
+        assert result.metadata["deletions"] == 0
+        assert "+++ b/new_file.txt" in result.metadata["diff_text"]
+        assert "+New content" in result.metadata["diff_text"]
 
     @pytest.mark.asyncio
     async def test_write_creates_directories(self, temp_dir, tool_context):
@@ -187,6 +191,10 @@ class TestEditFileTool:
 
         assert result.success
         assert test_file.read_text() == "Hello, Universe!"
+        assert result.metadata["additions"] == 1
+        assert result.metadata["deletions"] == 1
+        assert "-Hello, World!" in result.metadata["diff_text"]
+        assert "+Hello, Universe!" in result.metadata["diff_text"]
 
     @pytest.mark.asyncio
     async def test_edit_text_not_found(self, temp_dir, tool_context):
@@ -230,6 +238,78 @@ class TestEditFileTool:
 
         assert result.success
         assert test_file.read_text() == "qux bar qux baz qux"
+
+    @pytest.mark.asyncio
+    async def test_insert_returns_diff_metadata(self, temp_dir, tool_context):
+        """Test insert_text returns unified diff metadata."""
+        test_file = temp_dir / "insert_test.txt"
+        test_file.write_text("one\nthree")
+
+        tool = InsertTextTool()
+        result = await tool.execute(
+            {"path": "insert_test.txt", "line": 2, "text": "two"}, tool_context
+        )
+
+        assert result.success
+        assert test_file.read_text() == "one\ntwo\nthree"
+        assert result.metadata["additions"] == 1
+        assert "+two" in result.metadata["diff_text"]
+
+    @pytest.mark.asyncio
+    async def test_multi_edit_returns_diff_metadata(self, temp_dir, tool_context):
+        """Test multi_edit returns unified diff metadata."""
+        test_file = temp_dir / "multi_test.txt"
+        test_file.write_text("alpha\nbeta\ngamma")
+
+        tool = MultiEditTool()
+        result = await tool.execute(
+            {
+                "path": "multi_test.txt",
+                "edits": [
+                    {"old_text": "alpha", "new_text": "ALPHA"},
+                    {"old_text": "gamma", "new_text": "GAMMA"},
+                ],
+            },
+            tool_context,
+        )
+
+        assert result.success
+        assert test_file.read_text() == "ALPHA\nbeta\nGAMMA"
+        assert result.metadata["additions"] == 2
+        assert result.metadata["deletions"] == 2
+        assert "+ALPHA" in result.metadata["diff_text"]
+        assert "-gamma" in result.metadata["diff_text"]
+
+    @pytest.mark.asyncio
+    async def test_patch_returns_file_diff_metadata(self, temp_dir, tool_context):
+        """Test patch returns per-file unified diff metadata."""
+        test_file = temp_dir / "patch_test.txt"
+        test_file.write_text("one\ntwo\nthree")
+
+        tool = PatchTool()
+        result = await tool.execute(
+            {
+                "patch": "\n".join(
+                    [
+                        "--- a/patch_test.txt",
+                        "+++ b/patch_test.txt",
+                        "@@ -1,3 +1,3 @@",
+                        " one",
+                        "-two",
+                        "+TWO",
+                        " three",
+                    ]
+                )
+            },
+            tool_context,
+        )
+
+        assert result.success
+        assert test_file.read_text() == "one\nTWO\nthree"
+        file_diff = result.metadata["file_diffs"]["patch_test.txt"]
+        assert file_diff["additions"] == 1
+        assert file_diff["deletions"] == 1
+        assert "+TWO" in file_diff["diff_text"]
 
 
 class TestGlobTool:

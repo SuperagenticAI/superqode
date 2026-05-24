@@ -363,7 +363,10 @@ class AgentConfig:
     tools_enabled: bool = True
 
     # Execution settings
-    max_iterations: int = 50  # Prevent infinite loops
+    # 0 or negative => unlimited (no cap). Positive => safety cap.
+    # Aligned with fast-agent semantics where the loop runs until the model
+    # stops emitting tool calls or the user cancels.
+    max_iterations: int = 0  # 0 means unlimited
     require_confirmation: bool = False  # Ask before tool execution
 
     # Model parameters (passed through to gateway)
@@ -461,6 +464,15 @@ class AgentLoop:
         self.mcp_executor = mcp_executor
         self._mcp_tools = mcp_tools or []
         self.include_mcp = include_mcp
+        if self.include_mcp:
+            try:
+                from ..tools.mcp_tools import get_mcp_tools
+
+                for tool in get_mcp_tools():
+                    if self.tools.get(tool.name) is None:
+                        self.tools.register(tool)
+            except ImportError:
+                pass
         if permission_manager:
             self.permission_manager = permission_manager
         elif config.require_confirmation:
@@ -554,9 +566,8 @@ class AgentLoop:
         if self.include_mcp:
             try:
                 from ..tools.mcp_tools import get_mcp_tools
-                from ..mcp.client import get_mcp_manager
 
-                mcp_tools = get_mcp_tools(get_mcp_manager)
+                mcp_tools = get_mcp_tools()
                 for t in mcp_tools:
                     # Avoid duplicates
                     if not any(d.name == t.name for d in definitions):
@@ -939,7 +950,9 @@ class AgentLoop:
 
         # Always send tools if available - let malformed tool call handling deal with issues
         # This ensures models always get the full context and we handle malformed responses gracefully
-        while iterations < self.config.max_iterations:
+        # max_iterations <= 0 means unlimited (fast-agent style)
+        _cap = self.config.max_iterations
+        while _cap <= 0 or iterations < _cap:
             iterations += 1
 
             # Emit iteration log
@@ -1188,7 +1201,7 @@ class AgentLoop:
                     stopped_reason="complete",
                 )
 
-        # Hit max iterations
+        # Hit max iterations (only reachable when a positive cap is configured)
         if self.on_thinking:
             await self.on_thinking(f"Reached maximum iterations ({self.config.max_iterations})")
         return AgentResponse(
@@ -1230,7 +1243,9 @@ class AgentLoop:
         # Get cached tool definitions
         tool_defs = self._get_tool_definitions()
 
-        while iterations < self.config.max_iterations:
+        # max_iterations <= 0 means unlimited (fast-agent style)
+        _cap = self.config.max_iterations
+        while _cap <= 0 or iterations < _cap:
             # Check for cancellation
             if self._cancelled:
                 if self.on_thinking:

@@ -42,9 +42,28 @@ def test_pure_mode_switches_to_ds4_profile_on_connect(tmp_path, monkeypatch):
     assert "patch" in status["tools"]
     assert "batch" not in status["tools"]
     assert pure._agent is not None
-    assert pure._agent.config.max_iterations == 6
+    assert pure._agent.config.max_iterations == 0
     assert pure._agent.config.session_history_limit == 8
     assert pure._agent.parallel_tools is False
+
+
+def test_pure_mode_enables_mcp_tools_for_byok_and_local_when_requested(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUPERQODE_MCP_SEARCH", "1")
+    monkeypatch.chdir(tmp_path)
+
+    byok = PureMode()
+    byok.connect("anthropic", "claude-sonnet-4")
+    assert byok._agent is not None
+    byok_tool_names = {tool.name for tool in byok._agent.tools.list()}
+    byok_defs = {definition.name for definition in byok._agent._get_tool_definitions()}
+    assert {"mcp_search", "mcp_execute"}.issubset(byok_tool_names | byok_defs)
+
+    local = PureMode()
+    local.connect("ds4", "deepseek-v4-flash")
+    assert local._agent is not None
+    local_tool_names = {tool.name for tool in local._agent.tools.list()}
+    local_defs = {definition.name for definition in local._agent._get_tool_definitions()}
+    assert {"mcp_search", "mcp_execute"}.issubset(local_tool_names | local_defs)
 
 
 def test_explicit_tool_profile_overrides_ds4_default(tmp_path, monkeypatch):

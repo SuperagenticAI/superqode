@@ -4,6 +4,8 @@ MCP Search and Execute Tools for SuperQode.
 Provides model-accessible tools for:
 - mcp_search: Search available MCP tools by relevance (BM25)
 - mcp_execute: Execute a specific MCP tool on a specific server
+- mcp_list_resources / mcp_read_resource: Discover and read MCP resources
+- mcp_list_prompts / mcp_get_prompt: Discover and expand MCP prompt templates
 
 These tools require MCP server configuration in mcp.json.
 Enable via SUPERQODE_MCP_SEARCH=1 environment variable.
@@ -12,6 +14,7 @@ Enable via SUPERQODE_MCP_SEARCH=1 environment variable.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 from typing import Any, Dict, List, Optional
 
@@ -75,21 +78,24 @@ Example: Search for "web search" to find EXA or other search tools."""
             "required": ["query"],
         }
 
-    def _get_mcp_manager(self):
+    async def _get_mcp_manager(self):
         """Get MCP client manager if available."""
         if self._mcp_manager_getter:
             try:
-                return self._mcp_manager_getter()
+                manager = self._mcp_manager_getter()
+                if inspect.isawaitable(manager):
+                    manager = await manager
+                return manager
             except Exception:
                 return None
-        return None
+        return await _get_default_mcp_manager()
 
     async def _load_tools(self) -> List[MCPToolMatch]:
         """Load and cache MCP tools from all servers."""
         if self._cache_loaded:
             return self._cache
 
-        mcp_manager = self._get_mcp_manager()
+        mcp_manager = await self._get_mcp_manager()
         if not mcp_manager:
             return []
 
@@ -229,14 +235,17 @@ Example: Execute web_search on exa server with query argument."""
             "required": ["server", "tool"],
         }
 
-    def _get_mcp_manager(self):
+    async def _get_mcp_manager(self):
         """Get MCP client manager if available."""
         if self._mcp_manager_getter:
             try:
-                return self._mcp_manager_getter()
+                manager = self._mcp_manager_getter()
+                if inspect.isawaitable(manager):
+                    manager = await manager
+                return manager
             except Exception:
                 return None
-        return None
+        return await _get_default_mcp_manager()
 
     async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
         server = args.get("server", "")
@@ -250,7 +259,7 @@ Example: Execute web_search on exa server with query argument."""
                 error="Both 'server' and 'tool' are required",
             )
 
-        mcp_manager = self._get_mcp_manager()
+        mcp_manager = await self._get_mcp_manager()
         if not mcp_manager:
             return ToolResult(
                 success=False,
@@ -289,6 +298,283 @@ Example: Execute web_search on exa server with query argument."""
             )
 
 
+class MCPListResourcesTool(Tool):
+    """List resources exposed by connected MCP servers."""
+
+    def __init__(self, mcp_manager_getter=None):
+        self._mcp_manager_getter = mcp_manager_getter
+
+    @property
+    def name(self) -> str:
+        return "mcp_list_resources"
+
+    @property
+    def description(self) -> str:
+        return "List readable resources exposed by connected MCP servers."
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "server": {
+                    "type": "string",
+                    "description": "Optional MCP server name to filter resources by",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of resources to return (default: 50)",
+                    "default": 50,
+                },
+            },
+        }
+
+    async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        manager = await _resolve_mcp_manager(self._mcp_manager_getter)
+        if not manager:
+            return ToolResult(success=False, output="", error="MCP client not available")
+
+        server = args.get("server")
+        limit = int(args.get("limit", 50) or 50)
+        resources = manager.list_all_resources()
+        if server:
+            resources = [r for r in resources if r.server_id == server]
+        resources = resources[: max(0, limit)]
+
+        if not resources:
+            return ToolResult(
+                success=True,
+                output="No MCP resources found.",
+                metadata={"count": 0, "server": server},
+            )
+
+        lines = ["MCP Resources:"]
+        payload = []
+        for resource in resources:
+            lines.append(f"- {resource.server_id}: {resource.uri}")
+            if resource.name:
+                lines.append(f"  Name: {resource.name}")
+            if resource.description:
+                lines.append(f"  Description: {resource.description}")
+            if resource.mime_type:
+                lines.append(f"  MIME: {resource.mime_type}")
+            payload.append(
+                {
+                    "server": resource.server_id,
+                    "uri": resource.uri,
+                    "name": resource.name,
+                    "description": resource.description,
+                    "mime_type": resource.mime_type,
+                }
+            )
+
+        return ToolResult(
+            success=True,
+            output="\n".join(lines),
+            metadata={"count": len(resources), "resources": payload},
+        )
+
+
+class MCPReadResourceTool(Tool):
+    """Read a resource from an MCP server."""
+
+    def __init__(self, mcp_manager_getter=None):
+        self._mcp_manager_getter = mcp_manager_getter
+
+    @property
+    def name(self) -> str:
+        return "mcp_read_resource"
+
+    @property
+    def description(self) -> str:
+        return "Read a resource exposed by an MCP server. Use mcp_list_resources first."
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "server": {"type": "string", "description": "MCP server name"},
+                "uri": {"type": "string", "description": "Resource URI to read"},
+            },
+            "required": ["server", "uri"],
+        }
+
+    async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        server = args.get("server", "")
+        uri = args.get("uri", "")
+        if not server or not uri:
+            return ToolResult(success=False, output="", error="Both 'server' and 'uri' are required")
+
+        manager = await _resolve_mcp_manager(self._mcp_manager_getter)
+        if not manager:
+            return ToolResult(success=False, output="", error="MCP client not available")
+
+        content = await manager.read_resource(server, uri)
+        if content is None:
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"Resource not found or unreadable: {server}:{uri}",
+            )
+
+        output = content.text if content.text is not None else "[binary resource]"
+        return ToolResult(
+            success=True,
+            output=output,
+            metadata={
+                "server": server,
+                "uri": uri,
+                "mime_type": content.mime_type,
+                "has_blob": content.blob is not None,
+            },
+        )
+
+
+class MCPListPromptsTool(Tool):
+    """List prompt templates exposed by connected MCP servers."""
+
+    def __init__(self, mcp_manager_getter=None):
+        self._mcp_manager_getter = mcp_manager_getter
+
+    @property
+    def name(self) -> str:
+        return "mcp_list_prompts"
+
+    @property
+    def description(self) -> str:
+        return "List prompt templates exposed by connected MCP servers."
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "server": {
+                    "type": "string",
+                    "description": "Optional MCP server name to filter prompts by",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of prompts to return (default: 50)",
+                    "default": 50,
+                },
+            },
+        }
+
+    async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        manager = await _resolve_mcp_manager(self._mcp_manager_getter)
+        if not manager:
+            return ToolResult(success=False, output="", error="MCP client not available")
+
+        server = args.get("server")
+        limit = int(args.get("limit", 50) or 50)
+        prompts = manager.list_all_prompts()
+        if server:
+            prompts = [p for p in prompts if p.server_id == server]
+        prompts = prompts[: max(0, limit)]
+
+        if not prompts:
+            return ToolResult(
+                success=True,
+                output="No MCP prompts found.",
+                metadata={"count": 0, "server": server},
+            )
+
+        lines = ["MCP Prompts:"]
+        payload = []
+        for prompt in prompts:
+            arg_names = [arg.name if hasattr(arg, "name") else str(arg) for arg in prompt.arguments]
+            lines.append(f"- {prompt.server_id}: {prompt.name}")
+            if prompt.description:
+                lines.append(f"  Description: {prompt.description}")
+            if arg_names:
+                lines.append(f"  Arguments: {', '.join(arg_names)}")
+            payload.append(
+                {
+                    "server": prompt.server_id,
+                    "name": prompt.name,
+                    "description": prompt.description,
+                    "arguments": arg_names,
+                }
+            )
+
+        return ToolResult(
+            success=True,
+            output="\n".join(lines),
+            metadata={"count": len(prompts), "prompts": payload},
+        )
+
+
+class MCPGetPromptTool(Tool):
+    """Expand a prompt template from an MCP server."""
+
+    def __init__(self, mcp_manager_getter=None):
+        self._mcp_manager_getter = mcp_manager_getter
+
+    @property
+    def name(self) -> str:
+        return "mcp_get_prompt"
+
+    @property
+    def description(self) -> str:
+        return "Get an MCP prompt template result. Use mcp_list_prompts first."
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "server": {"type": "string", "description": "MCP server name"},
+                "prompt": {"type": "string", "description": "Prompt template name"},
+                "arguments": {
+                    "type": "object",
+                    "description": "Prompt arguments as string key-value pairs",
+                },
+            },
+            "required": ["server", "prompt"],
+        }
+
+    async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        server = args.get("server", "")
+        prompt = args.get("prompt", "")
+        arguments = args.get("arguments", {}) or {}
+        if not server or not prompt:
+            return ToolResult(
+                success=False,
+                output="",
+                error="Both 'server' and 'prompt' are required",
+            )
+
+        manager = await _resolve_mcp_manager(self._mcp_manager_getter)
+        if not manager:
+            return ToolResult(success=False, output="", error="MCP client not available")
+
+        result = await manager.get_prompt(server, prompt, {str(k): str(v) for k, v in arguments.items()})
+        if result is None:
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"Prompt not found or failed: {server}:{prompt}",
+            )
+
+        lines = []
+        if result.description:
+            lines.append(f"Description: {result.description}")
+        for message in result.messages:
+            lines.append(f"{message.role}: {message.content}")
+
+        return ToolResult(
+            success=True,
+            output="\n".join(lines),
+            metadata={
+                "server": server,
+                "prompt": prompt,
+                "message_count": len(result.messages),
+            },
+        )
+
+
 def create_mcp_tools(
     mcp_manager_getter=None,
 ) -> List[Tool]:
@@ -301,4 +587,47 @@ def create_mcp_tools(
     Returns:
         List of MCP tools
     """
-    return [MCPSearchTool(mcp_manager_getter), MCPExecuteTool(mcp_manager_getter)]
+    return [
+        MCPSearchTool(mcp_manager_getter),
+        MCPExecuteTool(mcp_manager_getter),
+        MCPListResourcesTool(mcp_manager_getter),
+        MCPReadResourceTool(mcp_manager_getter),
+        MCPListPromptsTool(mcp_manager_getter),
+        MCPGetPromptTool(mcp_manager_getter),
+    ]
+
+
+async def _resolve_mcp_manager(mcp_manager_getter=None):
+    if mcp_manager_getter:
+        try:
+            manager = mcp_manager_getter()
+            if inspect.isawaitable(manager):
+                manager = await manager
+            return manager
+        except Exception:
+            return None
+    return await _get_default_mcp_manager()
+
+
+async def _get_default_mcp_manager():
+    """Return the global MCP manager and auto-connect configured servers.
+
+    This makes MCP search/execute usable from BYOK and Local native sessions
+    once `SUPERQODE_MCP_SEARCH=1` is enabled, matching fast-agent's expectation
+    that configured MCP servers are available to the active agent.
+    """
+    try:
+        from superqode.mcp.integration import get_mcp_manager
+
+        manager = await get_mcp_manager()
+        status = manager.get_status_summary()
+        if status.get("total_servers", 0) and not status.get("connected", 0):
+            await manager.connect_all()
+        return manager
+    except Exception:
+        return None
+
+
+def get_mcp_tools(mcp_manager_getter=None) -> List[Tool]:
+    """Backward-compatible alias used by AgentLoop include_mcp wiring."""
+    return create_mcp_tools(mcp_manager_getter)

@@ -240,6 +240,8 @@ When editing files:
 ### MCP Tools (if SUPERQODE_MCP_SEARCH=1)
 - `mcp_search(query, limit?, use_bm25?, server?)` - Search available MCP tools by relevance (BM25 ranking). Use to discover tools before executing.
 - `mcp_execute(server, tool, arguments)` - Execute a specific MCP tool on a specific server. Use mcp_search first to find tool names.
+- `mcp_list_resources(server?, limit?)` / `mcp_read_resource(server, uri)` - Discover and read MCP resources.
+- `mcp_list_prompts(server?, limit?)` / `mcp_get_prompt(server, prompt, arguments?)` - Discover and expand MCP prompt templates.
 
 ### Plan Mode
 - When user asks to "plan", "design", or "create a plan", respond with a detailed execution plan WITHOUT executing tools

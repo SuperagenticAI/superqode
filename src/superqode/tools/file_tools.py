@@ -15,6 +15,7 @@ from typing import Any, Dict, Optional
 from .base import Tool, ToolResult, ToolContext
 from .validation import validate_path_in_working_directory
 from .file_tracking import record_file_read
+from .diff_utils import build_unified_diff, diff_stats
 
 
 def _get_workspace():
@@ -141,6 +142,14 @@ class WriteFileTool(Tool):
         try:
             # Validate and resolve path - ensures it stays within working directory
             file_path = validate_path_in_working_directory(path, ctx.working_directory)
+            old_content = file_path.read_text() if file_path.exists() else ""
+            diff_text = build_unified_diff(old_content, content, path=path)
+            additions, deletions = diff_stats(diff_text)
+            diff_metadata = {
+                "diff_text": diff_text,
+                "additions": additions,
+                "deletions": deletions,
+            }
             # Check if QE session is active - route through workspace
             workspace = _get_workspace()
             if workspace:
@@ -151,7 +160,12 @@ class WriteFileTool(Tool):
                     return ToolResult(
                         success=True,
                         output=f"Successfully wrote {len(content)} bytes to {path} (tracked for QE revert)",
-                        metadata={"path": str(file_path), "size": len(content), "qe_tracked": True},
+                        metadata={
+                            "path": str(file_path),
+                            "size": len(content),
+                            "qe_tracked": True,
+                            **diff_metadata,
+                        },
                     )
                 except ValueError:
                     # Path is outside project root, write directly
@@ -164,7 +178,7 @@ class WriteFileTool(Tool):
             return ToolResult(
                 success=True,
                 output=f"Successfully wrote {len(content)} bytes to {path}",
-                metadata={"path": str(file_path), "size": len(content)},
+                metadata={"path": str(file_path), "size": len(content), **diff_metadata},
             )
 
         except Exception as e:

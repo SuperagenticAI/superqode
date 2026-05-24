@@ -5586,15 +5586,39 @@ team:
                 _complete_tool_activity(name, status)
                 output = result.output if result.output else result.error
                 output_str = str(output) if output else ""
+                metadata = result.metadata or {}
+                result_path = str(metadata.get("path") or "")
+                if result_path:
+                    try:
+                        path_obj = Path(result_path)
+                        if path_obj.is_absolute():
+                            result_path = os.path.relpath(path_obj, os.getcwd())
+                    except Exception:
+                        pass
+                diff_text = str(metadata.get("diff_text") or "")
+                additions = metadata.get("additions")
+                deletions = metadata.get("deletions")
 
                 # Try to parse and display JSON nicely
-                if status == "success" and output_str:
+                if status == "success" and output_str and not diff_text:
                     formatted = self._format_tool_output(name, output_str, log)
                     if formatted:
                         return
 
                 # Fallback - show full output, no truncation
-                _safe_call(log.add_tool_call, name, status, "", "", output_str)
+                _safe_call(
+                    log.add_tool_call,
+                    name,
+                    status,
+                    result_path,
+                    "",
+                    output_str,
+                    None,
+                    diff_text,
+                    None,
+                    additions if isinstance(additions, int) else None,
+                    deletions if isinstance(deletions, int) else None,
+                )
             else:
                 _complete_tool_activity(name, "success")
                 output_str = str(result) if result else ""
@@ -6797,6 +6821,8 @@ team:
                         "success",
                         "",
                         "",
+                        "updated",
+                        None,
                         output_str,
                     )
                     return
@@ -11512,33 +11538,38 @@ team:
                 self._render_plain_text(clean_text, log)
             log.write(Text("\n"))
 
-        verbose_changes = getattr(log, "tool_output_mode", "normal") == "verbose"
+        # File Changes Section with visual indicators and inline diffs.
+        # Mirroring fast-agent's apply_patch preview: show the actual diff inline
+        # by default after edits/recommendations, not hidden behind a verbose flag.
+        # `:work minimal` or SUPERQODE_LOG_VERBOSITY=minimal still suppresses it.
+        minimal_changes = getattr(log, "tool_output_mode", "normal") == "minimal"
+        if files_modified and not minimal_changes:
+            from superqode.widgets.response_changes import (
+                render_file_changes_section,
+                render_inline_file_diffs,
+            )
+            from rich.console import Console
+            from io import StringIO
 
-        # File Changes Section with visual indicators. Keep normal output compact;
-        # detailed diffs are still available through :diff or :work verbose.
-        if files_modified:
-            if verbose_changes:
-                from superqode.widgets.response_changes import render_file_changes_section
-                from rich.console import Console
-                from io import StringIO
+            changes_section = render_file_changes_section(
+                files_modified, file_diffs, max_files=10
+            )
+            inline_diffs = render_inline_file_diffs(
+                files_modified, file_diffs, max_files=10
+            )
 
-                changes_section = render_file_changes_section(
-                    files_modified, file_diffs, max_files=10
-                )
-
-                # Render Rich Group to string and write to log
-                console = Console(file=StringIO(), width=120, legacy_windows=False)
-                console.print(changes_section)
-                rendered_text = console.file.getvalue()
-                log.write(rendered_text)
-            else:
-                compact = Text()
-                compact.append("  File details hidden. Use ", style=SQ_COLORS.text_muted)
-                compact.append(":work verbose", style=f"bold {SQ_COLORS.info}")
-                compact.append(" or ", style=SQ_COLORS.text_muted)
-                compact.append(":diff", style=f"bold {SQ_COLORS.info}")
-                compact.append(" to inspect changes.\n\n", style=SQ_COLORS.text_muted)
-                log.write(compact)
+            console = Console(file=StringIO(), width=120, legacy_windows=False)
+            console.print(changes_section)
+            console.print(inline_diffs)
+            log.write(console.file.getvalue())
+        elif files_modified and minimal_changes:
+            compact = Text()
+            compact.append("  File details hidden (minimal mode). Use ", style=SQ_COLORS.text_muted)
+            compact.append(":work normal", style=f"bold {SQ_COLORS.info}")
+            compact.append(" or ", style=SQ_COLORS.text_muted)
+            compact.append(":diff", style=f"bold {SQ_COLORS.info}")
+            compact.append(" to inspect changes.\n\n", style=SQ_COLORS.text_muted)
+            log.write(compact)
 
         footer = Text()
         footer.append("  Actions: ", style=SQ_COLORS.text_muted)
@@ -11629,31 +11660,33 @@ team:
         t.append("\n", style="")
         log.write(t)
 
-        verbose_changes = getattr(log, "tool_output_mode", "normal") == "verbose"
+        # Show inline diffs by default (fast-agent style). Only hide under
+        # explicit minimal mode.
+        minimal_changes = getattr(log, "tool_output_mode", "normal") == "minimal"
+        if files_modified and not minimal_changes:
+            from rich.console import Console
+            from io import StringIO
+            from superqode.widgets.response_changes import render_inline_file_diffs
 
-        # Show full file changes section only in verbose mode.
-        if files_modified:
-            if verbose_changes:
-                from rich.console import Console
-                from io import StringIO
+            changes_section = render_file_changes_section(
+                files_modified, file_diffs, max_files=10
+            )
+            inline_diffs = render_inline_file_diffs(
+                files_modified, file_diffs, max_files=10
+            )
 
-                changes_section = render_file_changes_section(
-                    files_modified, file_diffs, max_files=10
-                )
-
-                # Render Rich Group to string and write to log
-                console = Console(file=StringIO(), width=120, legacy_windows=False)
-                console.print(changes_section)
-                rendered_text = console.file.getvalue()
-                log.write(rendered_text)
-            else:
-                compact = Text()
-                compact.append("  File details hidden. Use ", style=SQ_COLORS.text_muted)
-                compact.append(":work verbose", style=f"bold {SQ_COLORS.info}")
-                compact.append(" or ", style=SQ_COLORS.text_muted)
-                compact.append(":diff", style=f"bold {SQ_COLORS.info}")
-                compact.append(" to inspect changes.\n", style=SQ_COLORS.text_muted)
-                log.write(compact)
+            console = Console(file=StringIO(), width=120, legacy_windows=False)
+            console.print(changes_section)
+            console.print(inline_diffs)
+            log.write(console.file.getvalue())
+        elif files_modified and minimal_changes:
+            compact = Text()
+            compact.append("  File details hidden (minimal mode). Use ", style=SQ_COLORS.text_muted)
+            compact.append(":work normal", style=f"bold {SQ_COLORS.info}")
+            compact.append(" or ", style=SQ_COLORS.text_muted)
+            compact.append(":diff", style=f"bold {SQ_COLORS.info}")
+            compact.append(" to inspect changes.\n", style=SQ_COLORS.text_muted)
+            log.write(compact)
 
         # NEW: Trigger sidebar auto-navigation if files were modified
         if files_modified:

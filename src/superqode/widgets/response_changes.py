@@ -212,7 +212,115 @@ def render_file_changes_compact(
     return text
 
 
+# Default lines per file shown inline, modeled on fast-agent's
+# DEFAULT_PATCH_PREVIEW_MAX_LINES (120). Kept conservative so a multi-file
+# edit doesn't overwhelm the terminal but still surfaces the actual diff.
+DEFAULT_INLINE_DIFF_LINES = 120
+
+
+def _style_diff_line(line: str) -> str | None:
+    """Style a single unified-diff line. Mirrors fast-agent's preview coloring."""
+    raw = line.rstrip("\n")
+    if not raw:
+        return None
+    if raw.startswith(("diff ", "index ")):
+        return SQ_COLORS["text_dim"]
+    if raw.startswith("@@"):
+        return "yellow"
+    if raw.startswith("+++") or raw.startswith("---"):
+        return SQ_COLORS["text_muted"]
+    if raw.startswith("+"):
+        return COLORS["addition"]
+    if raw.startswith("-"):
+        return COLORS["deletion"]
+    return SQ_COLORS["text_dim"]
+
+
+def render_diff_text(
+    diff_text: str,
+    *,
+    max_lines: int = DEFAULT_INLINE_DIFF_LINES,
+) -> Text:
+    """Render a unified-diff string with addition/deletion coloring.
+
+    Truncates long diffs with a "+N more lines" marker, matching the
+    pattern used in fast-agent's apply_patch preview.
+    """
+    out = Text()
+    if not diff_text:
+        return out
+    lines = diff_text.splitlines()
+    visible = lines[:max_lines] if max_lines > 0 else lines
+    for line in visible:
+        out.append(line + "\n", style=_style_diff_line(line))
+    omitted = len(lines) - len(visible)
+    if omitted > 0:
+        out.append(f"(+{omitted} more lines)\n", style=SQ_COLORS["text_dim"])
+    return out
+
+
+def render_inline_file_diffs(
+    files_modified: List[str],
+    file_diffs: Dict[str, Dict],
+    *,
+    max_files: int = 10,
+    max_lines_per_file: int = DEFAULT_INLINE_DIFF_LINES,
+) -> Group:
+    """Render per-file unified diffs inline so users see what changed.
+
+    Mirrors fast-agent's behavior of showing patch previews directly in
+    the conversation rather than hiding them behind a verbose toggle.
+    """
+    items: list = []
+    if not files_modified:
+        return Group()
+
+    for file_path in files_modified[:max_files]:
+        data = file_diffs.get(file_path) or {}
+        diff_text = data.get("diff_text") or ""
+        additions = data.get("additions", 0)
+        deletions = data.get("deletions", 0)
+
+        header = Text()
+        header.append("\n  ", style="")
+        header.append("◆ ", style=f"bold {SQ_COLORS['primary_light']}")
+        header.append(file_path, style=f"bold {SQ_COLORS['text_primary']}")
+        if additions or deletions:
+            header.append("  ", style="")
+            if additions:
+                header.append(f"+{additions}", style=f"bold {COLORS['addition']}")
+            if additions and deletions:
+                header.append(" / ", style=SQ_COLORS["text_dim"])
+            if deletions:
+                header.append(f"-{deletions}", style=f"bold {COLORS['deletion']}")
+        header.append("\n", style="")
+        items.append(header)
+
+        if diff_text.strip():
+            items.append(render_diff_text(diff_text, max_lines=max_lines_per_file))
+        else:
+            placeholder = Text()
+            placeholder.append(
+                "    (no textual diff — new/untracked or binary file)\n",
+                style=SQ_COLORS["text_dim"],
+            )
+            items.append(placeholder)
+
+    if len(files_modified) > max_files:
+        more = Text()
+        more.append(
+            f"\n  ⋯ {len(files_modified) - max_files} more file(s) — use :diff to view\n",
+            style=SQ_COLORS["text_ghost"],
+        )
+        items.append(more)
+
+    return Group(*items)
+
+
 __all__ = [
     "render_file_changes_section",
     "render_file_changes_compact",
+    "render_diff_text",
+    "render_inline_file_diffs",
+    "DEFAULT_INLINE_DIFF_LINES",
 ]

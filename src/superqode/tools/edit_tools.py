@@ -18,6 +18,7 @@ import re
 from .base import Tool, ToolResult, ToolContext
 from .validation import validate_path_in_working_directory
 from .file_tracking import check_file_unchanged
+from .diff_utils import build_unified_diff, diff_stats
 from ..agent.edit_strategies import replace_with_strategies
 
 
@@ -113,6 +114,14 @@ Usage:
             except ValueError as e:
                 return ToolResult(success=False, output="", error=str(e))
 
+            diff_text = build_unified_diff(content, new_content, path=path)
+            additions, deletions = diff_stats(diff_text)
+            diff_metadata = {
+                "diff_text": diff_text,
+                "additions": additions,
+                "deletions": deletions,
+            }
+
             # Check if QE session is active - route through workspace
             workspace = _get_workspace()
             if workspace:
@@ -126,6 +135,7 @@ Usage:
                             "path": str(file_path),
                             "replacements": replaced_count,
                             "qe_tracked": True,
+                            **diff_metadata,
                         },
                     )
                 except ValueError:
@@ -138,7 +148,7 @@ Usage:
             return ToolResult(
                 success=True,
                 output=f"Replaced {replaced_count} occurrence(s) in {path}",
-                metadata={"path": str(file_path), "replacements": replaced_count},
+                metadata={"path": str(file_path), "replacements": replaced_count, **diff_metadata},
             )
 
         except Exception as e:
@@ -183,7 +193,8 @@ class InsertTextTool(Tool):
             if not file_path.exists():
                 return ToolResult(success=False, output="", error=f"File not found: {path}")
 
-            lines = file_path.read_text().split("\n")
+            original_content = file_path.read_text()
+            lines = original_content.split("\n")
 
             # Check file unchanged since last read
             mtime = file_path.stat().st_mtime
@@ -204,6 +215,13 @@ class InsertTextTool(Tool):
             # Insert at position (convert to 0-indexed)
             lines.insert(line_num - 1, text)
             new_content = "\n".join(lines)
+            diff_text = build_unified_diff(original_content, new_content, path=path)
+            additions, deletions = diff_stats(diff_text)
+            diff_metadata = {
+                "diff_text": diff_text,
+                "additions": additions,
+                "deletions": deletions,
+            }
 
             # Check if QE session is active - route through workspace
             workspace = _get_workspace()
@@ -214,7 +232,12 @@ class InsertTextTool(Tool):
                     return ToolResult(
                         success=True,
                         output=f"Inserted text at line {line_num} in {path} (tracked for QE revert)",
-                        metadata={"path": str(file_path), "line": line_num, "qe_tracked": True},
+                        metadata={
+                            "path": str(file_path),
+                            "line": line_num,
+                            "qe_tracked": True,
+                            **diff_metadata,
+                        },
                     )
                 except ValueError:
                     pass
@@ -225,7 +248,7 @@ class InsertTextTool(Tool):
             return ToolResult(
                 success=True,
                 output=f"Inserted text at line {line_num} in {path}",
-                metadata={"path": str(file_path), "line": line_num},
+                metadata={"path": str(file_path), "line": line_num, **diff_metadata},
             )
 
         except Exception as e:
@@ -302,6 +325,7 @@ class PatchTool(Tool):
             results = []
             total_hunks = 0
             applied_hunks = 0
+            file_diff_metadata: Dict[str, Dict[str, Any]] = {}
 
             workspace = _get_workspace()
 
@@ -334,6 +358,7 @@ class PatchTool(Tool):
                         continue
                 else:
                     # New file (no prior read to check)
+                    content = ""
                     lines = []
 
                 # Apply hunks
@@ -356,6 +381,15 @@ class PatchTool(Tool):
 
                 # Write result
                 new_content = "\n".join(lines)
+                diff_text = build_unified_diff(content, new_content, path=file_path_str)
+                additions, deletions = diff_stats(diff_text)
+                if diff_text:
+                    file_diff_metadata[file_path_str] = {
+                        "path": str(file_path),
+                        "diff_text": diff_text,
+                        "additions": additions,
+                        "deletions": deletions,
+                    }
 
                 if workspace:
                     try:
@@ -386,6 +420,11 @@ class PatchTool(Tool):
                     "total_hunks": total_hunks,
                     "applied_hunks": applied_hunks,
                     "files": list(file_patches.keys()),
+                    "path": next(iter(file_patches.keys()), ""),
+                    "file_diffs": file_diff_metadata,
+                    "diff_text": "\n".join(
+                        item["diff_text"] for item in file_diff_metadata.values()
+                    ),
                 },
             )
 
@@ -578,7 +617,8 @@ class MultiEditTool(Tool):
             if not file_path.exists():
                 return ToolResult(success=False, output="", error=f"File not found: {path}")
 
-            content = file_path.read_text()
+            original_content = file_path.read_text()
+            content = original_content
 
             # Check file unchanged since last read
             mtime = file_path.stat().st_mtime
@@ -623,6 +663,14 @@ class MultiEditTool(Tool):
                 new_text = edit.get("new_text", "")
                 content = content[:pos] + new_text + content[pos + len(old_text) :]
 
+            diff_text = build_unified_diff(original_content, content, path=path)
+            additions, deletions = diff_stats(diff_text)
+            diff_metadata = {
+                "diff_text": diff_text,
+                "additions": additions,
+                "deletions": deletions,
+            }
+
             # Write result
             workspace = _get_workspace()
             if workspace:
@@ -636,6 +684,7 @@ class MultiEditTool(Tool):
                             "path": str(file_path),
                             "edit_count": len(edits),
                             "qe_tracked": True,
+                            **diff_metadata,
                         },
                     )
                 except ValueError:
@@ -646,7 +695,7 @@ class MultiEditTool(Tool):
             return ToolResult(
                 success=True,
                 output=f"Applied {len(edits)} edits to {path}",
-                metadata={"path": str(file_path), "edit_count": len(edits)},
+                metadata={"path": str(file_path), "edit_count": len(edits), **diff_metadata},
             )
 
         except Exception as e:

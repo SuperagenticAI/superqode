@@ -25,6 +25,13 @@ from .providers.registry import PROVIDERS, ProviderTier, ProviderCategory
 from .runtime import AgentRuntime, create_runtime, resolve_runtime_name
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass
 class PureSession:
     """Session state for Pure Mode."""
@@ -192,7 +199,8 @@ class PureMode:
             self.tools = ToolRegistry.for_profile(self.tool_profile)
 
         if is_ds4:
-            max_iterations = int(os.getenv("DS4_MAX_ITERATIONS", "6"))
+            # 0 (default) => unlimited iterations, matching fast-agent behavior.
+            max_iterations = int(os.getenv("DS4_MAX_ITERATIONS", "0"))
             session_history_limit = int(os.getenv("DS4_SESSION_HISTORY_LIMIT", "8"))
             parallel_tools = False
 
@@ -202,10 +210,8 @@ class PureMode:
             os.environ["DS4_KV_DISK_DIR"] = kv_disk_dir
             os.environ["DS4_KV_DISK_SPACE_MB"] = str(kv_disk_space)
         else:
-            default_max = (
-                30 if provider_def and provider_def.category == ProviderCategory.LOCAL else 50
-            )
-            max_iterations = int(os.getenv("SUPERQODE_MAX_ITERATIONS", str(default_max)))
+            # 0 means unlimited (fast-agent style). Users can still cap via env.
+            max_iterations = int(os.getenv("SUPERQODE_MAX_ITERATIONS", "0"))
             session_history_limit = int(os.getenv("SUPERQODE_SESSION_HISTORY_LIMIT", "20"))
             parallel_tools = True
 
@@ -232,6 +238,7 @@ class PureMode:
             on_tool_result=self.on_tool_result,
             on_thinking=self.on_thinking,
             parallel_tools=parallel_tools,
+            include_mcp=_env_flag("SUPERQODE_MCP_SEARCH"),
         )
         self._agent = getattr(self._runtime, "loop", None)
 

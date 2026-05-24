@@ -1,6 +1,6 @@
 """Tests for compact TUI tool display helpers."""
 
-from superqode.app.widgets import summarize_tool_output
+from superqode.app.widgets import _diff_stats_from_text, _format_duration, summarize_tool_output
 from superqode.tools.display import format_tool_call_compact
 
 
@@ -67,3 +67,25 @@ def test_compact_display_truncates_long_values():
     assert label.startswith('repo_search("')
     assert label.endswith("...")
     assert len(label) == 40
+
+
+def test_tool_display_counts_diff_stats():
+    diff = "\n".join(
+        [
+            "--- a/file.py",
+            "+++ b/file.py",
+            "@@ -1,2 +1,3 @@",
+            " unchanged",
+            "-old",
+            "+new",
+            "+extra",
+        ]
+    )
+
+    assert _diff_stats_from_text(diff) == (2, 1)
+
+
+def test_tool_display_formats_duration_badge():
+    assert _format_duration(0.01) == "<0.1s"
+    assert _format_duration(1.234) == "1.2s"
+    assert _format_duration(12.3) == "12s"

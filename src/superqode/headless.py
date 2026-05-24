@@ -19,6 +19,15 @@ from .tools.base import ToolRegistry
 from .tools.permissions import Permission, PermissionConfig, PermissionManager, ToolGroup
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    import os
+
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass(frozen=True)
 class HarnessProfile:
     """A built-in harness profile."""
@@ -201,6 +210,7 @@ async def run_headless(
         tools=create_tool_registry(profile),
         config=config,
         parallel_tools=True,
+        include_mcp=_env_flag("SUPERQODE_MCP_SEARCH"),
         permission_manager=PermissionManager(
             apply_backend_permissions(profile.permissions, sandbox_backend)
         ),

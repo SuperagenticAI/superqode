@@ -48,6 +48,15 @@ from .tool_bridge_openai import to_openai_function_tools
 
 logger = logging.getLogger(__name__)
 
+# OpenAI Agents SDK requires a positive max_turns. When SuperQode's
+# AgentConfig is set to unlimited (max_iterations <= 0, fast-agent style),
+# pass a very high cap so the SDK won't artificially terminate the run.
+_OPENAI_AGENTS_UNLIMITED_TURNS = 10_000
+
+
+def _resolve_max_turns(max_iterations: int) -> int:
+    return _OPENAI_AGENTS_UNLIMITED_TURNS if max_iterations <= 0 else max_iterations
+
 
 def _require_sdk():
     try:
@@ -355,7 +364,7 @@ class OpenAIAgentsRuntime:
                 prompt,
                 session=self._session,
                 run_config=self._run_config,
-                max_turns=self.config.max_iterations,
+                max_turns=_resolve_max_turns(self.config.max_iterations),
             )
         except asyncio.CancelledError:
             raise
@@ -381,7 +390,7 @@ class OpenAIAgentsRuntime:
             prompt,
             session=self._session,
             run_config=self._run_config,
-            max_turns=self.config.max_iterations,
+            max_turns=_resolve_max_turns(self.config.max_iterations),
         )
         self._active_stream = result
         try:
@@ -412,7 +421,7 @@ class OpenAIAgentsRuntime:
             prompt,
             session=self._session,
             run_config=self._run_config,
-            max_turns=self.config.max_iterations,
+            max_turns=_resolve_max_turns(self.config.max_iterations),
         )
         self._active_stream = result
         try:
@@ -481,7 +490,7 @@ class OpenAIAgentsRuntime:
             state,
             session=self._session,
             run_config=self._run_config,
-            max_turns=self.config.max_iterations,
+            max_turns=_resolve_max_turns(self.config.max_iterations),
         )
         return self._translate_result(prompt="", result=result)
 

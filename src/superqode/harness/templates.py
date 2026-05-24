@@ -153,7 +153,7 @@ def ds4_fast_local_template() -> HarnessSpec:
                 temperature=0.1,
                 tool_call_format="compact-json",
                 config={
-                    "max_iterations": 25,
+                    "max_iterations": 0,
                     "session_history_limit": 10,
                     "parallel_tools": False,
                     "tool_profile": "ds4",

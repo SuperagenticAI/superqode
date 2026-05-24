@@ -45,7 +45,7 @@ def test_gemma4_template_resolves_compact_local_policy():
     assert policy.tool_profile == "ds4"
     assert policy.tool_call_format == "strict-json"
     assert policy.parallel_tools is False
-    assert policy.max_iterations == 30
+    assert policy.max_iterations == 0
     assert policy.session_history_limit == 12
 
 
@@ -74,7 +74,7 @@ def test_no_tool_gemma4_policy_keeps_model_only_contract():
     assert policy.tool_profile == "none"
     assert policy.reasoning == "off"
     assert policy.parallel_tools is False
-    assert policy.max_iterations == 6
+    assert policy.max_iterations == 0
 
 
 def test_model_policy_config_overrides_profile_defaults():
@@ -135,7 +135,7 @@ async def test_runtime_backend_applies_gemma4_policy(monkeypatch, tmp_path):
     assert config.system_prompt_level == SystemPromptLevel.MINIMAL
     assert config.temperature == 0.2
     assert config.reasoning_effort is None
-    assert config.max_iterations == 30
+    assert config.max_iterations == 0
     assert config.session_history_limit == 12
     assert created["kwargs"]["parallel_tools"] is False
     assert "read_file" in tool_names
@@ -196,6 +196,6 @@ async def test_runtime_backend_applies_ds4_fast_local_template(monkeypatch, tmp_
 
     config = created["kwargs"]["config"]
     assert config.temperature == 0.1
-    assert config.max_iterations == 25
+    assert config.max_iterations == 0
     assert config.session_history_limit == 10
     assert created["kwargs"]["parallel_tools"] is False

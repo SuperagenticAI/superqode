@@ -91,6 +91,27 @@ def _clip_single_line(text: str, limit: int) -> str:
     return text[: limit - 1].rstrip() + "…"
 
 
+def _diff_stats_from_text(diff_text: str) -> tuple[int, int]:
+    additions = sum(
+        1 for line in diff_text.splitlines() if line.startswith("+") and not line.startswith("+++")
+    )
+    deletions = sum(
+        1 for line in diff_text.splitlines() if line.startswith("-") and not line.startswith("---")
+    )
+    return additions, deletions
+
+
+def _format_duration(seconds: float | None) -> str:
+    if seconds is None:
+        return ""
+    seconds = max(0.0, seconds)
+    if seconds < 0.05:
+        return "<0.1s"
+    if seconds < 10:
+        return f"{seconds:.1f}s"
+    return f"{seconds:.0f}s"
+
+
 class GradientLogo(Static):
     """ASCII logo with purple→pink→orange gradient - BIG display."""
 
@@ -1248,6 +1269,10 @@ class ConversationLog(RichLog):
         command: str = "",
         output: str = "",
         arguments: dict[str, Any] | None = None,
+        diff_text: str = "",
+        duration: float | None = None,
+        additions: int | None = None,
+        deletions: int | None = None,
     ):
         """
         Add a tool call display.
@@ -1259,6 +1284,10 @@ class ConversationLog(RichLog):
             command: Command if it's a shell tool
             output: Tool output/result
             arguments: Original tool arguments for compact display
+            diff_text: Unified diff to render after successful file edits
+            duration: Elapsed execution time in seconds
+            additions: Added line count for file-changing tools
+            deletions: Deleted line count for file-changing tools
         """
         display_args = dict(arguments or {})
         if file_path and not any(
@@ -1277,6 +1306,30 @@ class ConversationLog(RichLog):
                 "arguments": display_args,
             }
         )
+
+        if not hasattr(self, "_active_tool_start_times"):
+            self._active_tool_start_times = []
+
+        if status == "running":
+            self._active_tool_start_times.append(
+                {
+                    "name": tool_name,
+                    "path": file_path,
+                    "command": command,
+                    "started_at": monotonic(),
+                }
+            )
+        elif duration is None:
+            active_calls = getattr(self, "_active_tool_start_times", [])
+            for index in range(len(active_calls) - 1, -1, -1):
+                active = active_calls[index]
+                if active.get("name") != tool_name:
+                    continue
+                if file_path and active.get("path") and active.get("path") != file_path:
+                    continue
+                duration = monotonic() - active.get("started_at", monotonic())
+                del active_calls[index]
+                break
 
         # Track file modifications
         if status in ("running", "success") and file_path:
@@ -1330,6 +1383,24 @@ class ConversationLog(RichLog):
             style=THEME["text"],
         )
 
+        meta_parts: list[tuple[str, str]] = []
+        duration_label = _format_duration(duration)
+        if duration_label and status in ("success", "error"):
+            meta_parts.append((duration_label, THEME["dim"]))
+        if diff_text and additions is None and deletions is None:
+            additions, deletions = _diff_stats_from_text(diff_text)
+        if additions or deletions:
+            if additions:
+                meta_parts.append((f"+{additions}", THEME["success"]))
+            if deletions:
+                meta_parts.append((f"-{deletions}", THEME["error"]))
+        if meta_parts:
+            line.append("  ")
+            for index, (label, style) in enumerate(meta_parts):
+                if index:
+                    line.append(" ", style=THEME["dim"])
+                line.append(label, style=f"bold {style}" if label.startswith(("+", "-")) else style)
+
         if output and status in ("success", "error"):
             summary = summarize_tool_output(
                 tool_name,
@@ -1343,6 +1414,15 @@ class ConversationLog(RichLog):
 
         line.append("\n")
         self.write(line)
+
+        if (
+            diff_text
+            and status == "success"
+            and getattr(self, "tool_output_mode", "normal") != "minimal"
+        ):
+            from superqode.widgets.response_changes import render_diff_text
+
+            self.write(render_diff_text(diff_text))
 
     def _format_tool_name(self, tool_name: str) -> str:
         """Make common tool names read like concise actions."""
