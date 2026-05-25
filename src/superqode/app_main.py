@@ -19,6 +19,8 @@ from __future__ import annotations
 import asyncio
 import asyncio.base_subprocess as _asyncio_base_subprocess
 import os
+import pty
+import select
 import subprocess
 import shutil
 import time
@@ -687,6 +689,7 @@ class SuperQodeApp(App):
     _acp_client = None  # ACP client for agent communication
     _acp_client_key = None  # Current reusable ACP session key
     _acp_loop_runner = None  # Dedicated loop for persistent ACP clients
+    _acp_slash_registry = None  # Lazily-built superqode.acp.slash.SlashRegistry
     _plan_mode_enabled: bool = False  # Keep native BYOK/local prompts in plan-only mode
     _force_plan_once: bool = False  # Run the next native prompt as plan-only
     _force_execute_once: bool = False  # Run the next prompt even if plan mode is enabled
@@ -3704,6 +3707,61 @@ class SuperQodeApp(App):
     # Command Handling
     # ========================================================================
 
+    def _try_acp_slash_command(self, name: str, args: str, log: ConversationLog) -> bool:
+        """Dispatch a slash command through the ACP local registry if registered.
+
+        Returns True if the registry handled it (so the caller should stop
+        processing); False if the command isn't registered (fall through to
+        the rest of ``_handle_command``).
+
+        Output is written to the conversation log. Async handlers run on the
+        dedicated ACP loop runner when present so we don't block the UI loop.
+        """
+        from superqode.acp.slash import (
+            SlashRegistry,
+            UnknownSlashCommandError,
+            builtin_registry,
+        )
+
+        client = self._acp_client
+        if client is None:
+            return False
+
+        registry: SlashRegistry
+        if self._acp_slash_registry is None:
+            self._acp_slash_registry = builtin_registry()
+        registry = self._acp_slash_registry
+
+        if not registry.has(name):
+            return False
+
+        # Reconstruct the input line the registry expects.
+        line = f"/{name}" if not args else f"/{name} {args}"
+
+        async def _run() -> str:
+            try:
+                return await registry.dispatch(client, line)
+            except UnknownSlashCommandError:
+                # Shouldn't happen given the has() guard, but stay defensive.
+                return f"unknown local slash command: {name}"
+            except Exception as exc:  # noqa: BLE001 - surface to log, don't crash UI
+                return f"slash command {name!r} failed: {exc}"
+
+        try:
+            if self._acp_loop_runner is not None:
+                output = self._acp_loop_runner.run(_run(), timeout=15.0)
+            else:
+                import asyncio as _asyncio
+
+                output = _asyncio.run(_run())
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"slash command {name!r} dispatch error: {exc}")
+            return True
+
+        if output:
+            log.write(output)
+        return True
+
     def _handle_command(self, cmd: str, log: ConversationLog):
         # Command aliases for Vim-friendly shortcuts
         alias_map = {
@@ -3730,6 +3788,14 @@ class SuperQodeApp(App):
             args = parts[1] if len(parts) > 1 else ""
         else:
             args = parts[1] if len(parts) > 1 else ""
+
+        # ACP local slash commands win when an agent is connected. They cover
+        # introspection commands (:status, :model, :session, :history, etc.)
+        # for the connected agent so the agent's own slash surface isn't the
+        # only way to query it. Unknown commands fall through to the normal
+        # elif chain below.
+        if self._acp_client is not None and self._try_acp_slash_command(c, args, log):
+            return
 
         if c == "help":
             self._show_help(log)
@@ -6903,6 +6969,24 @@ team:
                 # Plans are important - always show
                 self._call_ui(log.add_thinking, f"📋 Plan: {len(entries)} tasks", "planning")
 
+        async def on_available_commands(commands: list[dict]) -> None:
+            """Remember agent-advertised commands without spamming the transcript."""
+            if commands:
+                self._call_ui(log.add_info, f"Agent commands available: {len(commands)}")
+
+        async def on_mode_update(mode_id: str) -> None:
+            """Surface ACP mode changes from the agent."""
+            if mode_id:
+                self._call_ui(log.add_info, f"ACP mode: {mode_id}")
+
+        async def on_usage_update(usage: dict) -> None:
+            """Surface compact ACP context usage updates."""
+            used = usage.get("used")
+            size = usage.get("size")
+            if isinstance(used, int) and isinstance(size, int) and size:
+                pct = (used / size) * 100
+                self._call_ui(log.add_info, f"Context: {used / 1000:.1f}K/{size / 1000:.1f}K ({pct:.1f}%)")
+
         async def on_permission_request(options: list[dict], tool_call: dict) -> str:
             tool_name = tool_call.get("title", "unknown")
             tool_input = tool_call.get("rawInput", {})
@@ -6951,6 +7035,44 @@ team:
 
             project_root = Path.cwd()
             client_key = (str(project_root), command, model_id or "")
+            ui_terminals = getattr(self, "_acp_ui_terminals", None)
+            if ui_terminals is None:
+                ui_terminals = {}
+                self._acp_ui_terminals = ui_terminals
+            terminal_counter_ref = getattr(self, "_acp_ui_terminal_counter_ref", None)
+            if terminal_counter_ref is None:
+                terminal_counter_ref = [0]
+                self._acp_ui_terminal_counter_ref = terminal_counter_ref
+
+            app = self
+
+            class AppTerminalService:
+                async def _run(self, method: str, params: dict) -> dict:
+                    result, _handled = await asyncio.to_thread(
+                        app._handle_terminal_method,
+                        method,
+                        params,
+                        ui_terminals,
+                        terminal_counter_ref,
+                        log,
+                    )
+                    return result
+
+                async def create(self, params: dict) -> dict:
+                    return await self._run("terminal/create", params)
+
+                async def output(self, params: dict) -> dict:
+                    return await self._run("terminal/output", params)
+
+                async def kill(self, params: dict) -> dict:
+                    return await self._run("terminal/kill", params)
+
+                async def release(self, params: dict) -> dict:
+                    return await self._run("terminal/release", params)
+
+                async def wait_for_exit(self, params: dict) -> dict:
+                    return await self._run("terminal/wait_for_exit", params)
+
             client = getattr(self, "_acp_client", None)
             if (
                 client is None
@@ -6979,6 +7101,10 @@ team:
             client.on_tool_update = on_tool_update
             client.on_permission_request = on_permission_request
             client.on_plan = on_plan
+            client.on_available_commands = on_available_commands
+            client.on_mode_update = on_mode_update
+            client.on_usage_update = on_usage_update
+            client.terminal_service = AppTerminalService()
 
             try:
                 if client.is_running():
@@ -7581,6 +7707,86 @@ team:
         Returns:
             Tuple of (response_dict, was_handled)
         """
+        def emit_terminal_tool(terminal: dict, status: str, output: str = "") -> None:
+            command_text = terminal.get("command", "")
+            terminal_id = terminal.get("terminal_id", "")
+            args = {
+                "terminalId": terminal_id,
+                "command": command_text,
+            }
+            output_text = output.strip()
+            self._call_ui(
+                log.add_tool_call,
+                "terminal",
+                status,
+                "",
+                command_text,
+                output_text,
+                args,
+            )
+
+        def emit_terminal_final_once(terminal: dict) -> None:
+            if terminal.get("rendered_final"):
+                return
+            terminal["rendered_final"] = True
+            exit_code = terminal.get("exit_code")
+            status = "success" if exit_code == 0 else "error"
+            emit_terminal_tool(terminal, status, terminal.get("output", ""))
+
+        def pty_supported() -> bool:
+            return os.name != "nt" and os.getenv("SUPERQODE_ACP_TERMINAL_PTY", "1").lower() not in {
+                "0",
+                "false",
+                "no",
+                "off",
+            }
+
+        def drain_terminal_output(terminal: dict, timeout: float = 0.0) -> None:
+            if terminal.get("pty"):
+                master_fd = terminal.get("master_fd")
+                if master_fd is None:
+                    return
+                while True:
+                    try:
+                        readable, _, _ = select.select([master_fd], [], [], timeout)
+                    except (OSError, ValueError):
+                        return
+                    timeout = 0.0
+                    if not readable:
+                        return
+                    try:
+                        chunk = os.read(master_fd, 4096)
+                    except BlockingIOError:
+                        return
+                    except OSError:
+                        return
+                    if not chunk:
+                        return
+                    terminal["output"] += chunk.decode("utf-8", errors="replace")
+                return
+
+            term_process = terminal["process"]
+            if term_process.poll() is not None:
+                remaining, _ = term_process.communicate(timeout=1)
+                if remaining:
+                    terminal["output"] += remaining
+                terminal["exit_code"] = term_process.returncode
+                return
+
+            readable, _, _ = select.select([term_process.stdout], [], [], timeout)
+            if readable:
+                chunk = term_process.stdout.read(4096)
+                if chunk:
+                    terminal["output"] += chunk
+
+        def close_terminal_pty(terminal: dict) -> None:
+            master_fd = terminal.pop("master_fd", None)
+            if master_fd is not None:
+                try:
+                    os.close(master_fd)
+                except OSError:
+                    pass
+
         if method == "terminal/create":
             command = params.get("command", "")
             args = params.get("args", [])
@@ -7605,22 +7811,51 @@ team:
             self._call_ui(self._show_thinking_line, f"🖥️ Running: {full_command}", log)
 
             try:
-                term_process = subprocess.Popen(
-                    full_command,
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    stdin=subprocess.PIPE,
-                    cwd=cwd,
-                    env=term_env,
-                    text=True,
-                )
+                master_fd = None
+                use_pty = pty_supported()
+                if use_pty:
+                    master_fd, slave_fd = pty.openpty()
+                    try:
+                        os.set_blocking(master_fd, False)
+                    except AttributeError:
+                        pass
+                    try:
+                        term_process = subprocess.Popen(
+                            full_command,
+                            shell=True,
+                            stdin=slave_fd,
+                            stdout=slave_fd,
+                            stderr=slave_fd,
+                            cwd=cwd,
+                            env=term_env,
+                            close_fds=True,
+                            start_new_session=True,
+                        )
+                    finally:
+                        os.close(slave_fd)
+                else:
+                    term_process = subprocess.Popen(
+                        full_command,
+                        shell=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        stdin=subprocess.PIPE,
+                        cwd=cwd,
+                        env=term_env,
+                        text=True,
+                    )
 
                 terminals[terminal_id] = {
                     "process": term_process,
                     "output": "",
                     "exit_code": None,
+                    "command": full_command,
+                    "terminal_id": terminal_id,
+                    "rendered_final": False,
+                    "pty": use_pty,
+                    "master_fd": master_fd,
                 }
+                emit_terminal_tool(terminals[terminal_id], "running")
 
                 return {"terminalId": terminal_id}, True
             except Exception as e:
@@ -7634,20 +7869,10 @@ team:
             if terminal:
                 term_process = terminal["process"]
                 try:
+                    drain_terminal_output(terminal, timeout=0.1)
                     if term_process.poll() is not None:
-                        remaining, _ = term_process.communicate(timeout=1)
-                        if remaining:
-                            terminal["output"] += remaining
                         terminal["exit_code"] = term_process.returncode
-                    else:
-                        import select
-
-                        if hasattr(select, "select"):
-                            readable, _, _ = select.select([term_process.stdout], [], [], 0.1)
-                            if readable:
-                                chunk = term_process.stdout.read(4096)
-                                if chunk:
-                                    terminal["output"] += chunk
+                        drain_terminal_output(terminal, timeout=0.0)
                 except Exception:
                     pass
 
@@ -7657,6 +7882,7 @@ team:
                 }
                 if terminal["exit_code"] is not None:
                     result["exitStatus"] = {"exitCode": terminal["exit_code"]}
+                    emit_terminal_final_once(terminal)
                 return result, True
             else:
                 return {"output": "", "truncated": False}, True
@@ -7668,21 +7894,28 @@ team:
             if terminal:
                 term_process = terminal["process"]
                 try:
-                    remaining, _ = term_process.communicate(timeout=120)
-                    if remaining:
-                        terminal["output"] += remaining
+                    timeout = float(params.get("timeoutMs", 120000)) / 1000
+                    deadline = time.monotonic() + timeout
+                    while term_process.poll() is None:
+                        if time.monotonic() >= deadline:
+                            raise subprocess.TimeoutExpired(term_process.args, timeout)
+                        drain_terminal_output(terminal, timeout=0.1)
+                    drain_terminal_output(terminal, timeout=0.0)
                     terminal["exit_code"] = term_process.returncode
 
-                    if terminal["output"]:
-                        # Show full terminal output, no truncation
-                        output_preview = terminal["output"].strip()
-                        if output_preview:
-                            self._call_ui(self._show_thinking_line, f"📋 {output_preview}", log)
+                    emit_terminal_final_once(terminal)
 
                     return {"exitCode": terminal["exit_code"], "signal": None}, True
                 except subprocess.TimeoutExpired:
                     term_process.kill()
+                    try:
+                        term_process.wait(timeout=2)
+                    except Exception:
+                        pass
+                    drain_terminal_output(terminal, timeout=0.0)
                     terminal["exit_code"] = -1
+                    terminal["output"] += "\n[terminal timed out]"
+                    emit_terminal_final_once(terminal)
                     return {"exitCode": -1, "signal": "SIGKILL"}, True
             else:
                 return {"exitCode": -1, "signal": None}, True
@@ -7692,11 +7925,13 @@ team:
             terminal = terminals.get(terminal_id)
             if terminal and terminal["process"]:
                 terminal["process"].terminate()
+                close_terminal_pty(terminal)
             return {}, True
 
         elif method == "terminal/release":
             terminal_id = params.get("terminalId", "")
             if terminal_id in terminals:
+                close_terminal_pty(terminals[terminal_id])
                 del terminals[terminal_id]
             return {}, True
 
@@ -7739,6 +7974,9 @@ team:
             try:
                 if term["process"] and term["process"].poll() is None:
                     term["process"].terminate()
+                master_fd = term.pop("master_fd", None)
+                if master_fd is not None:
+                    os.close(master_fd)
             except Exception:
                 pass
         terminals.clear()

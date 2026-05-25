@@ -6,6 +6,9 @@ Tests the communication layer for ACP-compatible coding agents.
 
 import pytest
 import asyncio
+import shlex
+import sys
+import textwrap
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 import json
@@ -17,6 +20,7 @@ from superqode.acp.client import (
     PROTOCOL_VERSION,
     CLIENT_NAME,
     CLIENT_VERSION,
+    default_acp_traffic_log_dir,
 )
 from superqode.acp.types import (
     PermissionOption,
@@ -205,6 +209,508 @@ class TestACPClient:
 
         on_message.assert_awaited_once_with("hello")
         assert client.get_message_buffer() == "hello"
+
+    @pytest.mark.asyncio
+    async def test_session_update_handles_commands_mode_and_usage(self, tmp_path):
+        """ACP state updates should be cached and surfaced to callbacks."""
+        on_commands = AsyncMock()
+        on_mode = AsyncMock()
+        on_usage = AsyncMock()
+        client = ACPClient(
+            project_root=tmp_path,
+            command="opencode acp",
+            on_available_commands=on_commands,
+            on_mode_update=on_mode,
+            on_usage_update=on_usage,
+        )
+
+        commands = [{"name": "review", "description": "Review changes"}]
+        await client._handle_session_update(
+            {
+                "sessionUpdate": "available_commands_update",
+                "availableCommands": commands,
+            }
+        )
+        await client._handle_session_update(
+            {"sessionUpdate": "current_mode_update", "currentModeId": "plan"}
+        )
+        await client._handle_session_update(
+            {
+                "sessionUpdate": "usage_update",
+                "used": 1000,
+                "size": 4000,
+                "cost": {"amount": 0.02, "currency": "USD"},
+            }
+        )
+
+        on_commands.assert_awaited_once_with(commands)
+        on_mode.assert_awaited_once_with("plan")
+        on_usage.assert_awaited_once()
+        assert client.get_available_commands_cached() == commands
+        assert await client.get_current_mode() == "plan"
+        assert client.get_usage()["used"] == 1000
+        assert client.get_stats().cost == 0.02
+
+    @pytest.mark.asyncio
+    async def test_new_session_captures_modes_and_models(self, tmp_path, monkeypatch):
+        """Modes and models returned by session/new should be available without extra RPCs."""
+        client = ACPClient(project_root=tmp_path, command="opencode acp")
+
+        async def fake_call_method(method, *, timeout=None, **params):
+            return {
+                "sessionId": "session-1",
+                "modes": {
+                    "currentModeId": "write",
+                    "availableModes": [{"id": "write", "name": "Write"}],
+                },
+                "models": {
+                    "currentModelId": "model-1",
+                    "availableModels": [{"id": "model-1", "name": "Model 1"}],
+                },
+            }
+
+        monkeypatch.setattr(client, "_call_method", fake_call_method)
+
+        await client._new_session()
+
+        assert await client.get_current_mode() == "write"
+        assert await client.get_current_model() == "model-1"
+        assert await client.get_available_modes() == [{"id": "write", "name": "Write"}]
+        assert await client.get_available_models() == [{"id": "model-1", "name": "Model 1"}]
+
+    @pytest.mark.asyncio
+    async def test_set_mode_uses_acp_mode_id_parameter(self, tmp_path, monkeypatch):
+        """ACP session/set_mode expects modeId, not SuperQode's older modeSlug alias."""
+        client = ACPClient(project_root=tmp_path, command="opencode acp")
+        client._session_id = "session-1"
+        calls = []
+
+        async def fake_call_method(method, *, timeout=None, **params):
+            calls.append((method, params))
+            return {}
+
+        monkeypatch.setattr(client, "_call_method", fake_call_method)
+
+        assert await client.set_mode("plan") is True
+        assert calls == [
+            (
+                "session/set_mode",
+                {
+                    "sessionId": "session-1",
+                    "modeId": "plan",
+                },
+            )
+        ]
+        assert await client.get_current_mode() == "plan"
+
+    @pytest.mark.asyncio
+    async def test_terminal_requests_delegate_to_service(self, tmp_path):
+        """TUI callers can own ACP terminal lifecycle through terminal_service."""
+
+        class FakeTerminalService:
+            def __init__(self):
+                self.calls = []
+
+            async def create(self, params):
+                self.calls.append(("create", params))
+                return {"terminalId": "ui-terminal-1"}
+
+            async def output(self, params):
+                self.calls.append(("output", params))
+                return {"output": "hello", "truncated": False}
+
+            async def kill(self, params):
+                self.calls.append(("kill", params))
+                return {}
+
+            async def release(self, params):
+                self.calls.append(("release", params))
+                return {}
+
+            async def wait_for_exit(self, params):
+                self.calls.append(("wait_for_exit", params))
+                return {"exitCode": 0, "signal": None}
+
+        service = FakeTerminalService()
+        client = ACPClient(
+            project_root=tmp_path,
+            command="opencode acp",
+            terminal_service=service,
+        )
+
+        assert await client._handle_agent_request(
+            "terminal/create", {"command": "echo", "args": ["hello"]}
+        ) == {"terminalId": "ui-terminal-1"}
+        assert await client._handle_agent_request(
+            "terminal/output", {"terminalId": "ui-terminal-1"}
+        ) == {"output": "hello", "truncated": False}
+        assert await client._handle_agent_request(
+            "terminal/wait_for_exit", {"terminalId": "ui-terminal-1"}
+        ) == {"exitCode": 0, "signal": None}
+        assert await client._handle_agent_request(
+            "terminal/kill", {"terminalId": "ui-terminal-1"}
+        ) == {}
+        assert await client._handle_agent_request(
+            "terminal/release", {"terminalId": "ui-terminal-1"}
+        ) == {}
+
+        assert [name for name, _params in service.calls] == [
+            "create",
+            "output",
+            "wait_for_exit",
+            "kill",
+            "release",
+        ]
+        assert client._terminals == {}
+
+    @pytest.mark.asyncio
+    async def test_terminal_release_fallback_remains_available(self, tmp_path):
+        """Headless callers without terminal_service still use client-owned terminals."""
+        client = ACPClient(project_root=tmp_path, command="opencode acp")
+        client._terminals["terminal-1"] = {"process": None}
+
+        assert await client._handle_agent_request(
+            "terminal/release", {"terminalId": "terminal-1"}
+        ) == {}
+        assert "terminal-1" not in client._terminals
+
+    @pytest.mark.asyncio
+    async def test_read_loop_does_not_block_responses_behind_permission_request(
+        self, tmp_path, monkeypatch
+    ):
+        """Blocking inbound RPC handlers must not stall unrelated responses.
+
+        ACP agents can ask for permission while also sending responses to
+        earlier client requests. If the read loop awaits the permission handler
+        inline, the pending response is not processed until the user answers.
+        """
+
+        class FakeStdout:
+            def __init__(self, lines):
+                self._lines = [line.encode("utf-8") + b"\n" for line in lines]
+                self.eof = asyncio.Event()
+
+            async def readline(self):
+                if self._lines:
+                    return self._lines.pop(0)
+                await self.eof.wait()
+                return b""
+
+        class FakeProcess:
+            def __init__(self, stdout):
+                self.stdout = stdout
+
+        permission_can_finish = asyncio.Event()
+
+        async def on_permission_request(options, tool_call):
+            await permission_can_finish.wait()
+            return options[0]["optionId"]
+
+        permission_request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "session/request_permission",
+            "params": {
+                "options": [
+                    {
+                        "optionId": "allow-1",
+                        "name": "Allow",
+                        "kind": "allow_once",
+                    }
+                ],
+                "toolCall": {
+                    "toolCallId": "tool-1",
+                    "title": "Run command",
+                },
+            },
+        }
+        unrelated_response = {
+            "jsonrpc": "2.0",
+            "id": 99,
+            "result": {"ok": True},
+        }
+
+        stdout = FakeStdout([json.dumps(permission_request), json.dumps(unrelated_response)])
+        client = ACPClient(
+            project_root=tmp_path,
+            command="opencode acp",
+            on_permission_request=on_permission_request,
+        )
+        client._process = FakeProcess(stdout)
+        pending = asyncio.get_running_loop().create_future()
+        client._pending_requests[99] = pending
+        sent = []
+
+        async def fake_send_json(data):
+            sent.append(data)
+
+        monkeypatch.setattr(client, "_send_json", fake_send_json)
+
+        read_task = asyncio.create_task(client._read_loop())
+        assert await asyncio.wait_for(pending, timeout=1.0) == {"ok": True}
+
+        permission_can_finish.set()
+        stdout.eof.set()
+        await asyncio.wait_for(read_task, timeout=1.0)
+
+        assert sent == [
+            {
+                "jsonrpc": "2.0",
+                "result": {
+                    "outcome": {
+                        "outcome": "selected",
+                        "optionId": "allow-1",
+                    }
+                },
+                "id": 1,
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_traffic_logging_to_explicit_path(self, tmp_path):
+        """ACP traffic logs raw client/agent JSON when an explicit path is configured."""
+
+        class FakeStdin:
+            def __init__(self):
+                self.writes = []
+
+            def write(self, data):
+                self.writes.append(data)
+
+            async def drain(self):
+                return None
+
+        class FakeProcess:
+            def __init__(self):
+                self.stdin = FakeStdin()
+                self.stdout = None
+
+        log_path = tmp_path / "traffic.jsonl"
+        client = ACPClient(
+            project_root=tmp_path,
+            command="opencode acp",
+            traffic_log_path=log_path,
+        )
+        client._process = FakeProcess()
+
+        await client._initialize_traffic_log()
+        await client._send_json({"jsonrpc": "2.0", "method": "initialize", "id": 1})
+        await client._log_traffic("agent->client", {"jsonrpc": "2.0", "result": {}, "id": 1})
+
+        records = [json.loads(line) for line in log_path.read_text().splitlines()]
+        assert records[0]["direction"] == "meta"
+        assert records[0]["event"] == "start"
+        assert records[1]["direction"] == "client->agent"
+        assert records[1]["payload"]["method"] == "initialize"
+        assert records[2]["direction"] == "agent->client"
+        assert records[2]["payload"]["id"] == 1
+        assert client.get_traffic_log_path() == log_path
+
+    @pytest.mark.asyncio
+    async def test_traffic_logging_env_uses_per_agent_default_path(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("SUPERQODE_HOME", str(tmp_path))
+        monkeypatch.setenv("SUPERQODE_ACP_TRAFFIC_LOG", "1")
+
+        client = ACPClient(
+            project_root=tmp_path,
+            command="opencode acp",
+            agent_identity="opencode.ai",
+        )
+        await client._initialize_traffic_log()
+
+        log_path = client.get_traffic_log_path()
+        assert log_path is not None
+        assert log_path.parent == default_acp_traffic_log_dir()
+        assert log_path.name.startswith("opencode.ai-")
+        assert log_path.suffix == ".jsonl"
+
+    @pytest.mark.asyncio
+    async def test_traffic_logging_write_failure_is_non_fatal(self, tmp_path, monkeypatch):
+        client = ACPClient(
+            project_root=tmp_path,
+            command="opencode acp",
+            traffic_log_path=tmp_path / "traffic.jsonl",
+        )
+        client._traffic_log_resolved_path = tmp_path / "traffic.jsonl"
+
+        def fail_open(*args, **kwargs):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(Path, "open", fail_open)
+
+        await client._log_traffic("client->agent", {"ok": True})
+
+    @pytest.mark.asyncio
+    async def test_real_subprocess_agent_exercises_terminal_service_path(self, tmp_path):
+        """Run a tiny ACP subprocess that calls terminal/* during a prompt turn.
+
+        This covers the real ``ACPClient.start()`` + read loop + outbound
+        request correlation path, not just direct method calls.
+        """
+
+        server_path = tmp_path / "fake_acp_terminal_server.py"
+        server_path.write_text(
+            textwrap.dedent(
+                """
+                import json
+                import sys
+
+
+                def send(payload):
+                    print(json.dumps(payload), flush=True)
+
+
+                def recv():
+                    line = sys.stdin.readline()
+                    if not line:
+                        raise SystemExit(0)
+                    return json.loads(line)
+
+
+                session_id = "fake-session-1"
+                while True:
+                    request = recv()
+                    method = request.get("method")
+                    request_id = request.get("id")
+                    if method == "initialize":
+                        send({
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "result": {
+                                "protocolVersion": 1,
+                                "agentCapabilities": {
+                                    "loadSession": False,
+                                    "promptCapabilities": {},
+                                },
+                            },
+                        })
+                    elif method == "session/new":
+                        send({
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "result": {"sessionId": session_id},
+                        })
+                    elif method == "session/prompt":
+                        send({
+                            "jsonrpc": "2.0",
+                            "id": 101,
+                            "method": "terminal/create",
+                            "params": {
+                                "sessionId": session_id,
+                                "command": "echo",
+                                "args": ["fake_terminal_service_smoke"],
+                            },
+                        })
+                        create_response = recv()
+                        terminal_id = create_response["result"]["terminalId"]
+                        send({
+                            "jsonrpc": "2.0",
+                            "id": 102,
+                            "method": "terminal/output",
+                            "params": {
+                                "sessionId": session_id,
+                                "terminalId": terminal_id,
+                            },
+                        })
+                        recv()
+                        send({
+                            "jsonrpc": "2.0",
+                            "id": 103,
+                            "method": "terminal/wait_for_exit",
+                            "params": {
+                                "sessionId": session_id,
+                                "terminalId": terminal_id,
+                            },
+                        })
+                        recv()
+                        send({
+                            "jsonrpc": "2.0",
+                            "method": "session/update",
+                            "params": {
+                                "sessionId": session_id,
+                                "update": {
+                                    "sessionUpdate": "agent_message_chunk",
+                                    "content": {
+                                        "type": "text",
+                                        "text": "terminal done",
+                                    },
+                                },
+                            },
+                        })
+                        send({
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "result": {"stopReason": "end_turn"},
+                        })
+                    else:
+                        send({
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "error": {"code": -32601, "message": f"unknown {method}"},
+                        })
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        class FakeTerminalService:
+            def __init__(self):
+                self.calls = []
+
+            async def create(self, params):
+                self.calls.append(("create", params))
+                return {"terminalId": "host-terminal-1"}
+
+            async def output(self, params):
+                self.calls.append(("output", params))
+                return {"output": "fake_terminal_service_smoke", "truncated": False}
+
+            async def kill(self, params):
+                self.calls.append(("kill", params))
+                return {}
+
+            async def release(self, params):
+                self.calls.append(("release", params))
+                return {}
+
+            async def wait_for_exit(self, params):
+                self.calls.append(("wait_for_exit", params))
+                return {"exitCode": 0, "signal": None}
+
+        service = FakeTerminalService()
+        messages = []
+
+        async def on_message(text):
+            messages.append(text)
+
+        command = f"{shlex.quote(sys.executable)} {shlex.quote(str(server_path))}"
+        client = ACPClient(
+            project_root=tmp_path,
+            command=command,
+            terminal_service=service,
+            on_message=on_message,
+            startup_timeout=5,
+            request_timeout=5,
+            prompt_timeout=5,
+        )
+
+        try:
+            assert await client.start() is True
+            assert await client.send_prompt("run terminal smoke") == "end_turn"
+        finally:
+            await client.stop()
+
+        assert messages == ["terminal done"]
+        assert [name for name, _params in service.calls] == [
+            "create",
+            "output",
+            "wait_for_exit",
+        ]
+        assert service.calls[0][1]["command"] == "echo"
+        assert service.calls[1][1]["terminalId"] == "host-terminal-1"
+        assert service.calls[2][1]["terminalId"] == "host-terminal-1"
 
 
 class TestProtocolConstants:

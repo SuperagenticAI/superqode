@@ -1,10 +1,20 @@
-"""Curated list of 14 official ACP agents.
+"""ACP agent registry compatibility layer.
 
-This registry contains metadata for all official ACP-compatible agents.
-These are the agents that implement the Agent Client Protocol.
+The maintained catalog lives in ``agents/data/*.toml`` so new agents and
+per-OS actions can be added without editing Python. This module preserves the
+older synchronous ``AgentMetadata`` API for existing callers.
 """
 
-from typing import TypedDict, Literal
+from __future__ import annotations
+
+import platform
+from pathlib import Path
+from typing import Any, TypedDict, Literal
+
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
 
 AgentStatus = Literal["available", "coming-soon", "deprecated"]
 
@@ -26,7 +36,7 @@ class AgentMetadata(TypedDict):
     requirements: list[str]
 
 
-# 14 Official ACP Agents
+# Python fallback used if TOML data cannot be loaded.
 ACP_AGENTS_REGISTRY: dict[str, AgentMetadata] = {
     # =========================================================================
     # 1. Gemini CLI - Google's Reference ACP Implementation
@@ -269,13 +279,95 @@ ACP_AGENTS_REGISTRY: dict[str, AgentMetadata] = {
 }
 
 
+def _current_os_key() -> str:
+    system = platform.system().lower()
+    if system == "darwin":
+        return "macos"
+    if system.startswith("win"):
+        return "windows"
+    return "linux"
+
+
+def _os_value(values: Any) -> str:
+    if isinstance(values, str):
+        return values
+    if not isinstance(values, dict):
+        return ""
+    os_key = _current_os_key()
+    value = values.get(os_key) or values.get("*")
+    return value if isinstance(value, str) else ""
+
+
+def _action_command(actions: Any, action: str) -> str:
+    if not isinstance(actions, dict):
+        return ""
+    os_key = _current_os_key()
+    for key in (os_key, "*"):
+        group = actions.get(key)
+        if not isinstance(group, dict):
+            continue
+        spec = group.get(action)
+        if isinstance(spec, dict) and isinstance(spec.get("command"), str):
+            return spec["command"]
+    return ""
+
+
+def _agent_metadata_from_toml(agent: dict[str, Any]) -> AgentMetadata | None:
+    identity = agent.get("identity")
+    name = agent.get("name")
+    short_name = agent.get("short_name")
+    if not all(isinstance(value, str) and value for value in (identity, name, short_name)):
+        return None
+
+    install_command = _action_command(agent.get("actions", {}), "install")
+    return {
+        "identity": identity,
+        "name": name,
+        "short_name": short_name,
+        "url": agent.get("url", ""),
+        "author_name": agent.get("author_name", ""),
+        "author_url": agent.get("author_url", ""),
+        "description": agent.get("description", ""),
+        "run_command": _os_value(agent.get("run_command", {})),
+        "status": "available" if agent.get("active", True) else "deprecated",
+        "installation_command": install_command,
+        "installation_instructions": agent.get("help", ""),
+        "requirements": [],
+    }
+
+
+def _read_toml_registry() -> dict[str, AgentMetadata]:
+    registry: dict[str, AgentMetadata] = {}
+    search_paths = [Path(__file__).parent / "data", Path.home() / ".superqode" / "agents"]
+    for search_path in search_paths:
+        if not search_path.exists():
+            continue
+        for path in sorted(search_path.glob("*.toml")):
+            try:
+                data = tomllib.load(path.open("rb"))
+            except Exception:
+                continue
+            if not data.get("active", True):
+                continue
+            metadata = _agent_metadata_from_toml(data)
+            if metadata is not None:
+                registry[metadata["identity"]] = metadata
+    return registry
+
+
 def get_all_registry_agents() -> dict[str, AgentMetadata]:
     """Get all agents from the registry.
 
     Returns:
         Dictionary mapping agent identity to metadata.
     """
-    return ACP_AGENTS_REGISTRY.copy()
+    toml_agents = _read_toml_registry()
+    if not toml_agents:
+        return ACP_AGENTS_REGISTRY.copy()
+
+    merged = ACP_AGENTS_REGISTRY.copy()
+    merged.update(toml_agents)
+    return merged
 
 
 def get_registry_agent(identity: str) -> AgentMetadata | None:
@@ -287,7 +379,7 @@ def get_registry_agent(identity: str) -> AgentMetadata | None:
     Returns:
         Agent metadata if found, None otherwise.
     """
-    return ACP_AGENTS_REGISTRY.get(identity)
+    return get_all_registry_agents().get(identity)
 
 
 def get_registry_agent_by_short_name(short_name: str) -> AgentMetadata | None:
@@ -299,7 +391,7 @@ def get_registry_agent_by_short_name(short_name: str) -> AgentMetadata | None:
     Returns:
         Agent metadata if found, None otherwise.
     """
-    for agent in ACP_AGENTS_REGISTRY.values():
+    for agent in get_all_registry_agents().values():
         if agent["short_name"].lower() == short_name.lower():
             return agent
     return None

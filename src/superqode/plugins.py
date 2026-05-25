@@ -1,11 +1,35 @@
-"""Plugin manifest loading for SuperQode extensions."""
+"""Plugin manifest loading for SuperQode extensions.
+
+Event hooks
+-----------
+A manifest's ``event_hooks`` is a list of entries with the shape::
+
+    {
+      "point": "before_tool_call",            # one of agent.hooks.ALL_HOOK_POINTS
+      "handler": "myplugin.hooks:audit",      # "module:func" or "module.func"
+      "name": "audit-tools"                   # optional, defaults to handler basename
+    }
+
+Use :func:`register_plugin_hooks` to import each handler and register it
+against an :class:`agent.hooks.HookRegistry`. Bad entries (unknown point,
+import error, non-callable) are skipped with a recorded error so one
+broken plugin doesn't take the others down.
+"""
 
 from __future__ import annotations
 
+import importlib
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from superqode.agent.hooks import HookRegistry
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -100,6 +124,133 @@ def load_plugins(root: str | Path = ".") -> List[PluginManifest]:
     return plugins
 
 
+@dataclass(frozen=True)
+class PluginHookRegistration:
+    """Outcome of registering one plugin event_hook entry."""
+
+    plugin_id: str
+    point: str
+    handler: str
+    name: str
+
+
+@dataclass(frozen=True)
+class PluginHookError:
+    """Failure attaching one plugin event_hook entry. Other entries still run."""
+
+    plugin_id: str
+    handler: Optional[str]
+    message: str
+
+
+@dataclass(frozen=True)
+class PluginHookRegistrationResult:
+    registered: List[PluginHookRegistration] = field(default_factory=list)
+    errors: List[PluginHookError] = field(default_factory=list)
+
+
+def _resolve_handler(spec: str) -> Callable[..., Any]:
+    """Resolve an import path to a callable.
+
+    Accepts both ``module:func`` (canonical) and ``module.func`` (Pythonic).
+    The colon form is preferred because it disambiguates packages whose
+    final dotted segment happens to share a name with an attribute.
+    """
+    if not isinstance(spec, str) or not spec.strip():
+        raise ValueError("handler must be a non-empty string")
+    spec = spec.strip()
+    if ":" in spec:
+        module_name, _, attr = spec.partition(":")
+    else:
+        if "." not in spec:
+            raise ValueError(f"handler {spec!r} must include a module path")
+        module_name, _, attr = spec.rpartition(".")
+    if not module_name or not attr:
+        raise ValueError(f"handler {spec!r} must be 'module:func' or 'module.func'")
+    module = importlib.import_module(module_name)
+    try:
+        target = getattr(module, attr)
+    except AttributeError as exc:
+        raise ValueError(f"{module_name!r} has no attribute {attr!r}") from exc
+    if not callable(target):
+        raise ValueError(f"handler {spec!r} resolved to a non-callable")
+    return target
+
+
+def register_plugin_hooks(
+    registry: "HookRegistry",
+    manifests: List[PluginManifest],
+) -> PluginHookRegistrationResult:
+    """Resolve each manifest's ``event_hooks`` and register them.
+
+    Per-entry errors are collected, not raised - a single broken plugin
+    must not block the others. Inspect the returned ``errors`` list (or
+    the logger) to surface failures to the user.
+    """
+    from superqode.agent.hooks import ALL_HOOK_POINTS
+
+    registered: List[PluginHookRegistration] = []
+    errors: List[PluginHookError] = []
+
+    for manifest in manifests:
+        for entry in manifest.event_hooks:
+            handler_spec = (entry.get("handler") or entry.get("target") or "") if isinstance(entry, dict) else ""
+            point = entry.get("point") if isinstance(entry, dict) else None
+            name = entry.get("name") if isinstance(entry, dict) else None
+
+            if not isinstance(entry, dict):
+                errors.append(
+                    PluginHookError(
+                        plugin_id=manifest.id,
+                        handler=None,
+                        message=f"event_hook entry must be a dict, got {type(entry).__name__}",
+                    )
+                )
+                continue
+            if point not in ALL_HOOK_POINTS:
+                errors.append(
+                    PluginHookError(
+                        plugin_id=manifest.id,
+                        handler=handler_spec or None,
+                        message=(
+                            f"unknown hook point {point!r}; "
+                            f"valid: {', '.join(ALL_HOOK_POINTS)}"
+                        ),
+                    )
+                )
+                continue
+            try:
+                fn = _resolve_handler(handler_spec)
+            except Exception as exc:  # noqa: BLE001
+                errors.append(
+                    PluginHookError(
+                        plugin_id=manifest.id,
+                        handler=handler_spec or None,
+                        message=str(exc),
+                    )
+                )
+                logger.warning(
+                    "plugin %s: failed to resolve hook handler %r: %s",
+                    manifest.id,
+                    handler_spec,
+                    exc,
+                )
+                continue
+
+            resolved_name = name or f"{manifest.id}:{handler_spec}"
+            registered_name = registry.register(point, fn, name=resolved_name)
+            registered.append(
+                PluginHookRegistration(
+                    plugin_id=manifest.id,
+                    point=point,
+                    handler=handler_spec,
+                    name=registered_name,
+                )
+            )
+
+    return PluginHookRegistrationResult(registered=registered, errors=errors)
+
+
 def validate_plugin_manifest(path: str | Path) -> List[str]:
     """Validate a plugin manifest and return human-readable issues."""
     issues: List[str] = []
@@ -124,5 +275,27 @@ def validate_plugin_manifest(path: str | Path) -> List[str]:
         collection = getattr(manifest, collection_name)
         if not isinstance(collection, list):
             issues.append(f"{collection_name} must be a list")
+
+    # Validate each event_hook entry shape; surface every problem so users
+    # can fix them all in one pass rather than re-running validation.
+    from superqode.agent.hooks import ALL_HOOK_POINTS
+
+    for index, entry in enumerate(manifest.event_hooks):
+        label = f"event_hooks[{index}]"
+        if not isinstance(entry, dict):
+            issues.append(f"{label} must be a dict")
+            continue
+        point = entry.get("point")
+        if point not in ALL_HOOK_POINTS:
+            issues.append(
+                f"{label}.point {point!r} is not one of {', '.join(ALL_HOOK_POINTS)}"
+            )
+        handler = entry.get("handler") or entry.get("target")
+        if not isinstance(handler, str) or not handler.strip():
+            issues.append(f"{label}.handler must be a non-empty string")
+        elif ":" not in handler and "." not in handler:
+            issues.append(
+                f"{label}.handler {handler!r} must be 'module:func' or 'module.func'"
+            )
 
     return issues

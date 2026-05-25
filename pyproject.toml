@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.1.31"
+version = "0.1.33"
 description = "SuperQode: Multi-Agent Coding Agent Harness"
 readme = "README.md"
 license = "Apache-2.0"
@@ -124,7 +124,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-superqode = ["agents/data/*.toml", "data/*.yaml"]
+superqode = ["agents/data/*.toml", "data/*.yaml", "py.typed"]
 
 [tool.ruff]
 line-length = 100

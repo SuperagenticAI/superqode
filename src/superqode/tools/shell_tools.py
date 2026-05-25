@@ -32,8 +32,19 @@ class BashTool(Tool):
     """
 
     DEFAULT_TIMEOUT = 120  # 2 minutes
-    MAX_OUTPUT = 50000  # 50KB output limit
+    MAX_OUTPUT = 50000  # 50KB - fallback cap when ctx.max_output_bytes is None
     CHUNK_SIZE = 1024  # Read chunks for streaming
+
+    @staticmethod
+    def _effective_max_output(ctx: ToolContext, default: int) -> int:
+        """Return the per-call byte cap.
+
+        AgentLoop sizes ``ctx.max_output_bytes`` from the model's
+        ``max_output_tokens`` (see agent/terminal_output_limits.py). When the
+        loop didn't populate it - direct tool calls, legacy callers - we fall
+        back to the class default.
+        """
+        return ctx.max_output_bytes if ctx.max_output_bytes else default
 
     def __init__(self, git_guard_enabled: bool = True):
         """
@@ -148,11 +159,11 @@ class BashTool(Tool):
         if stderr_str:
             output += f"\n[stderr]\n{stderr_str}" if output else stderr_str
 
-        # Truncate if too long
-        if len(output) > self.MAX_OUTPUT:
-            output = (
-                output[: self.MAX_OUTPUT] + f"\n\n[Output truncated at {self.MAX_OUTPUT} bytes]"
-            )
+        # Truncate if too long. Per-call cap so we can size to the active
+        # model's context window via ctx.max_output_bytes.
+        cap = self._effective_max_output(ctx, self.MAX_OUTPUT)
+        if len(output) > cap:
+            output = output[:cap] + f"\n\n[Output truncated at {cap} bytes]"
 
         success = process.returncode == 0
         await ctx.emit_progress(1.0, "Complete" if success else "Failed")
@@ -182,6 +193,7 @@ class BashTool(Tool):
         output_chunks = []
         total_bytes = 0
         truncated = False
+        cap = self._effective_max_output(ctx, self.MAX_OUTPUT)
 
         async def read_stream(stream, is_stderr: bool = False):
             """Read from a stream and emit chunks."""
@@ -201,9 +213,9 @@ class BashTool(Tool):
 
                 text = chunk.decode("utf-8", errors="replace")
 
-                # Check size limit
-                if total_bytes + len(text) > self.MAX_OUTPUT:
-                    remaining = self.MAX_OUTPUT - total_bytes
+                # Check size limit (sized to model's context window via cap)
+                if total_bytes + len(text) > cap:
+                    remaining = cap - total_bytes
                     if remaining > 0:
                         text = text[:remaining]
                         output_chunks.append(text)
@@ -241,7 +253,7 @@ class BashTool(Tool):
 
         output = "".join(output_chunks)
         if truncated:
-            output += f"\n\n[Output truncated at {self.MAX_OUTPUT} bytes]"
+            output += f"\n\n[Output truncated at {cap} bytes]"
 
         success = process.returncode == 0
         await ctx.emit_progress(1.0, "Complete" if success else "Failed")

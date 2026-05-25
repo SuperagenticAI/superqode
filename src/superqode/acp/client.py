@@ -8,10 +8,11 @@ This is the primary interface for all ACP agent communication.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 import json
 import os
 from pathlib import Path
-from typing import Any, Callable, Awaitable, Optional, Dict, List
+from typing import Any, Callable, Awaitable, Optional, Dict, List, Protocol
 from dataclasses import dataclass, field
 from time import monotonic
 
@@ -45,6 +46,26 @@ CLIENT_NAME = "SuperQode"
 CLIENT_VERSION = "0.1.20"
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _safe_log_name(value: str) -> str:
+    safe = "".join(ch if ch.isalnum() or ch in ("-", "_", ".") else "_" for ch in value)
+    return safe.strip("._") or "agent"
+
+
+def default_acp_traffic_log_dir() -> Path:
+    """Resolve the default ACP traffic log directory."""
+    home = os.environ.get("SUPERQODE_HOME")
+    if home:
+        return Path(home).expanduser() / "acp-logs"
+    return Path.home() / ".superqode" / "acp-logs"
+
+
 @dataclass
 class ACPMessage:
     """A message received from the agent."""
@@ -62,6 +83,34 @@ class ACPStats:
     files_read: List[str] = field(default_factory=list)
     duration: float = 0.0
     stop_reason: str = ""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    thinking_tokens: int = 0
+    cost: float = 0.0
+
+
+class ACPTerminalService(Protocol):
+    """Host-owned terminal service for ACP terminal/* requests.
+
+    The fallback implementation inside ``ACPClient`` keeps existing
+    behavior working for headless callers. TUI callers can provide this
+    service to own terminal rendering, lifecycle, and future PTY handling.
+    """
+
+    async def create(self, params: dict) -> CreateTerminalResponse:
+        ...
+
+    async def output(self, params: dict) -> TerminalOutputResponse:
+        ...
+
+    async def kill(self, params: dict) -> dict:
+        ...
+
+    async def release(self, params: dict) -> dict:
+        ...
+
+    async def wait_for_exit(self, params: dict) -> WaitForTerminalExitResponse:
+        ...
 
 
 @dataclass
@@ -89,6 +138,13 @@ class ACPClient:
         Callable[[List[PermissionOption], ToolCall], Awaitable[str]]
     ] = None
     on_plan: Optional[Callable[[List[dict]], Awaitable[None]]] = None
+    on_user_message: Optional[Callable[[str], Awaitable[None]]] = None
+    on_available_commands: Optional[Callable[[List[dict]], Awaitable[None]]] = None
+    on_mode_update: Optional[Callable[[str], Awaitable[None]]] = None
+    on_usage_update: Optional[Callable[[dict], Awaitable[None]]] = None
+    terminal_service: Optional[ACPTerminalService] = None
+    traffic_log_path: Optional[Path] = None
+    traffic_log_enabled: Optional[bool] = None
 
     # Persistent permission store. When set, ``_handle_permission_request``
     # consults the store before invoking the user callback. If the user
@@ -112,6 +168,7 @@ class ACPClient:
     _process: Optional[asyncio.subprocess.Process] = field(default=None, repr=False)
     _request_id: int = field(default=0, repr=False)
     _pending_requests: Dict[int, asyncio.Future] = field(default_factory=dict, repr=False)
+    _inbound_tasks: set[asyncio.Task] = field(default_factory=set, repr=False)
     _session_id: str = field(default="", repr=False)
     _tool_calls: Dict[str, ToolCall] = field(default_factory=dict, repr=False)
     _read_task: Optional[asyncio.Task] = field(default=None, repr=False)
@@ -124,6 +181,13 @@ class ACPClient:
     _tool_actions: List[dict] = field(default_factory=list, repr=False)
     _start_time: float = field(default=0.0, repr=False)
     _message_buffer: str = field(default="", repr=False)
+    _current_mode_id: Optional[str] = field(default=None, repr=False)
+    _available_modes: List[dict] = field(default_factory=list, repr=False)
+    _current_model_id: Optional[str] = field(default=None, repr=False)
+    _available_models: List[dict] = field(default_factory=list, repr=False)
+    _available_commands: List[dict] = field(default_factory=list, repr=False)
+    _usage: Dict[str, Any] = field(default_factory=dict, repr=False)
+    _traffic_log_resolved_path: Optional[Path] = field(default=None, repr=False)
 
     # Agent-advertised capabilities from the initialize response.
     # ``loadSession`` is the one we care about for resume; if the agent
@@ -139,6 +203,7 @@ class ACPClient:
         self._tool_actions = []
         self._start_time = monotonic()
         self._message_buffer = ""
+        self._usage = {}
 
     def get_stats(self) -> ACPStats:
         """Get current session stats."""
@@ -147,6 +212,18 @@ class ACPClient:
             files_modified=self._files_modified.copy(),
             files_read=self._files_read.copy(),
             duration=monotonic() - self._start_time if self._start_time else 0.0,
+            prompt_tokens=int(
+                self._usage.get("input_tokens")
+                or self._usage.get("prompt_tokens")
+                or 0
+            ),
+            completion_tokens=int(
+                self._usage.get("output_tokens")
+                or self._usage.get("completion_tokens")
+                or 0
+            ),
+            thinking_tokens=int(self._usage.get("thought_tokens") or 0),
+            cost=self._usage_cost_amount(self._usage),
         )
 
     def get_message_buffer(self) -> str:
@@ -163,9 +240,15 @@ class ACPClient:
             and not self._read_task.done()
         )
 
+    def get_traffic_log_path(self) -> Optional[Path]:
+        """Return the active ACP traffic log path, if logging is enabled."""
+        return self._traffic_log_resolved_path
+
     async def start(self) -> bool:
         """Start the ACP agent subprocess."""
         try:
+            await self._initialize_traffic_log()
+
             # Use command as-is - model selection is handled via ACP protocol
             # Don't add -m flag as not all agents support it (e.g., opencode acp)
             cmd = self.command
@@ -235,6 +318,74 @@ class ACPClient:
                 self._process.kill()
             self._process = None
 
+    async def _initialize_traffic_log(self) -> None:
+        """Create the ACP traffic log file when logging is enabled.
+
+        Logging is opt-in because raw ACP traffic may include prompts, file
+        contents, diffs, terminal output, or other sensitive project data.
+        Enable with ``traffic_log_path`` or ``SUPERQODE_ACP_TRAFFIC_LOG=1``.
+        """
+        enabled = (
+            self.traffic_log_enabled
+            if self.traffic_log_enabled is not None
+            else _env_flag("SUPERQODE_ACP_TRAFFIC_LOG", default=False)
+        )
+        explicit_path = self.traffic_log_path or (
+            Path(os.environ["SUPERQODE_ACP_TRAFFIC_LOG_PATH"]).expanduser()
+            if os.environ.get("SUPERQODE_ACP_TRAFFIC_LOG_PATH")
+            else None
+        )
+        if explicit_path is None and not enabled:
+            self._traffic_log_resolved_path = None
+            return
+
+        if explicit_path is not None:
+            log_path = explicit_path
+        else:
+            agent_name = self.agent_identity or self.command.split()[0] or "agent"
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            log_path = default_acp_traffic_log_dir() / f"{_safe_log_name(agent_name)}-{timestamp}.jsonl"
+
+        self._traffic_log_resolved_path = log_path
+        await asyncio.to_thread(log_path.parent.mkdir, parents=True, exist_ok=True)
+        header = {
+            "ts": datetime.now().isoformat(timespec="milliseconds"),
+            "direction": "meta",
+            "event": "start",
+            "command": self.command,
+            "cwd": str(self.project_root),
+            "agent_identity": self.agent_identity,
+            "model": self.model,
+        }
+        await self._write_traffic_log(header)
+
+    async def _write_traffic_log(self, record: dict[str, Any]) -> None:
+        log_path = self._traffic_log_resolved_path
+        if log_path is None:
+            return
+
+        def append() -> None:
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False, sort_keys=True))
+                f.write("\n")
+
+        try:
+            await asyncio.to_thread(append)
+        except OSError:
+            # Traffic logging is diagnostic only and must never break ACP.
+            pass
+
+    async def _log_traffic(self, direction: str, payload: Any) -> None:
+        if self._traffic_log_resolved_path is None:
+            return
+        await self._write_traffic_log(
+            {
+                "ts": datetime.now().isoformat(timespec="milliseconds"),
+                "direction": direction,
+                "payload": payload,
+            }
+        )
+
     async def send_prompt(self, prompt: str) -> Optional[str]:
         """
         Send a prompt to the agent and wait for completion.
@@ -254,6 +405,12 @@ class ACPClient:
         )
 
         stop_reason = response.get("stopReason") if response else None
+        if response:
+            usage = response.get("usage")
+            if isinstance(usage, dict):
+                self._merge_usage(usage)
+                if self.on_usage_update:
+                    await self.on_usage_update(dict(self._usage))
 
         # Bump last_used_at so "list recent sessions" reflects real
         # activity, not just creation time. Best-effort; store warns
@@ -365,6 +522,28 @@ class ACPClient:
         """Return a copy of the agent capabilities reported at initialize."""
         return dict(self._agent_capabilities)
 
+    def get_session_modes(self) -> dict[str, Any]:
+        """Return the latest ACP session mode state reported by the agent."""
+        return {
+            "availableModes": list(self._available_modes),
+            "currentModeId": self._current_mode_id,
+        }
+
+    def get_session_models(self) -> dict[str, Any]:
+        """Return the latest ACP session model state reported by the agent."""
+        return {
+            "availableModels": list(self._available_models),
+            "currentModelId": self._current_model_id,
+        }
+
+    def get_available_commands_cached(self) -> List[dict]:
+        """Return the latest slash commands pushed via ``available_commands_update``."""
+        return list(self._available_commands)
+
+    def get_usage(self) -> Dict[str, Any]:
+        """Return the latest token / context usage payload."""
+        return dict(self._usage)
+
     async def list_persisted_sessions(
         self, *, cwd_only: bool = True, limit: int = 50
     ) -> List["StoredSession"]:
@@ -426,6 +605,7 @@ class ACPClient:
             **params,
         )
         self._session_id = response.get("sessionId", "")
+        self._apply_session_state_from_response(response)
         await self._persist_current_session()
         return response
 
@@ -449,8 +629,48 @@ class ACPClient:
             **params,
         )
         self._session_id = session_id
+        self._apply_session_state_from_response(response)
         await self._persist_current_session(touch_only=True)
         return response
+
+    def _apply_session_state_from_response(self, response: Dict[str, Any]) -> None:
+        """Capture session state returned by ``session/new`` or ``session/load``."""
+        modes = response.get("modes")
+        if isinstance(modes, dict):
+            available = modes.get("availableModes")
+            if isinstance(available, list):
+                self._available_modes = available
+            current = modes.get("currentModeId")
+            if isinstance(current, str):
+                self._current_mode_id = current
+
+        models = response.get("models")
+        if isinstance(models, dict):
+            available = models.get("availableModels")
+            if isinstance(available, list):
+                self._available_models = available
+            current = models.get("currentModelId")
+            if isinstance(current, str):
+                self._current_model_id = current
+
+    @staticmethod
+    def _usage_cost_amount(usage: Dict[str, Any]) -> float:
+        cost = usage.get("cost")
+        if isinstance(cost, dict):
+            try:
+                return float(cost.get("amount") or 0.0)
+            except (TypeError, ValueError):
+                return 0.0
+        try:
+            return float(cost or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _merge_usage(self, usage: Dict[str, Any]) -> None:
+        """Merge usage from ACP prompt responses or usage_update events."""
+        for key, value in usage.items():
+            if value is not None:
+                self._usage[key] = value
 
     async def _persist_current_session(self, *, touch_only: bool = False) -> None:
         """Record the current session in the store (if configured).
@@ -521,6 +741,7 @@ class ACPClient:
     async def _send_json(self, data: dict) -> None:
         """Send JSON data to the agent."""
         if self._process and self._process.stdin:
+            await self._log_traffic("client->agent", data)
             json_bytes = json.dumps(data).encode("utf-8") + b"\n"
             self._process.stdin.write(json_bytes)
             await self._process.stdin.drain()
@@ -530,8 +751,8 @@ class ACPClient:
         if not self._process or not self._process.stdout:
             return
 
-        while True:
-            try:
+        try:
+            while True:
                 line = await self._process.stdout.readline()
                 if not line:
                     break
@@ -542,25 +763,41 @@ class ACPClient:
 
                 try:
                     data = json.loads(line_str)
-                    await self._handle_message(data)
+                    await self._log_traffic("agent->client", data)
+                    if self._is_jsonrpc_response(data):
+                        await self._handle_message(data)
+                    else:
+                        task = asyncio.create_task(self._handle_message(data))
+                        self._inbound_tasks.add(task)
+                        task.add_done_callback(self._inbound_tasks.discard)
                 except json.JSONDecodeError:
                     # Not JSON - might be debug output, log it
                     if self.on_thinking and line_str:
                         await self.on_thinking(f"[agent] {line_str}")
 
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                if self.on_thinking:
-                    await self.on_thinking(f"[error] {e}")
-                break
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            if self.on_thinking:
+                await self.on_thinking(f"[error] {e}")
+        finally:
+            if self._inbound_tasks:
+                for task in list(self._inbound_tasks):
+                    task.cancel()
+                await asyncio.gather(*self._inbound_tasks, return_exceptions=True)
+                self._inbound_tasks.clear()
+
+    @staticmethod
+    def _is_jsonrpc_response(data: Any) -> bool:
+        """Return True when ``data`` is a JSON-RPC response object."""
+        return isinstance(data, dict) and ("result" in data or "error" in data)
 
     async def _handle_message(self, data: dict) -> None:
         """Handle an incoming JSON-RPC message."""
         # Check if it's a response to a pending request
         if "result" in data or "error" in data:
             request_id = data.get("id")
-            if request_id and request_id in self._pending_requests:
+            if request_id is not None and request_id in self._pending_requests:
                 future = self._pending_requests.pop(request_id)
                 if "error" in data:
                     future.set_exception(Exception(data["error"].get("message", "Unknown error")))
@@ -620,10 +857,10 @@ class ACPClient:
             return await self._handle_terminal_output(params)
 
         elif method == "terminal/kill":
-            return self._handle_terminal_kill(params)
+            return await self._handle_terminal_kill(params)
 
         elif method == "terminal/release":
-            return self._handle_terminal_release(params)
+            return await self._handle_terminal_release(params)
 
         elif method == "terminal/wait_for_exit":
             return await self._handle_terminal_wait_for_exit(params)
@@ -652,6 +889,12 @@ class ACPClient:
                 self._message_buffer += text
                 if self.on_message:
                     await self.on_message(text)
+
+        elif update_type in ("user_message_chunk", "user_message"):
+            content = update.get("content", {})
+            text = self._content_to_text(content)
+            if text and self.on_user_message:
+                await self.on_user_message(text)
 
         elif update_type in ("agent_thought_chunk", "agent_thought"):
             content = update.get("content", {})
@@ -727,6 +970,26 @@ class ACPClient:
             entries = update.get("entries", [])
             if self.on_plan:
                 await self.on_plan(entries)
+
+        elif update_type == "available_commands_update":
+            commands = update.get("availableCommands", [])
+            if isinstance(commands, list):
+                self._available_commands = commands
+                if self.on_available_commands:
+                    await self.on_available_commands(commands)
+
+        elif update_type == "current_mode_update":
+            mode_id = update.get("currentModeId")
+            if isinstance(mode_id, str):
+                self._current_mode_id = mode_id
+                if self.on_mode_update:
+                    await self.on_mode_update(mode_id)
+
+        elif update_type == "usage_update":
+            usage = {k: v for k, v in update.items() if k != "sessionUpdate"}
+            self._merge_usage(usage)
+            if self.on_usage_update:
+                await self.on_usage_update(dict(self._usage))
 
     def _content_to_text(self, content: Any) -> str:
         """Convert ACP content blocks into a displayable text string."""
@@ -904,34 +1167,63 @@ class ACPClient:
 
     async def get_available_modes(self) -> List[AvailableMode]:
         """Get list of available modes from the agent."""
+        if self._available_modes:
+            return self._available_modes
         try:
             response = await self._call_method(
                 "session/modes",
                 sessionId=self._session_id,
             )
-            return response.get("modes", [])
+            modes = response.get("modes")
+            if isinstance(modes, dict):
+                available = modes.get("availableModes", [])
+                current = modes.get("currentModeId")
+                if isinstance(available, list):
+                    self._available_modes = available
+                if isinstance(current, str):
+                    self._current_mode_id = current
+                return self._available_modes
+            if isinstance(modes, list):
+                self._available_modes = modes
+                return modes
+            return response.get("availableModes", [])
         except Exception:
             return []
 
     async def get_available_models(self) -> List[AvailableModel]:
         """Get list of available models from the agent."""
+        if self._available_models:
+            return self._available_models
         try:
             response = await self._call_method(
                 "session/models",
                 sessionId=self._session_id,
             )
-            return response.get("models", [])
+            models = response.get("models")
+            if isinstance(models, dict):
+                available = models.get("availableModels", [])
+                current = models.get("currentModelId")
+                if isinstance(available, list):
+                    self._available_models = available
+                if isinstance(current, str):
+                    self._current_model_id = current
+                return self._available_models
+            if isinstance(models, list):
+                self._available_models = models
+                return models
+            return response.get("availableModels", [])
         except Exception:
             return []
 
-    async def set_mode(self, mode_slug: str) -> bool:
+    async def set_mode(self, mode_id: str) -> bool:
         """Set the current mode for the session."""
         try:
             await self._call_method(
                 "session/set_mode",
                 sessionId=self._session_id,
-                modeSlug=mode_slug,
+                modeId=mode_id,
             )
+            self._current_mode_id = mode_id
             return True
         except Exception:
             return False
@@ -944,29 +1236,54 @@ class ACPClient:
                 sessionId=self._session_id,
                 modelId=model_id,
             )
+            self._current_model_id = model_id
             return True
         except Exception:
             return False
 
     async def get_current_mode(self) -> Optional[str]:
         """Get the current mode."""
+        if self._current_mode_id:
+            return self._current_mode_id
         try:
             response = await self._call_method(
                 "session/modes",
                 sessionId=self._session_id,
             )
-            return response.get("currentMode")
+            modes = response.get("modes")
+            if isinstance(modes, dict):
+                current = modes.get("currentModeId")
+                if isinstance(current, str):
+                    self._current_mode_id = current
+                    return current
+            current = response.get("currentModeId") or response.get("currentMode")
+            if isinstance(current, str):
+                self._current_mode_id = current
+                return current
+            return None
         except Exception:
             return None
 
     async def get_current_model(self) -> Optional[str]:
         """Get the current model."""
+        if self._current_model_id:
+            return self._current_model_id
         try:
             response = await self._call_method(
                 "session/models",
                 sessionId=self._session_id,
             )
-            return response.get("currentModel")
+            models = response.get("models")
+            if isinstance(models, dict):
+                current = models.get("currentModelId")
+                if isinstance(current, str):
+                    self._current_model_id = current
+                    return current
+            current = response.get("currentModelId") or response.get("currentModel")
+            if isinstance(current, str):
+                self._current_model_id = current
+                return current
+            return None
         except Exception:
             return None
 
@@ -976,12 +1293,18 @@ class ACPClient:
 
     async def get_available_commands(self) -> List[SlashCommand]:
         """Get list of available slash commands from the agent."""
+        if self._available_commands:
+            return self._available_commands
         try:
             response = await self._call_method(
                 "session/commands",
                 sessionId=self._session_id,
             )
-            return response.get("commands", [])
+            commands = response.get("availableCommands") or response.get("commands", [])
+            if isinstance(commands, list):
+                self._available_commands = commands
+                return commands
+            return []
         except Exception:
             return []
 
@@ -1021,6 +1344,9 @@ class ACPClient:
 
     async def _handle_terminal_create(self, params: dict) -> CreateTerminalResponse:
         """Handle terminal create request."""
+        if self.terminal_service is not None:
+            return await self.terminal_service.create(params)
+
         command = params.get("command", "")
         args = params.get("args", [])
         cwd = params.get("cwd")
@@ -1101,6 +1427,9 @@ class ACPClient:
 
     async def _handle_terminal_output(self, params: dict) -> TerminalOutputResponse:
         """Handle terminal output request."""
+        if self.terminal_service is not None:
+            return await self.terminal_service.output(params)
+
         terminal_id = params.get("terminalId", "")
         terminal = self._terminals.get(terminal_id)
 
@@ -1120,8 +1449,11 @@ class ACPClient:
 
         return result
 
-    def _handle_terminal_kill(self, params: dict) -> dict:
+    async def _handle_terminal_kill(self, params: dict) -> dict:
         """Handle terminal kill request."""
+        if self.terminal_service is not None:
+            return await self.terminal_service.kill(params)
+
         terminal_id = params.get("terminalId", "")
         terminal = self._terminals.get(terminal_id)
 
@@ -1130,8 +1462,11 @@ class ACPClient:
 
         return {}
 
-    def _handle_terminal_release(self, params: dict) -> dict:
+    async def _handle_terminal_release(self, params: dict) -> dict:
         """Handle terminal release request."""
+        if self.terminal_service is not None:
+            return await self.terminal_service.release(params)
+
         terminal_id = params.get("terminalId", "")
         if terminal_id in self._terminals:
             del self._terminals[terminal_id]
@@ -1139,6 +1474,9 @@ class ACPClient:
 
     async def _handle_terminal_wait_for_exit(self, params: dict) -> WaitForTerminalExitResponse:
         """Handle terminal wait for exit request."""
+        if self.terminal_service is not None:
+            return await self.terminal_service.wait_for_exit(params)
+
         terminal_id = params.get("terminalId", "")
         terminal = self._terminals.get(terminal_id)
 

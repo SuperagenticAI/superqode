@@ -242,6 +242,7 @@ class AuthConfig(TypedDict, total=False):
 class AvailableMode(TypedDict, total=False):
     """An available mode that the agent can operate in."""
 
+    id: str
     slug: str
     name: str
     description: Optional[str]
@@ -278,6 +279,7 @@ class SetModeRequest(TypedDict, total=False):
     """Request to set the current mode."""
 
     sessionId: str
+    modeId: str
     modeSlug: str
 
 
@@ -317,8 +319,9 @@ class SlashCommand(TypedDict, total=False):
 class AvailableCommandsUpdate(TypedDict, total=False):
     """Update containing available commands."""
 
+    availableCommands: List[SlashCommand]
     commands: List[SlashCommand]
-    sessionUpdate: str  # "available_commands"
+    sessionUpdate: str  # "available_commands_update"
 
 
 class AvailableCommandsResponse(TypedDict, total=False):

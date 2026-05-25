@@ -206,24 +206,31 @@ class PermissionScreen(ModalScreen[str]):
                 path = content.get("path", "")
                 old_text = content.get("oldText", "")
                 new_text = content.get("newText", "")
+                from superqode.acp.render import count_line_changes, render_unified_diff
 
-                t.append(f"📄 File: {path}\n", style=f"bold {THEME['purple']}")
+                adds, dels = count_line_changes(old_text, new_text)
 
-                if old_text:
-                    t.append("--- Old:\n", style=THEME["error"])
-                    # Show first few lines
-                    lines = old_text.split("\n")[:5]
-                    for line in lines:
-                        t.append(f"  {line}\n", style=THEME["dim"])
-                    if len(old_text.split("\n")) > 5:
-                        t.append("  ...\n", style=THEME["dim"])
-
-                t.append("+++ New:\n", style=THEME["success"])
-                lines = new_text.split("\n")[:10]
-                for line in lines:
-                    t.append(f"  {line}\n", style=THEME["text"])
-                if len(new_text.split("\n")) > 10:
-                    t.append("  ...\n", style=THEME["dim"])
+                t.append(f"📄 {path}  +{adds} -{dels}\n", style=f"bold {THEME['purple']}")
+                diff = render_unified_diff(
+                    old_text,
+                    new_text,
+                    path,
+                    context=3,
+                    max_lines=80,
+                )
+                if diff:
+                    for line in diff.splitlines():
+                        if line.startswith("+"):
+                            style = THEME["success"]
+                        elif line.startswith("-"):
+                            style = THEME["error"]
+                        elif line.startswith("@@"):
+                            style = THEME["warning"]
+                        else:
+                            style = THEME["text"]
+                        t.append(f"{line}\n", style=style)
+                else:
+                    t.append("No text changes\n", style=THEME["dim"])
 
             elif content_type == "terminal":
                 terminal_id = content.get("terminalId", "")

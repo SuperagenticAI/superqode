@@ -453,6 +453,7 @@ class AgentLoop:
         mcp_tools: Optional[List[ToolDefinition]] = None,  # MCP tool definitions to include
         include_mcp: bool = False,  # Automatically inject MCP search/execute tools
         permission_manager: Optional[PermissionManager] = None,
+        hooks: Optional["HookRegistry"] = None,  # Lifecycle hooks (before/after llm/tool/turn)
     ):
         self.gateway = gateway
         self.tools = tools
@@ -516,6 +517,22 @@ class AgentLoop:
         self.pause_on_approval = False
         self._pending_approval: Optional[Dict[str, Any]] = None
         self._approved_tool_call_ids: set[str] = set()
+
+        # Per-model byte cap for tool output (computed once - same provider/model
+        # for the lifetime of the loop). Passed into ToolContext so individual
+        # tools (BashTool, web fetchers, ...) can size their truncation budget.
+        from .terminal_output_limits import calculate_terminal_output_limit_for_model
+
+        self._tool_output_byte_cap = calculate_terminal_output_limit_for_model(
+            config.provider, config.model
+        )
+
+        # Lifecycle hook registry. Empty by default; plugins or test fixtures
+        # register against it. See agent/hooks.py for the five hook points.
+        from .hooks import HookRegistry
+
+        self.hooks: HookRegistry = hooks if hooks is not None else HookRegistry()
+        self._current_iteration: int = 0
 
     def _build_system_prompt(self) -> str:
         """Build the system prompt based on config (uses cached function)."""
@@ -638,6 +655,19 @@ class AgentLoop:
             require_confirmation=self.config.require_confirmation,
             tool_registry=self.tools,
             sub_agent_runner=self._run_sub_agent,
+            max_output_bytes=self._tool_output_byte_cap,
+        )
+
+    def _lifecycle_context(self) -> "LifecycleContext":
+        """Build the lifecycle context passed to hooks."""
+        from .hooks import LifecycleContext
+
+        return LifecycleContext(
+            session_id=self.session_id,
+            provider=self.config.provider,
+            model=self.config.model,
+            working_directory=self.config.working_directory,
+            iteration=self._current_iteration,
         )
 
     async def _run_sub_agent(self, task_description: str, metadata: Dict[str, Any]) -> str:
@@ -743,8 +773,23 @@ class AgentLoop:
         SubAgentTool) inherit it as ``parentToolCallId`` in their ACP
         ``_meta`` payload. Optional for backwards compatibility — if a
         caller doesn't supply it, no parent linkage is recorded.
+
+        Hook coverage: ``before_tool_call`` fires once before any work
+        happens; ``after_tool_call`` fires once with the final ``ToolResult``,
+        even for permission denials and unknown-tool errors, so audit/log
+        hooks see every attempted call.
         """
         from ..acp.tool_call_context import acp_tool_call_context
+        from .hooks import AFTER_TOOL_CALL, BEFORE_TOOL_CALL
+
+        lifecycle_ctx = self._lifecycle_context()
+        await self.hooks.fire(BEFORE_TOOL_CALL, lifecycle_ctx, name, arguments)
+
+        async def _finalize(result: ToolResult) -> ToolResult:
+            await self.hooks.fire(
+                AFTER_TOOL_CALL, lifecycle_ctx, name, arguments, result
+            )
+            return result
 
         tool = self.tools.get(name)
 
@@ -753,7 +798,7 @@ class AgentLoop:
             if self.mcp_executor and name.startswith("mcp_"):
                 denied = await self._check_tool_permission(name, arguments, tool_call_id)
                 if denied:
-                    return denied
+                    return await _finalize(denied)
                 parts = name.split(
                     "_", 2
                 )  # mcp_serverid_toolname -> ["mcp", serverid", "toolname"]
@@ -762,16 +807,20 @@ class AgentLoop:
                     tool_name = parts[2]
                     try:
                         result = await self.mcp_executor(server_id, tool_name, arguments)
-                        return result
+                        return await _finalize(result)
                     except Exception as e:
-                        return ToolResult(
-                            success=False, output="", error=f"MCP tool error: {str(e)}"
+                        return await _finalize(
+                            ToolResult(
+                                success=False, output="", error=f"MCP tool error: {str(e)}"
+                            )
                         )
-            return ToolResult(success=False, output="", error=f"Unknown tool: {name}")
+            return await _finalize(
+                ToolResult(success=False, output="", error=f"Unknown tool: {name}")
+            )
 
         denied = await self._check_tool_permission(name, arguments, tool_call_id)
         if denied:
-            return denied
+            return await _finalize(denied)
 
         ctx = self._create_tool_context()
 
@@ -781,9 +830,11 @@ class AgentLoop:
             # so SubAgentTool's background _execute_subtask sees it too.
             with acp_tool_call_context(parent_tool_call_id=tool_call_id):
                 result = await tool.execute(arguments, ctx)
-            return result
+            return await _finalize(result)
         except Exception as e:
-            return ToolResult(success=False, output="", error=f"Tool execution error: {str(e)}")
+            return await _finalize(
+                ToolResult(success=False, output="", error=f"Tool execution error: {str(e)}")
+            )
 
     async def _maybe_summarize(self, messages: List["AgentMessage"]) -> List["AgentMessage"]:
         """Compact or prune messages when context exceeds the limit.
@@ -954,6 +1005,8 @@ class AgentLoop:
         _cap = self.config.max_iterations
         while _cap <= 0 or iterations < _cap:
             iterations += 1
+            self._current_iteration = iterations
+            turn_tool_results: List[ToolResult] = []
 
             # Emit iteration log
             if self.on_thinking:
@@ -981,6 +1034,15 @@ class AgentLoop:
                 await self.on_thinking("Plan Mode: Analyzing without executing tools...")
 
             # Call the model
+            from .hooks import (
+                AFTER_LLM_CALL,
+                BEFORE_LLM_CALL,
+            )
+
+            lifecycle_ctx = self._lifecycle_context()
+            await self.hooks.fire(
+                BEFORE_LLM_CALL, lifecycle_ctx, messages, tools_to_send
+            )
             try:
                 response = await self.gateway.chat_completion(
                     messages=gateway_messages,
@@ -1001,6 +1063,7 @@ class AgentLoop:
                     stopped_reason="error",
                     error=str(e),
                 )
+            await self.hooks.fire(AFTER_LLM_CALL, lifecycle_ctx, response)
 
             # Extract thinking content if available
             if response.thinking_content and self.on_thinking:
@@ -1097,6 +1160,7 @@ class AgentLoop:
                         )
                     for tool_name, tool_call_id, tool_args, result in results:
                         tool_calls_made += 1
+                        turn_tool_results.append(result)
                         messages.append(
                             AgentMessage(
                                 role="tool",
@@ -1139,6 +1203,7 @@ class AgentLoop:
                                 stopped_reason="needs_approval",
                             )
                         tool_calls_made += 1
+                        turn_tool_results.append(result)
 
                         if self.on_tool_result:
                             self.on_tool_result(tool_name, result)
@@ -1155,6 +1220,15 @@ class AgentLoop:
                 # Emit iteration complete log
                 if self.on_thinking:
                     await self.on_thinking(f"Iteration {iterations} complete")
+
+                from .hooks import AFTER_TURN_COMPLETE
+
+                await self.hooks.fire(
+                    AFTER_TURN_COMPLETE,
+                    lifecycle_ctx,
+                    response,
+                    turn_tool_results,
+                )
 
                 # Auto-summarize if enabled and context is too large
                 if self.config.enable_summarization:
@@ -1193,6 +1267,14 @@ class AgentLoop:
                     )
                 if self.on_thinking:
                     await self.on_thinking("Response complete")
+                from .hooks import AFTER_TURN_COMPLETE
+
+                await self.hooks.fire(
+                    AFTER_TURN_COMPLETE,
+                    lifecycle_ctx,
+                    response,
+                    turn_tool_results,
+                )
                 return AgentResponse(
                     content=response_content,
                     messages=messages,

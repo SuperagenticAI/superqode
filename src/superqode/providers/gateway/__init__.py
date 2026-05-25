@@ -33,6 +33,13 @@ from .base import (
     Cost,
 )
 from .litellm_gateway import LiteLLMGateway
+from .synthetic import (
+    CALL_TOOL_INDICATOR,
+    FIXED_RESPONSE_INDICATOR,
+    PassthroughGateway,
+    PlaybackGateway,
+    SilentGateway,
+)
 
 
 class GatewayFactory:
@@ -68,6 +75,9 @@ class GatewayFactory:
     # Registered gateway types
     _registry: Dict[str, type] = {
         "litellm": LiteLLMGateway,
+        "passthrough": PassthroughGateway,
+        "playback": PlaybackGateway,
+        "silent": SilentGateway,
     }
 
     @classmethod
@@ -160,6 +170,11 @@ __all__ = [
     "Cost",
     # Gateway implementations
     "LiteLLMGateway",
+    "PassthroughGateway",
+    "PlaybackGateway",
+    "SilentGateway",
+    "CALL_TOOL_INDICATOR",
+    "FIXED_RESPONSE_INDICATOR",
     # Factory
     "GatewayFactory",
 ]

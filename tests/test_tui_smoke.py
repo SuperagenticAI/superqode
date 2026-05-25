@@ -33,6 +33,30 @@ class FakeLog:
     def add_error(self, text):
         self.items.append(text)
 
+    def add_tool_call(
+        self,
+        tool_name,
+        status="running",
+        file_path="",
+        command="",
+        output="",
+        arguments=None,
+        diff_text="",
+        duration=None,
+        additions=None,
+        deletions=None,
+    ):
+        self.items.append(
+            {
+                "tool_name": tool_name,
+                "status": status,
+                "file_path": file_path,
+                "command": command,
+                "output": output,
+                "arguments": arguments or {},
+            }
+        )
+
     def get_last_error(self):
         return self._last_error
 
@@ -221,6 +245,42 @@ def test_agent_question_input_is_handled_while_busy():
     assert future.result()["value"] == "advanced"
     assert app._awaiting_agent_question is False
     assert any("Continuing" in str(item) for item in log.items)
+
+
+def test_acp_terminal_output_renders_as_tool_call():
+    app = make_app()
+    app._call_ui = lambda func, *args: func(*args)
+    app._show_thinking_line = lambda text, log: log.add_info(text)
+    log = FakeLog()
+    terminals = {}
+    terminal_counter = [0]
+
+    result, handled = app._handle_terminal_method(
+        "terminal/create",
+        {"command": "echo", "args": ["hello_from_terminal"]},
+        terminals,
+        terminal_counter,
+        log,
+    )
+    assert handled is True
+    terminal_id = result["terminalId"]
+    assert terminals[terminal_id]["pty"] is True
+
+    result, handled = app._handle_terminal_method(
+        "terminal/wait_for_exit",
+        {"terminalId": terminal_id},
+        terminals,
+        terminal_counter,
+        log,
+    )
+
+    assert handled is True
+    assert result["exitCode"] == 0
+    tool_rows = [item for item in log.items if isinstance(item, dict)]
+    assert tool_rows[0]["tool_name"] == "terminal"
+    assert tool_rows[0]["status"] == "running"
+    assert tool_rows[-1]["status"] == "success"
+    assert "hello_from_terminal" in tool_rows[-1]["output"]
 
 
 def test_agent_question_empty_input_uses_default():

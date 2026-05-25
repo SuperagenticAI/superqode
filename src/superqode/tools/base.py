@@ -52,6 +52,10 @@ class ToolContext:
     delegation_depth: int = 0
     # Optional runner provided by AgentLoop for real child-agent execution.
     sub_agent_runner: Optional[Callable[[str, Dict[str, Any]], Awaitable[str]]] = None
+    # Per-model byte cap for tool output (shell, web, etc.). When None, tools
+    # use their built-in defaults. Populated by AgentLoop via
+    # agent.terminal_output_limits.calculate_terminal_output_limit_for_model.
+    max_output_bytes: Optional[int] = None
 
     async def emit_output(self, text: str) -> None:
         """Emit output to the callback if set."""
