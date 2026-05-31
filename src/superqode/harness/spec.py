@@ -55,6 +55,23 @@ class ModelPolicySpec:
 
 
 @dataclass(frozen=True)
+class PermissionRuleSpec:
+    """One rule-based approval rule, evaluated when a tool needs approval.
+
+    ``tool`` is a glob over the tool name. ``pattern`` is a glob matched against
+    an argument value (the ``argument`` key if given, otherwise any argument
+    value); ``"*"`` matches any call to the tool. ``action`` is one of
+    ``allow`` / ``deny`` / ``ask``. Rules are evaluated in order and the first
+    match wins, so order them most-specific first.
+    """
+
+    tool: str = "*"
+    pattern: str = "*"
+    action: str = "ask"
+    argument: str = ""
+
+
+@dataclass(frozen=True)
 class ExecutionPolicySpec:
     """Tool, sandbox, command, and approval policy."""
 
@@ -66,6 +83,7 @@ class ExecutionPolicySpec:
     allow_network: bool = False
     allowed_commands: tuple[str, ...] = ()
     blocked_categories: tuple[str, ...] = ()
+    permission_rules: tuple[PermissionRuleSpec, ...] = ()
     config: dict[str, Any] = field(default_factory=dict)
 
 
@@ -105,6 +123,7 @@ class ContextSpec:
     skills_dir: str = ".agents/skills"
     roles_dir: str = ".agents/roles"
     session_storage: str = ".superqode/sessions"
+    prompt_persistence: str = "preview"  # off | preview | full
     compaction: dict[str, Any] = field(default_factory=dict)
     memory: dict[str, Any] = field(default_factory=dict)
 
@@ -128,6 +147,32 @@ class ValidationSpec:
     timeout_seconds: int = 300
     custom_steps: tuple[ValidationStepSpec, ...] = ()
     config: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class HookRuleSpec:
+    """One declarative lifecycle hook bound to a handler.
+
+    ``point`` is an agent lifecycle hook name (see ``agent.hooks``), e.g.
+    ``permission_request``, ``before_tool_call``, ``before_compact``.
+    ``handler`` is a dotted import path to a callable: ``module:function`` or
+    ``module.function``. For tool/permission points, ``matcher`` is a glob
+    matched against the tool name so a rule can target specific tools.
+    """
+
+    point: str
+    handler: str
+    matcher: str = "*"
+    name: str = ""
+    config: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class HooksSpec:
+    """Declarative hook policy attached to a harness."""
+
+    enabled: bool = True
+    rules: tuple[HookRuleSpec, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -156,6 +201,7 @@ class HarnessSpec:
     context: ContextSpec = field(default_factory=ContextSpec)
     validation: ValidationSpec = field(default_factory=ValidationSpec)
     observability: ObservabilitySpec = field(default_factory=ObservabilitySpec)
+    hooks: HooksSpec = field(default_factory=HooksSpec)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property

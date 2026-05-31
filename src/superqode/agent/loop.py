@@ -528,11 +528,13 @@ class AgentLoop:
         )
 
         # Lifecycle hook registry. Empty by default; plugins or test fixtures
-        # register against it. See agent/hooks.py for the five hook points.
+        # register against it. See agent/hooks.py for the hook points.
         from .hooks import HookRegistry
 
         self.hooks: HookRegistry = hooks if hooks is not None else HookRegistry()
         self._current_iteration: int = 0
+        # session_start fires once per AgentLoop instance, on the first run().
+        self._session_started: bool = False
 
     def _build_system_prompt(self) -> str:
         """Build the system prompt based on config (uses cached function)."""
@@ -723,10 +725,37 @@ class AgentLoop:
     async def _check_tool_permission(
         self, name: str, arguments: Dict[str, Any], tool_call_id: Optional[str] = None
     ) -> Optional[ToolResult]:
-        """Apply central permission checks before any local tool executes."""
+        """Apply central permission checks before any local tool executes.
+
+        Order of authority:
+
+        1. ``permission_request`` hooks fire first and can **deny** any call -
+           even one the manager would auto-allow - so a harness permission policy
+           (or custom hook) can veto allowed tools. A hook **allow** pre-approves
+           an otherwise-ASK call.
+        2. The manager's own **deny** (e.g. dangerous-command guards) still wins
+           over a permissive hook - hard safety rules are not overridable.
+        3. Manager **allow** passes through; otherwise (ASK) we honour a hook
+           allow or fall back to the pause/prompt flow.
+        """
+        from .hooks import PERMISSION_REQUEST
+
+        verdict = await self.hooks.fire_decision(
+            PERMISSION_REQUEST, self._lifecycle_context(), name, arguments
+        )
+        if verdict.denied:
+            return ToolResult(
+                success=False,
+                output="",
+                error=verdict.message or f"Permission denied for tool: {name}",
+                metadata={
+                    "permission": "hook_denied",
+                    "tool": name,
+                    **({"reason": verdict.reason} if verdict.reason else {}),
+                },
+            )
+
         permission = self.permission_manager.check_permission(name, arguments)
-        if permission == Permission.ALLOW:
-            return None
         if permission == Permission.DENY:
             return ToolResult(
                 success=False,
@@ -734,7 +763,11 @@ class AgentLoop:
                 error=f"Permission denied for tool: {name}",
                 metadata={"permission": "deny", "tool": name},
             )
+        if permission == Permission.ALLOW:
+            return None
         if tool_call_id and tool_call_id in self._approved_tool_call_ids:
+            return None
+        if verdict.allowed:
             return None
 
         if self.pause_on_approval:
@@ -783,13 +816,37 @@ class AgentLoop:
         from .hooks import AFTER_TOOL_CALL, BEFORE_TOOL_CALL
 
         lifecycle_ctx = self._lifecycle_context()
-        await self.hooks.fire(BEFORE_TOOL_CALL, lifecycle_ctx, name, arguments)
 
         async def _finalize(result: ToolResult) -> ToolResult:
             await self.hooks.fire(
                 AFTER_TOOL_CALL, lifecycle_ctx, name, arguments, result
             )
             return result
+
+        # Handler hooks can deny a tool call outright or rewrite its arguments
+        # before execution. Deny short-circuits; modify swaps in new arguments
+        # that the rest of this call (and the after-hook) see.
+        gate = await self.hooks.fire_decision(
+            BEFORE_TOOL_CALL, lifecycle_ctx, name, arguments
+        )
+        if gate.denied:
+            denied = (
+                gate.result
+                if isinstance(gate.result, ToolResult)
+                else ToolResult(
+                    success=False,
+                    output="",
+                    error=gate.message or f"Tool call blocked by hook: {name}",
+                    metadata={
+                        "permission": "hook_denied",
+                        "tool": name,
+                        **({"reason": gate.reason} if gate.reason else {}),
+                    },
+                )
+            )
+            return await _finalize(denied)
+        if gate.modified:
+            arguments = gate.arguments
 
         tool = self.tools.get(name)
 
@@ -864,6 +921,20 @@ class AgentLoop:
         if token_count <= self.config.max_context_tokens:
             return messages
 
+        # before_compact handler hooks may skip this round (DENY) - e.g. to defer
+        # compaction until a logical boundary - while observers can record it.
+        from .hooks import AFTER_COMPACT, BEFORE_COMPACT
+
+        lifecycle_ctx = self._lifecycle_context()
+        pre = await self.hooks.fire_decision(
+            BEFORE_COMPACT,
+            lifecycle_ctx,
+            token_count,
+            self.config.max_context_tokens,
+        )
+        if pre.denied:
+            return messages
+
         if self.on_thinking:
             await self.on_thinking(
                 f"Context management active ({token_count} tokens). Compacting earlier turns..."
@@ -879,6 +950,8 @@ class AgentLoop:
             else list(messages)
         )
 
+        strategy = "prune"
+        result_messages: List["AgentMessage"]
         if len(body) > keep_tail:
             head = body[:-keep_tail]
             tail = body[-keep_tail:]
@@ -893,14 +966,25 @@ class AgentLoop:
                     role="system",
                     content=f"[Earlier conversation summary]\n\n{summary}",
                 )
-                return system_prefix + [summary_msg] + tail
+                result_messages = system_prefix + [summary_msg] + tail
+                strategy = "summary"
 
-        # Fallback: mechanical prune-from-front (existing path).
-        pruned_dicts = self.context_manager.prune_history(msg_dicts)
-        return [
-            AgentMessage(role=d["role"], content=d["content"], tool_calls=d.get("tool_calls"))
-            for d in pruned_dicts
-        ]
+        if strategy != "summary":
+            # Fallback: mechanical prune-from-front (existing path).
+            pruned_dicts = self.context_manager.prune_history(msg_dicts)
+            result_messages = [
+                AgentMessage(role=d["role"], content=d["content"], tool_calls=d.get("tool_calls"))
+                for d in pruned_dicts
+            ]
+
+        await self.hooks.fire(
+            AFTER_COMPACT,
+            lifecycle_ctx,
+            token_count,
+            result_messages,
+            strategy,
+        )
+        return result_messages
 
     async def _execute_tools_parallel(
         self,
@@ -972,6 +1056,34 @@ class AgentLoop:
 
         Performance: Uses cached message conversion and parallel tool execution.
         """
+        from .hooks import SESSION_START, STOP, USER_PROMPT_SUBMIT
+
+        lifecycle_ctx = self._lifecycle_context()
+
+        async def _finish(response: AgentResponse) -> AgentResponse:
+            await self.hooks.fire(STOP, self._lifecycle_context(), response)
+            return response
+
+        if not self._session_started:
+            self._session_started = True
+            await self.hooks.fire(SESSION_START, lifecycle_ctx, user_message)
+
+        # user_prompt_submit handler hooks may block a prompt outright (DENY),
+        # e.g. policy filters. Deny returns immediately without calling the model.
+        submit = await self.hooks.fire_decision(
+            USER_PROMPT_SUBMIT, lifecycle_ctx, user_message
+        )
+        if submit.denied:
+            return await _finish(
+                AgentResponse(
+                    content=submit.message or "Prompt blocked by policy.",
+                    messages=[],
+                    tool_calls_made=0,
+                    iterations=0,
+                    stopped_reason="blocked",
+                )
+            )
+
         messages: List[AgentMessage] = []
 
         # Add system message if we have one
@@ -1055,13 +1167,15 @@ class AgentLoop:
                     **self._profile_kwargs(),
                 )
             except Exception as e:
-                return AgentResponse(
-                    content="",
-                    messages=messages,
-                    tool_calls_made=tool_calls_made,
-                    iterations=iterations,
-                    stopped_reason="error",
-                    error=str(e),
+                return await _finish(
+                    AgentResponse(
+                        content="",
+                        messages=messages,
+                        tool_calls_made=tool_calls_made,
+                        iterations=iterations,
+                        stopped_reason="error",
+                        error=str(e),
+                    )
                 )
             await self.hooks.fire(AFTER_LLM_CALL, lifecycle_ctx, response)
 
@@ -1112,12 +1226,14 @@ class AgentLoop:
 
                     # If we have content, return it (ignore malformed tool calls)
                     if content.strip():
-                        return AgentResponse(
-                            content=content,
-                            messages=messages,
-                            tool_calls_made=tool_calls_made,
-                            iterations=iterations,
-                            stopped_reason="complete",
+                        return await _finish(
+                            AgentResponse(
+                                content=content,
+                                messages=messages,
+                                tool_calls_made=tool_calls_made,
+                                iterations=iterations,
+                                stopped_reason="complete",
+                            )
                         )
 
                     # No content extracted - continue to normal tool call handling
@@ -1151,12 +1267,14 @@ class AgentLoop:
                     try:
                         results = await self._execute_tools_parallel(response.tool_calls)
                     except ToolApprovalRequired:
-                        return AgentResponse(
-                            content="",
-                            messages=messages,
-                            tool_calls_made=tool_calls_made,
-                            iterations=iterations,
-                            stopped_reason="needs_approval",
+                        return await _finish(
+                            AgentResponse(
+                                content="",
+                                messages=messages,
+                                tool_calls_made=tool_calls_made,
+                                iterations=iterations,
+                                stopped_reason="needs_approval",
+                            )
                         )
                     for tool_name, tool_call_id, tool_args, result in results:
                         tool_calls_made += 1
@@ -1195,12 +1313,14 @@ class AgentLoop:
                                 tool_name, tool_args, tool_call_id=tool_call_id
                             )
                         except ToolApprovalRequired:
-                            return AgentResponse(
-                                content="",
-                                messages=messages,
-                                tool_calls_made=tool_calls_made,
-                                iterations=iterations,
-                                stopped_reason="needs_approval",
+                            return await _finish(
+                                AgentResponse(
+                                    content="",
+                                    messages=messages,
+                                    tool_calls_made=tool_calls_made,
+                                    iterations=iterations,
+                                    stopped_reason="needs_approval",
+                                )
                             )
                         tool_calls_made += 1
                         turn_tool_results.append(result)
@@ -1275,24 +1395,27 @@ class AgentLoop:
                     response,
                     turn_tool_results,
                 )
-                return AgentResponse(
+                final = AgentResponse(
                     content=response_content,
                     messages=messages,
                     tool_calls_made=tool_calls_made,
                     iterations=iterations,
                     stopped_reason="complete",
                 )
+                return await _finish(final)
 
         # Hit max iterations (only reachable when a positive cap is configured)
         if self.on_thinking:
             await self.on_thinking(f"Reached maximum iterations ({self.config.max_iterations})")
-        return AgentResponse(
-            content="",
-            messages=messages,
-            tool_calls_made=tool_calls_made,
-            iterations=iterations,
-            stopped_reason="max_iterations",
-            error=f"Reached maximum iterations ({self.config.max_iterations})",
+        return await _finish(
+            AgentResponse(
+                content="",
+                messages=messages,
+                tool_calls_made=tool_calls_made,
+                iterations=iterations,
+                stopped_reason="max_iterations",
+                error=f"Reached maximum iterations ({self.config.max_iterations})",
+            )
         )
 
     async def run_streaming(

@@ -93,6 +93,7 @@ def test_harness_spec_round_trip_preserves_core_fields():
             "name": "team-coder",
             "flavor": "coding",
             "runtime": {"backend": "adk", "fallback_backends": ["builtin"]},
+            "context": {"prompt_persistence": "full"},
             "execution_policy": {"allow_write": True, "allow_shell": True},
             "agents": [{"id": "coder", "tools": ["read_file", "bash"]}],
             "validation": {
@@ -108,6 +109,7 @@ def test_harness_spec_round_trip_preserves_core_fields():
     assert restored.name == "team-coder"
     assert restored.runtime.backend == "adk"
     assert restored.runtime.fallback_backends == ("builtin",)
+    assert restored.context.prompt_persistence == "full"
     assert restored.execution_policy.allow_write is True
     assert restored.execution_policy.allow_shell is True
     assert restored.agents[0].tools == ("read_file", "bash")

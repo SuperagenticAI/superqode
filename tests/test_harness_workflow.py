@@ -1,5 +1,6 @@
 """Tests for harness workflow execution."""
 
+import sys
 from dataclasses import replace
 
 import pytest
@@ -11,6 +12,8 @@ from superqode.harness import (
     WorkflowMode,
     WorkflowSpec,
     WorkflowStep,
+    ValidationSpec,
+    ValidationStepSpec,
     get_harness_template,
     init_harness,
     run_workflow,
@@ -110,6 +113,136 @@ async def test_workflow_emits_step_progress(monkeypatch, tmp_path):
         ("summarize", "done"),
     ]
     assert events[-1].detail == "1 iteration(s)"
+
+
+@pytest.mark.asyncio
+async def test_workflow_persists_parent_run_graph(monkeypatch, tmp_path):
+    backend = RecordingBackend()
+    monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda name: backend)
+    store = FileHarnessStore(tmp_path / "store")
+    spec = replace(get_harness_template("no-tool"), workflow=WorkflowSpec(mode=WorkflowMode.CHAIN))
+    kernel = await init_harness(spec, store=store)
+
+    result = await run_workflow(
+        kernel,
+        [WorkflowStep("inspect", id="inspect"), WorkflowStep("summarize", id="summarize")],
+        provider="test",
+        model="model",
+        working_directory=tmp_path,
+        session_id="workflow-parent",
+    )
+
+    assert result.run_id.startswith("run_")
+    assert result.session_id == "workflow-parent"
+    run = store.get_run(result.run_id)
+    assert run is not None
+    assert run.status == "succeeded"
+    assert run.metadata["workflow"] is True
+    assert [event.type for event in run.events] == [
+        "workflow.run.started",
+        "workflow.step.started",
+        "workflow.step.completed",
+        "workflow.step.started",
+        "workflow.step.completed",
+        "workspace.changes.captured",
+        "workflow.result",
+        "workflow.run.completed",
+    ]
+    assert run.events[2].data["child_run_id"] == result.results[0].run_id
+    graph = store.get_event_graph(result.run_id)
+    assert [node.type for node in graph.nodes] == [
+        "workflow",
+        "workflow",
+        "workflow",
+        "workflow",
+        "workflow",
+        "evidence",
+        "workflow",
+        "workflow",
+    ]
+    assert graph.nodes[-1].label == "workflow.run.completed"
+
+
+@pytest.mark.asyncio
+async def test_workflow_persists_validation_and_evidence(monkeypatch, tmp_path):
+    backend = RecordingBackend()
+    monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda name: backend)
+    store = FileHarnessStore(tmp_path / "store")
+    spec = replace(
+        get_harness_template("no-tool"),
+        workflow=WorkflowSpec(mode=WorkflowMode.SINGLE),
+        validation=ValidationSpec(
+            enabled=True,
+            fail_on_error=True,
+            custom_steps=(
+                ValidationStepSpec(
+                    name="smoke",
+                    command=f"{sys.executable} -c \"print('validation ok')\"",
+                ),
+            ),
+        ),
+    )
+    kernel = await init_harness(spec, store=store)
+
+    result = await run_workflow(
+        kernel,
+        [WorkflowStep("inspect", id="inspect")],
+        provider="test",
+        model="model",
+        working_directory=tmp_path,
+        session_id="workflow-validation",
+    )
+
+    run = store.get_run(result.run_id)
+    assert run is not None
+    assert run.status == "succeeded"
+    event_types = [event.type for event in run.events]
+    assert "workspace.changes.captured" in event_types
+    assert "validation.step.started" in event_types
+    assert "validation.step.completed" in event_types
+    assert "workflow.result" in event_types
+    assert run.metadata["validation"]["status"] == "passed"
+    assert run.metadata["changed_files"]["file_count"] == 0
+    graph = store.get_event_graph(result.run_id)
+    assert "validation" in {node.type for node in graph.nodes}
+    assert "evidence" in {node.type for node in graph.nodes}
+
+
+@pytest.mark.asyncio
+async def test_workflow_marks_run_failed_when_required_validation_fails(monkeypatch, tmp_path):
+    backend = RecordingBackend()
+    monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda name: backend)
+    store = FileHarnessStore(tmp_path / "store")
+    spec = replace(
+        get_harness_template("no-tool"),
+        workflow=WorkflowSpec(mode=WorkflowMode.SINGLE),
+        validation=ValidationSpec(
+            enabled=True,
+            fail_on_error=True,
+            custom_steps=(
+                ValidationStepSpec(
+                    name="fail",
+                    command=f"{sys.executable} -c \"import sys; sys.exit(7)\"",
+                ),
+            ),
+        ),
+    )
+    kernel = await init_harness(spec, store=store)
+
+    result = await run_workflow(
+        kernel,
+        [WorkflowStep("inspect", id="inspect")],
+        provider="test",
+        model="model",
+        working_directory=tmp_path,
+        session_id="workflow-validation-fail",
+    )
+
+    run = store.get_run(result.run_id)
+    assert run is not None
+    assert run.status == "failed"
+    assert run.metadata["validation"]["status"] == "failed"
+    assert run.metadata["validation"]["steps"][0]["returncode"] == 7
 
 
 @pytest.mark.asyncio

@@ -4,8 +4,20 @@ import asyncio
 import concurrent.futures
 
 from superqode.app_main import SelectionAwareInput, SuperQodeApp, render_welcome
-from superqode.harness import AgentSpec, HarnessSpec, WorkflowMode, WorkflowSpec
+from superqode.harness import (
+    AgentSpec,
+    FileHarnessStore,
+    HarnessEvent,
+    HarnessSpec,
+    WorkflowMode,
+    WorkflowSpec,
+)
 from superqode.tools.question_tool import Question, QuestionType
+from superqode.widgets.sidebar_panels import HarnessPanel
+
+
+def _noop_hook(*_args, **_kwargs):
+    return None
 
 
 class FakeLog:
@@ -175,6 +187,289 @@ def test_work_command_renders_last_run_trace():
     assert "pyproject.toml" in text
     assert "read_file" in text
     assert "success" in text
+
+
+def test_harness_panel_renders_workbench_for_local_spec(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SUPERQODE_HARNESS", raising=False)
+    harness_path = tmp_path / "harness.yaml"
+    harness_path.write_text(
+        """
+name: demo-workbench
+runtime:
+  backend: builtin
+agents:
+  - id: coder
+    role: implementation
+    tools: [read_file, grep]
+workflow:
+  mode: single
+validation:
+  enabled: true
+  custom_steps:
+    - name: syntax
+      command: python --version
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    text = render_plain(HarnessPanel()._render_summary())
+
+    assert "Harness Workbench" in text
+    assert "Active Harness" in text
+    assert "demo-workbench" in text
+    assert "readiness ready" in text
+    assert "backend     builtin" in text
+    assert "tools     grep, read_file" in text
+    assert "Planned Graph" in text
+    assert "coder" in text
+
+
+def test_harness_panel_surfaces_policy_hooks_and_recent_signals(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    harness_path = tmp_path / "harness.yaml"
+    harness_path.write_text(
+        """
+name: policy-workbench
+context:
+  session_storage: .superqode/sessions
+execution_policy:
+  allow_shell: true
+  permission_rules:
+    - tool: bash
+      argument: command
+      pattern: "git *"
+      action: allow
+    - tool: bash
+      action: deny
+hooks:
+  rules:
+    - point: before_tool_call
+      handler: test_tui_smoke:_noop_hook
+      matcher: write_*
+      name: audit-write
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SUPERQODE_HARNESS", str(harness_path))
+
+    from superqode.harness import load_harness_spec, remember_approval_decision
+
+    spec = load_harness_spec(harness_path)
+    remember_approval_decision(
+        spec,
+        tool_name="bash",
+        arguments={"command": "git status"},
+        action="allow",
+    )
+    store = FileHarnessStore(".superqode/sessions")
+    store.open_session("session-1", spec)
+    run = store.start_run(
+        session_id="session-1",
+        spec=spec,
+        provider="test",
+        model="model",
+        runtime="builtin",
+        prompt="policy test",
+    )
+    store.append_event(
+        run.run_id,
+        HarnessEvent(
+            type="harness.permission.check",
+            run_id=run.run_id,
+            data={
+                "tool": "bash",
+                "arguments": {
+                    "keys": ["api_key", "command"],
+                    "preview": {"api_key": "[redacted]", "command": "git status"},
+                },
+            },
+        ),
+    )
+    store.append_event(
+        run.run_id,
+        HarnessEvent(
+            type="harness.hook.error",
+            run_id=run.run_id,
+            data={"point": "stop", "handler": "bad.module:fn", "error": "missing"},
+        ),
+    )
+
+    text = render_plain(HarnessPanel()._render_summary())
+
+    assert "policy-workbench" in text
+    assert "rules=2" in text
+    assert "remembered=1" in text
+    assert "allow bash command~git *" in text
+    assert "allow remembered bash command~git status" in text
+    assert "deny  bash" in text
+    assert "hooks=2 (enabled)" in text
+    assert "audit-write" in text
+    assert "signals" in text
+    assert "permission.check  bash keys=api_key,command" in text
+    assert "hook.error  stop bad.module:fn" in text
+    assert "sk-" not in text
+
+
+def test_harness_events_command_renders_persisted_timeline(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    harness_path = tmp_path / "harness.yaml"
+    harness_path.write_text(
+        """
+name: event-demo
+context:
+  session_storage: .superqode/sessions
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SUPERQODE_HARNESS", str(harness_path))
+
+    spec = HarnessSpec(name="event-demo")
+    store = FileHarnessStore(".superqode/sessions")
+    store.open_session("session-1", spec)
+    run = store.start_run(
+        session_id="session-1",
+        spec=spec,
+        provider="test",
+        model="model",
+        runtime="builtin",
+        prompt="event test",
+        metadata={"workflow": True},
+    )
+    store.append_event(
+        run.run_id,
+        HarnessEvent(type="workflow.step.completed", run_id=run.run_id, data={"step_id": "coder", "status": "done"}),
+    )
+    store.append_event(
+        run.run_id,
+        HarnessEvent(type="validation.step.completed", run_id=run.run_id, data={"name": "tests", "returncode": 0}),
+    )
+    store.append_event(
+        run.run_id,
+        HarnessEvent(
+            type="harness.permission.check",
+            run_id=run.run_id,
+            data={
+                "tool": "bash",
+                "arguments": {
+                    "keys": ["api_key", "command"],
+                    "preview": {"api_key": "[redacted]", "command": "git status"},
+                },
+            },
+        ),
+    )
+    store.append_event(
+        run.run_id,
+        HarnessEvent(
+            type="harness.stop",
+            run_id=run.run_id,
+            data={"stopped_reason": "complete", "iterations": 2, "tool_calls_made": 1},
+        ),
+    )
+
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._harness_cmd(f"events {run.run_id}", log)
+
+    text = render_plain(log.items[-1])
+    assert "Harness Events" in text
+    assert run.run_id in text
+    assert "workflow.step.completed" in text
+    assert "step_id=coder" in text
+    assert "validation.step.completed" in text
+    assert "harness.permission.check" in text
+    assert "tool=bash" in text
+    assert "arg_keys=api_key,command" in text
+    assert "api_key=[redacted]" in text
+    assert "harness.stop" in text
+    assert "stopped_reason=complete" in text
+    assert f":harness evidence {run.run_id}" in text
+
+
+def test_harness_replay_and_fork_commands_render_run_lineage(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    harness_path = tmp_path / "harness.yaml"
+    harness_path.write_text(
+        """
+name: replay-demo
+context:
+  session_storage: .superqode/sessions
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SUPERQODE_HARNESS", str(harness_path))
+
+    spec = HarnessSpec(name="replay-demo")
+    store = FileHarnessStore(".superqode/sessions")
+    store.open_session("session-1", spec)
+    run = store.start_run(
+        session_id="session-1",
+        spec=spec,
+        provider="test",
+        model="model",
+        runtime="builtin",
+        prompt="replay test",
+    )
+    store.append_event(run.run_id, HarnessEvent(type="run_start", run_id=run.run_id))
+    store.append_event(run.run_id, HarnessEvent(type="tool_call", run_id=run.run_id))
+
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._harness_cmd(f"replay {run.run_id}", log)
+    replay_text = render_plain(log.items[-1])
+    assert "Harness Replay" in replay_text
+    assert run.run_id in replay_text
+    assert "full=False" in replay_text
+    assert ":harness fork" in replay_text
+
+    app._harness_cmd(f"fork {run.run_id} 0", log)
+    fork_text = render_plain(log.items[-1])
+    assert "Harness Fork" in fork_text
+    assert run.run_id in fork_text
+    assert "Events" in fork_text
+    assert ":harness events" in fork_text
+
+
+def test_tui_palette_exposes_harness_commands():
+    app = make_app()
+
+    commands = {command.id: command for command in app._build_palette_commands()}
+
+    assert commands["harness"].shortcut == ":harness"
+    assert commands["harness_inspect"].shortcut == ":harness inspect"
+    assert commands["harness_doctor"].shortcut == ":harness doctor"
+    assert commands["harness_graph"].shortcut == ":harness graph"
+    assert commands["harness_runs"].shortcut == ":harness runs"
+    assert commands["harness_replay"].shortcut == ":harness replay "
+    assert commands["harness_fork"].shortcut == ":harness fork "
+    assert commands["harness_events"].shortcut == ":harness events "
+    assert commands["harness_evidence"].shortcut == ":harness evidence "
+
+
+def test_tui_static_commands_include_harness_subcommands():
+    from superqode.app.constants import COMMANDS
+    from superqode.widgets.slash_complete import DEFAULT_COMMANDS
+
+    assert ":harness inspect" in COMMANDS
+    assert ":harness doctor" in COMMANDS
+    assert ":harness graph" in COMMANDS
+    assert ":harness replay" in COMMANDS
+    assert ":harness fork" in COMMANDS
+    assert ":harness events" in COMMANDS
+    slash_values = {command.command for command in DEFAULT_COMMANDS}
+    assert ":harness inspect" in slash_values
+    assert ":harness doctor" in slash_values
+    assert ":harness replay" in slash_values
+    assert ":harness fork" in slash_values
+    assert ":harness events" in slash_values
 
 
 def test_skills_command_creates_and_lists_local_skill(tmp_path, monkeypatch):

@@ -83,6 +83,8 @@ class TestHarnessCommand:
         assert "diff" in result.output
         assert "doctor" in result.output
         assert "run" in result.output
+        assert "replay" in result.output
+        assert "fork" in result.output
 
     def test_harness_list_backends_json(self, runner):
         result = runner.invoke(cli_main, ["harness", "list-backends", "--json"])
@@ -165,6 +167,8 @@ class TestHarnessCommand:
             assert payload["backend"]["ok"] is False
             assert payload["backend"]["issues"][0]["code"] == "no_tool_unsupported"
             assert payload["backend"]["capabilities"]["supports_no_tool"] is False
+            assert payload["runtime_details"]["backend"] == "deepagents"
+            assert payload["workflow_details"]["mode"] == "single"
 
     def test_harness_doctor_json_reports_readiness(self, runner):
         with runner.isolated_filesystem():
@@ -198,6 +202,320 @@ class TestHarnessCommand:
             assert by_check["event_graph"]["rich_events"] is True
             assert by_check["model_registry"]["status"] == "ok"
             assert by_check["model_registry"]["unknown_models"] == []
+            assert payload["ready"] is True
+            assert payload["summary"]["checks"] == len(payload["checks"])
+            assert by_check["spec"]["severity"] == "info"
+
+    def test_harness_doctor_json_blocks_unknown_provider(self, runner):
+        with runner.isolated_filesystem():
+            Path("harness.yaml").write_text(
+                """
+name: demo
+model_policy:
+  primary: demo-model
+  config:
+    provider: missing-provider
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(
+                cli_main,
+                ["harness", "doctor", "--spec", "harness.yaml", "--json"],
+            )
+
+            assert result.exit_code == 1
+            payload = json.loads(result.output)
+            assert payload["ready"] is False
+            assert payload["summary"]["blockers"] >= 1
+            model_check = next(check for check in payload["checks"] if check["name"] == "model_registry")
+            assert model_check["status"] == "error"
+            assert model_check["severity"] == "blocker"
+            assert "missing-provider" in model_check["errors"][0]
+            assert "fix" in model_check
+
+    def test_harness_doctor_json_blocks_invalid_mcp_config(self, runner):
+        with runner.isolated_filesystem():
+            Path(".superqode").mkdir()
+            Path(".superqode/mcp.json").write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "missing": {
+                                "command": "definitely-missing-superqode-mcp-server",
+                                "args": [],
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            Path("harness.yaml").write_text(
+                """
+name: demo
+runtime:
+  backend: builtin
+  config:
+    mcp_config_path: .superqode/mcp.json
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(
+                cli_main,
+                ["harness", "doctor", "--spec", "harness.yaml", "--json"],
+            )
+
+            assert result.exit_code == 1
+            payload = json.loads(result.output)
+            mcp_check = next(check for check in payload["checks"] if check["name"] == "mcp")
+            assert mcp_check["status"] == "error"
+            assert mcp_check["severity"] == "blocker"
+            assert "missing" in mcp_check["servers"]
+            assert mcp_check["errors"]
+
+    def test_harness_doctor_json_blocks_missing_validation_command(self, runner):
+        with runner.isolated_filesystem():
+            Path("harness.yaml").write_text(
+                """
+name: demo
+validation:
+  enabled: true
+  custom_steps:
+    - name: missing-validator
+      command: definitely-missing-superqode-validator --check
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(
+                cli_main,
+                ["harness", "doctor", "--spec", "harness.yaml", "--json"],
+            )
+
+            assert result.exit_code == 1
+            payload = json.loads(result.output)
+            validation_check = next(check for check in payload["checks"] if check["name"] == "validation")
+            assert validation_check["status"] == "error"
+            assert validation_check["missing"] == ["missing-validator"]
+            assert "fix" in validation_check
+
+    def test_harness_graph_spec_json_reports_planned_workflow(self, runner):
+        with runner.isolated_filesystem():
+            init = runner.invoke(
+                cli_main,
+                ["harness", "init", "demo", "--template", "coding", "--output", "harness.yaml"],
+            )
+            assert init.exit_code == 0
+
+            result = runner.invoke(
+                cli_main,
+                ["harness", "graph", "--spec", "harness.yaml", "--json"],
+            )
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["run_id"] == "planned"
+            labels = [node["label"] for node in payload["nodes"]]
+            assert labels == ["coder"]
+
+    def test_harness_runs_json_lists_file_store_runs(self, runner):
+        from superqode.harness import FileHarnessStore, HarnessEvent, get_harness_template
+
+        with runner.isolated_filesystem():
+            store = FileHarnessStore(".superqode/sessions")
+            spec = get_harness_template("no-tool")
+            store.open_session("session-1", spec)
+            run = store.start_run(
+                session_id="session-1",
+                spec=spec,
+                provider="test",
+                model="model",
+                runtime="builtin",
+                prompt="parent workflow",
+                metadata={"workflow": True},
+            )
+            store.append_event(run.run_id, HarnessEvent(type="workflow.run.started", run_id=run.run_id))
+
+            result = runner.invoke(cli_main, ["harness", "runs", "--json"])
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload[0]["run_id"] == run.run_id
+            assert payload[0]["metadata"]["workflow"] is True
+
+    def test_harness_evidence_json_reports_run_receipt(self, runner):
+        from superqode.harness import FileHarnessStore, HarnessEvent, get_harness_template
+
+        with runner.isolated_filesystem():
+            store = FileHarnessStore(".superqode/sessions")
+            spec = get_harness_template("no-tool")
+            store.open_session("session-1", spec)
+            run = store.start_run(
+                session_id="session-1",
+                spec=spec,
+                provider="test",
+                model="model",
+                runtime="builtin",
+                prompt="parent workflow",
+                metadata={
+                    "workflow": True,
+                    "workflow_mode": "single",
+                    "changed_files": {"file_count": 0, "additions": 0, "deletions": 0, "files": []},
+                    "validation": {"enabled": True, "status": "passed", "steps": []},
+                },
+            )
+            store.append_event(
+                run.run_id,
+                HarnessEvent(type="workflow.run.started", run_id=run.run_id, data={"mode": "single"}),
+            )
+            store.append_event(
+                run.run_id,
+                HarnessEvent(type="workflow.step.completed", run_id=run.run_id, data={"step_id": "coder", "child_run_id": "run_child"}),
+            )
+            store.append_event(
+                run.run_id,
+                HarnessEvent(type="workspace.changes.captured", run_id=run.run_id, data={"file_count": 0, "additions": 0, "deletions": 0, "files": []}),
+            )
+            store.append_event(
+                run.run_id,
+                HarnessEvent(type="workflow.result", run_id=run.run_id, data={"status": "succeeded", "content_preview": "done", "result_count": 1}),
+            )
+            store.end_run(run.run_id, status="succeeded", metadata={"workflow": True})
+
+            result = runner.invoke(cli_main, ["harness", "evidence", run.run_id, "--json"])
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["run"]["run_id"] == run.run_id
+            assert payload["workflow"]["child_run_ids"] == ["run_child"]
+            assert payload["changes"]["file_count"] == 0
+            assert payload["result"]["content_preview"] == "done"
+            assert payload["commands"]["graph"].endswith(run.run_id)
+
+    def test_harness_replay_json_reports_replay_plan(self, runner):
+        from superqode.harness import FileHarnessStore, HarnessEvent, get_harness_template
+
+        with runner.isolated_filesystem():
+            store = FileHarnessStore(".superqode/sessions")
+            spec = get_harness_template("no-tool")
+            store.open_session("session-1", spec)
+            run = store.start_run(
+                session_id="session-1",
+                spec=spec,
+                provider="test",
+                model="model",
+                runtime="builtin",
+                prompt="replay workflow",
+            )
+            store.append_event(run.run_id, HarnessEvent(type="run_start", run_id=run.run_id))
+            store.append_event(
+                run.run_id,
+                HarnessEvent(type="run_end", run_id=run.run_id, data={"status": "succeeded"}),
+            )
+            store.end_run(run.run_id, status="succeeded")
+
+            result = runner.invoke(cli_main, ["harness", "replay", run.run_id, "--json"])
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["run"]["run_id"] == run.run_id
+            assert payload["events"]["count"] == 2
+            assert payload["terminal"]["type"] == "run_end"
+            assert payload["replayable"] is False
+            assert payload["commands"]["fork"].endswith(run.run_id)
+
+    def test_harness_replay_json_reports_full_prompt_replayable(self, runner):
+        from superqode.harness import ContextSpec, FileHarnessStore, HarnessSpec
+
+        with runner.isolated_filesystem():
+            spec = HarnessSpec(
+                name="prompt-full",
+                context=ContextSpec(session_storage=".superqode/sessions", prompt_persistence="full"),
+            )
+            store = FileHarnessStore(".superqode/sessions")
+            store.open_session("session-1", spec)
+            run = store.start_run(
+                session_id="session-1",
+                spec=spec,
+                provider="test",
+                model="model",
+                runtime="builtin",
+                prompt="exact replay prompt",
+            )
+
+            result = runner.invoke(cli_main, ["harness", "replay", run.run_id, "--json"])
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["replayable"] is True
+            assert payload["prompt"] == "exact replay prompt"
+            assert payload["run"]["has_full_prompt"] is True
+
+    def test_harness_replay_execute_requires_prompt_or_full_persistence(self, runner):
+        from superqode.harness import FileHarnessStore, get_harness_template
+
+        with runner.isolated_filesystem():
+            init = runner.invoke(
+                cli_main,
+                ["harness", "init", "demo", "--template", "no-tool", "--output", "harness.yaml"],
+            )
+            assert init.exit_code == 0
+            store = FileHarnessStore(".superqode/sessions")
+            spec = get_harness_template("no-tool")
+            store.open_session("session-1", spec)
+            run = store.start_run(
+                session_id="session-1",
+                spec=spec,
+                provider="test",
+                model="model",
+                runtime="builtin",
+                prompt="preview only",
+            )
+
+            result = runner.invoke(
+                cli_main,
+                ["harness", "replay", run.run_id, "--execute", "--spec", "harness.yaml"],
+            )
+
+            assert result.exit_code != 0
+            assert "No full prompt is stored" in result.output
+
+    def test_harness_fork_json_creates_lineage_run(self, runner):
+        from superqode.harness import FileHarnessStore, HarnessEvent, get_harness_template
+
+        with runner.isolated_filesystem():
+            store = FileHarnessStore(".superqode/sessions")
+            spec = get_harness_template("no-tool")
+            store.open_session("session-1", spec)
+            run = store.start_run(
+                session_id="session-1",
+                spec=spec,
+                provider="test",
+                model="model",
+                runtime="builtin",
+                prompt="fork workflow",
+            )
+            store.append_event(run.run_id, HarnessEvent(type="run_start", run_id=run.run_id))
+            store.append_event(run.run_id, HarnessEvent(type="tool_call", run_id=run.run_id))
+
+            result = runner.invoke(
+                cli_main,
+                ["harness", "fork", run.run_id, "--after", "0", "--session", "fork-s", "--json"],
+            )
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["fork_of"] == run.run_id
+            assert payload["fork_after"] == 0
+            assert payload["session_id"] == "fork-s"
+            assert payload["events"] == 1
+            forked = store.get_run(payload["run_id"])
+            assert forked is not None
+            assert forked.events[0].type == "run_start"
 
     def test_harness_compile_json_reports_effective_policy(self, runner):
         with runner.isolated_filesystem():
@@ -248,6 +566,8 @@ class TestHarnessCommand:
         assert help_result.exit_code == 0
         assert "ds4-fast-local" in help_result.output
         assert "gemma4-coding" in help_result.output
+        assert "--preset" in help_result.output
+        assert "fix-and-verify" in help_result.output
 
         with runner.isolated_filesystem():
             result = runner.invoke(
@@ -272,6 +592,84 @@ class TestHarnessCommand:
             payload = json.loads(validate.output)
             assert payload["valid"] is True
             assert payload["spec"]["model_policy"]["primary"].endswith("-local")
+
+    def test_harness_init_applies_workflow_preset(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "init",
+                    "team-agent",
+                    "--preset",
+                    "fix-and-verify",
+                    "--output",
+                    "harness.yaml",
+                ],
+            )
+
+            assert result.exit_code == 0
+            assert "Applied workflow preset: fix-and-verify" in result.output
+
+            validate = runner.invoke(
+                cli_main,
+                ["harness", "validate", "--spec", "harness.yaml", "--json"],
+            )
+            assert validate.exit_code == 0
+            payload = json.loads(validate.output)
+            spec = payload["spec"]
+            assert spec["name"] == "team-agent"
+            assert spec["workflow"]["preset"] == "fix-and-verify"
+            assert spec["workflow"]["mode"] == "chain"
+            assert [agent["id"] for agent in spec["agents"]] == [
+                "planner",
+                "implementer",
+                "verifier",
+            ]
+            assert "read_file" in spec["agents"][0]["tools"]
+            assert spec["validation"]["enabled"] is True
+
+            graph = runner.invoke(
+                cli_main,
+                ["harness", "graph", "--spec", "harness.yaml", "--json"],
+            )
+            assert graph.exit_code == 0
+            graph_payload = json.loads(graph.output)
+            assert [node["label"] for node in graph_payload["nodes"]] == [
+                "planner",
+                "implementer",
+                "verifier",
+            ]
+
+    def test_harness_init_applies_security_review_preset(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "init",
+                    "security-agent",
+                    "--preset",
+                    "security-review",
+                    "--output",
+                    "harness.yaml",
+                ],
+            )
+
+            assert result.exit_code == 0
+            validate = runner.invoke(
+                cli_main,
+                ["harness", "validate", "--spec", "harness.yaml", "--json"],
+            )
+            assert validate.exit_code == 0
+            spec = json.loads(validate.output)["spec"]
+            assert spec["workflow"]["mode"] == "orchestrator"
+            assert spec["workflow"]["parallelism"] == 3
+            assert [agent["id"] for agent in spec["agents"]] == [
+                "appsec",
+                "data-flow",
+                "dependency-risk",
+            ]
 
     def test_harness_doctor_json_blocks_incompatible_backend(self, runner):
         with runner.isolated_filesystem():

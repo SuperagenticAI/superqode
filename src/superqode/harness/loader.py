@@ -14,7 +14,10 @@ from .spec import (
     ExecutionPolicySpec,
     HarnessFlavor,
     HarnessSpec,
+    HookRuleSpec,
+    HooksSpec,
     ModelPolicySpec,
+    PermissionRuleSpec,
     ObservabilitySpec,
     RuntimeSpec,
     ValidationSpec,
@@ -75,6 +78,7 @@ def harness_spec_from_dict(data: dict[str, Any]) -> HarnessSpec:
         context=_context(raw.get("context")),
         validation=_validation(raw.get("validation")),
         observability=_observability(raw.get("observability")),
+        hooks=_hooks(raw.get("hooks")),
         metadata=dict(raw.get("metadata") or {}) if isinstance(raw.get("metadata"), dict) else {},
     )
     return apply_workflow_preset(spec)
@@ -116,6 +120,25 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
             "allow_network": spec.execution_policy.allow_network,
             "allowed_commands": list(spec.execution_policy.allowed_commands),
             "blocked_categories": list(spec.execution_policy.blocked_categories),
+            **(
+                {
+                    "permission_rules": [
+                        {
+                            key: value
+                            for key, value in {
+                                "tool": rule.tool,
+                                "pattern": rule.pattern,
+                                "action": rule.action,
+                                "argument": rule.argument,
+                            }.items()
+                            if value not in ("", None)
+                        }
+                        for rule in spec.execution_policy.permission_rules
+                    ]
+                }
+                if spec.execution_policy.permission_rules
+                else {}
+            ),
         },
         "agents": [
             {
@@ -149,6 +172,7 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
             "skills_dir": spec.context.skills_dir,
             "roles_dir": spec.context.roles_dir,
             "session_storage": spec.context.session_storage,
+            "prompt_persistence": spec.context.prompt_persistence,
             "compaction": spec.context.compaction,
             "memory": spec.context.memory,
         },
@@ -171,6 +195,29 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
             "traces": spec.observability.traces,
             "run_store": spec.observability.run_store,
         },
+        **(
+            {
+                "hooks": {
+                    "enabled": spec.hooks.enabled,
+                    "rules": [
+                        {
+                            key: value
+                            for key, value in {
+                                "point": rule.point,
+                                "handler": rule.handler,
+                                "matcher": rule.matcher,
+                                "name": rule.name,
+                                "config": rule.config or None,
+                            }.items()
+                            if value not in (None, "", {})
+                        }
+                        for rule in spec.hooks.rules
+                    ],
+                }
+            }
+            if spec.hooks.rules or not spec.hooks.enabled
+            else {}
+        ),
         "metadata": spec.metadata,
     }
 
@@ -225,6 +272,19 @@ def harness_spec_json_schema() -> dict[str, Any]:
                     "allow_network": {"type": "boolean"},
                     "allowed_commands": {"type": "array", "items": {"type": "string"}},
                     "blocked_categories": {"type": "array", "items": {"type": "string"}},
+                    "permission_rules": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {
+                                "tool": {"type": "string"},
+                                "pattern": {"type": "string"},
+                                "action": {"type": "string", "enum": ["allow", "deny", "ask"]},
+                                "argument": {"type": "string"},
+                            },
+                        },
+                    },
                     "config": {"type": "object"},
                 },
             },
@@ -268,6 +328,7 @@ def harness_spec_json_schema() -> dict[str, Any]:
                     "skills_dir": {"type": "string"},
                     "roles_dir": {"type": "string"},
                     "session_storage": {"type": "string"},
+                    "prompt_persistence": {"type": "string", "enum": ["off", "preview", "full"]},
                     "compaction": {"type": "object"},
                     "memory": {"type": "object"},
                 },
@@ -302,6 +363,28 @@ def harness_spec_json_schema() -> dict[str, Any]:
                     "traces": {"type": "boolean"},
                     "run_store": {"type": "string"},
                     "config": {"type": "object"},
+                },
+            },
+            "hooks": {
+                "type": "object",
+                "additionalProperties": True,
+                "properties": {
+                    "enabled": {"type": "boolean"},
+                    "rules": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["point", "handler"],
+                            "additionalProperties": True,
+                            "properties": {
+                                "point": {"type": "string"},
+                                "handler": {"type": "string"},
+                                "matcher": {"type": "string"},
+                                "name": {"type": "string"},
+                                "config": {"type": "object"},
+                            },
+                        },
+                    },
                 },
             },
             "metadata": {"type": "object"},
@@ -346,8 +429,33 @@ def _execution_policy(value: Any, flavor: HarnessFlavor) -> ExecutionPolicySpec:
         allow_network=False if no_tool else bool(data.get("allow_network", False)),
         allowed_commands=() if no_tool else _str_tuple(data.get("allowed_commands")),
         blocked_categories=_str_tuple(data.get("blocked_categories")),
+        permission_rules=_permission_rules(data.get("permission_rules")),
         config=dict(data.get("config") or {}) if isinstance(data.get("config"), dict) else {},
     )
+
+
+def _permission_rules(value: Any) -> tuple[PermissionRuleSpec, ...]:
+    if not isinstance(value, list):
+        return ()
+    out: list[PermissionRuleSpec] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise ValueError(f"Permission rule at index {index} must be a mapping")
+        action = str(item.get("action") or "ask").strip().lower()
+        if action not in {"allow", "deny", "ask"}:
+            raise ValueError(
+                f"Permission rule at index {index} has invalid action {action!r}; "
+                "valid: allow, deny, ask"
+            )
+        out.append(
+            PermissionRuleSpec(
+                tool=str(item.get("tool") or "*"),
+                pattern=str(item.get("pattern") or "*"),
+                action=action,
+                argument=str(item.get("argument") or ""),
+            )
+        )
+    return tuple(out)
 
 
 def _agents(value: Any) -> tuple[AgentSpec, ...]:
@@ -395,6 +503,9 @@ def _workflow(value: Any) -> WorkflowSpec:
 
 def _context(value: Any) -> ContextSpec:
     data = value if isinstance(value, dict) else {}
+    prompt_persistence = str(data.get("prompt_persistence") or "preview").strip().lower()
+    if prompt_persistence not in {"off", "preview", "full"}:
+        raise ValueError("context.prompt_persistence must be one of: off, preview, full")
     return ContextSpec(
         instruction_files=_str_tuple(
             data.get("instruction_files") or ("AGENTS.md", "CLAUDE.md", "SUPERQODE.md")
@@ -402,6 +513,7 @@ def _context(value: Any) -> ContextSpec:
         skills_dir=str(data.get("skills_dir") or ".agents/skills"),
         roles_dir=str(data.get("roles_dir") or ".agents/roles"),
         session_storage=str(data.get("session_storage") or ".superqode/sessions"),
+        prompt_persistence=prompt_persistence,
         compaction=dict(data.get("compaction") or {})
         if isinstance(data.get("compaction"), dict)
         else {},
@@ -443,6 +555,35 @@ def _observability(value: Any) -> ObservabilitySpec:
         traces=bool(data.get("traces", False)),
         run_store=str(data.get("run_store") or "memory"),
         config=dict(data.get("config") or {}) if isinstance(data.get("config"), dict) else {},
+    )
+
+
+def _hooks(value: Any) -> HooksSpec:
+    data = value if isinstance(value, dict) else {}
+    rules: list[HookRuleSpec] = []
+    for index, item in enumerate(data.get("rules") or ()):
+        if not isinstance(item, dict):
+            raise ValueError(f"Hook rule at index {index} must be a mapping")
+        point = str(item.get("point") or "").strip()
+        handler = str(item.get("handler") or item.get("target") or "").strip()
+        if not point:
+            raise ValueError(f"Hook rule at index {index} requires a point")
+        if not handler:
+            raise ValueError(f"Hook rule at index {index} requires a handler")
+        rules.append(
+            HookRuleSpec(
+                point=point,
+                handler=handler,
+                matcher=str(item.get("matcher") or "*"),
+                name=str(item.get("name") or ""),
+                config=dict(item.get("config") or {})
+                if isinstance(item.get("config"), dict)
+                else {},
+            )
+        )
+    return HooksSpec(
+        enabled=bool(data.get("enabled", True)),
+        rules=tuple(rules),
     )
 
 

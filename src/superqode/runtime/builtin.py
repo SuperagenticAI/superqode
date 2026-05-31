@@ -19,6 +19,10 @@ class BuiltinRuntime:
     name = "builtin"
 
     def __init__(self, **kwargs):
+        # ``harness_spec`` is metadata the harness backend passes to every
+        # runtime; the builtin AgentLoop doesn't take it directly, but this
+        # wrapper uses it for persistent approval memory.
+        self._harness_spec = kwargs.pop("harness_spec", None)
         self._loop = AgentLoop(**kwargs)
         self._loop.pause_on_approval = True
 
@@ -55,6 +59,15 @@ class BuiltinRuntime:
         tool_call_id = pending.get("tool_call_id")
         if tool_call_id:
             self._loop._approved_tool_call_ids.add(str(tool_call_id))
+        if always and self._harness_spec is not None:
+            from ..harness.approval_memory import remember_approval_decision
+
+            remember_approval_decision(
+                self._harness_spec,
+                tool_name=tool_name,
+                arguments=arguments,
+                action="allow",
+            )
         self._loop._pending_approval = None
         result = await self._loop._execute_tool(
             tool_name,
@@ -85,6 +98,15 @@ class BuiltinRuntime:
         pending = dict(self._loop._pending_approval)
         self._loop._pending_approval = None
         tool_name = str(pending.get("tool_name") or "")
+        if always and self._harness_spec is not None:
+            from ..harness.approval_memory import remember_approval_decision
+
+            remember_approval_decision(
+                self._harness_spec,
+                tool_name=tool_name,
+                arguments=dict(pending.get("arguments") or {}),
+                action="deny",
+            )
         reason = message or f"Permission rejected for tool: {tool_name}"
         return AgentResponse(
             content=reason,

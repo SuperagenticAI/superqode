@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import shlex
+import subprocess
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
 from ..agent.system_prompts import SystemPromptLevel
+from ..workspace.change_summary import capture_workspace_changes, summarize_workspace_changes
+from .events import HarnessEvent
 from .kernel import HarnessKernel, HarnessRunResult
 from .spec import WorkflowMode
 
@@ -28,6 +33,8 @@ class WorkflowResult:
 
     mode: WorkflowMode
     results: tuple[HarnessRunResult, ...]
+    run_id: str = ""
+    session_id: str = ""
 
     @property
     def content(self) -> str:
@@ -68,86 +75,176 @@ async def run_workflow(
     progress_callback: WorkflowProgressCallback | None = None,
 ) -> WorkflowResult:
     """Run steps according to the kernel spec's workflow mode."""
+    workflow_session_id = session_id or f"workflow-{uuid.uuid4().hex[:8]}"
+    runtime_name = runtime or kernel.spec.runtime.backend
+    evidence_cwd = working_directory or Path.cwd()
+    change_baseline = capture_workspace_changes(evidence_cwd)
+    kernel.store.open_session(
+        workflow_session_id,
+        kernel.spec,
+        metadata={"workflow": True, "provider": provider, "model": model},
+    )
+    workflow_run = kernel.store.start_run(
+        session_id=workflow_session_id,
+        spec=kernel.spec,
+        provider=provider,
+        model=model,
+        runtime=runtime_name,
+        prompt=_workflow_preview(steps),
+        metadata={
+            "workflow": True,
+            "workflow_mode": kernel.spec.workflow.mode.value,
+            "step_count": len(steps),
+        },
+    )
+    workflow_run_id = workflow_run.run_id
+    _append_workflow_event(
+        kernel,
+        workflow_run_id,
+        workflow_session_id,
+        "workflow.run.started",
+        {
+            "mode": kernel.spec.workflow.mode.value,
+            "preset": kernel.spec.workflow.preset,
+            "steps": [_step_id(step, index) for index, step in enumerate(steps)],
+            "provider": provider,
+            "model": model,
+            "runtime": runtime_name,
+        },
+    )
+
+    user_progress_callback = progress_callback
+
+    def persist_progress(progress: WorkflowProgress) -> None:
+        event_type = {
+            "running": "workflow.step.started",
+            "done": "workflow.step.completed",
+            "failed": "workflow.step.failed",
+        }.get(progress.status, "workflow.step.progress")
+        data: dict[str, Any] = {
+            "mode": progress.mode.value,
+            "step_id": progress.step_id,
+            "status": progress.status,
+            "index": progress.index,
+            "total": progress.total,
+            "detail": progress.detail,
+        }
+        if progress.result is not None:
+            data.update(
+                {
+                    "child_run_id": progress.result.run_id,
+                    "child_session_id": progress.result.session_id,
+                    "tool_calls_made": progress.result.tool_calls_made,
+                    "iterations": progress.result.iterations,
+                }
+            )
+        _append_workflow_event(kernel, workflow_run_id, workflow_session_id, event_type, data)
+        if user_progress_callback is not None:
+            user_progress_callback(progress)
+
+    workflow_kwargs = {
+        "provider": provider,
+        "model": model,
+        "working_directory": working_directory,
+        "runtime": runtime,
+        "sandbox_backend": sandbox_backend,
+        "system_level": system_level,
+        "session_id": workflow_session_id,
+        "progress_callback": persist_progress,
+    }
     mode = kernel.spec.workflow.mode
-    if mode == WorkflowMode.SINGLE:
-        return await _run_single(
+    try:
+        if mode == WorkflowMode.SINGLE:
+            result = await _run_single(kernel, steps, **workflow_kwargs)
+        elif mode == WorkflowMode.CHAIN:
+            result = await _run_chain(kernel, steps, **workflow_kwargs)
+        elif mode == WorkflowMode.PARALLEL:
+            result = await _run_parallel(kernel, steps, **workflow_kwargs)
+        elif mode == WorkflowMode.ROUTER:
+            result = await _run_router(kernel, steps, **workflow_kwargs)
+        elif mode == WorkflowMode.ORCHESTRATOR:
+            result = await _run_orchestrator(kernel, steps, **workflow_kwargs)
+        elif mode == WorkflowMode.EVALUATOR_OPTIMIZER:
+            result = await _run_evaluator_optimizer(kernel, steps, **workflow_kwargs)
+        else:
+            raise NotImplementedError(f"Workflow mode is not implemented yet: {mode.value}")
+    except Exception as exc:
+        _append_workflow_event(
             kernel,
-            steps,
-            provider=provider,
-            model=model,
-            working_directory=working_directory,
-            runtime=runtime,
-            sandbox_backend=sandbox_backend,
-            system_level=system_level,
-            session_id=session_id,
-            progress_callback=progress_callback,
+            workflow_run_id,
+            workflow_session_id,
+            "workflow.run.failed",
+            {"mode": mode.value, "error": str(exc), "error_type": type(exc).__name__},
         )
-    if mode == WorkflowMode.CHAIN:
-        return await _run_chain(
-            kernel,
-            steps,
-            provider=provider,
-            model=model,
-            working_directory=working_directory,
-            runtime=runtime,
-            sandbox_backend=sandbox_backend,
-            system_level=system_level,
-            session_id=session_id,
-            progress_callback=progress_callback,
+        kernel.store.end_run(
+            workflow_run_id,
+            status="failed",
+            metadata={"workflow": True, "error": str(exc), "error_type": type(exc).__name__},
         )
-    if mode == WorkflowMode.PARALLEL:
-        return await _run_parallel(
-            kernel,
-            steps,
-            provider=provider,
-            model=model,
-            working_directory=working_directory,
-            runtime=runtime,
-            sandbox_backend=sandbox_backend,
-            system_level=system_level,
-            session_id=session_id,
-            progress_callback=progress_callback,
-        )
-    if mode == WorkflowMode.ROUTER:
-        return await _run_router(
-            kernel,
-            steps,
-            provider=provider,
-            model=model,
-            working_directory=working_directory,
-            runtime=runtime,
-            sandbox_backend=sandbox_backend,
-            system_level=system_level,
-            session_id=session_id,
-            progress_callback=progress_callback,
-        )
-    if mode == WorkflowMode.ORCHESTRATOR:
-        return await _run_orchestrator(
-            kernel,
-            steps,
-            provider=provider,
-            model=model,
-            working_directory=working_directory,
-            runtime=runtime,
-            sandbox_backend=sandbox_backend,
-            system_level=system_level,
-            session_id=session_id,
-            progress_callback=progress_callback,
-        )
-    if mode == WorkflowMode.EVALUATOR_OPTIMIZER:
-        return await _run_evaluator_optimizer(
-            kernel,
-            steps,
-            provider=provider,
-            model=model,
-            working_directory=working_directory,
-            runtime=runtime,
-            sandbox_backend=sandbox_backend,
-            system_level=system_level,
-            session_id=session_id,
-            progress_callback=progress_callback,
-        )
-    raise NotImplementedError(f"Workflow mode is not implemented yet: {mode.value}")
+        raise
+
+    final = WorkflowResult(
+        mode=result.mode,
+        results=result.results,
+        run_id=workflow_run_id,
+        session_id=workflow_session_id,
+    )
+    change_summary = summarize_workspace_changes(evidence_cwd, before=change_baseline)
+    _append_workflow_event(
+        kernel,
+        workflow_run_id,
+        workflow_session_id,
+        "workspace.changes.captured",
+        change_summary.to_dict(),
+    )
+    validation = await _run_validation_steps(
+        kernel,
+        run_id=workflow_run_id,
+        session_id=workflow_session_id,
+        cwd=evidence_cwd,
+    )
+    validation_failed = validation["status"] == "failed"
+    final_status = "failed" if validation_failed and kernel.spec.validation.fail_on_error else "succeeded"
+    _append_workflow_event(
+        kernel,
+        workflow_run_id,
+        workflow_session_id,
+        "workflow.result",
+        {
+            "status": final_status,
+            "result_count": len(final.results),
+            "content_preview": _preview_text(final.content),
+            "changed_files": change_summary.to_dict(),
+            "validation": validation,
+        },
+    )
+    _append_workflow_event(
+        kernel,
+        workflow_run_id,
+        workflow_session_id,
+        "workflow.run.completed",
+        {
+            "mode": mode.value,
+            "status": final_status,
+            "result_count": len(final.results),
+            "result_run_ids": [item.run_id for item in final.results],
+            "changed_files": change_summary.to_dict(),
+            "validation": validation,
+        },
+    )
+    kernel.store.end_run(
+        workflow_run_id,
+        status=final_status,
+        metadata={
+            "workflow": True,
+            "workflow_mode": mode.value,
+            "result_count": len(final.results),
+            "result_run_ids": [item.run_id for item in final.results],
+            "changed_files": change_summary.to_dict(),
+            "validation": validation,
+        },
+    )
+    return final
 
 
 async def _run_single(
@@ -473,6 +570,111 @@ def _emit_progress(kwargs: dict[str, Any], progress: WorkflowProgress) -> None:
     callback = kwargs.get("progress_callback")
     if callback is not None:
         callback(progress)
+
+
+def _append_workflow_event(
+    kernel: HarnessKernel,
+    run_id: str,
+    session_id: str,
+    event_type: str,
+    data: dict[str, Any],
+) -> None:
+    event = HarnessEvent(type=event_type, data=data, session_id=session_id, run_id=run_id)
+    kernel.store.append_event(run_id, event)
+    kernel.emit(event)
+
+
+def _workflow_preview(steps: list[WorkflowStep] | tuple[WorkflowStep, ...]) -> str:
+    if not steps:
+        return "workflow"
+    return "\n".join(f"{_step_id(step, index)}: {step.prompt}" for index, step in enumerate(steps))
+
+
+def _step_id(step: WorkflowStep, index: int) -> str:
+    return step.id or f"step-{index + 1}"
+
+
+async def _run_validation_steps(
+    kernel: HarnessKernel,
+    *,
+    run_id: str,
+    session_id: str,
+    cwd: Path,
+) -> dict[str, Any]:
+    validation = kernel.spec.validation
+    if not validation.enabled:
+        return {"enabled": False, "status": "skipped", "steps": []}
+    steps = [step for step in validation.custom_steps if step.enabled]
+    if not steps:
+        return {"enabled": True, "status": "skipped", "steps": []}
+
+    results: list[dict[str, Any]] = []
+    for step in steps:
+        _append_workflow_event(
+            kernel,
+            run_id,
+            session_id,
+            "validation.step.started",
+            {"name": step.name, "command": step.command, "timeout": step.timeout},
+        )
+        result = await asyncio.to_thread(_run_validation_command, step.command, cwd, step.timeout)
+        step_result = {"name": step.name, "command": step.command, "timeout": step.timeout, **result}
+        results.append(step_result)
+        _append_workflow_event(
+            kernel,
+            run_id,
+            session_id,
+            (
+                "validation.step.completed"
+                if result["status"] == "passed"
+                else "validation.step.failed"
+            ),
+            step_result,
+        )
+    status = "passed" if all(item["status"] == "passed" for item in results) else "failed"
+    return {"enabled": True, "status": status, "steps": results}
+
+
+def _run_validation_command(command: str, cwd: Path, timeout: int) -> dict[str, Any]:
+    try:
+        args = shlex.split(command)
+        if not args:
+            return {"status": "failed", "returncode": None, "stdout": "", "stderr": "empty command"}
+        completed = subprocess.run(
+            args,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "status": "failed",
+            "returncode": None,
+            "stdout": _preview_text(exc.stdout or ""),
+            "stderr": f"timed out after {timeout}s",
+        }
+    except (OSError, ValueError) as exc:
+        return {
+            "status": "failed",
+            "returncode": None,
+            "stdout": "",
+            "stderr": str(exc),
+        }
+    return {
+        "status": "passed" if completed.returncode == 0 else "failed",
+        "returncode": completed.returncode,
+        "stdout": _preview_text(completed.stdout),
+        "stderr": _preview_text(completed.stderr),
+    }
+
+
+def _preview_text(value: str, limit: int = 1200) -> str:
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
 
 
 def _result_detail(result: HarnessRunResult) -> str:

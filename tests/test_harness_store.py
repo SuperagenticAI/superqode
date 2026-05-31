@@ -3,12 +3,14 @@
 import pytest
 
 from superqode.harness import (
+    ContextSpec,
     FileHarnessStore,
     HarnessEvent,
     HarnessEventGraph,
     SQLiteHarnessStore,
     get_harness_template,
 )
+from superqode.harness.spec import HarnessSpec
 
 
 def test_file_harness_store_persists_sessions_runs_and_events(tmp_path):
@@ -130,3 +132,75 @@ def test_harness_store_builds_event_graph(tmp_path, store_factory):
     ]
     assert [edge.type for edge in graph.edges] == ["calls", "pause"]
     assert graph.to_dict()["nodes"][1]["data"]["type"] == "tool_call"
+
+
+@pytest.mark.parametrize("store_factory", [FileHarnessStore, SQLiteHarnessStore])
+def test_harness_store_forks_run_event_prefix(tmp_path, store_factory):
+    path = tmp_path / "store.sqlite3" if store_factory is SQLiteHarnessStore else tmp_path / "files"
+    store = store_factory(path)
+    spec = get_harness_template("coding")
+    store.open_session("session-fork", spec)
+    run = store.start_run(
+        session_id="session-fork",
+        spec=spec,
+        provider="openai",
+        model="gpt-5",
+        runtime="builtin",
+        prompt="fork me",
+        metadata={"workflow": True},
+    )
+    store.append_event(run.run_id, HarnessEvent(type="run_start", data={"n": 1}, run_id=run.run_id))
+    store.append_event(run.run_id, HarnessEvent(type="tool_call", data={"n": 2}, run_id=run.run_id))
+    store.append_event(run.run_id, HarnessEvent(type="run_end", data={"n": 3}, run_id=run.run_id))
+
+    fork = store.fork_run(run.run_id, after=1, session_id="forked-session")
+
+    assert fork.run_id != run.run_id
+    assert fork.status == "forked"
+    assert fork.session_id == "forked-session"
+    assert fork.metadata["fork_of"] == run.run_id
+    assert fork.metadata["fork_after"] == 1
+    assert [event.type for event in fork.events] == ["run_start", "tool_call"]
+    assert all(event.run_id == fork.run_id for event in fork.events)
+
+
+@pytest.mark.parametrize("store_factory", [FileHarnessStore, SQLiteHarnessStore])
+def test_harness_store_prompt_persistence_policy(tmp_path, store_factory):
+    path = tmp_path / "store.sqlite3" if store_factory is SQLiteHarnessStore else tmp_path / "files"
+    store = store_factory(path)
+    full = HarnessSpec(
+        name="full",
+        context=ContextSpec(session_storage=str(tmp_path), prompt_persistence="full"),
+    )
+    off = HarnessSpec(
+        name="off",
+        context=ContextSpec(session_storage=str(tmp_path), prompt_persistence="off"),
+    )
+
+    full_run = store.start_run(
+        session_id="s",
+        spec=full,
+        provider="p",
+        model="m",
+        runtime="builtin",
+        prompt="exact prompt\nwith newline",
+    )
+    off_run = store.start_run(
+        session_id="s",
+        spec=off,
+        provider="p",
+        model="m",
+        runtime="builtin",
+        prompt="do not store me",
+    )
+
+    loaded_full = store.get_run(full_run.run_id)
+    loaded_off = store.get_run(off_run.run_id)
+    assert loaded_full is not None
+    assert loaded_full.prompt_preview == "exact prompt with newline"
+    assert loaded_full.metadata["prompt"] == "exact prompt\nwith newline"
+    assert loaded_full.metadata["prompt_persistence"] == "full"
+    assert loaded_off is not None
+    assert loaded_off.prompt_preview == ""
+    assert "prompt" not in loaded_off.metadata
+    assert loaded_off.metadata["prompt_persistence"] == "off"

@@ -210,8 +210,21 @@ def _create_runtime_for_request(
         session_history_limit=model_policy.session_history_limit,
     )
     callbacks = {}
-    if event_sink is not None and runtime_name == "builtin":
-        callbacks = _builtin_event_callbacks(event_sink)
+    hook_kwargs = {}
+    if runtime_name == "builtin":
+        if event_sink is not None:
+            callbacks = _builtin_event_callbacks(event_sink)
+        # Build the lifecycle hook registry from the HarnessSpec: declared
+        # handler rules (deny/allow/modify) plus store forwarders that persist
+        # new lifecycle events through the kernel's event_sink.
+        from ..hooks import build_hook_registry
+
+        registry, _hook_errors = build_hook_registry(
+            request.spec,
+            event_sink=event_sink,
+            session_id=request.session_id,
+        )
+        hook_kwargs = {"hooks": registry}
 
     return runtime_name, create_runtime(
         runtime_name,
@@ -227,6 +240,7 @@ def _create_runtime_for_request(
             )
         ),
         **callbacks,
+        **hook_kwargs,
         permission_manager=PermissionManager(
             apply_backend_permissions(profile.permissions, request.sandbox_backend)
         ),

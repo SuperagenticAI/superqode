@@ -48,6 +48,38 @@ WORKFLOW_PRESETS: dict[str, WorkflowPreset] = {
         parallelism=3,
         config={"synthesis_prompt": "Merge the reviewer findings into one prioritized engineering report."},
     ),
+    "fix-and-verify": WorkflowPreset(
+        name="fix-and-verify",
+        mode=WorkflowMode.CHAIN,
+        description="Plan the fix, implement it, then verify behavior and tests.",
+        agents=(
+            AgentSpec(id="planner", role="Identify the likely fix path and risks."),
+            AgentSpec(id="implementer", role="Apply the code change with repository tools."),
+            AgentSpec(id="verifier", role="Run checks, inspect changed files, and summarize evidence."),
+        ),
+    ),
+    "security-review": WorkflowPreset(
+        name="security-review",
+        mode=WorkflowMode.ORCHESTRATOR,
+        description="Review code through security, data-flow, and dependency-risk lenses.",
+        agents=(
+            AgentSpec(id="appsec", role="Find application security risks and unsafe patterns."),
+            AgentSpec(id="data-flow", role="Review sensitive data handling, auth boundaries, and leakage risk."),
+            AgentSpec(id="dependency-risk", role="Review dependency, supply-chain, and runtime risk."),
+        ),
+        parallelism=3,
+        config={"synthesis_prompt": "Merge the security findings into one prioritized risk report."},
+    ),
+    "release-check": WorkflowPreset(
+        name="release-check",
+        mode=WorkflowMode.CHAIN,
+        description="Check release readiness across changes, validation, docs, and operational risk.",
+        agents=(
+            AgentSpec(id="change-reviewer", role="Summarize the release changes and risky files."),
+            AgentSpec(id="validator", role="Review validation results and missing test coverage."),
+            AgentSpec(id="release-notes", role="Draft release notes and rollout caveats."),
+        ),
+    ),
     "router": WorkflowPreset(
         name="router",
         mode=WorkflowMode.ROUTER,

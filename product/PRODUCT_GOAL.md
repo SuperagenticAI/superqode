@@ -73,6 +73,41 @@ superqode harness run --runtime managed
 
 The execution engine can be local, open-source, framework-based, protocol-based, or managed by a lab. The project policy, workflow, validation, events, and evidence should remain under the SuperQode HarnessSpec.
 
+## Product Mission
+
+There are many coding agents.
+
+SuperQode is the harness that belongs to your codebase.
+
+Define the policy once. Run it anywhere. Inspect every step. Prove what happened.
+
+SuperQode should adapt to the user's project, team, tools, models, permissions, and validation requirements. The user should not have to reshape their workflow around one fixed agent product.
+
+## Minimal Core, Strong Contract
+
+SuperQode should keep the core concept simple:
+
+- a HarnessSpec
+- a runtime backend
+- a tool and protocol layer
+- a session and event graph
+- a TUI/CLI workbench
+- a validation and evidence layer
+
+Features should not become random product surface area. They should attach to the harness contract.
+
+The default should be usable immediately, but the deeper value is that teams can make SuperQode their own without forking internals.
+
+Advanced behavior should come from:
+
+- HarnessSpec presets
+- skills
+- workflow steps
+- runtime backends
+- protocol integrations
+- validation plugins
+- TUI workbench panels
+
 ## What To Build Next
 
 The next maturity push should be opinionated around the harness, not around one default agent.
@@ -110,6 +145,15 @@ It should show:
 - artifacts and run evidence
 
 The TUI should make users confident that they understand what the agent is doing and what policy controls are active.
+
+The TUI should also keep extension points visible:
+
+- available skills
+- available workflow presets
+- active prompt/context resources
+- active validation steps
+- active runtime backend
+- active protocol connections
 
 ### 3. Skills Maturity
 
@@ -152,6 +196,59 @@ Important outputs:
 - artifacts
 - structured run summaries
 - CI output
+
+### 6. Durable Harness Sessions
+
+Harness sessions should be durable enough to inspect, resume, branch, and explain.
+
+The session should preserve:
+
+- model and runtime changes
+- active tool changes
+- workflow step starts and finishes
+- provider request starts and finishes
+- tool call starts and finishes
+- approvals
+- compaction events
+- validation results
+- artifacts
+- branch and fork relationships
+
+Provider streams do not need to be magically resumable. Recovery should restart from clear durable boundaries, mark interrupted operations explicitly, and preserve enough state for the user to understand what happened.
+
+### 7. Harness Hooks And Extension Safety
+
+SuperQode should support hooks, but hooks must not corrupt an active run.
+
+The product should separate:
+
+- observers that only watch events
+- handlers that can influence specific events
+- structural operations that require the harness to be idle
+- queue operations that are safe during a turn
+- runtime configuration updates that affect future turns
+
+This keeps customization powerful without making the harness unpredictable.
+
+### 8. Observability Without Vendor Lock-In
+
+SuperQode should emit stable structured lifecycle events that can be converted into logs, traces, metrics, dashboards, or CI artifacts.
+
+The core should own the event contract, not depend on one observability vendor.
+
+Useful event names include:
+
+- `harness.run.start`
+- `harness.workflow.step.start`
+- `harness.workflow.step.end`
+- `harness.provider.request.start`
+- `harness.provider.request.end`
+- `harness.tool.call.start`
+- `harness.tool.call.end`
+- `harness.validation.start`
+- `harness.validation.end`
+- `harness.approval.requested`
+- `harness.approval.resolved`
 
 ## Marketing Page Structure
 
@@ -236,6 +333,11 @@ SuperQode should be layered explicitly:
 5. Validation Layer
    QE, artifacts, test runs, event graph, and CI evidence.
 
+## Related Product Notes
+
+- [PyFlue And Flue Insights](PYFLUE_FLUE_INSIGHTS.md)
+  How Flue and PyFlue validate the harness direction, and which ideas SuperQode should adopt for coding-agent workflows, durable runs, typed outputs, connector guides, and runtime portability.
+
 ## Product Principle
 
 SuperQode should make breadth feel intentional.
@@ -249,3 +351,21 @@ Every feature should answer one of these questions:
 - Does it create better validation evidence?
 
 If the answer is no, the feature should wait.
+
+## How SuperQode Wins
+
+SuperQode should win by combining four things:
+
+1. Ownership
+   The harness belongs to the user's codebase and team.
+
+2. Portability
+   The same harness can run across local, framework, protocol, and managed runtimes.
+
+3. Control
+   Permissions, approvals, tools, skills, model policy, workflows, and validation are explicit.
+
+4. Evidence
+   Every important run can produce events, diffs, artifacts, validation results, and CI-friendly summaries.
+
+The product should feel simple at first run and serious under inspection.

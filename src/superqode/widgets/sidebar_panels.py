@@ -1162,7 +1162,7 @@ class HistoryPanel(Container):
 
 
 class HarnessPanel(Container):
-    """Coding harness overview panel for sessions, providers, sandboxes, and plugins."""
+    """Harness workbench panel for active spec, readiness, graph, and evidence."""
 
     DEFAULT_CSS = (
         PANEL_CSS
@@ -1198,24 +1198,21 @@ class HarnessPanel(Container):
 
     def _render_summary(self) -> Text:
         text = Text()
-        text.append("Coding Harness\n\n", style=f"bold {SQ_COLORS.text_primary}")
+        text.append("Harness Workbench\n\n", style=f"bold {SQ_COLORS.text_primary}")
 
-        try:
-            from superqode.headless import list_sessions
-
-            sessions = list_sessions(limit=5)
-        except Exception:
-            sessions = []
-
-        text.append("Sessions\n", style=f"bold {SQ_COLORS.primary_light}")
-        if sessions:
-            for session in sessions[:5]:
-                text.append(f"  {session.session_id[:8]} ", style=SQ_COLORS.info)
-                text.append(f"{session.provider or '-'} ", style=SQ_COLORS.success)
-                text.append(f"{session.model or '-'} ", style=SQ_COLORS.text_secondary)
-                text.append(f"{session.message_count} msgs\n", style=SQ_COLORS.text_dim)
+        spec, path, load_error = self._load_active_harness()
+        if spec is None:
+            text.append("Active Harness\n", style=f"bold {SQ_COLORS.primary_light}")
+            text.append("  none loaded\n", style=SQ_COLORS.warning)
+            if path:
+                text.append(f"  {path}\n", style=SQ_COLORS.text_dim)
+            if load_error:
+                text.append(f"  {load_error}\n", style=SQ_COLORS.error)
+            text.append("  Load with :harness <spec.yaml>\n", style=SQ_COLORS.text_dim)
+            text.append("  Start with :harness templates\n", style=SQ_COLORS.text_dim)
+            text.append("\n")
         else:
-            text.append("  No stored sessions yet.\n", style=SQ_COLORS.text_dim)
+            self._append_active_harness(text, spec, path)
 
         text.append("\nProviders\n", style=f"bold {SQ_COLORS.primary_light}")
         try:
@@ -1271,9 +1268,299 @@ class HarnessPanel(Container):
             text.append(f"  Benchmark status unavailable: {exc}\n", style=SQ_COLORS.text_dim)
 
         text.append("\nCommands\n", style=f"bold {SQ_COLORS.primary_light}")
-        text.append("  :connect    :providers    :sandbox\n", style=SQ_COLORS.text_dim)
-        text.append("  :plugins    :benchmark    /sessions\n", style=SQ_COLORS.text_dim)
+        text.append("  :harness inspect    :harness doctor\n", style=SQ_COLORS.text_dim)
+        text.append("  :harness graph      :harness runs\n", style=SQ_COLORS.text_dim)
+        text.append("  :workflow preview   :workflow run <task>\n", style=SQ_COLORS.text_dim)
         return text
+
+    def _load_active_harness(self):
+        """Load the active harness from env, then fall back to local harness.yaml."""
+        import os
+
+        env_path = os.getenv("SUPERQODE_HARNESS", "").strip()
+        candidates = [env_path] if env_path else []
+        if not candidates and Path("harness.yaml").exists():
+            candidates.append("harness.yaml")
+        if not candidates and Path("harness.yml").exists():
+            candidates.append("harness.yml")
+        if not candidates:
+            return None, "", ""
+        path = candidates[0]
+        try:
+            from superqode.harness import load_harness_spec
+
+            return load_harness_spec(path), path, ""
+        except Exception as exc:  # noqa: BLE001
+            return None, path, str(exc)
+
+    def _append_active_harness(self, text: Text, spec, path: str) -> None:
+        """Append the active harness workbench summary."""
+        try:
+            from superqode.harness import (
+                FileHarnessStore,
+                build_harness_evidence,
+                doctor_harness,
+                inspect_harness,
+                plan_harness_graph,
+            )
+
+            summary = inspect_harness(spec)
+            report = doctor_harness(spec)
+            graph = plan_harness_graph(spec)
+        except Exception as exc:  # noqa: BLE001
+            text.append("Active Harness\n", style=f"bold {SQ_COLORS.primary_light}")
+            text.append(f"  {spec.name}\n", style=SQ_COLORS.info)
+            text.append(f"  Workbench unavailable: {exc}\n", style=SQ_COLORS.error)
+            return
+
+        ready_style = SQ_COLORS.success if report.status == "ok" else SQ_COLORS.warning
+        if report.status == "error":
+            ready_style = SQ_COLORS.error
+        report_dict = report.to_dict()
+        report_summary = report_dict["summary"]
+
+        text.append("Active Harness\n", style=f"bold {SQ_COLORS.primary_light}")
+        text.append(f"  {summary['name']} ", style=f"bold {SQ_COLORS.info}")
+        text.append(f"v{summary['version']}  ", style=SQ_COLORS.text_dim)
+        text.append(f"{summary['flavor']}\n", style=SQ_COLORS.text_secondary)
+        if path:
+            text.append(f"  {path}\n", style=SQ_COLORS.text_dim)
+        text.append("  readiness ", style=SQ_COLORS.text_dim)
+        text.append(
+            "ready" if report.status != "error" else "blocked",
+            style=f"bold {ready_style}",
+        )
+        text.append(
+            f"  {report_summary['blockers']} blocker(s), {report_summary['warnings']} warning(s)\n",
+            style=SQ_COLORS.text_dim,
+        )
+
+        workflow = summary["workflow"]
+        model = summary["model_policy"]
+        permissions = summary["permissions"]
+        text.append("\nRuntime\n", style=f"bold {SQ_COLORS.primary_light}")
+        text.append(f"  backend     {summary['runtime']['backend']}\n", style=SQ_COLORS.text_secondary)
+        text.append(
+            f"  workflow    {workflow['mode']}"
+            + (f" / {workflow['preset']}" if workflow["preset"] else "")
+            + f"  p={workflow['parallelism']}\n",
+            style=SQ_COLORS.text_secondary,
+        )
+        text.append(
+            f"  model       {model['primary'] or 'connection default'}\n",
+            style=SQ_COLORS.text_secondary,
+        )
+
+        text.append("\nPermissions\n", style=f"bold {SQ_COLORS.primary_light}")
+        text.append(
+            "  "
+            f"read={permissions['allow_read']}  "
+            f"write={permissions['allow_write']}  "
+            f"shell={permissions['allow_shell']}  "
+            f"net={permissions['allow_network']}\n",
+            style=SQ_COLORS.text_secondary,
+        )
+        text.append(f"  approvals={permissions['approval_profile']}\n", style=SQ_COLORS.text_dim)
+        self._append_permission_rules(text, permissions.get("rules") or [])
+        self._append_remembered_permission_rules(text, permissions.get("remembered_rules") or [])
+        self._append_hooks(text, summary.get("hooks") or {})
+
+        text.append("\nTools & Skills\n", style=f"bold {SQ_COLORS.primary_light}")
+        text.append(self._preview_line("tools", summary["tools"]), style=SQ_COLORS.text_secondary)
+        text.append(self._preview_line("skills", summary["skills"]), style=SQ_COLORS.text_secondary)
+
+        text.append("\nMCP / Validation\n", style=f"bold {SQ_COLORS.primary_light}")
+        mcp_servers = summary["mcp"]["servers"]
+        text.append(
+            f"  mcp         {', '.join(mcp_servers) if mcp_servers else 'none declared'}\n",
+            style=SQ_COLORS.text_secondary,
+        )
+        validation = summary["validation"]
+        text.append(
+            f"  validation  {'enabled' if validation['enabled'] else 'disabled'}"
+            f"  {len(validation['steps'])} step(s)\n",
+            style=SQ_COLORS.text_secondary,
+        )
+        text.append(f"  store       {summary['observability']['run_store']}\n", style=SQ_COLORS.text_dim)
+
+        issue_checks = [check for check in report.checks if check.status in {"error", "warning"}]
+        if issue_checks:
+            text.append("\nDoctor\n", style=f"bold {SQ_COLORS.primary_light}")
+            for check in issue_checks[:4]:
+                style = SQ_COLORS.error if check.status == "error" else SQ_COLORS.warning
+                text.append(f"  {check.status:<7}", style=style)
+                text.append(f"{check.name}  ", style=SQ_COLORS.info)
+                text.append(f"{check.message}\n", style=SQ_COLORS.text_secondary)
+                fix = check.data.get("fix")
+                if fix and fix != "No action needed.":
+                    text.append(f"    fix: {fix}\n", style=SQ_COLORS.text_dim)
+
+        text.append("\nPlanned Graph\n", style=f"bold {SQ_COLORS.primary_light}")
+        labels = [node.label for node in graph.nodes]
+        text.append(f"  {' -> '.join(labels) if labels else 'empty'}\n", style=SQ_COLORS.text_secondary)
+
+        evidence = self._latest_evidence(FileHarnessStore, build_harness_evidence, spec)
+        text.append("\nLast Run\n", style=f"bold {SQ_COLORS.primary_light}")
+        if evidence is None:
+            text.append("  no persisted harness run yet\n", style=SQ_COLORS.text_dim)
+        else:
+            run = evidence["run"]
+            changes = evidence["changes"] if isinstance(evidence["changes"], dict) else {}
+            validation_result = evidence["validation"] if isinstance(evidence["validation"], dict) else {}
+            text.append(f"  {run['run_id']}\n", style=SQ_COLORS.info)
+            text.append(f"  status      {run['status']}\n", style=SQ_COLORS.text_secondary)
+            text.append(
+                f"  changes     {int(changes.get('file_count') or 0)} file(s)"
+                f" (+{int(changes.get('additions') or 0)} -{int(changes.get('deletions') or 0)})\n",
+                style=SQ_COLORS.text_secondary,
+            )
+            text.append(
+                f"  validation  {validation_result.get('status') or 'unknown'}\n",
+                style=SQ_COLORS.text_secondary,
+            )
+            text.append(f"  :harness evidence {run['run_id']}\n", style=SQ_COLORS.text_dim)
+            self._append_recent_harness_events(text, FileHarnessStore, spec, run["run_id"])
+
+    def _latest_evidence(self, store_cls, evidence_fn, spec):
+        """Return latest persisted evidence for the active spec, if available."""
+        try:
+            store = store_cls(Path(spec.context.session_storage))
+            runs = store.list_runs()
+            if not runs:
+                return None
+            return evidence_fn(store, runs[0].run_id)
+        except Exception:
+            return None
+
+    def _append_permission_rules(self, text: Text, rules: list[dict]) -> None:
+        """Append compact rule-based permission policy details."""
+        if not rules:
+            text.append("  rules=none\n", style=SQ_COLORS.text_dim)
+            return
+        text.append(f"  rules={len(rules)}\n", style=SQ_COLORS.text_dim)
+        for rule in rules[:4]:
+            target = str(rule.get("tool") or "*")
+            if rule.get("argument"):
+                target += f" {rule['argument']}"
+            pattern = rule.get("pattern")
+            if pattern:
+                target += f"~{pattern}"
+            action = str(rule.get("action") or "ask")
+            style = (
+                SQ_COLORS.error
+                if action == "deny"
+                else SQ_COLORS.success
+                if action == "allow"
+                else SQ_COLORS.warning
+            )
+            text.append("    ", style="")
+            text.append(f"{action:<5}", style=style)
+            text.append(f" {target}\n", style=SQ_COLORS.text_secondary)
+        if len(rules) > 4:
+            text.append(f"    +{len(rules) - 4} more rule(s)\n", style=SQ_COLORS.text_dim)
+
+    def _append_remembered_permission_rules(self, text: Text, rules: list[dict]) -> None:
+        """Append persisted approval-memory decisions."""
+        if not rules:
+            return
+        text.append(f"  remembered={len(rules)}\n", style=SQ_COLORS.text_dim)
+        for rule in rules[:3]:
+            action = str(rule.get("action") or "ask")
+            style = SQ_COLORS.error if action == "deny" else SQ_COLORS.success
+            target = str(rule.get("tool") or "*")
+            if rule.get("argument"):
+                target += f" {rule['argument']}"
+            if rule.get("pattern"):
+                target += f"~{rule['pattern']}"
+            text.append("    ", style="")
+            text.append(f"{action:<5}", style=style)
+            text.append(f" remembered {target}\n", style=SQ_COLORS.text_secondary)
+        if len(rules) > 3:
+            text.append(f"    +{len(rules) - 3} more remembered\n", style=SQ_COLORS.text_dim)
+
+    def _append_hooks(self, text: Text, hooks: dict) -> None:
+        """Append declared and built-in hook policy details."""
+        declared = list(hooks.get("declared") or [])
+        builtin = list(hooks.get("builtin") or [])
+        count = int(hooks.get("count") or 0)
+        if count <= 0 and hooks.get("enabled", True):
+            text.append("  hooks=none\n", style=SQ_COLORS.text_dim)
+            return
+        state = "enabled" if hooks.get("enabled", True) else "disabled"
+        text.append(f"  hooks={count} ({state})\n", style=SQ_COLORS.text_dim)
+        for entry in builtin[:2]:
+            text.append("    policy ", style=SQ_COLORS.success)
+            text.append(
+                f"{entry.get('point')}  {entry.get('rules', 0)} rule(s)\n",
+                style=SQ_COLORS.text_secondary,
+            )
+        for entry in declared[:3]:
+            text.append("    hook   ", style=SQ_COLORS.info)
+            text.append(str(entry.get("point") or "-"), style=SQ_COLORS.text_secondary)
+            if entry.get("matcher"):
+                text.append(f"  {entry['matcher']}", style=SQ_COLORS.text_dim)
+            if entry.get("name"):
+                text.append(f"  {entry['name']}", style=SQ_COLORS.text_dim)
+            text.append("\n", style="")
+        remaining = max(0, len(declared) + len(builtin) - 5)
+        if remaining:
+            text.append(f"    +{remaining} more hook(s)\n", style=SQ_COLORS.text_dim)
+
+    def _append_recent_harness_events(self, text: Text, store_cls, spec, run_id: str) -> None:
+        """Append recent hook/permission harness events for the latest run."""
+        try:
+            store = store_cls(Path(spec.context.session_storage))
+            events = store.get_events(run_id)
+        except Exception:
+            return
+        interesting = [
+            event
+            for event in events
+            if event.type
+            in {
+                "harness.permission.check",
+                "harness.hook.error",
+                "harness.compaction.start",
+                "harness.compaction.end",
+                "harness.stop",
+            }
+        ]
+        if not interesting:
+            return
+        text.append("  signals\n", style=SQ_COLORS.text_dim)
+        for event in interesting[-5:]:
+            style = SQ_COLORS.error if event.type == "harness.hook.error" else SQ_COLORS.info
+            text.append("    ", style="")
+            text.append(event.type.replace("harness.", ""), style=style)
+            preview = self._event_preview(event)
+            if preview:
+                text.append(f"  {preview}", style=SQ_COLORS.text_dim)
+            text.append("\n", style="")
+
+    def _event_preview(self, event) -> str:
+        """One-line summary for harness sidebar events."""
+        data = getattr(event, "data", {}) or {}
+        if event.type == "harness.permission.check":
+            args = data.get("arguments") if isinstance(data.get("arguments"), dict) else {}
+            keys = args.get("keys") or []
+            keys_text = ",".join(str(k) for k in keys[:4])
+            return f"{data.get('tool') or '-'} keys={keys_text or '-'}"
+        if event.type == "harness.hook.error":
+            return f"{data.get('point') or '-'} {data.get('handler') or '-'}"
+        if event.type == "harness.stop":
+            return str(data.get("stopped_reason") or "-")
+        if event.type.startswith("harness.compaction."):
+            return str(data.get("strategy") or data.get("tokens") or "")
+        return ""
+
+    def _preview_line(self, label: str, values: list[str]) -> str:
+        """Render a compact list line for narrow sidebars."""
+        if not values:
+            return f"  {label:<10}-\n"
+        preview = ", ".join(values[:6])
+        if len(values) > 6:
+            preview += f", +{len(values) - 6}"
+        return f"  {label:<10}{preview}\n"
 
     def refresh_summary(self) -> None:
         """Refresh panel content."""

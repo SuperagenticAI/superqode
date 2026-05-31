@@ -250,8 +250,8 @@ class MemoryHarnessStore:
             runtime=runtime,
             status="running",
             started_at=time.time(),
-            prompt_preview=_preview(prompt),
-            metadata=dict(metadata or {}),
+            prompt_preview=_stored_prompt_preview(spec, prompt),
+            metadata=_run_metadata_with_prompt(spec, prompt, metadata),
         )
         self._runs[record.run_id] = record
         self._graphs[record.run_id] = HarnessEventGraph(run_id=record.run_id)
@@ -325,6 +325,50 @@ class MemoryHarnessStore:
     def get_event_graph(self, run_id: str) -> HarnessEventGraph:
         self._require_run(run_id)
         return self._graphs.get(run_id) or HarnessEventGraph(run_id=run_id)
+
+    def fork_run(
+        self,
+        run_id: str,
+        *,
+        after: int | None = None,
+        session_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> HarnessRunRecord:
+        source = self._require_run(run_id)
+        fork_session_id = session_id or f"{source.session_id}-fork"
+        fork = HarnessRunRecord(
+            run_id=generate_run_id(),
+            session_id=fork_session_id,
+            harness=source.harness,
+            flavor=source.flavor,
+            provider=source.provider,
+            model=source.model,
+            runtime=source.runtime,
+            status="forked",
+            started_at=time.time(),
+            prompt_preview=source.prompt_preview,
+            metadata={
+                **source.metadata,
+                "fork_of": source.run_id,
+                "fork_after": after,
+                **(metadata or {}),
+            },
+        )
+        self._runs[fork.run_id] = fork
+        self._graphs[fork.run_id] = HarnessEventGraph(run_id=fork.run_id)
+        limit = len(source.events) if after is None else max(0, min(after + 1, len(source.events)))
+        for event in source.events[:limit]:
+            self.append_event(
+                fork.run_id,
+                HarnessEvent(
+                    type=event.type,
+                    data=dict(event.data),
+                    timestamp=event.timestamp,
+                    session_id=fork_session_id,
+                    run_id=fork.run_id,
+                ),
+            )
+        return self._require_run(fork.run_id)
 
     def _require_run(self, run_id: str) -> HarnessRunRecord:
         record = self.get_run(run_id)
@@ -413,8 +457,8 @@ class FileHarnessStore:
             runtime=runtime,
             status="running",
             started_at=time.time(),
-            prompt_preview=_preview(prompt),
-            metadata=dict(metadata or {}),
+            prompt_preview=_stored_prompt_preview(spec, prompt),
+            metadata=_run_metadata_with_prompt(spec, prompt, metadata),
         )
         self._write_json(self._run_path(run_id), record.to_dict())
         return record
@@ -507,6 +551,49 @@ class FileHarnessStore:
                 ),
             )
         return _graph_from_events(run_id, record.events)
+
+    def fork_run(
+        self,
+        run_id: str,
+        *,
+        after: int | None = None,
+        session_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> HarnessRunRecord:
+        source = self._require_run(run_id)
+        fork_session_id = session_id or f"{source.session_id}-fork"
+        fork = HarnessRunRecord(
+            run_id=generate_run_id(),
+            session_id=fork_session_id,
+            harness=source.harness,
+            flavor=source.flavor,
+            provider=source.provider,
+            model=source.model,
+            runtime=source.runtime,
+            status="forked",
+            started_at=time.time(),
+            prompt_preview=source.prompt_preview,
+            metadata={
+                **source.metadata,
+                "fork_of": source.run_id,
+                "fork_after": after,
+                **(metadata or {}),
+            },
+        )
+        self._write_json(self._run_path(fork.run_id), fork.to_dict())
+        limit = len(source.events) if after is None else max(0, min(after + 1, len(source.events)))
+        for event in source.events[:limit]:
+            self.append_event(
+                fork.run_id,
+                HarnessEvent(
+                    type=event.type,
+                    data=dict(event.data),
+                    timestamp=event.timestamp,
+                    session_id=fork_session_id,
+                    run_id=fork.run_id,
+                ),
+            )
+        return self._require_run(fork.run_id)
 
     def _require_run(self, run_id: str) -> HarnessRunRecord:
         record = self.get_run(run_id)
@@ -611,8 +698,8 @@ class SQLiteHarnessStore:
             runtime=runtime,
             status="running",
             started_at=time.time(),
-            prompt_preview=_preview(prompt),
-            metadata=dict(metadata or {}),
+            prompt_preview=_stored_prompt_preview(spec, prompt),
+            metadata=_run_metadata_with_prompt(spec, prompt, metadata),
         )
         with self._connect() as conn:
             conn.execute(
@@ -769,6 +856,48 @@ class SQLiteHarnessStore:
             edges=tuple(_graph_edge_from_row(row) for row in edge_rows),
         )
 
+    def fork_run(
+        self,
+        run_id: str,
+        *,
+        after: int | None = None,
+        session_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> HarnessRunRecord:
+        source = self._require_run(run_id)
+        fork_session_id = session_id or f"{source.session_id}-fork"
+        fork_metadata = {
+            **source.metadata,
+            "fork_of": source.run_id,
+            "fork_after": after,
+            **(metadata or {}),
+        }
+        spec = HarnessSpec(name=source.harness)
+        fork = self.start_run(
+            session_id=fork_session_id,
+            spec=spec,
+            provider=source.provider,
+            model=source.model,
+            runtime=source.runtime,
+            prompt=source.prompt_preview,
+            metadata=fork_metadata,
+        )
+        with self._connect() as conn:
+            conn.execute("update runs set flavor = ?, status = ? where run_id = ?", (source.flavor, "forked", fork.run_id))
+        limit = len(source.events) if after is None else max(0, min(after + 1, len(source.events)))
+        for event in source.events[:limit]:
+            self.append_event(
+                fork.run_id,
+                HarnessEvent(
+                    type=event.type,
+                    data=dict(event.data),
+                    timestamp=event.timestamp,
+                    session_id=fork_session_id,
+                    run_id=fork.run_id,
+                ),
+            )
+        return self._require_run(fork.run_id)
+
     def _require_run(self, run_id: str) -> HarnessRunRecord:
         record = self.get_run(run_id)
         if record is None:
@@ -895,6 +1024,24 @@ def _preview(prompt: str, limit: int = 240) -> str:
     return normalized[: limit - 3] + "..."
 
 
+def _stored_prompt_preview(spec: HarnessSpec, prompt: str) -> str:
+    if spec.context.prompt_persistence == "off":
+        return ""
+    return _preview(prompt)
+
+
+def _run_metadata_with_prompt(
+    spec: HarnessSpec,
+    prompt: str,
+    metadata: dict[str, Any] | None,
+) -> dict[str, Any]:
+    out = dict(metadata or {})
+    out["prompt_persistence"] = spec.context.prompt_persistence
+    if spec.context.prompt_persistence == "full":
+        out["prompt"] = prompt
+    return out
+
+
 def _event_from_dict(data: dict[str, Any]) -> HarnessEvent:
     return HarnessEvent(
         type=str(data["type"]),
@@ -960,6 +1107,12 @@ def _graph_node_from_event(
 def _node_type(event_type: str) -> str:
     if event_type in {"run_start", "run_end"}:
         return "run"
+    if event_type.startswith("workflow."):
+        return "workflow"
+    if event_type.startswith("validation."):
+        return "validation"
+    if event_type.startswith("workspace."):
+        return "evidence"
     if event_type in {"delta", "thinking"} or event_type.startswith("model_"):
         return "model"
     if event_type.startswith("tool_"):

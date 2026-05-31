@@ -15,6 +15,7 @@ from superqode.providers.gateway.base import (
     ToolDefinition,
 )
 from superqode.runtime import AgentRuntime, BuiltinRuntime, create_runtime
+from superqode.harness import ContextSpec, HarnessSpec, load_approval_memory_rules
 from superqode.tools.base import Tool, ToolContext, ToolRegistry, ToolResult
 from superqode.tools.permissions import Permission, PermissionConfig, PermissionManager
 
@@ -106,6 +107,22 @@ def _approval_runtime(gateway: GatewayInterface) -> BuiltinRuntime:
         config=_config(),
         parallel_tools=False,
         permission_manager=PermissionManager(PermissionConfig(default=Permission.ASK)),
+    )
+    assert isinstance(runtime, BuiltinRuntime)
+    return runtime
+
+
+def _approval_runtime_with_spec(gateway: GatewayInterface, spec: HarnessSpec) -> BuiltinRuntime:
+    registry = ToolRegistry()
+    registry.register(EchoTool())
+    runtime = create_runtime(
+        "builtin",
+        gateway=gateway,
+        tools=registry,
+        config=_config(),
+        parallel_tools=False,
+        permission_manager=PermissionManager(PermissionConfig(default=Permission.ASK)),
+        harness_spec=spec,
     )
     assert isinstance(runtime, BuiltinRuntime)
     return runtime
@@ -224,3 +241,67 @@ async def test_builtin_runtime_rejects_pending_tool_call():
     assert response.stopped_reason == "needs_approval"
     assert resumed.content == "not allowed"
     assert runtime.get_pending_approvals() == []
+
+
+@pytest.mark.asyncio
+async def test_builtin_runtime_approve_always_persists_permission_rule(tmp_path):
+    spec = HarnessSpec(name="h", context=ContextSpec(session_storage=str(tmp_path)))
+    gateway = ScriptedGateway(
+        [
+            GatewayResponse(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "call-1",
+                        "function": {
+                            "name": "echo",
+                            "arguments": '{"text": "approved"}',
+                        },
+                    }
+                ],
+            )
+        ]
+    )
+    runtime = _approval_runtime_with_spec(gateway, spec)
+
+    response = await runtime.run("use echo")
+    resumed = await runtime.approve_and_resume(always=True)
+
+    assert response.stopped_reason == "needs_approval"
+    assert resumed.stopped_reason == "complete"
+    rules = load_approval_memory_rules(spec)
+    assert len(rules) == 1
+    assert rules[0].tool == "echo"
+    assert rules[0].action == "allow"
+
+
+@pytest.mark.asyncio
+async def test_builtin_runtime_reject_always_persists_permission_rule(tmp_path):
+    spec = HarnessSpec(name="h", context=ContextSpec(session_storage=str(tmp_path)))
+    gateway = ScriptedGateway(
+        [
+            GatewayResponse(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "call-1",
+                        "function": {
+                            "name": "echo",
+                            "arguments": '{"text": "blocked"}',
+                        },
+                    }
+                ],
+            )
+        ]
+    )
+    runtime = _approval_runtime_with_spec(gateway, spec)
+
+    response = await runtime.run("use echo")
+    resumed = await runtime.reject_and_resume(always=True)
+
+    assert response.stopped_reason == "needs_approval"
+    assert resumed.stopped_reason == "complete"
+    rules = load_approval_memory_rules(spec)
+    assert len(rules) == 1
+    assert rules[0].tool == "echo"
+    assert rules[0].action == "deny"

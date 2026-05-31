@@ -1242,6 +1242,78 @@ class SuperQodeApp(App):
                 "harness",
             ),
             PaletteCommand(
+                "harness",
+                "Harness",
+                "Show or load the active HarnessSpec",
+                "▣",
+                ":harness",
+                "harness",
+            ),
+            PaletteCommand(
+                "harness_inspect",
+                "Harness Inspect",
+                "Summarize active HarnessSpec policy, tools, workflow, hooks, and validation",
+                "▤",
+                ":harness inspect",
+                "harness",
+            ),
+            PaletteCommand(
+                "harness_doctor",
+                "Harness Doctor",
+                "Check active HarnessSpec readiness and blockers",
+                "🩺",
+                ":harness doctor",
+                "harness",
+            ),
+            PaletteCommand(
+                "harness_graph",
+                "Harness Graph",
+                "Show planned workflow graph for the active harness",
+                "◇",
+                ":harness graph",
+                "harness",
+            ),
+            PaletteCommand(
+                "harness_runs",
+                "Harness Runs",
+                "List persisted harness runs",
+                "▦",
+                ":harness runs",
+                "harness",
+            ),
+            PaletteCommand(
+                "harness_replay",
+                "Harness Replay",
+                "Prefill replay plan command for a persisted run",
+                "↻",
+                ":harness replay ",
+                "harness",
+            ),
+            PaletteCommand(
+                "harness_fork",
+                "Harness Fork",
+                "Prefill fork command for a persisted run",
+                "⑂",
+                ":harness fork ",
+                "harness",
+            ),
+            PaletteCommand(
+                "harness_events",
+                "Harness Events",
+                "Prefill event timeline command for a persisted run",
+                "≡",
+                ":harness events ",
+                "harness",
+            ),
+            PaletteCommand(
+                "harness_evidence",
+                "Harness Evidence",
+                "Prefill evidence receipt command for a persisted run",
+                "◫",
+                ":harness evidence ",
+                "harness",
+            ),
+            PaletteCommand(
                 "mcp",
                 "MCP Status",
                 "Show configured MCP servers and connected tools",
@@ -1531,6 +1603,16 @@ class SuperQodeApp(App):
         except Exception:
             pass
 
+    def _refresh_harness_panel(self) -> None:
+        """Refresh the harness workbench sidebar, if mounted."""
+        try:
+            sidebar = self.query_one("#sidebar", CollapsibleSidebar)
+            harness_panel = sidebar.get_harness_panel()
+            if harness_panel:
+                harness_panel.refresh_summary()
+        except Exception:
+            pass
+
     def _init_undo_manager(self):
         """Initialize the undo manager for checkpoint/restore."""
         try:
@@ -1717,6 +1799,7 @@ class SuperQodeApp(App):
         """Switch sidebar to harness overview."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
         sidebar.current_view = "harness"
+        self._refresh_harness_panel()
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
 
@@ -1868,6 +1951,11 @@ class SuperQodeApp(App):
             "tools": ":tools",
             "skills": ":skills",
             "recipes": ":recipes",
+            "harness": ":harness",
+            "harness_inspect": ":harness inspect",
+            "harness_doctor": ":harness doctor",
+            "harness_graph": ":harness graph",
+            "harness_runs": ":harness runs",
             "mcp": ":mcp status",
             "sessions": "/sessions",
             "compact": "/compact",
@@ -1889,6 +1977,10 @@ class SuperQodeApp(App):
             "search": ":search ",
             "attach": ":attach ",
             "prompt_file": ":prompt ",
+            "harness_events": ":harness events ",
+            "harness_evidence": ":harness evidence ",
+            "harness_replay": ":harness replay ",
+            "harness_fork": ":harness fork ",
         }
 
         if event.command.id == "sidebar":
@@ -4937,6 +5029,10 @@ class SuperQodeApp(App):
                 spec = load_harness_spec(harness_path)
                 self.active_harness_path = harness_path
                 self.active_harness_name = spec.name
+                os.environ["SUPERQODE_HARNESS"] = str(harness_path)
+                pure = self._ensure_pure_mode()
+                pure.set_harness(spec, path=harness_path)
+                self._refresh_harness_panel()
                 log.add_info(f"Loaded harness for recipe: {spec.name}")
             except Exception as exc:
                 log.add_error(f"Could not load recipe harness: {exc}")
@@ -6434,12 +6530,57 @@ class SuperQodeApp(App):
                 )
             return
 
+        if sub in ("inspect", "show", "summary"):
+            self._show_harness_inspect(log)
+            return
+
+        if sub in ("doctor", "check"):
+            self._show_harness_doctor(log)
+            return
+
+        if sub in ("graph", "plan"):
+            self._show_harness_graph(log, run_id=subargs if sub == "graph" else "")
+            return
+
+        if sub in ("runs", "history"):
+            self._show_harness_runs(log)
+            return
+
+        if sub in ("replay", "replay-plan"):
+            if not subargs:
+                log.add_error("Usage: :harness replay <run_id>")
+                return
+            self._show_harness_replay(log, subargs)
+            return
+
+        if sub in ("fork", "branch"):
+            if not subargs:
+                log.add_error("Usage: :harness fork <run_id> [after_index]")
+                return
+            self._show_harness_fork(log, subargs)
+            return
+
+        if sub in ("evidence", "receipt"):
+            if not subargs:
+                log.add_error("Usage: :harness evidence <run_id>")
+                return
+            self._show_harness_evidence(log, subargs)
+            return
+
+        if sub in ("events", "timeline"):
+            if not subargs:
+                log.add_error("Usage: :harness events <run_id>")
+                return
+            self._show_harness_events(log, subargs)
+            return
+
         if sub in ("off", "disable", "none"):
             _os.environ.pop("SUPERQODE_HARNESS", None)
             if hasattr(self, "_pure_mode") and self._pure_mode is not None:
                 self._pure_mode.clear_harness()
                 if self._pure_mode.session.connected:
                     self._pure_mode.disconnect()
+            self._refresh_harness_panel()
             log.add_info("HarnessSpec disabled. Reconnect with :connect byok or :connect local.")
             return
 
@@ -6449,7 +6590,9 @@ class SuperQodeApp(App):
             path = args.strip()
 
         if not path:
-            log.add_info("Usage: :harness <spec.yaml> | :harness templates | :harness off")
+            log.add_info(
+                "Usage: :harness <spec.yaml> | :harness inspect | :harness doctor | :harness graph | :harness replay <run_id> | :harness fork <run_id> | :harness evidence <run_id> | :harness runs | :harness templates | :harness off"
+            )
             return
 
         try:
@@ -6463,6 +6606,7 @@ class SuperQodeApp(App):
         pure.set_harness(spec, path=path)
         if pure.session.connected:
             pure.disconnect()
+        self._refresh_harness_panel()
 
         log.add_success(
             f"✓ Loaded harness {spec.name} ({spec.flavor.value}, runtime={spec.runtime.backend})"
@@ -6470,6 +6614,461 @@ class SuperQodeApp(App):
         log.add_info(
             "Reconnect with :connect byok or :connect local to run the TUI through this spec."
         )
+
+    def _show_harness_inspect(self, log) -> None:
+        """Show a readable summary for the active HarnessSpec."""
+        spec, path = self._active_harness_spec()
+        if spec is None:
+            log.add_error("No HarnessSpec is active. Load one with :harness <spec.yaml>.")
+            return
+        try:
+            from superqode.harness import inspect_harness
+        except Exception as exc:
+            log.add_error(f"Harness inspect is unavailable: {exc}")
+            return
+        summary = inspect_harness(spec)
+        workflow = summary["workflow"]
+        permissions = summary["permissions"]
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Harness Inspect\n\n", style=f"bold {THEME['text']}")
+        t.append("  Name        ", style=THEME["muted"])
+        t.append(f"{summary['name']} v{summary['version']}", style=f"bold {THEME['cyan']}")
+        t.append(f"  {summary['flavor']}\n", style=THEME["dim"])
+        if summary["description"]:
+            t.append("  Summary     ", style=THEME["muted"])
+            t.append(summary["description"], style=THEME["text"])
+            t.append("\n")
+        if path:
+            t.append("  Spec        ", style=THEME["muted"])
+            t.append(path, style=THEME["dim"])
+            t.append("\n")
+        t.append("  Runtime     ", style=THEME["muted"])
+        t.append(summary["runtime"]["backend"], style=THEME["text"])
+        t.append("\n  Workflow    ", style=THEME["muted"])
+        t.append(workflow["mode"], style=f"bold {THEME['success']}")
+        if workflow["preset"]:
+            t.append(f"  preset={workflow['preset']}", style=THEME["dim"])
+        t.append(f"  parallelism={workflow['parallelism']}\n", style=THEME["dim"])
+        t.append("  Model       ", style=THEME["muted"])
+        t.append(summary["model_policy"]["primary"] or "active connection", style=THEME["text"])
+        t.append("\n  Permissions ", style=THEME["muted"])
+        t.append(
+            f"read={permissions['allow_read']} write={permissions['allow_write']} shell={permissions['allow_shell']} network={permissions['allow_network']}",
+            style=THEME["text"],
+        )
+        t.append(f"  approvals={permissions['approval_profile']}\n", style=THEME["dim"])
+        t.append("  Tools       ", style=THEME["muted"])
+        t.append(", ".join(summary["tools"]) if summary["tools"] else "-", style=THEME["text"])
+        t.append("\n  Skills      ", style=THEME["muted"])
+        t.append(", ".join(summary["skills"]) if summary["skills"] else "-", style=THEME["text"])
+        t.append("\n  MCP         ", style=THEME["muted"])
+        t.append(
+            ", ".join(summary["mcp"]["servers"]) if summary["mcp"]["servers"] else "none declared",
+            style=THEME["text"],
+        )
+        t.append("\n  Validation  ", style=THEME["muted"])
+        t.append("enabled" if summary["validation"]["enabled"] else "disabled", style=THEME["text"])
+        t.append("\n  Run store   ", style=THEME["muted"])
+        t.append(summary["observability"]["run_store"], style=THEME["text"])
+
+        t.append("\n\n  Agents\n", style=f"bold {THEME['text']}")
+        for agent in summary["agents"]:
+            t.append("  - ", style=THEME["dim"])
+            t.append(agent["id"], style=f"bold {THEME['cyan']}")
+            if agent["role"]:
+                t.append(f"  {agent['role']}", style=THEME["muted"])
+            if agent["model"]:
+                t.append(f"  model={agent['model']}", style=THEME["dim"])
+            t.append("\n")
+        if not summary["agents"]:
+            t.append("  - prompt step generated from run input\n", style=THEME["muted"])
+        t.append("\n  Next        ", style=THEME["muted"])
+        t.append(":harness doctor", style=THEME["cyan"])
+        t.append("  ", style="")
+        t.append(":harness graph", style=THEME["cyan"])
+        t.append("\n")
+        self._show_command_output(log, t)
+
+    def _show_harness_doctor(self, log) -> None:
+        """Show active HarnessSpec readiness checks."""
+        spec, _path = self._active_harness_spec()
+        if spec is None:
+            log.add_error("No HarnessSpec is active. Load one with :harness <spec.yaml>.")
+            return
+        try:
+            from superqode.harness import doctor_harness
+        except Exception as exc:
+            log.add_error(f"Harness doctor is unavailable: {exc}")
+            return
+        report = doctor_harness(spec)
+        status_style = (
+            THEME["error"]
+            if report.status == "error"
+            else THEME["warning"]
+            if report.status == "warning"
+            else THEME["success"]
+        )
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Harness Doctor\n\n", style=f"bold {THEME['text']}")
+        t.append("  Harness     ", style=THEME["muted"])
+        t.append(report.name, style=f"bold {THEME['cyan']}")
+        t.append("\n  Status      ", style=THEME["muted"])
+        t.append(report.status, style=f"bold {status_style}")
+        t.append("\n\n  Checks\n", style=f"bold {THEME['text']}")
+        for check in report.checks:
+            style = THEME["error"] if check.status == "error" else THEME["warning"] if check.status == "warning" else THEME["success"]
+            icon = "!" if check.status == "error" else "!" if check.status == "warning" else "✓"
+            t.append(f"  {icon} ", style=style)
+            t.append(f"{check.name:<14}", style=f"bold {style}")
+            t.append(check.message, style=THEME["text"])
+            if check.data.get("missing"):
+                t.append(f"  missing: {', '.join(check.data['missing'])}", style=THEME["muted"])
+            t.append("\n")
+        self._show_command_output(log, t)
+
+    def _show_harness_graph(self, log, run_id: str = "") -> None:
+        """Show the planned graph or a persisted actual graph."""
+        spec, _path = self._active_harness_spec()
+        if spec is None:
+            log.add_error("No HarnessSpec is active. Load one with :harness <spec.yaml>.")
+            return
+        try:
+            from superqode.harness import FileHarnessStore, plan_harness_graph, render_harness_graph
+        except Exception as exc:
+            log.add_error(f"Harness graph is unavailable: {exc}")
+            return
+        run_id = run_id.strip()
+        if run_id:
+            try:
+                graph = FileHarnessStore(Path(spec.context.session_storage)).get_event_graph(run_id)
+            except Exception as exc:
+                log.add_error(f"Could not load harness graph for {run_id}: {exc}")
+                return
+            title = f"Harness Graph  {run_id}"
+            graph_note = "This is the persisted actual event graph."
+        else:
+            graph = plan_harness_graph(spec)
+            title = "Harness Graph"
+            graph_note = "This is the planned graph. Completed runs persist the actual event graph."
+        graph_text = render_harness_graph(graph)
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append(title + "\n\n", style=f"bold {THEME['text']}")
+        for line in graph_text.splitlines():
+            t.append("  ", style="")
+            t.append(line, style=THEME["cyan"] if "->" in line else THEME["text"])
+            t.append("\n")
+        t.append(f"\n  {graph_note}\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _show_harness_runs(self, log) -> None:
+        """Show recent persisted harness runs."""
+        spec, _path = self._active_harness_spec()
+        if spec is None:
+            log.add_error("No HarnessSpec is active. Load one with :harness <spec.yaml>.")
+            return
+        try:
+            from superqode.harness import FileHarnessStore
+        except Exception as exc:
+            log.add_error(f"Harness runs are unavailable: {exc}")
+            return
+        runs = FileHarnessStore(Path(spec.context.session_storage)).list_runs()
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Harness Runs\n\n", style=f"bold {THEME['text']}")
+        if not runs:
+            t.append("  No persisted harness runs found.\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+        for run in runs[:12]:
+            t.append("  ", style="")
+            t.append(run.run_id, style=f"bold {THEME['cyan']}")
+            t.append(f"  {run.status}", style=THEME["success"] if run.status == "succeeded" else THEME["warning"])
+            if run.metadata.get("workflow"):
+                t.append("  workflow", style=THEME["purple"])
+            t.append(f"  {run.prompt_preview}\n", style=THEME["muted"])
+        t.append("\n  Inspect graph with ", style=THEME["muted"])
+        t.append(":harness graph <run_id>\n", style=THEME["cyan"])
+        self._show_command_output(log, t)
+
+    def _show_harness_evidence(self, log, run_id: str) -> None:
+        """Show a readable evidence report for a persisted harness run."""
+        spec, _path = self._active_harness_spec()
+        if spec is None:
+            log.add_error("No HarnessSpec is active. Load one with :harness <spec.yaml>.")
+            return
+        try:
+            from superqode.harness import FileHarnessStore, build_harness_evidence
+        except Exception as exc:
+            log.add_error(f"Harness evidence is unavailable: {exc}")
+            return
+        try:
+            evidence = build_harness_evidence(
+                FileHarnessStore(Path(spec.context.session_storage)),
+                run_id.strip(),
+            )
+        except Exception as exc:
+            log.add_error(f"Could not load harness evidence for {run_id}: {exc}")
+            return
+        run = evidence["run"]
+        workflow = evidence["workflow"]
+        changes = evidence["changes"] if isinstance(evidence["changes"], dict) else {}
+        validation = evidence["validation"] if isinstance(evidence["validation"], dict) else {}
+        result = evidence["result"]
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Harness Evidence\n\n", style=f"bold {THEME['text']}")
+        t.append("  Run         ", style=THEME["muted"])
+        t.append(run["run_id"], style=f"bold {THEME['cyan']}")
+        t.append(f"  {run['status']}\n", style=THEME["success"] if run["status"] == "succeeded" else THEME["warning"])
+        t.append("  Harness     ", style=THEME["muted"])
+        t.append(f"{run['harness']}  {run['runtime']}", style=THEME["text"])
+        t.append("\n  Model       ", style=THEME["muted"])
+        t.append(f"{run['provider']}/{run['model']}", style=THEME["text"])
+        if workflow.get("mode"):
+            t.append("\n  Workflow    ", style=THEME["muted"])
+            t.append(str(workflow["mode"]), style=THEME["text"])
+        t.append("\n\n  Steps\n", style=f"bold {THEME['text']}")
+        for step in workflow.get("completed_steps") or []:
+            t.append("  ✓ ", style=THEME["success"])
+            t.append(str(step.get("step_id") or "-"), style=f"bold {THEME['cyan']}")
+            if step.get("child_run_id"):
+                t.append(f"  {step['child_run_id']}", style=THEME["dim"])
+            if step.get("detail"):
+                t.append(f"  {step['detail']}", style=THEME["muted"])
+            t.append("\n")
+        for step in workflow.get("failed_steps") or []:
+            t.append("  ! ", style=THEME["error"])
+            t.append(str(step.get("step_id") or "-"), style=f"bold {THEME['error']}")
+            if step.get("detail"):
+                t.append(f"  {step['detail']}", style=THEME["muted"])
+            t.append("\n")
+        file_count = int(changes.get("file_count") or 0)
+        t.append("\n  Changes     ", style=THEME["muted"])
+        t.append(
+            f"{file_count} file(s) (+{int(changes.get('additions') or 0)} -{int(changes.get('deletions') or 0)})",
+            style=THEME["text"],
+        )
+        t.append("\n  Validation  ", style=THEME["muted"])
+        t.append(str(validation.get("status") or "unknown"), style=THEME["text"])
+        t.append(f"  {len(validation.get('steps') or [])} step(s)", style=THEME["dim"])
+        t.append("\n  Approvals   ", style=THEME["muted"])
+        t.append(f"{len(evidence.get('approvals') or [])} event(s)", style=THEME["text"])
+        t.append("\n  Result      ", style=THEME["muted"])
+        t.append(str(result.get("status") or run["status"]), style=THEME["text"])
+        if result.get("content_preview"):
+            t.append("\n\n", style="")
+            t.append(str(result["content_preview"]), style=THEME["text"])
+        t.append("\n\n  Next        ", style=THEME["muted"])
+        t.append(f":harness graph {run['run_id']}", style=THEME["cyan"])
+        t.append("  ", style="")
+        t.append(f":harness events {run['run_id']}", style=THEME["cyan"])
+        t.append("\n")
+        self._show_command_output(log, t)
+
+    def _show_harness_replay(self, log, run_id: str) -> None:
+        """Show replay readiness for a persisted harness run."""
+        spec, _path = self._active_harness_spec()
+        if spec is None:
+            log.add_error("No HarnessSpec is active. Load one with :harness <spec.yaml>.")
+            return
+        try:
+            from superqode.harness import FileHarnessStore, build_harness_replay_plan
+        except Exception as exc:
+            log.add_error(f"Harness replay is unavailable: {exc}")
+            return
+        try:
+            plan = build_harness_replay_plan(
+                FileHarnessStore(Path(spec.context.session_storage)),
+                run_id.strip(),
+            )
+        except Exception as exc:
+            log.add_error(f"Could not build harness replay plan for {run_id}: {exc}")
+            return
+        run = plan["run"]
+        events = plan["events"]
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Harness Replay\n\n", style=f"bold {THEME['text']}")
+        t.append("  Run         ", style=THEME["muted"])
+        t.append(run["run_id"], style=f"bold {THEME['cyan']}")
+        t.append("\n  Status      ", style=THEME["muted"])
+        t.append(str(run["status"]), style=THEME["text"])
+        t.append("\n  Prompt      ", style=THEME["muted"])
+        t.append(str(run.get("prompt_preview") or "-"), style=THEME["text"])
+        t.append("\n  Persistence ", style=THEME["muted"])
+        t.append(str(run.get("prompt_persistence") or "unknown"), style=THEME["text"])
+        t.append("  full=", style=THEME["dim"])
+        t.append(str(run.get("has_full_prompt")), style=THEME["success"] if run.get("has_full_prompt") else THEME["warning"])
+        t.append("\n  Events      ", style=THEME["muted"])
+        t.append(f"{events['count']} ({events['first']} -> {events['last']})", style=THEME["text"])
+        if plan.get("limitations"):
+            t.append("\n\n  Limitations\n", style=f"bold {THEME['warning']}")
+            for item in plan["limitations"]:
+                t.append(f"  - {item}\n", style=THEME["muted"])
+        t.append("\n  Next        ", style=THEME["muted"])
+        t.append(f":harness fork {run['run_id']}", style=THEME["cyan"])
+        t.append("  ", style="")
+        t.append(f":harness events {run['run_id']}", style=THEME["cyan"])
+        t.append("\n")
+        self._show_command_output(log, t)
+
+    def _show_harness_fork(self, log, args: str) -> None:
+        """Fork a persisted harness run at an optional event index."""
+        spec, _path = self._active_harness_spec()
+        if spec is None:
+            log.add_error("No HarnessSpec is active. Load one with :harness <spec.yaml>.")
+            return
+        parts = args.split()
+        run_id = parts[0]
+        after = None
+        if len(parts) > 1:
+            try:
+                after = int(parts[1])
+            except ValueError:
+                log.add_error("Usage: :harness fork <run_id> [after_index]")
+                return
+        try:
+            from superqode.harness import FileHarnessStore, fork_harness_run
+        except Exception as exc:
+            log.add_error(f"Harness fork is unavailable: {exc}")
+            return
+        try:
+            fork = fork_harness_run(
+                FileHarnessStore(Path(spec.context.session_storage)),
+                run_id,
+                after=after,
+            )
+        except Exception as exc:
+            log.add_error(f"Could not fork harness run {run_id}: {exc}")
+            return
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Harness Fork\n\n", style=f"bold {THEME['text']}")
+        t.append("  Source      ", style=THEME["muted"])
+        t.append(str(fork["fork_of"]), style=THEME["cyan"])
+        t.append("\n  Fork        ", style=THEME["muted"])
+        t.append(str(fork["run_id"]), style=f"bold {THEME['success']}")
+        t.append("\n  Events      ", style=THEME["muted"])
+        t.append(str(fork["events"]), style=THEME["text"])
+        t.append("\n\n  Next        ", style=THEME["muted"])
+        t.append(f":harness events {fork['run_id']}", style=THEME["cyan"])
+        t.append("  ", style="")
+        t.append(f":harness graph {fork['run_id']}", style=THEME["cyan"])
+        t.append("\n")
+        self._show_command_output(log, t)
+
+    def _show_harness_events(self, log, run_id: str) -> None:
+        """Show the persisted event timeline for a harness run."""
+        spec, _path = self._active_harness_spec()
+        if spec is None:
+            log.add_error("No HarnessSpec is active. Load one with :harness <spec.yaml>.")
+            return
+        try:
+            from superqode.harness import FileHarnessStore
+        except Exception as exc:
+            log.add_error(f"Harness events are unavailable: {exc}")
+            return
+        run_id = run_id.strip()
+        try:
+            events = FileHarnessStore(Path(spec.context.session_storage)).get_events(run_id)
+        except Exception as exc:
+            log.add_error(f"Could not load harness events for {run_id}: {exc}")
+            return
+
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Harness Events\n\n", style=f"bold {THEME['text']}")
+        t.append("  Run         ", style=THEME["muted"])
+        t.append(run_id, style=f"bold {THEME['cyan']}")
+        t.append(f"  {len(events)} event(s)\n\n", style=THEME["dim"])
+        if not events:
+            t.append("  No persisted events found.\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+        for index, event in enumerate(events[:80]):
+            style = self._harness_event_style(event.type)
+            t.append(f"  {index:04d} ", style=THEME["dim"])
+            t.append(f"{event.type:<30}", style=f"bold {style}")
+            preview = self._harness_event_preview(event)
+            if preview:
+                t.append(preview, style=THEME["text"])
+            t.append("\n")
+        if len(events) > 80:
+            t.append(f"  ... {len(events) - 80} more event(s)\n", style=THEME["muted"])
+        t.append("\n  Next        ", style=THEME["muted"])
+        t.append(f":harness graph {run_id}", style=THEME["cyan"])
+        t.append("  ", style="")
+        t.append(f":harness evidence {run_id}", style=THEME["cyan"])
+        t.append("\n")
+        self._show_command_output(log, t)
+
+    def _harness_event_style(self, event_type: str) -> str:
+        """Return a theme color for a harness event type."""
+        if "failed" in event_type or "error" in event_type:
+            return THEME["error"]
+        if "completed" in event_type or "result" in event_type:
+            return THEME["success"]
+        if event_type.startswith("validation."):
+            return THEME["gold"]
+        if event_type.startswith("workflow."):
+            return THEME["cyan"]
+        if event_type.startswith("workspace."):
+            return THEME["purple"]
+        if event_type == "harness.hook.error":
+            return THEME["error"]
+        if event_type == "harness.permission.check":
+            return THEME["warning"]
+        if event_type.startswith("harness.compaction."):
+            return THEME["gold"]
+        if event_type == "harness.stop":
+            return THEME["success"]
+        if event_type.startswith("harness."):
+            return THEME["purple"]
+        if event_type.startswith("approval"):
+            return THEME["warning"]
+        return THEME["text"]
+
+    def _harness_event_preview(self, event) -> str:
+        """Build a compact one-line event preview."""
+        data = getattr(event, "data", {}) or {}
+        fields = []
+        for key in (
+            "step_id",
+            "status",
+            "detail",
+            "name",
+            "command",
+            "child_run_id",
+            "file_count",
+            "returncode",
+            "error",
+            "content_preview",
+            "tool",
+            "handler",
+            "point",
+            "stopped_reason",
+            "iterations",
+            "tool_calls_made",
+        ):
+            value = data.get(key)
+            if value in (None, "", [], {}):
+                continue
+            fields.append(f"{key}={value}")
+        arguments = data.get("arguments")
+        if isinstance(arguments, dict):
+            keys = arguments.get("keys")
+            if keys:
+                fields.append("arg_keys=" + ",".join(str(k) for k in keys[:8]))
+            preview = arguments.get("preview")
+            if isinstance(preview, dict):
+                for key, value in list(preview.items())[:4]:
+                    fields.append(f"{key}={value}")
+        preview = "  ".join(fields)
+        preview = preview.replace("\n", " ")
+        return preview[:137] + "..." if len(preview) > 140 else preview
 
     def _active_harness_spec(self):
         """Return the active HarnessSpec and source path, if one is configured."""
@@ -6879,7 +7478,7 @@ class SuperQodeApp(App):
         try:
             pure = getattr(self, "_pure_mode", None)
             kernel = getattr(pure, "_harness_kernel", None) if pure is not None else None
-            if kernel is None:
+            if kernel is None or not isinstance(getattr(kernel, "store", None), FileHarnessStore):
                 kernel = await init_harness(
                     spec,
                     store=FileHarnessStore(Path(spec.context.session_storage)),
@@ -6902,10 +7501,14 @@ class SuperQodeApp(App):
             return
 
         self._last_workflow_result = result
+        self._refresh_harness_panel()
         done = Text()
         done.append("\n  ✓ ", style=f"bold {THEME['success']}")
         done.append("Workflow complete", style=f"bold {THEME['text']}")
         done.append(f"  {result.mode.value}, {len(result.results)} result(s)\n\n", style=THEME["dim"])
+        if getattr(result, "run_id", ""):
+            done.append("Run graph: ", style=THEME["muted"])
+            done.append(f":harness graph {result.run_id}\n\n", style=THEME["cyan"])
         if result.content:
             done.append(result.content, style=THEME["text"])
             done.append("\n", style="")
@@ -21387,6 +21990,17 @@ team:
                     (":status", "Show active provider, model, sandbox/session, branch, approval"),
                     (":doctor tui", "Show full TUI readiness dashboard"),
                     (":harness", "Open the harness overview and show active state"),
+                    (":harness <spec.yaml>", "Load a HarnessSpec into the TUI"),
+                    (":harness inspect", "Summarize active HarnessSpec policy, tools, workflow, hooks, validation"),
+                    (":harness doctor", "Check active HarnessSpec readiness, blockers, and fix hints"),
+                    (":harness graph [run_id]", "Show planned graph or persisted run graph"),
+                    (":harness runs", "List persisted HarnessSpec runs"),
+                    (":harness replay <run_id>", "Show exact replay readiness and next commands"),
+                    (":harness fork <run_id> [event]", "Fork a persisted run at an event index"),
+                    (":harness evidence <run_id>", "Show run evidence, changes, validation, and result receipt"),
+                    (":harness events <run_id>", "Show persisted event timeline for a harness run"),
+                    (":harness templates", "List built-in HarnessSpec templates"),
+                    (":harness off", "Disable the active HarnessSpec"),
                     (":retry", "Retry the last user prompt"),
                     (":work [verbose]", "Show last run tools, files, and commands"),
                     (":copy error", "Copy the latest error to clipboard"),
