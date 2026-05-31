@@ -4,6 +4,7 @@ import asyncio
 import concurrent.futures
 
 from superqode.app_main import SelectionAwareInput, SuperQodeApp, render_welcome
+from superqode.harness import AgentSpec, HarnessSpec, WorkflowMode, WorkflowSpec
 from superqode.tools.question_tool import Question, QuestionType
 
 
@@ -274,6 +275,285 @@ def test_prompt_completion_suggests_skill_name(tmp_path, monkeypatch):
     assert app._suggest_prompt_completion(":skills info rep") == ":skills info repo-review"
 
 
+def test_recipes_command_lists_and_doctors_local_recipe(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    recipe_dir = tmp_path / ".superqode" / "recipes"
+    recipe_dir.mkdir(parents=True)
+    (recipe_dir / "review.yaml").write_text(
+        "name: review\n"
+        "description: Review current change\n"
+        "prompt: Review the current git diff.\n"
+        "skills: []\n"
+    )
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    asyncio.run(app._recipe_cmd("list", log))
+    text = render_plain(log.items[-1])
+    assert "review" in text
+    assert "Review current change" in text
+
+    asyncio.run(app._recipe_cmd("doctor review", log))
+    text = render_plain(log.items[-1])
+    assert "Recipe looks runnable" in text
+
+
+def test_recipe_completion_suggests_recipe_name(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    recipe_dir = tmp_path / ".superqode" / "recipes"
+    recipe_dir.mkdir(parents=True)
+    (recipe_dir / "fix-tests.json").write_text(
+        '{"name":"fix-tests","description":"Repair failing tests","prompt":"Fix tests."}'
+    )
+    app = make_app()
+
+    candidates = app._prompt_completion_candidates_for(":recipe run fix")
+
+    assert candidates[0].value == ":recipe run fix-tests"
+    assert candidates[0].kind == "recipe"
+    assert candidates[0].description == "Repair failing tests"
+
+
+def test_recipe_run_prefills_prompt_and_stages_refs_when_disconnected(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "README.md").write_text("# Project\n")
+    recipe_dir = tmp_path / ".superqode" / "recipes"
+    recipe_dir.mkdir(parents=True)
+    (recipe_dir / "review.yaml").write_text(
+        "name: review\n"
+        "description: Review docs\n"
+        "prompt: Review attached docs.\n"
+        "attachments:\n"
+        "  - ../../README.md\n"
+        "mcp_resources:\n"
+        "  - docs/file:///docs/readme.md\n"
+    )
+    app = make_app()
+    log = FakeLog()
+    captured = []
+    app._set_prompt_prefill = lambda value: captured.append(value)
+
+    recipe = app._find_recipe("review")
+    asyncio.run(app._run_recipe(recipe, "focus on clarity", log))
+
+    assert captured[-1].startswith("Review attached docs.")
+    assert "@README.md" in app._attached_refs
+    assert "mcp://docs/file:///docs/readme.md" in app._attached_refs
+    assert any("Loaded recipe prompt" in str(item) for item in log.items)
+
+
+def test_byok_provider_selection_enables_model_keyboard_immediately():
+    app = make_app()
+    log = FakeLog()
+    provider_def = SimpleNamespace(name="Anthropic")
+    app._awaiting_byok_provider = True
+    app._byok_connect_list = [("anthropic", provider_def)]
+    def show_provider_models(provider_id, target_log, use_picker=False):
+        app._byok_selected_provider = provider_id
+        app._byok_model_list = ["claude-sonnet"]
+
+    app._show_provider_models = show_provider_models
+
+    assert app._handle_byok_provider_selection("1", log)
+
+    assert app._awaiting_byok_model is True
+    assert app._byok_selected_provider == "anthropic"
+    assert app._byok_model_list == ["claude-sonnet"]
+
+
+def test_byok_highlighted_model_enter_selects_current_model(monkeypatch):
+    app = make_app()
+    log = FakeLog()
+    app._awaiting_byok_model = True
+    app._byok_selected_provider = "anthropic"
+    app._byok_model_list = ["first-model", "second-model"]
+    app._byok_highlighted_model_index = 1
+    captured = []
+    app.query_one = lambda selector, *args, **kwargs: log if selector == "#log" else None
+    app._connect_byok_mode = lambda provider, model, target_log: captured.append((provider, model))
+
+    app.action_select_highlighted_model()
+
+    assert captured == [("anthropic", "second-model")]
+    assert app._awaiting_byok_model is False
+
+
+def test_picker_link_click_selects_byok_model_directly():
+    app = make_app()
+    log = FakeLog()
+    app._awaiting_byok_model = True
+    app._byok_selected_provider = "anthropic"
+    app._byok_model_list = ["first-model", "second-model"]
+    captured = []
+    event = SimpleNamespace(
+        style=SimpleNamespace(link="superqode://pick/2"),
+        stop=lambda: setattr(event, "stopped", True),
+        prevent_default=lambda: setattr(event, "prevented", True),
+        stopped=False,
+        prevented=False,
+    )
+    app.query_one = lambda selector, *args, **kwargs: log if selector == "#log" else None
+    app.set_timer = lambda *args, **kwargs: None
+    app._connect_byok_mode = lambda provider, model, target_log: captured.append((provider, model))
+
+    app.on_click(event)
+
+    assert captured == [("anthropic", "second-model")]
+    assert event.stopped is True
+    assert event.prevented is True
+    assert app._awaiting_byok_model is False
+
+
+def test_acp_highlighted_model_enter_selects_current_agent_model():
+    app = make_app()
+    app.current_agent = "gemini"
+    app._gemini_models = [{"id": "gemini-flash"}, {"id": "gemini-pro"}]
+    app._awaiting_model_selection = True
+    app._opencode_highlighted_model_index = 1
+    captured = []
+    app._select_model_by_number = lambda number: captured.append(number)
+
+    app.action_select_highlighted_acp_model()
+
+    assert captured == [2]
+
+
+def test_workflow_center_renders_active_harness():
+    app = make_app()
+    log = FakeLog()
+    spec = HarnessSpec(
+        name="review-flow",
+        workflow=WorkflowSpec(mode=WorkflowMode.PARALLEL, parallelism=2),
+        agents=(
+            AgentSpec(id="api", role="API reviewer"),
+            AgentSpec(id="ui", role="UI reviewer"),
+        ),
+    )
+    app._active_harness_spec = lambda: (spec, "superqode.yaml")
+    app.current_provider = "anthropic"
+    app.current_model = "claude-sonnet"
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._show_workflow_center(log)
+    text = render_plain(log.items[-1])
+
+    assert "Workflow Run Center" in text
+    assert "review-flow" in text
+    assert "parallel" in text
+    assert "api" in text
+    assert "anthropic/claude-sonnet" in text
+
+
+def test_workflow_presets_command_lists_builtin_presets():
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._show_workflow_presets(log)
+    text = render_plain(log.items[-1])
+
+    assert "Workflow Presets" in text
+    assert "parallel-review" in text
+    assert "plan-implement-review" in text
+
+
+def test_workflow_preview_renders_readiness():
+    app = make_app()
+    log = FakeLog()
+    spec = HarnessSpec(
+        name="preview-flow",
+        workflow=WorkflowSpec(preset="parallel-review"),
+    )
+    app._active_harness_spec = lambda: (spec, "superqode.yaml")
+    app.current_provider = "anthropic"
+    app.current_model = "claude-sonnet"
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._show_workflow_preview(log, "fix auth bug")
+    text = render_plain(log.items[-1])
+
+    assert "Workflow Preview" in text
+    assert "preview-flow" in text
+    assert "preset=parallel-review" in text
+    assert "security" in text
+    assert "anthropic/claude-sonnet" in text
+    assert "Readiness" in text
+    assert "Run with" in text
+
+
+def test_workflow_preview_reports_missing_model():
+    app = make_app()
+    log = FakeLog()
+    spec = HarnessSpec(name="blocked-flow", workflow=WorkflowSpec(mode=WorkflowMode.CHAIN))
+    app._active_harness_spec = lambda: (spec, "")
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._show_workflow_preview(log, "ship it")
+    text = render_plain(log.items[-1])
+
+    assert "Workflow Preview" in text
+    assert "not selected" in text
+    assert "blocked" in text
+    assert "connect BYOK/local" in text
+
+
+def test_workflow_steps_from_spec_adds_router_step():
+    app = make_app()
+    spec = HarnessSpec(
+        name="router-flow",
+        workflow=WorkflowSpec(mode=WorkflowMode.ROUTER),
+        agents=(
+            AgentSpec(id="frontend", role="Frontend engineer"),
+            AgentSpec(id="backend", role="Backend engineer"),
+        ),
+    )
+
+    steps = app._workflow_steps_from_spec(spec, "Fix the API client")
+
+    assert [step.id for step in steps] == ["router", "frontend", "backend"]
+    assert "Fix the API client" in steps[0].prompt
+    assert "Frontend engineer" in steps[1].prompt
+
+
+def test_workflow_timeline_renders_step_states():
+    app = make_app()
+
+    text = render_plain(
+        app._workflow_timeline_text(
+            title="Workflow timeline",
+            mode="parallel",
+            step_ids=["api", "ui"],
+            states={"api": "done", "ui": "running"},
+            details={"api": "1 iteration(s)"},
+        )
+    )
+
+    assert "Workflow timeline" in text
+    assert "parallel" in text
+    assert "api" in text
+    assert "done" in text
+    assert "ui" in text
+    assert "running" in text
+
+
+def test_doctor_tui_dashboard_renders_readiness(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    app = make_app()
+    log = FakeLog()
+    app.current_provider = "anthropic"
+    app.current_model = "claude-sonnet"
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._doctor_cmd("tui", log)
+    text = render_plain(log.items[-1])
+
+    assert "TUI Doctor Dashboard" in text
+    assert "Provider" in text
+    assert "anthropic/claude-sonnet" in text
+    assert "Recipes" in text
+
+
 def test_prompt_completion_suggests_attach_and_prompt_paths(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     target = tmp_path / "prompts" / "review.md"
@@ -292,6 +572,34 @@ def test_prompt_completion_suggests_provider_and_model():
     assert app._suggest_prompt_completion(":model switch anthropic") == ":model switch anthropic/"
 
 
+def test_prompt_completion_candidates_include_descriptions(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    skill_dir = tmp_path / ".agents" / "skills" / "repo-review"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: repo-review\ndescription: Review repository changes\nenabled: true\n---\n\n# Review\n"
+    )
+    app = make_app()
+
+    candidates = app._prompt_completion_candidates_for(":skills info rep")
+
+    assert candidates[0].label == "repo-review"
+    assert candidates[0].description == "Review repository changes"
+    assert candidates[0].kind == "skill"
+
+
+def test_prompt_completion_accepts_visible_candidate():
+    app = make_app()
+    input_widget = SimpleNamespace(value=":mod", cursor_position=0)
+    app._prompt_completion_candidates = app._prompt_completion_candidates_for(":mod")
+    app._prompt_completion_index = 0
+    app._prompt_completion_visible = True
+
+    assert app._accept_prompt_completion(input_widget)
+    assert input_widget.value.startswith(":mode") or input_widget.value.startswith(":model")
+    assert input_widget.cursor_position == len(input_widget.value)
+
+
 def test_mcp_target_config_detects_http_and_stdio():
     app = make_app()
 
@@ -306,6 +614,132 @@ def test_mcp_target_config_detects_http_and_stdio():
     assert stdio_config.config.transport == "stdio"
     assert stdio_config.config.command == "npx"
     assert stdio_config.config.args == ["@modelcontextprotocol/server-everything"]
+
+
+def test_mcp_resource_ref_resolution_supports_index_and_server_uri():
+    app = make_app()
+    resource = SimpleNamespace(
+        server_id="docs",
+        uri="file:///docs/readme.md",
+        name="README",
+        description="Project README",
+        mime_type="text/markdown",
+    )
+    manager = SimpleNamespace(list_all_resources=lambda: [resource])
+
+    assert app._resolve_mcp_resource_ref(manager, "1") is resource
+    assert app._resolve_mcp_resource_ref(manager, "docs/file:///docs/readme.md") is resource
+    assert app._resolve_mcp_resource_ref(manager, "mcp://docs/file:///docs/readme.md") is resource
+
+
+def test_mcp_attach_resource_stages_prompt_reference():
+    app = make_app()
+    log = FakeLog()
+    captured = []
+    app._set_prompt_prefill = lambda value: captured.append(value)
+    resource = SimpleNamespace(
+        server_id="docs",
+        uri="file:///docs/readme.md",
+        name="README",
+        description="Project README",
+        mime_type="text/markdown",
+    )
+    manager = SimpleNamespace(list_all_resources=lambda: [resource])
+
+    asyncio.run(app._mcp_attach_resource(manager, "1", log))
+
+    assert app._attached_refs == ["mcp://docs/file:///docs/readme.md"]
+    assert captured == ["mcp://docs/file:///docs/readme.md "]
+    assert any("Attached MCP resource" in str(item) for item in log.items)
+
+
+def test_prompt_completion_suggests_mcp_resource(monkeypatch):
+    from superqode.mcp import integration
+
+    app = make_app()
+    resource = SimpleNamespace(
+        server_id="docs",
+        uri="file:///docs/readme.md",
+        name="README",
+        description="Project README",
+        mime_type="text/markdown",
+    )
+    manager = SimpleNamespace(list_all_resources=lambda: [resource])
+    monkeypatch.setattr(integration, "_mcp_manager", manager)
+
+    candidates = app._prompt_completion_candidates_for(":mcp attach docs/fi")
+
+    assert candidates[0].value == ":mcp attach docs/file:///docs/readme.md"
+    assert candidates[0].kind == "resource"
+    assert "README" in candidates[0].description
+
+
+def test_extract_mcp_refs_from_prompt_text():
+    text, refs = SuperQodeApp._extract_mcp_refs_from_text(
+        "review mcp://docs/file:///docs/readme.md carefully"
+    )
+
+    assert text == "review carefully"
+    assert refs == ["mcp://docs/file:///docs/readme.md"]
+
+
+def test_resolve_mcp_attachment_context_reads_text_resource(monkeypatch):
+    from superqode.mcp import integration
+
+    app = make_app()
+    log = FakeLog()
+    app._current_mcp_refs = ["mcp://docs/file:///docs/readme.md"]
+    content = SimpleNamespace(
+        uri="file:///docs/readme.md",
+        mime_type="text/markdown",
+        text="# README\nProject notes",
+        blob=None,
+    )
+
+    class FakeManager:
+        async def read_resource(self, server_id, uri):
+            assert server_id == "docs"
+            assert uri == "file:///docs/readme.md"
+            return content
+
+    async def fake_get_mcp_manager():
+        return FakeManager()
+
+    monkeypatch.setattr(integration, "get_mcp_manager", fake_get_mcp_manager)
+
+    context = asyncio.run(app._resolve_mcp_attachment_context(log))
+
+    assert '<mcp-resource server="docs" uri="file:///docs/readme.md"' in context
+    assert "# README" in context
+    assert app._current_mcp_refs == []
+    assert any("Including 1 MCP resource" in str(item) for item in log.items)
+
+
+def test_resolve_mcp_attachment_context_bounds_text(monkeypatch):
+    from superqode.mcp import integration
+
+    app = make_app()
+    app._current_mcp_refs = ["mcp://docs/file:///large.txt"]
+    content = SimpleNamespace(
+        uri="file:///large.txt",
+        mime_type="text/plain",
+        text="x" * 40000,
+        blob=None,
+    )
+
+    class FakeManager:
+        async def read_resource(self, server_id, uri):
+            return content
+
+    async def fake_get_mcp_manager():
+        return FakeManager()
+
+    monkeypatch.setattr(integration, "get_mcp_manager", fake_get_mcp_manager)
+
+    context = asyncio.run(app._resolve_mcp_attachment_context())
+
+    assert 'truncated="true"' in context
+    assert len(context) < 31000
 
 
 def test_select_command_routes_response_error_prompt_and_transcript():

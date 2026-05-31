@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import asyncio.base_subprocess as _asyncio_base_subprocess
+import json
 import os
 import pty
 import select
@@ -51,6 +52,38 @@ from rich.markdown import Markdown
 from rich.rule import Rule
 from rich.console import Group
 from rich.box import ROUNDED, DOUBLE, HEAVY
+
+
+@dataclass
+class PromptCompletionCandidate:
+    """A contextual prompt completion candidate."""
+
+    value: str
+    label: str
+    description: str = ""
+    kind: str = "command"
+
+
+@dataclass
+class LocalRecipe:
+    """A local reusable TUI workflow recipe."""
+
+    name: str
+    description: str = ""
+    path: Path | None = None
+    prompt: str = ""
+    prompt_file: str = ""
+    provider: str = ""
+    model: str = ""
+    mode: str = ""
+    role: str = ""
+    skills: tuple[str, ...] = ()
+    attachments: tuple[str, ...] = ()
+    mcp_resources: tuple[str, ...] = ()
+    harness: str = ""
+    variables: tuple[str, ...] = ()
+    raw: dict[str, Any] = field(default_factory=dict)
+
 
 # Import from modular app package
 from superqode.app.constants import (
@@ -355,6 +388,9 @@ class SelectionAwareInput(TextArea):
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         self._resize_to_content()
+        update_panel = getattr(self.app, "_update_prompt_completion_panel", None)
+        if callable(update_panel):
+            update_panel(self.value)
 
     def on_resize(self, event: events.Resize) -> None:
         self._resize_to_content()
@@ -384,6 +420,31 @@ class SelectionAwareInput(TextArea):
     def on_key(self, event: events.Key) -> None:
         """Intercept key events for selection navigation and number selection."""
         app = self.app
+
+        if getattr(app, "_prompt_completion_visible", False):
+            if event.key == "up":
+                if hasattr(app, "_move_prompt_completion"):
+                    app._move_prompt_completion(-1)
+                event.stop()
+                event.prevent_default()
+                return
+            if event.key == "down":
+                if hasattr(app, "_move_prompt_completion"):
+                    app._move_prompt_completion(1)
+                event.stop()
+                event.prevent_default()
+                return
+            if event.key in ("tab", "right", "enter"):
+                if hasattr(app, "_accept_prompt_completion") and app._accept_prompt_completion(self):
+                    event.stop()
+                    event.prevent_default()
+                    return
+            if event.key == "escape":
+                if hasattr(app, "_hide_prompt_completion_panel"):
+                    app._hide_prompt_completion_panel()
+                event.stop()
+                event.prevent_default()
+                return
 
         if event.key in ("tab", "right"):
             complete_prompt = getattr(app, "_complete_prompt_input", None)
@@ -468,9 +529,15 @@ class SelectionAwareInput(TextArea):
                 event.stop()
                 event.prevent_default()
                 if event.key == "up":
-                    app.action_navigate_opencode_model_up()
+                    if hasattr(app, "action_navigate_acp_model_up"):
+                        app.action_navigate_acp_model_up()
+                    else:
+                        app.action_navigate_opencode_model_up()
                 else:
-                    app.action_navigate_opencode_model_down()
+                    if hasattr(app, "action_navigate_acp_model_down"):
+                        app.action_navigate_acp_model_down()
+                    else:
+                        app.action_navigate_opencode_model_down()
                 return
 
         # For all other keys or when not in selection mode, let parent handle it
@@ -722,6 +789,9 @@ class SuperQodeApp(App):
         self._permission_pulse_timer: Optional[Timer] = None  # Timer for permission pulse animation
         self._permission_pending = False  # Track if permission is pending
         self._attached_refs: list[str] = []
+        self._prompt_completion_candidates: list[PromptCompletionCandidate] = []
+        self._prompt_completion_index = 0
+        self._prompt_completion_visible = False
         self._history_manager = HistoryManager()
         self._plan_manager = PlanManager()
 
@@ -980,6 +1050,7 @@ class SuperQodeApp(App):
                             suggester=CommandSuggester(),
                             # No restrict parameter - allow all characters including colon
                         )
+                    yield Static("", id="prompt-completions")
                     yield HintsBar(id="hints")
 
                 # Scanning line animation at TOP (shown when agent is thinking)
@@ -1160,6 +1231,14 @@ class SuperQodeApp(App):
                 "List, inspect, create, or import local skills",
                 "✦",
                 ":skills",
+                "harness",
+            ),
+            PaletteCommand(
+                "recipes",
+                "Recipes",
+                "Run reusable local workflow recipes",
+                "◇",
+                ":recipes",
                 "harness",
             ),
             PaletteCommand(
@@ -1788,6 +1867,7 @@ class SuperQodeApp(App):
             "benchmark": ":benchmark",
             "tools": ":tools",
             "skills": ":skills",
+            "recipes": ":recipes",
             "mcp": ":mcp status",
             "sessions": "/sessions",
             "compact": "/compact",
@@ -1918,12 +1998,14 @@ class SuperQodeApp(App):
                     self.action_select_highlighted_acp_agent()
 
             elif getattr(self, "_awaiting_byok_model", False):
-                # Keyboard navigation disabled for BYOK model selection
-                # Users must enter a number to select a model
-                # Allow R to refresh
-                if event.key == "r":
-                    self.action_refresh_byok_models()
-                pass
+                event.stop()
+                handled = True
+                if event.key == "up":
+                    self.action_navigate_model_up()
+                elif event.key == "down":
+                    self.action_navigate_model_down()
+                elif event.key == "enter":
+                    self.action_select_highlighted_model()
 
             elif getattr(self, "_awaiting_byok_provider", False):
                 event.stop()
@@ -1971,13 +2053,11 @@ class SuperQodeApp(App):
                 event.stop()
                 handled = True
                 if event.key == "up":
-                    self.action_navigate_opencode_model_up()
+                    self.action_navigate_acp_model_up()
                 elif event.key == "down":
-                    self.action_navigate_opencode_model_down()
+                    self.action_navigate_acp_model_down()
                 elif event.key == "enter":
-                    self.action_select_highlighted_opencode_model()
-                elif event.key == "r":
-                    self.action_refresh_opencode_models()
+                    self.action_select_highlighted_acp_model()
 
             if handled:
                 # Ensure input stays focused after navigation
@@ -2338,6 +2418,11 @@ class SuperQodeApp(App):
             else:
                 log.add_error(f"Invalid selection. Choose 1-{len(self._openhands_models)}")
 
+    @staticmethod
+    def _picker_link_style(style: str, number: int) -> str:
+        """Add a Textual/Rich link target to a picker style."""
+        return f"{style} link superqode://pick/{number}"
+
     def _select_by_number_universal(self, num: int):
         """Universal number selection handler for all selection modes.
 
@@ -2453,6 +2538,65 @@ class SuperQodeApp(App):
 
         return False
 
+    def _select_picker_number_direct(self, num: int) -> bool:
+        """Select a picker item directly from a mouse click.
+
+        Typed numeric keys are intentionally buffered for provider/model pickers so
+        users can enter multi-digit indexes. Mouse clicks already carry the exact
+        target number, so they should execute the selection immediately.
+        """
+        log = self.query_one("#log", ConversationLog)
+
+        if getattr(self, "_awaiting_connect_type", False):
+            return bool(self._select_by_number_universal(num))
+
+        if getattr(self, "_awaiting_acp_agent_selection", False):
+            agent_list = getattr(self, "_acp_agent_list", [])
+            if agent_list and 1 <= num <= len(agent_list):
+                self._handle_acp_agent_selection(str(num), log)
+                return True
+            return False
+
+        if getattr(self, "_awaiting_byok_provider", False):
+            provider_list = getattr(self, "_byok_connect_list", [])
+            if provider_list and 1 <= num <= len(provider_list):
+                self._just_showed_byok_picker = False
+                self._handle_byok_provider_selection(str(num), log)
+                return True
+            return False
+
+        if getattr(self, "_awaiting_byok_model", False):
+            model_list = getattr(self, "_byok_model_list", [])
+            if model_list and 1 <= num <= len(model_list):
+                self._handle_byok_model_selection(str(num), log)
+                return True
+            return False
+
+        if getattr(self, "_awaiting_local_provider", False):
+            provider_list = getattr(self, "_local_provider_list", [])
+            if provider_list and 1 <= num <= len(provider_list):
+                self._just_showed_local_picker = False
+                self._handle_local_provider_selection(str(num), log)
+                return True
+            return False
+
+        if getattr(self, "_awaiting_local_model", False):
+            model_list = getattr(self, "_local_model_list", [])
+            if model_list and 1 <= num <= len(model_list):
+                self._handle_local_model_selection(str(num), log)
+                return True
+            return False
+
+        if getattr(self, "_awaiting_model_selection", False):
+            self._select_model_by_number(num)
+            return True
+
+        if getattr(self, "_awaiting_recommendation_selection", False):
+            self._handle_recommendation_selection(str(num), log)
+            return True
+
+        return bool(self._select_by_number_universal(num))
+
     def _queue_selection_digit(self, digit: str) -> None:
         """Queue a digit for multi-digit selection in provider/model pickers."""
         buf = getattr(self, "_selection_digit_buffer", "")
@@ -2466,6 +2610,20 @@ class SuperQodeApp(App):
             prompt_input.cursor_position = len(buf)
         except Exception:
             pass
+
+    def on_click(self, event: events.Click) -> None:
+        """Route mouse clicks on numbered picker links through direct selection."""
+        style = getattr(event, "style", None)
+        link = getattr(style, "link", None) if style is not None else None
+        if not link or not str(link).startswith("superqode://pick/"):
+            return
+        raw = str(link).rsplit("/", 1)[-1]
+        if not raw.isdigit():
+            return
+        if self._select_picker_number_direct(int(raw)):
+            event.stop()
+            event.prevent_default()
+            self.set_timer(0.05, self._ensure_input_focus)
 
         # Reset timer
         timer = getattr(self, "_selection_digit_timer", None)
@@ -2702,6 +2860,84 @@ class SuperQodeApp(App):
             # _connect_agent is decorated with @work, so calling it directly
             # returns a Worker that will run the async method
             self._connect_agent("opencode", model_id)
+
+    def _current_acp_model_list(self) -> list[Any]:
+        """Return model list for the active ACP model picker."""
+        agent = getattr(self, "current_agent", "")
+        if agent == "opencode":
+            return list(self.opencode_models)
+        if agent == "gemini":
+            return list(getattr(self, "gemini_models", []))
+        if agent == "claude":
+            return list(getattr(self, "claude_models", []))
+        if agent == "codex":
+            return list(getattr(self, "codex_models", []))
+        if agent == "openhands":
+            return list(getattr(self, "openhands_models", []))
+        return []
+
+    def _redraw_current_acp_model_picker(
+        self, log: ConversationLog, clear_log: bool = False
+    ) -> None:
+        """Redraw the visible ACP model picker after keyboard navigation."""
+        agent_data = getattr(self, f"_{self.current_agent}_agent_data", None)
+        if agent_data is None:
+            agent_data = {"name": self.current_agent or "Agent", "short_name": self.current_agent}
+        if self.current_agent == "opencode":
+            self._show_opencode_models_selection(agent_data, log, clear_log=clear_log)
+        elif self.current_agent == "gemini":
+            if not clear_log:
+                log.clear()
+            self._show_gemini_models_selection(agent_data, log)
+        elif self.current_agent == "claude":
+            if not clear_log:
+                log.clear()
+            self._show_claude_models_selection(agent_data, log)
+        elif self.current_agent == "codex":
+            if not clear_log:
+                log.clear()
+            self._show_codex_models_selection(agent_data, log)
+        elif self.current_agent == "openhands":
+            if not clear_log:
+                log.clear()
+            self._show_openhands_models_selection(agent_data, log)
+
+    def action_navigate_acp_model_up(self):
+        """Navigate to previous ACP model for the current agent."""
+        if not getattr(self, "_awaiting_model_selection", False):
+            return
+        models = self._current_acp_model_list()
+        if not models:
+            return
+        current_idx = getattr(self, "_opencode_highlighted_model_index", 0)
+        self._opencode_highlighted_model_index = max(0, current_idx - 1)
+        log = self.query_one("#log", ConversationLog)
+        self._redraw_current_acp_model_picker(log, clear_log=False)
+        self.set_timer(0.05, self._ensure_input_focus)
+
+    def action_navigate_acp_model_down(self):
+        """Navigate to next ACP model for the current agent."""
+        if not getattr(self, "_awaiting_model_selection", False):
+            return
+        models = self._current_acp_model_list()
+        if not models:
+            return
+        current_idx = getattr(self, "_opencode_highlighted_model_index", 0)
+        self._opencode_highlighted_model_index = min(len(models) - 1, current_idx + 1)
+        log = self.query_one("#log", ConversationLog)
+        self._redraw_current_acp_model_picker(log, clear_log=False)
+        self.set_timer(0.05, self._ensure_input_focus)
+
+    def action_select_highlighted_acp_model(self):
+        """Select highlighted model for the current ACP agent."""
+        if not getattr(self, "_awaiting_model_selection", False):
+            return
+        models = self._current_acp_model_list()
+        if not models:
+            return
+        current_idx = getattr(self, "_opencode_highlighted_model_index", 0)
+        if 0 <= current_idx < len(models):
+            self._select_model_by_number(current_idx + 1)
 
     def action_refresh_opencode_models(self):
         """Refresh OpenCode models from CLI."""
@@ -3890,6 +4126,8 @@ class SuperQodeApp(App):
             self._show_harness_status(log)
         elif c == "harness":
             self._harness_cmd(args, log)
+        elif c in ("workflow", "workflows"):
+            self.run_worker(self._workflow_cmd(args, log))
         elif c == "retry":
             self._retry_last_message(log)
         elif c in ("doctor", "doctor-current"):
@@ -3941,6 +4179,8 @@ class SuperQodeApp(App):
             self._show_tools(args, log)
         elif c == "skills":
             self._skills_cmd(args, log)
+        elif c in ("recipe", "recipes", "workflow", "workflows"):
+            self.run_worker(self._recipe_cmd(args, log))
         elif c == "attach":
             self._attach_cmd(args, log)
         elif c == "prompt":
@@ -4439,6 +4679,294 @@ class SuperQodeApp(App):
                 t.append(f"  ... and {len(issues) - 30} more issue(s)\n", style=THEME["dim"])
         self._show_command_output(log, t)
 
+    def _find_recipe(self, name: str) -> LocalRecipe | None:
+        recipes = self._load_local_recipes()
+        recipe = recipes.get(name)
+        if recipe is not None:
+            return recipe
+        lowered = name.lower()
+        return next((item for item in recipes.values() if item.name.lower() == lowered), None)
+
+    async def _recipe_cmd(self, args: str, log: ConversationLog):
+        """Handle reusable local workflow recipes."""
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :recipe arguments: {exc}")
+            return
+        action = tokens[0].lower() if tokens else "list"
+        rest = tokens[1:]
+        if action in {"ls", "show"}:
+            action = "list"
+
+        if action in {"list", "available", "status"}:
+            self._show_recipes(log)
+            return
+
+        if action in {"info", "read"}:
+            if not rest:
+                log.add_error("Usage: :recipe info <name>")
+                return
+            recipe = self._find_recipe(rest[0])
+            if recipe is None:
+                log.add_error(f"Recipe not found: {rest[0]}")
+                return
+            self._show_recipe_info(recipe, log)
+            return
+
+        if action in {"doctor", "validate", "check"}:
+            if rest:
+                recipe = self._find_recipe(rest[0])
+                if recipe is None:
+                    log.add_error(f"Recipe not found: {rest[0]}")
+                    return
+                self._show_recipe_doctor(recipe, log)
+            else:
+                self._show_recipes_doctor(log)
+            return
+
+        if action in {"run", "start", "use"}:
+            if not rest:
+                log.add_error("Usage: :recipe run <name> [extra prompt text]")
+                return
+            name = rest[0]
+            extra = " ".join(rest[1:]).strip()
+            recipe = self._find_recipe(name)
+            if recipe is None:
+                log.add_error(f"Recipe not found: {name}")
+                return
+            await self._run_recipe(recipe, extra, log)
+            return
+
+        log.add_info("Usage: :recipe [list|info <name>|doctor [name]|run <name> [input]]")
+
+    def _show_recipes(self, log: ConversationLog) -> None:
+        recipes = sorted(self._load_local_recipes().values(), key=lambda item: item.name.lower())
+        t = Text()
+        t.append("\n  ◇ ", style=f"bold {THEME['purple']}")
+        t.append("Recipes\n\n", style=f"bold {THEME['text']}")
+        for directory in self._recipe_dirs():
+            t.append("  Directory   ", style=THEME["muted"])
+            t.append(f"{directory}\n", style=THEME["dim"])
+        t.append("  Loaded      ", style=THEME["muted"])
+        t.append(f"{len(recipes)}\n\n", style=THEME["cyan"])
+        if not recipes:
+            t.append("  No local recipes found.\n", style=THEME["muted"])
+            t.append("  Add YAML or JSON recipes under .superqode/recipes.\n", style=THEME["muted"])
+        for index, recipe in enumerate(recipes, 1):
+            t.append(f"  [{index}] ", style=THEME["dim"])
+            t.append(recipe.name, style=f"bold {THEME['cyan']}")
+            if recipe.description:
+                t.append(f" - {recipe.description}", style=THEME["muted"])
+            t.append("\n")
+            details = []
+            if recipe.provider and recipe.model:
+                details.append(f"{recipe.provider}/{recipe.model}")
+            if recipe.mode or recipe.role:
+                details.append(".".join(part for part in [recipe.mode, recipe.role] if part))
+            if recipe.skills:
+                details.append(f"{len(recipe.skills)} skill(s)")
+            if recipe.attachments or recipe.mcp_resources:
+                details.append(f"{len(recipe.attachments) + len(recipe.mcp_resources)} attachment(s)")
+            if details:
+                t.append(f"      {', '.join(details)}\n", style=THEME["dim"])
+            if recipe.path:
+                t.append(f"      {recipe.path}\n", style=THEME["dim"])
+        t.append("\n  Commands: ", style=THEME["muted"])
+        t.append(":recipe run <name>", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":recipe doctor <name>", style=THEME["cyan"])
+        t.append("\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _show_recipe_info(self, recipe: LocalRecipe, log: ConversationLog) -> None:
+        t = Text()
+        t.append("\n  ◇ ", style=f"bold {THEME['purple']}")
+        t.append(recipe.name, style=f"bold {THEME['text']}")
+        t.append("\n\n")
+        fields = [
+            ("Description", recipe.description),
+            ("Path", str(recipe.path) if recipe.path else ""),
+            ("Provider", f"{recipe.provider}/{recipe.model}" if recipe.provider or recipe.model else ""),
+            ("Role", ".".join(part for part in [recipe.mode, recipe.role] if part)),
+            ("Harness", recipe.harness),
+            ("Skills", ", ".join(recipe.skills)),
+            ("Attachments", ", ".join([*recipe.attachments, *recipe.mcp_resources])),
+            ("Variables", ", ".join(recipe.variables)),
+            ("Prompt file", recipe.prompt_file),
+        ]
+        for label, value in fields:
+            if value:
+                t.append(f"  {label:<12}", style=THEME["muted"])
+                t.append(f"{value}\n", style=THEME["text"])
+        if recipe.prompt:
+            preview = recipe.prompt[:1200].rstrip()
+            t.append("\n", style="")
+            t.append(preview, style=THEME["text"])
+            if len(recipe.prompt) > len(preview):
+                t.append("\n...", style=THEME["dim"])
+            t.append("\n", style="")
+        self._show_command_output(log, t)
+
+    def _recipe_prompt_text(self, recipe: LocalRecipe, extra: str = "") -> str:
+        prompt = recipe.prompt
+        if recipe.prompt_file and recipe.path:
+            path = Path(recipe.prompt_file).expanduser()
+            if not path.is_absolute():
+                path = recipe.path.parent / path
+            if path.exists() and path.is_file():
+                prompt = path.read_text(encoding="utf-8").strip()
+        if recipe.variables:
+            prompt += "\n\nRecipe variables to fill: " + ", ".join(recipe.variables)
+        if recipe.skills:
+            prompt += "\n\nUse these skills when relevant: " + ", ".join(recipe.skills)
+        if extra:
+            prompt += "\n\nUser input:\n" + extra
+        return prompt.strip()
+
+    def _recipe_issues(self, recipe: LocalRecipe) -> list[str]:
+        issues: list[str] = []
+        if not recipe.prompt and not recipe.prompt_file:
+            issues.append("missing prompt or prompt_file")
+        if recipe.prompt_file and recipe.path:
+            prompt_path = Path(recipe.prompt_file).expanduser()
+            if not prompt_path.is_absolute():
+                prompt_path = recipe.path.parent / prompt_path
+            if not prompt_path.exists() or not prompt_path.is_file():
+                issues.append(f"prompt_file not found: {recipe.prompt_file}")
+        if recipe.provider:
+            try:
+                from superqode.providers.registry import PROVIDERS
+
+                if recipe.provider not in PROVIDERS:
+                    issues.append(f"unknown provider: {recipe.provider}")
+            except Exception:
+                issues.append("provider registry unavailable")
+        if recipe.skills:
+            loaded = set(self._all_local_skill_names())
+            for skill in recipe.skills:
+                if skill not in loaded:
+                    issues.append(f"missing skill: {skill}")
+        if recipe.attachments:
+            base = recipe.path.parent if recipe.path else Path.cwd()
+            for ref in recipe.attachments:
+                if ref.startswith(("http://", "https://", "@")):
+                    continue
+                path = Path(ref).expanduser()
+                if not path.is_absolute():
+                    path = base / path
+                if not path.exists():
+                    issues.append(f"attachment not found: {ref}")
+        if recipe.harness and recipe.path:
+            harness_path = Path(recipe.harness).expanduser()
+            if not harness_path.is_absolute():
+                harness_path = recipe.path.parent / harness_path
+            if not harness_path.exists():
+                issues.append(f"harness spec not found: {recipe.harness}")
+        return issues
+
+    def _show_recipe_doctor(self, recipe: LocalRecipe, log: ConversationLog) -> None:
+        issues = self._recipe_issues(recipe)
+        t = Text()
+        t.append("\n  ◇ ", style=f"bold {THEME['purple']}")
+        t.append(f"Recipe Doctor: {recipe.name}\n\n", style=f"bold {THEME['text']}")
+        if not issues:
+            t.append("  ok  Recipe looks runnable.\n", style=THEME["success"])
+        else:
+            for issue in issues:
+                t.append("  warning  ", style=THEME["warning"])
+                t.append(f"{issue}\n", style=THEME["text"])
+        self._show_command_output(log, t)
+
+    def _show_recipes_doctor(self, log: ConversationLog) -> None:
+        recipes = sorted(self._load_local_recipes().values(), key=lambda item: item.name.lower())
+        t = Text()
+        t.append("\n  ◇ ", style=f"bold {THEME['purple']}")
+        t.append("Recipes Doctor\n\n", style=f"bold {THEME['text']}")
+        if not recipes:
+            t.append("  warning  No local recipes found.\n", style=THEME["warning"])
+        total_issues = 0
+        for recipe in recipes:
+            issues = self._recipe_issues(recipe)
+            total_issues += len(issues)
+            style = THEME["success"] if not issues else THEME["warning"]
+            t.append(f"  {recipe.name:<24}", style=f"bold {THEME['cyan']}")
+            t.append("ok\n" if not issues else f"{len(issues)} issue(s)\n", style=style)
+            for issue in issues[:5]:
+                t.append(f"      {issue}\n", style=THEME["dim"])
+        t.append("\n  Issues      ", style=THEME["muted"])
+        t.append(f"{total_issues}\n", style=THEME["warning"] if total_issues else THEME["success"])
+        self._show_command_output(log, t)
+
+    async def _run_recipe(self, recipe: LocalRecipe, extra: str, log: ConversationLog) -> None:
+        issues = self._recipe_issues(recipe)
+        if issues:
+            log.add_error(f"Recipe {recipe.name} has {len(issues)} issue(s). Run :recipe doctor {recipe.name}.")
+            return
+        prompt = self._recipe_prompt_text(recipe, extra)
+        refs = list(getattr(self, "_attached_refs", []))
+        base = recipe.path.parent if recipe.path else Path.cwd()
+        for ref in recipe.attachments:
+            if ref.startswith(("http://", "https://", "@", "mcp://")):
+                normalized = ref
+            else:
+                path = Path(ref).expanduser()
+                if not path.is_absolute():
+                    path = base / path
+                path = path.resolve()
+                try:
+                    normalized = "@" + str(path.relative_to(Path.cwd()))
+                except ValueError:
+                    normalized = "@" + str(path)
+            if normalized not in refs:
+                refs.append(normalized)
+        for ref in recipe.mcp_resources:
+            normalized = ref if ref.startswith("mcp://") else f"mcp://{ref}"
+            if normalized not in refs:
+                refs.append(normalized)
+        self._attached_refs = refs
+        self._sync_attachment_prefill()
+
+        if recipe.harness and recipe.path:
+            harness_path = Path(recipe.harness).expanduser()
+            if not harness_path.is_absolute():
+                harness_path = recipe.path.parent / harness_path
+            try:
+                from superqode.harness import load_harness_spec
+
+                spec = load_harness_spec(harness_path)
+                self.active_harness_path = harness_path
+                self.active_harness_name = spec.name
+                log.add_info(f"Loaded harness for recipe: {spec.name}")
+            except Exception as exc:
+                log.add_error(f"Could not load recipe harness: {exc}")
+                return
+
+        if recipe.provider and recipe.model and (
+            self.current_provider != recipe.provider or self.current_model != recipe.model
+        ):
+            try:
+                from superqode.providers.registry import PROVIDERS, ProviderCategory
+
+                provider_def = PROVIDERS.get(recipe.provider)
+                if provider_def and provider_def.category == ProviderCategory.LOCAL:
+                    self._connect_local_mode(recipe.provider, recipe.model, log)
+                else:
+                    self._connect_byok_mode(recipe.provider, recipe.model, log)
+            except Exception as exc:
+                log.add_error(f"Could not connect recipe model: {exc}")
+
+        if not prompt:
+            log.add_error(f"Recipe {recipe.name} produced an empty prompt.")
+            return
+        if hasattr(self, "_pure_mode") and self._pure_mode.session.connected:
+            log.add_info(f"Running recipe: {recipe.name}")
+            self._handle_message(prompt, log)
+        else:
+            self._set_prompt_prefill(prompt)
+            log.add_info(f"Loaded recipe prompt: {recipe.name}")
+            log.add_info("Connect a model, then press Enter to run it.")
+
     def _set_prompt_prefill(self, value: str) -> None:
         """Put text in the prompt input and focus it."""
         try:
@@ -4451,44 +4979,137 @@ class SuperQodeApp(App):
 
     def _complete_prompt_input(self, input_widget: SelectionAwareInput) -> bool:
         """Complete the active prompt command in-place."""
-        suggestion = self._suggest_prompt_completion(input_widget.value)
-        if not suggestion or suggestion == input_widget.value:
+        candidates = self._prompt_completion_candidates_for(input_widget.value)
+        if not candidates:
+            self._hide_prompt_completion_panel()
             return False
-        input_widget.value = suggestion
-        input_widget.cursor_position = len(suggestion)
-        return True
+        if len(candidates) > 1 and not self._prompt_completion_visible:
+            self._show_prompt_completion_panel(candidates)
+            return True
+        self._prompt_completion_candidates = candidates
+        self._prompt_completion_index = 0
+        return self._accept_prompt_completion(input_widget)
 
     def _suggest_prompt_completion(self, value: str) -> str | None:
         """Return a contextual completion for command-like prompt text."""
+        candidates = self._prompt_completion_candidates_for(value)
+        return candidates[0].value if candidates else None
+
+    def _prompt_completion_candidates_for(self, value: str) -> list[PromptCompletionCandidate]:
+        """Return contextual completion candidates for command-like prompt text."""
         if not value.startswith(("/", ":")):
-            return None
+            return []
 
         lowered = value.lower()
         context_specs = [
-            (":mcp connect ", self._configured_mcp_server_ids),
-            (":mcp disconnect ", self._configured_mcp_server_ids),
-            (":mcp reconnect ", self._configured_mcp_server_ids),
-            (":mcp doctor ", self._configured_mcp_server_ids),
-            (":skills info ", self._local_skill_names),
-            (":skills search ", self._local_skill_names),
-            (":skills enable ", self._local_skill_names),
-            (":skills disable ", self._all_local_skill_names),
-            (":skills remove ", self._all_local_skill_names),
-            (":connect byok ", self._byok_provider_ids),
-            (":connect local ", self._local_provider_ids),
+            (":mcp connect ", self._mcp_server_completion_candidates),
+            (":mcp disconnect ", self._mcp_server_completion_candidates),
+            (":mcp reconnect ", self._mcp_server_completion_candidates),
+            (":mcp doctor ", self._mcp_server_completion_candidates),
+            (":mcp attach ", self._mcp_resource_completion_candidates),
+            (":skills info ", self._skill_completion_candidates),
+            (":skills search ", self._skill_completion_candidates),
+            (":skills enable ", self._skill_completion_candidates),
+            (":skills disable ", self._all_skill_completion_candidates),
+            (":skills remove ", self._all_skill_completion_candidates),
+            (":recipe run ", self._recipe_completion_candidates),
+            (":recipe info ", self._recipe_completion_candidates),
+            (":recipe doctor ", self._recipe_completion_candidates),
+            (":recipes run ", self._recipe_completion_candidates),
+            (":recipes info ", self._recipe_completion_candidates),
+            (":recipes doctor ", self._recipe_completion_candidates),
+            (":connect byok ", self._byok_provider_completion_candidates),
+            (":connect local ", self._local_provider_completion_candidates),
         ]
         for prefix, provider in context_specs:
             if lowered.startswith(prefix):
-                return self._complete_after_prefix(value, prefix, provider())
+                return self._candidate_after_prefix(value, prefix, provider())
 
         if lowered.startswith(":attach "):
-            return self._complete_path_after_prefix(value, ":attach ")
+            return self._path_candidates_after_prefix(value, ":attach ")
         if lowered.startswith(":prompt "):
-            return self._complete_path_after_prefix(value, ":prompt ", files_only=True)
+            return self._path_candidates_after_prefix(value, ":prompt ", files_only=True)
         if lowered.startswith(":model switch "):
-            return self._complete_model_switch(value, ":model switch ")
+            return self._model_switch_candidates(value, ":model switch ")
 
-        return self._first_completion(value, COMMANDS)
+        return self._static_command_candidates(value)
+
+    def _update_prompt_completion_panel(self, value: str) -> None:
+        """Refresh the visible prompt completion panel as the prompt changes."""
+        candidates = self._prompt_completion_candidates_for(value)
+        if not candidates:
+            self._hide_prompt_completion_panel()
+            return
+        self._show_prompt_completion_panel(candidates)
+
+    def _show_prompt_completion_panel(self, candidates: list[PromptCompletionCandidate]) -> None:
+        self._prompt_completion_candidates = candidates[:8]
+        self._prompt_completion_index = min(
+            self._prompt_completion_index,
+            max(0, len(self._prompt_completion_candidates) - 1),
+        )
+        self._prompt_completion_visible = True
+        self._render_prompt_completion_panel()
+
+    def _hide_prompt_completion_panel(self) -> None:
+        self._prompt_completion_candidates = []
+        self._prompt_completion_index = 0
+        self._prompt_completion_visible = False
+        try:
+            panel = self.query_one("#prompt-completions", Static)
+            panel.update("")
+            panel.remove_class("visible")
+        except Exception:
+            pass
+
+    def _render_prompt_completion_panel(self) -> None:
+        try:
+            panel = self.query_one("#prompt-completions", Static)
+        except Exception:
+            return
+        if not self._prompt_completion_candidates:
+            self._hide_prompt_completion_panel()
+            return
+        text = Text()
+        text.append("  completions", style=f"bold {THEME['cyan']}")
+        text.append("   ↑↓ choose   Tab/Enter accept   Esc close\n", style=THEME["dim"])
+        for index, candidate in enumerate(self._prompt_completion_candidates):
+            selected = index == self._prompt_completion_index
+            marker = ">" if selected else " "
+            label_style = f"bold {THEME['text']}" if selected else THEME["cyan"]
+            desc_style = THEME["text"] if selected else THEME["muted"]
+            text.append(f"  {marker} ", style=THEME["success"] if selected else THEME["dim"])
+            text.append(f"{candidate.label:<28}", style=label_style)
+            if candidate.kind:
+                text.append(f"{candidate.kind:<10}", style=THEME["purple"] if selected else THEME["dim"])
+            if candidate.description:
+                text.append(candidate.description[:80], style=desc_style)
+            text.append("\n")
+        panel.update(text)
+        panel.add_class("visible")
+
+    def _move_prompt_completion(self, delta: int) -> None:
+        if not self._prompt_completion_candidates:
+            return
+        self._prompt_completion_index = (
+            self._prompt_completion_index + delta
+        ) % len(self._prompt_completion_candidates)
+        self._render_prompt_completion_panel()
+
+    def _accept_prompt_completion(self, input_widget: SelectionAwareInput) -> bool:
+        if not self._prompt_completion_candidates:
+            return False
+        index = max(
+            0,
+            min(self._prompt_completion_index, len(self._prompt_completion_candidates) - 1),
+        )
+        value = self._prompt_completion_candidates[index].value
+        if not value or value == input_widget.value:
+            return False
+        input_widget.value = value
+        input_widget.cursor_position = len(value)
+        self._hide_prompt_completion_panel()
+        return True
 
     @staticmethod
     def _first_completion(value: str, candidates: list[str] | tuple[str, ...]) -> str | None:
@@ -4511,6 +5132,32 @@ class SuperQodeApp(App):
                 return completed if completed != value else None
         return None
 
+    @staticmethod
+    def _candidate_after_prefix(
+        value: str,
+        prefix: str,
+        candidates: list[PromptCompletionCandidate],
+    ) -> list[PromptCompletionCandidate]:
+        partial = value[len(prefix) :]
+        matches: list[PromptCompletionCandidate] = []
+        seen: set[str] = set()
+        for candidate in sorted(candidates, key=lambda item: item.label.lower()):
+            if not candidate.label.lower().startswith(partial.lower()):
+                continue
+            replacement = prefix + candidate.label
+            if replacement == value or replacement in seen:
+                continue
+            seen.add(replacement)
+            matches.append(
+                PromptCompletionCandidate(
+                    value=replacement,
+                    label=candidate.label,
+                    description=candidate.description,
+                    kind=candidate.kind,
+                )
+            )
+        return matches
+
     def _complete_path_after_prefix(
         self,
         value: str,
@@ -4525,19 +5172,43 @@ class SuperQodeApp(App):
         suggestion = prefix + completed
         return suggestion if suggestion != value else None
 
+    def _path_candidates_after_prefix(
+        self,
+        value: str,
+        prefix: str,
+        *,
+        files_only: bool = False,
+    ) -> list[PromptCompletionCandidate]:
+        partial = value[len(prefix) :]
+        return [
+            PromptCompletionCandidate(
+                value=prefix + path,
+                label=path,
+                description=description,
+                kind="path",
+            )
+            for path, description in self._path_token_candidates(partial, files_only=files_only)
+        ]
+
     @staticmethod
     def _complete_path_token(partial: str, *, files_only: bool = False) -> str | None:
+        candidates = SuperQodeApp._path_token_candidates(partial, files_only=files_only)
+        return candidates[0][0] if candidates else None
+
+    @staticmethod
+    def _path_token_candidates(partial: str, *, files_only: bool = False) -> list[tuple[str, str]]:
         expanded = partial.replace("\\ ", " ")
         raw_dir, raw_name = os.path.split(expanded)
         base = Path(raw_dir or ".").expanduser()
         if not base.is_absolute():
             base = Path.cwd() / base
         if not base.exists() or not base.is_dir():
-            return None
+            return []
         try:
             entries = sorted(base.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower()))
         except OSError:
-            return None
+            return []
+        candidates: list[tuple[str, str]] = []
         for entry in entries:
             if raw_name and not entry.name.lower().startswith(raw_name.lower()):
                 continue
@@ -4546,19 +5217,453 @@ class SuperQodeApp(App):
             if files_only and not entry.is_file():
                 continue
             rel = os.path.join(raw_dir, entry.name) if raw_dir else entry.name
-            return rel + "/" if entry.is_dir() else rel
-        return None
+            if entry.is_dir():
+                candidates.append((rel + "/", "directory"))
+            else:
+                candidates.append((rel, f"{entry.stat().st_size} bytes"))
+            if len(candidates) >= 8:
+                break
+        return candidates
 
     def _complete_model_switch(self, value: str, prefix: str) -> str | None:
+        candidates = self._model_switch_candidates(value, prefix)
+        return candidates[0].value if candidates else None
+
+    def _model_switch_candidates(self, value: str, prefix: str) -> list[PromptCompletionCandidate]:
         partial = value[len(prefix) :]
         if "/" not in partial:
             if partial in self._all_provider_ids():
-                return value + "/"
-            provider = self._complete_after_prefix(value, prefix, self._all_provider_ids())
-            return provider + "/" if provider else None
+                provider = partial
+                return [
+                    PromptCompletionCandidate(
+                        value=value + "/",
+                        label=provider,
+                        description="show models for provider",
+                        kind="provider",
+                    )
+                ]
+            return [
+                PromptCompletionCandidate(
+                    value=f"{prefix}{provider}/",
+                    label=provider,
+                    description=self._provider_description(provider),
+                    kind="provider",
+                )
+                for provider in self._all_provider_ids()
+                if provider.lower().startswith(partial.lower())
+            ][:8]
         provider, model_partial = partial.split("/", 1)
-        models = self._model_ids_for_provider(provider)
-        return self._complete_after_prefix(value, f"{prefix}{provider}/", models)
+        return [
+            PromptCompletionCandidate(
+                value=f"{prefix}{provider}/{model}",
+                label=model,
+                description=self._model_description(provider, model),
+                kind="model",
+            )
+            for model in self._model_ids_for_provider(provider)
+            if model.lower().startswith(model_partial.lower())
+        ][:8]
+
+    @staticmethod
+    def _static_command_candidates(value: str) -> list[PromptCompletionCandidate]:
+        lowered = value.lower()
+        return [
+            PromptCompletionCandidate(
+                value=command,
+                label=command,
+                description=SuperQodeApp._command_description(command),
+                kind="command",
+            )
+            for command in sorted(dict.fromkeys(COMMANDS), key=str.lower)
+            if command.lower().startswith(lowered) and command != value
+        ][:8]
+
+    @staticmethod
+    def _command_description(command: str) -> str:
+        descriptions = {
+            ":mcp": "manage Model Context Protocol servers",
+            ":skills": "manage local project skills",
+            ":recipe": "run reusable local workflows",
+            ":recipes": "list and run reusable local workflows",
+            ":attach": "stage files or URLs for the next prompt",
+            ":prompt": "load a prompt file into the input buffer",
+            ":model": "inspect or switch active provider/model",
+            ":connect": "connect ACP, BYOK, or local runtime",
+            ":status": "show harness status",
+            ":tools": "show tool profiles",
+        }
+        for prefix, description in descriptions.items():
+            if command.startswith(prefix):
+                return description
+        return ""
+
+    @staticmethod
+    def _mcp_server_completion_candidates() -> list[PromptCompletionCandidate]:
+        try:
+            from superqode.mcp.config import load_mcp_config
+
+            servers = load_mcp_config(Path.cwd() / ".superqode" / "mcp.json")
+        except Exception:
+            return []
+        candidates = []
+        for server_id, server in servers.items():
+            transport = getattr(server.config, "transport", "mcp")
+            enabled = "enabled" if server.enabled else "disabled"
+            candidates.append(
+                PromptCompletionCandidate(
+                    value=server_id,
+                    label=server_id,
+                    description=f"{transport}, {enabled}",
+                    kind="mcp",
+                )
+            )
+        return candidates
+
+    @staticmethod
+    def _recipe_dirs() -> list[Path]:
+        return [Path.cwd() / ".superqode" / "recipes", Path.cwd() / ".agents" / "recipes"]
+
+    @staticmethod
+    def _string_tuple(value: Any) -> tuple[str, ...]:
+        if value is None:
+            return ()
+        if isinstance(value, str):
+            return (value,)
+        if isinstance(value, (list, tuple)):
+            return tuple(str(item) for item in value if str(item).strip())
+        return ()
+
+    @staticmethod
+    def _load_recipe_file(path: Path) -> LocalRecipe | None:
+        try:
+            raw = path.read_text(encoding="utf-8")
+            if path.suffix.lower() == ".json":
+                data = json.loads(raw)
+            else:
+                import yaml
+
+                data = yaml.safe_load(raw) or {}
+        except Exception:
+            return None
+        if not isinstance(data, dict):
+            return None
+        recipe_data = data.get("recipe") if isinstance(data.get("recipe"), dict) else data
+        name = str(recipe_data.get("name") or path.stem).strip()
+        if not name:
+            return None
+        model = str(recipe_data.get("model") or "").strip()
+        provider = str(recipe_data.get("provider") or "").strip()
+        if not provider and "/" in model:
+            provider, model = model.split("/", 1)
+        variables = recipe_data.get("variables") or ()
+        if isinstance(variables, dict):
+            variables = tuple(str(key) for key in variables)
+        return LocalRecipe(
+            name=name,
+            description=str(recipe_data.get("description") or "").strip(),
+            path=path,
+            prompt=str(recipe_data.get("prompt") or "").strip(),
+            prompt_file=str(recipe_data.get("prompt_file") or recipe_data.get("promptFile") or "").strip(),
+            provider=provider,
+            model=model,
+            mode=str(recipe_data.get("mode") or "").strip(),
+            role=str(recipe_data.get("role") or "").strip(),
+            skills=SuperQodeApp._string_tuple(recipe_data.get("skills")),
+            attachments=SuperQodeApp._string_tuple(
+                recipe_data.get("attachments") or recipe_data.get("attach")
+            ),
+            mcp_resources=SuperQodeApp._string_tuple(
+                recipe_data.get("mcp_resources") or recipe_data.get("mcpResources")
+            ),
+            harness=str(recipe_data.get("harness") or recipe_data.get("harness_spec") or "").strip(),
+            variables=SuperQodeApp._string_tuple(variables),
+            raw=dict(recipe_data),
+        )
+
+    @staticmethod
+    def _load_local_recipes() -> dict[str, LocalRecipe]:
+        recipes: dict[str, LocalRecipe] = {}
+        for directory in SuperQodeApp._recipe_dirs():
+            if not directory.exists():
+                continue
+            for path in sorted(directory.glob("*")):
+                if path.suffix.lower() not in {".yaml", ".yml", ".json"} or not path.is_file():
+                    continue
+                recipe = SuperQodeApp._load_recipe_file(path)
+                if recipe:
+                    recipes[recipe.name] = recipe
+        return recipes
+
+    @staticmethod
+    def _recipe_completion_candidates() -> list[PromptCompletionCandidate]:
+        return [
+            PromptCompletionCandidate(
+                value=recipe.name,
+                label=recipe.name,
+                description=recipe.description,
+                kind="recipe",
+            )
+            for recipe in SuperQodeApp._load_local_recipes().values()
+        ]
+
+    @staticmethod
+    def _mcp_resource_ref(server_id: str, uri: str) -> str:
+        return f"mcp://{server_id}/{uri}"
+
+    @staticmethod
+    def _parse_mcp_resource_ref(ref: str) -> tuple[str, str] | None:
+        if not ref.startswith("mcp://"):
+            return None
+        body = ref[len("mcp://") :]
+        if "/" not in body:
+            return None
+        server_id, uri = body.split("/", 1)
+        if not server_id or not uri:
+            return None
+        return server_id, uri
+
+    @staticmethod
+    def _extract_mcp_refs_from_text(text: str) -> tuple[str, list[str]]:
+        """Remove inline MCP refs from prompt text and return them separately."""
+        parts = text.split()
+        refs: list[str] = []
+        kept: list[str] = []
+        for part in parts:
+            stripped = part.strip()
+            if stripped.startswith("mcp://") and SuperQodeApp._parse_mcp_resource_ref(stripped):
+                refs.append(stripped)
+            else:
+                kept.append(part)
+        return " ".join(kept).strip(), refs
+
+    @staticmethod
+    def _truncate_mcp_content(text: str, remaining_chars: int) -> tuple[str, bool]:
+        if len(text) <= remaining_chars:
+            return text, False
+        return text[: max(0, remaining_chars)].rstrip(), True
+
+    async def _resolve_mcp_attachment_context(self, log: ConversationLog | None = None) -> str:
+        """Read staged MCP resource refs into bounded prompt context."""
+        refs = list(dict.fromkeys(getattr(self, "_current_mcp_refs", []) or []))
+        if not refs:
+            return ""
+        try:
+            from superqode.mcp.integration import get_mcp_manager
+
+            manager = await get_mcp_manager()
+        except Exception as exc:
+            if log is not None:
+                log.add_error(f"Could not initialize MCP manager for resource context: {exc}")
+            return ""
+
+        blocks: list[str] = []
+        total_chars = 0
+        max_resources = 5
+        max_total_chars = 30000
+        loaded = 0
+        skipped = 0
+        for ref in refs[:max_resources]:
+            parsed = self._parse_mcp_resource_ref(ref)
+            if parsed is None:
+                skipped += 1
+                continue
+            server_id, uri = parsed
+            try:
+                content = await manager.read_resource(server_id, uri)
+            except Exception as exc:
+                skipped += 1
+                blocks.append(
+                    f'<mcp-resource server="{server_id}" uri="{uri}" error="{str(exc)}"></mcp-resource>'
+                )
+                continue
+            if content is None:
+                skipped += 1
+                blocks.append(
+                    f'<mcp-resource server="{server_id}" uri="{uri}" error="not found"></mcp-resource>'
+                )
+                continue
+            text = getattr(content, "text", None)
+            mime_type = getattr(content, "mime_type", None) or ""
+            if not text:
+                skipped += 1
+                blob = getattr(content, "blob", None)
+                reason = "binary content" if blob else "empty content"
+                blocks.append(
+                    f'<mcp-resource server="{server_id}" uri="{uri}" mime_type="{mime_type}" skipped="{reason}"></mcp-resource>'
+                )
+                continue
+            remaining = max_total_chars - total_chars
+            if remaining <= 0:
+                skipped += 1
+                break
+            clipped, truncated = self._truncate_mcp_content(text, remaining)
+            total_chars += len(clipped)
+            truncated_attr = ' truncated="true"' if truncated else ""
+            blocks.append(
+                f'<mcp-resource server="{server_id}" uri="{uri}" mime_type="{mime_type}"{truncated_attr}>\n'
+                f"{clipped}\n"
+                "</mcp-resource>"
+            )
+            loaded += 1
+            if truncated:
+                break
+        self._current_mcp_refs = []
+        if log is not None and (loaded or skipped):
+            message = f"Including {loaded} MCP resource(s)"
+            if skipped:
+                message += f"; {skipped} skipped or unavailable"
+            log.add_info(message + ".")
+        if not blocks:
+            return ""
+        return "<mcp-resources>\n" + "\n\n".join(blocks) + "\n</mcp-resources>"
+
+    def _resolve_mcp_attachment_context_sync(self, log: ConversationLog | None = None) -> str:
+        """Synchronous wrapper for thread-based agent runners."""
+        try:
+            return asyncio.run(self._resolve_mcp_attachment_context(log))
+        except RuntimeError:
+            # If a loop is already active in this thread, skip rather than deadlock.
+            if log is not None:
+                log.add_error("Could not resolve MCP resources from this runner.")
+            return ""
+
+    @staticmethod
+    def _mcp_resource_completion_candidates() -> list[PromptCompletionCandidate]:
+        try:
+            from superqode.mcp import integration
+
+            manager = getattr(integration, "_mcp_manager", None)
+            if manager is None:
+                return []
+            resources = manager.list_all_resources()
+        except Exception:
+            return []
+        candidates = []
+        for resource in resources:
+            label = f"{resource.server_id}/{resource.uri}"
+            description = resource.name or resource.mime_type or ""
+            if resource.description:
+                description = f"{description} - {resource.description}" if description else resource.description
+            candidates.append(
+                PromptCompletionCandidate(
+                    value=label,
+                    label=label,
+                    description=description,
+                    kind="resource",
+                )
+            )
+        return candidates[:25]
+
+    @staticmethod
+    def _skill_completion_candidates() -> list[PromptCompletionCandidate]:
+        try:
+            from superqode.skills import load_skills
+
+            return [
+                PromptCompletionCandidate(
+                    value=skill.name,
+                    label=skill.name,
+                    description=skill.description,
+                    kind="skill",
+                )
+                for skill in load_skills(Path.cwd()).values()
+            ]
+        except Exception:
+            return []
+
+    @staticmethod
+    def _all_skill_completion_candidates() -> list[PromptCompletionCandidate]:
+        loaded = {candidate.label: candidate for candidate in SuperQodeApp._skill_completion_candidates()}
+        skills_root = Path.cwd() / ".agents" / "skills"
+        if not skills_root.exists():
+            return list(loaded.values())
+        for path in sorted(skills_root.rglob("*.md")):
+            name = path.parent.name if path.name.upper() == "SKILL.MD" else path.stem
+            description = ""
+            try:
+                text = path.read_text(encoding="utf-8", errors="ignore")[:1000]
+            except Exception:
+                text = ""
+            if text.startswith("---"):
+                end = text.find("\n---", 3)
+                front = text[:end] if end != -1 else text
+                for line in front.splitlines():
+                    stripped = line.strip()
+                    if stripped.startswith("name:"):
+                        name = stripped.split(":", 1)[1].strip().strip('"').strip("'") or name
+                    elif stripped.startswith("description:"):
+                        description = stripped.split(":", 1)[1].strip()
+            loaded.setdefault(
+                name,
+                PromptCompletionCandidate(
+                    value=name,
+                    label=name,
+                    description=description,
+                    kind="skill",
+                ),
+            )
+        return list(loaded.values())
+
+    @staticmethod
+    def _provider_completion_candidates(local: bool) -> list[PromptCompletionCandidate]:
+        try:
+            from superqode.providers.registry import PROVIDERS, ProviderCategory
+        except Exception:
+            return []
+        candidates = []
+        for provider_id, provider in PROVIDERS.items():
+            is_local = provider.category == ProviderCategory.LOCAL
+            if local != is_local:
+                continue
+            candidates.append(
+                PromptCompletionCandidate(
+                    value=provider_id,
+                    label=provider_id,
+                    description=provider.name,
+                    kind="provider",
+                )
+            )
+        return candidates
+
+    @staticmethod
+    def _byok_provider_completion_candidates() -> list[PromptCompletionCandidate]:
+        return SuperQodeApp._provider_completion_candidates(local=False)
+
+    @staticmethod
+    def _local_provider_completion_candidates() -> list[PromptCompletionCandidate]:
+        return SuperQodeApp._provider_completion_candidates(local=True)
+
+    @staticmethod
+    def _provider_description(provider_id: str) -> str:
+        try:
+            from superqode.providers.registry import PROVIDERS
+
+            provider = PROVIDERS.get(provider_id)
+            return provider.name if provider else ""
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _model_description(provider_id: str, model_id: str) -> str:
+        try:
+            from superqode.providers.models import get_models_for_provider
+
+            model = get_models_for_provider(provider_id).get(model_id)
+            if model is None:
+                return ""
+            labels = []
+            if getattr(model, "supports_tools", False):
+                labels.append("tools")
+            if getattr(model, "supports_reasoning", False):
+                labels.append("reasoning")
+            if getattr(model, "is_code_optimized", False):
+                labels.append("code")
+            prefix = ", ".join(labels)
+            context = getattr(model, "context_display", "")
+            price = getattr(model, "price_display", "")
+            return " | ".join(part for part in [prefix, context, price] if part)
+        except Exception:
+            return ""
 
     @staticmethod
     def _configured_mcp_server_ids() -> list[str]:
@@ -4664,7 +5769,14 @@ class SuperQodeApp(App):
             return t
         for index, ref in enumerate(refs, 1):
             t.append(f"  [{index}] ", style=THEME["dim"])
-            t.append(ref, style=THEME["cyan"] if ref.startswith("@") else THEME["text"])
+            ref_style = (
+                THEME["purple"]
+                if ref.startswith("mcp://")
+                else THEME["cyan"]
+                if ref.startswith("@")
+                else THEME["text"]
+            )
+            t.append(ref, style=ref_style)
             t.append("\n")
         t.append("\n  Commands: ", style=THEME["muted"])
         t.append(":attach remove <n>", style=THEME["cyan"])
@@ -4829,6 +5941,59 @@ class SuperQodeApp(App):
         manager.add_server(config)
         return True, f"Saved MCP server {server_id}."
 
+    @staticmethod
+    def _resolve_mcp_resource_ref(manager, target: str):
+        """Resolve a user-facing MCP resource reference to a resource object."""
+        target = target.strip()
+        resources = list(manager.list_all_resources())
+        if not target:
+            return None
+        if target.isdigit():
+            index = int(target) - 1
+            return resources[index] if 0 <= index < len(resources) else None
+        if target.startswith("mcp://"):
+            target = target[len("mcp://") :]
+        server_hint = ""
+        resource_hint = target
+        if "/" in target:
+            server_hint, resource_hint = target.split("/", 1)
+
+        matches = []
+        lowered = resource_hint.lower()
+        for resource in resources:
+            if server_hint and resource.server_id.lower() != server_hint.lower():
+                continue
+            candidates = [
+                resource.uri,
+                resource.name,
+                f"{resource.server_id}/{resource.uri}",
+                f"{resource.server_id}/{resource.name}",
+            ]
+            if any(candidate and candidate.lower() == lowered for candidate in candidates):
+                matches.append(resource)
+                continue
+            if any(candidate and candidate.lower().startswith(lowered) for candidate in candidates):
+                matches.append(resource)
+        return matches[0] if len(matches) == 1 else None
+
+    async def _mcp_attach_resource(self, manager, target: str, log: ConversationLog) -> None:
+        """Stage an MCP resource reference for the next prompt."""
+        resource = self._resolve_mcp_resource_ref(manager, target)
+        if resource is None:
+            log.add_error(f"MCP resource not found or ambiguous: {target}")
+            log.add_info("Use :mcp resources, then :mcp attach <index|server/uri>.")
+            return
+        ref = self._mcp_resource_ref(resource.server_id, resource.uri)
+        refs = list(getattr(self, "_attached_refs", []))
+        if ref not in refs:
+            refs.append(ref)
+        self._attached_refs = refs
+        self._sync_attachment_prefill()
+        detail = resource.name or resource.uri
+        if resource.mime_type:
+            detail = f"{detail} ({resource.mime_type})"
+        log.add_info(f"Attached MCP resource: {detail}")
+
     async def _mcp_cmd(self, args: str, log: ConversationLog):
         """Handle MCP status and inventory commands."""
         try:
@@ -4897,6 +6062,10 @@ class SuperQodeApp(App):
             t.append(":mcp disconnect [server]", style=THEME["cyan"])
             t.append(", ", style=THEME["muted"])
             t.append(":mcp tools", style=THEME["cyan"])
+            t.append(", ", style=THEME["muted"])
+            t.append(":mcp resources", style=THEME["cyan"])
+            t.append(", ", style=THEME["muted"])
+            t.append(":mcp attach <resource>", style=THEME["cyan"])
             t.append("\n", style=THEME["muted"])
             self._show_command_output(log, t)
             return
@@ -4971,6 +6140,14 @@ class SuperQodeApp(App):
             self._show_mcp_doctor(manager, subargs, log)
             return
 
+        if subcommand == "attach":
+            if not subargs:
+                log.add_info("Usage: :mcp attach <index|server/uri|mcp://server/uri>")
+                log.add_info("Use :mcp resources to list attachable resources.")
+                return
+            await self._mcp_attach_resource(manager, subargs, log)
+            return
+
         if subcommand == "tools":
             tools = manager.list_all_tools()
             t = Text()
@@ -5002,11 +6179,18 @@ class SuperQodeApp(App):
                     "  No MCP resources are available from connected servers.\n",
                     style=THEME["muted"],
                 )
-            for resource in resources:
-                t.append(f"  {resource.server_id:<16}", style=f"bold {THEME['purple']}")
+            for index, resource in enumerate(resources, 1):
+                t.append(f"  [{index}] ", style=THEME["dim"])
+                t.append(f"{resource.server_id:<16}", style=f"bold {THEME['purple']}")
                 t.append(f"{resource.name}", style=THEME["text"])
                 t.append(f"  {resource.uri}", style=THEME["muted"])
+                if resource.mime_type:
+                    t.append(f"  {resource.mime_type}", style=THEME["dim"])
                 t.append("\n")
+            if resources:
+                t.append("\n  Attach: ", style=THEME["muted"])
+                t.append(":mcp attach <index|server/uri>", style=THEME["cyan"])
+                t.append("\n", style=THEME["muted"])
             self._show_command_output(log, t)
             return
 
@@ -5029,7 +6213,7 @@ class SuperQodeApp(App):
             return
 
         log.add_info(
-            "Usage: :mcp status|add|connect|reconnect|disconnect|doctor|tools|resources|prompts"
+            "Usage: :mcp status|add|connect|reconnect|disconnect|doctor|tools|resources|attach|prompts"
         )
 
     def _show_mcp_doctor(self, manager, server_filter: str, log: ConversationLog) -> None:
@@ -5286,6 +6470,446 @@ class SuperQodeApp(App):
         log.add_info(
             "Reconnect with :connect byok or :connect local to run the TUI through this spec."
         )
+
+    def _active_harness_spec(self):
+        """Return the active HarnessSpec and source path, if one is configured."""
+        import os as _os
+
+        pure = getattr(self, "_pure_mode", None)
+        spec = getattr(pure, "_harness_spec", None) if pure is not None else None
+        path = getattr(pure, "_harness_path", "") if pure is not None else ""
+        if spec is not None:
+            return spec, path
+
+        env_path = _os.getenv("SUPERQODE_HARNESS", "").strip()
+        if not env_path:
+            return None, ""
+        try:
+            from superqode.harness import load_harness_spec
+
+            return load_harness_spec(env_path), env_path
+        except Exception:
+            return None, env_path
+
+    def _workflow_provider_model(self, spec) -> tuple[str, str]:
+        """Resolve provider/model for an explicit workflow run."""
+        provider = getattr(self, "current_provider", "") or ""
+        model = getattr(self, "current_model", "") or ""
+        primary = getattr(getattr(spec, "model_policy", None), "primary", None)
+        if (not provider or not model) and primary:
+            primary_text = str(primary)
+            if "/" in primary_text:
+                inferred_provider, inferred_model = primary_text.split("/", 1)
+                provider = provider or inferred_provider
+                model = model or inferred_model
+            else:
+                model = model or primary_text
+        return provider, model
+
+    def _workflow_steps_from_spec(self, spec, prompt: str):
+        """Build runnable workflow steps from HarnessSpec agents and a user prompt."""
+        from superqode.harness import WorkflowMode, WorkflowStep, apply_workflow_preset
+
+        spec = apply_workflow_preset(spec)
+        mode = spec.workflow.mode
+        prompt = prompt.strip()
+        agents = list(getattr(spec, "agents", ()) or ())
+
+        def agent_step(agent):
+            parts = []
+            if getattr(agent, "role", ""):
+                parts.append(f"Role: {agent.role}")
+            if getattr(agent, "system_prompt", ""):
+                parts.append(f"Instructions:\n{agent.system_prompt}")
+            parts.append(f"Task:\n{prompt}")
+            return WorkflowStep(
+                "\n\n".join(parts),
+                id=agent.id,
+                metadata={"role": getattr(agent, "role", "")},
+            )
+
+        if agents:
+            steps = [agent_step(agent) for agent in agents]
+            if mode == WorkflowMode.ROUTER and not (
+                steps and str(steps[0].id or "").lower() == "router"
+            ):
+                router_prompt = f"Route this request to the best harness agent.\n\nTask:\n{prompt}"
+                steps.insert(0, WorkflowStep(router_prompt, id="router"))
+            if mode == WorkflowMode.EVALUATOR_OPTIMIZER:
+                defaults = [
+                    WorkflowStep(f"Create a candidate solution.\n\nTask:\n{prompt}", id="candidate"),
+                    WorkflowStep("Evaluate the candidate for correctness and completeness.", id="evaluator"),
+                    WorkflowStep("Improve the candidate using the evaluator feedback.", id="optimizer"),
+                ]
+                steps = (steps + defaults[len(steps) :])[:3]
+            return steps
+
+        if mode == WorkflowMode.EVALUATOR_OPTIMIZER:
+            return [
+                WorkflowStep(f"Create a candidate solution.\n\nTask:\n{prompt}", id="candidate"),
+                WorkflowStep("Evaluate the candidate for correctness and completeness.", id="evaluator"),
+                WorkflowStep("Improve the candidate using the evaluator feedback.", id="optimizer"),
+            ]
+        if mode == WorkflowMode.ROUTER:
+            return [
+                WorkflowStep(f"Route this request to the best execution path.\n\nTask:\n{prompt}", id="router"),
+                WorkflowStep(prompt, id="default"),
+            ]
+        return [WorkflowStep(prompt, id="step-1")]
+
+    def _show_workflow_center(self, log) -> None:
+        """Render the active HarnessSpec workflow center."""
+        spec, path = self._active_harness_spec()
+        if spec is not None:
+            from superqode.harness import apply_workflow_preset
+
+            spec = apply_workflow_preset(spec)
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Workflow Run Center\n\n", style=f"bold {THEME['text']}")
+
+        if spec is None:
+            t.append("  Harness     ", style=THEME["muted"])
+            t.append("not loaded\n", style=THEME["warning"])
+            if path:
+                t.append("  Spec        ", style=THEME["muted"])
+                t.append(f"{path} could not be loaded\n", style=THEME["error"])
+            t.append("\n  Load one with ", style=THEME["muted"])
+            t.append(":harness <spec.yaml>", style=THEME["cyan"])
+            t.append(" or inspect templates with ", style=THEME["muted"])
+            t.append(":harness templates\n", style=THEME["cyan"])
+            self._show_command_output(log, t)
+            return
+
+        provider, model = self._workflow_provider_model(spec)
+        workflow = spec.workflow
+        t.append("  Harness     ", style=THEME["muted"])
+        t.append(spec.name, style=f"bold {THEME['cyan']}")
+        t.append(f"  {spec.flavor.value}", style=THEME["dim"])
+        if path:
+            t.append(f"\n  Spec        {path}", style=THEME["dim"])
+        t.append("\n  Runtime     ", style=THEME["muted"])
+        t.append(spec.runtime.backend, style=THEME["text"])
+        t.append("\n  Workflow    ", style=THEME["muted"])
+        t.append(workflow.mode.value, style=f"bold {THEME['success']}")
+        if workflow.preset:
+            t.append(f"  preset={workflow.preset}", style=THEME["dim"])
+        t.append(f"  parallelism={workflow.parallelism}", style=THEME["dim"])
+        t.append("\n  Model       ", style=THEME["muted"])
+        if provider and model:
+            t.append(f"{provider}/{model}", style=THEME["text"])
+        else:
+            t.append("not connected", style=THEME["warning"])
+
+        agents = list(getattr(spec, "agents", ()) or ())
+        t.append("\n\n  Steps\n", style=f"bold {THEME['text']}")
+        if agents:
+            for index, agent in enumerate(agents, 1):
+                t.append(f"  [{index}] ", style=THEME["dim"])
+                t.append(agent.id, style=f"bold {THEME['cyan']}")
+                if agent.role:
+                    t.append(f"  {agent.role}", style=THEME["muted"])
+                if agent.model:
+                    t.append(f"  model={agent.model}", style=THEME["dim"])
+                t.append("\n")
+        else:
+            t.append("  [1] prompt step generated from the run input\n", style=THEME["muted"])
+
+        t.append("\n  Commands    ", style=THEME["muted"])
+        t.append(":workflow run <task>", style=THEME["cyan"])
+        t.append("  ", style="")
+        t.append(":workflow status", style=THEME["cyan"])
+        t.append("\n", style="")
+        self._show_command_output(log, t)
+
+    def _show_workflow_presets(self, log) -> None:
+        """Show built-in HarnessSpec workflow presets."""
+        from superqode.harness import list_workflow_presets
+
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Workflow Presets\n\n", style=f"bold {THEME['text']}")
+        for preset in list_workflow_presets():
+            t.append("  ", style="")
+            t.append(preset.name, style=f"bold {THEME['cyan']}")
+            t.append(f"  {preset.mode.value}", style=THEME["success"])
+            t.append(f"  {preset.description}\n", style=THEME["muted"])
+        t.append("\n  Use in HarnessSpec YAML: ", style=THEME["muted"])
+        t.append("workflow: { preset: parallel-review }\n", style=THEME["cyan"])
+        self._show_command_output(log, t)
+
+    def _workflow_preview_text(self, spec, prompt: str) -> Text:
+        """Render a preflight preview for the active HarnessSpec workflow."""
+        from superqode.harness import apply_workflow_preset
+
+        spec = apply_workflow_preset(spec)
+        provider, model = self._workflow_provider_model(spec)
+        steps = self._workflow_steps_from_spec(spec, prompt or "your task")
+        policy = spec.execution_policy
+        blocked = 0
+        warnings = 0
+
+        def status(ok: bool, warn: bool = False) -> tuple[str, str, str]:
+            nonlocal blocked, warnings
+            if ok:
+                return "✓", "ready", THEME["success"]
+            if warn:
+                warnings += 1
+                return "!", "warn", THEME["warning"]
+            blocked += 1
+            return "!", "blocked", THEME["error"]
+
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Workflow Preview\n\n", style=f"bold {THEME['text']}")
+        t.append("  Harness     ", style=THEME["muted"])
+        t.append(spec.name, style=f"bold {THEME['cyan']}")
+        t.append(f"  {spec.flavor.value}\n", style=THEME["dim"])
+        t.append("  Workflow    ", style=THEME["muted"])
+        t.append(spec.workflow.mode.value, style=f"bold {THEME['success']}")
+        if spec.workflow.preset:
+            t.append(f"  preset={spec.workflow.preset}", style=THEME["dim"])
+        t.append(f"  parallelism={spec.workflow.parallelism}\n", style=THEME["dim"])
+        t.append("  Runtime     ", style=THEME["muted"])
+        t.append(spec.runtime.backend, style=THEME["text"])
+        t.append("\n  Model       ", style=THEME["muted"])
+        if provider and model:
+            t.append(f"{provider}/{model}", style=THEME["text"])
+        else:
+            t.append("not selected", style=THEME["warning"])
+        t.append("\n  Task        ", style=THEME["muted"])
+        t.append(prompt or "(no task supplied)", style=THEME["text"] if prompt else THEME["warning"])
+
+        t.append("\n\n  Steps\n", style=f"bold {THEME['text']}")
+        for index, step in enumerate(steps, 1):
+            step_id = step.id or f"step-{index}"
+            t.append("  ✓ ", style=THEME["success"])
+            t.append(f"{index:02d}. ", style=THEME["dim"])
+            t.append(step_id, style=f"bold {THEME['cyan']}")
+            role = step.metadata.get("role") if isinstance(step.metadata, dict) else ""
+            if role:
+                t.append(f"  {role}", style=THEME["muted"])
+            t.append("\n")
+
+        t.append("\n  Readiness\n", style=f"bold {THEME['text']}")
+        icon, label, style = status(bool(provider and model))
+        t.append(f"  {icon} model       {label}", style=style)
+        if not provider or not model:
+            t.append("  connect BYOK/local or set model_policy.primary", style=THEME["muted"])
+        t.append("\n")
+
+        icon, label, style = status(bool(steps))
+        t.append(f"  {icon} steps       {label}  {len(steps)} step(s)\n", style=style)
+
+        icon, label, style = status(policy.allow_read, warn=True)
+        t.append(f"  {icon} read        {label}\n", style=style)
+
+        write_required = spec.flavor.value == "coding"
+        icon, label, style = status(policy.allow_write or not write_required, warn=write_required)
+        t.append(f"  {icon} write       {label}", style=style)
+        if not policy.allow_write:
+            t.append("  read-only harness", style=THEME["muted"])
+        t.append("\n")
+
+        icon, label, style = status(policy.allow_shell or not policy.allowed_commands, warn=True)
+        t.append(f"  {icon} shell       {label}", style=style)
+        if policy.allowed_commands:
+            t.append(f"  {', '.join(policy.allowed_commands[:3])}", style=THEME["muted"])
+        t.append("\n")
+
+        t.append("  ✓ approvals   ", style=THEME["success"])
+        t.append(policy.approval_profile, style=THEME["text"])
+        t.append("\n")
+
+        mcp_servers = []
+        if isinstance(spec.runtime.config, dict):
+            raw_mcp = spec.runtime.config.get("mcp_servers") or spec.runtime.config.get("mcp")
+            if isinstance(raw_mcp, dict):
+                mcp_servers = list(raw_mcp)
+            elif isinstance(raw_mcp, list):
+                mcp_servers = [str(item) for item in raw_mcp]
+        icon, label, style = status(True, warn=bool(mcp_servers))
+        t.append(f"  {icon} MCP         {label}", style=style)
+        if mcp_servers:
+            t.append(f"  declared: {', '.join(mcp_servers[:4])}", style=THEME["muted"])
+        else:
+            t.append("  none declared", style=THEME["muted"])
+        t.append("\n")
+
+        overall = "blocked" if blocked else "warnings" if warnings else "ready"
+        overall_style = THEME["error"] if blocked else THEME["warning"] if warnings else THEME["success"]
+        t.append("\n  Result      ", style=THEME["muted"])
+        t.append(overall, style=f"bold {overall_style}")
+        t.append(f"  ({blocked} blocked, {warnings} warning(s))\n", style=THEME["dim"])
+        if not blocked:
+            t.append("\n  Run with    ", style=THEME["muted"])
+            t.append(f':workflow run "{prompt}"\n' if prompt else ":workflow run <task>\n", style=THEME["cyan"])
+        return t
+
+    def _show_workflow_preview(self, log, prompt: str = "") -> None:
+        """Show a readiness preview for the active workflow."""
+        spec, path = self._active_harness_spec()
+        if spec is None:
+            t = Text()
+            t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+            t.append("Workflow Preview\n\n", style=f"bold {THEME['text']}")
+            t.append("  Harness     ", style=THEME["muted"])
+            t.append("not loaded\n", style=THEME["warning"])
+            if path:
+                t.append("  Spec        ", style=THEME["muted"])
+                t.append(f"{path} could not be loaded\n", style=THEME["error"])
+            t.append("\n  Load one with ", style=THEME["muted"])
+            t.append(":harness <spec.yaml>\n", style=THEME["cyan"])
+            self._show_command_output(log, t)
+            return
+        self._show_command_output(log, self._workflow_preview_text(spec, prompt))
+
+    def _workflow_timeline_text(
+        self,
+        *,
+        title: str,
+        mode: str,
+        step_ids: list[str],
+        states: dict[str, str],
+        details: dict[str, str] | None = None,
+    ) -> Text:
+        """Render a compact workflow timeline for the TUI log."""
+        details = details or {}
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append(title, style=f"bold {THEME['text']}")
+        t.append(f"  {mode}\n\n", style=THEME["dim"])
+        status_icons = {
+            "pending": "○",
+            "running": "●",
+            "done": "✓",
+            "failed": "!",
+        }
+        status_styles = {
+            "pending": THEME["dim"],
+            "running": THEME["cyan"],
+            "done": THEME["success"],
+            "failed": THEME["error"],
+        }
+        for index, step_id in enumerate(step_ids, 1):
+            state = states.get(step_id, "pending")
+            style = status_styles.get(state, THEME["text"])
+            t.append(f"  {status_icons.get(state, '○')} ", style=f"bold {style}")
+            t.append(f"{index:02d}. ", style=THEME["dim"])
+            t.append(step_id, style=f"bold {style}" if state != "pending" else style)
+            t.append(f"  {state}", style=style)
+            if details.get(step_id):
+                t.append(f"  {details[step_id]}", style=THEME["muted"])
+            t.append("\n")
+        return t
+
+    async def _workflow_cmd(self, args: str, log) -> None:
+        """Handle HarnessSpec workflow status and explicit workflow runs."""
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :workflow arguments: {exc}")
+            return
+        action = tokens[0].lower() if tokens else "status"
+        rest = tokens[1:]
+        if action in {"presets", "templates"}:
+            self._show_workflow_presets(log)
+            return
+        if action in {"preview", "doctor", "check"}:
+            self._show_workflow_preview(log, " ".join(rest).strip())
+            return
+        if action in {"status", "list", "center", "dashboard", "show"}:
+            self._show_workflow_center(log)
+            return
+        if action not in {"run", "start"}:
+            log.add_info("Usage: :workflow status | :workflow preview <task> | :workflow run <task>")
+            return
+
+        prompt = " ".join(rest).strip()
+        if not prompt:
+            log.add_error("Usage: :workflow run <task>")
+            return
+        spec, path = self._active_harness_spec()
+        if spec is None:
+            log.add_error("No HarnessSpec is active. Load one with :harness <spec.yaml>.")
+            return
+
+        provider, model = self._workflow_provider_model(spec)
+        if not provider or not model:
+            log.add_error("Connect a BYOK/local provider or set model_policy.primary before running workflows.")
+            return
+
+        try:
+            from superqode.harness import FileHarnessStore, init_harness, run_workflow
+        except Exception as exc:
+            log.add_error(f"Workflow support is unavailable: {exc}")
+            return
+
+        steps = self._workflow_steps_from_spec(spec, prompt)
+        step_ids = [step.id or f"step-{index + 1}" for index, step in enumerate(steps)]
+        states = dict.fromkeys(step_ids, "pending")
+        details: dict[str, str] = {}
+        log.write(
+            self._workflow_timeline_text(
+                title="Workflow started",
+                mode=spec.workflow.mode.value,
+                step_ids=step_ids,
+                states=states,
+                details=details,
+            )
+        )
+
+        def on_progress(progress) -> None:
+            step_id = progress.step_id
+            if step_id not in states:
+                step_ids.append(step_id)
+            states[step_id] = progress.status
+            if progress.detail:
+                details[step_id] = progress.detail
+            log.write(
+                self._workflow_timeline_text(
+                    title="Workflow timeline",
+                    mode=progress.mode.value,
+                    step_ids=step_ids,
+                    states=states,
+                    details=details,
+                )
+            )
+
+        try:
+            pure = getattr(self, "_pure_mode", None)
+            kernel = getattr(pure, "_harness_kernel", None) if pure is not None else None
+            if kernel is None:
+                kernel = await init_harness(
+                    spec,
+                    store=FileHarnessStore(Path(spec.context.session_storage)),
+                )
+                if pure is not None:
+                    pure._harness_kernel = kernel
+            result = await run_workflow(
+                kernel,
+                steps,
+                provider=provider,
+                model=model,
+                working_directory=Path.cwd(),
+                runtime=spec.runtime.backend,
+                sandbox_backend=spec.execution_policy.sandbox,
+                session_id=f"workflow-{int(time.time())}",
+                progress_callback=on_progress,
+            )
+        except Exception as exc:
+            log.add_error(f"Workflow failed: {exc}")
+            return
+
+        self._last_workflow_result = result
+        done = Text()
+        done.append("\n  ✓ ", style=f"bold {THEME['success']}")
+        done.append("Workflow complete", style=f"bold {THEME['text']}")
+        done.append(f"  {result.mode.value}, {len(result.results)} result(s)\n\n", style=THEME["dim"])
+        if result.content:
+            done.append(result.content, style=THEME["text"])
+            done.append("\n", style="")
+        log.write(done)
 
     async def _approval_cmd(self, action: str, args: str, log) -> None:
         """Handle :approve / :reject for the OpenAI Agents HITL flow.
@@ -6119,6 +7743,12 @@ team:
             )
             return
 
+        text, inline_mcp_refs = self._extract_mcp_refs_from_text(text)
+        staged_mcp_refs = [
+            ref for ref in getattr(self, "_attached_refs", []) if ref.startswith("mcp://")
+        ]
+        self._current_mcp_refs = list(dict.fromkeys([*inline_mcp_refs, *staged_mcp_refs]))
+
         # Parse @file references and include file content
         file_context = ""
         if "@" in text:
@@ -6342,6 +7972,10 @@ team:
                 self._pure_mode.compact()
                 log.add_info("Context compacted.")
             return
+
+        mcp_context = await self._resolve_mcp_attachment_context(log)
+        if mcp_context:
+            text = f"{mcp_context}\n\n{text}"
 
         # Prepend file context if available (from @file references)
         file_context = getattr(self, "_current_file_context", "")
@@ -7134,6 +8768,9 @@ team:
         if file_context:
             message = f"{file_context}\n\n{message}"
             self._current_file_context = ""  # Clear after use
+        mcp_context = self._resolve_mcp_attachment_context_sync(log)
+        if mcp_context:
+            message = f"{mcp_context}\n\n{message}"
 
         # Route ACP-compatible agents to the JSON-RPC ACP client
         # All 15 official ACP agents support the Agent Client Protocol
@@ -12971,6 +14608,10 @@ team:
             model_display = f"{resolved.provider}/{resolved.model}"
             self._call_ui(log.add_info, f"🤖 Using {model_display} with full codebase access")
 
+            mcp_context = await self._resolve_mcp_attachment_context(log)
+            if mcp_context:
+                message = f"{mcp_context}\n\n{message}"
+
             # Track tool usage for summary
             tool_stats = {"tools_called": 0, "files_analyzed": set(), "tool_names": []}
 
@@ -13673,12 +15314,11 @@ team:
                 # Always use numbered list (not picker) to ensure model list is shown
                 # Disable picker mode to prevent any auto-selection issues
                 self._show_provider_models(provider_id, log, use_picker=False)
-                # Set _awaiting_byok_model AFTER showing the models with a longer delay
-                # to ensure the user sees the model list and must enter a NEW input to select
-                # Use a longer delay (0.5s) to ensure the UI has fully updated
-                self.set_timer(0.5, lambda: setattr(self, "_awaiting_byok_model", True))
-                # Clear the last provider selection after a delay to allow normal model selection
-                self.set_timer(0.6, lambda: setattr(self, "_last_provider_selection", None))
+                # The provider input event has already been consumed, so it is safe
+                # to enable model navigation immediately. Delaying this made
+                # arrow/Enter feel broken when users acted quickly after the list appeared.
+                self._awaiting_byok_model = True
+                self.set_timer(0.1, lambda: setattr(self, "_last_provider_selection", None))
                 return True
             else:
                 # Invalid selection
@@ -14670,7 +16310,7 @@ team:
             elif provider_id in ("vllm", "sglang", "tgi"):
                 labels.extend(["server", "advanced"])
 
-            t.append(f"    [{idx}] ", style=THEME["dim"])
+            t.append(f"    [{idx}] ", style=self._picker_link_style(THEME["dim"], idx))
             t.append(f"{status_icon} ", style=THEME["success"])
             t.append(f"{provider_def.name}", style=f"bold {THEME['cyan']}")
             if provider_id in ("vllm", "sglang"):
@@ -14780,14 +16420,17 @@ team:
             is_highlighted = i == highlighted_idx
             if is_highlighted:
                 t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                t.append(f"[{num}] ", style=f"bold {THEME['success']}")
+                t.append(
+                    f"[{num}] ",
+                    style=self._picker_link_style(f"bold {THEME['success']}", num),
+                )
                 t.append(f"{name}", style=f"bold {THEME['success']}")
                 t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
                 t.append(f"     {desc}\n", style=THEME["muted"])
                 t.append(f"     Example: ", style=THEME["dim"])
                 t.append(f"{example}\n\n", style=THEME["cyan"])
             else:
-                t.append(f"    [{num}] ", style=THEME["dim"])
+                t.append(f"    [{num}] ", style=self._picker_link_style(THEME["dim"], num))
                 t.append(f"{name}", style=f"bold {color}")
                 t.append("\n", style="")
                 t.append(f"     {desc}\n", style=THEME["muted"])
@@ -14967,7 +16610,10 @@ team:
                 is_highlighted = (idx - 1) == getattr(self, "_byok_highlighted_provider_index", 0)
                 if is_highlighted:
                     t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                    t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
+                    t.append(
+                        f"[{idx:2}] ",
+                        style=self._picker_link_style(f"bold {THEME['success']}", idx),
+                    )
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=f"bold {THEME['success']}")
                     t.append(f"{pdef.name}", style=f"bold {THEME['success']}")
@@ -14983,7 +16629,9 @@ team:
                         )
                     t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
                 else:
-                    t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                    t.append(
+                        f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx)
+                    )
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=THEME["text"])
                     t.append(f"{pdef.name}", style=THEME["muted"])
@@ -15042,7 +16690,10 @@ team:
                 is_highlighted = (idx - 1) == getattr(self, "_byok_highlighted_provider_index", 0)
                 if is_highlighted:
                     t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                    t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
+                    t.append(
+                        f"[{idx:2}] ",
+                        style=self._picker_link_style(f"bold {THEME['success']}", idx),
+                    )
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=f"bold {THEME['success']}")
                     t.append(f"{pdef.name}", style=f"bold {THEME['success']}")
@@ -15057,7 +16708,9 @@ team:
                         )
                     t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
                 else:
-                    t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                    t.append(
+                        f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx)
+                    )
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=THEME["text"])
                     t.append(f"{pdef.name}", style=THEME["muted"])
@@ -15472,7 +17125,10 @@ team:
                     if is_highlighted:
                         # Simple highlight - just bold and arrow
                         t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                        t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
+                        t.append(
+                            f"[{idx:2}] ",
+                            style=self._picker_link_style(f"bold {THEME['success']}", idx),
+                        )
                         t.append(f"{info.name:<25}", style=f"bold {THEME['success']}")
                         t.append(f"{info.price_display:>12}", style=f"bold {THEME['success']}")
                         t.append(
@@ -15492,7 +17148,10 @@ team:
                         t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
                         t.append(f"         {model_id}\n", style=THEME["muted"])
                     else:
-                        t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                        t.append(
+                            f"    [{idx:2}] ",
+                            style=self._picker_link_style(THEME["dim"], idx),
+                        )
                         # Highlight latest models
                         is_latest = get_latest_priority(model_id, info) < 0
                         name_style = (
@@ -15525,7 +17184,9 @@ team:
             if budget:
                 t.append(f"  💰 Budget-Friendly (< $1/1M):\n", style=f"bold {THEME['cyan']}")
                 for model_id, info in budget[:6]:
-                    t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                    t.append(
+                        f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx)
+                    )
                     t.append(f"{info.name:<25}", style=f"bold {THEME['text']}")
                     t.append(f"{info.price_display:>12}", style=THEME["gold"])
                     t.append(f" • {info.context_display:>6} ctx", style=THEME["cyan"])
@@ -15546,7 +17207,9 @@ team:
             if free:
                 t.append(f"  🆓 Free Models:\n", style=f"bold {THEME['success']}")
                 for model_id, info in free[:6]:
-                    t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                    t.append(
+                        f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx)
+                    )
                     t.append(f"{info.name:<25}", style=f"bold {THEME['success']}")
                     t.append(f"{'FREE':>12}", style=THEME["success"])
                     t.append(f" • {info.context_display:>6} ctx", style=THEME["cyan"])
@@ -15574,7 +17237,9 @@ team:
                 sorted_others = latest_others + regular_others
 
                 for model_id, info in sorted_others[:remaining]:
-                    t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                    t.append(
+                        f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx)
+                    )
                     # Highlight latest models
                     is_latest = get_latest_priority(model_id, info) < 0
                     name_style = f"bold {THEME['success']}" if is_latest else THEME["text"]
@@ -15618,11 +17283,19 @@ team:
                             )
                             if is_highlighted:
                                 t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                                t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
+                                t.append(
+                                    f"[{idx:2}] ",
+                                    style=self._picker_link_style(
+                                        f"bold {THEME['success']}", idx
+                                    ),
+                                )
                                 t.append(f"{model}", style=f"bold {THEME['success']}")
                                 t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
                             else:
-                                t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                                t.append(
+                                    f"    [{idx:2}] ",
+                                    style=self._picker_link_style(THEME["dim"], idx),
+                                )
                                 t.append(f"{model}\n", style=THEME["text"])
                             model_list.append(model)
                 except Exception:
@@ -15651,7 +17324,10 @@ team:
                     is_highlighted = (idx - 1) == getattr(self, "_byok_highlighted_model_index", 0)
                     if is_highlighted:
                         t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                        t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
+                        t.append(
+                            f"[{idx:2}] ",
+                            style=self._picker_link_style(f"bold {THEME['success']}", idx),
+                        )
                         # Highlight latest models
                         is_latest = any(
                             x in model.lower()
@@ -15663,7 +17339,10 @@ team:
                         t.append(f"{model}", style=name_style)
                         t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
                     else:
-                        t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                        t.append(
+                            f"    [{idx:2}] ",
+                            style=self._picker_link_style(THEME["dim"], idx),
+                        )
                         # Highlight latest models
                         is_latest = any(
                             x in model.lower()
@@ -15958,9 +17637,15 @@ team:
 
                     if is_highlighted:
                         t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                        t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
+                        t.append(
+                            f"[{idx:2}] ",
+                            style=self._picker_link_style(f"bold {THEME['success']}", idx),
+                        )
                     else:
-                        t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                        t.append(
+                            f"    [{idx:2}] ",
+                            style=self._picker_link_style(THEME["dim"], idx),
+                        )
 
                     name_style = (
                         f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}"
@@ -16110,9 +17795,14 @@ team:
 
                 if is_highlighted:
                     t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                    t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
+                    t.append(
+                        f"[{idx:2}] ",
+                        style=self._picker_link_style(f"bold {THEME['success']}", idx),
+                    )
                 else:
-                    t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                    t.append(
+                        f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx)
+                    )
 
                 # Running status
                 if model.running:
@@ -16261,9 +17951,14 @@ team:
                 is_highlighted = (idx - 1) == highlighted_idx
                 if is_highlighted:
                     t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                    t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
+                    t.append(
+                        f"[{idx:2}] ",
+                        style=self._picker_link_style(f"bold {THEME['success']}", idx),
+                    )
                 else:
-                    t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                    t.append(
+                        f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx)
+                    )
 
                 name_style = (
                     f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}"
@@ -16306,9 +18001,12 @@ team:
 
             if is_highlighted:
                 t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                t.append(f"[{idx:2}] ", style=f"bold {THEME['success']}")
+                t.append(
+                    f"[{idx:2}] ",
+                    style=self._picker_link_style(f"bold {THEME['success']}", idx),
+                )
             else:
-                t.append(f"    [{idx:2}] ", style=THEME["dim"])
+                t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
 
             # Running status
             if model.running:
@@ -18329,14 +20027,20 @@ team:
 
                 if is_highlighted:
                     t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                    t.append(f"[{num:2}] ", style=f"bold {THEME['success']}")
+                    t.append(
+                        f"[{num:2}] ",
+                        style=self._picker_link_style(f"bold {THEME['success']}", num),
+                    )
                     t.append(f"{emoji} ", style=THEME["success"])
                     t.append(f"{agent_data['short_name']:<15}", style=f"bold {THEME['success']}")
                     t.append(
                         f"{agent_data['name']}  ← SELECTED\n", style=f"bold {THEME['success']}"
                     )
                 else:
-                    t.append(f"    [{num:2}] ", style=f"bold {THEME['text']}")
+                    t.append(
+                        f"    [{num:2}] ",
+                        style=self._picker_link_style(f"bold {THEME['text']}", num),
+                    )
                     t.append(f"{emoji} ", style=THEME["success"])
                     t.append(f"{agent_data['short_name']:<15}", style=f"bold {THEME['text']}")
                     t.append(f"{agent_data['name']}\n", style=THEME["muted"])
@@ -18361,7 +20065,10 @@ team:
 
                 if is_highlighted:
                     t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                    t.append(f"[{num:2}] ", style=f"bold {THEME['success']}")
+                    t.append(
+                        f"[{num:2}] ",
+                        style=self._picker_link_style(f"bold {THEME['success']}", num),
+                    )
                     t.append(f"{emoji} ", style=THEME["warning"])
                     t.append(f"{agent_data['short_name']:<15}", style=f"bold {THEME['success']}")
                     t.append(
@@ -18372,7 +20079,10 @@ team:
                             install_cmd = install_cmd[:32] + "..."
                         t.append(f"         → {install_cmd}\n", style=THEME["cyan"])
                 else:
-                    t.append(f"    [{num:2}] ", style=f"bold {THEME['text']}")
+                    t.append(
+                        f"    [{num:2}] ",
+                        style=self._picker_link_style(f"bold {THEME['text']}", num),
+                    )
                     t.append(f"{emoji} ", style=THEME["warning"])
                     t.append(f"{agent_data['short_name']:<15}", style=f"bold {THEME['text']}")
                     t.append(f"{agent_data['name']:<25}", style=THEME["muted"])
@@ -18596,7 +20306,10 @@ team:
 
             if is_highlighted:
                 t.append(f"▶ ", style=f"bold {THEME['success']}")
-                t.append(f"[{num}]", style=f"bold {THEME['success']}")
+                t.append(
+                    f"[{num}]",
+                    style=self._picker_link_style(f"bold {THEME['success']}", num),
+                )
                 t.append(f" {model_name:<18}", style=f"bold {THEME['success']}")
                 if is_recommended:
                     t.append("⭐ ", style=THEME["gold"])
@@ -18608,7 +20321,10 @@ team:
                     t.append("   ", style="")
                 t.append("  ← SELECTED", style=f"bold {THEME['success']}")
             else:
-                t.append(f"  [{num}]", style=f"bold {THEME['cyan']}")
+                t.append(
+                    f"  [{num}]",
+                    style=self._picker_link_style(f"bold {THEME['cyan']}", num),
+                )
                 t.append(f" {model_name:<18}", style=f"bold {THEME['text']}")
                 if is_recommended:
                     t.append("⭐ ", style=THEME["gold"])
@@ -18702,12 +20418,23 @@ team:
             model_name = model.get("name", "")
             desc = model.get("desc", "")
             is_recommended = model.get("recommended", False)
+            is_highlighted = i == getattr(self, "_opencode_highlighted_model_index", 0)
 
             # Number for selection
             num = i + 1
             t.append(f"  │  ", style=color)
-            t.append(f"[{num}]", style=f"bold {THEME['cyan']}")
-            t.append(f" {model_name:<18}", style=f"bold {THEME['text']}")
+            if is_highlighted:
+                t.append(f"▶ ", style=f"bold {THEME['success']}")
+                number_style = self._picker_link_style(f"bold {THEME['success']}", num)
+                name_style = f"bold {THEME['success']}"
+            else:
+                t.append("  ", style="")
+                number_style = self._picker_link_style(f"bold {THEME['cyan']}", num)
+                name_style = f"bold {THEME['text']}"
+            t.append(
+                f"[{num}]", style=number_style
+            )
+            t.append(f" {model_name:<18}", style=name_style)
 
             if is_recommended:
                 t.append("⭐ ", style=THEME["gold"])
@@ -18716,7 +20443,9 @@ team:
 
             # Truncate desc to fit
             desc_short = desc[:25] + ".." if len(desc) > 25 else desc
-            padding = 27 - len(desc_short)
+            if is_highlighted:
+                t.append("  ← SELECTED", style=f"bold {THEME['success']}")
+            padding = 27 - len(desc_short) - (12 if is_highlighted else 0)
             t.append(f"{desc_short}{' ' * padding}│\n", style=THEME["dim"])
 
         t.append(f"  ├{'─' * 58}┤\n", style=color)
@@ -18736,6 +20465,7 @@ team:
 
         # Set flag to await model selection
         self._awaiting_model_selection = True
+        self._gemini_agent_data = agent
 
         # No model selected yet
         self.current_model = ""
@@ -18826,12 +20556,23 @@ team:
             model_name = model.get("name", "")
             desc = model.get("desc", "")
             is_recommended = model.get("recommended", False)
+            is_highlighted = i == getattr(self, "_opencode_highlighted_model_index", 0)
 
             # Number for selection
             num = i + 1
             t.append(f"  │  ", style=color)
-            t.append(f"[{num}]", style=f"bold {THEME['cyan']}")
-            t.append(f" {model_name:<18}", style=f"bold {THEME['text']}")
+            if is_highlighted:
+                t.append(f"▶ ", style=f"bold {THEME['success']}")
+                number_style = self._picker_link_style(f"bold {THEME['success']}", num)
+                name_style = f"bold {THEME['success']}"
+            else:
+                t.append("  ", style="")
+                number_style = self._picker_link_style(f"bold {THEME['cyan']}", num)
+                name_style = f"bold {THEME['text']}"
+            t.append(
+                f"[{num}]", style=number_style
+            )
+            t.append(f" {model_name:<18}", style=name_style)
 
             if is_recommended:
                 t.append("⭐ ", style=THEME["gold"])
@@ -18840,7 +20581,9 @@ team:
 
             # Truncate desc to fit
             desc_short = desc[:25] + ".." if len(desc) > 25 else desc
-            padding = 27 - len(desc_short)
+            if is_highlighted:
+                t.append("  ← SELECTED", style=f"bold {THEME['success']}")
+            padding = 27 - len(desc_short) - (12 if is_highlighted else 0)
             t.append(f"{desc_short}{' ' * padding}│\n", style=THEME["dim"])
 
         t.append(f"  ├{'─' * 58}┤\n", style=color)
@@ -18866,6 +20609,7 @@ team:
 
         # Set flag to await model selection
         self._awaiting_model_selection = True
+        self._claude_agent_data = agent
 
         # No model selected yet
         self.current_model = ""
@@ -18962,12 +20706,23 @@ team:
             model_name = model.get("name", "")
             desc = model.get("desc", "")
             is_recommended = model.get("recommended", False)
+            is_highlighted = i == getattr(self, "_opencode_highlighted_model_index", 0)
 
             # Number for selection
             num = i + 1
             t.append(f"  │  ", style=color)
-            t.append(f"[{num}]", style=f"bold {THEME['cyan']}")
-            t.append(f" {model_name:<18}", style=f"bold {THEME['text']}")
+            if is_highlighted:
+                t.append(f"▶ ", style=f"bold {THEME['success']}")
+                number_style = self._picker_link_style(f"bold {THEME['success']}", num)
+                name_style = f"bold {THEME['success']}"
+            else:
+                t.append("  ", style="")
+                number_style = self._picker_link_style(f"bold {THEME['cyan']}", num)
+                name_style = f"bold {THEME['text']}"
+            t.append(
+                f"[{num}]", style=number_style
+            )
+            t.append(f" {model_name:<18}", style=name_style)
 
             if is_recommended:
                 t.append("⭐ ", style=THEME["gold"])
@@ -18976,7 +20731,9 @@ team:
 
             # Truncate desc to fit
             desc_short = desc[:25] + ".." if len(desc) > 25 else desc
-            padding = 27 - len(desc_short)
+            if is_highlighted:
+                t.append("  ← SELECTED", style=f"bold {THEME['success']}")
+            padding = 27 - len(desc_short) - (12 if is_highlighted else 0)
             t.append(f"{desc_short}{' ' * padding}│\n", style=THEME["dim"])
 
         t.append(f"  ├{'─' * 58}┤\n", style=color)
@@ -19004,6 +20761,7 @@ team:
 
         # Set flag to await model selection
         self._awaiting_model_selection = True
+        self._codex_agent_data = agent
 
         # No model selected yet
         self.current_model = ""
@@ -19097,12 +20855,23 @@ team:
             model_name = model.get("name", "")
             desc = model.get("desc", "")
             is_recommended = model.get("recommended", False)
+            is_highlighted = i == getattr(self, "_opencode_highlighted_model_index", 0)
 
             # Number for selection
             num = i + 1
             t.append(f"  │  ", style=color)
-            t.append(f"[{num}]", style=f"bold {THEME['cyan']}")
-            t.append(f" {model_name:<18}", style=f"bold {THEME['text']}")
+            if is_highlighted:
+                t.append(f"▶ ", style=f"bold {THEME['success']}")
+                number_style = self._picker_link_style(f"bold {THEME['success']}", num)
+                name_style = f"bold {THEME['success']}"
+            else:
+                t.append("  ", style="")
+                number_style = self._picker_link_style(f"bold {THEME['cyan']}", num)
+                name_style = f"bold {THEME['text']}"
+            t.append(
+                f"[{num}]", style=number_style
+            )
+            t.append(f" {model_name:<18}", style=name_style)
 
             if is_recommended:
                 t.append("⭐ ", style=THEME["gold"])
@@ -19111,7 +20880,9 @@ team:
 
             # Truncate desc to fit
             desc_short = desc[:25] + ".." if len(desc) > 25 else desc
-            padding = 27 - len(desc_short)
+            if is_highlighted:
+                t.append("  ← SELECTED", style=f"bold {THEME['success']}")
+            padding = 27 - len(desc_short) - (12 if is_highlighted else 0)
             t.append(f"{desc_short}{' ' * padding}│\n", style=THEME["dim"])
 
         t.append(f"  ├{'─' * 58}┤\n", style=color)
@@ -19140,6 +20911,7 @@ team:
 
         # Set flag to await model selection
         self._awaiting_model_selection = True
+        self._openhands_agent_data = agent
 
         # No model selected yet
         self.current_model = ""
@@ -19609,7 +21381,11 @@ team:
                     (":skills import <path>", "Import a local skill file or directory"),
                     (":skills doctor", "Validate local skill metadata and duplicates"),
                     (":skills enable|disable <name>", "Toggle a local skill's enabled flag"),
+                    (":recipes", "List reusable local workflows from .superqode/recipes"),
+                    (":recipe run <name>", "Load or run a reusable workflow recipe"),
+                    (":recipe doctor <name>", "Validate recipe prompt, skills, model, and attachments"),
                     (":status", "Show active provider, model, sandbox/session, branch, approval"),
+                    (":doctor tui", "Show full TUI readiness dashboard"),
                     (":harness", "Open the harness overview and show active state"),
                     (":retry", "Retry the last user prompt"),
                     (":work [verbose]", "Show last run tools, files, and commands"),
@@ -19625,6 +21401,7 @@ team:
                     (":mcp disconnect [server]", "Disconnect one or all MCP servers"),
                     (":mcp tools", "List tools exposed by connected MCP servers"),
                     (":mcp resources", "List resources exposed by connected MCP servers"),
+                    (":mcp attach <resource>", "Stage an MCP resource for the next prompt"),
                     (":mcp prompts", "List prompts exposed by connected MCP servers"),
                     (":sandbox [backend]", "Show Docker and remote sandbox readiness"),
                     (":plugins", "Show discovered plugin manifests"),
@@ -20248,6 +22025,9 @@ team:
         from superqode.providers.registry import PROVIDERS
 
         tokens = (args or "").split()
+        if any(token in ("tui", "dashboard", "all", "harness") for token in tokens):
+            self._show_tui_doctor_dashboard(log)
+            return
         live = any(token in ("--live", "live", "smoke") for token in tokens)
         provider = " ".join(
             token for token in tokens if token not in ("--live", "live", "smoke")
@@ -20300,6 +22080,147 @@ team:
         t.append(":providers ", style=THEME["cyan"])
         t.append(provider, style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _show_tui_doctor_dashboard(self, log: ConversationLog):
+        """Show a one-screen readiness dashboard for TUI agent runs."""
+        rows: list[tuple[str, str, str, str]] = []
+
+        def add(label: str, status: str, detail: str, action: str = "") -> None:
+            rows.append((label, status, detail, action))
+
+        provider = self.current_provider or "-"
+        model = self.current_model or "-"
+        if self.current_provider and self.current_model:
+            provider_status = "ready"
+            provider_detail = f"{provider}/{model}"
+        elif self.current_provider:
+            provider_status = "warn"
+            provider_detail = f"{provider}/-"
+        else:
+            provider_status = "blocked"
+            provider_detail = "no provider/model connected"
+        add("Provider", provider_status, provider_detail, ":connect")
+
+        try:
+            from superqode.mcp import integration
+
+            manager = getattr(integration, "_mcp_manager", None)
+            if manager is None:
+                add("MCP", "warn", "manager not initialized", ":mcp connect")
+            else:
+                summary = manager.get_status_summary()
+                connected = summary.get("connected", 0)
+                total = summary.get("total_servers", 0)
+                status = "ready" if connected else "warn" if total else "warn"
+                detail = (
+                    f"{connected}/{total} connected, "
+                    f"{summary.get('total_tools', 0)} tools, "
+                    f"{summary.get('total_resources', 0)} resources, "
+                    f"{summary.get('total_prompts', 0)} prompts"
+                )
+                add("MCP", status, detail, ":mcp connect")
+        except Exception as exc:
+            add("MCP", "warn", f"unavailable: {exc}", ":mcp doctor")
+
+        try:
+            from superqode.skills import load_skills
+
+            skills = load_skills(Path.cwd())
+            status = "ready" if skills else "warn"
+            add("Skills", status, f"{len(skills)} loaded", ":skills doctor")
+        except Exception as exc:
+            add("Skills", "warn", f"unavailable: {exc}", ":skills doctor")
+
+        try:
+            recipes = self._load_local_recipes()
+            issue_count = sum(len(self._recipe_issues(recipe)) for recipe in recipes.values())
+            status = "ready" if recipes and issue_count == 0 else "warn"
+            detail = f"{len(recipes)} loaded, {issue_count} issue(s)"
+            add("Recipes", status, detail, ":recipe doctor")
+        except Exception as exc:
+            add("Recipes", "warn", f"unavailable: {exc}", ":recipe doctor")
+
+        refs = list(getattr(self, "_attached_refs", []))
+        mcp_refs = [ref for ref in refs if ref.startswith("mcp://")]
+        file_refs = [ref for ref in refs if ref.startswith("@")]
+        missing_files = []
+        for ref in file_refs:
+            path = Path(ref[1:]).expanduser()
+            if not path.is_absolute():
+                path = Path.cwd() / path
+            if not path.exists():
+                missing_files.append(ref)
+        attach_status = "ready" if refs and not missing_files else "warn" if refs else "ready"
+        add(
+            "Attachments",
+            attach_status,
+            f"{len(refs)} staged, {len(mcp_refs)} MCP, {len(missing_files)} missing file(s)",
+            ":attach list",
+        )
+
+        try:
+            branch = subprocess.run(
+                ["git", "branch", "--show-current"],
+                cwd=Path.cwd(),
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=2,
+            ).stdout.strip() or "-"
+            dirty = subprocess.run(
+                ["git", "status", "--short"],
+                cwd=Path.cwd(),
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=2,
+            ).stdout.strip()
+            add("Git", "warn" if dirty else "ready", f"{branch}, {'dirty' if dirty else 'clean'}", ":diff")
+        except Exception:
+            add("Git", "warn", "not a git workspace or git unavailable", ":files")
+
+        add("Approval", "ready", getattr(self, "approval_mode", "ask"), ":mode")
+        session_id = "-"
+        if hasattr(self, "_pure_mode"):
+            try:
+                session_id = self._pure_mode.get_current_session_id() or "-"
+            except Exception:
+                session_id = "-"
+        add("Session", "ready" if session_id != "-" else "warn", session_id[:12], ":session current")
+
+        blocked = sum(1 for _, status, _, _ in rows if status == "blocked")
+        warnings = sum(1 for _, status, _, _ in rows if status == "warn")
+        overall = "Blocked" if blocked else "Warnings" if warnings else "Ready"
+        overall_style = THEME["error"] if blocked else THEME["warning"] if warnings else THEME["success"]
+
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("TUI Doctor Dashboard\n\n", style=f"bold {THEME['text']}")
+        t.append("  Status      ", style=THEME["muted"])
+        t.append(f"{overall}", style=f"bold {overall_style}")
+        t.append(f"  ({blocked} blocked, {warnings} warning(s))\n\n", style=THEME["dim"])
+
+        status_style = {
+            "ready": THEME["success"],
+            "warn": THEME["warning"],
+            "blocked": THEME["error"],
+        }
+        for label, status, detail, action in rows:
+            t.append(f"  {label:<13}", style=THEME["muted"])
+            t.append(f"{status:<8}", style=f"bold {status_style.get(status, THEME['text'])}")
+            t.append(f"{detail}", style=THEME["text"])
+            if action:
+                t.append(f"  fix: {action}", style=THEME["cyan"])
+            t.append("\n")
+
+        t.append("\n  Run readiness: ", style=THEME["muted"])
+        t.append(":doctor current", style=THEME["cyan"])
+        t.append(" provider, ", style=THEME["muted"])
+        t.append(":mcp doctor", style=THEME["cyan"])
+        t.append(" MCP, ", style=THEME["muted"])
+        t.append(":recipe doctor", style=THEME["cyan"])
+        t.append(" recipes\n", style=THEME["cyan"])
         self._show_command_output(log, t)
 
     def _work_cmd(self, args: str, log: ConversationLog):

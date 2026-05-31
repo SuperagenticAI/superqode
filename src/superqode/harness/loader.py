@@ -22,6 +22,7 @@ from .spec import (
     WorkflowMode,
     WorkflowSpec,
 )
+from .workflow_presets import apply_workflow_preset
 
 
 def load_harness_spec(path: str | Path) -> HarnessSpec:
@@ -61,7 +62,7 @@ def harness_spec_from_dict(data: dict[str, Any]) -> HarnessSpec:
     if not name:
         raise ValueError("Harness spec requires a non-empty name")
 
-    return HarnessSpec(
+    spec = HarnessSpec(
         name=name,
         version=int(raw.get("version", 1) or 1),
         description=str(raw.get("description", "") or ""),
@@ -76,6 +77,7 @@ def harness_spec_from_dict(data: dict[str, Any]) -> HarnessSpec:
         observability=_observability(raw.get("observability")),
         metadata=dict(raw.get("metadata") or {}) if isinstance(raw.get("metadata"), dict) else {},
     )
+    return apply_workflow_preset(spec)
 
 
 def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
@@ -136,9 +138,11 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
         ],
         "workflow": {
             "mode": spec.workflow.mode.value,
+            **({"preset": spec.workflow.preset} if spec.workflow.preset else {}),
             "max_task_depth": spec.workflow.max_task_depth,
             "parallelism": spec.workflow.parallelism,
             "merge_strategy": spec.workflow.merge_strategy,
+            **({"config": spec.workflow.config} if spec.workflow.config else {}),
         },
         "context": {
             "instruction_files": list(spec.context.instruction_files),
@@ -249,6 +253,7 @@ def harness_spec_json_schema() -> dict[str, Any]:
                 "additionalProperties": True,
                 "properties": {
                     "mode": {"type": "string", "enum": [item.value for item in WorkflowMode]},
+                    "preset": {"type": "string"},
                     "max_task_depth": {"type": "integer"},
                     "parallelism": {"type": "integer"},
                     "merge_strategy": {"type": "string"},
@@ -380,6 +385,7 @@ def _workflow(value: Any) -> WorkflowSpec:
     data = value if isinstance(value, dict) else {}
     return WorkflowSpec(
         mode=_workflow_mode(data.get("mode", WorkflowMode.SINGLE.value)),
+        preset=str(data.get("preset") or "").strip().lower().replace("_", "-"),
         max_task_depth=int(data.get("max_task_depth", 4) or 0),
         parallelism=int(data.get("parallelism", 1) or 1),
         merge_strategy=str(data.get("merge_strategy") or "summary"),

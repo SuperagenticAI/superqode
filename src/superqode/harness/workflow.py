@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ..agent.system_prompts import SystemPromptLevel
 from .kernel import HarnessKernel, HarnessRunResult
@@ -38,6 +38,22 @@ class WorkflowResult:
         return self.results[-1].data if self.results else None
 
 
+@dataclass(frozen=True)
+class WorkflowProgress:
+    """Progress update emitted while a workflow is running."""
+
+    mode: WorkflowMode
+    step_id: str
+    status: str
+    index: int
+    total: int
+    detail: str = ""
+    result: HarnessRunResult | None = None
+
+
+WorkflowProgressCallback = Callable[[WorkflowProgress], None]
+
+
 async def run_workflow(
     kernel: HarnessKernel,
     steps: list[WorkflowStep] | tuple[WorkflowStep, ...],
@@ -49,6 +65,7 @@ async def run_workflow(
     sandbox_backend: str = "local",
     system_level: SystemPromptLevel | None = None,
     session_id: str | None = None,
+    progress_callback: WorkflowProgressCallback | None = None,
 ) -> WorkflowResult:
     """Run steps according to the kernel spec's workflow mode."""
     mode = kernel.spec.workflow.mode
@@ -63,6 +80,7 @@ async def run_workflow(
             sandbox_backend=sandbox_backend,
             system_level=system_level,
             session_id=session_id,
+            progress_callback=progress_callback,
         )
     if mode == WorkflowMode.CHAIN:
         return await _run_chain(
@@ -75,6 +93,7 @@ async def run_workflow(
             sandbox_backend=sandbox_backend,
             system_level=system_level,
             session_id=session_id,
+            progress_callback=progress_callback,
         )
     if mode == WorkflowMode.PARALLEL:
         return await _run_parallel(
@@ -87,6 +106,7 @@ async def run_workflow(
             sandbox_backend=sandbox_backend,
             system_level=system_level,
             session_id=session_id,
+            progress_callback=progress_callback,
         )
     if mode == WorkflowMode.ROUTER:
         return await _run_router(
@@ -99,6 +119,7 @@ async def run_workflow(
             sandbox_backend=sandbox_backend,
             system_level=system_level,
             session_id=session_id,
+            progress_callback=progress_callback,
         )
     if mode == WorkflowMode.ORCHESTRATOR:
         return await _run_orchestrator(
@@ -111,6 +132,7 @@ async def run_workflow(
             sandbox_backend=sandbox_backend,
             system_level=system_level,
             session_id=session_id,
+            progress_callback=progress_callback,
         )
     if mode == WorkflowMode.EVALUATOR_OPTIMIZER:
         return await _run_evaluator_optimizer(
@@ -123,6 +145,7 @@ async def run_workflow(
             sandbox_backend=sandbox_backend,
             system_level=system_level,
             session_id=session_id,
+            progress_callback=progress_callback,
         )
     raise NotImplementedError(f"Workflow mode is not implemented yet: {mode.value}")
 
@@ -135,16 +158,14 @@ async def _run_single(
     if not steps:
         return WorkflowResult(mode=WorkflowMode.SINGLE, results=())
     session = await kernel.session(kwargs.get("session_id"))
-    result = await session.prompt(
-        steps[0].prompt,
-        provider=kwargs["provider"],
-        model=kwargs["model"],
-        working_directory=kwargs.get("working_directory"),
-        runtime=kwargs.get("runtime"),
-        sandbox_backend=kwargs.get("sandbox_backend", "local"),
-        system_level=kwargs.get("system_level"),
-        result=steps[0].result,
-        metadata={"workflow_step": steps[0].id or "single", **steps[0].metadata},
+    result = await _prompt_workflow_step(
+        session,
+        steps[0],
+        kwargs,
+        mode=WorkflowMode.SINGLE,
+        index=0,
+        total=1,
+        fallback_id="single",
     )
     return WorkflowResult(mode=WorkflowMode.SINGLE, results=(result,))
 
@@ -161,16 +182,15 @@ async def _run_chain(
         prompt = step.prompt
         if previous:
             prompt = f"{prompt}\n\nPrevious step result:\n{previous}"
-        result = await session.prompt(
-            prompt,
-            provider=kwargs["provider"],
-            model=kwargs["model"],
-            working_directory=kwargs.get("working_directory"),
-            runtime=kwargs.get("runtime"),
-            sandbox_backend=kwargs.get("sandbox_backend", "local"),
-            system_level=kwargs.get("system_level"),
-            result=step.result,
-            metadata={"workflow_step": step.id or f"chain-{index + 1}", **step.metadata},
+        run_step = WorkflowStep(prompt, id=step.id, result=step.result, metadata=step.metadata)
+        result = await _prompt_workflow_step(
+            session,
+            run_step,
+            kwargs,
+            mode=WorkflowMode.CHAIN,
+            index=index,
+            total=len(steps),
+            fallback_id=f"chain-{index + 1}",
         )
         results.append(result)
         previous = result.content
@@ -191,16 +211,14 @@ async def _run_parallel(
             session = await kernel.session(
                 f"{kwargs.get('session_id') or 'workflow'}:{session_suffix}"
             )
-            return await session.prompt(
-                step.prompt,
-                provider=kwargs["provider"],
-                model=kwargs["model"],
-                working_directory=kwargs.get("working_directory"),
-                runtime=kwargs.get("runtime"),
-                sandbox_backend=kwargs.get("sandbox_backend", "local"),
-                system_level=kwargs.get("system_level"),
-                result=step.result,
-                metadata={"workflow_step": step.id or f"parallel-{index + 1}", **step.metadata},
+            return await _prompt_workflow_step(
+                session,
+                step,
+                kwargs,
+                mode=WorkflowMode.PARALLEL,
+                index=index,
+                total=len(steps),
+                fallback_id=f"parallel-{index + 1}",
             )
 
     results = await asyncio.gather(*(run_one(index, step) for index, step in enumerate(steps)))
@@ -218,26 +236,42 @@ async def _run_router(
     if route_to is not None:
         selected = _select_step(steps, str(route_to), default_index=0)
         result = await _run_routed_step(
-            kernel, selected, kwargs, route_reason=f"route_to:{route_to}"
+            kernel,
+            selected,
+            kwargs,
+            route_reason=f"route_to:{route_to}",
+            index=0,
+            total=1,
         )
         return WorkflowResult(mode=WorkflowMode.ROUTER, results=(result,))
     if len(steps) == 1:
-        result = await _run_routed_step(kernel, steps[0], kwargs, route_reason="single")
+        result = await _run_routed_step(
+            kernel,
+            steps[0],
+            kwargs,
+            route_reason="single",
+            index=0,
+            total=1,
+        )
         return WorkflowResult(mode=WorkflowMode.ROUTER, results=(result,))
 
     router = steps[0]
     candidates = steps[1:]
     session = await kernel.session(kwargs.get("session_id"))
-    router_result = await session.prompt(
+    router_step = WorkflowStep(
         _router_prompt(router.prompt, candidates),
-        provider=kwargs["provider"],
-        model=kwargs["model"],
-        working_directory=kwargs.get("working_directory"),
-        runtime=kwargs.get("runtime"),
-        sandbox_backend=kwargs.get("sandbox_backend", "local"),
-        system_level=kwargs.get("system_level"),
+        id=router.id,
         result=router.result,
-        metadata={"workflow_step": router.id or "router", **router.metadata},
+        metadata=router.metadata,
+    )
+    router_result = await _prompt_workflow_step(
+        session,
+        router_step,
+        kwargs,
+        mode=WorkflowMode.ROUTER,
+        index=0,
+        total=2,
+        fallback_id="router",
     )
     selected = _select_step(candidates, router_result.content, default_index=0)
     routed_result = await _run_routed_step(
@@ -245,6 +279,8 @@ async def _run_router(
         selected,
         kwargs,
         route_reason=f"router_output:{router_result.content}",
+        index=1,
+        total=2,
     )
     return WorkflowResult(mode=WorkflowMode.ROUTER, results=(router_result, routed_result))
 
@@ -265,15 +301,14 @@ async def _run_orchestrator(
     )
     synthesis_input = synthesis_prompt + "\n\nWorker results:\n" + _format_results(parallel.results)
     session = await kernel.session(f"{kwargs.get('session_id') or 'orchestrator'}:synthesis")
-    synthesis = await session.prompt(
-        synthesis_input,
-        provider=kwargs["provider"],
-        model=kwargs["model"],
-        working_directory=kwargs.get("working_directory"),
-        runtime=kwargs.get("runtime"),
-        sandbox_backend=kwargs.get("sandbox_backend", "local"),
-        system_level=kwargs.get("system_level"),
-        metadata={"workflow_step": "synthesis"},
+    synthesis = await _prompt_workflow_step(
+        session,
+        WorkflowStep(synthesis_input, id="synthesis"),
+        kwargs,
+        mode=WorkflowMode.ORCHESTRATOR,
+        index=len(steps),
+        total=len(steps) + 1,
+        fallback_id="synthesis",
     )
     return WorkflowResult(mode=WorkflowMode.ORCHESTRATOR, results=(*parallel.results, synthesis))
 
@@ -287,32 +322,33 @@ async def _run_evaluator_optimizer(
         return WorkflowResult(mode=WorkflowMode.EVALUATOR_OPTIMIZER, results=())
     session = await kernel.session(kwargs.get("session_id"))
     candidate_step = steps[0]
-    candidate = await session.prompt(
-        candidate_step.prompt,
-        provider=kwargs["provider"],
-        model=kwargs["model"],
-        working_directory=kwargs.get("working_directory"),
-        runtime=kwargs.get("runtime"),
-        sandbox_backend=kwargs.get("sandbox_backend", "local"),
-        system_level=kwargs.get("system_level"),
-        result=candidate_step.result,
-        metadata={"workflow_step": candidate_step.id or "candidate", **candidate_step.metadata},
+    candidate = await _prompt_workflow_step(
+        session,
+        candidate_step,
+        kwargs,
+        mode=WorkflowMode.EVALUATOR_OPTIMIZER,
+        index=0,
+        total=min(max(len(steps), 2), 3),
+        fallback_id="candidate",
     )
     evaluator_step = steps[1] if len(steps) > 1 else WorkflowStep("Evaluate the candidate result.")
     evaluator_prompt = (
         f"{evaluator_step.prompt}\n\nCandidate result:\n{candidate.content}\n\n"
         "Respond with PASS if the candidate is acceptable; otherwise explain what to improve."
     )
-    evaluation = await session.prompt(
-        evaluator_prompt,
-        provider=kwargs["provider"],
-        model=kwargs["model"],
-        working_directory=kwargs.get("working_directory"),
-        runtime=kwargs.get("runtime"),
-        sandbox_backend=kwargs.get("sandbox_backend", "local"),
-        system_level=kwargs.get("system_level"),
-        result=evaluator_step.result,
-        metadata={"workflow_step": evaluator_step.id or "evaluator", **evaluator_step.metadata},
+    evaluation = await _prompt_workflow_step(
+        session,
+        WorkflowStep(
+            evaluator_prompt,
+            id=evaluator_step.id,
+            result=evaluator_step.result,
+            metadata=evaluator_step.metadata,
+        ),
+        kwargs,
+        mode=WorkflowMode.EVALUATOR_OPTIMIZER,
+        index=1,
+        total=min(max(len(steps), 2), 3),
+        fallback_id="evaluator",
     )
     if _evaluation_passed(evaluation.content) or len(steps) < 3:
         return WorkflowResult(
@@ -324,16 +360,19 @@ async def _run_evaluator_optimizer(
         f"{optimizer_step.prompt}\n\nCandidate result:\n{candidate.content}\n\n"
         f"Evaluator feedback:\n{evaluation.content}"
     )
-    optimized = await session.prompt(
-        optimizer_prompt,
-        provider=kwargs["provider"],
-        model=kwargs["model"],
-        working_directory=kwargs.get("working_directory"),
-        runtime=kwargs.get("runtime"),
-        sandbox_backend=kwargs.get("sandbox_backend", "local"),
-        system_level=kwargs.get("system_level"),
-        result=optimizer_step.result,
-        metadata={"workflow_step": optimizer_step.id or "optimizer", **optimizer_step.metadata},
+    optimized = await _prompt_workflow_step(
+        session,
+        WorkflowStep(
+            optimizer_prompt,
+            id=optimizer_step.id,
+            result=optimizer_step.result,
+            metadata=optimizer_step.metadata,
+        ),
+        kwargs,
+        mode=WorkflowMode.EVALUATOR_OPTIMIZER,
+        index=2,
+        total=3,
+        fallback_id="optimizer",
     )
     return WorkflowResult(
         mode=WorkflowMode.EVALUATOR_OPTIMIZER,
@@ -347,25 +386,102 @@ async def _run_routed_step(
     kwargs: dict[str, Any],
     *,
     route_reason: str,
+    index: int,
+    total: int,
 ) -> HarnessRunResult:
     session = await kernel.session(
         f"{kwargs.get('session_id') or 'router'}:{step.id or 'selected'}"
     )
-    return await session.prompt(
-        step.prompt,
-        provider=kwargs["provider"],
-        model=kwargs["model"],
-        working_directory=kwargs.get("working_directory"),
-        runtime=kwargs.get("runtime"),
-        sandbox_backend=kwargs.get("sandbox_backend", "local"),
-        system_level=kwargs.get("system_level"),
-        result=step.result,
-        metadata={
-            "workflow_step": step.id or "routed",
-            "route_reason": route_reason,
-            **step.metadata,
-        },
+    return await _prompt_workflow_step(
+        session,
+        WorkflowStep(
+            step.prompt,
+            id=step.id,
+            result=step.result,
+            metadata={"route_reason": route_reason, **step.metadata},
+        ),
+        kwargs,
+        mode=WorkflowMode.ROUTER,
+        index=index,
+        total=total,
+        fallback_id="routed",
     )
+
+
+async def _prompt_workflow_step(
+    session,
+    step: WorkflowStep,
+    kwargs: dict[str, Any],
+    *,
+    mode: WorkflowMode,
+    index: int,
+    total: int,
+    fallback_id: str,
+) -> HarnessRunResult:
+    step_id = step.id or fallback_id
+    _emit_progress(
+        kwargs,
+        WorkflowProgress(
+            mode=mode,
+            step_id=step_id,
+            status="running",
+            index=index,
+            total=total,
+        ),
+    )
+    try:
+        result = await session.prompt(
+            step.prompt,
+            provider=kwargs["provider"],
+            model=kwargs["model"],
+            working_directory=kwargs.get("working_directory"),
+            runtime=kwargs.get("runtime"),
+            sandbox_backend=kwargs.get("sandbox_backend", "local"),
+            system_level=kwargs.get("system_level"),
+            result=step.result,
+            metadata={"workflow_step": step_id, **step.metadata},
+        )
+    except Exception as exc:
+        _emit_progress(
+            kwargs,
+            WorkflowProgress(
+                mode=mode,
+                step_id=step_id,
+                status="failed",
+                index=index,
+                total=total,
+                detail=str(exc),
+            ),
+        )
+        raise
+    _emit_progress(
+        kwargs,
+        WorkflowProgress(
+            mode=mode,
+            step_id=step_id,
+            status="done",
+            index=index,
+            total=total,
+            detail=_result_detail(result),
+            result=result,
+        ),
+    )
+    return result
+
+
+def _emit_progress(kwargs: dict[str, Any], progress: WorkflowProgress) -> None:
+    callback = kwargs.get("progress_callback")
+    if callback is not None:
+        callback(progress)
+
+
+def _result_detail(result: HarnessRunResult) -> str:
+    parts = []
+    if result.tool_calls_made:
+        parts.append(f"{result.tool_calls_made} tool call(s)")
+    if result.iterations:
+        parts.append(f"{result.iterations} iteration(s)")
+    return ", ".join(parts)
 
 
 def _router_prompt(prompt: str, candidates: list[WorkflowStep] | tuple[WorkflowStep, ...]) -> str:

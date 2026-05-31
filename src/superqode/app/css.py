@@ -130,6 +130,20 @@ ConversationLog {
     scrollbar-gutter: stable;
     overflow: hidden auto;
 }
+#prompt-completions {
+    display: none;
+    height: auto;
+    max-height: 10;
+    margin: 0 2;
+    padding: 0;
+    background: #09090b;
+    border: solid #3f3f46;
+    color: #f4f4f5;
+    overflow: hidden;
+}
+#prompt-completions.visible {
+    display: block;
+}
 #hints { text-align: center; color: #52525b; height: 1; margin-top: 1; padding: 0; }
 
 /* Streaming thinking indicator with changing text - shown when agent is thinking */

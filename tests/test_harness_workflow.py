@@ -87,6 +87,32 @@ async def test_chain_workflow_passes_previous_result(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_workflow_emits_step_progress(monkeypatch, tmp_path):
+    backend = RecordingBackend()
+    monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda name: backend)
+    spec = replace(get_harness_template("no-tool"), workflow=WorkflowSpec(mode=WorkflowMode.CHAIN))
+    kernel = await init_harness(spec, store=FileHarnessStore(tmp_path / "store"))
+    events = []
+
+    await run_workflow(
+        kernel,
+        [WorkflowStep("inspect", id="inspect"), WorkflowStep("summarize", id="summarize")],
+        provider="test",
+        model="model",
+        working_directory=tmp_path,
+        progress_callback=events.append,
+    )
+
+    assert [(event.step_id, event.status) for event in events] == [
+        ("inspect", "running"),
+        ("inspect", "done"),
+        ("summarize", "running"),
+        ("summarize", "done"),
+    ]
+    assert events[-1].detail == "1 iteration(s)"
+
+
+@pytest.mark.asyncio
 async def test_parallel_workflow_runs_all_steps_in_separate_sessions(monkeypatch, tmp_path):
     backend = RecordingBackend()
     monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda name: backend)

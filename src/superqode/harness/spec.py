@@ -90,6 +90,7 @@ class WorkflowSpec:
     """Multi-agent workflow policy."""
 
     mode: WorkflowMode = WorkflowMode.SINGLE
+    preset: str = ""
     max_task_depth: int = 4
     parallelism: int = 1
     merge_strategy: str = "summary"

@@ -7,6 +7,7 @@ import pytest
 from superqode.agent.system_prompts import SystemPromptLevel
 from superqode.harness import (
     HarnessFlavor,
+    WorkflowMode,
     compile_to_headless_profile,
     get_harness_template,
     harness_spec_from_dict,
@@ -112,6 +113,23 @@ def test_harness_spec_round_trip_preserves_core_fields():
     assert restored.agents[0].tools == ("read_file", "bash")
     assert restored.validation.enabled is True
     assert restored.validation.custom_steps[0].command == "pytest -q"
+
+
+def test_workflow_preset_expands_harness_agents_and_mode():
+    spec = harness_spec_from_dict(
+        {
+            "name": "review-harness",
+            "workflow": {"preset": "parallel-review"},
+        }
+    )
+
+    assert spec.workflow.preset == "parallel-review"
+    assert spec.workflow.mode == WorkflowMode.ORCHESTRATOR
+    assert spec.workflow.parallelism == 3
+    assert [agent.id for agent in spec.agents] == ["security", "tests", "architecture"]
+
+    payload = harness_spec_to_dict(spec)
+    assert payload["workflow"]["preset"] == "parallel-review"
 
 
 def test_patch_harness_namespace_exports_legacy_validator():
