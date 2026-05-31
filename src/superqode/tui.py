@@ -30,6 +30,7 @@ from .danger import analyze_command, DangerLevel, DANGER_STYLES
 
 from rich.console import Console, Group
 from rich.panel import Panel
+from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 from rich.live import Live
@@ -852,6 +853,13 @@ class SuperQodeCompleter(Completer):
             (":sessions", "List saved sessions"),
             (":resume latest", "Resume most recent saved session"),
             (":mcp status", "Show MCP status"),
+            (":mcp connect", "Connect configured MCP servers"),
+            (":mcp tools", "List connected MCP tools"),
+            (":skills", "List local skills"),
+            (":skills info", "Inspect a local skill"),
+            (":skills add", "Create a skill template"),
+            (":attach", "Stage a file or URL reference"),
+            (":prompt", "Load prompt text from a file"),
             (":init", "Initialize SuperQode configuration"),
             (":i", "Alias for :init"),
             (":sidebar", "Show/hide sidebar"),
@@ -1396,6 +1404,57 @@ class SuperQodeUI:
             table.add_row(name, target)
         self.console.print(table)
 
+    def _print_skills(self, args: str = "") -> None:
+        """List or inspect local skills from .agents/skills."""
+        try:
+            from .skills import load_skills
+        except Exception as exc:
+            self.print_error(f"Could not load skills: {exc}")
+            return
+        tokens = args.strip().split(maxsplit=1)
+        action = tokens[0].lower() if tokens else "list"
+        value = tokens[1].strip() if len(tokens) > 1 else ""
+        skills = load_skills(Path.cwd())
+        if action == "info" and value:
+            skill = skills.get(value) or next(
+                (item for item in skills.values() if item.name.lower() == value.lower()),
+                None,
+            )
+            if skill is None:
+                self.print_error(f"Skill not found: {value}")
+                return
+            self.console.print(Panel(skill.instructions or "(empty skill)", title=skill.name))
+            return
+
+        table = Table(title="Local Skills", border_style="cyan")
+        table.add_column("Name", style="yellow")
+        table.add_column("Description")
+        table.add_column("Path", style="dim")
+        for skill in sorted(skills.values(), key=lambda item: item.name.lower()):
+            table.add_row(skill.name, skill.description or "-", str(skill.path or "-"))
+        if not skills:
+            table.add_row("-", "No local skills found. Use :skills add <name> in the Textual TUI.", "-")
+        self.console.print(table)
+
+    def _load_prompt_file(self, args: str) -> None:
+        """Print prompt-file content so users can submit or edit it."""
+        path_text = args.strip()
+        if not path_text:
+            self.print_info("Usage: :prompt <file>")
+            return
+        path = Path(path_text).expanduser()
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        if not path.is_file():
+            self.print_error(f"Prompt file not found: {path}")
+            return
+        try:
+            content = path.read_text(encoding="utf-8")
+        except Exception as exc:
+            self.print_error(f"Could not read prompt file: {exc}")
+            return
+        self.console.print(Panel(content, title=f"Prompt: {path}"))
+
     def _print_pending_approvals(self) -> None:
         table = Table(title="Pending Tool Approval", border_style="yellow")
         table.add_column("#", justify="right")
@@ -1528,6 +1587,21 @@ class SuperQodeUI:
                 self._handle_resume_command(args)
             elif command.name == "mcp":
                 self._print_mcp_status()
+            elif command.name == "skills":
+                self._print_skills(args)
+            elif command.name == "tools":
+                from .tools.base import ToolRegistry
+
+                table = Table(title="Coding Tools", border_style="cyan")
+                table.add_column("Tool", style="yellow")
+                table.add_column("Description")
+                for tool in ToolRegistry.coding().list():
+                    table.add_row(tool.name, tool.description.splitlines()[0][:90])
+                self.console.print(table)
+            elif command.name == "prompt":
+                self._load_prompt_file(args)
+            elif command.name == "attach":
+                self.print_info(f"Add this reference to your next message: {args.strip()}")
             elif command.name == "approve":
                 self._handle_approval_command(approve=True, args=args)
             elif command.name == "reject":

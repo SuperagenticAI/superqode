@@ -308,6 +308,56 @@ def create_builtin_commands(handlers: dict) -> list[SlashCommand]:
             category="session",
         )
     )
+    commands.append(
+        SlashCommand(
+            name="connect",
+            description="Connect to ACP, BYOK, or local providers",
+            handler=handlers.get("connect", lambda _: None),
+            aliases=["c"],
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="model",
+            description="Show or switch model settings",
+            handler=handlers.get("model", lambda _: None),
+            aliases=["models"],
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="tools",
+            description="Show active tool profile and available tools",
+            handler=handlers.get("tools", lambda _: None),
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="skills",
+            description="List, inspect, add, import, or remove local skills",
+            handler=handlers.get("skills", lambda _: None),
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="attach",
+            description="Stage a file path or URL reference into the prompt",
+            handler=handlers.get("attach", lambda _: None),
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="prompt",
+            description="Load a prompt file into the input buffer",
+            handler=handlers.get("prompt", lambda _: None),
+            category="session",
+        )
+    )
 
     # HITL approval / rejection for the OpenAI Agents runtime. Bare :approve
     # acts on the first pending approval; :approve <index> picks one; trailing

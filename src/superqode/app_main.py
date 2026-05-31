@@ -23,11 +23,13 @@ import pty
 import select
 import subprocess
 import shutil
+import shlex
 import time
 import math
 import random
 import concurrent.futures
 import threading
+from urllib.parse import urlparse
 from pathlib import Path
 from typing import Any
 from dataclasses import dataclass, field
@@ -383,6 +385,13 @@ class SelectionAwareInput(TextArea):
         """Intercept key events for selection navigation and number selection."""
         app = self.app
 
+        if event.key in ("tab", "right"):
+            complete_prompt = getattr(app, "_complete_prompt_input", None)
+            if callable(complete_prompt) and complete_prompt(self):
+                event.stop()
+                event.prevent_default()
+                return
+
         if event.key == "enter":
             self._submit_current_value(event)
             return
@@ -712,6 +721,7 @@ class SuperQodeApp(App):
         self._stream_animation_timer: Optional[Timer] = None
         self._permission_pulse_timer: Optional[Timer] = None  # Timer for permission pulse animation
         self._permission_pending = False  # Track if permission is pending
+        self._attached_refs: list[str] = []
         self._history_manager = HistoryManager()
         self._plan_manager = PlanManager()
 
@@ -1105,6 +1115,14 @@ class SuperQodeApp(App):
                 "connection",
             ),
             PaletteCommand(
+                "model_status",
+                "Current Model",
+                "Show active model, capabilities, and runtime settings",
+                "◇",
+                ":model",
+                "connection",
+            ),
+            PaletteCommand(
                 "health",
                 "Provider Health",
                 "Check configured provider connectivity",
@@ -1134,6 +1152,14 @@ class SuperQodeApp(App):
                 "Show active tool profile and available tools",
                 "🧰",
                 ":tools",
+                "harness",
+            ),
+            PaletteCommand(
+                "skills",
+                "Skills",
+                "List, inspect, create, or import local skills",
+                "✦",
+                ":skills",
                 "harness",
             ),
             PaletteCommand(
@@ -1186,6 +1212,22 @@ class SuperQodeApp(App):
                 "📋",
                 ":context",
                 "harness",
+            ),
+            PaletteCommand(
+                "attach",
+                "Attach Reference",
+                "Insert a file path or URL reference into the next prompt",
+                "@",
+                ":attach ",
+                "view",
+            ),
+            PaletteCommand(
+                "prompt_file",
+                "Load Prompt File",
+                "Load prompt text from a local file into the input",
+                "¶",
+                ":prompt ",
+                "view",
             ),
             PaletteCommand("diff", "Diff", "Inspect file changes", "🧾", ":diff", "changes"),
             PaletteCommand(
@@ -1737,6 +1779,7 @@ class SuperQodeApp(App):
             "connect_local": ":connect local",
             "acp_agents": ":acp list",
             "models": ":models",
+            "model_status": ":model",
             "health": ":health",
             "provider_guide": ":providers",
             "recommend": ":recommend coding",
@@ -1744,6 +1787,7 @@ class SuperQodeApp(App):
             "plugins": ":plugins",
             "benchmark": ":benchmark",
             "tools": ":tools",
+            "skills": ":skills",
             "mcp": ":mcp status",
             "sessions": "/sessions",
             "compact": "/compact",
@@ -1763,6 +1807,8 @@ class SuperQodeApp(App):
             "fork": "/fork ",
             "find": ":find ",
             "search": ":search ",
+            "attach": ":attach ",
+            "prompt_file": ":prompt ",
         }
 
         if event.command.id == "sidebar":
@@ -3893,6 +3939,12 @@ class SuperQodeApp(App):
             self._handle_search(args, log)
         elif c == "tools":
             self._show_tools(args, log)
+        elif c == "skills":
+            self._skills_cmd(args, log)
+        elif c == "attach":
+            self._attach_cmd(args, log)
+        elif c == "prompt":
+            self._prompt_file_cmd(args, log)
         elif c == "sessions":
             self._show_sessions(log)
         elif c == "resume":
@@ -3937,6 +3989,8 @@ class SuperQodeApp(App):
                         self._connect_byok_cmd(args, log)
         elif c == "models":
             self._models_cmd(args, log)
+        elif c == "model":
+            self._model_cmd(args, log)
         elif c in ("providers", "provider"):
             self._providers_cmd(args, log)
         elif c in ("recommend", "model-guide"):
@@ -4067,6 +4121,714 @@ class SuperQodeApp(App):
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
 
+    def _skills_cmd(self, args: str, log: ConversationLog):
+        """Handle local skill inventory and setup commands.
+
+        This mirrors the most useful fast-agent TUI flow for day-to-day work:
+        users can see the skills currently visible to the agent, inspect one,
+        create a template, or import an existing local SKILL.md/markdown skill.
+        """
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :skills arguments: {exc}")
+            return
+        action = tokens[0].lower() if tokens else "list"
+        rest = tokens[1:]
+        if action in {"ls", "show"}:
+            action = "list"
+
+        skills_root = Path.cwd() / ".agents" / "skills"
+
+        if action in {"list", "available", "status"}:
+            from superqode.skills import load_skills
+
+            skills = sorted(load_skills(Path.cwd()).values(), key=lambda item: item.name.lower())
+            t = Text()
+            t.append("\n  ✦ ", style=f"bold {THEME['purple']}")
+            t.append("Skills\n\n", style=f"bold {THEME['text']}")
+            t.append("  Directory   ", style=THEME["muted"])
+            t.append(f"{skills_root}\n", style=THEME["text"])
+            t.append("  Loaded      ", style=THEME["muted"])
+            t.append(f"{len(skills)}\n\n", style=f"bold {THEME['cyan']}")
+            if not skills:
+                t.append("  No local skills found.\n", style=THEME["muted"])
+                t.append("  Create one with ", style=THEME["muted"])
+                t.append(":skills add repo-review", style=THEME["cyan"])
+                t.append(" or import an existing SKILL.md.\n", style=THEME["muted"])
+            for index, skill in enumerate(skills, 1):
+                t.append(f"  [{index}] ", style=THEME["dim"])
+                t.append(skill.name, style=f"bold {THEME['cyan']}")
+                if skill.description:
+                    t.append(f" - {skill.description}", style=THEME["muted"])
+                t.append("\n")
+                if skill.path:
+                    t.append(f"      {skill.path}\n", style=THEME["dim"])
+            t.append("\n  Commands: ", style=THEME["muted"])
+            t.append(":skills info <name>", style=THEME["cyan"])
+            t.append(", ", style=THEME["muted"])
+            t.append(":skills add <name>", style=THEME["cyan"])
+            t.append(", ", style=THEME["muted"])
+            t.append(":skills import <path>\n", style=THEME["cyan"])
+            self._show_command_output(log, t)
+            return
+
+        if action in {"info", "read"}:
+            if not rest:
+                log.add_error("Usage: :skills info <name>")
+                return
+            from superqode.skills import load_skills
+
+            name = rest[0]
+            skills = load_skills(Path.cwd())
+            skill = skills.get(name)
+            if skill is None:
+                lowered = name.lower()
+                skill = next((item for item in skills.values() if item.name.lower() == lowered), None)
+            if skill is None:
+                log.add_error(f"Skill not found: {name}")
+                log.add_info("Use :skills to list loaded skills.")
+                return
+            t = Text()
+            t.append("\n  ✦ ", style=f"bold {THEME['purple']}")
+            t.append(skill.name, style=f"bold {THEME['text']}")
+            t.append("\n\n", style="")
+            if skill.description:
+                t.append("  Description ", style=THEME["muted"])
+                t.append(f"{skill.description}\n", style=THEME["text"])
+            if skill.path:
+                t.append("  Path        ", style=THEME["muted"])
+                t.append(f"{skill.path}\n", style=THEME["dim"])
+            t.append("\n", style="")
+            preview = skill.instructions.strip()
+            if len(preview) > 2400:
+                preview = preview[:2400].rstrip() + "\n..."
+            t.append(preview or "(empty skill)", style=THEME["text"])
+            t.append("\n", style="")
+            self._show_command_output(log, t)
+            return
+
+        if action in {"search", "find"}:
+            if not rest:
+                log.add_error("Usage: :skills search <query>")
+                return
+            from superqode.skills import load_skills
+
+            query = " ".join(rest).lower()
+            skills = [
+                skill
+                for skill in load_skills(Path.cwd()).values()
+                if query in skill.name.lower()
+                or query in skill.description.lower()
+                or query in skill.instructions.lower()
+            ]
+            t = Text()
+            t.append("\n  ✦ ", style=f"bold {THEME['purple']}")
+            t.append(f"Skill Search: {query}\n\n", style=f"bold {THEME['text']}")
+            if not skills:
+                t.append("  No matching skills found.\n", style=THEME["muted"])
+            for skill in sorted(skills, key=lambda item: item.name.lower()):
+                t.append(f"  {skill.name}", style=f"bold {THEME['cyan']}")
+                if skill.description:
+                    t.append(f" - {skill.description}", style=THEME["muted"])
+                t.append("\n")
+                if skill.path:
+                    t.append(f"    {skill.path}\n", style=THEME["dim"])
+            self._show_command_output(log, t)
+            return
+
+        if action in {"doctor", "validate", "check"}:
+            self._skills_doctor(skills_root, log)
+            return
+
+        if action in {"enable", "disable"}:
+            if not rest:
+                log.add_error(f"Usage: :skills {action} <name>")
+                return
+            changed = self._set_skill_enabled(skills_root, rest[0], enabled=action == "enable")
+            if changed:
+                log.add_success(f"Skill {rest[0]} {action}d.")
+            else:
+                log.add_error(f"Skill not found or could not be updated: {rest[0]}")
+            return
+
+        if action in {"add", "create", "new"}:
+            if not rest:
+                log.add_error("Usage: :skills add <name> [description]")
+                return
+            name = rest[0].strip().replace("/", "-")
+            description = " ".join(rest[1:]).strip() or f"{name} workflow"
+            skill_dir = skills_root / name
+            skill_file = skill_dir / "SKILL.md"
+            if skill_file.exists():
+                log.add_error(f"Skill already exists: {skill_file}")
+                return
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            content = (
+                "---\n"
+                f"name: {name}\n"
+                f"description: {description}\n"
+                "enabled: true\n"
+                "---\n\n"
+                f"# {name}\n\n"
+                "Describe when to use this skill, what context to gather, and the steps the agent should follow.\n"
+            )
+            skill_file.write_text(content, encoding="utf-8")
+            log.add_success(f"Created skill template: {skill_file}")
+            log.add_info("Edit the SKILL.md instructions, then run :skills to confirm it loads.")
+            return
+
+        if action in {"import", "add-local"}:
+            if not rest:
+                log.add_error("Usage: :skills import <path-to-SKILL.md-or-directory>")
+                return
+            source = Path(rest[0]).expanduser()
+            if not source.is_absolute():
+                source = Path.cwd() / source
+            if not source.exists():
+                log.add_error(f"Path not found: {source}")
+                return
+            skills_root.mkdir(parents=True, exist_ok=True)
+            if source.is_dir():
+                name = source.name
+                destination = skills_root / name
+                if destination.exists():
+                    log.add_error(f"Destination already exists: {destination}")
+                    return
+                shutil.copytree(source, destination)
+                log.add_success(f"Imported skill directory: {destination}")
+                return
+            destination_dir = skills_root / source.stem
+            destination_dir.mkdir(parents=True, exist_ok=True)
+            destination = destination_dir / ("SKILL.md" if source.name.upper() == "SKILL.MD" else source.name)
+            if destination.exists():
+                log.add_error(f"Destination already exists: {destination}")
+                return
+            shutil.copy2(source, destination)
+            log.add_success(f"Imported skill file: {destination}")
+            return
+
+        if action in {"remove", "rm", "delete", "uninstall"}:
+            if not rest:
+                log.add_error("Usage: :skills remove <name>")
+                return
+            target = skills_root / rest[0]
+            if not target.exists():
+                log.add_error(f"Skill path not found: {target}")
+                return
+            if target.is_dir():
+                shutil.rmtree(target)
+            else:
+                target.unlink()
+            log.add_success(f"Removed skill: {target}")
+            return
+
+        log.add_info("Usage: :skills [list|info <name>|add <name>|import <path>|remove <name>]")
+
+    def _find_skill_file(self, skills_root: Path, name: str) -> Path | None:
+        """Find a local skill file by directory, file stem, or frontmatter name."""
+        candidates = [
+            skills_root / name / "SKILL.md",
+            skills_root / name,
+            skills_root / f"{name}.md",
+        ]
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate
+        if not skills_root.exists():
+            return None
+        for path in sorted(skills_root.rglob("*.md")):
+            if path.stem.lower() == name.lower() or path.parent.name.lower() == name.lower():
+                return path
+            try:
+                head = path.read_text(encoding="utf-8", errors="ignore")[:1000].lower()
+            except Exception:
+                continue
+            if f"name: {name.lower()}" in head:
+                return path
+        return None
+
+    def _set_skill_enabled(self, skills_root: Path, name: str, *, enabled: bool) -> bool:
+        """Toggle a skill's frontmatter enabled flag."""
+        path = self._find_skill_file(skills_root, name)
+        if path is None:
+            return False
+        try:
+            text = path.read_text(encoding="utf-8")
+            value = "true" if enabled else "false"
+            if text.startswith("---"):
+                end = text.find("\n---", 3)
+                if end != -1:
+                    front = text[:end]
+                    body = text[end:]
+                    lines = front.splitlines()
+                    replaced = False
+                    for idx, line in enumerate(lines):
+                        if line.strip().startswith("enabled:"):
+                            lines[idx] = f"enabled: {value}"
+                            replaced = True
+                            break
+                    if not replaced:
+                        lines.append(f"enabled: {value}")
+                    path.write_text("\n".join(lines) + body, encoding="utf-8")
+                    return True
+            path.write_text(f"---\nenabled: {value}\n---\n\n{text}", encoding="utf-8")
+            return True
+        except Exception:
+            return False
+
+    def _skills_doctor(self, skills_root: Path, log: ConversationLog) -> None:
+        """Validate local skill files and show actionable issues."""
+        t = Text()
+        t.append("\n  ✦ ", style=f"bold {THEME['purple']}")
+        t.append("Skills Doctor\n\n", style=f"bold {THEME['text']}")
+        t.append("  Directory   ", style=THEME["muted"])
+        t.append(f"{skills_root}\n\n", style=THEME["text"])
+
+        if not skills_root.exists():
+            t.append("  warning  ", style=THEME["warning"])
+            t.append("Skills directory does not exist. Use :skills add <name>.\n", style=THEME["text"])
+            self._show_command_output(log, t)
+            return
+
+        files = sorted(skills_root.rglob("*.md"))
+        names: dict[str, Path] = {}
+        issues: list[tuple[str, str]] = []
+        for path in files:
+            try:
+                text = path.read_text(encoding="utf-8", errors="ignore")
+            except Exception as exc:
+                issues.append((str(path), f"unreadable: {exc}"))
+                continue
+            name = path.parent.name if path.name.upper() == "SKILL.MD" else path.stem
+            description = ""
+            if text.startswith("---"):
+                end = text.find("\n---", 3)
+                if end != -1:
+                    front = text[:end]
+                    for line in front.splitlines():
+                        stripped = line.strip()
+                        if stripped.startswith("name:"):
+                            name = stripped.split(":", 1)[1].strip().strip('"').strip("'") or name
+                        elif stripped.startswith("description:"):
+                            description = stripped.split(":", 1)[1].strip()
+            else:
+                issues.append((str(path), "missing frontmatter block"))
+            if not description:
+                issues.append((str(path), "missing description"))
+            lowered = name.lower()
+            if lowered in names:
+                issues.append((str(path), f"duplicate skill name also used by {names[lowered]}"))
+            else:
+                names[lowered] = path
+
+        t.append("  Files       ", style=THEME["muted"])
+        t.append(f"{len(files)}\n", style=THEME["text"])
+        t.append("  Names       ", style=THEME["muted"])
+        t.append(f"{len(names)}\n", style=THEME["text"])
+        t.append("  Issues      ", style=THEME["muted"])
+        t.append(f"{len(issues)}\n\n", style=THEME["warning"] if issues else THEME["success"])
+
+        if not issues:
+            t.append("  ok  All local skills look valid.\n", style=THEME["success"])
+        else:
+            for path, issue in issues[:30]:
+                t.append("  warning  ", style=THEME["warning"])
+                t.append(f"{path}: {issue}\n", style=THEME["text"])
+            if len(issues) > 30:
+                t.append(f"  ... and {len(issues) - 30} more issue(s)\n", style=THEME["dim"])
+        self._show_command_output(log, t)
+
+    def _set_prompt_prefill(self, value: str) -> None:
+        """Put text in the prompt input and focus it."""
+        try:
+            input_widget = self.query_one("#prompt-input", SelectionAwareInput)
+            input_widget.value = value
+            input_widget.cursor_position = len(value)
+            input_widget.focus()
+        except Exception:
+            pass
+
+    def _complete_prompt_input(self, input_widget: SelectionAwareInput) -> bool:
+        """Complete the active prompt command in-place."""
+        suggestion = self._suggest_prompt_completion(input_widget.value)
+        if not suggestion or suggestion == input_widget.value:
+            return False
+        input_widget.value = suggestion
+        input_widget.cursor_position = len(suggestion)
+        return True
+
+    def _suggest_prompt_completion(self, value: str) -> str | None:
+        """Return a contextual completion for command-like prompt text."""
+        if not value.startswith(("/", ":")):
+            return None
+
+        lowered = value.lower()
+        context_specs = [
+            (":mcp connect ", self._configured_mcp_server_ids),
+            (":mcp disconnect ", self._configured_mcp_server_ids),
+            (":mcp reconnect ", self._configured_mcp_server_ids),
+            (":mcp doctor ", self._configured_mcp_server_ids),
+            (":skills info ", self._local_skill_names),
+            (":skills search ", self._local_skill_names),
+            (":skills enable ", self._local_skill_names),
+            (":skills disable ", self._all_local_skill_names),
+            (":skills remove ", self._all_local_skill_names),
+            (":connect byok ", self._byok_provider_ids),
+            (":connect local ", self._local_provider_ids),
+        ]
+        for prefix, provider in context_specs:
+            if lowered.startswith(prefix):
+                return self._complete_after_prefix(value, prefix, provider())
+
+        if lowered.startswith(":attach "):
+            return self._complete_path_after_prefix(value, ":attach ")
+        if lowered.startswith(":prompt "):
+            return self._complete_path_after_prefix(value, ":prompt ", files_only=True)
+        if lowered.startswith(":model switch "):
+            return self._complete_model_switch(value, ":model switch ")
+
+        return self._first_completion(value, COMMANDS)
+
+    @staticmethod
+    def _first_completion(value: str, candidates: list[str] | tuple[str, ...]) -> str | None:
+        lowered = value.lower()
+        for candidate in sorted(dict.fromkeys(candidates), key=str.lower):
+            if candidate.lower().startswith(lowered) and candidate != value:
+                return candidate
+        return None
+
+    @staticmethod
+    def _complete_after_prefix(
+        value: str,
+        prefix: str,
+        candidates: list[str] | tuple[str, ...] | set[str],
+    ) -> str | None:
+        partial = value[len(prefix) :]
+        for candidate in sorted(dict.fromkeys(candidates), key=str.lower):
+            if candidate.lower().startswith(partial.lower()):
+                completed = prefix + candidate
+                return completed if completed != value else None
+        return None
+
+    def _complete_path_after_prefix(
+        self,
+        value: str,
+        prefix: str,
+        *,
+        files_only: bool = False,
+    ) -> str | None:
+        partial = value[len(prefix) :]
+        completed = self._complete_path_token(partial, files_only=files_only)
+        if not completed:
+            return None
+        suggestion = prefix + completed
+        return suggestion if suggestion != value else None
+
+    @staticmethod
+    def _complete_path_token(partial: str, *, files_only: bool = False) -> str | None:
+        expanded = partial.replace("\\ ", " ")
+        raw_dir, raw_name = os.path.split(expanded)
+        base = Path(raw_dir or ".").expanduser()
+        if not base.is_absolute():
+            base = Path.cwd() / base
+        if not base.exists() or not base.is_dir():
+            return None
+        try:
+            entries = sorted(base.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower()))
+        except OSError:
+            return None
+        for entry in entries:
+            if raw_name and not entry.name.lower().startswith(raw_name.lower()):
+                continue
+            if entry.name.startswith(".") and not raw_name.startswith("."):
+                continue
+            if files_only and not entry.is_file():
+                continue
+            rel = os.path.join(raw_dir, entry.name) if raw_dir else entry.name
+            return rel + "/" if entry.is_dir() else rel
+        return None
+
+    def _complete_model_switch(self, value: str, prefix: str) -> str | None:
+        partial = value[len(prefix) :]
+        if "/" not in partial:
+            if partial in self._all_provider_ids():
+                return value + "/"
+            provider = self._complete_after_prefix(value, prefix, self._all_provider_ids())
+            return provider + "/" if provider else None
+        provider, model_partial = partial.split("/", 1)
+        models = self._model_ids_for_provider(provider)
+        return self._complete_after_prefix(value, f"{prefix}{provider}/", models)
+
+    @staticmethod
+    def _configured_mcp_server_ids() -> list[str]:
+        try:
+            from superqode.mcp.config import load_mcp_config
+
+            servers = load_mcp_config(Path.cwd() / ".superqode" / "mcp.json")
+            return list(servers.keys())
+        except Exception:
+            return []
+
+    @staticmethod
+    def _local_skill_names() -> list[str]:
+        try:
+            from superqode.skills import load_skills
+
+            return [skill.name for skill in load_skills(Path.cwd()).values()]
+        except Exception:
+            return []
+
+    @staticmethod
+    def _all_local_skill_names() -> list[str]:
+        names = set(SuperQodeApp._local_skill_names())
+        skills_root = Path.cwd() / ".agents" / "skills"
+        if not skills_root.exists():
+            return sorted(names)
+        for path in sorted(skills_root.rglob("*.md")):
+            name = path.parent.name if path.name.upper() == "SKILL.MD" else path.stem
+            try:
+                text = path.read_text(encoding="utf-8", errors="ignore")[:1000]
+            except Exception:
+                text = ""
+            if text.startswith("---"):
+                end = text.find("\n---", 3)
+                front = text[:end] if end != -1 else text
+                for line in front.splitlines():
+                    if line.strip().startswith("name:"):
+                        name = line.split(":", 1)[1].strip().strip('"').strip("'") or name
+                        break
+            names.add(name)
+        return sorted(names)
+
+    @staticmethod
+    def _all_provider_ids() -> list[str]:
+        try:
+            from superqode.providers.registry import PROVIDERS
+
+            return list(PROVIDERS.keys())
+        except Exception:
+            return []
+
+    @staticmethod
+    def _byok_provider_ids() -> list[str]:
+        try:
+            from superqode.providers.registry import PROVIDERS, ProviderCategory
+
+            return [
+                provider_id
+                for provider_id, provider in PROVIDERS.items()
+                if provider.category != ProviderCategory.LOCAL
+            ]
+        except Exception:
+            return []
+
+    @staticmethod
+    def _local_provider_ids() -> list[str]:
+        try:
+            from superqode.providers.registry import PROVIDERS, ProviderCategory
+
+            return [
+                provider_id
+                for provider_id, provider in PROVIDERS.items()
+                if provider.category == ProviderCategory.LOCAL
+            ]
+        except Exception:
+            return []
+
+    @staticmethod
+    def _model_ids_for_provider(provider_id: str) -> list[str]:
+        try:
+            from superqode.providers.models import get_models_for_provider
+
+            return list(get_models_for_provider(provider_id).keys())
+        except Exception:
+            return []
+
+    def _sync_attachment_prefill(self) -> None:
+        if not getattr(self, "_attached_refs", None):
+            self._set_prompt_prefill("")
+            return
+        prefill = " ".join(dict.fromkeys(self._attached_refs)) + " "
+        self._set_prompt_prefill(prefill)
+
+    def _render_attachments(self) -> Text:
+        t = Text()
+        t.append("\n  📎 ", style=f"bold {THEME['cyan']}")
+        t.append("Prompt Attachments\n\n", style=f"bold {THEME['text']}")
+        refs = getattr(self, "_attached_refs", [])
+        if not refs:
+            t.append("  No staged references.\n", style=THEME["muted"])
+            t.append("  Add one with ", style=THEME["muted"])
+            t.append(":attach <file|url>\n", style=THEME["cyan"])
+            return t
+        for index, ref in enumerate(refs, 1):
+            t.append(f"  [{index}] ", style=THEME["dim"])
+            t.append(ref, style=THEME["cyan"] if ref.startswith("@") else THEME["text"])
+            t.append("\n")
+        t.append("\n  Commands: ", style=THEME["muted"])
+        t.append(":attach remove <n>", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":attach clear\n", style=THEME["cyan"])
+        return t
+
+    def _attach_cmd(self, args: str, log: ConversationLog):
+        """Insert file or URL references into the next prompt."""
+        value = args.strip()
+        if not value:
+            self._show_command_output(log, self._render_attachments())
+            return
+        try:
+            raw_refs = shlex.split(value)
+        except ValueError as exc:
+            log.add_error(f"Could not parse :attach arguments: {exc}")
+            return
+        action = raw_refs[0].lower() if raw_refs else ""
+        if action in {"list", "ls", "show"}:
+            self._show_command_output(log, self._render_attachments())
+            return
+        if action in {"clear", "reset"}:
+            self._attached_refs = []
+            self._set_prompt_prefill("")
+            log.add_info("Cleared staged prompt references.")
+            return
+        if action in {"remove", "rm", "delete"}:
+            if len(raw_refs) < 2:
+                log.add_error("Usage: :attach remove <index|reference>")
+                return
+            target = raw_refs[1]
+            refs = list(getattr(self, "_attached_refs", []))
+            removed = None
+            if target.isdigit():
+                index = int(target) - 1
+                if 0 <= index < len(refs):
+                    removed = refs.pop(index)
+            elif target in refs:
+                refs.remove(target)
+                removed = target
+            if removed is None:
+                log.add_error(f"Attachment not found: {target}")
+                return
+            self._attached_refs = refs
+            self._sync_attachment_prefill()
+            log.add_info(f"Removed staged reference: {removed}")
+            return
+        refs: list[str] = []
+        for raw in raw_refs:
+            if raw.startswith(("http://", "https://")):
+                refs.append(raw)
+                continue
+            path = Path(raw).expanduser()
+            if not path.is_absolute():
+                path = Path.cwd() / path
+            if not path.exists():
+                log.add_error(f"Cannot attach missing path: {raw}")
+                continue
+            try:
+                refs.append("@" + str(path.relative_to(Path.cwd())))
+            except ValueError:
+                refs.append("@" + str(path))
+        if not refs:
+            return
+        self._attached_refs.extend(refs)
+        self._attached_refs = list(dict.fromkeys(self._attached_refs))
+        self._sync_attachment_prefill()
+        log.add_info(f"Attached {len(refs)} reference(s) to the next prompt.")
+
+    def _prompt_file_cmd(self, args: str, log: ConversationLog):
+        """Load a prompt file into the input buffer."""
+        value = args.strip()
+        if not value:
+            log.add_info("Usage: :prompt <file>")
+            return
+        try:
+            parts = shlex.split(value)
+        except ValueError as exc:
+            log.add_error(f"Could not parse :prompt arguments: {exc}")
+            return
+        if not parts:
+            log.add_info("Usage: :prompt <file>")
+            return
+        path = Path(parts[0]).expanduser()
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        if not path.exists() or not path.is_file():
+            log.add_error(f"Prompt file not found: {path}")
+            return
+        try:
+            content = path.read_text(encoding="utf-8")
+        except Exception as exc:
+            log.add_error(f"Could not read prompt file: {exc}")
+            return
+        self._set_prompt_prefill(content)
+        log.add_info(f"Loaded prompt file into input: {path}")
+
+    @staticmethod
+    def _mcp_server_config_from_target(server_id: str, target: str):
+        """Build an MCPServerConfig from a URL or stdio command string."""
+        from superqode.mcp.config import MCPHttpConfig, MCPServerConfig, MCPStdioConfig
+
+        target = target.strip()
+        if target.startswith(("http://", "https://")):
+            return MCPServerConfig(
+                id=server_id,
+                name=server_id,
+                enabled=True,
+                auto_connect=True,
+                config=MCPHttpConfig(url=target),
+            )
+        argv = shlex.split(target)
+        if not argv:
+            raise ValueError("MCP target cannot be empty")
+        command = argv[0]
+        args = argv[1:]
+        if command.startswith("@"):
+            args = [command, *args]
+            command = "npx"
+        return MCPServerConfig(
+            id=server_id,
+            name=server_id,
+            enabled=True,
+            auto_connect=True,
+            config=MCPStdioConfig(command=command, args=args),
+        )
+
+    @staticmethod
+    def _mcp_id_from_target(target: str) -> str:
+        """Generate a stable-ish MCP server id for direct connect targets."""
+        target = target.strip()
+        if target.startswith(("http://", "https://")):
+            parsed = urlparse(target)
+            base = parsed.netloc or parsed.path
+        else:
+            try:
+                parts = shlex.split(target)
+            except ValueError:
+                parts = target.split()
+            base = parts[0] if parts else "mcp"
+            if base.startswith("@"):
+                base = base.split("/")[-1]
+        safe = "".join(ch if ch.isalnum() else "-" for ch in base.lower()).strip("-")
+        return safe or "mcp-server"
+
+    async def _add_mcp_server_config(
+        self,
+        manager,
+        server_id: str,
+        target: str,
+    ) -> tuple[bool, str]:
+        """Persist and register an MCP server config."""
+        from superqode.mcp.config import load_mcp_config, save_mcp_config
+
+        config = self._mcp_server_config_from_target(server_id, target)
+        servers = load_mcp_config()
+        if server_id in servers:
+            return False, f"MCP server already exists: {server_id}"
+        servers[server_id] = config
+        save_mcp_config(servers)
+        manager.add_server(config)
+        return True, f"Saved MCP server {server_id}."
+
     async def _mcp_cmd(self, args: str, log: ConversationLog):
         """Handle MCP status and inventory commands."""
         try:
@@ -4139,10 +4901,38 @@ class SuperQodeApp(App):
             self._show_command_output(log, t)
             return
 
+        if subcommand == "add":
+            try:
+                tokens = shlex.split(subargs)
+            except ValueError as exc:
+                log.add_error(f"Could not parse MCP add command: {exc}")
+                return
+            if len(tokens) < 2:
+                log.add_info("Usage: :mcp add <name> <url|stdio command>")
+                return
+            server_id = tokens[0]
+            target = " ".join(shlex.quote(token) for token in tokens[1:])
+            ok, message = await self._add_mcp_server_config(manager, server_id, target)
+            if ok:
+                log.add_info(message)
+                log.add_info(f"Connect it with :mcp connect {server_id}")
+            else:
+                log.add_error(message)
+            return
+
         if subcommand == "connect":
             if subargs:
-                ok = await manager.connect(subargs)
-                log.add_info(f"MCP server {subargs}: {'connected' if ok else 'failed to connect'}")
+                configs = manager.get_server_configs()
+                server_id = subargs
+                if subargs not in configs:
+                    server_id = self._mcp_id_from_target(subargs)
+                    ok, message = await self._add_mcp_server_config(manager, server_id, subargs)
+                    if not ok:
+                        log.add_error(message)
+                        return
+                    log.add_info(message)
+                ok = await manager.connect(server_id)
+                log.add_info(f"MCP server {server_id}: {'connected' if ok else 'failed to connect'}")
             else:
                 results = await manager.connect_all()
                 if not results:
@@ -4152,6 +4942,22 @@ class SuperQodeApp(App):
                     log.add_info(f"Connected {connected}/{len(results)} MCP servers.")
             return
 
+        if subcommand in {"reconnect", "restart"}:
+            if subargs:
+                ok = await manager.restart_server(subargs)
+                log.add_info(f"MCP server {subargs}: {'reconnected' if ok else 'failed to reconnect'}")
+            else:
+                configs = manager.get_server_configs()
+                if not configs:
+                    log.add_info("No MCP servers configured.")
+                    return
+                results = {}
+                for server_id in configs:
+                    results[server_id] = await manager.restart_server(server_id)
+                connected = sum(1 for ok in results.values() if ok)
+                log.add_info(f"Reconnected {connected}/{len(results)} MCP servers.")
+            return
+
         if subcommand == "disconnect":
             if subargs:
                 await manager.disconnect(subargs)
@@ -4159,6 +4965,10 @@ class SuperQodeApp(App):
             else:
                 await manager.disconnect_all()
                 log.add_info("Disconnected all MCP servers.")
+            return
+
+        if subcommand in {"doctor", "diagnostics", "diag"}:
+            self._show_mcp_doctor(manager, subargs, log)
             return
 
         if subcommand == "tools":
@@ -4219,8 +5029,59 @@ class SuperQodeApp(App):
             return
 
         log.add_info(
-            "Usage: :mcp status|connect [server]|disconnect [server]|tools|resources|prompts"
+            "Usage: :mcp status|add|connect|reconnect|disconnect|doctor|tools|resources|prompts"
         )
+
+    def _show_mcp_doctor(self, manager, server_filter: str, log: ConversationLog) -> None:
+        """Render MCP server configuration and runtime diagnostics."""
+        configs = manager.get_server_configs()
+        if server_filter:
+            configs = {server_filter: configs[server_filter]} if server_filter in configs else {}
+        t = Text()
+        t.append("\n  🔗 ", style=f"bold {THEME['cyan']}")
+        t.append("MCP Doctor\n\n", style=f"bold {THEME['text']}")
+        if not configs:
+            t.append("  No matching MCP server configured.\n", style=THEME["warning"])
+            t.append("  Add one with :mcp add <name> <url|command>.\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+        summary = manager.get_status_summary()
+        for server_id, config in configs.items():
+            conn = manager.get_connection(server_id)
+            state = manager.get_connection_state(server_id).value
+            config_obj = config.config
+            transport = getattr(config_obj, "transport", type(config_obj).__name__)
+            if hasattr(config_obj, "url"):
+                target = getattr(config_obj, "url", "")
+            else:
+                target = " ".join([getattr(config_obj, "command", ""), *getattr(config_obj, "args", [])])
+            server_summary = summary.get("servers", {}).get(server_id, {})
+            style = THEME["success"] if state == "connected" else THEME["warning"] if state == "error" else THEME["muted"]
+            t.append(f"  {server_id}\n", style=f"bold {THEME['cyan']}")
+            t.append("    state      ", style=THEME["muted"])
+            t.append(f"{state}\n", style=style)
+            t.append("    transport  ", style=THEME["muted"])
+            t.append(f"{transport}\n", style=THEME["text"])
+            t.append("    target     ", style=THEME["muted"])
+            t.append(f"{target or '-'}\n", style=THEME["text"])
+            t.append("    enabled    ", style=THEME["muted"])
+            t.append(f"{config.enabled}  auto_connect={config.auto_connect}\n", style=THEME["text"])
+            t.append("    exposed    ", style=THEME["muted"])
+            t.append(
+                f"{server_summary.get('tools', 0)} tools, {server_summary.get('resources', 0)} resources, {server_summary.get('prompts', 0)} prompts\n",
+                style=THEME["text"],
+            )
+            error = getattr(conn, "error_message", None) if conn else server_summary.get("error")
+            if error:
+                t.append("    error      ", style=THEME["muted"])
+                t.append(f"{error}\n", style=THEME["error"])
+            t.append("\n")
+        t.append("  Commands: ", style=THEME["muted"])
+        t.append(":mcp connect <server>", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":mcp reconnect <server>", style=THEME["cyan"])
+        t.append("\n", style=THEME["muted"])
+        self._show_command_output(log, t)
 
     def _get_session_manager(self):
         """Get a local JSONL session manager."""
@@ -15555,6 +16416,124 @@ team:
         else:
             log.add_info("No provider selected")
 
+    def _model_cmd(self, args: str, log: ConversationLog):
+        """Handle current model status and lightweight runtime overrides."""
+        args = args.strip()
+        parts = args.split(maxsplit=1) if args else []
+        sub = parts[0].lower() if parts else "status"
+        value = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub in {"", "status", "current"}:
+            self._show_model_status(log)
+            return
+        if sub in {"doctor", "check"}:
+            self._doctor_cmd("current", log)
+            return
+        if sub in {"switch", "use", "set"}:
+            if not value:
+                log.add_info("Usage: :model switch <provider>/<model> or :model switch <model>")
+                return
+            if "/" in value:
+                provider, model = value.split("/", 1)
+                provider = provider.strip()
+                model = model.strip()
+            else:
+                provider = self.current_provider
+                model = value
+            if not provider or not model:
+                log.add_error("No provider/model selected. Use :connect byok or :connect local first.")
+                return
+            local_providers = {"ds4", "ollama", "lmstudio", "mlx", "vllm", "sglang", "tgi", "huggingface-local"}
+            if provider in local_providers:
+                self._connect_local_mode(provider, model, log)
+            else:
+                self._connect_byok_mode(provider, model, log)
+            return
+        if sub in {"reasoning", "temperature", "verbosity", "web_search", "web-search"}:
+            if not value:
+                current = getattr(self, f"_model_{sub.replace('-', '_')}", None)
+                log.add_info(f"{sub}: {current if current is not None else 'default'}")
+                return
+            attr = f"_model_{sub.replace('-', '_')}"
+            setattr(self, attr, value)
+            log.add_info(
+                f"Model override set for this TUI session: {sub}={value}. "
+                "HarnessSpec-backed runs should encode durable settings in the spec."
+            )
+            return
+        log.add_info(
+            "Usage: :model [doctor|switch <provider>/<model>|reasoning <value>|temperature <n>|verbosity <value>]"
+        )
+
+    def _show_model_status(self, log: ConversationLog):
+        """Show active provider/model and known capability hints."""
+        from superqode.providers.models import get_models_for_provider
+        from superqode.providers.registry import PROVIDERS
+
+        provider = self.current_provider or ""
+        model = self.current_model or ""
+        t = Text()
+        t.append("\n  ◇ ", style=f"bold {THEME['purple']}")
+        t.append("Current Model\n\n", style=f"bold {THEME['text']}")
+        t.append("  Provider    ", style=THEME["muted"])
+        t.append(f"{provider or '-'}\n", style=f"bold {THEME['cyan']}")
+        t.append("  Model       ", style=THEME["muted"])
+        t.append(f"{model or '-'}\n", style=f"bold {THEME['text']}")
+
+        provider_def = PROVIDERS.get(provider)
+        if provider_def is not None:
+            t.append("  Provider    ", style=THEME["muted"])
+            t.append(f"{provider_def.name}\n", style=THEME["text"])
+            if provider_def.notes:
+                t.append("  Notes       ", style=THEME["muted"])
+                t.append(f"{provider_def.notes}\n", style=THEME["dim"])
+
+        model_info = get_models_for_provider(provider).get(model) if provider and model else None
+        if model_info is not None:
+            labels = []
+            if model_info.supports_tools:
+                labels.append(("tools", THEME["success"]))
+            if model_info.supports_reasoning:
+                labels.append(("reasoning", THEME["purple"]))
+            if model_info.is_code_optimized:
+                labels.append(("code", THEME["cyan"]))
+            if model_info.supports_vision:
+                labels.append(("vision", THEME["orange"]))
+            t.append("  Context     ", style=THEME["muted"])
+            t.append(f"{model_info.context_display}\n", style=THEME["cyan"])
+            t.append("  Price       ", style=THEME["muted"])
+            t.append(f"{model_info.price_display}\n", style=THEME["gold"])
+            if labels:
+                t.append("  Capability  ", style=THEME["muted"])
+                for idx, (label, style) in enumerate(labels):
+                    if idx:
+                        t.append(", ", style=THEME["dim"])
+                    t.append(label, style=style)
+                t.append("\n")
+        else:
+            t.append("  Capability  ", style=THEME["muted"])
+            t.append("unknown; run :doctor current or :providers <provider>\n", style=THEME["warning"])
+
+        overrides = {
+            "reasoning": getattr(self, "_model_reasoning", None),
+            "temperature": getattr(self, "_model_temperature", None),
+            "verbosity": getattr(self, "_model_verbosity", None),
+            "web_search": getattr(self, "_model_web_search", None),
+        }
+        active_overrides = {key: val for key, val in overrides.items() if val is not None}
+        if active_overrides:
+            t.append("  Overrides   ", style=THEME["muted"])
+            t.append(", ".join(f"{key}={val}" for key, val in active_overrides.items()), style=THEME["text"])
+            t.append("\n")
+
+        t.append("\n  Commands: ", style=THEME["muted"])
+        t.append(":model doctor", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":model switch <provider>/<model>", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":recommend coding\n", style=THEME["cyan"])
+        self._show_command_output(log, t)
+
     def _providers_cmd(self, args: str, log: ConversationLog):
         """Show provider setup, labels, and representative models."""
         from superqode.providers.recommendations import provider_doctor_cards
@@ -18336,6 +19315,14 @@ team:
         t.append(f"  📁 Directory: ", style=THEME["muted"])
         t.append(f"{Path.cwd()}\n", style=THEME["text"])
 
+        refs = getattr(self, "_attached_refs", [])
+        t.append(f"  📎 Attachments: ", style=THEME["muted"])
+        t.append(f"{len(refs)}\n", style=THEME["cyan"] if refs else THEME["dim"])
+        for ref in refs[:5]:
+            t.append(f"     {ref}\n", style=THEME["dim"])
+        if len(refs) > 5:
+            t.append(f"     ... and {len(refs) - 5} more\n", style=THEME["dim"])
+
         log.write(t)
 
     def _show_harness_status(self, log: ConversationLog):
@@ -18382,6 +19369,7 @@ team:
             ("Agent", self.current_agent or "-", THEME["orange"]),
             ("Session", session_id[:12] if session_id != "-" else "-", THEME["text"]),
             ("Approval", self.approval_mode, THEME["warning"]),
+            ("Attachments", str(len(getattr(self, "_attached_refs", []))), THEME["cyan"]),
             ("Branch", git_branch, THEME["text"]),
             ("Git", git_dirty, THEME["success"] if git_dirty == "clean" else THEME["warning"]),
             ("CWD", str(Path.cwd()), THEME["dim"]),
@@ -18389,6 +19377,14 @@ team:
         for label, value, style in fields:
             t.append(f"  {label:<10}", style=THEME["muted"])
             t.append(f"{value}\n", style=style)
+
+        refs = getattr(self, "_attached_refs", [])
+        if refs:
+            t.append("\n  Staged refs\n", style=f"bold {THEME['cyan']}")
+            for ref in refs[:8]:
+                t.append(f"    {ref}\n", style=THEME["dim"])
+            if len(refs) > 8:
+                t.append(f"    ... and {len(refs) - 8} more\n", style=THEME["dim"])
 
         if self.current_provider:
             try:
@@ -18551,6 +19547,11 @@ team:
                     (":models search <q>", "Search all available models"),
                     (":models update", "Refresh models database from models.dev"),
                     (":models info", "Show model database information"),
+                    (":model", "Show current model card and runtime overrides"),
+                    (":model switch <p>/<m>", "Switch provider/model for native BYOK/local sessions"),
+                    (":model reasoning <value>", "Set reasoning effort for future native runs"),
+                    (":model temperature <n>", "Set temperature for future native runs"),
+                    (":model doctor", "Check active provider/model readiness"),
                     (":providers [provider]", "Show provider setup and quality labels"),
                     (":doctor current", "Check active provider/model readiness"),
                     (":recommend <task>", "Recommend models for coding/review/testing/budget"),
@@ -18601,6 +19602,13 @@ team:
                 THEME["teal"],
                 [
                     (":tools [profile]", "Show tool profile and available built-in tools"),
+                    (":skills", "List local project skills from .agents/skills"),
+                    (":skills search <query>", "Search loaded local skills"),
+                    (":skills info <name>", "Inspect a skill's metadata and instructions"),
+                    (":skills add <name>", "Create a SKILL.md template for a new skill"),
+                    (":skills import <path>", "Import a local skill file or directory"),
+                    (":skills doctor", "Validate local skill metadata and duplicates"),
+                    (":skills enable|disable <name>", "Toggle a local skill's enabled flag"),
                     (":status", "Show active provider, model, sandbox/session, branch, approval"),
                     (":harness", "Open the harness overview and show active state"),
                     (":retry", "Retry the last user prompt"),
@@ -18610,6 +19618,10 @@ team:
                     (":session list", "Show recent local/BYOK sessions"),
                     (":mcp status", "Show configured MCP servers"),
                     (":mcp connect [server]", "Connect one or all MCP servers"),
+                    (":mcp connect <url|command>", "Add and connect a new MCP server target"),
+                    (":mcp add <name> <url|command>", "Save an MCP server config"),
+                    (":mcp reconnect [server]", "Reconnect one or all MCP servers"),
+                    (":mcp doctor [server]", "Inspect MCP config, state, and capabilities"),
                     (":mcp disconnect [server]", "Disconnect one or all MCP servers"),
                     (":mcp tools", "List tools exposed by connected MCP servers"),
                     (":mcp resources", "List resources exposed by connected MCP servers"),
@@ -18656,6 +19668,10 @@ team:
                     (":search <query>", "Search file contents"),
                     (":sidebar", "Toggle sidebar (Ctrl+B)"),
                     (":open <file>", "Open a file in viewer"),
+                    (":attach <file|url>", "Insert @file or URL reference into the prompt"),
+                    (":attach list", "Show staged prompt references"),
+                    (":attach remove <n>", "Remove a staged prompt reference"),
+                    (":prompt <file>", "Load a prompt file into the input buffer"),
                 ],
             ),
             (
@@ -18710,8 +19726,8 @@ team:
                     ("Ctrl+L", "Clear screen"),
                     ("Ctrl+Shift+C", "Copy last response"),
                     ("Ctrl+C", "Exit / Cancel"),
-                    ("Tab", "Change section in pickers"),
-                    ("→", "Auto-complete command"),
+                    ("Tab", "Complete commands, names, models, and paths"),
+                    ("→", "Complete commands, names, models, and paths"),
                 ],
             ),
         ]

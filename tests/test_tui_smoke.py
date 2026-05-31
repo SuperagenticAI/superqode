@@ -176,6 +176,138 @@ def test_work_command_renders_last_run_trace():
     assert "success" in text
 
 
+def test_skills_command_creates_and_lists_local_skill(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._skills_cmd("add repo-review Repository review workflow", log)
+    assert (tmp_path / ".agents" / "skills" / "repo-review" / "SKILL.md").exists()
+
+    app._skills_cmd("", log)
+    text = render_plain(log.items[-1])
+
+    assert "repo-review" in text
+    assert "Repository review workflow" in text
+
+
+def test_attach_command_prefills_file_reference(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    target = tmp_path / "src" / "example.py"
+    target.parent.mkdir()
+    target.write_text("print('hi')\n")
+    app = make_app()
+    log = FakeLog()
+    captured = []
+    app._set_prompt_prefill = lambda value: captured.append(value)
+
+    app._attach_cmd("src/example.py", log)
+
+    assert captured == ["@src/example.py "]
+    assert any("Attached 1 reference" in str(item) for item in log.items)
+
+
+def test_attach_command_lists_removes_and_clears_refs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    target = tmp_path / "README.md"
+    target.write_text("# Project\n")
+    app = make_app()
+    log = FakeLog()
+    captured = []
+    app._set_prompt_prefill = lambda value: captured.append(value)
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._attach_cmd("README.md https://example.com/spec", log)
+    assert app._attached_refs == ["@README.md", "https://example.com/spec"]
+
+    app._attach_cmd("list", log)
+    text = render_plain(log.items[-1])
+    assert "@README.md" in text
+    assert "https://example.com/spec" in text
+
+    app._attach_cmd("remove 1", log)
+    assert app._attached_refs == ["https://example.com/spec"]
+    assert captured[-1] == "https://example.com/spec "
+
+    app._attach_cmd("clear", log)
+    assert app._attached_refs == []
+    assert captured[-1] == ""
+
+
+def test_skills_doctor_reports_missing_description(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    skill_dir = tmp_path / ".agents" / "skills" / "thin"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: thin\nenabled: true\n---\n\n# Thin\n")
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._skills_cmd("doctor", log)
+    text = render_plain(log.items[-1])
+
+    assert "missing description" in text
+
+
+def test_prompt_completion_suggests_mcp_server(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    config_dir = tmp_path / ".superqode"
+    config_dir.mkdir()
+    (config_dir / "mcp.json").write_text(
+        '{"mcpServers":{"filesystem":{"command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","."]}}}'
+    )
+    app = make_app()
+
+    assert app._suggest_prompt_completion(":mcp connect fi") == ":mcp connect filesystem"
+
+
+def test_prompt_completion_suggests_skill_name(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    skill_dir = tmp_path / ".agents" / "skills" / "repo-review"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: repo-review\ndescription: Review repository changes\nenabled: true\n---\n\n# Review\n"
+    )
+    app = make_app()
+
+    assert app._suggest_prompt_completion(":skills info rep") == ":skills info repo-review"
+
+
+def test_prompt_completion_suggests_attach_and_prompt_paths(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    target = tmp_path / "prompts" / "review.md"
+    target.parent.mkdir()
+    target.write_text("Review this change\n")
+    app = make_app()
+
+    assert app._suggest_prompt_completion(":attach pro") == ":attach prompts/"
+    assert app._suggest_prompt_completion(":prompt prompts/rev") == ":prompt prompts/review.md"
+
+
+def test_prompt_completion_suggests_provider_and_model():
+    app = make_app()
+
+    assert app._suggest_prompt_completion(":connect byok anthrop") == ":connect byok anthropic"
+    assert app._suggest_prompt_completion(":model switch anthropic") == ":model switch anthropic/"
+
+
+def test_mcp_target_config_detects_http_and_stdio():
+    app = make_app()
+
+    http_config = app._mcp_server_config_from_target("hf", "https://huggingface.co/mcp")
+    stdio_config = app._mcp_server_config_from_target(
+        "everything",
+        "@modelcontextprotocol/server-everything",
+    )
+
+    assert http_config.config.transport == "http"
+    assert http_config.config.url == "https://huggingface.co/mcp"
+    assert stdio_config.config.transport == "stdio"
+    assert stdio_config.config.command == "npx"
+    assert stdio_config.config.args == ["@modelcontextprotocol/server-everything"]
+
+
 def test_select_command_routes_response_error_prompt_and_transcript():
     app = make_app()
     log = FakeLog()
