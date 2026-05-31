@@ -27,6 +27,50 @@ async def test_ds4_lists_server_models_as_tool_capable(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_ds4_honors_server_reported_context_length(monkeypatch):
+    """ds4-server --ctx N is surfaced via /v1/models; the harness budgets
+    against the live window rather than the 1M default."""
+    client = DS4Client(host="http://127.0.0.1:8000/v1")
+
+    async def fake_request(method, endpoint, data=None, timeout=10.0):
+        return {
+            "data": [
+                {
+                    "id": "deepseek-v4-flash",
+                    "name": "DeepSeek V4 Flash",
+                    "context_length": 100000,
+                    "top_provider": {"context_length": 100000},
+                },
+                # Falls back to top_provider when the top-level field is absent.
+                {"id": "deepseek-v4-pro", "top_provider": {"context_length": 100000}},
+            ]
+        }
+
+    monkeypatch.setattr(client, "_async_request", fake_request)
+
+    models = await client.list_models()
+
+    assert {m.id: m.context_window for m in models} == {
+        "deepseek-v4-flash": 100000,
+        "deepseek-v4-pro": 100000,
+    }
+
+
+@pytest.mark.asyncio
+async def test_ds4_context_window_defaults_to_1m_when_unreported(monkeypatch):
+    client = DS4Client(host="http://127.0.0.1:8000/v1")
+
+    async def fake_request(method, endpoint, data=None, timeout=10.0):
+        return {"data": [{"id": "deepseek-v4-flash"}]}
+
+    monkeypatch.setattr(client, "_async_request", fake_request)
+
+    models = await client.list_models()
+
+    assert models[0].context_window == 1_000_000
+
+
+@pytest.mark.asyncio
 async def test_ds4_falls_back_to_known_models_when_server_unreachable(monkeypatch):
     client = DS4Client(host="http://127.0.0.1:8000/v1")
 

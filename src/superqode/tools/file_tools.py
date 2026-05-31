@@ -13,7 +13,10 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .base import Tool, ToolResult, ToolContext
-from .validation import validate_path_in_working_directory
+from .validation import (
+    validate_path_in_search_scope,
+    validate_path_in_working_directory,
+)
 from .file_tracking import record_file_read
 from .diff_utils import build_unified_diff, diff_stats
 
@@ -68,8 +71,11 @@ class ReadFileTool(Tool):
         end_line = args.get("end_line")
 
         try:
-            # Validate and resolve path - ensures it stays within working directory
-            file_path = validate_path_in_working_directory(path, ctx.working_directory)
+            # Reads may also target configured read-only search roots, so a
+            # local model can open a file it found in a downloaded repo.
+            file_path = validate_path_in_search_scope(
+                path, ctx.working_directory, getattr(ctx, "search_roots", None)
+            )
             if not file_path.exists():
                 return ToolResult(success=False, output="", error=f"File not found: {path}")
 
@@ -297,8 +303,10 @@ class ListDirectoryTool(Tool):
         max_depth = args.get("max_depth", 3)
 
         try:
-            # Validate and resolve path - ensures it stays within working directory
-            dir_path = validate_path_in_working_directory(path, ctx.working_directory)
+            # Listing is read-only, so configured search roots are allowed too.
+            dir_path = validate_path_in_search_scope(
+                path, ctx.working_directory, getattr(ctx, "search_roots", None)
+            )
             if not dir_path.exists():
                 return ToolResult(success=False, output="", error=f"Directory not found: {path}")
 

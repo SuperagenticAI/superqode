@@ -40,6 +40,10 @@ class ToolContext:
 
     session_id: str
     working_directory: Path
+    # Optional: extra read-only roots that search/read tools may access (e.g. a
+    # downloaded repo outside the project). None => fall back to the
+    # SUPERQODE_SEARCH_ROOTS env var. Writers ignore this and stay in the cwd.
+    search_roots: Optional[List[Path]] = None
     # Optional: for permission checks (user can enable/disable)
     require_confirmation: bool = False
     # Callback for streaming output (optional) - can be sync or async
@@ -287,7 +291,7 @@ class ToolRegistry:
         from .file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
         from .edit_tools import EditFileTool, PatchTool
         from .shell_tools import BashTool
-        from .search_tools import GrepTool, GlobTool, RepoSearchTool
+        from .search_tools import GrepTool, GlobTool, RepoSearchTool, CodeSearchTool
         from .question_tool import QuestionTool, ConfirmTool
         from .todo_tools import TodoWriteTool, TodoReadTool
 
@@ -308,6 +312,9 @@ class ToolRegistry:
         registry.register(GrepTool())
         registry.register(GlobTool())
         registry.register(RepoSearchTool())
+        # Semantic symbol/definition/reference search. Local models lean on
+        # local search in place of web access, so give them the richer tool.
+        registry.register(CodeSearchTool())
 
         registry.register(QuestionTool())
         registry.register(ConfirmTool())

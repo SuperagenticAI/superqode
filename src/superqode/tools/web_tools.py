@@ -31,6 +31,33 @@ from dataclasses import dataclass
 from .base import Tool, ToolResult, ToolContext
 
 
+def _is_network_error(exc: BaseException) -> bool:
+    """True when an exception indicates missing/blocked network access.
+
+    Lets web tools degrade with actionable guidance (use local search) instead
+    of a raw stack-trace-style error when running offline or sandboxed.
+    """
+    if isinstance(exc, (urllib.error.URLError, ssl.SSLError, TimeoutError, OSError)):
+        return True
+    # urllib.error.URLError wraps the underlying OSError in .reason.
+    reason = getattr(exc, "reason", None)
+    if isinstance(reason, OSError):
+        return True
+    text = str(exc).lower()
+    return any(
+        marker in text
+        for marker in (
+            "name or service not known",
+            "temporary failure in name resolution",
+            "nodename nor servname",
+            "network is unreachable",
+            "connection refused",
+            "timed out",
+            "no route to host",
+        )
+    )
+
+
 # ============================================================================
 # HTML Processing Utilities
 # ============================================================================
@@ -278,6 +305,20 @@ Useful for finding documentation, examples, recent information, etc."""
             return self._format_results(query, results, "duckduckgo")
 
         except Exception as e:
+            if _is_network_error(e):
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=(
+                        "web_search is unavailable: no network access "
+                        f"({type(e).__name__}). This environment is offline or "
+                        "network-restricted. Do not retry web_search. Instead, find "
+                        "the answer in the local code: use `repo_search` for a broad "
+                        "pass, then `grep`/`code_search`/`read_file`. If a downloaded "
+                        "reference repo is configured (SUPERQODE_SEARCH_ROOTS), search "
+                        "it by its absolute path."
+                    ),
+                )
             return ToolResult(success=False, output="", error=f"Search failed: {str(e)}")
 
     def _format_results(self, query: str, results: List[SearchResult], provider: str) -> ToolResult:

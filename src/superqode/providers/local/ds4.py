@@ -29,6 +29,27 @@ DEFAULT_DS4_HEALTH_TIMEOUT = 1.0
 DEFAULT_DS4_MODELS_TIMEOUT = 1.5
 
 
+def _extract_context_length(model_data: Dict[str, Any]) -> Optional[int]:
+    """Pull the context window from a ``/v1/models`` entry.
+
+    ds4-server reports the live window (``--ctx``) as ``context_length`` and
+    mirrors it under ``top_provider``. Returns ``None`` when absent so callers
+    can fall back to a default.
+    """
+    candidates = [
+        model_data.get("context_length"),
+        (model_data.get("top_provider") or {}).get("context_length"),
+    ]
+    for value in candidates:
+        try:
+            window = int(value)
+        except (TypeError, ValueError):
+            continue
+        if window > 0:
+            return window
+    return None
+
+
 def _env_float(name: str, default: float) -> float:
     value = os.environ.get(name, "").strip()
     if not value:
@@ -133,7 +154,14 @@ class DS4Client(LocalProviderClient):
                 model_id = model_data.get("id", "")
                 if not model_id:
                     continue
-                result.append(self._model_from_id(model_id, running=True))
+                result.append(
+                    self._model_from_id(
+                        model_id,
+                        name=model_data.get("name"),
+                        running=True,
+                        context_window=_extract_context_length(model_data),
+                    )
+                )
             return result or self._fallback_models()
         except Exception:
             return self._fallback_models()
@@ -176,13 +204,20 @@ class DS4Client(LocalProviderClient):
         ]
 
     def _model_from_id(
-        self, model_id: str, name: Optional[str] = None, running: bool = False
+        self,
+        model_id: str,
+        name: Optional[str] = None,
+        running: bool = False,
+        context_window: Optional[int] = None,
     ) -> LocalModel:
         return LocalModel(
             id=model_id,
             name=name or model_id.split("/")[-1],
             quantization="GGUF",
-            context_window=1_000_000,
+            # Honor the server-reported window (set by ds4-server --ctx) when
+            # known; the harness budgets iterations/compaction against this, so
+            # a stale 1M default would overflow a server started at --ctx 100000.
+            context_window=context_window or 1_000_000,
             supports_tools=True,
             supports_vision=False,
             family="deepseek",

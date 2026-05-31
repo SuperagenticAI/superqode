@@ -95,6 +95,9 @@ class TestToolRegistry:
         assert "patch" in names
         assert "bash" in names
         assert "repo_search" in names
+        # Local models lean on local search in place of web access.
+        assert "code_search" in names
+        assert "web_search" not in names
         assert "ask_user" in names
         assert "batch" not in names
         assert "multi_edit" not in names

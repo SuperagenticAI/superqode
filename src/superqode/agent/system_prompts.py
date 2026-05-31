@@ -50,8 +50,12 @@ Behavior:
 - Prefer one decisive tool call over a long explanation of what you might do.
 - For general-knowledge or chat questions that don't need the repo, answer directly.
 - Keep responses short. The user can see the diff and tool output.
+- You have NO web/internet access. Never attempt web search. To find APIs,
+  usage, or examples, search the local code instead: `repo_search` first, then
+  `grep`/`code_search`/`read_file`. Answer from what the code actually shows.
 
 Tool use:
+- `repo_search` for broad exploration (ranked files + content + symbols in one pass).
 - `read_file` for any path; `list_directory` to explore.
 - `create_file` for new files; `write_file` for overwrite/create.
 - `grep` for content patterns, `glob` for file names, `code_search` for symbols.
@@ -100,11 +104,15 @@ Behavior:
 - Read before you edit; verify before you claim a task is done.
 - Keep responses short. The user sees the diff and tool output.
 - For general-knowledge or chat questions, answer directly without tools.
+- You have NO web/internet access. Never attempt web search. To find APIs,
+  usage, or examples, search the local code instead: `repo_search` first, then
+  `grep`/`code_search`/`read_file`. Answer from what the code actually shows.
 
 Tool use:
+- `repo_search` for broad exploration (ranked files + content + symbols in one pass).
 - `read_file` for any path; `list_directory` to explore.
 - `create_file` for new files; `write_file` for overwrite/create.
-- `grep` for content patterns, `glob` for file names.
+- `grep` for content patterns, `glob` for file names, `code_search` for symbols.
 - `edit_file` requires the old text to match exactly, including whitespace.
 - `bash` for one-shot commands.
 
@@ -420,12 +428,35 @@ def get_provider_prompt(provider: Optional[str], model: Optional[str]) -> str:
         return ""
     model_lower = (model or "").lower()
     if provider == "ds4" or "deepseek-v4" in model_lower:
-        return DS4_PROMPT
+        return DS4_PROMPT + _search_roots_note()
     if provider in {"ollama", "mlx", "lmstudio", "vllm", "sglang", "tgi", "llama-cpp"}:
-        if "qwen" in model_lower:
-            return QWEN_PROMPT
-        return LOCAL_PROMPT
+        base = QWEN_PROMPT if "qwen" in model_lower else LOCAL_PROMPT
+        return base + _search_roots_note()
     return ""
+
+
+def _search_roots_note() -> str:
+    """A note listing extra read-only search roots, when configured.
+
+    Local models have no web access, so when the user points SuperQode at a
+    downloaded/cloned repo via SUPERQODE_SEARCH_ROOTS, surface those paths so
+    the model knows it can search and read them (by absolute path).
+    """
+    try:
+        from superqode.tools.validation import get_configured_search_roots
+
+        roots = get_configured_search_roots()
+    except Exception:
+        roots = []
+    if not roots:
+        return ""
+    listed = "\n".join(f"  - {root}" for root in roots)
+    return (
+        "\n\nReference repositories (read-only, outside the project):\n"
+        f"{listed}\n"
+        "You may search and read files under these paths (use their absolute "
+        "path with `repo_search`/`grep`/`read_file`). You cannot write to them."
+    )
 
 
 def get_system_prompt(

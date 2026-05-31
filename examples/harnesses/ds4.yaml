@@ -43,6 +43,9 @@ agents:
       - patch
       - grep
       - glob
+      # Local models have no web access, so lean on rich local search:
+      - repo_search
+      - code_search
       - bash
     skills:
       - repo-navigation

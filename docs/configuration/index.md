@@ -319,6 +319,7 @@ SuperQode respects these environment variables:
 | `SUPERQODE_CONFIG` | Override config file path |
 | `SUPERQODE_OUTPUT_DIR` | Default output directory |
 | `SUPERQODE_LOG_LEVEL` | Logging level |
+| `SUPERQODE_SEARCH_ROOTS` | Extra **read-only** repo roots that search/read tools may access, outside the working directory (`os.pathsep`-separated). See [Local Code Search](../providers/local.md#local-code-search-no-web-access). |
 
 ---
 

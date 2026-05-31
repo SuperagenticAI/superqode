@@ -7029,9 +7029,25 @@ team:
             total_start = time.monotonic()
             model_id = None
             if model and agent_type in ("codex", "openhands", "opencode"):
-                model_id = model
-                if agent_type == "opencode" and not model_id.startswith("opencode/"):
-                    model_id = f"opencode/{model_id}"
+                normalized = model.strip()
+                # "auto"/"default" is a UI placeholder meaning "let the agent
+                # pick its configured default model" — it is NOT a real model id.
+                # Passing a literal "auto" (or "opencode/auto") to session/new
+                # makes opencode return an empty response, which the app then
+                # surfaces as "run failed". Send no model in that case so the
+                # agent falls back to its own default. This mirrors the
+                # special-casing already done in _auto_select_opencode_model.
+                if normalized.lower() in (
+                    "auto",
+                    "default",
+                    "opencode/auto",
+                    "opencode/default",
+                ):
+                    model_id = None
+                else:
+                    model_id = normalized
+                    if agent_type == "opencode" and not model_id.startswith("opencode/"):
+                        model_id = f"opencode/{model_id}"
 
             project_root = Path.cwd()
             client_key = (str(project_root), command, model_id or "")

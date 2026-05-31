@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .base import Tool, ToolResult, ToolContext
-from .validation import validate_path_in_working_directory
+from .validation import validate_path_in_search_scope
 
 try:
     from superqode.file_explorer import PathFilter
@@ -69,7 +69,9 @@ class GrepTool(Tool):
 
         try:
             # Validate and resolve path - ensures it stays within working directory
-            search_path = validate_path_in_working_directory(path, ctx.working_directory)
+            search_path = validate_path_in_search_scope(
+                path, ctx.working_directory, getattr(ctx, "search_roots", None)
+            )
         except ValueError as e:
             return ToolResult(success=False, output="", error=str(e))
 
@@ -93,6 +95,17 @@ class GrepTool(Tool):
 
             output = stdout.decode("utf-8", errors="replace")
 
+            # grep/rg exit 1 == "no matches" (not an error); exit >=2 == real
+            # failure (bad flag, unreadable path). Surface the latter instead of
+            # masking it as "No matches found".
+            if process.returncode and process.returncode >= 2:
+                err = stderr.decode("utf-8", errors="replace").strip()
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=err or f"search command failed (exit {process.returncode})",
+                )
+
             # Limit results
             lines = output.strip().split("\n")
             if len(lines) > self.MAX_RESULTS:
@@ -113,7 +126,9 @@ class GrepTool(Tool):
         self, pattern: str, path: Path, include: str, case_sensitive: bool
     ) -> str:
         """Build ripgrep command."""
-        cmd_parts = ["rg", "--line-number", "--no-heading", "--git-ignore"]
+        # ripgrep respects .gitignore by default; there is no --git-ignore flag
+        # (passing it makes rg exit 2 and return zero matches).
+        cmd_parts = ["rg", "--line-number", "--no-heading"]
 
         if not case_sensitive:
             cmd_parts.append("-i")
@@ -186,7 +201,9 @@ class GlobTool(Tool):
 
         try:
             # Validate and resolve path - ensures it stays within working directory
-            base_path = validate_path_in_working_directory(path, ctx.working_directory)
+            base_path = validate_path_in_search_scope(
+                path, ctx.working_directory, getattr(ctx, "search_roots", None)
+            )
         except ValueError as e:
             return ToolResult(success=False, output="", error=str(e))
 
@@ -369,7 +386,9 @@ class CodeSearchTool(Tool):
 
         try:
             # Validate and resolve path - ensures it stays within working directory
-            search_path = validate_path_in_working_directory(path, ctx.working_directory)
+            search_path = validate_path_in_search_scope(
+                path, ctx.working_directory, getattr(ctx, "search_roots", None)
+            )
         except ValueError as e:
             return ToolResult(success=False, output="", error=str(e))
 
@@ -669,7 +688,9 @@ class RepoSearchTool(Tool):
             return ToolResult(success=False, output="", error="Query is required")
 
         try:
-            search_path = validate_path_in_working_directory(path, ctx.working_directory)
+            search_path = validate_path_in_search_scope(
+                path, ctx.working_directory, getattr(ctx, "search_roots", None)
+            )
         except ValueError as e:
             return ToolResult(success=False, output="", error=str(e))
 

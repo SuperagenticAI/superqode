@@ -142,6 +142,30 @@ export SUPERQODE_DS4_TOOL_MODE=always
 export SUPERQODE_DS4_TOOL_MODE=never
 ```
 
+### Local Code Search (No Web Access)
+
+Local models have no internet access, so `web_search` is intentionally not part
+of the DS4/local tool profile — and asking a local model to "search the web"
+will not work. Instead, local models are tuned to answer from **local code**
+using `repo_search` (broad, ranked files + content + symbols in one pass),
+`grep`, `code_search` (symbols/definitions/references), and `read_file`.
+
+To let a local model search a repo you downloaded **outside** your project (for
+reference, API examples, etc.), point SuperQode at it with
+`SUPERQODE_SEARCH_ROOTS` (`os.pathsep`-separated — `:` on macOS/Linux):
+
+```bash
+export SUPERQODE_SEARCH_ROOTS="$HOME/refs/react:$HOME/refs/linux"
+superqode -p --provider ds4 "how does this project's router compare to react's? search the react ref"
+```
+
+- Search and read tools (`repo_search`, `grep`, `glob`, `code_search`,
+  `read_file`, `list_directory`) may access those roots **read-only**.
+- Writes/edits/shell stay confined to your working directory — reference repos
+  cannot be modified.
+- Address a reference repo by its **absolute path**. The configured roots are
+  listed in the local model's system prompt so it knows they're available.
+
 ---
 
 ## Ollama
