@@ -27,6 +27,46 @@ async def test_ds4_lists_server_models_as_tool_capable(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_ds4_warmup_sends_one_token_completion():
+    """warmup() pokes the model with a 1-token completion to trigger the
+    cold load, and reports timing instead of raising."""
+    client = DS4Client(host="http://127.0.0.1:8000/v1")
+    calls = []
+
+    async def fake_request(method, endpoint, data=None, timeout=10.0):
+        calls.append((method, endpoint, data, timeout))
+        return {"choices": [{"message": {"content": "hi"}}]}
+
+    client._async_request = fake_request
+
+    result = await client.warmup("deepseek-v4-flash")
+
+    assert result["ok"] is True
+    assert result["elapsed"] >= 0
+    method, endpoint, data, timeout = calls[0]
+    assert method == "POST"
+    assert endpoint == "/chat/completions"
+    assert data["model"] == "deepseek-v4-flash"
+    assert data["max_tokens"] == 1
+    assert timeout >= 60  # generous, cold load can take a while
+
+
+@pytest.mark.asyncio
+async def test_ds4_warmup_reports_failure_without_raising():
+    client = DS4Client(host="http://127.0.0.1:8000/v1")
+
+    async def boom(method, endpoint, data=None, timeout=10.0):
+        raise OSError("connection refused")
+
+    client._async_request = boom
+
+    result = await client.warmup()
+
+    assert result["ok"] is False
+    assert "refused" in result["error"]
+
+
+@pytest.mark.asyncio
 async def test_ds4_honors_server_reported_context_length(monkeypatch):
     """ds4-server --ctx N is surfaced via /v1/models; the harness budgets
     against the live window rather than the 1M default."""

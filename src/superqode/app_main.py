@@ -13364,9 +13364,13 @@ team:
 
                     ds4_host = os.getenv("DS4_HOST", "http://127.0.0.1:8000/v1")
                     log.add_info(f"DS4 host: {ds4_host}")
-                    health = await DS4Client(host=ds4_host).get_status()
+                    client = DS4Client(host=ds4_host)
+                    health = await client.get_status()
                     if health.available:
                         log.add_success(f"✓ DS4 server ready at {ds4_host}")
+                        # Warm the model so the first real prompt isn't the one
+                        # paying the one-time cold load (~81GB paged from disk).
+                        await self._warmup_ds4(client, model, log)
                     else:
                         log.add_warning(f"DS4 server not ready: {health.error or 'unavailable'}")
                 elif provider == "ollama":
@@ -13451,6 +13455,43 @@ team:
             # Ensure focus returns to input even after error
             # Use set_timer since we're in the app's event loop, not a separate thread
             self.set_timer(0.1, self._ensure_input_focus)
+
+    async def _warmup_ds4(self, client, model: str, log: ConversationLog) -> None:
+        """Pre-load the DS4 model on connect, with a live elapsed-time indicator.
+
+        DS4's first inference pays a large one-time cost paging the ~81GB model
+        in from disk; doing it here (visibly) keeps the user's first prompt
+        fast. Opt out with ``SUPERQODE_DS4_WARMUP=0``. Never fails the connect:
+        a slow/failed warmup just leaves the model to load on first prompt.
+        """
+        import asyncio
+        import os
+        import time
+
+        if os.getenv("SUPERQODE_DS4_WARMUP", "1").strip().lower() in ("0", "false", "no", "off"):
+            return
+
+        log.add_info("⏳ Loading model into memory (first start can be slow on a cold cache)…")
+        task = asyncio.ensure_future(client.warmup(model))
+        start = time.monotonic()
+        next_tick = 10.0
+        while not task.done():
+            await asyncio.sleep(0.5)
+            elapsed = time.monotonic() - start
+            if elapsed >= next_tick:
+                log.add_info(f"   …still loading the model ({int(elapsed)}s)")
+                next_tick += 10.0
+
+        result = await task
+        if result.get("ok"):
+            log.add_success(f"✓ DS4 ready (warm) — {result.get('elapsed', 0.0):.0f}s")
+            log.add_info("Ready to chat! Type your message below.")
+        else:
+            # Don't block usage — the model will simply load on the first prompt.
+            log.add_warning(
+                "DS4 warmup did not complete "
+                f"({result.get('error') or 'unknown error'}); the first prompt may be slow."
+            )
 
     # =========================================================================
     # BYOK ENHANCED COMMANDS

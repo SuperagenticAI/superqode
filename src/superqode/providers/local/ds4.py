@@ -183,6 +183,33 @@ class DS4Client(LocalProviderClient):
                 return model
         return None
 
+    async def warmup(self, model: Optional[str] = None, timeout: float = 600.0) -> Dict[str, Any]:
+        """Trigger the model load with a 1-token completion.
+
+        DS4 mmaps an ~81GB GGUF and pays a large one-time cost paging it in on
+        the first inference. Calling this right after connect moves that cost to
+        connect time (with progress feedback) instead of the user's first real
+        prompt. Best-effort: returns timing/error rather than raising.
+
+        Returns a dict: ``{"ok": bool, "elapsed": float, "error": str | None}``.
+        """
+        start = time.time()
+        try:
+            await self._async_request(
+                "POST",
+                "/chat/completions",
+                data={
+                    "model": model or DEFAULT_DS4_MODELS[0][0],
+                    "messages": [{"role": "user", "content": "hi"}],
+                    "max_tokens": 1,
+                    "stream": False,
+                },
+                timeout=timeout,
+            )
+            return {"ok": True, "elapsed": time.time() - start, "error": None}
+        except Exception as e:  # noqa: BLE001 - report, don't raise into connect UI
+            return {"ok": False, "elapsed": time.time() - start, "error": str(e)}
+
     async def test_tool_calling(self, model_id: str) -> ToolTestResult:
         """DS4's OpenAI-compatible endpoint supports tool schemas in SuperQode."""
         return ToolTestResult(

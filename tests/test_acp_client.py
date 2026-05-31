@@ -279,6 +279,94 @@ class TestACPClient:
         assert await client.get_available_models() == [{"id": "model-1", "name": "Model 1"}]
 
     @pytest.mark.asyncio
+    async def test_new_session_switches_to_requested_model(self, tmp_path, monkeypatch):
+        """Agents like opencode ignore session/new's model field and start on
+        their default, so the client must follow up with session/set_model."""
+        client = ACPClient(
+            project_root=tmp_path,
+            command="opencode acp",
+            model="opencode/mimo-v2.5-free",
+        )
+        calls = []
+
+        async def fake_call_method(method, *, timeout=None, **params):
+            calls.append((method, params))
+            return {
+                "sessionId": "session-1",
+                "models": {
+                    "currentModelId": "opencode/big-pickle",
+                    "availableModels": [
+                        {"modelId": "opencode/big-pickle", "name": "Big Pickle"},
+                        {"modelId": "opencode/mimo-v2.5-free", "name": "MiMo"},
+                    ],
+                },
+            }
+
+        monkeypatch.setattr(client, "_call_method", fake_call_method)
+
+        await client._new_session()
+
+        methods = [m for m, _ in calls]
+        assert methods == ["session/new", "session/set_model"]
+        assert calls[1] == (
+            "session/set_model",
+            {"sessionId": "session-1", "modelId": "opencode/mimo-v2.5-free"},
+        )
+        assert client._current_model_id == "opencode/mimo-v2.5-free"
+
+    @pytest.mark.asyncio
+    async def test_new_session_skips_set_model_when_already_current(self, tmp_path, monkeypatch):
+        """No redundant set_model when the session already starts on our model."""
+        client = ACPClient(
+            project_root=tmp_path,
+            command="opencode acp",
+            model="opencode/big-pickle",
+        )
+        calls = []
+
+        async def fake_call_method(method, *, timeout=None, **params):
+            calls.append(method)
+            return {
+                "sessionId": "session-1",
+                "models": {
+                    "currentModelId": "opencode/big-pickle",
+                    "availableModels": [{"modelId": "opencode/big-pickle", "name": "Big Pickle"}],
+                },
+            }
+
+        monkeypatch.setattr(client, "_call_method", fake_call_method)
+
+        await client._new_session()
+
+        assert calls == ["session/new"]
+
+    @pytest.mark.asyncio
+    async def test_new_session_skips_set_model_for_unadvertised_model(self, tmp_path, monkeypatch):
+        """Don't send a model id the agent never advertised (and no models => skip)."""
+        client = ACPClient(
+            project_root=tmp_path,
+            command="opencode acp",
+            model="opencode/not-a-real-model",
+        )
+        calls = []
+
+        async def fake_call_method(method, *, timeout=None, **params):
+            calls.append(method)
+            return {
+                "sessionId": "session-1",
+                "models": {
+                    "currentModelId": "opencode/big-pickle",
+                    "availableModels": [{"modelId": "opencode/big-pickle", "name": "Big Pickle"}],
+                },
+            }
+
+        monkeypatch.setattr(client, "_call_method", fake_call_method)
+
+        await client._new_session()
+
+        assert calls == ["session/new"]
+
+    @pytest.mark.asyncio
     async def test_set_mode_uses_acp_mode_id_parameter(self, tmp_path, monkeypatch):
         """ACP session/set_mode expects modeId, not SuperQode's older modeSlug alias."""
         client = ACPClient(project_root=tmp_path, command="opencode acp")

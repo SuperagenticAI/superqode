@@ -142,6 +142,32 @@ export SUPERQODE_DS4_TOOL_MODE=always
 export SUPERQODE_DS4_TOOL_MODE=never
 ```
 
+### Cold Start & Warm-up
+
+DS4 mmaps a large GGUF (the IQ2XXS DeepSeek V4 Flash build is ~81GB) and pays a
+one-time cost paging it in from disk on the **first** inference. Once warm,
+responses are fast (sub-second for short prompts). To keep your first real
+prompt fast, SuperQode **warms the model on connect**: it sends a tiny 1-token
+request and shows a live elapsed-time indicator, then reports when DS4 is warm.
+
+```text
+✓ DS4 server ready at http://127.0.0.1:8000/v1
+⏳ Loading model into memory (first start can be slow on a cold cache)…
+   …still loading the model (10s)
+✓ DS4 ready (warm) — 24s
+```
+
+Tips to avoid cold starts:
+
+- Keep `ds4-server` running between sessions (the OS page cache stays warm).
+- Use the disk KV cache (`--kv-disk-dir`) so prompt prefixes survive restarts.
+
+Disable the connect-time warm-up with:
+
+```bash
+export SUPERQODE_DS4_WARMUP=0   # 0/false/no/off — skip warm-up on connect
+```
+
 ### Local Code Search (No Web Access)
 
 Local models have no internet access, so `web_search` is intentionally not part

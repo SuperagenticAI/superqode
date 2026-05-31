@@ -606,8 +606,41 @@ class ACPClient:
         )
         self._session_id = response.get("sessionId", "")
         self._apply_session_state_from_response(response)
+        await self._select_requested_model()
         await self._persist_current_session()
         return response
+
+    async def _select_requested_model(self) -> None:
+        """Switch the session to ``self.model`` via ``session/set_model``.
+
+        Several agents (notably opencode) ignore the ``model`` field in
+        ``session/new`` and always start on their default model — so without
+        this every session ran the default (e.g. big-pickle) no matter which
+        model the user picked. The ACP-canonical way to choose a model is
+        ``session/set_model`` against an advertised ``availableModels`` id.
+
+        No-ops when no model was requested, the agent advertised no models,
+        or the session is already on the requested model. Best-effort: a
+        failed switch leaves the session on its default rather than erroring.
+        """
+        if not self.model or not self._session_id:
+            return
+        available = self._available_models or []
+        if not available:
+            # Agent doesn't expose model selection — nothing to do.
+            return
+        available_ids = {
+            m.get("modelId")
+            for m in available
+            if isinstance(m, dict) and m.get("modelId")
+        }
+        # Only switch to a model the agent actually advertises; otherwise we'd
+        # send a bogus id and (best case) get rejected.
+        if self.model not in available_ids:
+            return
+        if self._current_model_id == self.model:
+            return
+        await self.set_model(self.model)
 
     async def _load_session(self, session_id: str) -> Dict[str, Any]:
         """Send ``session/load`` for a prior session id.
