@@ -297,6 +297,7 @@ COMMANDS = [
     ":undo",
     ":history",
     ":history clear",
+    ":transcript",
     # File viewer commands
     ":view",
     ":view info",
@@ -349,6 +350,11 @@ COMMANDS = [
     "/compact",
     # Copy/Open commands
     ":copy",
+    ":copy response",
+    ":copy transcript",
+    ":select",
+    ":select response",
+    ":select transcript",
     ":open",
     # MCP commands
     ":mcp list",

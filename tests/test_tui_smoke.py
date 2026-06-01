@@ -2,8 +2,12 @@ from rich.console import Console
 from types import SimpleNamespace
 import asyncio
 import concurrent.futures
+import subprocess
+
+import pytest
 
 from superqode.app_main import SelectionAwareInput, SuperQodeApp, render_welcome
+from superqode.app.widgets import ConversationLog
 from superqode.harness import (
     AgentSpec,
     FileHarnessStore,
@@ -1165,6 +1169,44 @@ def test_select_command_routes_response_error_prompt_and_transcript():
     ]
 
 
+def test_transcript_command_opens_selectable_transcript():
+    app = make_app()
+    log = FakeLog()
+    captured = []
+    app.push_screen = lambda screen, callback=None: captured.append((screen._title, screen._content))
+
+    app._handle_command(":transcript", log)
+
+    assert captured == [("Transcript", "full transcript")]
+
+
+def test_scroll_actions_target_conversation_log():
+    app = make_app()
+    calls = []
+    log = SimpleNamespace(
+        auto_scroll=True,
+        scroll_page_up=lambda animate=False: calls.append(("page_up", animate)),
+        scroll_page_down=lambda animate=False: calls.append(("page_down", animate)),
+        scroll_home=lambda animate=False: calls.append(("home", animate)),
+        scroll_end=lambda animate=False: calls.append(("end", animate)),
+    )
+    app._conversation_log = lambda: log
+
+    app.action_scroll_log_page_up()
+    assert log.auto_scroll is False
+    app.action_scroll_log_page_down()
+    app.action_scroll_log_home()
+    app.action_scroll_log_end()
+
+    assert calls == [
+        ("page_up", False),
+        ("page_down", False),
+        ("home", False),
+        ("end", False),
+    ]
+    assert log.auto_scroll is True
+
+
 def test_busy_message_rejects_second_prompt():
     app = make_app()
     log = FakeLog()
@@ -1244,6 +1286,39 @@ def test_acp_terminal_output_renders_as_tool_call():
     assert "hello_from_terminal" in tool_rows[-1]["output"]
 
 
+def test_acp_terminal_timeout_reports_timeout(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_ACP_TERMINAL_PTY", "0")
+    app = make_app()
+    app._call_ui = lambda func, *args: func(*args)
+    app._show_thinking_line = lambda text, log: log.add_info(text)
+    log = FakeLog()
+    terminals = {}
+    terminal_counter = [0]
+
+    result, handled = app._handle_terminal_method(
+        "terminal/create",
+        {"command": 'python3 -c "import time; time.sleep(2)"'},
+        terminals,
+        terminal_counter,
+        log,
+    )
+    assert handled is True
+
+    result, handled = app._handle_terminal_method(
+        "terminal/wait_for_exit",
+        {"terminalId": result["terminalId"], "timeoutMs": 10},
+        terminals,
+        terminal_counter,
+        log,
+    )
+
+    assert handled is True
+    assert result["exitCode"] == -1
+    tool_rows = [item for item in log.items if isinstance(item, dict)]
+    assert tool_rows[-1]["status"] == "error"
+    assert "Run timed out after 0.01s" in tool_rows[-1]["output"]
+
+
 def test_agent_question_empty_input_uses_default():
     app = make_app()
     log = FakeLog()
@@ -1259,6 +1334,364 @@ def test_agent_question_empty_input_uses_default():
 
     assert app._handle_agent_question_input("", log) is True
     assert future.result()["value"] is True
+
+
+def test_conversation_log_streaming_renders_final_markdown_once():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.start_agent_session("OpenCode", "deepseek/deepseek-v4", "acp", "ask")
+    log.add_response_chunk("| Item | Status |\n")
+    log.add_response_chunk("| --- | --- |\n")
+    log.add_response_chunk("| TUI | clean |\n")
+    log.end_agent_session(True)
+
+    rendered = "\n".join(render_plain(item) for item in writes)
+    assert "generating response" in rendered
+    assert "| --- | --- |" not in rendered
+    assert "TUI" in rendered
+    assert log.get_last_response().count("| Item | Status |") == 1
+    assert "Assistant:" in log.get_all_text()
+
+
+def test_conversation_log_thinking_icon_is_deterministic():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.add_thinking("waiting on provider")
+    log.add_thinking("waiting on provider")
+
+    rendered = [render_plain(item) for item in writes]
+    assert len(rendered) == 1
+    assert rendered[0].strip().startswith("💭")
+
+
+def test_conversation_log_filters_protocol_noise_from_thinking():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.add_thinking('{"jsonrpc":"2.0","method":"session/update","params":{}}')
+    log.add_thinking("reading project files")
+
+    rendered = [render_plain(item) for item in writes]
+    assert len(rendered) == 1
+    assert "reading project files" in rendered[0]
+
+
+def test_write_final_response_records_once_and_renders_markdown():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.write_final_response("**Done**\n\n| A | B |\n| --- | --- |\n| 1 | 2 |", agent="OpenCode")
+    log.write_final_response("**Done**\n\n| A | B |\n| --- | --- |\n| 1 | 2 |", agent="OpenCode")
+
+    assert log.get_last_response().startswith("**Done**")
+    assert log.get_all_text().count("OpenCode:") == 1
+    rendered = "\n".join(render_plain(item) for item in writes)
+    assert "| --- | --- |" not in rendered
+    assert "Done" in rendered
+
+
+def test_conversation_log_tool_rows_use_action_verbs():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.add_tool_call(
+        "read_file",
+        status="success",
+        arguments={"path": "src/superqode/app_main.py"},
+        output="line 1\nline 2",
+        duration=0.2,
+    )
+
+    rendered = render_plain(writes[-1])
+    assert "Read" in rendered
+    assert "src/superqode/app_main.py" in rendered
+    assert "0.2s" in rendered
+
+
+def test_tool_output_modes_minimal_normal_verbose():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.tool_output_mode = "minimal"
+    log.add_tool_call("bash", status="success", arguments={"command": "echo hi"}, output="hi")
+    minimal = render_plain(writes[-1])
+    assert "Run" in minimal
+    assert "→" not in minimal
+
+    log.tool_output_mode = "normal"
+    log.add_tool_call("bash", status="success", arguments={"command": "echo hi"}, output="hi")
+    normal = render_plain(writes[-1])
+    assert "1 output line" in normal
+
+    log.tool_output_mode = "verbose"
+    log.add_tool_call("bash", status="success", arguments={"command": "echo hi"}, output="hi")
+    verbose = render_plain(writes[-1])
+    assert "→ hi" in verbose
+
+    log.tool_output_mode = "minimal"
+    log.add_tool_call("bash", status="error", arguments={"command": "bad"}, output="boom")
+    error = render_plain(writes[-1])
+    assert "boom" in error
+
+
+def test_tool_running_rows_are_hidden_until_verbose():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.tool_output_mode = "normal"
+    log.add_tool_call("bash", status="running", arguments={"command": "uv run pytest"})
+    assert writes == []
+
+    log.add_tool_call("bash", status="success", arguments={"command": "uv run pytest"}, output="ok")
+    assert len(writes) == 1
+    assert "Run" in render_plain(writes[-1])
+
+    log.tool_output_mode = "verbose"
+    log.add_tool_call("bash", status="running", arguments={"command": "uv run pytest"})
+    assert "Run" in render_plain(writes[-1])
+
+
+def test_active_tool_status_tracks_running_tools_without_log_rows():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+    log._update_active_tool_status = lambda: None
+    log.tool_output_mode = "normal"
+
+    log.add_tool_call("bash", status="running", arguments={"command": "uv run pytest"})
+    assert writes == []
+    active = render_plain(log._active_tools_renderable())
+    assert "running" in active
+    assert "Run" in active
+    assert "uv run pytest" in active
+
+    # Duplicate running updates from ACP should not duplicate the status strip.
+    log.add_tool_call("bash", status="running", arguments={"command": "uv run pytest"})
+    assert len(log._active_tool_start_times) == 1
+
+    log.add_tool_call("bash", status="success", arguments={"command": "uv run pytest"}, output="ok")
+    assert log._active_tool_start_times == []
+    assert render_plain(log._active_tools_renderable()).strip() == ""
+
+
+def test_tool_diff_is_visible_in_normal_mode():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+    log.tool_output_mode = "normal"
+
+    diff = "\n".join(
+        [
+            "--- a/app.py",
+            "+++ b/app.py",
+            "@@ -1 +1 @@",
+            "-old",
+            "+new",
+        ]
+    )
+    log.add_tool_call(
+        "apply_patch",
+        status="success",
+        arguments={"path": "app.py"},
+        output="updated",
+        diff_text=diff,
+    )
+
+    rendered = "\n".join(render_plain(item) for item in writes)
+    assert "diff collapsed" not in rendered
+    assert "@@ -1 +1 @@" in rendered
+    assert "-old" in rendered
+    assert "+new" in rendered
+
+
+def test_pure_tool_result_uses_shared_diff_renderer():
+    app = make_app()
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+    diff = "\n".join(
+        [
+            "--- a/app.py",
+            "+++ b/app.py",
+            "@@ -1 +1 @@",
+            "-old",
+            "+new",
+        ]
+    )
+
+    app._show_pure_tool_result(
+        "edit_file",
+        SimpleNamespace(success=True, output="", metadata={"path": "app.py", "diff_text": diff}),
+        log,
+    )
+
+    rendered = "\n".join(render_plain(item) for item in writes)
+    assert "Edit" in rendered
+    assert "app.py" in rendered
+    assert "@@ -1 +1 @@" in rendered
+
+
+def test_permission_needed_for_project_edit_but_not_read(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    app = make_app()
+
+    assert app._tool_needs_permission("edit_file", {"path": "src/app.py"}) is True
+    assert app._tool_needs_permission("write_file", {"path": "src/app.py"}) is True
+    assert app._tool_needs_permission("apply_patch", {"path": "src/app.py"}) is True
+    assert app._tool_needs_permission("read_file", {"path": "src/app.py"}) is False
+
+
+def test_permission_prompt_is_visible_card_and_sets_pending(monkeypatch):
+    app = make_app()
+    log = FakeLog()
+    app._start_permission_pulse = lambda: None
+    app.query_one = lambda *args, **kwargs: SimpleNamespace(placeholder="", focus=lambda: None)
+
+    app._show_permission_prompt("edit_file", {"path": "src/app.py", "old": "a", "new": "b"}, log)
+
+    assert app._permission_pending is True
+    assert app._pending_tool_name == "edit_file"
+    rendered = render_plain(log.items[-1])
+    assert "Permission required" in rendered
+    assert "file change" in rendered
+    assert "[y]" in rendered
+    assert "[n]" in rendered
+    assert "[a]" in rendered
+
+
+def test_permission_input_resets_prompt_state():
+    app = make_app()
+    app._permission_pending = True
+    app._pending_tool_name = "bash"
+    app._pending_tool_input = {"command": "uv run pytest"}
+    reset = []
+    app._reset_input_placeholder = lambda: reset.append(True)
+    app.query_one = lambda *args, **kwargs: FakeLog()
+
+    assert app._handle_permission_input("y") is True
+    assert app._permission_response == "allow"
+    assert app._permission_pending is False
+    assert reset == [True]
+
+
+def test_pending_approvals_render_as_card():
+    app = make_app()
+    log = FakeLog()
+    source = SimpleNamespace(
+        get_pending_approvals=lambda: [
+            {"index": 0, "tool_name": "bash", "arguments": {"command": "uv run pytest"}}
+        ]
+    )
+
+    app._announce_pending_approvals(source, log)
+
+    rendered = render_plain(log.items[-1])
+    assert "Tool approval needed" in rendered
+    assert "bash" in rendered
+    assert ":approve [N]" in rendered
+    assert ":reject [N]" in rendered
+
+
+def test_current_git_diff_text_includes_tracked_and_untracked(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True, text=True)
+    (tmp_path / "tracked.txt").write_text("old\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], check=True, capture_output=True, text=True)
+    (tmp_path / "tracked.txt").write_text("new\n", encoding="utf-8")
+    (tmp_path / "new.txt").write_text("created\n", encoding="utf-8")
+
+    app = make_app()
+    diff_text = app._current_git_diff_text()
+
+    assert "tracked.txt" in diff_text
+    assert "-old" in diff_text
+    assert "+new" in diff_text
+    assert "new.txt" in diff_text
+    assert "+created" in diff_text
+
+
+def test_diff_command_opens_selectable_overlay(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True, text=True)
+    (tmp_path / "tracked.txt").write_text("old\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], check=True, capture_output=True, text=True)
+    (tmp_path / "tracked.txt").write_text("new\n", encoding="utf-8")
+
+    app = make_app()
+    log = FakeLog()
+    pushed = []
+    app.push_screen = lambda screen, callback=None: pushed.append((screen, callback))
+    app.set_timer = lambda *_args, **_kwargs: None
+
+    app._handle_diff("", log)
+
+    assert pushed
+    assert pushed[0][0]._title == "Current Diff"
+    assert "tracked.txt" in pushed[0][0]._content
+
+
+def test_acp_render_helpers_keep_completed_row_target_visible():
+    from superqode.acp.render import (
+        display_title_from_update,
+        extract_tool_arguments,
+        normalize_acp_tool_status,
+    )
+
+    update = {
+        "status": "done",
+        "name": "read_file",
+        "arguments": {"path": "src/superqode/app_main.py"},
+    }
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.add_tool_call(
+        display_title_from_update(update),
+        "success" if normalize_acp_tool_status(update["status"]) == "completed" else "running",
+        arguments=extract_tool_arguments(update),
+        output="file contents",
+    )
+
+    rendered = render_plain(writes[-1])
+    assert "Read" in rendered
+    assert "src/superqode/app_main.py" in rendered
+
+
+@pytest.mark.asyncio
+async def test_agent_question_renders_styled_card():
+    app = make_app()
+    log = FakeLog()
+    question = Question(
+        question="Which implementation should I use?",
+        question_type=QuestionType.CHOICE,
+        options=["small patch", "larger cleanup"],
+        default="small patch",
+    )
+    app._call_ui = lambda fn, *args, **kwargs: fn(*args, **kwargs)
+    app.query_one = lambda *args, **kwargs: SimpleNamespace(placeholder="", focus=lambda: None)
+    app._start_permission_pulse = lambda: None
+
+    task = asyncio.create_task(app._ask_agent_question(question, log))
+    await asyncio.sleep(0)
+    assert log.items
+    text = render_plain(log.items[-1])
+    assert "Agent needs your input" in text
+    assert "[1]" in text
+    assert "small patch" in text
+    assert ":cancel" in text
+    app._pending_agent_question_future.set_result({"value": "small patch", "custom": False})
+    answer = await task
+    assert answer.value == "small patch"
 
 
 def test_retry_refuses_while_busy():

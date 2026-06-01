@@ -146,6 +146,17 @@ ConversationLog {
 }
 #hints { text-align: center; color: #52525b; height: 1; margin-top: 1; padding: 0; }
 
+#active-tools {
+    display: none;
+    height: 1;
+    margin: 0 2;
+    padding: 0;
+    color: #a1a1aa;
+}
+#active-tools.visible {
+    display: block;
+}
+
 /* Streaming thinking indicator with changing text - shown when agent is thinking */
 #streaming-thinking { height: auto; text-align: left; padding: 0 2; margin-bottom: 1; display: none; }
 #streaming-thinking.visible { display: block; }

@@ -28,6 +28,7 @@ headless renderer can reuse the same logic without dragging in
 
 from __future__ import annotations
 
+import json
 from typing import Any, Iterable, List, Optional, Tuple
 
 
@@ -45,6 +46,57 @@ DisplayMode = str
 # typical terminal pane without scrolling away the next tool call.
 NORMAL_DIFF_MAX_LINES = 24
 VERBOSE_DIFF_MAX_LINES = 200
+
+
+def normalize_acp_tool_status(status: Any) -> str:
+    """Normalize ACP agent status spellings into TUI lifecycle states."""
+    value = str(status or "").strip().lower().replace("-", "_")
+    if value in {"completed", "complete", "done", "success", "succeeded", "finished"}:
+        return "completed"
+    if value in {"failed", "fail", "error", "errored", "cancelled", "canceled"}:
+        return "failed"
+    if value in {"running", "started", "in_progress", "pending", "queued"}:
+        return "running"
+    return value or "running"
+
+
+def display_title_from_update(update: dict[str, Any]) -> str:
+    """Pick a useful display title from an ACP tool update/call."""
+    for key in ("title", "name", "tool", "kind", "type"):
+        value = update.get(key)
+        if value:
+            return str(value)
+    return "Tool"
+
+
+def extract_tool_arguments(update: dict[str, Any]) -> dict[str, Any]:
+    """Return normalized argument/input mapping from ACP tool events."""
+    for key in ("rawInput", "input", "arguments", "args", "params"):
+        value = update.get(key)
+        if isinstance(value, dict):
+            return dict(value)
+    return {}
+
+
+def extract_raw_output_text(raw_output: Any, *, mode: DisplayMode = "normal") -> Optional[str]:
+    """Convert raw ACP output into useful text without dumping noisy objects."""
+    if raw_output is None:
+        return None
+    if isinstance(raw_output, str):
+        return raw_output
+    if isinstance(raw_output, dict):
+        for key in ("output", "stdout", "stderr", "text", "message", "error", "result"):
+            value = raw_output.get(key)
+            if value not in (None, ""):
+                return str(value)
+        if mode == "verbose":
+            return json.dumps(raw_output, indent=2, sort_keys=True, default=str)
+        return json.dumps(raw_output, sort_keys=True, default=str)
+    if isinstance(raw_output, list):
+        if mode == "verbose":
+            return json.dumps(raw_output, indent=2, default=str)
+        return json.dumps(raw_output, default=str)
+    return str(raw_output)
 
 
 def extract_diff_blocks(content: Any) -> List[Tuple[str, str, str]]:
@@ -92,7 +144,7 @@ def extract_text_blocks(content: Any) -> str:
     parts: List[str] = []
     for block in content:
         if isinstance(block, dict) and block.get("type") == "text":
-            parts.append(str(block.get("text", "") or ""))
+            parts.append(str(block.get("text", block.get("content", "")) or ""))
     return "".join(parts)
 
 
@@ -299,4 +351,4 @@ def render_acp_tool_output(
 
     if raw_output is None:
         return None
-    return str(raw_output)
+    return extract_raw_output_text(raw_output, mode=mode)

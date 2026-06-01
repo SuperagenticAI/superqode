@@ -5,7 +5,6 @@ SuperQode App Widgets - All UI widget classes.
 from __future__ import annotations
 
 import math
-import random
 from time import monotonic
 from typing import Any
 
@@ -13,10 +12,10 @@ from textual.widgets import Static, RichLog
 from textual.reactive import reactive
 from rich.text import Text
 from rich.panel import Panel
-from rich.markdown import Markdown
 from rich.console import Group
 from rich.box import ROUNDED, HEAVY
 
+from superqode.rendering.markdown import render_agent_markdown
 from superqode.tools.display import format_tool_call_compact
 
 from .constants import (
@@ -669,6 +668,8 @@ class HintsBar(Static):
             ("🚀 :i [:init]", THEME["success"]),
             ("📚 :s [:sidebar]", THEME["cyan"]),
             ("🔌 :connect", THEME["pink"]),
+            ("⌨ PgUp/PgDn", THEME["muted"]),
+            ("📜 :transcript", THEME["cyan"]),
             ("👋 :exit", THEME["orange"]),
         ]
         for i, (hint, color) in enumerate(hints):
@@ -759,6 +760,10 @@ class ConversationLog(RichLog):
         self._thinking_lines: list[str] = []
         self._tool_calls: list[dict] = []
         self._streaming_response: str = ""
+        self._streaming_notice_shown: bool = False
+        self._last_thinking_key: str = ""
+        self._last_thinking_at: float = 0.0
+        self._active_tool_start_times: list[dict[str, Any]] = []
         # Initial verbosity respects ``SUPERQODE_LOG_VERBOSITY`` so a
         # user who runs ``SUPERQODE_LOG_VERBOSITY=verbose superqode`` or
         # passes ``--verbose`` sees full tool output from the first
@@ -868,22 +873,17 @@ class ConversationLog(RichLog):
         self.write(panel)
 
     def add_agent(self, text: str, agent: str = "Agent"):
-        self._messages.append(("agent", text, agent))
-        self._last_response = text  # Track for easy copy
         color = AGENT_COLORS.get(agent.lower(), THEME["purple"])
         icon = AGENT_ICONS.get(agent.lower(), "🤖")
-        # Use overflow="fold" to wrap instead of truncate
-        content = (
-            Markdown(text) if "```" in text else Text(text, style=THEME["text"], overflow="fold")
-        )
         panel = Panel(
-            content,
+            render_agent_markdown(text),
             title=f"[bold {color}]{icon} {agent} Agent[/]",
             border_style=color,
             box=ROUNDED,
             padding=(0, 1),
             width=None,  # Use full available width
         )
+        self._record_final_response(text, agent=agent, role="agent")
         self.write(panel)
 
     def add_assistant(self, text: str, agent: str = "Assistant"):
@@ -1064,9 +1064,14 @@ class ConversationLog(RichLog):
         """
         # Reset streaming state
         self._streaming_response = ""
+        self._streaming_notice_shown = False
         self._streaming_thinking = ""
         self._thinking_lines = []
         self._tool_calls = []
+        self._last_thinking_key = ""
+        self._last_thinking_at = 0.0
+        self._active_tool_start_times = []
+        self._update_active_tool_status()
         self._session_start_time = None
 
         try:
@@ -1129,6 +1134,18 @@ class ConversationLog(RichLog):
         """
         if not text or not text.strip():
             return
+        text = " ".join(str(text).split())
+        if not text:
+            return
+        if self._is_protocol_noise(text):
+            return
+
+        now = monotonic()
+        key = text.lower()
+        if key == self._last_thinking_key and now - self._last_thinking_at < 2.0:
+            return
+        self._last_thinking_key = key
+        self._last_thinking_at = now
 
         # Ensure auto-scroll is ON
         self.auto_scroll = True
@@ -1183,12 +1200,7 @@ class ConversationLog(RichLog):
             elif any(w in text_lower for w in ["info", "note", "alert", "notice"]):
                 icon, color = category_styles["notifying"]
             else:
-                # Randomize generic icon to avoid repetition
-                generic_icons = ["💭", "💡", "⚙️", "🧩", "🔮", "✨", "📡"]
-                import random
-
-                icon = random.choice(generic_icons)
-                # Keep neutral color for generic thoughts
+                icon, color = category_styles["general"]
 
         # Display thinking line
         line = Text()
@@ -1196,6 +1208,25 @@ class ConversationLog(RichLog):
         line.append(text, style=f"italic {THEME['muted']}")
         line.append("\n")
         self.write(line)
+
+    def _is_protocol_noise(self, text: str) -> bool:
+        """Suppress raw protocol chatter from compact thinking logs."""
+        stripped = text.strip()
+        lowered = stripped.lower()
+        protocol_markers = (
+            '"jsonrpc"',
+            '"method"',
+            '"params"',
+            "session/update",
+            "session/did",
+            "terminal/output",
+            "raw event",
+        )
+        if any(marker in lowered for marker in protocol_markers):
+            return True
+        if len(stripped) > 200 and stripped[:1] in ("{", "["):
+            return True
+        return False
 
     def add_response_chunk(self, text: str):
         """
@@ -1213,53 +1244,53 @@ class ConversationLog(RichLog):
         self._streaming_response += text
         self.auto_scroll = True
 
-        # Check for code block state
-        if not hasattr(self, "_in_code_block"):
-            self._in_code_block = False
-
-        # Toggle code block state
-        if "```" in text:
-            # Count occurrences to toggle state correctly
-            count = text.count("```")
-            if count % 2 != 0:
-                self._in_code_block = not self._in_code_block
-
-        # Buffer chunks and only write on natural boundaries to avoid word-per-line
-        if not hasattr(self, "_chunk_buffer"):
-            self._chunk_buffer = ""
-        self._chunk_buffer += text
-
-        # Write when we have:
-        # 1. A complete sentence (ends with . ! ? : ; followed by space or newline)
-        # 2. A newline character in the text
-        # 3. Accumulated enough text (50+ chars with a space near the end)
-        buffer = self._chunk_buffer
-        should_write = (
-            (
-                buffer.rstrip().endswith((".", "!", "?", ":", ";"))
-                and (text.endswith(" ") or text.endswith("\n") or len(buffer) > 30)
-            )
-            or "\n" in text
-            or (len(buffer) > 50 and " " in buffer[-15:])
-        )
-
-        if should_write:
-            chunk_text = Text()
-            style = f"bold {THEME['cyan']}" if self._in_code_block else THEME["text"]
-            chunk_text.append(buffer, style=style)
-            self.write(chunk_text)
-            self._chunk_buffer = ""
+        if not self._streaming_notice_shown:
+            notice = Text()
+            notice.append("  ◌ ", style=f"bold {THEME['purple']}")
+            notice.append("generating response…", style=THEME["muted"])
+            notice.append("\n")
+            self.write(notice)
+            self._streaming_notice_shown = True
 
     def flush_response_buffer(self):
-        """Flush any remaining buffered response chunks."""
-        if hasattr(self, "_chunk_buffer") and self._chunk_buffer:
-            chunk_text = Text()
-            style = (
-                f"bold {THEME['cyan']}" if getattr(self, "_in_code_block", False) else THEME["text"]
-            )
-            chunk_text.append(self._chunk_buffer, style=style)
-            self.write(chunk_text)
-            self._chunk_buffer = ""
+        """Compatibility no-op.
+
+        RichLog is append-only, so streamed chunks are accumulated and rendered
+        once at session end as clean markdown instead of leaking raw markdown
+        during generation.
+        """
+        return None
+
+    def _record_final_response(self, text: str, agent: str, role: str = "agent") -> None:
+        """Store final response text for copy/transcript without duplicates."""
+        if not text:
+            return
+        self._last_response = text
+        if not self._messages or self._messages[-1][1] != text:
+            self._messages.append((role, text, agent))
+
+    def write_final_response(
+        self,
+        text: str,
+        *,
+        agent: str = "Assistant",
+        success: bool = True,
+        leading_newline: bool = False,
+        trailing_newline: bool = True,
+    ) -> None:
+        """Record and render a final assistant response through one path."""
+        if not text:
+            return
+        role = "agent" if success else "error"
+        self._record_final_response(text, agent=agent, role=role)
+        if leading_newline:
+            self.write(Text("\n"))
+        if success:
+            self.write(render_agent_markdown(text))
+        else:
+            self.write(Text(f"  ✕ {text}\n", style=THEME["error"], overflow="fold"))
+        if trailing_newline:
+            self.write(Text("\n"))
 
     def add_tool_call(
         self,
@@ -1311,25 +1342,37 @@ class ConversationLog(RichLog):
             self._active_tool_start_times = []
 
         if status == "running":
-            self._active_tool_start_times.append(
-                {
-                    "name": tool_name,
-                    "path": file_path,
-                    "command": command,
-                    "started_at": monotonic(),
-                }
-            )
+            active_calls = getattr(self, "_active_tool_start_times", [])
+            if not any(
+                self._active_tool_matches(active, tool_name, file_path, command)
+                for active in active_calls
+            ):
+                active_calls.append(
+                    {
+                        "name": tool_name,
+                        "path": file_path,
+                        "command": command,
+                        "arguments": display_args,
+                        "started_at": monotonic(),
+                    }
+                )
         elif duration is None:
             active_calls = getattr(self, "_active_tool_start_times", [])
             for index in range(len(active_calls) - 1, -1, -1):
                 active = active_calls[index]
-                if active.get("name") != tool_name:
-                    continue
-                if file_path and active.get("path") and active.get("path") != file_path:
+                if not self._active_tool_matches(active, tool_name, file_path, command):
                     continue
                 duration = monotonic() - active.get("started_at", monotonic())
                 del active_calls[index]
                 break
+        elif status in ("success", "error"):
+            active_calls = getattr(self, "_active_tool_start_times", [])
+            for index in range(len(active_calls) - 1, -1, -1):
+                if self._active_tool_matches(active_calls[index], tool_name, file_path, command):
+                    del active_calls[index]
+                    break
+
+        self._update_active_tool_status()
 
         # Track file modifications
         if status in ("running", "success") and file_path:
@@ -1350,6 +1393,14 @@ class ConversationLog(RichLog):
             "error": ("✕", THEME["error"]),
         }
         status_icon, status_color = status_map.get(status, ("●", THEME["muted"]))
+        mode = getattr(self, "tool_output_mode", "normal")
+
+        # RichLog is append-only, so showing both a "running" row and a
+        # completion row creates noisy duplicates. Keep live running rows for
+        # verbose/debug mode; normal/minimal transcripts show the completed
+        # result row only.
+        if status in ("pending", "running") and mode != "verbose":
+            return
 
         # Tool type icons
         tool_icons = {
@@ -1374,14 +1425,15 @@ class ConversationLog(RichLog):
         line = Text()
         line.append(f"  {status_icon} ", style=f"bold {status_color}")
         line.append(f"{tool_icon} ", style=THEME["dim"])
-        line.append(
-            format_tool_call_compact(
-                tool_name,
-                display_args,
-                max_length=132 if getattr(self, "tool_output_mode", "normal") == "verbose" else 88,
-            ),
-            style=THEME["text"],
+        line.append(self._format_tool_name(tool_name).title(), style=f"bold {THEME['text']}")
+        detail = self._format_tool_detail(
+            tool_name,
+            display_args,
+            max_length=120 if mode == "verbose" else 76,
         )
+        if detail:
+            line.append("  ", style=THEME["dim"])
+            line.append(detail, style=THEME["muted"])
 
         meta_parts: list[tuple[str, str]] = []
         duration_label = _format_duration(duration)
@@ -1406,7 +1458,7 @@ class ConversationLog(RichLog):
                 tool_name,
                 status,
                 output,
-                getattr(self, "tool_output_mode", "normal"),
+                mode,
             )
             if summary:
                 style = THEME["error"] if status == "error" else THEME["muted"]
@@ -1418,36 +1470,121 @@ class ConversationLog(RichLog):
         if (
             diff_text
             and status == "success"
-            and getattr(self, "tool_output_mode", "normal") != "minimal"
+            and mode != "minimal"
         ):
-            if getattr(self, "tool_output_mode", "normal") == "verbose":
-                from superqode.widgets.response_changes import render_diff_text
+            from superqode.widgets.response_changes import render_diff_text
 
-                self.write(render_diff_text(diff_text))
-            else:
-                notice = Text()
-                notice.append("    diff collapsed. Use ", style=THEME["dim"])
-                notice.append(":work verbose", style=f"bold {THEME['cyan']}")
-                notice.append(" or ", style=THEME["dim"])
-                notice.append(":diff", style=f"bold {THEME['cyan']}")
-                notice.append(" to inspect changes.\n", style=THEME["dim"])
-                self.write(notice)
+            max_lines = 120 if mode == "verbose" else 48
+            self.write(render_diff_text(diff_text, max_lines=max_lines))
+
+    def _active_tool_matches(
+        self,
+        active: dict[str, Any],
+        tool_name: str,
+        file_path: str = "",
+        command: str = "",
+    ) -> bool:
+        if active.get("name") != tool_name:
+            return False
+        if file_path and active.get("path") and active.get("path") != file_path:
+            return False
+        if command and active.get("command") and active.get("command") != command:
+            return False
+        return True
+
+    def _active_tools_renderable(self) -> Text:
+        active_calls = getattr(self, "_active_tool_start_times", [])
+        line = Text()
+        if not active_calls:
+            return line
+        line.append("  ◐ ", style=f"bold {THEME['purple']}")
+        line.append("running ", style=THEME["muted"])
+        visible = active_calls[-3:]
+        for index, active in enumerate(visible):
+            if index:
+                line.append("  •  ", style=THEME["dim"])
+            name = str(active.get("name") or "tool")
+            args = active.get("arguments") if isinstance(active.get("arguments"), dict) else {}
+            detail = self._format_tool_detail(name, args, max_length=42)
+            label = self._format_tool_name(name).title()
+            line.append(label, style=f"bold {THEME['text']}")
+            if detail:
+                line.append(f" {detail}", style=THEME["muted"])
+            duration = monotonic() - float(active.get("started_at") or monotonic())
+            if duration >= 1:
+                line.append(f" {_format_duration(duration)}", style=THEME["dim"])
+        hidden = len(active_calls) - len(visible)
+        if hidden > 0:
+            line.append(f"  +{hidden} more", style=THEME["dim"])
+        return line
+
+    def _update_active_tool_status(self) -> None:
+        try:
+            panel = self.app.query_one("#active-tools", Static)
+        except Exception:
+            return
+        active_calls = getattr(self, "_active_tool_start_times", [])
+        if not active_calls:
+            panel.update("")
+            panel.remove_class("visible")
+            return
+        panel.update(self._active_tools_renderable())
+        panel.add_class("visible")
 
     def _format_tool_name(self, tool_name: str) -> str:
         """Make common tool names read like concise actions."""
         name = tool_name.replace("_", " ").replace("-", " ").strip()
         aliases = {
             "read": "read",
+            "read file": "read",
+            "read_file": "read",
             "write": "write",
+            "write file": "write",
+            "write_file": "write",
             "edit": "edit",
+            "edit file": "edit",
+            "edit_file": "edit",
             "multi edit": "edit",
+            "multi_edit": "edit",
+            "patch": "patch",
             "bash": "run",
             "shell": "run",
+            "terminal": "run",
             "grep": "search",
+            "repo search": "search",
+            "repo_search": "search",
             "glob": "find",
             "list directory": "list",
+            "list_directory": "list",
+            "todo write": "todo",
+            "todo_write": "todo",
         }
         return aliases.get(name.lower(), name)
+
+    def _format_tool_detail(self, tool_name: str, arguments: dict[str, Any], max_length: int) -> str:
+        """Return the important target for a tool row without noisy JSON."""
+        lower = tool_name.lower()
+        keys_by_kind = (
+            (("read", "write", "edit", "patch", "create"), ("path", "file_path", "filePath", "target_file")),
+            (("bash", "shell", "terminal", "exec"), ("command", "cmd")),
+            (("grep", "search", "repo_search"), ("pattern", "query", "search")),
+            (("glob", "list", "ls"), ("path", "directory", "pattern")),
+            (("todo",), ("todos",)),
+        )
+        for names, keys in keys_by_kind:
+            if not any(name in lower for name in names):
+                continue
+            for key in keys:
+                value = arguments.get(key)
+                if value:
+                    if key == "todos" and isinstance(value, list):
+                        return f"{len(value)} item{'s' if len(value) != 1 else ''}"
+                    return _clip_single_line(str(value), max_length)
+        compact = format_tool_call_compact(tool_name, arguments, max_length=max_length)
+        prefix = f"{tool_name}("
+        if compact.startswith(prefix) and compact.endswith(")"):
+            compact = compact[len(prefix) : -1]
+        return _clip_single_line(compact, max_length)
 
     def end_agent_session(
         self,
@@ -1482,12 +1619,18 @@ class ConversationLog(RichLog):
             except Exception:
                 pass
 
-        # Store final response for copy
-        if response_text:
-            self._last_response = response_text
-            self._streaming_response = response_text
-        elif self._streaming_response:
-            self._last_response = self._streaming_response
+        # Store and render the final response once. Streaming chunks are kept
+        # out of the log so markdown tables/code render cleanly here.
+        final_response = response_text or self._streaming_response
+        if final_response:
+            self._streaming_response = final_response
+            self.write_final_response(
+                final_response,
+                agent="Assistant",
+                success=success,
+                leading_newline=not self._streaming_notice_shown,
+                trailing_newline=True,
+            )
 
         summary_content = Text()
         if success:
@@ -1524,23 +1667,20 @@ class ConversationLog(RichLog):
             for f in sorted(files_mod):
                 summary_content.append(f"  {f}\n", style=THEME["warning"])
 
-        panel = Panel(
-            summary_content,
-            title="[bold]Run Summary[/bold]",
-            border_style=THEME["success"] if success else THEME["error"],
-            box=ROUNDED,
-            padding=(0, 1),
-        )
-
-        self.write(panel)
+        summary_content.append("\n")
+        self.write(summary_content)
 
         footer = Text()
-        footer.append("  :work", style=THEME["cyan"])
-        footer.append(" summary  •  ", style=THEME["dim"])
+        footer.append("  ", style=THEME["dim"])
         footer.append(":work verbose", style=THEME["cyan"])
-        footer.append(" details  •  ", style=THEME["dim"])
+        footer.append(" details", style=THEME["dim"])
+        if files_mod:
+            footer.append("  •  ", style=THEME["dim"])
+            footer.append(":diff", style=THEME["cyan"])
+            footer.append(" changes", style=THEME["dim"])
+        footer.append("  •  ", style=THEME["dim"])
         footer.append(":select response", style=THEME["cyan"])
-        footer.append(" copyable view\n", style=THEME["dim"])
+        footer.append(" copy\n", style=THEME["dim"])
         self.write(footer)
 
     def get_thinking_text(self) -> str:

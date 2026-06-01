@@ -31,7 +31,7 @@ class BashTool(Tool):
         as it's produced, instead of waiting for command completion.
     """
 
-    DEFAULT_TIMEOUT = 120  # 2 minutes
+    DEFAULT_TIMEOUT = 300  # 5 minutes
     MAX_OUTPUT = 50000  # 50KB - fallback cap when ctx.max_output_bytes is None
     CHUNK_SIZE = 1024  # Read chunks for streaming
 
@@ -73,7 +73,7 @@ class BashTool(Tool):
                     "type": "string",
                     "description": "Working directory for the command (optional)",
                 },
-                "timeout": {"type": "integer", "description": "Timeout in seconds (default: 120)"},
+                "timeout": {"type": "integer", "description": "Timeout in seconds (default: 300)"},
             },
             "required": ["command"],
         }
