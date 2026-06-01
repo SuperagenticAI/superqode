@@ -315,6 +315,130 @@ class TestACPClient:
         assert client._current_model_id == "opencode/mimo-v2.5-free"
 
     @pytest.mark.asyncio
+    async def test_new_session_switches_opencode_config_option_model(
+        self, tmp_path, monkeypatch
+    ):
+        """OpenCode now exposes model selection through configOptions.
+
+        Regression: when only configOptions were present, SuperQode skipped
+        model switching and OpenCode stayed on its default big-pickle model.
+        """
+        client = ACPClient(
+            project_root=tmp_path,
+            command="opencode acp",
+            model="deepseek/deepseek-v4-pro",
+        )
+        calls = []
+
+        async def fake_call_method(method, *, timeout=None, **params):
+            calls.append((method, params))
+            if method == "session/new":
+                return {
+                    "sessionId": "session-1",
+                    "configOptions": [
+                        {
+                            "id": "model",
+                            "name": "Model",
+                            "category": "model",
+                            "type": "select",
+                            "currentValue": "opencode/big-pickle",
+                            "options": [
+                                {
+                                    "value": "opencode/big-pickle",
+                                    "name": "OpenCode/Big Pickle",
+                                },
+                                {
+                                    "value": "deepseek/deepseek-v4-pro",
+                                    "name": "DeepSeek/DeepSeek V4 Pro",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            if method == "session/set_config_option":
+                return {
+                    "configOptions": [
+                        {
+                            "id": "model",
+                            "category": "model",
+                            "type": "select",
+                            "currentValue": params["value"],
+                            "options": [
+                                {
+                                    "value": "opencode/big-pickle",
+                                    "name": "OpenCode/Big Pickle",
+                                },
+                                {
+                                    "value": "deepseek/deepseek-v4-pro",
+                                    "name": "DeepSeek/DeepSeek V4 Pro",
+                                },
+                            ],
+                        }
+                    ]
+                }
+            return {}
+
+        monkeypatch.setattr(client, "_call_method", fake_call_method)
+
+        await client._new_session()
+
+        assert calls[1] == (
+            "session/set_config_option",
+            {
+                "sessionId": "session-1",
+                "configId": "model",
+                "value": "deepseek/deepseek-v4-pro",
+            },
+        )
+        assert client._current_model_id == "deepseek/deepseek-v4-pro"
+        assert await client.get_current_model() == "deepseek/deepseek-v4-pro"
+        assert await client.get_available_models() == [
+            {
+                "id": "opencode/big-pickle",
+                "modelId": "opencode/big-pickle",
+                "name": "OpenCode/Big Pickle",
+            },
+            {
+                "id": "deepseek/deepseek-v4-pro",
+                "modelId": "deepseek/deepseek-v4-pro",
+                "name": "DeepSeek/DeepSeek V4 Pro",
+            },
+        ]
+
+    @pytest.mark.asyncio
+    async def test_new_session_switches_legacy_id_model_shape(self, tmp_path, monkeypatch):
+        """Some ACP agents advertise availableModels with id rather than modelId."""
+        client = ACPClient(
+            project_root=tmp_path,
+            command="some-agent --acp",
+            model="deepseek/deepseek-v4-pro",
+        )
+        calls = []
+
+        async def fake_call_method(method, *, timeout=None, **params):
+            calls.append((method, params))
+            return {
+                "sessionId": "session-1",
+                "models": {
+                    "currentModelId": "opencode/big-pickle",
+                    "availableModels": [
+                        {"id": "opencode/big-pickle", "name": "Big Pickle"},
+                        {"id": "deepseek/deepseek-v4-pro", "name": "DeepSeek V4 Pro"},
+                    ],
+                },
+            }
+
+        monkeypatch.setattr(client, "_call_method", fake_call_method)
+
+        await client._new_session()
+
+        assert calls[1] == (
+            "session/set_model",
+            {"sessionId": "session-1", "modelId": "deepseek/deepseek-v4-pro"},
+        )
+        assert client._current_model_id == "deepseek/deepseek-v4-pro"
+
+    @pytest.mark.asyncio
     async def test_new_session_skips_set_model_when_already_current(self, tmp_path, monkeypatch):
         """No redundant set_model when the session already starts on our model."""
         client = ACPClient(

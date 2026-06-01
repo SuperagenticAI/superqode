@@ -134,6 +134,15 @@ def test_welcome_positions_superqode_as_coding_harness():
     assert "Agentic Code Needs Super Quality Engineering" not in text
 
 
+def test_opencode_acp_model_normalization_preserves_provider_ids():
+    assert (
+        SuperQodeApp._normalize_acp_model_id("opencode", "deepseek/deepseek-v4-pro")
+        == "deepseek/deepseek-v4-pro"
+    )
+    assert SuperQodeApp._normalize_acp_model_id("opencode", "big-pickle") == "opencode/big-pickle"
+    assert SuperQodeApp._normalize_acp_model_id("opencode", "opencode/auto") is None
+
+
 def test_prompt_height_wraps_and_caps_long_text():
     assert SelectionAwareInput._height_for_text("", 40) == 1
     assert SelectionAwareInput._height_for_text("short prompt", 40) == 1
@@ -464,12 +473,58 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":harness replay" in COMMANDS
     assert ":harness fork" in COMMANDS
     assert ":harness events" in COMMANDS
+    assert ":qe fullstack" not in COMMANDS
+    assert ":qe unit_tester" not in COMMANDS
+    assert ":qe api_tester" not in COMMANDS
+    assert ":connect" in COMMANDS
+    assert ":connect acp" in COMMANDS
+    assert ":connect byok" in COMMANDS
+    assert ":connect local" in COMMANDS
+    assert ":exit" in COMMANDS
+    assert ":quit" in COMMANDS
+    assert ":c" not in COMMANDS
+    assert ":q" not in COMMANDS
     slash_values = {command.command for command in DEFAULT_COMMANDS}
     assert ":harness inspect" in slash_values
     assert ":harness doctor" in slash_values
     assert ":harness replay" in slash_values
     assert ":harness fork" in slash_values
     assert ":harness events" in slash_values
+    assert ":connect" in slash_values
+    assert ":connect acp" in slash_values
+    assert ":connect byok" in slash_values
+    assert ":connect local" in slash_values
+    assert ":exit" in slash_values
+    assert ":quit" in slash_values
+    assert ":c" not in slash_values
+    assert ":q" not in slash_values
+
+
+def test_slash_complete_prioritizes_connect_and_quit():
+    from superqode.widgets.slash_complete import DEFAULT_COMMANDS, filter_slash_commands
+
+    root_values = [command.command for command in filter_slash_commands(DEFAULT_COMMANDS, ":")]
+    connect_values = [command.command for command in filter_slash_commands(DEFAULT_COMMANDS, ":c")]
+    quit_values = [command.command for command in filter_slash_commands(DEFAULT_COMMANDS, ":q")]
+
+    assert root_values[:6] == [
+        ":connect",
+        ":connect acp",
+        ":connect byok",
+        ":connect local",
+        ":exit",
+        ":quit",
+    ]
+    assert connect_values[:4] == [
+        ":connect",
+        ":connect acp",
+        ":connect byok",
+        ":connect local",
+    ]
+    assert ":clear" not in connect_values
+    assert ":context" not in connect_values
+    assert ":copy" not in connect_values
+    assert quit_values[0] == ":quit"
 
 
 def test_skills_command_creates_and_lists_local_skill(tmp_path, monkeypatch):
@@ -865,6 +920,51 @@ def test_prompt_completion_suggests_provider_and_model():
 
     assert app._suggest_prompt_completion(":connect byok anthrop") == ":connect byok anthropic"
     assert app._suggest_prompt_completion(":model switch anthropic") == ":model switch anthropic/"
+
+
+def test_prompt_completion_prioritizes_full_connect_and_quit_commands():
+    app = make_app()
+
+    root_values = [candidate.value for candidate in app._prompt_completion_candidates_for(":")]
+    connect_values = [candidate.value for candidate in app._prompt_completion_candidates_for(":c")]
+    quit_values = [candidate.value for candidate in app._prompt_completion_candidates_for(":q")]
+
+    assert root_values[:6] == [
+        ":connect",
+        ":connect acp",
+        ":connect byok",
+        ":connect local",
+        ":exit",
+        ":quit",
+    ]
+    assert connect_values[:4] == [
+        ":connect",
+        ":connect acp",
+        ":connect byok",
+        ":connect local",
+    ]
+    assert connect_values == [
+        ":connect",
+        ":connect acp",
+        ":connect byok",
+        ":connect local",
+    ]
+    assert quit_values[0] == ":quit"
+    assert all(not value.startswith(":qe") for value in quit_values)
+    assert SuperQodeApp._should_submit_prompt_without_completion(":c") is False
+    assert SuperQodeApp._should_submit_prompt_without_completion(":q") is False
+    assert SuperQodeApp._should_submit_prompt_without_completion(":connect") is True
+
+
+def test_command_suggester_prioritizes_full_connect_and_quit_commands():
+    from superqode.app.suggester import CommandSuggester
+
+    suggester = CommandSuggester()
+
+    assert asyncio.run(suggester.get_suggestion(":")) == ":connect"
+    assert asyncio.run(suggester.get_suggestion(":c")) == ":connect"
+    assert asyncio.run(suggester.get_suggestion(":q")) == ":quit"
+    assert asyncio.run(suggester.get_suggestion(":co")) == ":connect"
 
 
 def test_prompt_completion_candidates_include_descriptions(tmp_path, monkeypatch):

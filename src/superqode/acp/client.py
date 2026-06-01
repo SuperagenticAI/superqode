@@ -185,6 +185,7 @@ class ACPClient:
     _available_modes: List[dict] = field(default_factory=list, repr=False)
     _current_model_id: Optional[str] = field(default=None, repr=False)
     _available_models: List[dict] = field(default_factory=list, repr=False)
+    _config_options: List[dict] = field(default_factory=list, repr=False)
     _available_commands: List[dict] = field(default_factory=list, repr=False)
     _usage: Dict[str, Any] = field(default_factory=dict, repr=False)
     _traffic_log_resolved_path: Optional[Path] = field(default=None, repr=False)
@@ -536,6 +537,10 @@ class ACPClient:
             "currentModelId": self._current_model_id,
         }
 
+    def get_session_config_options(self) -> List[dict]:
+        """Return the latest session config options reported by the agent."""
+        return list(self._config_options)
+
     def get_available_commands_cached(self) -> List[dict]:
         """Return the latest slash commands pushed via ``available_commands_update``."""
         return list(self._available_commands)
@@ -625,22 +630,47 @@ class ACPClient:
         """
         if not self.model or not self._session_id:
             return
+
+        # Newer OpenCode ACP exposes model selection as a generic
+        # configOption rather than session/models. Prefer that path when
+        # present; otherwise OpenCode starts on its default model (currently
+        # big-pickle) even if session/new included a model field.
+        model_option = self._model_config_option()
+        if model_option is not None:
+            available_ids = {item["id"] for item in self._models_from_config_option(model_option)}
+            if self.model not in available_ids:
+                if self.on_thinking:
+                    await self.on_thinking(
+                        f"[model switch skipped] ACP agent did not advertise requested model: {self.model}"
+                    )
+                return
+            if self._current_model_id == self.model:
+                return
+            switched = await self.set_config_option(str(model_option.get("id") or "model"), self.model)
+            if switched:
+                self._current_model_id = self.model
+            elif self.on_thinking:
+                await self.on_thinking(f"[model switch failed] {self.model}")
+            return
+
         available = self._available_models or []
         if not available:
             # Agent doesn't expose model selection — nothing to do.
             return
-        available_ids = {
-            m.get("modelId")
-            for m in available
-            if isinstance(m, dict) and m.get("modelId")
-        }
+        available_ids = {self._model_id(m) for m in available if self._model_id(m)}
         # Only switch to a model the agent actually advertises; otherwise we'd
         # send a bogus id and (best case) get rejected.
         if self.model not in available_ids:
+            if self.on_thinking:
+                await self.on_thinking(
+                    f"[model switch skipped] ACP agent did not advertise requested model: {self.model}"
+                )
             return
         if self._current_model_id == self.model:
             return
-        await self.set_model(self.model)
+        switched = await self.set_model(self.model)
+        if not switched and self.on_thinking:
+            await self.on_thinking(f"[model switch failed] {self.model}")
 
     async def _load_session(self, session_id: str) -> Dict[str, Any]:
         """Send ``session/load`` for a prior session id.
@@ -668,6 +698,8 @@ class ACPClient:
 
     def _apply_session_state_from_response(self, response: Dict[str, Any]) -> None:
         """Capture session state returned by ``session/new`` or ``session/load``."""
+        self._apply_config_options_from_response(response)
+
         modes = response.get("modes")
         if isinstance(modes, dict):
             available = modes.get("availableModes")
@@ -685,6 +717,71 @@ class ACPClient:
             current = models.get("currentModelId")
             if isinstance(current, str):
                 self._current_model_id = current
+
+    def _apply_config_options_from_response(self, response: Dict[str, Any]) -> None:
+        """Capture generic ACP config options and derive model state from them."""
+        options = response.get("configOptions")
+        if not isinstance(options, list):
+            return
+        self._config_options = [item for item in options if isinstance(item, dict)]
+
+        model_option = self._model_config_option()
+        if model_option is None:
+            return
+        current = model_option.get("currentValue")
+        if isinstance(current, str) and current:
+            self._current_model_id = current
+        models = self._models_from_config_option(model_option)
+        if models:
+            self._available_models = models
+
+    @staticmethod
+    def _model_id(model: Any) -> Optional[str]:
+        """Return a model id from known ACP/OpenCode model shapes."""
+        if not isinstance(model, dict):
+            return None
+        for key in ("modelId", "modelID", "id", "value"):
+            value = model.get(key)
+            if isinstance(value, str) and value:
+                return value
+        return None
+
+    def _model_config_option(self) -> Optional[dict]:
+        """Return the generic config option that represents model selection."""
+        for option in self._config_options:
+            if not isinstance(option, dict):
+                continue
+            if option.get("id") == "model" or option.get("category") == "model":
+                return option
+        return None
+
+    def _models_from_config_option(self, option: dict) -> List[dict]:
+        """Convert a generic select config option into AvailableModel objects."""
+        out: List[dict] = []
+
+        def append_items(items: Any) -> None:
+            if not isinstance(items, list):
+                return
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                if isinstance(item.get("options"), list):
+                    append_items(item.get("options"))
+                    continue
+                model_id = self._model_id(item)
+                if not model_id:
+                    continue
+                out.append(
+                    {
+                        "id": model_id,
+                        "modelId": model_id,
+                        "name": item.get("name") or item.get("label") or model_id,
+                        **({"description": item["description"]} if item.get("description") else {}),
+                    }
+                )
+
+        append_items(option.get("options"))
+        return out
 
     @staticmethod
     def _usage_cost_amount(usage: Dict[str, Any]) -> float:
@@ -1244,7 +1341,10 @@ class ACPClient:
             if isinstance(models, list):
                 self._available_models = models
                 return models
-            return response.get("availableModels", [])
+            available = response.get("availableModels", [])
+            if isinstance(available, list):
+                self._available_models = available
+            return self._available_models
         except Exception:
             return []
 
@@ -1270,6 +1370,22 @@ class ACPClient:
                 modelId=model_id,
             )
             self._current_model_id = model_id
+            return True
+        except Exception:
+            return False
+
+    async def set_config_option(self, config_id: str, value: str) -> bool:
+        """Set a generic ACP session config option."""
+        try:
+            response = await self._call_method(
+                "session/set_config_option",
+                sessionId=self._session_id,
+                configId=config_id,
+                value=value,
+            )
+            self._apply_session_state_from_response(response)
+            if config_id == "model":
+                self._current_model_id = value
             return True
         except Exception:
             return False

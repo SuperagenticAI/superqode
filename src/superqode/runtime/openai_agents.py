@@ -188,7 +188,10 @@ def _make_mcp_function_tool(
             return json.dumps(output, default=str)
         return "" if output is None else str(output)
 
-    return FunctionTool(
+    from .tool_bridge_openai import construct_function_tool
+
+    return construct_function_tool(
+        FunctionTool,
         name=tool_name,
         description=description,
         params_json_schema=params_schema,

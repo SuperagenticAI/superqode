@@ -2584,17 +2584,6 @@ import rich.box
 
 from superqode.providers import ProviderManager
 from superqode.dialogs import ProviderDialog, ModelDialog, ConnectDialog
-from superqode.tui import (
-    SuperQodeUI,
-    ThinkingSpinner,
-    ResponsePanel,
-    print_disconnect_message,
-    print_exit_message,
-)
-
-# Alias for backward compatibility
-SuperQodeTUI = SuperQodeUI
-
 # LLM provider management
 from superqode.providers.manager import ProviderManager
 

@@ -248,16 +248,17 @@ THINKING_MSGS = [
 
 # Commands for autocompletion - ordered by priority (most common first)
 COMMANDS = [
-    ":help",
-    ":clear",
+    ":connect",
+    ":connect acp",
+    ":connect byok",
+    ":connect local",
     ":exit",
     ":quit",
+    ":help",
+    ":clear",
     ":dev fullstack",
     ":dev frontend",
     ":dev backend",
-    ":qe fullstack",
-    ":qe unit_tester",
-    ":qe api_tester",
     ":devops fullstack",
     ":devops cicd_engineer",
     ":agents connect",

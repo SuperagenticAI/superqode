@@ -422,6 +422,11 @@ class SelectionAwareInput(TextArea):
         app = self.app
 
         if getattr(app, "_prompt_completion_visible", False):
+            if event.key == "enter":
+                should_submit = getattr(app, "_should_submit_prompt_without_completion", None)
+                if callable(should_submit) and should_submit(self.value):
+                    self._submit_current_value(event)
+                    return
             if event.key == "up":
                 if hasattr(app, "_move_prompt_completion"):
                     app._move_prompt_completion(-1)
@@ -1701,7 +1706,7 @@ class SuperQodeApp(App):
     def _load_welcome(self):
         # Agents are now lazy loaded - no need to preload
         try:
-            from superqode.tui import load_team_config
+            from superqode.team_config import load_team_config
 
             team_name = load_team_config().team_name
         except Exception:
@@ -4139,8 +4144,6 @@ class SuperQodeApp(App):
     def _handle_command(self, cmd: str, log: ConversationLog):
         # Command aliases for Vim-friendly shortcuts
         alias_map = {
-            "c": "connect",
-            "q": "quit",
             "h": "help",
             "s": "sidebar",
             "i": "init",
@@ -5130,6 +5133,15 @@ class SuperQodeApp(App):
 
         return self._static_command_candidates(value)
 
+    @staticmethod
+    def _should_submit_prompt_without_completion(value: str) -> bool:
+        """Return True when Enter should execute the exact command in the prompt."""
+        text = value.strip()
+        if not text.startswith(("/", ":")):
+            return False
+        command = ":" + text[1:].split(maxsplit=1)[0].lower()
+        return text.lower() in {candidate.lower() for candidate in COMMANDS}
+
     def _update_prompt_completion_panel(self, value: str) -> None:
         """Refresh the visible prompt completion panel as the prompt changes."""
         candidates = self._prompt_completion_candidates_for(value)
@@ -5363,6 +5375,18 @@ class SuperQodeApp(App):
     @staticmethod
     def _static_command_candidates(value: str) -> list[PromptCompletionCandidate]:
         lowered = value.lower()
+        if lowered in {":c", ":co", ":con", ":conn", ":conne", ":connec"}:
+            commands = [":connect", ":connect acp", ":connect byok", ":connect local"]
+            return [
+                PromptCompletionCandidate(
+                    value=command,
+                    label=command,
+                    description=SuperQodeApp._command_description(command),
+                    kind="command",
+                )
+                for command in commands
+                if command != value
+            ]
         return [
             PromptCompletionCandidate(
                 value=command,
@@ -5370,9 +5394,49 @@ class SuperQodeApp(App):
                 description=SuperQodeApp._command_description(command),
                 kind="command",
             )
-            for command in sorted(dict.fromkeys(COMMANDS), key=str.lower)
+            for command in sorted(
+                dict.fromkeys(COMMANDS),
+                key=lambda command: SuperQodeApp._command_completion_sort_key(lowered, command),
+            )
             if command.lower().startswith(lowered) and command != value
         ][:8]
+
+    @staticmethod
+    def _command_completion_sort_key(lowered_input: str, command: str) -> tuple[int, str]:
+        command_lower = command.lower()
+        priority: dict[str, dict[str, int]] = {
+            ":": {
+                ":connect": 0,
+                ":connect acp": 1,
+                ":connect byok": 2,
+                ":connect local": 3,
+                ":exit": 4,
+                ":quit": 5,
+            },
+            ":c": {
+                ":connect": 0,
+                ":connect acp": 1,
+                ":connect byok": 2,
+                ":connect local": 3,
+                ":clear": 20,
+            },
+            ":co": {
+                ":connect": 0,
+                ":connect acp": 1,
+                ":connect byok": 2,
+                ":connect local": 3,
+            },
+            ":q": {
+                ":quit": 0,
+            },
+            ":e": {
+                ":exit": 0,
+            },
+        }
+        for prefix, scores in priority.items():
+            if lowered_input.startswith(prefix):
+                return (scores.get(command_lower, 10), command_lower)
+        return (10, command_lower)
 
     @staticmethod
     def _command_description(command: str) -> str:
@@ -5385,6 +5449,8 @@ class SuperQodeApp(App):
             ":prompt": "load a prompt file into the input buffer",
             ":model": "inspect or switch active provider/model",
             ":connect": "connect ACP, BYOK, or local runtime",
+            ":exit": "exit SuperQode",
+            ":quit": "exit SuperQode",
             ":status": "show harness status",
             ":tools": "show tool profiles",
         }
@@ -7828,7 +7894,7 @@ class SuperQodeApp(App):
         log = self.query_one("#log", ConversationLog)
         log.clear()
         try:
-            from superqode.tui import load_team_config
+            from superqode.team_config import load_team_config
 
             team_name = load_team_config().team_name
         except Exception:
@@ -9712,6 +9778,28 @@ team:
         mode = os.environ.get("SUPERQODE_ACP_CLIENT", "").strip().lower()
         return mode in {"custom", "jsonrpc", "rpc"}
 
+    @staticmethod
+    def _normalize_acp_model_id(agent_type: str, model: str) -> str | None:
+        """Normalize a UI model value before sending it to an ACP agent."""
+        if not model or agent_type not in ("codex", "openhands", "opencode"):
+            return None
+        normalized = model.strip()
+        # "auto"/"default" is a UI placeholder meaning "let the agent
+        # pick its configured default model" — it is NOT a real model id.
+        if normalized.lower() in (
+            "auto",
+            "default",
+            "opencode/auto",
+            "opencode/default",
+        ):
+            return None
+        # OpenCode model ids are provider/model pairs (for example
+        # opencode/big-pickle or deepseek/deepseek-v4...). Only prefix legacy
+        # bare ids; do not rewrite real provider ids.
+        if agent_type == "opencode" and "/" not in normalized:
+            return f"opencode/{normalized}"
+        return normalized
+
     def _run_acp_jsonrpc_client(
         self,
         message: str,
@@ -10128,27 +10216,7 @@ team:
 
         async def run_prompt() -> tuple[str | None, dict]:
             total_start = time.monotonic()
-            model_id = None
-            if model and agent_type in ("codex", "openhands", "opencode"):
-                normalized = model.strip()
-                # "auto"/"default" is a UI placeholder meaning "let the agent
-                # pick its configured default model" — it is NOT a real model id.
-                # Passing a literal "auto" (or "opencode/auto") to session/new
-                # makes opencode return an empty response, which the app then
-                # surfaces as "run failed". Send no model in that case so the
-                # agent falls back to its own default. This mirrors the
-                # special-casing already done in _auto_select_opencode_model.
-                if normalized.lower() in (
-                    "auto",
-                    "default",
-                    "opencode/auto",
-                    "opencode/default",
-                ):
-                    model_id = None
-                else:
-                    model_id = normalized
-                    if agent_type == "opencode" and not model_id.startswith("opencode/"):
-                        model_id = f"opencode/{model_id}"
+            model_id = self._normalize_acp_model_id(agent_type, model)
 
             project_root = Path.cwd()
             client_key = (str(project_root), command, model_id or "")
@@ -21806,7 +21874,7 @@ team:
 
     def _show_team(self, log: ConversationLog):
         try:
-            from superqode.tui import load_team_config
+            from superqode.team_config import load_team_config
 
             config = load_team_config()
 
@@ -22158,7 +22226,7 @@ team:
 
     def _show_roles(self, log: ConversationLog):
         try:
-            from superqode.tui import load_team_config
+            from superqode.team_config import load_team_config
 
             config = load_team_config()
 

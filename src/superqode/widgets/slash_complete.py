@@ -78,8 +78,12 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand("/mcp connect", "Connect configured MCP servers", category="workflow"),
     SlashCommand("/mcp tools", "List connected MCP tools", category="workflow"),
     SlashCommand("/connect", "Choose ACP, BYOK, or local connection", category="workflow"),
+    SlashCommand(":connect", "Choose ACP, BYOK, or local connection", category="workflow"),
+    SlashCommand(":connect acp", "Connect to ACP agent", category="workflow"),
     SlashCommand("/connect byok", "Connect to BYOK provider/model", category="workflow"),
+    SlashCommand(":connect byok", "Connect to BYOK provider/model", category="workflow"),
     SlashCommand("/connect local", "Connect to local model provider", category="workflow"),
+    SlashCommand(":connect local", "Connect to local model provider", category="workflow"),
     SlashCommand("/model", "Show or switch models", category="workflow"),
     SlashCommand("/tools", "Show active tool profile", category="workflow"),
     SlashCommand("/skills", "List local skills", category="workflow"),
@@ -92,7 +96,96 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand("/help", "Show help", "?", category="system"),
     SlashCommand("/disconnect", "Disconnect from agent", "Ctrl+D", category="system"),
     SlashCommand("/exit", "Exit SuperQode", "Ctrl+C", category="system"),
+    SlashCommand(":exit", "Exit SuperQode", "Ctrl+C", category="system"),
+    SlashCommand(":quit", "Exit SuperQode", "Ctrl+C", category="system"),
 ]
+
+
+def _command_sort_key(query: str, command: str) -> tuple[int, str]:
+    query = query.lower()
+    command = command.lower()
+    priority: dict[str, dict[str, int]] = {
+        ":": {
+            ":connect": 0,
+            ":connect acp": 1,
+            ":connect byok": 2,
+            ":connect local": 3,
+            ":exit": 4,
+            ":quit": 5,
+        },
+        ":c": {
+            ":connect": 0,
+            ":connect acp": 1,
+            ":connect byok": 2,
+            ":connect local": 3,
+            ":clear": 20,
+        },
+        ":co": {
+            ":connect": 0,
+            ":connect acp": 1,
+            ":connect byok": 2,
+            ":connect local": 3,
+        },
+        ":q": {
+            ":quit": 0,
+        },
+        ":e": {
+            ":exit": 0,
+        },
+    }
+    for prefix, scores in priority.items():
+        if query.startswith(prefix):
+            return (scores.get(command, 10), command)
+    return (10, command)
+
+
+def filter_slash_commands(
+    commands: list[SlashCommand],
+    query: str,
+    *,
+    max_results: int = 10,
+) -> list[SlashCommand]:
+    """Filter slash/colon commands with prefix matches before fuzzy matches."""
+    if not query:
+        return commands[:max_results]
+
+    query_lower = query.lower()
+    if query_lower in {":c", ":co", ":con", ":conn", ":conne", ":connec"}:
+        connect_order = [":connect", ":connect acp", ":connect byok", ":connect local"]
+        by_command = {command.command: command for command in commands}
+        return [by_command[command] for command in connect_order if command in by_command][
+            :max_results
+        ]
+    seen: set[str] = set()
+    prefix_matches = []
+    for command in commands:
+        if not command.command.lower().startswith(query_lower):
+            continue
+        if command.command in seen:
+            continue
+        seen.add(command.command)
+        prefix_matches.append(command)
+    prefix_matches = sorted(
+        prefix_matches,
+        key=lambda command: _command_sort_key(query_lower, command.command),
+    )
+    if len(prefix_matches) >= max_results:
+        return prefix_matches[:max_results]
+
+    fuzzy = FuzzySearch()
+    prefix_set = {command.command for command in prefix_matches}
+    fuzzy_items = [
+        (command.command, command) for command in commands if command.command not in prefix_set
+    ]
+    fuzzy_matches = [
+        command
+        for _, command in fuzzy.search_with_data(
+            query,
+            fuzzy_items,
+            max_results=max_results - len(prefix_matches),
+        )
+    ]
+    return [*prefix_matches, *fuzzy_matches]
 
 
 class SlashCompleteItem(Widget):
@@ -311,23 +404,7 @@ class SlashComplete(Widget):
 
     def _update_filtered_commands(self) -> None:
         """Update the filtered command list based on query."""
-        # Remove leading "/" for search
-        search_text = self.search_query.lstrip("/")
-
-        # Build searchable items
-        items = [(cmd.command.lstrip("/"), cmd) for cmd in self.commands]
-
-        if search_text:
-            # Fuzzy search
-            results = self.fuzzy.search_with_data(
-                search_text,
-                items,
-                max_results=10,
-            )
-            self.filtered_commands = [cmd for _, cmd in results]
-        else:
-            # Show all commands (limited)
-            self.filtered_commands = self.commands[:10]
+        self.filtered_commands = filter_slash_commands(self.commands, self.search_query)
 
         self._render_commands()
 

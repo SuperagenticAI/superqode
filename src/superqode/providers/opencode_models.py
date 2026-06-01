@@ -8,6 +8,7 @@ from OpenCode's CLI, so we don't have to manually update the model list.
 import asyncio
 import json
 import logging
+import re
 import shutil
 import subprocess
 from datetime import datetime, timedelta
@@ -175,21 +176,10 @@ def _parse_opencode_models(output: str) -> List[Dict]:
         return json_models
 
     models = []
-    blocks = output.split("opencode/")
-
-    for block in blocks:
-        if not block.strip():
-            continue
-        lines = block.strip().split("\n")
-        if not lines:
-            continue
-
-        model_id = lines[0].strip()
+    for raw_model_id, json_text in _iter_cli_model_blocks(output):
+        model_id = raw_model_id.strip()
         if not model_id:
             continue
-
-        model_id = model_id.replace("opencode/", "").strip()
-        json_text = "\n".join(lines[1:])
 
         try:
             data = json.loads(json_text[:2000])
@@ -209,9 +199,9 @@ def _parse_opencode_models(output: str) -> List[Dict]:
 
             models.append(
                 {
-                    "id": f"opencode/{model_id}",
+                    "id": model_id,
                     "name": name,
-                    "provider": "opencode",
+                    "provider": model_id.split("/", 1)[0],
                     "is_free": is_free,
                     "context": context,
                     "source": "opencode",
@@ -221,9 +211,9 @@ def _parse_opencode_models(output: str) -> List[Dict]:
             is_free = "-free" in model_id.lower() or "free" in model_id.lower()
             models.append(
                 {
-                    "id": f"opencode/{model_id}",
+                    "id": model_id,
                     "name": model_id.replace("-", " ").replace("_", " ").title(),
-                    "provider": "opencode",
+                    "provider": model_id.split("/", 1)[0],
                     "is_free": is_free,
                     "context": _estimate_context(model_id),
                     "source": "opencode",
@@ -231,6 +221,35 @@ def _parse_opencode_models(output: str) -> List[Dict]:
             )
 
     return models
+
+
+_MODEL_ID_LINE = re.compile(r"^[A-Za-z0-9_.-]+/.+")
+
+
+def _iter_cli_model_blocks(output: str) -> List[tuple[str, str]]:
+    """Split ``opencode models --verbose`` output into ``provider/model`` blocks."""
+    blocks: List[tuple[str, str]] = []
+    current_id: Optional[str] = None
+    current_lines: List[str] = []
+
+    def flush() -> None:
+        nonlocal current_id, current_lines
+        if current_id:
+            blocks.append((current_id, "\n".join(current_lines).strip()))
+        current_id = None
+        current_lines = []
+
+    for line in output.splitlines():
+        stripped = line.strip()
+        if _MODEL_ID_LINE.match(stripped) and not stripped.startswith(("{", "}", '"')):
+            flush()
+            current_id = stripped
+            continue
+        if current_id is not None:
+            current_lines.append(line)
+
+    flush()
+    return blocks
 
 
 def _parse_json_models(output: str) -> List[Dict]:
@@ -258,12 +277,13 @@ def _parse_json_models(output: str) -> List[Dict]:
         raw_id = item.get("id") or item.get("model") or item.get("name") or ""
         if not raw_id:
             continue
-        model_id = raw_id if str(raw_id).startswith("opencode/") else f"opencode/{raw_id}"
+        raw_id = str(raw_id)
+        model_id = raw_id if "/" in raw_id else f"opencode/{raw_id}"
         models.append(
             {
                 "id": model_id,
                 "name": item.get("name") or str(raw_id).split("/")[-1],
-                "provider": item.get("provider", "opencode"),
+                "provider": item.get("provider") or model_id.split("/", 1)[0],
                 "is_free": _model_has_free_pricing(item, model_id=str(raw_id)),
                 "context": item.get("context")
                 or item.get("context_window")

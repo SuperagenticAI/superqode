@@ -668,8 +668,8 @@ class HintsBar(Static):
             ("❓ :h [:help]", THEME["purple"]),
             ("🚀 :i [:init]", THEME["success"]),
             ("📚 :s [:sidebar]", THEME["cyan"]),
-            ("🔌 :c [:connect]", THEME["pink"]),
-            ("👋 :q [:quit]", THEME["orange"]),
+            ("🔌 :connect", THEME["pink"]),
+            ("👋 :exit", THEME["orange"]),
         ]
         for i, (hint, color) in enumerate(hints):
             if i > 0:

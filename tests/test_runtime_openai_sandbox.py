@@ -12,6 +12,7 @@ from superqode.runtime.errors import RuntimeNotInstalledError
 from superqode.tools.base import Tool, ToolContext, ToolRegistry, ToolResult
 
 pytest.importorskip("agents", reason="openai-agents not installed")
+pytest.importorskip("agents.sandbox", reason="openai-agents sandbox support not installed")
 
 from superqode.runtime.openai_agents import OpenAIAgentsRuntime  # noqa: E402
 from superqode.runtime.openai_sandbox import (  # noqa: E402

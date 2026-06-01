@@ -53,11 +53,11 @@ a2a = [
     "uvicorn>=0.32.0",
 ]
 adk = [
-    "google-adk>=1.33.0,<2.0",
+    "google-adk>=2.1.0,<3.0",
 ]
 openai-agents = [
-    "openai-agents>=0.17.2",
-    "openai-agents[litellm]>=0.17.2",
+    "openai-agents>=0.17.4",
+    "openai-agents[litellm]>=0.17.4",
 ]
 deepagents = [
     "deepagents>=0.6.0,<0.7.0",
