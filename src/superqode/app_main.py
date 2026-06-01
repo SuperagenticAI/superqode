@@ -459,6 +459,14 @@ class SelectionAwareInput(TextArea):
                 return
 
         if event.key == "enter":
+            # In a selection picker, Enter confirms the highlighted item rather
+            # than submitting the (usually empty) prompt buffer. Without this the
+            # keystroke is swallowed by _submit_current_value before the app-level
+            # on_key handler can act on it.
+            if self._handle_selection_enter(app):
+                event.stop()
+                event.prevent_default()
+                return
             self._submit_current_value(event)
             return
 
@@ -526,9 +534,26 @@ class SelectionAwareInput(TextArea):
                     app.action_navigate_connect_type_down()
                 return
 
-            # Don't handle arrow keys for local providers/models in Input widget
-            # Let them bubble up to App-level handler instead
-            # This prevents conflicts and ensures consistent behavior
+            # Handle local provider/model arrows here too. Relying on the event
+            # bubbling to the app-level handler is unreliable because the
+            # underlying TextArea consumes up/down for cursor movement first.
+            if getattr(app, "_awaiting_local_provider", False):
+                event.stop()
+                event.prevent_default()
+                if event.key == "up":
+                    app.action_navigate_local_provider_up()
+                else:
+                    app.action_navigate_local_provider_down()
+                return
+
+            if getattr(app, "_awaiting_local_model", False):
+                event.stop()
+                event.prevent_default()
+                if event.key == "up":
+                    app.action_navigate_local_model_up()
+                else:
+                    app.action_navigate_local_model_down()
+                return
 
             if getattr(app, "_awaiting_model_selection", False):
                 event.stop()
@@ -547,6 +572,37 @@ class SelectionAwareInput(TextArea):
 
         # For all other keys or when not in selection mode, let parent handle it
         # TextArea handles normal editing, wrapping, and cursor movement.
+
+    def _handle_selection_enter(self, app) -> bool:
+        """Confirm the active picker selection on Enter.
+
+        Returns True when Enter was consumed by a selection picker. Mirrors the
+        per-mode dispatch in the app-level on_key handler so behaviour is
+        identical whether or not the prompt input holds focus.
+        """
+        # A pending typed-number buffer (BYOK/local pickers) takes priority so
+        # Enter commits the digits the user just typed instead of the highlight.
+        if getattr(app, "_selection_digit_buffer", ""):
+            if hasattr(app, "_apply_selection_buffer"):
+                app._apply_selection_buffer()
+                return True
+
+        mode_actions = (
+            ("_awaiting_acp_agent_selection", "action_select_highlighted_acp_agent"),
+            ("_awaiting_byok_model", "action_select_highlighted_model"),
+            ("_awaiting_byok_provider", "action_select_highlighted_provider"),
+            ("_awaiting_connect_type", "action_select_highlighted_connect_type"),
+            ("_awaiting_local_provider", "action_select_highlighted_local_provider"),
+            ("_awaiting_local_model", "action_select_highlighted_local_model"),
+            ("_awaiting_model_selection", "action_select_highlighted_acp_model"),
+        )
+        for flag, action_name in mode_actions:
+            if getattr(app, flag, False):
+                action = getattr(app, action_name, None)
+                if callable(action):
+                    action()
+                    return True
+        return False
 
 
 # ============================================================================
@@ -5139,7 +5195,6 @@ class SuperQodeApp(App):
         text = value.strip()
         if not text.startswith(("/", ":")):
             return False
-        command = ":" + text[1:].split(maxsplit=1)[0].lower()
         return text.lower() in {candidate.lower() for candidate in COMMANDS}
 
     def _update_prompt_completion_panel(self, value: str) -> None:
@@ -16891,10 +16946,13 @@ team:
             if hasattr(self, attr):
                 delattr(self, attr)
 
-        # Reset indices - will be set properly below
-        self._local_highlighted_provider_index = 0
-        if hasattr(self, "_local_highlighted_model_index"):
-            self._local_highlighted_model_index = 0
+        # Reset indices only on a fresh show. Navigation redraws pass
+        # clear_log=False and must preserve the highlighted provider, otherwise
+        # arrow keys move the index and it's immediately reset back to 0 here.
+        if clear_log:
+            self._local_highlighted_provider_index = 0
+            if hasattr(self, "_local_highlighted_model_index"):
+                self._local_highlighted_model_index = 0
 
         from superqode.providers.registry import PROVIDERS, ProviderCategory, get_local_providers
         from superqode.providers.local.discovery import get_discovery_service
@@ -16981,9 +17039,20 @@ team:
             elif provider_id in ("vllm", "sglang", "tgi"):
                 labels.extend(["server", "advanced"])
 
-            t.append(f"    [{idx}] ", style=self._picker_link_style(THEME["dim"], idx))
+            is_highlighted = (idx - 1) == highlighted_idx
+            marker = "▶ " if is_highlighted else "  "
+            name_style = (
+                f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['cyan']}"
+            )
+            num_style = (
+                self._picker_link_style(f"bold {THEME['success']}", idx)
+                if is_highlighted
+                else self._picker_link_style(THEME["dim"], idx)
+            )
+            t.append(f"  {marker}", style=f"bold {THEME['success']}")
+            t.append(f"[{idx}] ", style=num_style)
             t.append(f"{status_icon} ", style=THEME["success"])
-            t.append(f"{provider_def.name}", style=f"bold {THEME['cyan']}")
+            t.append(f"{provider_def.name}", style=name_style)
             if provider_id in ("vllm", "sglang"):
                 t.append(" [EXPERIMENTAL]", style=f"bold {THEME['warning']}")
             t.append(f" ({provider_id})", style=THEME["muted"])
