@@ -609,18 +609,18 @@ class TUIEnhancer:
 
 
 # ============================================================================
-# OPENCODE-STYLE UX HELPERS
+# RICH UX HELPERS
 # ============================================================================
 
 
-def format_tool_call_opencode_style(
+def format_tool_call_styled(
     tool_name: str,
     tool_kind: str,
     arguments: Dict[str, Any],
     status: str = "running",
 ) -> Text:
     """
-    Format a tool call in OpenCode's style.
+    Format a tool call with rich styling.
 
     Uses a clean, minimal style with:
     - Tool icon based on kind
@@ -629,7 +629,7 @@ def format_tool_call_opencode_style(
     """
     result = Text()
 
-    # Icons similar to OpenCode
+    # File-type icons
     icons = {
         "read": "📖",
         "write": "✏️",
@@ -675,11 +675,11 @@ def format_tool_call_opencode_style(
     return result
 
 
-def format_thinking_opencode_style(thoughts: List[str]) -> Text:
+def format_thinking_styled(thoughts: List[str]) -> Text:
     """
-    Format thinking in OpenCode's style.
+    Format thinking with rich styling.
 
-    OpenCode shows thinking in a collapsible section with bullet points.
+    Thinking is shown in a collapsible section with bullet points.
     """
     result = Text()
 
@@ -694,14 +694,14 @@ def format_thinking_opencode_style(thoughts: List[str]) -> Text:
     return result
 
 
-def format_response_opencode_style(
+def format_response_styled(
     text: str,
     agent_name: str,
     duration: float = 0,
     token_count: int = 0,
 ) -> Text:
     """
-    Format response in OpenCode's style.
+    Format response with rich styling.
 
     Uses clean typography with agent name header.
     """
@@ -779,10 +779,8 @@ MISSING_FEATURES = """
 ## 3. PROVIDER INTEGRATION
 
 ### ACP (Agent Client Protocol)
-- [x] OpenCode connection ✓
-- [x] OpenHands connection ✓
-- [ ] Claude Code connection
-- [ ] Cursor connection
+- [x] External ACP agent connections ✓
+- [ ] Additional ACP agent adapters
 - [ ] Auto-discovery of ACP agents
 
 ### BYOK (Bring Your Own Key)

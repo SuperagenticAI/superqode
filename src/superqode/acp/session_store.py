@@ -20,8 +20,7 @@ Schema rationale
   ``session/new``. The same id is sent back in ``session/load``.
 - ``cwd`` is the project root the session was created in. We surface it
   to the user when listing and refuse a resume if the on-disk cwd has
-  moved (mirrors fast-agent's behavior; see ``session_store.py:386`` in
-  the reference).
+  moved.
 - ``metadata_json`` is a free-form bag for agent-specific extras
   (model name, mode at last use, any future fields). Stored as TEXT so
   we don't have to migrate schema for every new key.

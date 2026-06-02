@@ -5,6 +5,30 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.36] - 2026-06-03
+
+### Added
+
+- **Local OS command sandbox** confining shell commands with the operating system's own isolation — macOS Seatbelt (`sandbox-exec`) and Linux Bubblewrap (`bwrap`). Modes via `SUPERQODE_SANDBOX` (`off`, `workspace-write`, `read-only`, `danger-full-access`) and the `:sandbox` command. See [Safety & Permissions](docs/advanced/safety-permissions.md#local-command-sandbox-os-level).
+- **Command safety classification** that auto-runs known read-only commands (no prompt), gates writes/network, and blocks destructive ones. Obfuscation-aware: commands are canonicalised before analysis, and dynamic constructs (`$(...)`, backticks, `eval`, pipe-to-shell) can never be classified safe.
+- **Network destination allowlist** so trusted installs (PyPI, npm, crates, GitHub, …) run without prompts while arbitrary egress is gated. Extendable via `SUPERQODE_NET_ALLOW`; `SUPERQODE_NET_STRICT` denies untrusted destinations.
+- **Rewind & transcript overlay** (`Ctrl+R`, double-`Esc`, or `:rewind`) that truncates the agent's stored history to an earlier message and reloads it for editing.
+- **`@` file mentions** — a live fuzzy file picker in the prompt that inlines referenced file contents on submit.
+- **Live streaming markdown** so assistant responses render formatted as they stream.
+- **`:theme`** picker with multiple accent themes (persisted to `~/.superqode/config.json`).
+- **`:export`** to write the conversation to a self-contained HTML file.
+- **`:compare <models>`** to re-run the last message across several models/runtimes concurrently and read the answers side by side.
+- **`create_skill` tool** making the agent self-extensible — it can author a new `SKILL.md` that is hot-loaded and immediately invocable.
+
+### Changed
+
+- Unified the product tagline to **"Your Portable Coding Agent Harness"** across the TUI welcome screen, README, docs, and package metadata, with a refreshed welcome subheading.
+- Updated the README header image and documentation logo.
+
+### Fixed
+
+- Rewrote the optional `python_repl` (Monty) tool against the real `pydantic-monty` API; it previously targeted a non-existent API and failed at runtime. Each call now runs in a fresh, fully isolated sandbox (no host filesystem, network, or third-party imports), and the `pydantic-monty` version constraint was corrected.
+
 ## [0.1.35] - 2026-06-02
 
 ### Added

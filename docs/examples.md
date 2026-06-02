@@ -1,6 +1,6 @@
 # Harness Examples
 
-SuperQode is your pluggable multi-agent coding harness. It ships ready-to-run HarnessSpec examples in `examples/harnesses/`.
+SuperQode is your portable coding agent harness. It ships ready-to-run HarnessSpec examples in `examples/harnesses/`.
 
 Use them when you want a complete starting point instead of generating a minimal template.
 

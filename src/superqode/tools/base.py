@@ -420,10 +420,11 @@ class ToolRegistry:
             registry.register(MCPExecuteTool())
 
         # Skill tools (always available, loads from .agents/skills/)
-        from .skill_tools import SkillTool, ReadSkillTool
+        from .skill_tools import SkillTool, ReadSkillTool, CreateSkillTool
 
         registry.register(SkillTool())
         registry.register(ReadSkillTool())
+        registry.register(CreateSkillTool())
 
         # Compact tool (manual context compression)
         from .compact_tool import CompactTool

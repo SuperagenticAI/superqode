@@ -1,6 +1,6 @@
 # CLI Reference
 
-SuperQode provides a CLI for your pluggable multi-agent coding harness: coding sessions, runtime management, provider setup, validation workflows, agents, and configuration. This reference documents the available commands, options, and usage patterns.
+SuperQode provides a CLI for your portable coding agent harness: coding sessions, runtime management, provider setup, validation workflows, agents, and configuration. This reference documents the available commands, options, and usage patterns.
 
 ---
 

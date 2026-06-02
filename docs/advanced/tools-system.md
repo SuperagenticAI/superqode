@@ -70,9 +70,24 @@ SuperQode provides a complete tool system for AI agents:
 |------|-------------|
 | `python_repl` | Optional Monty-backed sandboxed Python REPL |
 
-`python_repl` is registered only when `pydantic-monty` is installed. See
-[Monty Python REPL](monty-python-repl.md) for setup, limits, and filesystem
-mount behavior.
+`python_repl` is registered only when `pydantic-monty` is installed. It runs each
+snippet in a fresh, fully isolated sandbox (no host filesystem, network, or
+third-party imports). See [Monty Python REPL](monty-python-repl.md) for setup and
+limits.
+
+### Skills
+
+| Tool | Description |
+|------|-------------|
+| `skill` | List, inspect, and invoke Markdown skills |
+| `read_skill` | Read a skill's full instructions |
+| `create_skill` | Author a new reusable skill at runtime |
+
+`create_skill` makes the agent **self-extensible**: when it discovers a workflow
+worth reusing, it can write a new `SKILL.md` (name, description, instructions)
+that is hot-loaded and immediately invocable via `skill(action="invoke", …)` -
+without restarting the session. Skills are Markdown instructions, not executable
+code, so authoring one is safe. Skills are stored under `.agents/skills/`.
 
 ### LSP
 

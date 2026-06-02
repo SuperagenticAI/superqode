@@ -20,7 +20,7 @@ from typing import Optional
 
 from ..providers.models import get_model_info
 
-# --- Tunables (mirrored from fast-agent) ----------------------------------
+# --- Tunables -------------------------------------------------------------
 
 #: Default byte budget when we have no model info to work from.
 DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT = 8192

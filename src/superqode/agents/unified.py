@@ -158,12 +158,12 @@ class SuperQodeAgent(UnifiedAgent):
 
         provider_def = PROVIDERS.get(self.provider)
         if self.provider == "ds4":
-            # 0 (default) => unlimited iterations, matching fast-agent behavior.
+            # 0 (default) => unlimited iterations (loop until the model stops).
             max_iterations = int(os.getenv("DS4_MAX_ITERATIONS", "0"))
             session_history_limit = int(os.getenv("DS4_SESSION_HISTORY_LIMIT", "8"))
             parallel_tools = False
         else:
-            # 0 means unlimited (fast-agent style). Users can still cap via env.
+            # 0 means unlimited iterations. Users can still cap via env.
             max_iterations = int(os.getenv("SUPERQODE_MAX_ITERATIONS", "0"))
             session_history_limit = int(os.getenv("SUPERQODE_SESSION_HISTORY_LIMIT", "20"))
             parallel_tools = True

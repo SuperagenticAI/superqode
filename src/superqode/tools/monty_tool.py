@@ -1,16 +1,22 @@
-"""Monty-backed Python REPL tool.
+"""Monty-backed Python sandbox tool.
 
-Monty is optional. When ``pydantic-monty`` is installed, this tool gives the
-agent a fast, resource-limited Python interpreter without handing it direct host
-Python execution.
+Monty (``pydantic-monty``) is an optional, from-scratch Python interpreter that
+runs LLM-generated Python in-process with resource limits and *no* host access
+(filesystem, env, and network are all denied unless explicitly provided). It
+starts in microseconds, so it is the lightest sandbox tier — use it for quick
+generated-Python compute, not for shell commands (use ``bash`` for those) or
+full project runs (use a remote sandbox for those).
+
+This wraps the real ``pydantic-monty`` API (``Monty(...).run(...)`` with
+``ResourceLimits`` and a ``print_callback``). Monty is experimental and supports
+only a subset of Python, so the tool degrades gracefully when it is missing or
+when a snippet uses an unsupported feature.
 """
 
 from __future__ import annotations
 
 import asyncio
 import importlib
-import threading
-from dataclasses import dataclass
 from typing import Any, Dict
 
 from .base import Tool, ToolContext, ToolResult
@@ -18,17 +24,6 @@ from .base import Tool, ToolContext, ToolResult
 MAX_OUTPUT = 20000
 DEFAULT_MAX_DURATION_SECS = 2.0
 DEFAULT_MAX_MEMORY = 32 * 1024 * 1024
-DEFAULT_MAX_RECURSION_DEPTH = 200
-
-
-@dataclass
-class _ReplState:
-    repl: Any
-    lock: threading.Lock
-
-
-_REPLS: dict[str, _ReplState] = {}
-_REPLS_LOCK = threading.Lock()
 
 
 def _load_monty() -> Any | None:
@@ -52,31 +47,45 @@ def monty_version() -> str | None:
     return str(getattr(module, "__version__", "unknown"))
 
 
-def reset_monty_repl(session_id: str | None = None) -> None:
-    """Reset one Monty REPL session, or all sessions when omitted."""
-    with _REPLS_LOCK:
-        if session_id is None:
-            _REPLS.clear()
-        else:
-            _REPLS.pop(session_id, None)
-
-
-def _format_result(value: Any, printed: str) -> str:
-    parts: list[str] = []
-    if printed:
-        parts.append(printed.rstrip())
-    if value is not None:
-        parts.append(repr(value))
-    output = "\n".join(part for part in parts if part)
-    if not output:
-        output = "None"
+def _truncate(output: str) -> str:
     if len(output) > MAX_OUTPUT:
         return output[:MAX_OUTPUT] + f"\n\n[Output truncated at {MAX_OUTPUT} characters]"
     return output
 
 
+def run_monty_snippet(
+    module: Any,
+    code: str,
+    *,
+    type_check: bool = False,
+    max_duration_secs: float = DEFAULT_MAX_DURATION_SECS,
+    max_memory: int = DEFAULT_MAX_MEMORY,
+) -> str:
+    """Execute a snippet in a fresh Monty sandbox and return captured output.
+
+    Uses the real ``pydantic-monty`` API: build a ``Monty`` with the code and
+    call ``.run()`` with ``ResourceLimits`` and a stdout ``print_callback``. Each
+    call is isolated (no host filesystem/network access). Raises on Monty errors.
+    """
+    chunks: list[str] = []
+
+    def _print_callback(_stream: str, text: str) -> None:
+        chunks.append(text)
+
+    limits = module.ResourceLimits(
+        max_duration_secs=float(max_duration_secs),
+        max_memory=int(max_memory),
+    )
+    runner = module.Monty(code, script_name="superqode_repl.py", type_check=type_check)
+    value = runner.run(limits=limits, print_callback=_print_callback)
+
+    printed = "".join(chunks).rstrip()
+    parts = [p for p in (printed, repr(value) if value is not None else "") if p]
+    return _truncate("\n".join(parts) if parts else "None")
+
+
 class MontyPythonReplTool(Tool):
-    """Run small Python snippets in a Monty sandbox."""
+    """Run small Python snippets in a Monty sandbox (no host access)."""
 
     @property
     def name(self) -> str:
@@ -85,9 +94,12 @@ class MontyPythonReplTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Execute a small Python snippet in a Monty sandboxed REPL. "
-            "State persists for this SuperQode session. Filesystem access is disabled "
-            "unless explicitly mounted."
+            "Execute a small Python snippet in a Monty sandbox: a fast, "
+            "resource-limited Python interpreter with NO access to the host "
+            "filesystem, environment, or network. Prefer this over running "
+            "`python -c` through bash for quick calculations, data shaping, or "
+            "logic checks — it is safer and isolated. Each call runs fresh. Note: "
+            "Monty supports a subset of Python (no third-party imports)."
         )
 
     @property
@@ -97,31 +109,12 @@ class MontyPythonReplTool(Tool):
             "properties": {
                 "code": {
                     "type": "string",
-                    "description": "Python code snippet to execute.",
-                },
-                "reset": {
-                    "type": "boolean",
-                    "description": "Reset the session REPL before running code.",
-                    "default": False,
+                    "description": "Python code snippet to execute. Use print() to emit output.",
                 },
                 "type_check": {
                     "type": "boolean",
-                    "description": "Create a fresh type-checking REPL for this snippet.",
+                    "description": "Type-check the snippet before running it.",
                     "default": False,
-                },
-                "allow_filesystem": {
-                    "type": "boolean",
-                    "description": (
-                        "Mount the workspace at /workspace. Default false keeps filesystem "
-                        "access blocked."
-                    ),
-                    "default": False,
-                },
-                "mount_mode": {
-                    "type": "string",
-                    "enum": ["read-only", "overlay", "read-write"],
-                    "description": "Filesystem mount mode when allow_filesystem is true.",
-                    "default": "overlay",
                 },
                 "max_duration_secs": {
                     "type": "number",
@@ -154,30 +147,18 @@ class MontyPythonReplTool(Tool):
         if not code.strip():
             return ToolResult(success=False, output="", error="Code is required")
 
-        reset = bool(args.get("reset", False))
         type_check = bool(args.get("type_check", False))
-        allow_filesystem = bool(args.get("allow_filesystem", False))
-        mount_mode = str(args.get("mount_mode", "overlay"))
-        if mount_mode not in {"read-only", "overlay", "read-write"}:
-            return ToolResult(success=False, output="", error=f"Invalid mount_mode: {mount_mode}")
-
-        limits = {
-            "max_duration_secs": float(args.get("max_duration_secs", DEFAULT_MAX_DURATION_SECS)),
-            "max_memory": int(args.get("max_memory", DEFAULT_MAX_MEMORY)),
-            "max_recursion_depth": DEFAULT_MAX_RECURSION_DEPTH,
-        }
+        max_duration_secs = float(args.get("max_duration_secs", DEFAULT_MAX_DURATION_SECS))
+        max_memory = int(args.get("max_memory", DEFAULT_MAX_MEMORY))
 
         try:
             output = await asyncio.to_thread(
-                self._run_sync,
+                run_monty_snippet,
                 module,
-                ctx,
                 code,
-                reset,
-                type_check,
-                allow_filesystem,
-                mount_mode,
-                limits,
+                type_check=type_check,
+                max_duration_secs=max_duration_secs,
+                max_memory=max_memory,
             )
         except Exception as exc:  # noqa: BLE001 - Monty raises package-specific exceptions.
             return ToolResult(
@@ -193,51 +174,6 @@ class MontyPythonReplTool(Tool):
             metadata={
                 "runtime": "monty",
                 "version": str(getattr(module, "__version__", "unknown")),
-                "filesystem": "mounted" if allow_filesystem else "blocked",
-                "mount_mode": mount_mode if allow_filesystem else None,
+                "filesystem": "blocked",
             },
         )
-
-    def _run_sync(
-        self,
-        module: Any,
-        ctx: ToolContext,
-        code: str,
-        reset: bool,
-        type_check: bool,
-        allow_filesystem: bool,
-        mount_mode: str,
-        limits: dict[str, Any],
-    ) -> str:
-        session_key = f"{ctx.session_id}:{ctx.working_directory.resolve()}:{type_check}"
-        if reset:
-            reset_monty_repl(session_key)
-
-        with _REPLS_LOCK:
-            state = _REPLS.get(session_key)
-            if state is None:
-                repl = module.MontyRepl(
-                    script_name="superqode_repl.py",
-                    limits=limits,
-                    type_check=type_check,
-                )
-                state = _ReplState(repl=repl, lock=threading.Lock())
-                _REPLS[session_key] = state
-
-        collector = module.CollectString()
-        mount = None
-        if allow_filesystem:
-            mount = module.MountDir(
-                "/workspace",
-                ctx.working_directory,
-                mode=mount_mode,
-            )
-
-        with state.lock:
-            value = state.repl.feed_run(
-                code,
-                print_callback=collector,
-                mount=mount,
-            )
-
-        return _format_result(value, str(getattr(collector, "output", "")))

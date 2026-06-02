@@ -19,9 +19,8 @@ provider:
   useful for fan-in / aggregator agents in workflows where token counting
   for intermediate replies would distort budgets.
 
-These mirror the synthetic providers in fast-agent
-(``fast_agent.llm.internal.{passthrough,playback,silent}``) so prompts and
-fixtures port across without rewriting indicator syntax.
+These provide passthrough/playback/silent synthetic models so prompts and
+fixtures can be exercised deterministically without a live provider.
 """
 
 from __future__ import annotations

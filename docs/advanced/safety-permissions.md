@@ -260,6 +260,98 @@ sandbox:
 
 ---
 
+## Local Command Sandbox (OS-level)
+
+Beyond the permission gate, SuperQode can confine every shell command using the
+operating system's own isolation so that even an auto-approved command cannot
+write outside the workspace or reach the network. This is enforced by the OS, not
+by string matching.
+
+### Backends
+
+| Platform | Backend | Binary |
+|----------|---------|--------|
+| macOS | Seatbelt | `sandbox-exec` (built in) |
+| Linux | Bubblewrap | `bwrap` |
+
+If no backend is available, commands run unconfined and SuperQode says so.
+
+### Modes
+
+Select a mode with the `SUPERQODE_SANDBOX` environment variable (or the
+`:sandbox <mode>` command in the TUI):
+
+| Mode | Filesystem | Network |
+|------|-----------|---------|
+| `off` *(default)* | unrestricted | unrestricted |
+| `workspace-write` | read anywhere, **write only** to the workspace + temp | allowed |
+| `read-only` | read anywhere, write only to temp | **denied** |
+| `danger-full-access` | unrestricted | unrestricted |
+
+```bash
+# Confine writes to the project, keep network for installs
+SUPERQODE_SANDBOX=workspace-write superqode
+
+# Strict read-only analysis: no writes, no network
+SUPERQODE_SANDBOX=read-only superqode
+```
+
+In the TUI, `:sandbox` shows the active mode, backend, and whether a sandbox is
+currently applied; `:sandbox workspace-write` switches modes for the session.
+
+---
+
+## Command Safety Classification
+
+Every shell command is classified before it runs, which lets SuperQode auto-run
+safe commands (no prompt) while still gating risky ones:
+
+| Class | Examples | Default action |
+|-------|----------|----------------|
+| **Safe** (read-only) | `ls`, `cat`, `grep`, `git status`, `git diff`, `pip show` | Auto-allow |
+| **Write** | `mv`, `mkdir`, `git commit`, `sed -i`, unknown commands | Ask |
+| **Network** | `curl`, `git push`, `pip install`, `npm install` | Ask (see allowlist) |
+| **Destructive** | `rm -rf`, `sudo`, `dd of=…`, `mkfs`, `curl … \| sh` | Block |
+
+The classifier is **obfuscation-aware**: commands are canonicalised before
+analysis, so `\rm`, `'/bin/rm'`, and `r""m` are still recognised as `rm`, and
+dynamic constructs (`$(...)`, backticks, `eval`, pipe-to-shell) can never be
+classified Safe.
+
+This is what removes prompt fatigue - you are no longer asked to approve every
+`ls` or `git status`, only the operations that actually carry risk.
+
+---
+
+## Network Allowlist Policy
+
+Network commands are checked against a domain allowlist so trusted installs run
+without prompts while arbitrary egress is gated:
+
+| Status | Meaning | Default action |
+|--------|---------|----------------|
+| **Trusted** | every destination is on the allowlist | Auto-allow |
+| **Untrusted** | a destination is not on the allowlist | Ask (or deny in strict mode) |
+| **Unknown** | no host could be determined (e.g. `git push`) | Ask |
+
+The built-in allowlist covers common registries and source hosts - PyPI, npm,
+crates.io, Go/Ruby proxies, GitHub/GitLab/Bitbucket, container registries, and OS
+package mirrors. So `pip install requests`, `npm install`, and
+`git clone https://github.com/...` run automatically, while `curl https://evil.com`
+is gated.
+
+| Environment variable | Effect |
+|----------------------|--------|
+| `SUPERQODE_NET_ALLOW` | Comma-separated extra domains to trust (e.g. `internal.corp,mirror.local`) |
+| `SUPERQODE_NET_STRICT` | When set, untrusted destinations are **denied** instead of prompted |
+
+```bash
+# Trust an internal mirror and hard-deny anything else
+SUPERQODE_NET_ALLOW=mirror.corp SUPERQODE_NET_STRICT=1 superqode
+```
+
+---
+
 ## Safety Warnings
 
 The warning system (`safety/warnings.py`) alerts users to potential issues:

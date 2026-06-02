@@ -1,7 +1,7 @@
 """
 Skills System for SuperQode.
 
-Markdown-based reusable agent workflows, similar to PyFlue and Fast-Agent.
+Markdown-based reusable agent workflows.
 Skills are loaded from .agents/skills/ directory.
 
 Usage:
@@ -196,7 +196,7 @@ def load_project_instructions(root: str | Path = ".") -> str:
             continue
         seen.add(directory)
 
-        # AGENTS.md is canonical (OpenAI Agents SDK / Codex convention).
+        # AGENTS.md is the canonical project-instructions file.
         # CLAUDE.md is a SuperQode legacy fallback: only loaded when AGENTS.md
         # is missing from the same directory.
         agents_path = directory / "AGENTS.md"

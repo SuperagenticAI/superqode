@@ -166,7 +166,7 @@ class ColorfulStatusBar(Static):
             result.append(char, style=f"bold {color}")
         result.append(" ✨", style="bold #fbbf24")
         result.append(" ", style="")
-        result.append("Multi-agent coding harness", style="")
+        result.append("Your Portable Coding Agent Harness", style="")
 
         # BYOK status (if connected)
         if self.byok_provider:
@@ -800,6 +800,9 @@ class ConversationLog(RichLog):
         self._session_tool_calls: list[dict] = []
         self._streaming_response: str = ""
         self._streaming_notice_shown: bool = False
+        # Characters of `_streaming_response` already rendered as finished
+        # markdown during progressive streaming (block-wise live rendering).
+        self._streamed_offset: int = 0
         self._last_thinking_key: str = ""
         self._last_thinking_at: float = 0.0
         self._active_tool_start_times: list[dict[str, Any]] = []
@@ -1151,6 +1154,7 @@ class ConversationLog(RichLog):
         # Reset streaming state
         self._streaming_response = ""
         self._streaming_notice_shown = False
+        self._streamed_offset = 0
         self._streaming_thinking = ""
         self._thinking_lines = []
         self._tool_calls = []
@@ -1338,12 +1342,47 @@ class ConversationLog(RichLog):
             self.write(notice)
             self._streaming_notice_shown = True
 
+        # Progressive markdown: flush completed blocks as they stabilize so the
+        # user sees formatted output live instead of waiting for the full
+        # response. RichLog is append-only, so we only render text up to the
+        # last safe paragraph boundary and keep the in-progress tail buffered.
+        pending = self._streaming_response[self._streamed_offset :]
+        flush_len = self._stable_markdown_split(pending)
+        if flush_len:
+            block = pending[:flush_len].strip("\n")
+            self._streamed_offset += flush_len
+            if block:
+                self.write(render_agent_markdown(block))
+
+    @staticmethod
+    def _stable_markdown_split(buffer: str) -> int:
+        """Length of the leading portion of *buffer* safe to render as markdown.
+
+        Splits only at blank-line paragraph boundaries that fall outside an open
+        code fence, so a partially written paragraph or an unterminated code
+        block is never rendered mid-stream (which would flash broken markdown).
+        Returns 0 when nothing is safe to flush yet.
+        """
+        if "\n\n" not in buffer:
+            return 0
+        safe = 0
+        search_from = 0
+        while True:
+            idx = buffer.find("\n\n", search_from)
+            if idx == -1:
+                break
+            boundary = idx + 2
+            # Only flush when every code fence opened so far has been closed.
+            if buffer.count("```", 0, boundary) % 2 == 0:
+                safe = boundary
+            search_from = boundary
+        return safe
+
     def flush_response_buffer(self):
         """Compatibility no-op.
 
-        RichLog is append-only, so streamed chunks are accumulated and rendered
-        once at session end as clean markdown instead of leaking raw markdown
-        during generation.
+        Progressive markdown is flushed block-by-block in ``add_response_chunk``;
+        any remaining tail is rendered by ``write_final_response`` at session end.
         """
         return None
 
@@ -1372,9 +1411,19 @@ class ConversationLog(RichLog):
         if leading_newline:
             self.write(Text("\n"))
         if success:
-            self.write(render_agent_markdown(text))
+            # If blocks were already rendered live during streaming, only render
+            # the remaining tail to avoid duplicating earlier paragraphs.
+            remaining = text
+            if self._streamed_offset > 0:
+                flushed = self._streaming_response[: self._streamed_offset]
+                remaining = text[len(flushed) :] if text.startswith(flushed) else text
+            remaining = remaining.strip("\n")
+            if remaining:
+                self.write(render_agent_markdown(remaining))
         else:
             self.write(Text(f"  ✕ {text}\n", style=THEME["error"], overflow="fold"))
+        # Reset so a subsequent (non-streamed) response renders in full.
+        self._streamed_offset = 0
         if trailing_newline:
             self.write(Text("\n"))
 

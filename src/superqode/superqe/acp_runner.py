@@ -1,13 +1,13 @@
 """
 ACP Runner - Execute QE roles using ACP-compatible agents.
 
-Uses the existing AgentStreamClient to communicate with coding agents
-like OpenCode for AI-powered validation and evaluation analysis.
+Uses the existing AgentStreamClient to communicate with ACP-compatible
+coding agents for AI-powered validation and evaluation analysis.
 
 Features:
 - Real-time streaming of agent analysis
 - Structured finding extraction from agent output
-- Support for OpenCode free models
+- Support for free models
 - Integration with QE noise controls
 """
 
@@ -35,10 +35,10 @@ from superqode.agent_stream import (
 logger = logging.getLogger(__name__)
 
 
-# Default OpenCode command (same as TUI uses)
+# Default ACP agent command (same as the TUI uses)
 OPENCODE_COMMAND = "opencode run --format json"
 
-# Mapping from QE role names to OpenCode agent names
+# Mapping from QE role names to ACP agent names
 QE_ROLE_TO_OPENCODE_AGENT = {
     # Execution roles (not ACP-driven, but keep mapping for consistency)
     "smoke_tester": "deployment-readiness",
@@ -56,7 +56,7 @@ QE_ROLE_TO_OPENCODE_AGENT = {
 
 
 def get_opencode_agent_for_role(role_name: str) -> str:
-    """Map QE role name to appropriate OpenCode agent."""
+    """Map QE role name to the appropriate ACP agent."""
     return QE_ROLE_TO_OPENCODE_AGENT.get(role_name, "mutation-tester")  # Default fallback
 
 
@@ -106,7 +106,7 @@ class ACPFinding:
 class ACPRunnerConfig:
     """Configuration for ACP runner."""
 
-    # Agent command (default: opencode acp)
+    # Agent command (default ACP agent)
     agent_command: str = OPENCODE_COMMAND
 
     # Model to use (for agents that support model selection)
@@ -146,7 +146,7 @@ class ACPQERunner:
     """
     Runs QE analysis using an ACP-compatible coding agent.
 
-    Connects to agents like OpenCode and sends QE-specific prompts
+    Connects to an ACP-compatible agent and sends QE-specific prompts
     to analyze code for issues, then extracts structured findings
     from the agent's output.
     """
@@ -168,7 +168,7 @@ class ACPQERunner:
 
     async def run(self, prompt: str, role_name: str = "qe") -> ACPRunnerResult:
         """
-        Run the QE analysis with the given prompt using OpenCode subprocess.
+        Run the QE analysis with the given prompt using the ACP agent subprocess.
 
         Args:
             prompt: The QE analysis prompt to send to the agent
@@ -183,7 +183,7 @@ class ACPQERunner:
         collected_output = ""
         tool_calls = []
 
-        # Check if opencode is available
+        # Check if the ACP agent binary is available
         if not self._check_agent_available():
             return ACPRunnerResult(
                 success=False,
@@ -195,14 +195,14 @@ class ACPQERunner:
             )
 
         agent_logs.append(
-            f"[{start_time.strftime('%H:%M:%S')}] Starting OpenCode analysis for {role_name}"
+            f"[{start_time.strftime('%H:%M:%S')}] Starting agent analysis for {role_name}"
         )
         agent_logs.append(
             f"[{start_time.strftime('%H:%M:%S')}] Command: {self._build_agent_command(role_name)}"
         )
 
         if self.config.verbose:
-            print(f"🤖 Starting {role_name} analysis with OpenCode...")
+            print(f"🤖 Starting {role_name} analysis with the agent...")
 
         try:
             # Build the command with appropriate agent
@@ -213,9 +213,9 @@ class ACPQERunner:
 
             if self.config.verbose:
                 model_info = f" using {self.config.model}" if self.config.model else ""
-                print(f"🔧 Running OpenCode{model_info} for {role_name} analysis...")
+                print(f"🔧 Running the agent{model_info} for {role_name} analysis...")
 
-            # Run OpenCode as subprocess with memory limits for performance
+            # Run the agent as a subprocess with memory limits for performance
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 cwd=str(self.project_root),
@@ -226,11 +226,11 @@ class ACPQERunner:
             )
 
             agent_logs.append(
-                f"[{datetime.now().strftime('%H:%M:%S')}] OpenCode process started (PID: {process.pid})"
+                f"[{datetime.now().strftime('%H:%M:%S')}] Agent process started (PID: {process.pid})"
             )
 
             if self.config.verbose:
-                print(f"⚙️  OpenCode process started (PID: {process.pid})")
+                print(f"⚙️  Agent process started (PID: {process.pid})")
                 print(f"⏳ Analyzing codebase... (timeout: {self.config.timeout_seconds}s)")
 
             try:
@@ -432,7 +432,7 @@ class ACPQERunner:
                     agent_logs.append(
                         f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Process failed with error: {error_output}"
                     )
-                    errors.append(f"OpenCode process failed: {error_output}")
+                    errors.append(f"Agent process failed: {error_output}")
 
             except asyncio.TimeoutError:
                 agent_logs.append(
@@ -572,7 +572,7 @@ class ACPQERunner:
         """Build the agent command with model configuration."""
         cmd_parts = self.config.agent_command.split()
 
-        # If model is specified and using opencode, add model flag
+        # If model is specified and a model is set, add the model flag
         if self.config.model and "opencode" in self.config.agent_command:
             cmd_parts.extend(["-m", f"opencode/{self.config.model}"])
 

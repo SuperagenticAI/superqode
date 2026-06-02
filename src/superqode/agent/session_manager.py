@@ -134,6 +134,51 @@ class SessionStore:
         )
         self.append_message(session_id, message)
 
+    def truncate_to_user_message(self, session_id: str, occurrence: int) -> int:
+        """Rewind a session by removing the Nth user message and everything after it.
+
+        ``occurrence`` is 1-based and counts only ``role == "user"`` messages.
+        This is the backbone of "rewind": after truncation the agent reloads a
+        shorter history, so resending the edited message continues cleanly from
+        that point. Returns the number of stored messages removed.
+        """
+        path = self._session_path(session_id)
+        if occurrence < 1 or not path.exists():
+            return 0
+
+        raw_lines: List[str] = []
+        user_line_indices: List[int] = []
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                idx = len(raw_lines)
+                raw_lines.append(line.rstrip("\n"))
+                try:
+                    if json.loads(line).get("role") == "user":
+                        user_line_indices.append(idx)
+                except json.JSONDecodeError:
+                    continue
+
+        if occurrence > len(user_line_indices):
+            return 0
+
+        cut = user_line_indices[occurrence - 1]
+        removed = len(raw_lines) - cut
+        if removed <= 0:
+            return 0
+
+        with open(path, "w", encoding="utf-8") as f:
+            for line in raw_lines[:cut]:
+                f.write(line + "\n")
+
+        metadata = self.get_metadata(session_id)
+        if metadata:
+            metadata.message_count = max(0, metadata.message_count - removed)
+            metadata.updated_at = datetime.now().isoformat()
+            self._save_metadata(metadata)
+        return removed
+
     def get_messages(self, session_id: str, limit: Optional[int] = None) -> List[SessionMessage]:
         """Get all messages from session."""
         path = self._session_path(session_id)
@@ -290,6 +335,16 @@ class SessionManager:
         if not self._current_session_id:
             return []
         return self.store.get_messages(self._current_session_id, limit=limit)
+
+    def rewind_to_user_message(self, occurrence: int) -> int:
+        """Rewind the current session to before the Nth (1-based) user message.
+
+        Returns the number of stored messages removed (0 when there is no
+        active session or the index is out of range).
+        """
+        if not self._current_session_id:
+            return 0
+        return self.store.truncate_to_user_message(self._current_session_id, occurrence)
 
     def list_all_sessions(self) -> List[SessionMetadata]:
         """List all sessions."""

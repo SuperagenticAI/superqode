@@ -52,39 +52,44 @@ dependencies.
 
 ## Behavior
 
-`python_repl` runs Python snippets in a Monty REPL.
+`python_repl` runs a Python snippet in a fresh Monty sandbox and returns the
+captured `print()` output plus the value of the final expression.
 
 | Behavior | Default |
 |----------|---------|
-| Session state | Persists per SuperQode session |
-| Filesystem access | Blocked |
-| Workspace mount | Optional at `/workspace` |
-| Mount modes | `read-only`, `overlay`, `read-write` |
-| Execution limit | Duration, memory, and recursion caps |
+| Isolation | Each call runs in a fresh sandbox - no state carries between calls |
+| Host filesystem | No access (`open` is not defined in the sandbox) |
+| Network | No access |
+| Environment / stdlib | No third-party imports; only a minimal built-in subset |
+| Execution limit | Duration and memory caps |
 | Output limit | Truncated before returning to the model |
 
 The tool parameters are:
 
-| Parameter | Description |
-|-----------|-------------|
-| `code` | Python snippet to execute |
-| `reset` | Reset the session REPL before running |
-| `type_check` | Use a fresh type-checking REPL for the snippet |
-| `allow_filesystem` | Mount the workspace at `/workspace` |
-| `mount_mode` | Filesystem mount mode when mounting is enabled |
-| `max_duration_secs` | Maximum execution time |
-| `max_memory` | Maximum Monty heap memory |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `code` | - | Python snippet to execute. Use `print()` to emit output. |
+| `type_check` | `false` | Type-check the snippet before running it |
+| `max_duration_secs` | `2.0` | Maximum execution time in seconds |
+| `max_memory` | `32 MiB` | Maximum Monty heap memory in bytes |
 
 ---
 
-## Filesystem Access
+## Sandbox Isolation
 
-Filesystem access is blocked by default. If a task needs to inspect workspace
-files from Python, the tool can explicitly mount the current workspace at
-`/workspace`.
+Monty has **no access to the host**. The filesystem, environment variables, and
+network are all unavailable inside the sandbox - for example `open(...)` raises
+`NameError` and `import socket` raises `ModuleNotFoundError`. This is what makes
+it safe to run model-written snippets in-process without a container.
 
-Use `read-only` for inspection, `overlay` for temporary writes, and `read-write`
-only when the session policy allows real file modification.
+If a task needs to read or write real project files, use the `read_file`,
+`write_file`, or `edit_file` tools (which run under the permission system), or
+`bash` for shell access.
+
+> **Note:** Monty is experimental and implements a subset of Python. Snippets
+> that need third-party packages (NumPy, requests, …), the full standard
+> library, or the project's own modules should use `bash` with the project's
+> Python interpreter instead.
 
 ---
 
@@ -122,6 +127,7 @@ extra and restart the SuperQode session:
 uv sync --extra monty
 ```
 
-If code cannot read files, that is expected unless `allow_filesystem` is enabled
-for the tool call.
+If code cannot read files, call the network, or import third-party packages,
+that is expected - Monty is fully isolated from the host by design. Use
+`read_file`/`bash` for those tasks instead.
 

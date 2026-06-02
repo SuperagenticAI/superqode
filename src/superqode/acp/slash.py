@@ -8,9 +8,8 @@ session, two routes are possible:
 2. Handle it locally — useful for introspection commands that ask about
    *the connection itself* rather than something the agent should do.
 
-This module owns route 2. It mirrors the spirit of fast-agent's
-``acp/slash_commands.py`` + ``acp/slash/dispatch.py`` + ``acp/slash/handlers/``
-but in a single small file because the surface is much smaller.
+This module owns route 2, kept in a single small file because the surface
+is much smaller than the connection-level command handling.
 
 Built-in commands:
 

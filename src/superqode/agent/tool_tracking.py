@@ -9,8 +9,6 @@ Providers disagree on how to identify in-flight tool calls during a stream:
 If you only key by id, OpenAI deltas with no id yet get lost. If you only
 key by index, Anthropic calls (which never have an index) don't fit.
 :class:`ToolCallTracker` indexes by *both* so either provider style works.
-
-Ported from fast-agent's ``llm/tool_tracking.py``.
 """
 
 from __future__ import annotations

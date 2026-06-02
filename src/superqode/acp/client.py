@@ -1,7 +1,7 @@
 """
 ACP Client for SuperQode.
 
-Handles communication with ACP-compatible coding agents like OpenCode.
+Handles communication with ACP-compatible coding agents.
 This is the primary interface for all ACP agent communication.
 """
 

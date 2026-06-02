@@ -135,7 +135,7 @@ def test_welcome_positions_superqode_as_coding_harness():
 
     text = render_plain(welcome)
 
-    assert "SuperQode = Multi-agent coding harness" in text
+    assert "SuperQode = Your Portable Coding Agent Harness" in text
     assert ":connect local" in text
     assert "Agentic Code Needs Super Quality Engineering" not in text
 
@@ -548,6 +548,41 @@ def test_slash_complete_prioritizes_connect_and_quit():
     assert ":context" not in connect_values
     assert ":copy" not in connect_values
     assert quit_values[0] == ":quit"
+
+
+def test_mention_completion_suggests_files(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "main.py").write_text("print('hi')\n")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("x = 1\n")
+    app = make_app()
+
+    # Typing "@" at the end of a prose prompt opens the file picker.
+    candidates = app._prompt_completion_candidates_for("explain @")
+    labels = {c.label for c in candidates}
+    assert "@main.py" in labels
+    assert "@src/" in labels
+
+    # The candidate value preserves the leading prose and inserts the reference.
+    main_candidate = next(c for c in candidates if c.label == "@main.py")
+    assert main_candidate.value == "explain @main.py"
+    assert main_candidate.kind == "file"
+
+    # Drilling into a directory lists its contents.
+    nested = app._prompt_completion_candidates_for("explain @src/")
+    assert any(c.value == "explain @src/app.py" for c in nested)
+
+
+def test_mention_completion_ignores_emails_and_plain_text(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    app = make_app()
+
+    # No "@" -> not a mention, and not a command either.
+    assert app._mention_completion_candidates("just some text") is None
+    # An email address must not trigger the file picker (no whitespace before @).
+    assert app._mention_completion_candidates("ping me at foo@bar.com") is None
+    # A trailing space closes the active mention.
+    assert app._mention_completion_candidates("see @src/ here") is None
 
 
 def test_slash_complete_prioritizes_diff_review_commands():
@@ -1390,6 +1425,108 @@ def test_conversation_log_streaming_renders_final_markdown_once():
     assert "TUI" in rendered
     assert log.get_last_response().count("| Item | Status |") == 1
     assert "Assistant:" in log.get_all_text()
+
+
+def test_streaming_renders_completed_paragraphs_live():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.start_agent_session("OpenCode", "deepseek/deepseek-v4", "acp", "ask")
+    # First paragraph completes (blank line) -> should render before the turn ends.
+    log.add_response_chunk("Here is the **plan**.\n\n")
+    rendered_mid = "\n".join(render_plain(item) for item in writes)
+    assert "Here is the plan." in rendered_mid
+
+    # Second paragraph still being typed -> held back until it stabilizes.
+    log.add_response_chunk("Now the second")
+    rendered_partial = "\n".join(render_plain(item) for item in writes)
+    assert "Now the second" not in rendered_partial
+
+    log.add_response_chunk(" part is done.")
+    log.end_agent_session(True)
+    rendered_final = "\n".join(render_plain(item) for item in writes)
+    assert "Now the second part is done." in rendered_final
+    # The first paragraph must not be rendered twice.
+    assert rendered_final.count("Here is the plan.") == 1
+
+
+def test_streaming_holds_unterminated_code_fence():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.start_agent_session("OpenCode", "deepseek/deepseek-v4", "acp", "ask")
+    log.add_response_chunk("intro line\n\n```python\nx = 1\n\n")
+    rendered = "\n".join(render_plain(item) for item in writes)
+    # Intro paragraph flushes, but the open code fence is not rendered yet.
+    assert "intro line" in rendered
+    assert "x = 1" not in rendered
+
+    log.add_response_chunk("y = 2\n```\n\n")
+    log.end_agent_session(True)
+    rendered_final = "\n".join(render_plain(item) for item in writes)
+    assert "x = 1" in rendered_final
+    assert "y = 2" in rendered_final
+
+
+def test_perform_rewind_trims_transcript_and_truncates_history(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from superqode.agent.session_manager import SessionManager
+
+    monkeypatch.chdir(tmp_path)
+    manager = SessionManager(".superqode/sessions")
+    manager.start_session("rwapp01", provider="ollama", model="qwen")
+    manager.add_user_message("q1")
+    manager.add_assistant_message("a1")
+    manager.add_user_message("q2")
+    manager.add_assistant_message("a2")
+
+    app = make_app()
+    app._pure_mode = SimpleNamespace(_session_manager=manager)
+
+    log = ConversationLog()
+    log.write = lambda *a, **k: None
+    infos = []
+    log.add_info = lambda text: infos.append(text)
+    log._messages = [
+        ("user", "q1", ""),
+        ("agent", "a1", "A"),
+        ("user", "q2", ""),
+        ("agent", "a2", "A"),
+    ]
+
+    app._perform_rewind(2, log)
+
+    # Transcript record is trimmed to before the 2nd user message.
+    assert log._messages == [("user", "q1", ""), ("agent", "a1", "A")]
+    # Stored agent history is truncated too.
+    assert [(m.role, m.content) for m in manager.get_messages()] == [
+        ("user", "q1"),
+        ("assistant", "a1"),
+    ]
+    assert any("Rewound to message 2" in t for t in infos)
+
+
+def test_render_compare_results_shows_labels_answers_and_errors():
+    from superqode.agent.parallel_compare import CompareResult, CompareSpec
+
+    app = make_app()
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *a, **k: writes.append(content)
+
+    results = [
+        CompareResult(spec=CompareSpec("openai", "gpt-4o"), text="**Answer A**", elapsed=1.2),
+        CompareResult(spec=CompareSpec("anthropic", "claude"), error="boom", elapsed=0.3),
+    ]
+    app._render_compare_results(results, log)
+
+    rendered = "\n".join(render_plain(item) for item in writes)
+    assert "openai/gpt-4o" in rendered
+    assert "Answer A" in rendered
+    assert "anthropic/claude" in rendered
+    assert "boom" in rendered
 
 
 def test_conversation_log_thinking_icon_is_deterministic():

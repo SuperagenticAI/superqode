@@ -154,7 +154,7 @@ request and shows a live elapsed-time indicator, then reports when DS4 is warm.
 ✓ DS4 server ready at http://127.0.0.1:8000/v1
 ⏳ Loading model into memory (first start can be slow on a cold cache)…
    …still loading the model (10s)
-✓ DS4 ready (warm) — 24s
+✓ DS4 ready (warm) - 24s
 ```
 
 Tips to avoid cold starts:
@@ -165,20 +165,20 @@ Tips to avoid cold starts:
 Disable the connect-time warm-up with:
 
 ```bash
-export SUPERQODE_DS4_WARMUP=0   # 0/false/no/off — skip warm-up on connect
+export SUPERQODE_DS4_WARMUP=0   # 0/false/no/off - skip warm-up on connect
 ```
 
 ### Local Code Search (No Web Access)
 
 Local models have no internet access, so `web_search` is intentionally not part
-of the DS4/local tool profile — and asking a local model to "search the web"
+of the DS4/local tool profile - and asking a local model to "search the web"
 will not work. Instead, local models are tuned to answer from **local code**
 using `repo_search` (broad, ranked files + content + symbols in one pass),
 `grep`, `code_search` (symbols/definitions/references), and `read_file`.
 
 To let a local model search a repo you downloaded **outside** your project (for
 reference, API examples, etc.), point SuperQode at it with
-`SUPERQODE_SEARCH_ROOTS` (`os.pathsep`-separated — `:` on macOS/Linux):
+`SUPERQODE_SEARCH_ROOTS` (`os.pathsep`-separated - `:` on macOS/Linux):
 
 ```bash
 export SUPERQODE_SEARCH_ROOTS="$HOME/refs/react:$HOME/refs/linux"
@@ -187,7 +187,7 @@ superqode -p --provider ds4 "how does this project's router compare to react's? 
 
 - Search and read tools (`repo_search`, `grep`, `glob`, `code_search`,
   `read_file`, `list_directory`) may access those roots **read-only**.
-- Writes/edits/shell stay confined to your working directory — reference repos
+- Writes/edits/shell stay confined to your working directory - reference repos
   cannot be modified.
 - Address a reference repo by its **absolute path**. The configured roots are
   listed in the local model's system prompt so it knows they're available.

@@ -2,7 +2,7 @@
 
 Get a SuperQode harness running in a few minutes.
 
-SuperQode is your pluggable multi-agent coding harness. A harness defines the run contract: model policy, runtime backend, tool access, sandbox policy, workflow shape, events, and output handling.
+SuperQode is your portable coding agent harness. A harness defines the run contract: model policy, runtime backend, tool access, sandbox policy, workflow shape, events, and output handling.
 
 !!! note "Safe first run"
     Start in a low-risk repository, throwaway branch, sandbox, or VM. Coding harnesses can read files, edit files, and run shell commands when policy allows it.
@@ -50,7 +50,11 @@ Useful TUI commands:
 | `:runtime list` | Show runtime backends |
 | `:runtime pydanticai` | Switch runtime where available |
 | `:providers` | Inspect provider setup |
-| `:sandbox` | Inspect sandbox policy |
+| `:sandbox` | Show or set the local command sandbox mode |
+| `:theme` | Pick an accent theme |
+| `:compare <models>` | Re-run your last message across several models |
+| `:export` | Export the conversation to HTML |
+| `:rewind` | Rewind the conversation to an earlier message |
 | `:help` | Show available commands |
 
 You can also ask directly in natural language:

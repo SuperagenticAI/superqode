@@ -26,8 +26,8 @@ class EffectiveModelPolicy:
     tool_call_format: str | None = None
     reasoning: str | None = None
     parallel_tools: bool = True
-    # 0 or negative => unlimited (fast-agent style: loop until the model stops
-    # calling tools). Positive => safety cap.
+    # 0 or negative => unlimited (loop until the model stops calling tools).
+    # Positive => safety cap.
     max_iterations: int = 0
     session_history_limit: int = 20
 

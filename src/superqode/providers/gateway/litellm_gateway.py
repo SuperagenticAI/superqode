@@ -404,9 +404,9 @@ class LiteLLMGateway(GatewayInterface):
             return msg
         return {**msg, "content": blocks}
 
-    # Provider-neutral reasoning effort levels. The names match fast-agent
-    # and (largely) OpenAI's o-series convention so users don't have to
-    # learn a new vocabulary per backend.
+    # Provider-neutral reasoning effort levels. The names follow OpenAI's
+    # o-series convention so users don't have to learn a new vocabulary per
+    # backend.
     _REASONING_LEVELS = ("off", "low", "medium", "high", "max")
 
     # Per-level thinking budgets for Anthropic-shape APIs (Claude

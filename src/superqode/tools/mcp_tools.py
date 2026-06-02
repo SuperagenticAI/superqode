@@ -617,8 +617,8 @@ async def _get_default_mcp_manager():
     """Return the global MCP manager and auto-connect configured servers.
 
     This makes MCP search/execute usable from BYOK and Local native sessions
-    once `SUPERQODE_MCP_SEARCH=1` is enabled, matching fast-agent's expectation
-    that configured MCP servers are available to the active agent.
+    once `SUPERQODE_MCP_SEARCH=1` is enabled, so that configured MCP servers
+    are available to the active agent.
     """
     try:
         from superqode.mcp.integration import get_mcp_manager

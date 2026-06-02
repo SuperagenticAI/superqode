@@ -300,11 +300,11 @@ async def _run_acp_role(
             id=f"{role_name}-oss-info",
             severity="info",
             title=f"{role_name.replace('_', ' ').title()} - Agent Not Available",
-            description=f"This QE role requires ACP-compatible coding agents (OpenCode, Claude Code, etc.). Install coding agents to enable full analysis capabilities.",
+            description=f"This QE role requires an ACP-compatible coding agent. Install one to enable full analysis capabilities.",
             file_path=None,
             line_number=None,
             evidence="ACP agent connection failed - this is normal in OSS environments without coding agents installed",
-            suggested_fix="Install OpenCode (npm i -g opencode-ai) or other ACP-compatible coding agents",
+            suggested_fix="Install an ACP-compatible coding agent to enable QE analysis",
             confidence=0.0,
             category="infrastructure",
         )
@@ -356,7 +356,7 @@ class APITestRole(QERole):
     """
     API Test Role - API contract and security testing.
 
-    Uses ACP agent (OpenCode) to:
+    Uses an ACP agent to:
     - Discover API endpoints
     - Test API contracts
     - Find security vulnerabilities in APIs
@@ -376,7 +376,7 @@ class UnitTestRole(QERole):
     """
     Unit Test Role - Function/class unit testing.
 
-    Uses ACP agent (OpenCode) to:
+    Uses an ACP agent to:
     - Identify functions lacking tests
     - Generate unit tests for uncovered code
     - Find edge cases and error conditions
@@ -395,7 +395,7 @@ class E2ETestRole(QERole):
     """
     E2E Test Role - End-to-end workflow testing.
 
-    Uses ACP agent (OpenCode) to:
+    Uses an ACP agent to:
     - Map user workflows
     - Generate E2E test scenarios
     - Test complete user journeys
@@ -415,7 +415,7 @@ class SecurityTestRole(QERole):
     """
     Security Test Role - Security vulnerability detection.
 
-    Uses ACP agent (OpenCode) to:
+    Uses an ACP agent to:
     - Find common vulnerabilities (OWASP Top 10)
     - Analyze authentication/authorization
     - Check for injection vulnerabilities
@@ -435,7 +435,7 @@ class PerformanceTestRole(QERole):
     """
     Performance Test Role - Performance bottleneck detection.
 
-    Uses ACP agent (OpenCode) to:
+    Uses an ACP agent to:
     - Identify performance bottlenecks
     - Find N+1 queries
     - Detect memory leaks

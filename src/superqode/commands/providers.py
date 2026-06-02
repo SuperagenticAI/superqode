@@ -667,7 +667,7 @@ def monty_command(action: str):
     async def smoke():
         tool = MontyPythonReplTool()
         ctx = ToolContext(session_id="monty-smoke", working_directory=Path.cwd())
-        return await tool.execute({"code": "x = 40\nx + 2", "reset": True}, ctx)
+        return await tool.execute({"code": "x = 40\nx + 2"}, ctx)
 
     result = asyncio.run(smoke())
     if result.success and result.output.strip().endswith("42"):

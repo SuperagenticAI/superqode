@@ -2,7 +2,7 @@
 BM25 Search implementation for MCP tools.
 
 Provides relevance-based ranking for MCP tool discovery using
-the BM25 ranking algorithm (same as PyFlue).
+the BM25 ranking algorithm.
 """
 
 from __future__ import annotations

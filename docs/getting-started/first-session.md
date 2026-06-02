@@ -2,7 +2,7 @@
 
 This guide walks through a normal SuperQode TUI session: connect a model or agent, load a harness, ask for a repository task, approve tool calls when needed, and inspect what happened.
 
-SuperQode is your pluggable multi-agent coding harness. The TUI is the best place to explore a project because it keeps prompts, tool activity, approvals, file changes, and session state visible in one terminal.
+SuperQode is your portable coding agent harness. The TUI is the best place to explore a project because it keeps prompts, tool activity, approvals, file changes, and session state visible in one terminal.
 
 ---
 

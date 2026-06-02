@@ -1105,7 +1105,7 @@ class AgentLoop:
 
         # Always send tools if available - let malformed tool call handling deal with issues
         # This ensures models always get the full context and we handle malformed responses gracefully
-        # max_iterations <= 0 means unlimited (fast-agent style)
+        # max_iterations <= 0 means unlimited (loop until the model stops)
         _cap = self.config.max_iterations
         while _cap <= 0 or iterations < _cap:
             iterations += 1
@@ -1440,7 +1440,7 @@ class AgentLoop:
         # Get cached tool definitions
         tool_defs = self._get_tool_definitions()
 
-        # max_iterations <= 0 means unlimited (fast-agent style)
+        # max_iterations <= 0 means unlimited (loop until the model stops)
         _cap = self.config.max_iterations
         while _cap <= 0 or iterations < _cap:
             # Check for cancellation

@@ -141,7 +141,7 @@ AGENT_COLORS = {
     "gemini": "#4285f4",  # Google Blue
     "claude": "#d97706",  # Anthropic Orange
     "claude-code": "#d97706",  # Anthropic Orange
-    "codex": "#10b981",  # OpenAI Green
+    "codex": "#10b981",  # Green
     "junie": "#fe315d",  # JetBrains Pink
     "goose": "#8b5cf6",  # Block Purple
     "kimi": "#5b21b6",  # Moonshot Deep Purple
@@ -162,7 +162,7 @@ AGENT_ICONS = {
     "gemini": "✨",  # Sparkles - Google Gemini's multimodal nature
     "claude": "🧡",  # Orange heart - Anthropic's warm AI
     "claude-code": "🧡",  # Orange heart - Anthropic's warm AI
-    "codex": "📜",  # Scroll - OpenAI codex knowledge
+    "codex": "📜",  # Scroll
     "junie": "🧠",  # Brain - JetBrains intelligence
     "goose": "🦆",  # Duck - Block's Goose
     "kimi": "🌙",  # Moon - Moonshot AI's Kimi
@@ -303,6 +303,10 @@ COMMANDS = [
     ":transcript",
     ":timeline",
     ":rewind",
+    ":theme",
+    ":export",
+    ":compare",
+    ":sandbox",
     ":paste",
     ":queue",
     ":queue clear",

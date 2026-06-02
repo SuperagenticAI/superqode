@@ -1,5 +1,5 @@
 """
-Enhanced App Layout - OpenCode-Style TUI.
+Enhanced App Layout.
 
 This module provides an enhanced app layout that integrates all the new
 TUI widgets for a competitive coding agent experience.
@@ -23,7 +23,7 @@ from rich.text import Text
 
 class EnhancedLayout(Container):
     """
-    Enhanced layout container with OpenCode-style UX.
+    Enhanced layout container.
 
     Layout:
     ┌─────────────────────────────────────────────────────────────────┐

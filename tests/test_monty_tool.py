@@ -1,66 +1,16 @@
-import ast
-import contextlib
-import io
-from pathlib import Path
-from types import SimpleNamespace
+"""Tests for the Monty Python-sandbox tool.
+
+These run against the *real* ``pydantic-monty`` package (skipped when it is not
+installed) so an API mismatch is actually caught — an earlier version of these
+tests mocked a fake Monty API and masked a broken integration.
+"""
 
 import pytest
 
 from superqode.tools.base import ToolContext, ToolRegistry
-from superqode.tools.monty_tool import MontyPythonReplTool, reset_monty_repl
+from superqode.tools.monty_tool import MontyPythonReplTool, is_monty_available
 
-
-class FakeCollectString:
-    def __init__(self):
-        self.output = ""
-
-
-class FakeMountDir:
-    def __init__(self, virtual_path, host_path, *, mode="overlay", write_bytes_limit=None):
-        self.virtual_path = virtual_path
-        self.host_path = Path(host_path)
-        self.mode = mode
-        self.write_bytes_limit = write_bytes_limit
-
-
-class FakeMontyRepl:
-    def __init__(self, **kwargs):
-        self.kwargs = kwargs
-        self.namespace = {}
-        self.mounts = []
-
-    def feed_run(self, code, *, print_callback=None, mount=None):
-        if "open(" in code and mount is None:
-            raise PermissionError("filesystem access blocked")
-        if mount is not None:
-            self.mounts.append(mount)
-
-        tree = ast.parse(code)
-        stdout = io.StringIO()
-        with contextlib.redirect_stdout(stdout):
-            if tree.body and isinstance(tree.body[-1], ast.Expr):
-                prefix = ast.Module(body=tree.body[:-1], type_ignores=[])
-                if prefix.body:
-                    exec(compile(prefix, "fake_monty.py", "exec"), self.namespace)
-                value = eval(
-                    compile(ast.Expression(tree.body[-1].value), "fake_monty.py", "eval"),
-                    self.namespace,
-                )
-            else:
-                exec(compile(tree, "fake_monty.py", "exec"), self.namespace)
-                value = None
-        if print_callback is not None:
-            print_callback.output += stdout.getvalue()
-        return value
-
-
-def fake_monty_module():
-    return SimpleNamespace(
-        __version__="fake",
-        CollectString=FakeCollectString,
-        MontyRepl=FakeMontyRepl,
-        MountDir=FakeMountDir,
-    )
+requires_monty = pytest.mark.skipif(not is_monty_available(), reason="pydantic-monty not installed")
 
 
 @pytest.fixture
@@ -70,67 +20,70 @@ def tool_context(tmp_path):
 
 def test_full_registry_includes_python_repl_when_monty_available(monkeypatch):
     monkeypatch.setattr("superqode.tools.monty_tool.is_monty_available", lambda: True)
-
     registry = ToolRegistry.full()
-
     assert registry.get("python_repl") is not None
 
 
 @pytest.mark.asyncio
 async def test_python_repl_reports_missing_dependency(monkeypatch, tool_context):
     monkeypatch.setattr("superqode.tools.monty_tool._load_monty", lambda: None)
-
     result = await MontyPythonReplTool().execute({"code": "1 + 1"}, tool_context)
-
     assert not result.success
     assert result.metadata["missing_dependency"] == "pydantic-monty"
     assert "superqode[monty]" in result.error
 
 
+@requires_monty
 @pytest.mark.asyncio
-async def test_python_repl_executes_and_preserves_session_state(monkeypatch, tool_context):
-    reset_monty_repl()
-    monkeypatch.setattr("superqode.tools.monty_tool._load_monty", fake_monty_module)
+async def test_python_repl_executes_and_captures_output(tool_context):
     tool = MontyPythonReplTool()
-
-    first = await tool.execute({"code": "x = 40\nx + 2", "reset": True}, tool_context)
-    second = await tool.execute({"code": "x + 3"}, tool_context)
-
-    assert first.success
-    assert first.output == "42"
-    assert second.success
-    assert second.output == "43"
+    result = await tool.execute({"code": "print(2 + 3)\nsum([1, 2, 3, 4])"}, tool_context)
+    assert result.success, result.error
+    # stdout (5) plus the final expression value (10).
+    assert "5" in result.output
+    assert "10" in result.output
+    assert result.metadata["runtime"] == "monty"
 
 
+@requires_monty
 @pytest.mark.asyncio
-async def test_python_repl_blocks_filesystem_by_default(monkeypatch, tool_context):
-    reset_monty_repl()
-    monkeypatch.setattr("superqode.tools.monty_tool._load_monty", fake_monty_module)
+async def test_python_repl_returns_final_expression_value(tool_context):
+    result = await MontyPythonReplTool().execute({"code": "x = 40\nx + 2"}, tool_context)
+    assert result.success, result.error
+    assert result.output.strip() == "42"
 
+
+@requires_monty
+@pytest.mark.asyncio
+async def test_python_repl_has_no_filesystem_access(tool_context):
+    # Monty denies host access: open() is not even defined in the sandbox.
     result = await MontyPythonReplTool().execute(
-        {"code": "open('/tmp/example').read()"}, tool_context
+        {"code": "open('/etc/passwd').read()"}, tool_context
     )
-
     assert not result.success
-    assert "filesystem access blocked" in result.error
+    assert result.metadata.get("runtime") == "monty"
 
 
+@requires_monty
 @pytest.mark.asyncio
-async def test_python_repl_can_mount_workspace(monkeypatch, tool_context):
-    reset_monty_repl()
-    monkeypatch.setattr("superqode.tools.monty_tool._load_monty", fake_monty_module)
+async def test_python_repl_has_no_network_or_third_party_imports(tool_context):
+    result = await MontyPythonReplTool().execute({"code": "import socket"}, tool_context)
+    assert not result.success
 
-    result = await MontyPythonReplTool().execute(
-        {
-            "code": "'mounted'",
-            "allow_filesystem": True,
-            "mount_mode": "read-only",
-            "reset": True,
-        },
-        tool_context,
-    )
 
-    assert result.success
-    assert result.output == "'mounted'"
-    assert result.metadata["filesystem"] == "mounted"
-    assert result.metadata["mount_mode"] == "read-only"
+@requires_monty
+@pytest.mark.asyncio
+async def test_python_repl_each_call_is_isolated(tool_context):
+    tool = MontyPythonReplTool()
+    await tool.execute({"code": "x = 99"}, tool_context)
+    # Fresh sandbox each call: the prior binding must not leak.
+    result = await tool.execute({"code": "x"}, tool_context)
+    assert not result.success  # NameError: x is not defined
+
+
+@requires_monty
+@pytest.mark.asyncio
+async def test_python_repl_empty_code_rejected(tool_context):
+    result = await MontyPythonReplTool().execute({"code": "   "}, tool_context)
+    assert not result.success
+    assert "required" in result.error.lower()

@@ -3,9 +3,8 @@ Structured conversation compaction.
 
 When a session outgrows the model's context window, we replace the bulk of
 the transcript with a single structured Markdown summary plus a short
-tail of recent turns. The 9-section template is ported from opencode's
-``session/compaction.ts`` so summaries are predictable enough for the
-next assistant turn to reason against.
+tail of recent turns. The 9-section template keeps summaries predictable
+enough for the next assistant turn to reason against.
 
 This is opt-in via ``AgentConfig.enable_summarization`` and currently
 runs once per turn when the token estimate crosses the limit. If the

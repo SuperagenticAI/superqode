@@ -8,7 +8,7 @@
 
 # **SuperQode**
 
-### Your pluggable multi-agent coding harness.
+### Your Portable Coding Agent Harness.
 
 <p class="tagline">Run coding agents with portable specs, controlled tools, and readable sessions.</p>
 
@@ -24,7 +24,7 @@
 
 ## What Is SuperQode?
 
-SuperQode is your pluggable multi-agent coding harness. It gives developers one contract for model calls,
+SuperQode is your portable coding agent harness. It gives developers one contract for model calls,
 tool execution, sessions, sandbox policy, model routing, runtime adapters, workflow execution,
 typed outputs, validation, and readable interactive output.
 

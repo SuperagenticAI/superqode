@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
-site_description: "Your pluggable multi-agent coding harness."
+site_description: "Your Portable Coding Agent Harness."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode
@@ -18,8 +18,8 @@ copyright: Copyright &copy; 2026 <a href="https://super-agentic.ai" target="_bla
 
 theme:
   name: material
-  logo: assets/superqode.png
-  favicon: assets/superqode.png
+  logo: assets/superqode-logo.png
+  favicon: assets/superqode-logo.png
 
   palette:
     # Light mode

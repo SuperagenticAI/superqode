@@ -21,6 +21,7 @@ import asyncio.base_subprocess as _asyncio_base_subprocess
 import json
 import os
 import pty
+import re
 import select
 import signal
 import subprocess
@@ -129,6 +130,14 @@ from superqode.app.widgets import (
 )
 from superqode.widgets.leader_key import LeaderKeyPopup
 from superqode.widgets.command_palette import CommandPalette, PaletteCommand
+from superqode.widgets.rewind_overlay import RewindOverlay, RewindTarget
+from superqode.widgets.theme_picker import ThemePicker
+from superqode.app.theme_bridge import (
+    apply_theme as _apply_theme_palette,
+    load_saved_theme,
+    save_theme,
+    theme_names,
+)
 
 # validation roles that should be highlighted as power roles in the TUI.
 POWER_QE_ROLES = {
@@ -636,13 +645,23 @@ def render_welcome(agents: List[AgentInfo], team_name: str = "Development Team")
     # DESCRIPTION SECTION - Position SuperQode as a coding agent harness first.
     # ═══════════════════════════════════════════════════════════════════════
     desc_text = Text()
-    desc_text.append("SuperQode = Multi-agent coding harness\n", style="bold #ffffff")
+    desc_text.append("SuperQode = Your Portable Coding Agent Harness\n", style="bold #ffffff")
     desc_text.append("\n", style="")
-    desc_text.append("SuperQode", style=f"bold {THEME['purple']}")
-    desc_text.append(
-        " connects coding agents, models, sessions, and project tools", style=THEME["muted"]
-    )
-    desc_text.append(" into one developer workflow.\n", style=THEME["muted"])
+    desc_text.append("Your models", style=f"bold {THEME['cyan']}")
+    desc_text.append("  ·  ", style=THEME["dim"])
+    desc_text.append("Your harness", style=f"bold {THEME['purple']}")
+    desc_text.append("  ·  ", style=THEME["dim"])
+    desc_text.append("Your memory", style=f"bold {THEME['magenta']}")
+    desc_text.append("  ·  ", style=THEME["dim"])
+    desc_text.append("Your Coding Agent", style=f"bold {THEME['pink']}")
+    desc_text.append("\n", style="")
+    desc_text.append("Define your own harness and connect any model — ", style=THEME["muted"])
+    desc_text.append("ACP", style=f"bold {THEME['purple']}")
+    desc_text.append(", ", style=THEME["muted"])
+    desc_text.append("BYOK", style=f"bold {THEME['success']}")
+    desc_text.append(", or ", style=THEME["muted"])
+    desc_text.append("local", style=f"bold {THEME['cyan']}")
+    desc_text.append(" — your way.\n", style=THEME["muted"])
     items.append(Align.center(desc_text))
 
     commands_text = Text()
@@ -714,6 +733,7 @@ class SuperQodeApp(App):
         Binding("ctrl+b", "toggle_sidebar", "Sidebar", show=True),
         Binding("ctrl+t", "toggle_thinking", "Toggle Logs", show=True),
         Binding("ctrl+k", "command_palette", "Commands", show=True),
+        Binding("ctrl+r", "rewind", "Rewind", show=True),
         Binding("escape", "smart_cancel", "Cancel", show=True),
         Binding("pageup", "scroll_log_page_up", "Scroll Up", show=False),
         Binding("pagedown", "scroll_log_page_down", "Scroll Down", show=False),
@@ -842,6 +862,10 @@ class SuperQodeApp(App):
 
     def __init__(self):
         super().__init__()
+        # Apply the persisted accent theme before any widget renders so the
+        # whole UI paints in the chosen palette from the first frame.
+        self._current_theme = load_saved_theme()
+        _apply_theme_palette(self._current_theme)
         # Lazy load agents to improve startup time
         self._agents: Optional[List[AgentInfo]] = None
         # Lazy load model lists for faster startup
@@ -1194,6 +1218,7 @@ class SuperQodeApp(App):
         "redo_action",
         "toggle_split_view",
         "create_checkpoint",
+        "rewind",
     }
 
     def _load_custom_keybindings(self) -> None:
@@ -2599,9 +2624,9 @@ class SuperQodeApp(App):
                 pass
             if input_empty and self._user_message_history(log) and (now - last) < 0.8:
                 self._last_idle_escape_at = 0.0
-                self._handle_rewind("last", log)
+                self._open_rewind_overlay(log)
             else:
-                log.add_info("💡 Press Esc again to rewind your last message  •  :exit to quit")
+                log.add_info("💡 Press Esc again to rewind the conversation  •  :exit to quit")
 
     def _select_model_by_number(self, num: int):
         """Select a model by number when awaiting model selection."""
@@ -4624,6 +4649,12 @@ class SuperQodeApp(App):
             self._handle_timeline(log)
         elif c == "rewind":
             self._handle_rewind(args, log)
+        elif c == "export":
+            self._handle_export(args, log)
+        elif c == "sandbox":
+            self._handle_sandbox(args, log)
+        elif c == "compare":
+            self.run_worker(self._compare_cmd(args, log))
         elif c in ("paste", "image", "img"):
             self._handle_paste_image(args, log)
         elif c == "queue":
@@ -4927,64 +4958,283 @@ class SuperQodeApp(App):
             text for role, text, _agent in log._messages if role == "user" and str(text).strip()
         ]
 
-    def _handle_rewind(self, args: str, log: ConversationLog):
-        """Pull a previous user message back into the prompt to edit and resend.
+    def action_rewind(self) -> None:
+        """Open the transcript/rewind overlay (Ctrl+R)."""
+        log = self._conversation_log()
+        if log is None:
+            return
+        self._open_rewind_overlay(log)
 
-        ``:rewind`` lists recent user messages; ``:rewind <n>`` loads message #n.
-        With no argument and a single previous message, the latest is loaded.
+    def _handle_export(self, args: str, log: ConversationLog) -> None:
+        """Export the current conversation to a standalone HTML file.
+
+        ``:export`` writes to ``.superqode/exports/transcript-<timestamp>.html``;
+        ``:export <path>`` writes to the given path.
+        """
+        from superqode.rendering.html_export import render_transcript_html
+
+        messages = list(getattr(log, "_messages", []))
+        if not messages:
+            log.add_info("Nothing to export yet.")
+            return
+
+        arg = (args or "").strip()
+        if arg:
+            out_path = Path(arg).expanduser()
+            if out_path.suffix.lower() not in (".html", ".htm"):
+                out_path = out_path.with_suffix(".html")
+        else:
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            out_path = Path(".superqode") / "exports" / f"transcript-{stamp}.html"
+
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            html_doc = render_transcript_html(messages, title="SuperQode Transcript")
+            out_path.write_text(html_doc, encoding="utf-8")
+        except Exception as exc:
+            log.add_error(f"Could not export transcript: {exc}")
+            return
+        log.add_success(f"Exported transcript → {out_path}")
+
+    def _handle_sandbox(self, args: str, log: ConversationLog) -> None:
+        """Show or set the local OS command sandbox.
+
+        ``:sandbox`` shows status; ``:sandbox <off|workspace-write|read-only>``
+        sets the mode for this session. When active, shell commands are confined
+        to the workspace (and network is denied in read-only) via the OS sandbox
+        (macOS Seatbelt / Linux bubblewrap).
+        """
+        from superqode.sandbox.local_sandbox import (
+            MODE_OFF,
+            MODE_READ_ONLY,
+            MODE_WORKSPACE_WRITE,
+            sandbox_status,
+        )
+
+        valid = {MODE_OFF, MODE_WORKSPACE_WRITE, MODE_READ_ONLY}
+        arg = (args or "").strip().lower()
+        if arg:
+            if arg not in valid:
+                log.add_error(f"Unknown sandbox mode '{arg}'. Use: {', '.join(sorted(valid))}")
+                return
+            os.environ["SUPERQODE_SANDBOX"] = arg
+            status = sandbox_status()
+            if arg != MODE_OFF and not status["available"]:
+                log.add_info(
+                    f"Sandbox mode set to '{arg}', but no backend is available on this system "
+                    "(needs macOS sandbox-exec or Linux bwrap). Commands run unconfined."
+                )
+            else:
+                log.add_success(f"🛡 Sandbox mode set to '{arg}'.")
+            return
+
+        status = sandbox_status()
+        t = Text()
+        t.append("\n🛡 Command sandbox\n", style=f"bold {THEME['purple']}")
+        t.append(f"  Mode:      {status['mode']}\n", style=THEME["text"])
+        t.append(f"  Backend:   {status['backend']}\n", style=THEME["text"])
+        t.append(
+            f"  Active:    {'yes' if status['active'] else 'no'}\n",
+            style=THEME["success"] if status["active"] else THEME["muted"],
+        )
+        t.append("\n  Modes: ", style=THEME["dim"])
+        t.append("off", style=THEME["cyan"])
+        t.append(" · ", style=THEME["dim"])
+        t.append("workspace-write", style=THEME["cyan"])
+        t.append(" (write workspace, network on) · ", style=THEME["dim"])
+        t.append("read-only", style=THEME["cyan"])
+        t.append(" (no writes/network)\n", style=THEME["dim"])
+        t.append("  Set with :sandbox <mode>\n", style=THEME["dim"])
+        try:
+            from superqode.agent.network_policy import load_allowlist, strict_mode
+
+            allow_count = len(load_allowlist())
+            t.append(
+                f"\n  Network policy: {allow_count} trusted domains"
+                f"{' · strict (deny untrusted)' if strict_mode() else ''}\n",
+                style=THEME["dim"],
+            )
+            t.append(
+                "  Trusted installs auto-run; untrusted egress is gated.\n",
+                style=THEME["dim"],
+            )
+        except Exception:
+            pass
+        log.write(t)
+
+    async def _compare_cmd(self, args: str, log: ConversationLog) -> None:
+        """Fan the last user message across several models concurrently.
+
+        ``:compare <m1> <m2> ...`` — each token is ``provider/model`` or a bare
+        ``model`` (using the connected provider). Read-only: a single chat
+        completion per target, no tools, so it is safe to run in parallel. This
+        leans on SuperQode's multi-runtime reach — comparing across providers in
+        one shot is something single-stack harnesses can't do.
+        """
+        from superqode.agent.parallel_compare import (
+            default_compare_runner,
+            parse_compare_specs,
+            run_parallel_compare,
+        )
+
+        prompt = self._last_user_message or log.get_last_message("user")
+        if not prompt:
+            log.add_info("Send a message first, then :compare <models> to compare answers to it.")
+            return
+
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :compare arguments: {exc}")
+            return
+        default_provider = getattr(getattr(self._pure_mode, "session", None), "provider", "") or ""
+        specs = parse_compare_specs(tokens, default_provider=default_provider)
+        if not specs:
+            log.add_info("Usage: :compare <provider/model> <model> …  (e.g. :compare openai/gpt-4o anthropic/claude-3-5-sonnet)")
+            return
+
+        labels = ", ".join(spec.label for spec in specs)
+        log.add_info(f"⚖ Comparing {len(specs)} models on your last message: {labels}")
+
+        results = await run_parallel_compare(prompt, specs, default_compare_runner)
+        self._render_compare_results(results, log)
+
+    def _render_compare_results(self, results, log: ConversationLog) -> None:
+        """Render parallel-compare results as labelled stacked sections."""
+        from superqode.rendering.markdown import render_agent_markdown
+
+        for result in results:
+            header = Text()
+            mark = "✓" if result.ok else "✕"
+            color = THEME["success"] if result.ok else THEME["error"]
+            header.append(f"\n  {mark} ", style=f"bold {color}")
+            header.append(f"{result.spec.label}", style=f"bold {THEME['cyan']}")
+            header.append(f"  ({result.elapsed:.1f}s)\n", style=THEME["dim"])
+            log.write(header)
+            if result.ok and result.text:
+                log.write(render_agent_markdown(result.text))
+            elif result.ok:
+                log.write(Text("  (empty response)\n", style=THEME["muted"]))
+            else:
+                log.write(Text(f"  {result.error}\n", style=THEME["error"], overflow="fold"))
+
+    def _apply_and_persist_theme(self, name: str) -> bool:
+        """Apply a theme palette live, persist it, and refresh the visible UI."""
+        if not _apply_theme_palette(name):
+            return False
+        self._current_theme = name
+        save_theme(name)
+        # Re-render widgets that read THEME at render time.
+        try:
+            self.screen.refresh(layout=True)
+        except Exception:
+            pass
+        return True
+
+    def _handle_rewind(self, args: str, log: ConversationLog):
+        """Rewind the conversation to an earlier user message.
+
+        ``:rewind`` (or Ctrl+R) opens the transcript overlay to choose a point;
+        ``:rewind <n>`` / ``:rewind last`` rewind directly. Rewinding truncates
+        the agent's stored history so it forgets everything after that message,
+        then loads the message back into the prompt for editing and resending.
         """
         messages = self._user_message_history(log)
         if not messages:
             log.add_info("No previous messages to rewind to yet.")
             return
 
-        arg = (args or "").strip()
+        arg = (args or "").strip().lower()
         if arg.isdigit():
             index = int(arg)
             if not (1 <= index <= len(messages)):
                 log.add_info(
-                    f"No message #{index}. Use :rewind to list ({len(messages)} available)."
+                    f"No message #{index}. Use :rewind to choose ({len(messages)} available)."
                 )
                 return
-            self._load_rewind_message(messages[index - 1], index, len(messages), log)
+            self._perform_rewind(index, log)
             return
-        if arg in ("last", "prev", "previous", ""):
-            if arg == "" and len(messages) > 1:
-                # Multiple messages: show the picker so the user can choose.
-                self._show_rewind_list(messages, log)
-                return
-            self._load_rewind_message(messages[-1], len(messages), len(messages), log)
+        if arg in ("last", "prev", "previous"):
+            self._perform_rewind(len(messages), log)
+            return
+        if arg == "":
+            self._open_rewind_overlay(log)
             return
         log.add_info("Usage: :rewind  •  :rewind <number>  •  :rewind last")
 
-    def _show_rewind_list(self, messages: list[str], log: ConversationLog):
-        """Show a numbered list of prior user messages for :rewind <n>."""
-        t = Text()
-        t.append("\n  ↩ ", style=f"bold {THEME['purple']}")
-        t.append("Rewind to a previous message\n\n", style=f"bold {THEME['text']}")
-        recent = messages[-9:]
-        start = len(messages) - len(recent) + 1
-        for offset, message in enumerate(recent):
-            number = start + offset
-            preview = " ".join(str(message).split())
-            if len(preview) > 88:
-                preview = preview[:85].rstrip() + "..."
-            t.append(f"  [{number}] ", style=f"bold {THEME['cyan']}")
-            t.append(f"{preview}\n", style=THEME["text"])
-        t.append("\n  Run ", style=THEME["muted"])
-        t.append(":rewind <number>", style=f"bold {THEME['cyan']}")
-        t.append(" to load it into the prompt for editing.\n", style=THEME["muted"])
-        log.write(t)
+    def _open_rewind_overlay(self, log: ConversationLog) -> None:
+        """Push the interactive transcript/rewind overlay."""
+        messages = self._user_message_history(log)
+        if not messages:
+            log.add_info("No previous messages to rewind to yet.")
+            return
+        targets = [
+            RewindTarget(occurrence=i + 1, preview=" ".join(str(text).split())[:200])
+            for i, text in enumerate(messages)
+        ]
+        transcript = list(getattr(log, "_messages", []))
 
-    def _load_rewind_message(self, message: str, index: int, total: int, log: ConversationLog):
-        """Load a chosen prior message into the prompt for editing."""
-        self._set_prompt_prefill(message)
-        log.add_info(f"Rewound to message {index}/{total}. Edit and press Enter to resend.")
+        def _on_dismissed(occurrence: int | None) -> None:
+            self.set_timer(0.1, self._ensure_input_focus)
+            if occurrence:
+                self._perform_rewind(occurrence, log)
+
+        self.push_screen(RewindOverlay(transcript, targets), callback=_on_dismissed)
+
+    def _perform_rewind(self, occurrence: int, log: ConversationLog) -> None:
+        """Truncate context to before the Nth user message and reload it.
+
+        ``occurrence`` is 1-based among user messages. Removes the stored agent
+        history from that point on, trims the in-memory transcript record, and
+        prefills the prompt so the user can edit and resend.
+        """
+        messages = self._user_message_history(log)
+        total = len(messages)
+        if not (1 <= occurrence <= total):
+            log.add_info(f"No message #{occurrence} to rewind to.")
+            return
+        target_text = messages[occurrence - 1]
+
+        # Truncate the agent's persisted history so it forgets later turns.
+        removed = 0
+        session_manager = getattr(self._pure_mode, "_session_manager", None)
+        if session_manager is not None:
+            try:
+                removed = session_manager.rewind_to_user_message(occurrence)
+            except Exception as exc:  # pragma: no cover - defensive
+                log.add_error(f"Could not rewind stored history: {exc}")
+
+        # Trim the in-memory transcript record to the chosen point so future
+        # rewinds, copies and transcripts reflect the rewound conversation.
+        self._trim_transcript_to_user_occurrence(log, occurrence)
+
+        self._set_prompt_prefill(target_text)
+        suffix = f" — cleared {removed} stored message(s)" if removed else ""
+        log.add_info(
+            f"↩ Rewound to message {occurrence}/{total}{suffix}. Edit and press Enter to resend."
+        )
+
+    @staticmethod
+    def _trim_transcript_to_user_occurrence(log: ConversationLog, occurrence: int) -> None:
+        """Drop transcript entries from the Nth user message onward."""
+        records = getattr(log, "_messages", None)
+        if records is None:
+            return
+        seen = 0
+        cut = None
+        for index, (role, _text, _agent) in enumerate(records):
+            if role == "user" and str(_text).strip():
+                seen += 1
+                if seen == occurrence:
+                    cut = index
+                    break
+        if cut is not None:
+            del records[cut:]
 
     def _skills_cmd(self, args: str, log: ConversationLog):
         """Handle local skill inventory and setup commands.
 
-        This mirrors the most useful fast-agent TUI flow for day-to-day work:
+        Covers the most useful day-to-day skill flow:
         users can see the skills currently visible to the agent, inspect one,
         create a template, or import an existing local SKILL.md/markdown skill.
         """
@@ -5634,8 +5884,51 @@ class SuperQodeApp(App):
         candidates = self._prompt_completion_candidates_for(value)
         return candidates[0].value if candidates else None
 
+    # Matches a trailing "@token" mention being typed, anywhere in the prompt.
+    # The "@" must start the line or follow whitespace so emails/handles inside a
+    # word do not trigger the file picker.
+    _MENTION_QUERY_RE = re.compile(r"(?:^|\s)@([\w./\-]*)$")
+
+    def _mention_completion_candidates(
+        self, value: str
+    ) -> list[PromptCompletionCandidate] | None:
+        """Return file candidates for an active @mention, or None when not in one.
+
+        The picker reuses the existing prompt-completion panel so the look and
+        feel matches slash/colon command completion exactly. Each candidate's
+        ``value`` is the full replacement text: everything before the "@" plus
+        ``@<path>``, so accepting it leaves a reference that
+        ``expand_file_references`` recognises on submit.
+        """
+        match = self._MENTION_QUERY_RE.search(value)
+        if match is None:
+            return None
+        query = match.group(1)
+        at_pos = match.start(1) - 1  # index of the "@" itself
+        prefix_text = value[:at_pos]
+        candidates: list[PromptCompletionCandidate] = []
+        for path, description in self._path_token_candidates(query):
+            replacement = f"{prefix_text}@{path}"
+            # Skip the no-op match so a fully-typed reference closes the panel
+            # instead of lingering on the path the user already selected.
+            if replacement == value:
+                continue
+            candidates.append(
+                PromptCompletionCandidate(
+                    value=replacement,
+                    label=f"@{path}",
+                    description=description,
+                    kind="dir" if path.endswith("/") else "file",
+                )
+            )
+        return candidates
+
     def _prompt_completion_candidates_for(self, value: str) -> list[PromptCompletionCandidate]:
         """Return contextual completion candidates for command-like prompt text."""
+        mention_candidates = self._mention_completion_candidates(value)
+        if mention_candidates is not None:
+            return mention_candidates
+
         if not value.startswith(("/", ":")):
             return []
 
@@ -5659,6 +5952,7 @@ class SuperQodeApp(App):
             (":recipes doctor ", self._recipe_completion_candidates),
             (":connect byok ", self._byok_provider_completion_candidates),
             (":connect local ", self._local_provider_completion_candidates),
+            (":theme ", self._theme_completion_candidates),
         ]
         for prefix, provider in context_specs:
             if lowered.startswith(prefix):
@@ -5672,6 +5966,21 @@ class SuperQodeApp(App):
             return self._model_switch_candidates(value, ":model switch ")
 
         return self._static_command_candidates(value)
+
+    @staticmethod
+    def _theme_completion_candidates() -> list[PromptCompletionCandidate]:
+        """Theme names for `:theme <name>` completion."""
+        from superqode.app.theme_bridge import available_themes
+
+        return [
+            PromptCompletionCandidate(
+                value=name,
+                label=name,
+                description=description,
+                kind="theme",
+            )
+            for name, description in available_themes()
+        ]
 
     @staticmethod
     def _should_submit_prompt_without_completion(value: str) -> bool:
@@ -10296,9 +10605,7 @@ team:
                 persona_context=None,
             )
         else:
-            # Handle all other ACP-compatible agents generically
-            # This covers: junie, goose, kimi, stakpak, vtcode, auggie,
-            # code-assistant, cagent, fast-agent, llmling-agent, amp
+            # Handle all other ACP-compatible agents generically.
             acp_agents = {
                 "junie",
                 "goose",
@@ -12834,7 +13141,7 @@ team:
         """
         Run Codex CLI using the ACP protocol via codex-acp adapter.
 
-        Codex ACP uses full bidirectional JSON-RPC protocol, similar to Claude Code.
+        This ACP path uses the full bidirectional JSON-RPC protocol.
         This method uses subprocess with JSON-RPC communication.
         """
         import subprocess
@@ -15888,8 +16195,8 @@ team:
             log.write_final_response(response_text, agent=name, success=True)
 
         # File changes are summarized in normal mode and expanded in verbose mode.
-        # This keeps the transcript compact while preserving the fast-agent-style
-        # inline preview when the user opts into detailed work output.
+        # This keeps the transcript compact while preserving the inline
+        # preview when the user opts into detailed work output.
         change_mode = getattr(log, "tool_output_mode", "normal")
         if files_modified and change_mode != "minimal":
             from superqode.widgets.response_changes import (
@@ -16073,7 +16380,7 @@ team:
                 self._call_ui(log.add_error, f"Role {mode}.{role} not found")
                 return
 
-            # Handle ACP agents (like opencode)
+            # Handle external ACP agents
             if resolved.coding_agent == "opencode":
                 # Build persona context and wrap message
                 injector = PersonaInjector()
@@ -23542,53 +23849,27 @@ team:
             log.add_info("Open this file manually to select and copy text")
 
     def _handle_theme(self, args: str, log: ConversationLog):
-        """Handle :theme command - change or list themes."""
-        from superqode.design_system import get_theme, set_theme, list_themes, get_active_theme_name
+        """Handle :theme command - open the picker or apply a named theme live.
 
+        ``:theme`` opens the interactive picker; ``:theme <name>`` applies and
+        persists a theme immediately. Themes apply live (no restart needed).
+        """
         theme_name = args.strip().lower() if args else ""
 
-        if not theme_name:
-            # List themes
-            t = Text()
-            t.append(f"\n◈ Themes\n", style=f"bold {THEME['purple']}")
-            t.append(f"  Current: {get_active_theme_name()}\n\n", style=THEME["muted"])
-
-            for name, description in list_themes():
-                is_active = name == get_active_theme_name()
-                marker = "▸" if is_active else " "
-                style = f"bold {THEME['cyan']}" if is_active else THEME["text"]
-                t.append(f"  {marker} ", style=THEME["primary"] if is_active else THEME["muted"])
-                t.append(f"{name:<12}", style=style)
-                t.append(f" {description}\n", style=THEME["muted"])
-
-            t.append(f"\n  Usage: :theme <name>\n", style=THEME["dim"])
-            log.write(t)
+        if theme_name:
+            if self._apply_and_persist_theme(theme_name):
+                log.add_success(f"Theme changed to: {theme_name}")
+            else:
+                log.add_error(f"Unknown theme: {theme_name}")
+                log.add_info(f"Available: {', '.join(theme_names())}")
             return
 
-        # Set theme
-        if set_theme(theme_name):
-            log.add_success(f"Theme changed to: {theme_name}")
-            log.add_info("Restart the app to see all changes")
+        def _on_dismissed(name: str | None) -> None:
+            self.set_timer(0.1, self._ensure_input_focus)
+            if name and self._apply_and_persist_theme(name):
+                log.add_success(f"Theme changed to: {name}")
 
-            # Save to config
-            try:
-                config_path = Path.home() / ".superqode" / "config.json"
-                config_path.parent.mkdir(parents=True, exist_ok=True)
-
-                import json
-
-                config = {}
-                if config_path.exists():
-                    config = json.loads(config_path.read_text())
-
-                config["theme"] = theme_name
-                config_path.write_text(json.dumps(config, indent=2))
-            except Exception:
-                pass
-        else:
-            themes = [name for name, _ in list_themes()]
-            log.add_error(f"Unknown theme: {theme_name}")
-            log.add_info(f"Available: {', '.join(themes)}")
+        self.push_screen(ThemePicker(current=self._current_theme), callback=_on_dismissed)
 
     def _retry_last_message(self, log: ConversationLog):
         """Retry the last user prompt in the current session."""

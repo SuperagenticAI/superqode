@@ -1,7 +1,7 @@
 [project]
 name = "superqode"
-version = "0.1.35"
-description = "SuperQode: Multi-Agent Coding Agent Harness"
+version = "0.1.36"
+description = "SuperQode: Your Portable Coding Agent Harness"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12,<3.14"
@@ -43,7 +43,7 @@ mlx = [
     "mlx-lm>=0.28.3,<0.30.0; python_version < '3.14'",
 ]
 monty = [
-    "pydantic-monty>=0.0.17",
+    "pydantic-monty>=0.0.4",
 ]
 extras = [
     "exa-py>=1.0.0",

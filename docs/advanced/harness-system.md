@@ -1,6 +1,6 @@
 # Harness System
 
-SuperQode is your pluggable multi-agent coding harness.
+SuperQode is your portable coding agent harness.
 
 SuperQode separates the harness you configure from the runtime that executes it. The harness defines what a
 run is allowed to do, which model policy to use, which tools are available, how approvals work, where events

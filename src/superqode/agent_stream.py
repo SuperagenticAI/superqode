@@ -2,7 +2,7 @@
 SuperQode Agent Streaming - Real-time Agent Communication
 
 Implements ACP (Agent Client Protocol) for streaming agent output in real-time.
-Supports OpenCode and other ACP-compatible agents.
+Supports ACP-compatible agents.
 
 Features:
 - Real-time message streaming (agent responses, thoughts, tool calls)
@@ -773,7 +773,7 @@ class AgentStreamClient:
 
 
 # ============================================================================
-# SIMPLE STREAMING CLIENT (for non-ACP agents like basic OpenCode)
+# SIMPLE STREAMING CLIENT (for non-ACP agents)
 # ============================================================================
 
 

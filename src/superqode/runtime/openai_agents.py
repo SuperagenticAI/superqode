@@ -49,7 +49,7 @@ from .tool_bridge_openai import to_openai_function_tools
 logger = logging.getLogger(__name__)
 
 # OpenAI Agents SDK requires a positive max_turns. When SuperQode's
-# AgentConfig is set to unlimited (max_iterations <= 0, fast-agent style),
+# AgentConfig is set to unlimited (max_iterations <= 0),
 # pass a very high cap so the SDK won't artificially terminate the run.
 _OPENAI_AGENTS_UNLIMITED_TURNS = 10_000
 

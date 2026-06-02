@@ -127,6 +127,35 @@ class BashTool(Tool):
         except Exception as e:
             return ToolResult(success=False, output="", error=str(e))
 
+    @staticmethod
+    async def _spawn(command: str, cwd: Path):
+        """Spawn a command, applying the local OS sandbox when one is active.
+
+        When ``SUPERQODE_SANDBOX`` selects a sandbox mode and a backend
+        (Seatbelt/bwrap) is available, the command is confined to the workspace;
+        otherwise it runs through the shell unchanged.
+        """
+        try:
+            from superqode.sandbox.local_sandbox import build_sandboxed_command
+
+            plan = build_sandboxed_command(command, cwd)
+        except Exception:
+            plan = None
+
+        if plan is not None and plan.applied:
+            return await asyncio.create_subprocess_exec(
+                *plan.argv,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(cwd),
+            )
+        return await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=str(cwd),
+        )
+
     async def _execute_buffered(
         self,
         command: str,
@@ -135,12 +164,7 @@ class BashTool(Tool):
         ctx: ToolContext,
     ) -> ToolResult:
         """Execute command and buffer all output (original behavior)."""
-        process = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(cwd),
-        )
+        process = await self._spawn(command, cwd)
 
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
@@ -191,12 +215,7 @@ class BashTool(Tool):
         ctx: ToolContext,
     ) -> ToolResult:
         """Execute command with streaming output to callback."""
-        process = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(cwd),
-        )
+        process = await self._spawn(command, cwd)
 
         output_chunks = []
         total_bytes = 0

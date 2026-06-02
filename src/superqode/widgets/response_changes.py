@@ -219,7 +219,7 @@ DEFAULT_INLINE_DIFF_LINES = 120
 
 
 def _style_diff_line(line: str) -> str | None:
-    """Style a single unified-diff line. Mirrors fast-agent's preview coloring."""
+    """Style a single unified-diff line for inline preview."""
     raw = line.rstrip("\n")
     if not raw:
         return None
@@ -268,8 +268,8 @@ def render_inline_file_diffs(
 ) -> Group:
     """Render per-file unified diffs inline so users see what changed.
 
-    Mirrors fast-agent's behavior of showing patch previews directly in
-    the conversation rather than hiding them behind a verbose toggle.
+    Shows patch previews directly in the conversation rather than hiding
+    them behind a verbose toggle.
     """
     items: list = []
     if not files_modified:

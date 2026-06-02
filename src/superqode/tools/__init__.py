@@ -31,7 +31,7 @@ from .agent_tools import SubAgentTool, TaskCoordinatorTool
 from .lsp_tools import LSPTool
 from .web_tools import WebSearchTool, WebFetchTool
 from .mcp_tools import MCPSearchTool, MCPExecuteTool, create_mcp_tools
-from .skill_tools import SkillTool, ReadSkillTool, create_skill_tools
+from .skill_tools import SkillTool, ReadSkillTool, CreateSkillTool, create_skill_tools
 from .compact_tool import CompactTool, create_compact_tool
 from .question_tool import QuestionTool, ConfirmTool, set_question_handler, get_question_handler
 from .permissions import (
@@ -84,6 +84,7 @@ __all__ = [
     # Skill tools
     "SkillTool",
     "ReadSkillTool",
+    "CreateSkillTool",
     "create_skill_tools",
     # Compact tool
     "CompactTool",

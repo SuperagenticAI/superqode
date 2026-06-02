@@ -4333,7 +4333,7 @@ requires-dist = [
     { name = "prompt-toolkit", specifier = ">=3.0.52" },
     { name = "pydantic-ai", marker = "extra == 'pydanticai'", specifier = ">=1.98.0,<2.0.0" },
     { name = "pydantic-ai", marker = "extra == 'pydanticai-logfire'", specifier = ">=1.98.0,<2.0.0" },
-    { name = "pydantic-monty", marker = "extra == 'monty'", specifier = ">=0.0.17" },
+    { name = "pydantic-monty", marker = "extra == 'monty'", specifier = ">=0.0.4" },
     { name = "pylint", marker = "extra == 'linters'", specifier = ">=3.3.0" },
     { name = "pymdown-extensions", marker = "extra == 'docs'", specifier = ">=10.12.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.5" },

@@ -1,7 +1,7 @@
 """
 Local Auth Storage for SuperQode.
 
-Simple, minimal local storage for API keys. Inspired by opencode's approach.
+Simple, minimal local storage for API keys.
 
 Security:
 - File permissions set to 0o600 (owner read/write only)

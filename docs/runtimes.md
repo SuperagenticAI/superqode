@@ -1,6 +1,6 @@
 # Agent Runtimes
 
-SuperQode is your pluggable multi-agent coding harness. You can keep the default native loop, or opt into a different backend with one flag. Runtime adapters are peers behind the same harness contract.
+SuperQode is your portable coding agent harness. You can keep the default native loop, or opt into a different backend with one flag. Runtime adapters are peers behind the same harness contract.
 
 ## Runtime Versus Harness
 

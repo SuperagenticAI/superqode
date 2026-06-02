@@ -2,6 +2,54 @@ from superqode.agent.session_manager import SessionManager
 from superqode.pure_mode import PureMode
 
 
+def test_rewind_truncates_history_to_chosen_user_message(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    manager = SessionManager(".superqode/sessions")
+    manager.start_session("rewindtest01", provider="ollama", model="qwen")
+
+    manager.add_user_message("first question")
+    manager.add_assistant_message("first answer")
+    manager.add_user_message("second question")
+    manager.add_assistant_message("second answer")
+    manager.add_user_message("third question")
+    manager.add_assistant_message("third answer")
+
+    # Rewind to the 2nd user message: it and everything after must be removed.
+    removed = manager.rewind_to_user_message(2)
+    assert removed == 4  # second q/a + third q/a
+
+    remaining = [(m.role, m.content) for m in manager.get_messages()]
+    assert remaining == [("user", "first question"), ("assistant", "first answer")]
+
+    # Metadata count stays consistent with the truncated file.
+    info = manager.get_session_info("rewindtest01")
+    assert info.message_count == 2
+
+
+def test_rewind_out_of_range_is_noop(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    manager = SessionManager(".superqode/sessions")
+    manager.start_session("rewindtest02", provider="ollama", model="qwen")
+    manager.add_user_message("only question")
+    manager.add_assistant_message("only answer")
+
+    assert manager.rewind_to_user_message(5) == 0
+    assert manager.rewind_to_user_message(0) == 0
+    assert len(manager.get_messages()) == 2
+
+
+def test_rewind_to_first_message_clears_everything(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    manager = SessionManager(".superqode/sessions")
+    manager.start_session("rewindtest03", provider="ollama", model="qwen")
+    manager.add_user_message("q1")
+    manager.add_assistant_message("a1")
+    manager.add_user_message("q2")
+
+    assert manager.rewind_to_user_message(1) == 3
+    assert manager.get_messages() == []
+
+
 def test_session_listing_preserves_full_id_and_prefix_resolution(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     manager = SessionManager(".superqode/sessions")

@@ -245,6 +245,29 @@ class PermissionManager:
             if self._is_dangerous_command(command):
                 return Permission.DENY
 
+            # Auto-allow known read-only commands (ls, cat, grep, git status…)
+            # and trusted-registry network commands (pip/npm/git clone github…)
+            # when the policy would otherwise prompt, to cut prompt fatigue
+            # without weakening safety. Untrusted egress can be hard-denied.
+            configured = self.config.get_permission(tool_name)
+            try:
+                from superqode.agent.command_safety import CommandSafety, classify_command
+
+                level = classify_command(command)
+                if level == CommandSafety.NETWORK:
+                    from superqode.agent.network_policy import check_network, strict_mode
+
+                    verdict = check_network(command)
+                    if verdict.status == "untrusted" and strict_mode():
+                        return Permission.DENY
+                    if verdict.status == "trusted" and configured == Permission.ASK:
+                        return Permission.ALLOW
+                elif level == CommandSafety.SAFE and configured == Permission.ASK:
+                    return Permission.ALLOW
+            except Exception:
+                pass
+            return configured
+
         # Get configured permission
         return self.config.get_permission(tool_name)
 
@@ -287,12 +310,22 @@ class PermissionManager:
         return False
 
     def _is_dangerous_command(self, command: str) -> bool:
-        """Check if a shell command is dangerous."""
+        """Check if a shell command is dangerous (destructive)."""
         import re
 
         for pattern in self._dangerous_patterns:
             if re.search(pattern, command, re.IGNORECASE):
                 return True
+
+        # Defer to the richer classifier for destructive detection (rm -rf,
+        # mkfs, fork bombs, writes to /dev, etc.) so the deny list stays current.
+        try:
+            from superqode.agent.command_safety import is_destructive
+
+            if is_destructive(command):
+                return True
+        except Exception:
+            pass
 
         return False
 

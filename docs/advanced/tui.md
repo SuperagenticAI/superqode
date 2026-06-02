@@ -87,9 +87,12 @@ Summarize what changed.
 | `Ctrl+S` | Save session |
 | `Ctrl+Q` | Quit |
 | `Ctrl+T` | Toggle agent thinking/session logs |
+| `Ctrl+R` | Open the rewind / transcript overlay |
+| `Escape` `Escape` | Rewind the conversation (when the prompt is empty) |
 | `Escape` | Close modal/cancel |
 | `Enter` | Submit input |
-| `Tab` | Next widget |
+| `@` | Open the file-mention picker in the prompt |
+| `Tab` | Accept completion / next widget |
 | `Shift+Tab` | Previous widget |
 | `:` | Command mode (for commands like `:connect`, `:qe`, etc.) |
 
@@ -114,6 +117,11 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:log verbose` - Show full tool outputs and changed file names
 - `:qe <role>` - Switch to validation role mode (e.g., `:qe security_tester`)
 - `:view <file>` - View file content
+- `:rewind` - Open the rewind overlay (or `:rewind <n>` to jump directly)
+- `:theme` - Open the theme picker (or `:theme <name>` to apply one)
+- `:export` - Export the conversation to a standalone HTML file
+- `:compare <models>` - Re-run your last message across several models side by side
+- `:sandbox` - Show or set the local command sandbox mode
 - `:help` - Show all available commands
 
 Tool and file-change output is collapsed by default so normal coding sessions stay readable. Agent thinking/session notes are also hidden by default. Use `Ctrl+T` when you want to see thinking logs, and use `:log verbose` before a task when you want full successful tool output, raw ACP agent session logs, and file names in the session report.
@@ -121,6 +129,93 @@ Tool and file-change output is collapsed by default so normal coding sessions st
 ## Prompt Input
 
 The top prompt is a wrapped multiline input. Long prompts expand the prompt box up to a fixed height and then scroll internally, so pasted tasks remain visible instead of being cut off. Press `Enter` to submit the current prompt.
+
+### File mentions (`@`)
+
+Type `@` in the prompt to open a fuzzy file picker. As you keep typing it filters
+the workspace; selecting a directory (ending in `/`) drills into it. Accepted
+mentions become `@path/to/file` references, and the referenced file contents are
+included with your message when you submit.
+
+```text
+> Explain the bug in @src/superqode/agent/loop.py
+> Compare @tests/test_tui_smoke.py with @src/superqode/app_main.py
+```
+
+### Streaming markdown
+
+Assistant responses render as **live, formatted markdown** while they stream -
+paragraphs, headings, lists, and code blocks appear as they complete. Partially
+written paragraphs and unterminated code fences are held back so you never see
+broken formatting mid-stream.
+
+## Rewind & Transcript Overlay
+
+Press `Ctrl+R` (or double-tap `Escape` with an empty prompt) to open the rewind
+overlay. It shows the full conversation transcript and a list of your earlier
+messages. Selecting one **rewinds the conversation to that point**: the agent's
+stored history is truncated so it forgets everything after that message, and the
+message is loaded back into the prompt for you to edit and resend.
+
+```text
+:rewind          # open the overlay
+:rewind 3        # rewind directly to your 3rd message
+:rewind last     # rewind to your most recent message
+```
+
+Use this to retry a turn with a better prompt without starting a new session.
+
+## Themes
+
+SuperQode ships several accent themes on top of its dark identity. Open the
+picker with `:theme`, or apply one directly with `:theme <name>`:
+
+```text
+:theme            # open the picker with live swatch previews
+:theme tokyonight
+:theme dracula
+```
+
+The choice is saved to `~/.superqode/config.json` and applied on the next launch.
+
+## Export
+
+Save the current conversation to a self-contained, styled HTML file:
+
+```text
+:export                       # writes .superqode/exports/transcript-<timestamp>.html
+:export ~/notes/session.html  # write to a specific path
+```
+
+Agent messages keep their markdown (code blocks, lists, headings); the file has
+no external dependencies and can be shared or archived.
+
+## Compare Models
+
+Re-run your **last message** across several models or runtimes at once and read
+the answers side by side. Each target runs a read-only chat completion
+concurrently, so this is safe to fan out - and because SuperQode is multi-runtime,
+you can mix providers in one comparison.
+
+```text
+:compare openai/gpt-4o anthropic/claude-3-5-sonnet
+:compare gpt-4o o3            # bare model names use the connected provider
+```
+
+## Command Sandbox
+
+`:sandbox` shows the active local command sandbox (mode, backend, and whether it
+is currently confining commands). Switch modes for the session with
+`:sandbox <mode>`:
+
+```text
+:sandbox                   # show status
+:sandbox workspace-write   # confine writes to the workspace
+:sandbox read-only         # no writes outside temp, no network
+:sandbox off               # disable
+```
+
+See [Safety & Permissions](safety-permissions.md) for what each mode enforces.
 
 ## Tool Activity Display
 

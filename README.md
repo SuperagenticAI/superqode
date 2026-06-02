@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode TUI">
+  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode">
 </p>
 <p align="center">
   <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode-logo.png" alt="SuperQode Logo" width="200">
@@ -8,7 +8,7 @@
 <h1 align="center">SuperQode</h1>
 
 <p align="center">
-  <strong>Your pluggable multi-agent coding harness.</strong><br>
+  <strong>Your Portable Coding Agent Harness.</strong><br>
   <em>Run coding agents with portable specs, controlled tools, and readable sessions.</em>
 </p>
 
@@ -35,7 +35,7 @@
 
 ## What is SuperQode?
 
-**SuperQode** is your pluggable multi-agent coding harness for interactive development, local model workflows, BYOK providers, ACP coding agents, and tool-based repository work. It provides a TUI and CLI so developers can connect to the model or agent runtime they prefer, run file/search/edit/shell tools under policy, and get concise summaries of what changed.
+**SuperQode** is your portable coding agent harness for interactive development, local model workflows, BYOK providers, ACP coding agents, and tool-based repository work. It provides a TUI and CLI so developers can connect to the model or agent runtime they prefer, run file/search/edit/shell tools under policy, and get concise summaries of what changed.
 
 Use one harness spec to choose the runtime, model policy, tools, sandbox rules, approvals, event storage, and output shape for a coding-agent run.
 
@@ -61,7 +61,7 @@ The harness is the product contract. Runtimes and framework adapters are executi
 Watch the demo: [SuperQode Demo](https://www.youtube.com/watch?v=x2V323HgXRk)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner">
+  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode TUI">
 </p>
 
 ## Quick Start

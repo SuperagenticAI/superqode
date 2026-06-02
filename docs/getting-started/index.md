@@ -1,6 +1,6 @@
 # Getting Started
 
-Welcome to SuperQode, your pluggable multi-agent coding harness. This guide helps you get started with the coding-agent TUI, headless CLI, HarnessSpec workflows, runtime backends, provider setup, local models, and optional validation workflows.
+Welcome to SuperQode, your portable coding agent harness. This guide helps you get started with the coding-agent TUI, headless CLI, HarnessSpec workflows, runtime backends, provider setup, local models, and optional validation workflows.
 
 ---
 
