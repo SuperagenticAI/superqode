@@ -73,7 +73,7 @@ validation:
   timeout_seconds: 300
   custom_steps:
     - name: lint
-      command: uv run ruff check src tests
+      command: ruff check src tests
       enabled: true
       timeout: 300
 observability:
