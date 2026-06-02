@@ -11929,7 +11929,21 @@ team:
 
             term_process = terminal["process"]
             if term_process.poll() is not None:
-                remaining, _ = term_process.communicate(timeout=1)
+                try:
+                    remaining, _ = term_process.communicate(timeout=1)
+                except subprocess.TimeoutExpired:
+                    # A just-killed process can still fail to drain promptly on
+                    # slower CI hosts. Terminal draining is best-effort; never
+                    # let it mask the real timeout result.
+                    try:
+                        term_process.kill()
+                    except Exception:
+                        pass
+                    try:
+                        term_process.wait(timeout=0.2)
+                    except Exception:
+                        pass
+                    remaining = ""
                 if remaining:
                     terminal["output"] += remaining
                 terminal["exit_code"] = term_process.returncode
