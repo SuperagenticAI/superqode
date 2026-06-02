@@ -22,6 +22,7 @@ import json
 import os
 import pty
 import select
+import signal
 import subprocess
 import shutil
 import shlex
@@ -11928,32 +11929,53 @@ team:
                 return
 
             term_process = terminal["process"]
-            if term_process.poll() is not None:
+            stdout = term_process.stdout
+
+            def read_pipe_chunk() -> str:
+                if stdout is None:
+                    return ""
                 try:
-                    remaining, _ = term_process.communicate(timeout=1)
-                except subprocess.TimeoutExpired:
-                    # A just-killed process can still fail to drain promptly on
-                    # slower CI hosts. Terminal draining is best-effort; never
-                    # let it mask the real timeout result.
+                    data = os.read(stdout.fileno(), 4096)
+                except (BlockingIOError, OSError, ValueError):
+                    return ""
+                if not data:
+                    return ""
+                return data.decode("utf-8", errors="replace")
+
+            if term_process.poll() is not None:
+                while True:
                     try:
-                        term_process.kill()
-                    except Exception:
-                        pass
-                    try:
-                        term_process.wait(timeout=0.2)
-                    except Exception:
-                        pass
-                    remaining = ""
-                if remaining:
-                    terminal["output"] += remaining
+                        readable, _, _ = (
+                            select.select([stdout], [], [], 0.0) if stdout else ([], [], [])
+                        )
+                    except (OSError, ValueError):
+                        break
+                    if not readable:
+                        break
+                    chunk = read_pipe_chunk()
+                    if not chunk:
+                        break
+                    terminal["output"] += chunk
                 terminal["exit_code"] = term_process.returncode
                 return
 
-            readable, _, _ = select.select([term_process.stdout], [], [], timeout)
+            readable, _, _ = select.select([stdout], [], [], timeout) if stdout else ([], [], [])
             if readable:
-                chunk = term_process.stdout.read(4096)
+                chunk = read_pipe_chunk()
                 if chunk:
                     terminal["output"] += chunk
+
+        def kill_terminal_process(term_process: subprocess.Popen) -> None:
+            if os.name != "nt":
+                try:
+                    os.killpg(term_process.pid, signal.SIGKILL)
+                    return
+                except Exception:
+                    pass
+            try:
+                term_process.kill()
+            except Exception:
+                pass
 
         def close_terminal_pty(terminal: dict) -> None:
             master_fd = terminal.pop("master_fd", None)
@@ -12019,6 +12041,7 @@ team:
                         cwd=cwd,
                         env=term_env,
                         text=True,
+                        start_new_session=(os.name != "nt"),
                     )
 
                 terminals[terminal_id] = {
@@ -12085,7 +12108,7 @@ team:
                 except subprocess.TimeoutExpired:
                     terminal["timed_out"] = True
                     terminal["timeout_seconds"] = timeout
-                    term_process.kill()
+                    kill_terminal_process(term_process)
                     try:
                         term_process.wait(timeout=2)
                     except Exception:
@@ -12102,7 +12125,7 @@ team:
             terminal_id = params.get("terminalId", "")
             terminal = terminals.get(terminal_id)
             if terminal and terminal["process"]:
-                terminal["process"].terminate()
+                kill_terminal_process(terminal["process"])
                 close_terminal_pty(terminal)
             return {}, True
 
