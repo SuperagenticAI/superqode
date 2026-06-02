@@ -88,10 +88,14 @@ async def run_parallel_compare(
         started = time.monotonic()
         try:
             text = await asyncio.wait_for(runner(spec, prompt), timeout=timeout)
-            return CompareResult(spec=spec, text=str(text).strip(), elapsed=time.monotonic() - started)
+            return CompareResult(
+                spec=spec, text=str(text).strip(), elapsed=time.monotonic() - started
+            )
         except asyncio.TimeoutError:
             return CompareResult(
-                spec=spec, error=f"timed out after {timeout:.0f}s", elapsed=time.monotonic() - started
+                spec=spec,
+                error=f"timed out after {timeout:.0f}s",
+                elapsed=time.monotonic() - started,
             )
         except Exception as exc:  # capture per-target so siblings still complete
             return CompareResult(spec=spec, error=str(exc), elapsed=time.monotonic() - started)
@@ -114,6 +118,4 @@ async def default_compare_runner(spec: CompareSpec, prompt: str) -> str:
         {"role": "user", "content": prompt},
     ]
     # ProviderManager.chat_completion is synchronous (LiteLLM); run off the loop.
-    return await asyncio.to_thread(
-        manager.chat_completion, spec.provider, spec.model, messages
-    )
+    return await asyncio.to_thread(manager.chat_completion, spec.provider, spec.model, messages)

@@ -327,7 +327,9 @@ Example:
         slug = _slugify_skill_name(raw_name)
         if not slug:
             return ToolResult(
-                success=False, output="", error=f"Could not derive a valid skill name from '{raw_name}'."
+                success=False,
+                output="",
+                error=f"Could not derive a valid skill name from '{raw_name}'.",
             )
 
         loader = self._get_loader()

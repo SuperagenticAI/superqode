@@ -114,7 +114,9 @@ def build_sandboxed_command(command: str, cwd: Path, mode: str | None = None) ->
     cwd = Path(cwd)
 
     if backend == "seatbelt":
-        profile = _seatbelt_profile(cwd, allow_network=allow_network, writable=_writable_roots(cwd, mode))
+        profile = _seatbelt_profile(
+            cwd, allow_network=allow_network, writable=_writable_roots(cwd, mode)
+        )
         argv = ["sandbox-exec", "-p", profile, *shell_argv]
         return SandboxPlan(argv=argv, applied=True, backend="seatbelt")
 

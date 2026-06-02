@@ -57,9 +57,7 @@ def test_created_skill_is_invocable_via_skill_tool(tmp_path):
     )
 
     skill_tool = SkillTool(loader)
-    invoked = asyncio.run(
-        skill_tool.execute({"action": "invoke", "name": "greet"}, _ctx(tmp_path))
-    )
+    invoked = asyncio.run(skill_tool.execute({"action": "invoke", "name": "greet"}, _ctx(tmp_path)))
     assert invoked.success
     assert "Say hello warmly." in invoked.output
 

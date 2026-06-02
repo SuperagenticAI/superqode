@@ -5090,7 +5090,9 @@ class SuperQodeApp(App):
         default_provider = getattr(getattr(self._pure_mode, "session", None), "provider", "") or ""
         specs = parse_compare_specs(tokens, default_provider=default_provider)
         if not specs:
-            log.add_info("Usage: :compare <provider/model> <model> …  (e.g. :compare openai/gpt-4o anthropic/claude-3-5-sonnet)")
+            log.add_info(
+                "Usage: :compare <provider/model> <model> …  (e.g. :compare openai/gpt-4o anthropic/claude-3-5-sonnet)"
+            )
             return
 
         labels = ", ".join(spec.label for spec in specs)
@@ -5889,9 +5891,7 @@ class SuperQodeApp(App):
     # word do not trigger the file picker.
     _MENTION_QUERY_RE = re.compile(r"(?:^|\s)@([\w./\-]*)$")
 
-    def _mention_completion_candidates(
-        self, value: str
-    ) -> list[PromptCompletionCandidate] | None:
+    def _mention_completion_candidates(self, value: str) -> list[PromptCompletionCandidate] | None:
         """Return file candidates for an active @mention, or None when not in one.
 
         The picker reuses the existing prompt-completion panel so the look and

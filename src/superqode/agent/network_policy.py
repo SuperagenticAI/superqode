@@ -21,20 +21,36 @@ from urllib.parse import urlparse
 # Trusted by default: package registries, language toolchains, source forges.
 DEFAULT_ALLOWED_DOMAINS = {
     # Python
-    "pypi.org", "pypi.python.org", "files.pythonhosted.org",
+    "pypi.org",
+    "pypi.python.org",
+    "files.pythonhosted.org",
     # JS
-    "registry.npmjs.org", "registry.yarnpkg.com",
+    "registry.npmjs.org",
+    "registry.yarnpkg.com",
     # Rust / Go / Ruby
-    "crates.io", "static.crates.io", "index.crates.io",
-    "proxy.golang.org", "sum.golang.org", "goproxy.io",
+    "crates.io",
+    "static.crates.io",
+    "index.crates.io",
+    "proxy.golang.org",
+    "sum.golang.org",
+    "goproxy.io",
     "rubygems.org",
     # Source forges
-    "github.com", "raw.githubusercontent.com", "codeload.github.com",
-    "objects.githubusercontent.com", "gitlab.com", "bitbucket.org",
+    "github.com",
+    "raw.githubusercontent.com",
+    "codeload.github.com",
+    "objects.githubusercontent.com",
+    "gitlab.com",
+    "bitbucket.org",
     # Containers / models
-    "ghcr.io", "registry-1.docker.io", "auth.docker.io", "huggingface.co",
+    "ghcr.io",
+    "registry-1.docker.io",
+    "auth.docker.io",
+    "huggingface.co",
     # OS package mirrors
-    "deb.debian.org", "archive.ubuntu.com", "security.ubuntu.com",
+    "deb.debian.org",
+    "archive.ubuntu.com",
+    "security.ubuntu.com",
 }
 
 # Commands whose implicit destination is a known registry even without a URL.
