@@ -32,6 +32,8 @@ from .store import (
 )
 from .workflow_presets import apply_workflow_preset
 
+LOCAL_PROVIDER_ALIASES = {"local"}
+
 
 @dataclass(frozen=True)
 class HarnessCheck:
@@ -925,7 +927,11 @@ def _model_policy_check(spec: HarnessSpec) -> dict[str, Any]:
     errors: list[str] = []
     unknown_models: list[str] = []
 
-    if configured_provider and configured_provider not in PROVIDERS:
+    if (
+        configured_provider
+        and configured_provider not in PROVIDERS
+        and configured_provider not in LOCAL_PROVIDER_ALIASES
+    ):
         errors.append(f"unknown provider '{configured_provider}'")
     if len(inferred_providers) > 1 and not configured_provider:
         warnings.append(

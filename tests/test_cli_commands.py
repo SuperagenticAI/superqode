@@ -237,6 +237,35 @@ model_policy:
             assert "missing-provider" in model_check["errors"][0]
             assert "fix" in model_check
 
+    def test_harness_doctor_json_accepts_local_provider_alias(self, runner):
+        with runner.isolated_filesystem():
+            Path("harness.yaml").write_text(
+                """
+name: local-demo
+model_policy:
+  primary: ds4-local
+  profile: ds4-fast-local
+  config:
+    provider: local
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(
+                cli_main,
+                ["harness", "doctor", "--spec", "harness.yaml", "--json"],
+            )
+
+            assert result.exit_code == 0, result.output
+            payload = json.loads(result.output)
+            model_check = next(
+                check for check in payload["checks"] if check["name"] == "model_registry"
+            )
+            assert model_check["status"] == "ok"
+            assert model_check["provider"] == "local"
+            assert model_check["errors"] == []
+
     def test_harness_doctor_json_blocks_invalid_mcp_config(self, runner):
         with runner.isolated_filesystem():
             Path(".superqode").mkdir()
