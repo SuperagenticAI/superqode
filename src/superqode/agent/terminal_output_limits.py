@@ -59,9 +59,7 @@ def calculate_terminal_output_limit_for_max_tokens(max_tokens: Optional[int]) ->
     return max(DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT, terminal_byte_budget)
 
 
-def calculate_terminal_output_limit_for_model(
-    provider: Optional[str], model: Optional[str]
-) -> int:
+def calculate_terminal_output_limit_for_model(provider: Optional[str], model: Optional[str]) -> int:
     """Look up a model's max-output-tokens and return the byte cap.
 
     Unknown providers/models fall back to ``DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT``

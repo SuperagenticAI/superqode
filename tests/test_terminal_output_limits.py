@@ -26,7 +26,9 @@ from superqode.tools.shell_tools import BashTool
 
 @pytest.mark.parametrize("value", [None, 0, -1, -100])
 def test_no_or_invalid_max_tokens_returns_default(value):
-    assert calculate_terminal_output_limit_for_max_tokens(value) == DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT
+    assert (
+        calculate_terminal_output_limit_for_max_tokens(value) == DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT
+    )
 
 
 def test_tiny_max_tokens_clamped_to_default_floor():
@@ -37,8 +39,7 @@ def test_tiny_max_tokens_clamped_to_default_floor():
 def test_large_max_tokens_clamped_to_ceiling():
     # An absurd 10M max_output_tokens must still be capped at the ceiling.
     assert (
-        calculate_terminal_output_limit_for_max_tokens(10_000_000)
-        == MAX_TERMINAL_OUTPUT_BYTE_LIMIT
+        calculate_terminal_output_limit_for_max_tokens(10_000_000) == MAX_TERMINAL_OUTPUT_BYTE_LIMIT
     )
 
 
@@ -141,7 +142,7 @@ def test_agent_loop_populates_max_output_bytes(tmp_path):
 
     cfg = AgentConfig(
         provider="anthropic",
-        model="claude-sonnet-4-5-20250929",  # known to providers/models.py
+        model="claude-sonnet-4-6",  # known to providers/models.py
         working_directory=tmp_path,
     )
     loop = AgentLoop(gateway=PassthroughGateway(), tools=ToolRegistry(), config=cfg)

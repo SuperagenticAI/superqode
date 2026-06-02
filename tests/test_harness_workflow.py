@@ -222,7 +222,7 @@ async def test_workflow_marks_run_failed_when_required_validation_fails(monkeypa
             custom_steps=(
                 ValidationStepSpec(
                     name="fail",
-                    command=f"{sys.executable} -c \"import sys; sys.exit(7)\"",
+                    command=f'{sys.executable} -c "import sys; sys.exit(7)"',
                 ),
             ),
         ),

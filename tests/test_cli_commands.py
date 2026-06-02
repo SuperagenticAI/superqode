@@ -229,7 +229,9 @@ model_policy:
             payload = json.loads(result.output)
             assert payload["ready"] is False
             assert payload["summary"]["blockers"] >= 1
-            model_check = next(check for check in payload["checks"] if check["name"] == "model_registry")
+            model_check = next(
+                check for check in payload["checks"] if check["name"] == "model_registry"
+            )
             assert model_check["status"] == "error"
             assert model_check["severity"] == "blocker"
             assert "missing-provider" in model_check["errors"][0]
@@ -298,7 +300,9 @@ validation:
 
             assert result.exit_code == 1
             payload = json.loads(result.output)
-            validation_check = next(check for check in payload["checks"] if check["name"] == "validation")
+            validation_check = next(
+                check for check in payload["checks"] if check["name"] == "validation"
+            )
             assert validation_check["status"] == "error"
             assert validation_check["missing"] == ["missing-validator"]
             assert "fix" in validation_check
@@ -338,7 +342,9 @@ validation:
                 prompt="parent workflow",
                 metadata={"workflow": True},
             )
-            store.append_event(run.run_id, HarnessEvent(type="workflow.run.started", run_id=run.run_id))
+            store.append_event(
+                run.run_id, HarnessEvent(type="workflow.run.started", run_id=run.run_id)
+            )
 
             result = runner.invoke(cli_main, ["harness", "runs", "--json"])
 
@@ -370,19 +376,33 @@ validation:
             )
             store.append_event(
                 run.run_id,
-                HarnessEvent(type="workflow.run.started", run_id=run.run_id, data={"mode": "single"}),
+                HarnessEvent(
+                    type="workflow.run.started", run_id=run.run_id, data={"mode": "single"}
+                ),
             )
             store.append_event(
                 run.run_id,
-                HarnessEvent(type="workflow.step.completed", run_id=run.run_id, data={"step_id": "coder", "child_run_id": "run_child"}),
+                HarnessEvent(
+                    type="workflow.step.completed",
+                    run_id=run.run_id,
+                    data={"step_id": "coder", "child_run_id": "run_child"},
+                ),
             )
             store.append_event(
                 run.run_id,
-                HarnessEvent(type="workspace.changes.captured", run_id=run.run_id, data={"file_count": 0, "additions": 0, "deletions": 0, "files": []}),
+                HarnessEvent(
+                    type="workspace.changes.captured",
+                    run_id=run.run_id,
+                    data={"file_count": 0, "additions": 0, "deletions": 0, "files": []},
+                ),
             )
             store.append_event(
                 run.run_id,
-                HarnessEvent(type="workflow.result", run_id=run.run_id, data={"status": "succeeded", "content_preview": "done", "result_count": 1}),
+                HarnessEvent(
+                    type="workflow.result",
+                    run_id=run.run_id,
+                    data={"status": "succeeded", "content_preview": "done", "result_count": 1},
+                ),
             )
             store.end_run(run.run_id, status="succeeded", metadata={"workflow": True})
 
@@ -434,7 +454,9 @@ validation:
         with runner.isolated_filesystem():
             spec = HarnessSpec(
                 name="prompt-full",
-                context=ContextSpec(session_storage=".superqode/sessions", prompt_persistence="full"),
+                context=ContextSpec(
+                    session_storage=".superqode/sessions", prompt_persistence="full"
+                ),
             )
             store = FileHarnessStore(".superqode/sessions")
             store.open_session("session-1", spec)

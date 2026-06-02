@@ -62,6 +62,7 @@ class FakeLog:
         duration=None,
         additions=None,
         deletions=None,
+        metadata=None,
     ):
         self.items.append(
             {
@@ -71,6 +72,7 @@ class FakeLog:
                 "command": command,
                 "output": output,
                 "arguments": arguments or {},
+                "metadata": metadata or {},
             }
         )
 
@@ -354,11 +356,19 @@ context:
     )
     store.append_event(
         run.run_id,
-        HarnessEvent(type="workflow.step.completed", run_id=run.run_id, data={"step_id": "coder", "status": "done"}),
+        HarnessEvent(
+            type="workflow.step.completed",
+            run_id=run.run_id,
+            data={"step_id": "coder", "status": "done"},
+        ),
     )
     store.append_event(
         run.run_id,
-        HarnessEvent(type="validation.step.completed", run_id=run.run_id, data={"name": "tests", "returncode": 0}),
+        HarnessEvent(
+            type="validation.step.completed",
+            run_id=run.run_id,
+            data={"name": "tests", "returncode": 0},
+        ),
     )
     store.append_event(
         run.run_id,
@@ -486,6 +496,10 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":connect local" in COMMANDS
     assert ":exit" in COMMANDS
     assert ":quit" in COMMANDS
+    assert ":diff files" in COMMANDS
+    assert ":timeline" in COMMANDS
+    assert ":permissions" in COMMANDS
+    assert ":policy" in COMMANDS
     assert ":c" not in COMMANDS
     assert ":q" not in COMMANDS
     slash_values = {command.command for command in DEFAULT_COMMANDS}
@@ -500,6 +514,11 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":connect local" in slash_values
     assert ":exit" in slash_values
     assert ":quit" in slash_values
+    assert ":diff" in slash_values
+    assert ":diff files" in slash_values
+    assert ":timeline" in slash_values
+    assert ":permissions" in slash_values
+    assert ":policy" in slash_values
     assert ":c" not in slash_values
     assert ":q" not in slash_values
 
@@ -529,6 +548,19 @@ def test_slash_complete_prioritizes_connect_and_quit():
     assert ":context" not in connect_values
     assert ":copy" not in connect_values
     assert quit_values[0] == ":quit"
+
+
+def test_slash_complete_prioritizes_diff_review_commands():
+    from superqode.widgets.slash_complete import DEFAULT_COMMANDS, filter_slash_commands
+
+    diff_values = [command.command for command in filter_slash_commands(DEFAULT_COMMANDS, ":d")]
+
+    assert diff_values[:4] == [
+        ":diff",
+        ":diff files",
+        ":diff unified",
+        ":diff split",
+    ]
 
 
 def test_skills_command_creates_and_lists_local_skill(tmp_path, monkeypatch):
@@ -602,7 +634,8 @@ def test_skills_doctor_reports_missing_description(tmp_path, monkeypatch):
     app._skills_cmd("doctor", log)
     text = render_plain(log.items[-1])
 
-    assert "missing description" in text
+    # Collapse whitespace so the assertion is robust to terminal line wrapping.
+    assert "missing description" in " ".join(text.split())
 
 
 def test_prompt_completion_suggests_mcp_server(tmp_path, monkeypatch):
@@ -703,6 +736,7 @@ def test_byok_provider_selection_enables_model_keyboard_immediately():
     provider_def = SimpleNamespace(name="Anthropic")
     app._awaiting_byok_provider = True
     app._byok_connect_list = [("anthropic", provider_def)]
+
     def show_provider_models(provider_id, target_log, use_picker=False):
         app._byok_selected_provider = provider_id
         app._byok_model_list = ["claude-sonnet"]
@@ -1173,7 +1207,9 @@ def test_transcript_command_opens_selectable_transcript():
     app = make_app()
     log = FakeLog()
     captured = []
-    app.push_screen = lambda screen, callback=None: captured.append((screen._title, screen._content))
+    app.push_screen = lambda screen, callback=None: captured.append(
+        (screen._title, screen._content)
+    )
 
     app._handle_command(":transcript", log)
 
@@ -1207,14 +1243,15 @@ def test_scroll_actions_target_conversation_log():
     assert log.auto_scroll is True
 
 
-def test_busy_message_rejects_second_prompt():
+def test_busy_message_queues_second_prompt():
     app = make_app()
     log = FakeLog()
     app.is_busy = True
 
     app._handle_message("second prompt", log)
 
-    assert any("already running" in str(item) for item in log.items)
+    # Type-ahead: the prompt is queued to send once the agent is free.
+    assert app._typeahead_queue == ["second prompt"]
 
 
 def test_plan_command_without_args_does_not_crash():
@@ -1483,6 +1520,156 @@ def test_active_tool_status_tracks_running_tools_without_log_rows():
     assert render_plain(log._active_tools_renderable()).strip() == ""
 
 
+def test_failed_tool_renders_failure_card_with_command_context():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.add_tool_call(
+        "bash",
+        status="error",
+        arguments={"command": "uv run pytest"},
+        output="line one\nline two\nFAILED tests/test_example.py",
+        duration=2.4,
+        metadata={"command": "uv run pytest", "cwd": "/repo", "exit_code": 1},
+    )
+
+    rendered = "\n".join(render_plain(item) for item in writes)
+    assert "Tool failed: Run" in rendered
+    assert "exit 1" in rendered
+    assert "uv run pytest" in rendered
+    assert "/repo" in rendered
+    assert "FAILED tests/test_example.py" in rendered
+
+
+def test_failed_tool_timeout_card_shows_timeout():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.add_tool_call(
+        "bash",
+        status="error",
+        arguments={"command": "npm test"},
+        output="Command timed out after 300 seconds",
+        metadata={"command": "npm test", "timed_out": True, "timeout": 300},
+    )
+
+    rendered = "\n".join(render_plain(item) for item in writes)
+    assert "timeout 300s" in rendered
+    assert "npm test" in rendered
+
+
+def test_tool_runs_index_and_detail_capture_output_metadata_and_diff():
+    log = ConversationLog()
+    log.write = lambda content, *args, **kwargs: None
+    diff = "\n".join(["--- a/app.py", "+++ b/app.py", "@@ -1 +1 @@", "-old", "+new"])
+
+    log.add_tool_call(
+        "bash",
+        status="error",
+        arguments={"command": "uv run pytest"},
+        output="FAILED tests/test_app.py",
+        duration=1.25,
+        metadata={"command": "uv run pytest", "cwd": "/repo", "exit_code": 1},
+    )
+    log.add_tool_call(
+        "apply_patch",
+        status="success",
+        arguments={"path": "app.py"},
+        output="updated",
+        diff_text=diff,
+        metadata={"path": "app.py"},
+    )
+
+    index = log.format_tool_runs_index()
+    assert "Recent tool runs (2)" in index
+    assert "Run" in index
+    assert "Apply Patch" in index
+
+    detail = log.format_tool_run_detail(1)
+    assert "SuperQode Tool Run" in detail
+    assert "Tool:     bash" in detail
+    assert "Command:  uv run pytest" in detail
+    assert "Cwd:      /repo" in detail
+    assert "Exit:     1" in detail
+    assert "FAILED tests/test_app.py" in detail
+
+    patch_detail = log.format_tool_run_detail(2)
+    assert "Diff" in patch_detail
+    assert "+new" in patch_detail
+
+
+def test_tools_recent_and_tool_number_commands():
+    app = make_app()
+    log = ConversationLog()
+    writes = []
+    pushed = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+    app.push_screen = lambda screen, callback=None: pushed.append((screen, callback))
+    app.set_timer = lambda *_args, **_kwargs: None
+    log.add_tool_call(
+        "bash",
+        status="success",
+        arguments={"command": "echo hi"},
+        output="hi",
+    )
+
+    app._show_tools("recent", log)
+    assert "Recent tool runs" in render_plain(writes[-1])
+
+    app._show_tools("1", log)
+    assert pushed
+    assert pushed[0][0]._title == "Tool Run #1"
+    assert "SuperQode Tool Run" in pushed[0][0]._content
+    assert "echo hi" in pushed[0][0]._content
+
+
+def test_session_timeline_includes_messages_and_tool_runs():
+    log = ConversationLog()
+    log.write = lambda content, *args, **kwargs: None
+
+    log.add_user("please fix the test")
+    log.add_info("connected to opencode")
+    log.add_tool_call(
+        "bash",
+        status="error",
+        arguments={"command": "uv run pytest"},
+        output="FAILED tests/test_app.py",
+        metadata={"command": "uv run pytest", "exit_code": 1},
+    )
+    log.write_final_response("Changed the failing test.", agent="Assistant")
+
+    timeline = log.format_session_timeline()
+
+    assert "SuperQode Session Timeline" in timeline
+    assert "Messages:" in timeline
+    assert "Tool runs: 1" in timeline
+    assert "User: please fix the test" in timeline
+    assert "Info: connected to opencode" in timeline
+    assert "error   Run" in timeline
+    assert "uv run pytest" in timeline
+    assert "Assistant: Changed the failing test." in timeline
+    assert ":tools <number>" in timeline
+
+
+def test_timeline_command_opens_session_timeline():
+    app = make_app()
+    log = ConversationLog()
+    log.write = lambda content, *args, **kwargs: None
+    log.add_user("hello")
+    pushed = []
+    app.push_screen = lambda screen, callback=None: pushed.append((screen, callback))
+    app.set_timer = lambda *_args, **_kwargs: None
+
+    app._handle_command(":timeline", log)
+
+    assert pushed
+    assert pushed[0][0]._title == "Session Timeline"
+    assert "SuperQode Session Timeline" in pushed[0][0]._content
+    assert "User: hello" in pushed[0][0]._content
+
+
 def test_tool_diff_is_visible_in_normal_mode():
     log = ConversationLog()
     writes = []
@@ -1563,9 +1750,19 @@ def test_permission_prompt_is_visible_card_and_sets_pending(monkeypatch):
     rendered = render_plain(log.items[-1])
     assert "Permission required" in rendered
     assert "file change" in rendered
+    assert "Risk:" in rendered
+    assert "medium" in rendered
     assert "[y]" in rendered
     assert "[n]" in rendered
     assert "[a]" in rendered
+
+
+def test_permission_risk_marks_destructive_commands_critical():
+    app = make_app()
+
+    label, _style = app._permission_risk("bash", {"command": "sudo rm -rf /tmp/example"})
+
+    assert label == "critical"
 
 
 def test_permission_input_resets_prompt_state():
@@ -1581,6 +1778,43 @@ def test_permission_input_resets_prompt_state():
     assert app._permission_response == "allow"
     assert app._permission_pending is False
     assert reset == [True]
+
+
+def test_permissions_command_shows_mode_pending_and_learned_rules():
+    from superqode.approval import ApprovalManager, ApprovalRequest
+
+    app = make_app()
+    app.approval_mode = "ask"
+    app._permission_pending = True
+    app._pending_tool_name = "bash"
+    app._approval_manager = ApprovalManager(Console())
+    app._approval_manager.always_approve.add("README.md")
+    app._approval_manager.always_reject.add("secrets.env")
+    app._approval_manager.add_request(
+        ApprovalRequest(
+            id="req-1",
+            title="Edit app.py",
+            description="Agent wants to edit app.py",
+            file_path="app.py",
+            old_content="old\n",
+            new_content="new\n",
+        )
+    )
+    log = FakeLog()
+
+    app._handle_permissions(log)
+
+    rendered = render_plain(log.items[-1])
+    assert "Permission Policy" in rendered
+    assert "Mode" in rendered
+    assert "ask" in rendered
+    assert "Pending" in rendered
+    assert "bash" in rendered
+    assert "1 pending" in rendered
+    assert "Edit app.py" in rendered
+    assert "README.md" in rendered
+    assert "secrets.env" in rendered
+    assert ":mode auto|ask|deny" in rendered
 
 
 def test_pending_approvals_render_as_card():
@@ -1612,6 +1846,10 @@ def test_current_git_diff_text_includes_tracked_and_untracked(tmp_path, monkeypa
     app = make_app()
     diff_text = app._current_git_diff_text()
 
+    assert "SuperQode Diff Review" in diff_text
+    assert "Files:" in diff_text
+    assert "[Working tree] tracked.txt" in diff_text
+    assert "[Untracked] new.txt" in diff_text
     assert "tracked.txt" in diff_text
     assert "-old" in diff_text
     assert "+new" in diff_text
@@ -1635,8 +1873,210 @@ def test_diff_command_opens_selectable_overlay(tmp_path, monkeypatch):
     app._handle_diff("", log)
 
     assert pushed
-    assert pushed[0][0]._title == "Current Diff"
+    assert pushed[0][0]._title == "Diff Review"
+    assert "SuperQode Diff Review" in pushed[0][0]._content
+    assert "Files:" in pushed[0][0]._content
     assert "tracked.txt" in pushed[0][0]._content
+
+
+def test_diff_files_command_lists_changed_files(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True, text=True)
+    (tmp_path / "tracked.txt").write_text("old\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], check=True, capture_output=True, text=True)
+    (tmp_path / "tracked.txt").write_text("new\n", encoding="utf-8")
+    (tmp_path / "new.txt").write_text("created\n", encoding="utf-8")
+
+    app = make_app()
+    log = FakeLog()
+
+    app._handle_diff("files", log)
+
+    rendered = render_plain(log.items[-1])
+    assert "Changed files (" in rendered
+    assert "[Working tree] tracked.txt" in rendered
+    assert "[Staged] tracked.txt" in rendered
+    assert "[Untracked] new.txt" in rendered
+    assert "Use :diff <path> to open one file." in rendered
+
+
+def test_diff_command_filters_to_matching_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True, text=True)
+    (tmp_path / "a.txt").write_text("old a\n", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("old b\n", encoding="utf-8")
+    subprocess.run(["git", "add", "a.txt", "b.txt"], check=True, capture_output=True, text=True)
+    (tmp_path / "a.txt").write_text("new a\n", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("new b\n", encoding="utf-8")
+
+    app = make_app()
+    log = FakeLog()
+    pushed = []
+    app.push_screen = lambda screen, callback=None: pushed.append((screen, callback))
+    app.set_timer = lambda *_args, **_kwargs: None
+
+    app._handle_diff("a.txt", log)
+
+    assert pushed
+    content = pushed[0][0]._content
+    assert "[Working tree] a.txt" in content
+    assert "diff --git a/a.txt b/a.txt" in content
+    assert "diff --git a/b.txt b/b.txt" not in content
+
+
+def test_diff_review_overlay_supports_file_navigation(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True, text=True)
+    (tmp_path / "a.txt").write_text("old a\n", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("old b\n", encoding="utf-8")
+    subprocess.run(["git", "add", "a.txt", "b.txt"], check=True, capture_output=True, text=True)
+    (tmp_path / "a.txt").write_text("new a\n", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("new b\n", encoding="utf-8")
+
+    app = make_app()
+    log = FakeLog()
+    pushed = []
+    app.push_screen = lambda screen, callback=None: pushed.append((screen, callback))
+    app.set_timer = lambda *_args, **_kwargs: None
+
+    app._handle_diff("", log)
+
+    screen = pushed[0][0]
+    assert len(screen._entries) >= 2
+    assert screen._index == -1
+    screen.action_next_file()
+    assert screen._index == 0
+    assert "File 1/" in screen._current_text
+    assert "a.txt" in screen._current_text
+    screen.action_next_file()
+    assert screen._index == 1
+    assert "b.txt" in screen._current_text
+    screen.action_show_all()
+    assert screen._index == -1
+    assert "SuperQode Diff Review" in screen._current_text
+    assert "Files:" in screen._current_text
+
+
+def test_diff_review_overlay_can_approve_pending_file_change(tmp_path, monkeypatch):
+    from superqode.approval import ApprovalManager, ApprovalRequest
+
+    monkeypatch.chdir(tmp_path)
+    app = make_app()
+    app._approval_manager = ApprovalManager(Console())
+    app._approval_manager.add_request(
+        ApprovalRequest(
+            id="req-1",
+            title="Update app.py",
+            description="Agent wants to edit app.py",
+            file_path="app.py",
+            old_content="old\n",
+            new_content="new\n",
+        )
+    )
+    writes = []
+    app._file_manager = SimpleNamespace(write=lambda path, content: writes.append((path, content)))
+    log = FakeLog()
+    pushed = []
+    app.push_screen = lambda screen, callback=None: pushed.append((screen, callback))
+    app.set_timer = lambda *_args, **_kwargs: None
+
+    app._handle_diff("", log)
+
+    screen = pushed[0][0]
+    assert screen._entries[0]["approval_id"] == "req-1"
+    screen.action_next_file()
+    assert "app.py" in screen._current_text
+    screen.action_approve_current()
+
+    assert writes == [("app.py", "new\n")]
+    assert app._approval_manager.get_pending() == []
+    assert screen._entries == []
+
+
+def test_diff_review_overlay_can_reject_pending_file_change(tmp_path, monkeypatch):
+    from superqode.approval import ApprovalManager, ApprovalRequest
+
+    monkeypatch.chdir(tmp_path)
+    app = make_app()
+    app._approval_manager = ApprovalManager(Console())
+    app._approval_manager.add_request(
+        ApprovalRequest(
+            id="req-2",
+            title="Update app.py",
+            description="Agent wants to edit app.py",
+            file_path="app.py",
+            old_content="old\n",
+            new_content="new\n",
+        )
+    )
+    writes = []
+    app._file_manager = SimpleNamespace(write=lambda path, content: writes.append((path, content)))
+    log = FakeLog()
+    pushed = []
+    app.push_screen = lambda screen, callback=None: pushed.append((screen, callback))
+    app.set_timer = lambda *_args, **_kwargs: None
+
+    app._handle_diff("", log)
+
+    screen = pushed[0][0]
+    screen.action_next_file()
+    screen.action_reject_current()
+
+    assert writes == []
+    assert app._approval_manager.get_pending() == []
+    assert screen._entries == []
+
+
+def test_diff_review_overlay_can_copy_current_file_patch(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True, text=True)
+    (tmp_path / "a.txt").write_text("old a\n", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("old b\n", encoding="utf-8")
+    subprocess.run(["git", "add", "a.txt", "b.txt"], check=True, capture_output=True, text=True)
+    (tmp_path / "a.txt").write_text("new a\n", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("new b\n", encoding="utf-8")
+
+    app = make_app()
+    log = FakeLog()
+    pushed = []
+    app.push_screen = lambda screen, callback=None: pushed.append((screen, callback))
+    app.set_timer = lambda *_args, **_kwargs: None
+
+    app._handle_diff("", log)
+
+    copied = []
+    screen = pushed[0][0]
+    screen._copy_to_clipboard = lambda text: copied.append(text)
+    screen.action_next_file()
+    screen.action_copy_current_patch()
+
+    assert copied
+    assert "diff --git a/a.txt b/a.txt" in copied[-1]
+    assert "diff --git a/b.txt b/b.txt" not in copied[-1]
+
+
+def test_diff_review_overlay_can_open_current_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True, text=True)
+    (tmp_path / "a.txt").write_text("old a\n", encoding="utf-8")
+    subprocess.run(["git", "add", "a.txt"], check=True, capture_output=True, text=True)
+    (tmp_path / "a.txt").write_text("new a\n", encoding="utf-8")
+
+    app = make_app()
+    opened = []
+    app._open_diff_entry_file = lambda entry: opened.append(entry["path"]) or "Opened"
+    log = FakeLog()
+    pushed = []
+    app.push_screen = lambda screen, callback=None: pushed.append((screen, callback))
+    app.set_timer = lambda *_args, **_kwargs: None
+
+    app._handle_diff("", log)
+
+    screen = pushed[0][0]
+    screen.action_next_file()
+    screen.action_open_current_file()
+
+    assert opened == ["a.txt"]
 
 
 def test_acp_render_helpers_keep_completed_row_target_visible():

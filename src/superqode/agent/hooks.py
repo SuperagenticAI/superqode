@@ -96,9 +96,9 @@ DECISION_HOOK_POINTS = (
 
 # Decision actions.
 CONTINUE = "continue"  # abstain - no opinion (the observer default)
-ALLOW = "allow"        # explicitly allow / auto-approve
-DENY = "deny"          # block the operation
-MODIFY = "modify"      # proceed with replacement payload (e.g. tool arguments)
+ALLOW = "allow"  # explicitly allow / auto-approve
+DENY = "deny"  # block the operation
+MODIFY = "modify"  # proceed with replacement payload (e.g. tool arguments)
 
 
 @dataclass
@@ -112,9 +112,9 @@ class HookDecision:
 
     action: str = CONTINUE
     arguments: Optional[Dict[str, Any]] = None  # MODIFY: replacement tool arguments
-    result: Any = None                          # DENY: explicit result to return instead
-    message: Optional[str] = None               # human/model-facing explanation
-    reason: Optional[str] = None                # audit/source reason
+    result: Any = None  # DENY: explicit result to return instead
+    message: Optional[str] = None  # human/model-facing explanation
+    reason: Optional[str] = None  # audit/source reason
 
 
 @dataclass
@@ -198,9 +198,7 @@ class HookRegistry:
         the caller can unregister later.
         """
         if point not in self._hooks:
-            raise ValueError(
-                f"Unknown hook point {point!r}. Valid: {', '.join(ALL_HOOK_POINTS)}"
-            )
+            raise ValueError(f"Unknown hook point {point!r}. Valid: {', '.join(ALL_HOOK_POINTS)}")
         resolved = name or f"{getattr(fn, '__name__', 'hook')}_{len(self._hooks[point])}"
         self._hooks[point].append((resolved, fn))
         return resolved
@@ -268,9 +266,7 @@ class HookRegistry:
             except asyncio.CancelledError:
                 raise
             except Exception:  # noqa: BLE001 - hooks are user code; isolate them.
-                logger.exception(
-                    "Decision hook %r at %s raised; treating as abstain.", name, point
-                )
+                logger.exception("Decision hook %r at %s raised; treating as abstain.", name, point)
                 continue
             decision = normalize_decision(raw)
             if decision is None or decision.action == CONTINUE:

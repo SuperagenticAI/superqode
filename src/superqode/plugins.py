@@ -194,7 +194,11 @@ def register_plugin_hooks(
 
     for manifest in manifests:
         for entry in manifest.event_hooks:
-            handler_spec = (entry.get("handler") or entry.get("target") or "") if isinstance(entry, dict) else ""
+            handler_spec = (
+                (entry.get("handler") or entry.get("target") or "")
+                if isinstance(entry, dict)
+                else ""
+            )
             point = entry.get("point") if isinstance(entry, dict) else None
             name = entry.get("name") if isinstance(entry, dict) else None
 
@@ -213,8 +217,7 @@ def register_plugin_hooks(
                         plugin_id=manifest.id,
                         handler=handler_spec or None,
                         message=(
-                            f"unknown hook point {point!r}; "
-                            f"valid: {', '.join(ALL_HOOK_POINTS)}"
+                            f"unknown hook point {point!r}; valid: {', '.join(ALL_HOOK_POINTS)}"
                         ),
                     )
                 )
@@ -287,15 +290,11 @@ def validate_plugin_manifest(path: str | Path) -> List[str]:
             continue
         point = entry.get("point")
         if point not in ALL_HOOK_POINTS:
-            issues.append(
-                f"{label}.point {point!r} is not one of {', '.join(ALL_HOOK_POINTS)}"
-            )
+            issues.append(f"{label}.point {point!r} is not one of {', '.join(ALL_HOOK_POINTS)}")
         handler = entry.get("handler") or entry.get("target")
         if not isinstance(handler, str) or not handler.strip():
             issues.append(f"{label}.handler must be a non-empty string")
         elif ":" not in handler and "." not in handler:
-            issues.append(
-                f"{label}.handler {handler!r} must be 'module:func' or 'module.func'"
-            )
+            issues.append(f"{label}.handler {handler!r} must be 'module:func' or 'module.func'")
 
     return issues

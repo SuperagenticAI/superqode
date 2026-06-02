@@ -66,6 +66,10 @@ def _register(key: str, profile: ModelProfile) -> None:
 def register_all() -> None:
     """Register every built-in profile. Idempotent — re-registration merges."""
     _register(
+        "anthropic:claude-opus-4-8",
+        ModelProfile(system_prompt_suffix=_CLAUDE_BASE_SUFFIX),
+    )
+    _register(
         "anthropic:claude-sonnet-4-6",
         ModelProfile(system_prompt_suffix=_CLAUDE_BASE_SUFFIX),
     )

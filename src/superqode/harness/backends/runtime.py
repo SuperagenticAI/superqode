@@ -113,7 +113,30 @@ class OpenAIAgentsHarnessBackend(RuntimeHarnessBackend):
         super().__init__("openai-agents")
 
 
+class CodexSDKHarnessBackend(RuntimeHarnessBackend):
+    """First-class harness adapter name for OpenAI Codex Python SDK."""
+
+    def __init__(self) -> None:
+        super().__init__("codex-sdk")
+
+
 def _runtime_capabilities(runtime_name: str) -> HarnessBackendCapabilities:
+    if runtime_name == "codex-sdk":
+        return HarnessBackendCapabilities(
+            backend=runtime_name,
+            supports_coding=True,
+            supports_no_tool=True,
+            supports_streaming=True,
+            supports_approvals=False,
+            supports_sandbox=True,
+            supports_shell=True,
+            supports_mcp=False,
+            supports_typed_output=False,
+            notes=(
+                "Official Codex SDK runtime. ASK approvals are denied by policy "
+                "until interactive approval bridging is implemented.",
+            ),
+        )
     if runtime_name == "openai-agents":
         return HarnessBackendCapabilities(
             backend=runtime_name,

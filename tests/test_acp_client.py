@@ -194,7 +194,7 @@ class TestACPClient:
         on_message = AsyncMock()
         client = ACPClient(
             project_root=tmp_path,
-            command="fast-agent --acp",
+            command="uvx --from fast-agent-mcp@latest fast-agent-acp",
             on_message=on_message,
         )
 
@@ -209,6 +209,29 @@ class TestACPClient:
 
         on_message.assert_awaited_once_with("hello")
         assert client.get_message_buffer() == "hello"
+
+    @pytest.mark.asyncio
+    async def test_stop_tolerates_already_exited_process(self, tmp_path):
+        """Live doctor should not crash when an ACP subprocess exits before cleanup."""
+
+        class ExitedProcess:
+            returncode = 2
+
+            def terminate(self):
+                raise ProcessLookupError()
+
+            async def wait(self):
+                return self.returncode
+
+            def kill(self):
+                raise ProcessLookupError()
+
+        client = ACPClient(project_root=tmp_path, command="bad-agent --acp")
+        client._process = ExitedProcess()
+
+        await client.stop()
+
+        assert client._process is None
 
     @pytest.mark.asyncio
     async def test_session_update_handles_commands_mode_and_usage(self, tmp_path):
@@ -315,9 +338,7 @@ class TestACPClient:
         assert client._current_model_id == "opencode/mimo-v2.5-free"
 
     @pytest.mark.asyncio
-    async def test_new_session_switches_opencode_config_option_model(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_new_session_switches_opencode_config_option_model(self, tmp_path, monkeypatch):
         """OpenCode now exposes model selection through configOptions.
 
         Regression: when only configOptions were present, SuperQode skipped
@@ -559,12 +580,14 @@ class TestACPClient:
         assert await client._handle_agent_request(
             "terminal/wait_for_exit", {"terminalId": "ui-terminal-1"}
         ) == {"exitCode": 0, "signal": None}
-        assert await client._handle_agent_request(
-            "terminal/kill", {"terminalId": "ui-terminal-1"}
-        ) == {}
-        assert await client._handle_agent_request(
-            "terminal/release", {"terminalId": "ui-terminal-1"}
-        ) == {}
+        assert (
+            await client._handle_agent_request("terminal/kill", {"terminalId": "ui-terminal-1"})
+            == {}
+        )
+        assert (
+            await client._handle_agent_request("terminal/release", {"terminalId": "ui-terminal-1"})
+            == {}
+        )
 
         assert [name for name, _params in service.calls] == [
             "create",
@@ -581,9 +604,10 @@ class TestACPClient:
         client = ACPClient(project_root=tmp_path, command="opencode acp")
         client._terminals["terminal-1"] = {"process": None}
 
-        assert await client._handle_agent_request(
-            "terminal/release", {"terminalId": "terminal-1"}
-        ) == {}
+        assert (
+            await client._handle_agent_request("terminal/release", {"terminalId": "terminal-1"})
+            == {}
+        )
         assert "terminal-1" not in client._terminals
 
     @pytest.mark.asyncio
@@ -719,9 +743,7 @@ class TestACPClient:
         assert client.get_traffic_log_path() == log_path
 
     @pytest.mark.asyncio
-    async def test_traffic_logging_env_uses_per_agent_default_path(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_traffic_logging_env_uses_per_agent_default_path(self, tmp_path, monkeypatch):
         monkeypatch.setenv("SUPERQODE_HOME", str(tmp_path))
         monkeypatch.setenv("SUPERQODE_ACP_TRAFFIC_LOG", "1")
 

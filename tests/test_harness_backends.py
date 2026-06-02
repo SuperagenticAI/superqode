@@ -10,6 +10,7 @@ from superqode.agent.loop import AgentResponse
 from superqode.tools.base import ToolResult
 from superqode.harness import (
     ADKHarnessBackend,
+    CodexSDKHarnessBackend,
     DeepAgentsHarnessBackend,
     ExecutionPolicySpec,
     HarnessBackendRequest,
@@ -110,6 +111,7 @@ def test_known_harness_backends_include_current_runtime_backends():
 
     assert "builtin" in names
     assert "adk" in names
+    assert "codex-sdk" in names
     assert "openai-agents" in names
     assert "deepagents" in names
     assert "pydanticai" in names
@@ -131,6 +133,7 @@ def test_create_harness_backend_returns_deepagents_adapter():
 
 def test_create_harness_backend_returns_direct_runtime_adapters():
     assert isinstance(create_harness_backend("adk"), ADKHarnessBackend)
+    assert isinstance(create_harness_backend("codex-sdk"), CodexSDKHarnessBackend)
     assert isinstance(create_harness_backend("openai-agents"), OpenAIAgentsHarnessBackend)
     assert isinstance(create_harness_backend("pydanticai"), PydanticAIHarnessBackend)
 
@@ -144,6 +147,8 @@ def test_backend_capabilities_are_advertised():
     assert create_harness_backend("builtin").capabilities.supports_no_tool is True
     assert create_harness_backend("builtin").capabilities.supports_approvals is True
     assert create_harness_backend("openai-agents").capabilities.supports_approvals is True
+    assert create_harness_backend("codex-sdk").capabilities.supports_streaming is True
+    assert create_harness_backend("codex-sdk").capabilities.supports_approvals is False
     assert create_harness_backend("deepagents").capabilities.supports_no_tool is False
     assert create_harness_backend("pydanticai").capabilities.supports_coding is True
 

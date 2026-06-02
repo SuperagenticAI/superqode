@@ -49,6 +49,10 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand("/context", "View/update work context", "Ctrl+I", category="workflow"),
     SlashCommand("/approve", "Approve a pending tool call", category="workflow"),
     SlashCommand("/reject", "Reject a pending tool call", category="workflow"),
+    SlashCommand(
+        ":permissions", "Show permission policy and pending approvals", category="workflow"
+    ),
+    SlashCommand(":policy", "Show permission policy", category="workflow"),
     SlashCommand("/harness", "Load or inspect a HarnessSpec", category="workflow"),
     SlashCommand(":harness", "Load or inspect a HarnessSpec", category="workflow"),
     SlashCommand("/harness inspect", "Summarize the active HarnessSpec", category="workflow"),
@@ -74,9 +78,25 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand("/usage", "Show latest run usage and latency", category="workflow"),
     SlashCommand("/sessions", "List saved sessions", category="workflow"),
     SlashCommand("/resume", "Resume latest or selected session", category="workflow"),
+    SlashCommand(":diff", "Open current diff review", category="workflow"),
+    SlashCommand(":diff files", "List changed files", category="workflow"),
+    SlashCommand(":diff split", "Use side-by-side diff mode", category="workflow"),
+    SlashCommand(":diff unified", "Use unified diff mode", category="workflow"),
     SlashCommand(":transcript", "Open selectable conversation transcript", category="workflow"),
+    SlashCommand(":timeline", "Open session timeline replay", category="workflow"),
+    SlashCommand(":rewind", "Edit & resend a previous message (Esc Esc)", category="workflow"),
+    SlashCommand(":paste", "Attach an image from clipboard or path", category="workflow"),
+    SlashCommand(":queue", "Show queued type-ahead messages", category="workflow"),
+    SlashCommand(":queue clear", "Clear queued messages", category="workflow"),
+    SlashCommand(":stash", "Restore a stashed prompt draft (Ctrl+G to stash)", category="workflow"),
+    SlashCommand(":stash list", "List stashed prompt drafts", category="workflow"),
+    SlashCommand(":session", "Show current session info", category="workflow"),
+    SlashCommand(":session rename", "Rename the current session", category="workflow"),
+    SlashCommand(":update", "Check for a newer SuperQode release", category="workflow"),
     SlashCommand(":copy transcript", "Copy the conversation transcript", category="workflow"),
-    SlashCommand(":select transcript", "Open selectable conversation transcript", category="workflow"),
+    SlashCommand(
+        ":select transcript", "Open selectable conversation transcript", category="workflow"
+    ),
     SlashCommand("/mcp", "Show MCP status", category="workflow"),
     SlashCommand("/mcp connect", "Connect configured MCP servers", category="workflow"),
     SlashCommand("/mcp tools", "List connected MCP tools", category="workflow"),
@@ -108,14 +128,6 @@ def _command_sort_key(query: str, command: str) -> tuple[int, str]:
     query = query.lower()
     command = command.lower()
     priority: dict[str, dict[str, int]] = {
-        ":": {
-            ":connect": 0,
-            ":connect acp": 1,
-            ":connect byok": 2,
-            ":connect local": 3,
-            ":exit": 4,
-            ":quit": 5,
-        },
         ":c": {
             ":connect": 0,
             ":connect acp": 1,
@@ -132,8 +144,22 @@ def _command_sort_key(query: str, command: str) -> tuple[int, str]:
         ":q": {
             ":quit": 0,
         },
+        ":d": {
+            ":diff": 0,
+            ":diff files": 1,
+            ":diff unified": 2,
+            ":diff split": 3,
+        },
         ":e": {
             ":exit": 0,
+        },
+        ":": {
+            ":connect": 0,
+            ":connect acp": 1,
+            ":connect byok": 2,
+            ":connect local": 3,
+            ":exit": 4,
+            ":quit": 5,
         },
     }
     for prefix, scores in priority.items():

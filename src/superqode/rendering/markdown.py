@@ -24,9 +24,7 @@ _FENCED_MARKDOWN_RE = re.compile(
 class AgentHeading(Heading):
     """Restrained headings for terminal chat output."""
 
-    def __rich_console__(
-        self, console: Console, options: ConsoleOptions
-    ) -> RenderResult:
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
         text = self.text.copy()
         text.justify = "left"
         level = int(self.tag[1:]) if self.tag[1:].isdigit() else 2
@@ -60,9 +58,7 @@ class AgentCodeBlock(CodeBlock):
         "ruby": "💎",
     }
 
-    def __rich_console__(
-        self, console: Console, options: ConsoleOptions
-    ) -> RenderResult:
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
         code = str(self.text).rstrip()
         lang = self.lexer_name or "text"
         icon = self.LANG_ICONS.get(lang.lower(), "📄")

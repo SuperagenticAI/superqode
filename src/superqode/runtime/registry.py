@@ -70,11 +70,23 @@ def _pydanticai_factory(**kwargs) -> AgentRuntime:
     return module.PydanticAIRuntime(**kwargs)
 
 
+def _codex_sdk_factory(**kwargs) -> AgentRuntime:
+    try:
+        module = importlib.import_module("superqode.runtime.codex_sdk")
+    except ImportError as exc:
+        raise RuntimeNotInstalledError(
+            "Codex SDK runtime requires the 'codex-sdk' extra. "
+            "Install with: pip install superqode[codex-sdk]"
+        ) from exc
+    return module.CodexSDKRuntime(**kwargs)
+
+
 _FACTORIES: dict[str, Callable[..., AgentRuntime]] = {
     "builtin": _builtin_factory,
     "adk": _adk_factory,
     "openai-agents": _openai_agents_factory,
     "pydanticai": _pydanticai_factory,
+    "codex-sdk": _codex_sdk_factory,
 }
 
 _DESCRIPTIONS: dict[str, str] = {
@@ -82,6 +94,7 @@ _DESCRIPTIONS: dict[str, str] = {
     "adk": "Google Agent Development Kit",
     "openai-agents": "OpenAI Agents SDK",
     "pydanticai": "PydanticAI agent framework",
+    "codex-sdk": "OpenAI Codex Python SDK / local app-server",
 }
 
 _OPTIONAL_PACKAGES: dict[str, tuple[str, str]] = {
@@ -89,6 +102,7 @@ _OPTIONAL_PACKAGES: dict[str, tuple[str, str]] = {
     "adk": ("google.adk", "superqode[adk]"),
     "openai-agents": ("agents", "superqode[openai-agents]"),
     "pydanticai": ("pydantic_ai", "superqode[pydanticai]"),
+    "codex-sdk": ("openai_codex", "superqode[codex-sdk]"),
 }
 
 

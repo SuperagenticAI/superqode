@@ -97,20 +97,15 @@ class ACPTerminalService(Protocol):
     service to own terminal rendering, lifecycle, and future PTY handling.
     """
 
-    async def create(self, params: dict) -> CreateTerminalResponse:
-        ...
+    async def create(self, params: dict) -> CreateTerminalResponse: ...
 
-    async def output(self, params: dict) -> TerminalOutputResponse:
-        ...
+    async def output(self, params: dict) -> TerminalOutputResponse: ...
 
-    async def kill(self, params: dict) -> dict:
-        ...
+    async def kill(self, params: dict) -> dict: ...
 
-    async def release(self, params: dict) -> dict:
-        ...
+    async def release(self, params: dict) -> dict: ...
 
-    async def wait_for_exit(self, params: dict) -> WaitForTerminalExitResponse:
-        ...
+    async def wait_for_exit(self, params: dict) -> WaitForTerminalExitResponse: ...
 
 
 @dataclass
@@ -214,14 +209,10 @@ class ACPClient:
             files_read=self._files_read.copy(),
             duration=monotonic() - self._start_time if self._start_time else 0.0,
             prompt_tokens=int(
-                self._usage.get("input_tokens")
-                or self._usage.get("prompt_tokens")
-                or 0
+                self._usage.get("input_tokens") or self._usage.get("prompt_tokens") or 0
             ),
             completion_tokens=int(
-                self._usage.get("output_tokens")
-                or self._usage.get("completion_tokens")
-                or 0
+                self._usage.get("output_tokens") or self._usage.get("completion_tokens") or 0
             ),
             thinking_tokens=int(self._usage.get("thought_tokens") or 0),
             cost=self._usage_cost_amount(self._usage),
@@ -312,11 +303,18 @@ class ACPClient:
                 pass
 
         if self._process:
-            self._process.terminate()
+            if self._process.returncode is None:
+                try:
+                    self._process.terminate()
+                except ProcessLookupError:
+                    pass
             try:
                 await asyncio.wait_for(self._process.wait(), timeout=5.0)
             except asyncio.TimeoutError:
-                self._process.kill()
+                try:
+                    self._process.kill()
+                except ProcessLookupError:
+                    pass
             self._process = None
 
     async def _initialize_traffic_log(self) -> None:
@@ -345,7 +343,9 @@ class ACPClient:
         else:
             agent_name = self.agent_identity or self.command.split()[0] or "agent"
             timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            log_path = default_acp_traffic_log_dir() / f"{_safe_log_name(agent_name)}-{timestamp}.jsonl"
+            log_path = (
+                default_acp_traffic_log_dir() / f"{_safe_log_name(agent_name)}-{timestamp}.jsonl"
+            )
 
         self._traffic_log_resolved_path = log_path
         await asyncio.to_thread(log_path.parent.mkdir, parents=True, exist_ok=True)
@@ -646,7 +646,9 @@ class ACPClient:
                 return
             if self._current_model_id == self.model:
                 return
-            switched = await self.set_config_option(str(model_option.get("id") or "model"), self.model)
+            switched = await self.set_config_option(
+                str(model_option.get("id") or "model"), self.model
+            )
             if switched:
                 self._current_model_id = self.model
             elif self.on_thinking:

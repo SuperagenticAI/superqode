@@ -404,7 +404,9 @@ class MCPReadResourceTool(Tool):
         server = args.get("server", "")
         uri = args.get("uri", "")
         if not server or not uri:
-            return ToolResult(success=False, output="", error="Both 'server' and 'uri' are required")
+            return ToolResult(
+                success=False, output="", error="Both 'server' and 'uri' are required"
+            )
 
         manager = await _resolve_mcp_manager(self._mcp_manager_getter)
         if not manager:
@@ -550,7 +552,9 @@ class MCPGetPromptTool(Tool):
         if not manager:
             return ToolResult(success=False, output="", error="MCP client not available")
 
-        result = await manager.get_prompt(server, prompt, {str(k): str(v) for k, v in arguments.items()})
+        result = await manager.get_prompt(
+            server, prompt, {str(k): str(v) for k, v in arguments.items()}
+        )
         if result is None:
             return ToolResult(
                 success=False,

@@ -74,7 +74,9 @@ def build_permission_handler(
     """
     ruleset = tuple(rules)
 
-    def handler(ctx: Any, name: str = "", arguments: Any = None, *_a: Any) -> Optional[HookDecision]:
+    def handler(
+        ctx: Any, name: str = "", arguments: Any = None, *_a: Any
+    ) -> Optional[HookDecision]:
         args = arguments if isinstance(arguments, dict) else {}
         rule = evaluate_permission_rules(ruleset, name, args)
         if rule is None:

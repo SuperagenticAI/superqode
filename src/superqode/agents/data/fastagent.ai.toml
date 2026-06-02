@@ -13,7 +13,7 @@ publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
 description = "Create and interact with sophisticated Agents and Workflows in minutes. MCP native."
 tags = ["workflows", "mcp", "rapid"]
-run_command."*" = "fast-agent --acp"
+run_command."*" = "uvx --from fast-agent-mcp@latest fast-agent-acp"
 
 help = '''
 # fast-agent
@@ -35,7 +35,7 @@ fast-agent allows you to create and interact with sophisticated Agents and Workf
 Install fast-agent via uv (recommended):
 
 ```bash
-uv tool install fast-agent-mcp
+uv tool install -U fast-agent-mcp
 ```
 
 Or via pip:
@@ -49,12 +49,12 @@ pip install fast-agent-mcp
 Run with ACP support:
 
 ```bash
-fast-agent --acp
+uvx --from fast-agent-mcp@latest fast-agent-acp
 ```
 
 **Requirements:**
 - Python 3.10+
-- uv (recommended) or pip
+- uv/uvx (recommended) or pip
 
 ---
 
@@ -62,5 +62,5 @@ fast-agent --acp
 '''
 
 [actions."*".install]
-command = "uv tool install fast-agent-mcp"
+command = "uv tool install -U fast-agent-mcp"
 description = "Install fast-agent via uv"

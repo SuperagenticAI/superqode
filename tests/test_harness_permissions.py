@@ -220,7 +220,9 @@ def _spec_with_rules_and_hooks():
             allow_write=True,
             allow_shell=True,
             permission_rules=(
-                PermissionRuleSpec(tool="bash", argument="command", pattern="git *", action="allow"),
+                PermissionRuleSpec(
+                    tool="bash", argument="command", pattern="git *", action="allow"
+                ),
                 PermissionRuleSpec(tool="bash", action="deny"),
             ),
         ),

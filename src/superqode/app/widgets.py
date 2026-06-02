@@ -4,6 +4,7 @@ SuperQode App Widgets - All UI widget classes.
 
 from __future__ import annotations
 
+import json
 import math
 from time import monotonic
 from typing import Any
@@ -111,6 +112,11 @@ def _format_duration(seconds: float | None) -> str:
     return f"{seconds:.0f}s"
 
 
+def _tail_nonempty_lines(text: str, limit: int = 8) -> list[str]:
+    lines = [line.rstrip() for line in str(text or "").splitlines() if line.strip()]
+    return lines[-limit:]
+
+
 class GradientLogo(Static):
     """ASCII logo with purple→pink→orange gradient - BIG display."""
 
@@ -136,6 +142,15 @@ class ColorfulStatusBar(Static):
     byok_model: reactive[str] = reactive("")
     byok_tokens: reactive[int] = reactive(0)
     byok_cost: reactive[float] = reactive(0.0)
+    context_window: reactive[int] = reactive(0)
+
+    @staticmethod
+    def _format_token_count(tokens: int) -> str:
+        if tokens >= 1_000_000:
+            return f"{tokens / 1_000_000:.1f}M".replace(".0M", "M")
+        if tokens >= 1000:
+            return f"{tokens / 1000:.1f}K".replace(".0K", "K")
+        return str(tokens)
 
     def render(self) -> Text:
         result = Text()
@@ -169,11 +184,26 @@ class ColorfulStatusBar(Static):
             # Show usage
             if self.byok_tokens > 0:
                 result.append("  ", style="")
-                if self.byok_tokens >= 1000:
-                    result.append(f"{self.byok_tokens // 1000}K", style="#06b6d4")
-                else:
-                    result.append(f"{self.byok_tokens}", style="#06b6d4")
+                result.append(self._format_token_count(self.byok_tokens), style="#06b6d4")
                 result.append(" tok", style="#52525b")
+
+            # Live context window meter: how full the model's context is.
+            if self.context_window > 0 and self.byok_tokens > 0:
+                pct = min(100, round(100 * self.byok_tokens / self.context_window))
+                if pct < 60:
+                    gauge_color = "#22c55e"
+                elif pct < 85:
+                    gauge_color = "#fbbf24"
+                else:
+                    gauge_color = "#ef4444"
+                filled = min(8, round(pct / 100 * 8))
+                result.append("  ", style="")
+                result.append("▰" * filled, style=gauge_color)
+                result.append("▱" * (8 - filled), style="#3f3f46")
+                result.append(f" {pct}%", style=gauge_color)
+                result.append(
+                    f" of {self._format_token_count(self.context_window)}", style="#52525b"
+                )
 
             # Show cost
             if self.byok_cost > 0:
@@ -186,13 +216,19 @@ class ColorfulStatusBar(Static):
         return result
 
     def update_byok_status(
-        self, provider: str = "", model: str = "", tokens: int = 0, cost: float = 0.0
+        self,
+        provider: str = "",
+        model: str = "",
+        tokens: int = 0,
+        cost: float = 0.0,
+        context_window: int = 0,
     ):
         """Update BYOK status display."""
         self.byok_provider = provider
         self.byok_model = model
         self.byok_tokens = tokens
         self.byok_cost = cost
+        self.context_window = context_window
 
 
 class GradientTagline(Static):
@@ -664,9 +700,9 @@ class HintsBar(Static):
 
         hints = [
             ("🏠 :home", THEME["cyan"]),
-            ("❓ :h [:help]", THEME["purple"]),
-            ("🚀 :i [:init]", THEME["success"]),
-            ("📚 :s [:sidebar]", THEME["cyan"]),
+            ("❓ :help", THEME["purple"]),
+            ("🚀 :init", THEME["success"]),
+            ("📚 :sidebar", THEME["cyan"]),
             ("🔌 :connect", THEME["pink"]),
             ("⌨ PgUp/PgDn", THEME["muted"]),
             ("📜 :transcript", THEME["cyan"]),
@@ -759,6 +795,9 @@ class ConversationLog(RichLog):
         # Track thinking and tool calls for agent sessions
         self._thinking_lines: list[str] = []
         self._tool_calls: list[dict] = []
+        # Session-wide record of completed tool runs (never reset per turn) so
+        # :timeline / :tools reflect the whole conversation, not just this turn.
+        self._session_tool_calls: list[dict] = []
         self._streaming_response: str = ""
         self._streaming_notice_shown: bool = False
         self._last_thinking_key: str = ""
@@ -861,16 +900,18 @@ class ConversationLog(RichLog):
 
     def add_user(self, text: str):
         self._messages.append(("user", text, ""))
-        # Use None for width to allow full width usage
-        panel = Panel(
-            Text(text, style=THEME["text"], overflow="fold"),
-            title=f"[bold {THEME['cyan']}]👩‍💻👨‍💻 >[/]",
-            border_style=THEME["border"],
-            box=ROUNDED,
-            padding=(0, 1),
-            width=None,  # Use full available width
-        )
-        self.write(panel)
+        # Clean, professional prompt echo: a subtle left accent bar and a small
+        # "you" tag, no panel box or emoji. Mirrors the restrained response
+        # styling and reads well while the answer is being generated.
+        body = Text()
+        body.append("\n")
+        body.append("  ▌ ", style=f"bold {THEME['cyan']}")
+        body.append("you\n", style=f"bold {THEME['muted']}")
+        for line in str(text).split("\n"):
+            body.append("  ▌ ", style=THEME["cyan"])
+            body.append(line, style=THEME["text"])
+            body.append("\n", style="")
+        self.write(body)
 
     def add_agent(self, text: str, agent: str = "Agent"):
         color = AGENT_COLORS.get(agent.lower(), THEME["purple"])
@@ -981,6 +1022,51 @@ class ConversationLog(RichLog):
             elif role == "info":
                 lines.append(f"Info: {text}")
         return "\n\n".join(lines)
+
+    def format_session_timeline(self) -> str:
+        """Return a replay-style timeline of messages and tool runs."""
+        tool_runs = getattr(self, "_session_tool_calls", [])
+        lines = [
+            "SuperQode Session Timeline",
+            "=" * 26,
+            "",
+            f"Messages: {len(self._messages)}   Tool runs: {len(tool_runs)}",
+            "",
+        ]
+        if not self._messages and not tool_runs:
+            lines.append("No session activity recorded yet.")
+            return "\n".join(lines)
+
+        if self._messages:
+            lines.extend(["Conversation", "------------"])
+            for index, (role, text, agent) in enumerate(self._messages, 1):
+                label = role.title()
+                if role == "agent" and agent:
+                    label = f"{agent}"
+                preview = " ".join(str(text).split())
+                if len(preview) > 220:
+                    preview = preview[:217].rstrip() + "..."
+                lines.append(f"{index:>2}. {label}: {preview}")
+            lines.append("")
+
+        if tool_runs:
+            lines.extend(["Tool Runs", "---------"])
+            for index, call in enumerate(tool_runs, 1):
+                status = str(call.get("status") or "unknown")
+                name = self._format_tool_name(str(call.get("name") or "tool")).title()
+                args = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
+                detail = self._format_tool_detail(
+                    str(call.get("name") or "tool"), args, max_length=88
+                )
+                duration = _format_duration(call.get("duration"))
+                diff = " diff" if call.get("diff_text") else ""
+                duration_suffix = f" {duration}" if duration else ""
+                lines.append(
+                    f"{index:>2}. {status:<7} {name:<14} {detail}{duration_suffix}{diff}".rstrip()
+                )
+            lines.extend(["", "Use :tools recent or :tools <number> for full tool drilldown."])
+
+        return "\n".join(lines).strip()
 
     def copy_to_clipboard(self, text: str = None) -> bool:
         """Copy text to clipboard. Returns True if successful."""
@@ -1304,6 +1390,7 @@ class ConversationLog(RichLog):
         duration: float | None = None,
         additions: int | None = None,
         deletions: int | None = None,
+        metadata: dict[str, Any] | None = None,
     ):
         """
         Add a tool call display.
@@ -1321,6 +1408,11 @@ class ConversationLog(RichLog):
             deletions: Deleted line count for file-changing tools
         """
         display_args = dict(arguments or {})
+        metadata = dict(metadata or {})
+
+        # Keep the pinned plan/todo panel in sync whenever a todo tool runs.
+        if "todo" in tool_name.lower():
+            self._sync_todo_panel(tool_name, display_args, output)
         if file_path and not any(
             key in display_args for key in ("path", "file_path", "filePath", "target_file")
         ):
@@ -1335,6 +1427,12 @@ class ConversationLog(RichLog):
                 "path": file_path,
                 "command": command,
                 "arguments": display_args,
+                "output": output,
+                "diff_text": diff_text,
+                "duration": duration,
+                "additions": additions,
+                "deletions": deletions,
+                "metadata": metadata,
             }
         )
 
@@ -1433,7 +1531,13 @@ class ConversationLog(RichLog):
         )
         if detail:
             line.append("  ", style=THEME["dim"])
-            line.append(detail, style=THEME["muted"])
+            detail_style = THEME["muted"]
+            # Make file targets clickable (OSC-8) so supporting terminals can
+            # open them in the user's editor/viewer.
+            link = self._file_link_for(file_path or display_args)
+            if link:
+                detail_style = f"{THEME['muted']} link {link}"
+            line.append(detail, style=detail_style)
 
         meta_parts: list[tuple[str, str]] = []
         duration_label = _format_duration(duration)
@@ -1453,7 +1557,7 @@ class ConversationLog(RichLog):
                     line.append(" ", style=THEME["dim"])
                 line.append(label, style=f"bold {style}" if label.startswith(("+", "-")) else style)
 
-        if output and status in ("success", "error"):
+        if output and status == "success":
             summary = summarize_tool_output(
                 tool_name,
                 status,
@@ -1467,15 +1571,178 @@ class ConversationLog(RichLog):
         line.append("\n")
         self.write(line)
 
-        if (
-            diff_text
-            and status == "success"
-            and mode != "minimal"
-        ):
+        if status == "error":
+            self.write(
+                self._render_tool_failure_card(
+                    tool_name,
+                    display_args,
+                    output,
+                    duration=duration,
+                    metadata=metadata,
+                )
+            )
+
+        if diff_text and status == "success" and mode != "minimal":
             from superqode.widgets.response_changes import render_diff_text
 
             max_lines = 120 if mode == "verbose" else 48
             self.write(render_diff_text(diff_text, max_lines=max_lines))
+
+        # Record completed runs session-wide (after duration is resolved) so the
+        # timeline/tool index survive the per-turn reset of ``_tool_calls``.
+        if status in ("success", "error"):
+            if not hasattr(self, "_session_tool_calls"):
+                self._session_tool_calls = []
+            self._session_tool_calls.append(
+                {
+                    "name": tool_name,
+                    "status": status,
+                    "path": file_path,
+                    "command": command,
+                    "arguments": display_args,
+                    "output": output,
+                    "diff_text": diff_text,
+                    "duration": duration,
+                    "additions": additions,
+                    "deletions": deletions,
+                    "metadata": metadata,
+                }
+            )
+
+    @staticmethod
+    def _file_link_for(source: Any) -> str:
+        """Return a file:// URL for a tool's target path, if it resolves."""
+        candidate = ""
+        if isinstance(source, str):
+            candidate = source
+        elif isinstance(source, dict):
+            for key in ("path", "file_path", "filePath", "target_file", "file"):
+                value = source.get(key)
+                if value:
+                    candidate = str(value)
+                    break
+        if not candidate:
+            return ""
+        try:
+            from pathlib import Path as _Path
+
+            path = _Path(candidate).expanduser()
+            if not path.is_absolute():
+                path = _Path.cwd() / path
+            if path.exists():
+                return path.resolve().as_uri()
+        except Exception:
+            return ""
+        return ""
+
+    def _sync_todo_panel(self, tool_name: str, arguments: dict[str, Any], output: str) -> None:
+        """Forward todo data to the app's live plan panel, if present."""
+        setter = getattr(self.app, "_set_todos", None)
+        if not callable(setter):
+            return
+        todos = None
+        if isinstance(arguments, dict) and isinstance(arguments.get("todos"), list):
+            todos = arguments["todos"]
+        elif output:
+            try:
+                import json
+
+                parsed = json.loads(str(output))
+                if isinstance(parsed, list):
+                    todos = parsed
+                elif isinstance(parsed, dict) and isinstance(parsed.get("todos"), list):
+                    todos = parsed["todos"]
+            except Exception:
+                todos = None
+        if todos is not None:
+            try:
+                setter(todos)
+            except Exception:
+                pass
+
+    def recent_tool_runs(self, limit: int = 12) -> list[dict[str, Any]]:
+        """Return recent tool call records, newest last."""
+        if limit <= 0:
+            return []
+        return list(getattr(self, "_session_tool_calls", [])[-limit:])
+
+    def format_tool_runs_index(self, limit: int = 12) -> str:
+        """Return a compact numbered index of recent tool runs."""
+        calls = self.recent_tool_runs(limit)
+        if not calls:
+            return "No tool runs recorded yet."
+        lines = [f"Recent tool runs ({len(calls)})", ""]
+        start = len(getattr(self, "_session_tool_calls", [])) - len(calls) + 1
+        for offset, call in enumerate(calls):
+            number = start + offset
+            status = str(call.get("status") or "unknown")
+            name = self._format_tool_name(str(call.get("name") or "tool")).title()
+            detail = self._format_tool_detail(
+                str(call.get("name") or "tool"),
+                call.get("arguments") if isinstance(call.get("arguments"), dict) else {},
+                max_length=72,
+            )
+            duration = _format_duration(call.get("duration"))
+            suffix = f"  {duration}" if duration else ""
+            lines.append(f"{number:>2}. {status:<7} {name:<14} {detail}{suffix}".rstrip())
+        lines.extend(["", "Use :tools <number> to inspect one run."])
+        return "\n".join(lines)
+
+    def format_tool_run_detail(self, index: int) -> str:
+        """Return a drilldown document for a recorded tool run."""
+        session_calls = getattr(self, "_session_tool_calls", [])
+        if index < 1 or index > len(session_calls):
+            return f"No tool run #{index}. Use :tools recent."
+        call = session_calls[index - 1]
+        name = str(call.get("name") or "tool")
+        status = str(call.get("status") or "unknown")
+        args = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
+        metadata = call.get("metadata") if isinstance(call.get("metadata"), dict) else {}
+        output = str(call.get("output") or "").strip()
+        diff_text = str(call.get("diff_text") or "").strip()
+        duration = _format_duration(call.get("duration"))
+        command = str(metadata.get("command") or call.get("command") or args.get("command") or "")
+        cwd = str(metadata.get("cwd") or args.get("cwd") or "")
+        exit_code = metadata.get("exit_code")
+        timed_out = bool(metadata.get("timed_out"))
+        timeout = metadata.get("timeout")
+
+        lines = [
+            "SuperQode Tool Run",
+            "=" * 19,
+            "",
+            f"Run:      #{index}",
+            f"Tool:     {name}",
+            f"Status:   {status}",
+        ]
+        if duration:
+            lines.append(f"Duration: {duration}")
+        if command:
+            lines.append(f"Command:  {command}")
+        if cwd:
+            lines.append(f"Cwd:      {cwd}")
+        if exit_code is not None:
+            lines.append(f"Exit:     {exit_code}")
+        if timed_out:
+            timeout_label = f" after {timeout}s" if timeout else ""
+            lines.append(f"Timeout:  yes{timeout_label}")
+
+        if args:
+            lines.extend(["", "Arguments", "---------"])
+            lines.append(json.dumps(args, indent=2, sort_keys=True, default=str))
+        if metadata:
+            lines.extend(["", "Metadata", "--------"])
+            lines.append(json.dumps(metadata, indent=2, sort_keys=True, default=str))
+        if output:
+            lines.extend(["", "Output", "------"])
+            lines.append(output)
+        if diff_text:
+            lines.extend(["", "Diff", "----"])
+            lines.append(diff_text)
+        if not output and not diff_text:
+            lines.extend(["", "No output or diff was recorded for this run."])
+        lines.extend(["", "Actions: copy this view, rerun/copy command from your shell."])
+        return "\n".join(lines).strip()
 
     def _active_tool_matches(
         self,
@@ -1531,6 +1798,77 @@ class ConversationLog(RichLog):
         panel.update(self._active_tools_renderable())
         panel.add_class("visible")
 
+    def _render_tool_failure_card(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        output: str,
+        *,
+        duration: float | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> Panel:
+        """Render a focused failure card for failed tools/commands."""
+        metadata = metadata or {}
+        body = Text()
+        body.append("Command failed\n\n", style=f"bold {THEME['error']}")
+
+        command = (
+            metadata.get("command")
+            or arguments.get("command")
+            or arguments.get("cmd")
+            or arguments.get("path")
+            or arguments.get("file_path")
+            or ""
+        )
+        cwd = metadata.get("cwd") or arguments.get("cwd") or arguments.get("working_dir") or ""
+        exit_code = metadata.get("exit_code")
+        timeout = metadata.get("timeout")
+        timed_out = bool(metadata.get("timed_out")) or "timed out" in str(output).lower()
+
+        facts: list[str] = []
+        duration_label = _format_duration(duration)
+        if duration_label:
+            facts.append(duration_label)
+        if timed_out:
+            facts.append(
+                f"timeout {timeout:g}s" if isinstance(timeout, (int, float)) else "timeout"
+            )
+        elif exit_code not in (None, ""):
+            facts.append(f"exit {exit_code}")
+        if facts:
+            body.append("Status: ", style=THEME["muted"])
+            body.append("  •  ".join(facts), style=THEME["text"])
+            body.append("\n")
+        if command:
+            body.append("Run: ", style=THEME["muted"])
+            body.append(_clip_single_line(str(command), 180), style=THEME["text"])
+            body.append("\n")
+        if cwd:
+            body.append("Cwd: ", style=THEME["muted"])
+            body.append(_clip_single_line(str(cwd), 180), style=THEME["muted"])
+            body.append("\n")
+
+        tail = _tail_nonempty_lines(output, limit=8)
+        if tail:
+            body.append("\nLast output:\n", style=THEME["muted"])
+            for line in tail:
+                body.append("  ")
+                body.append(_clip_single_line(line, 220), style=THEME["error"])
+                body.append("\n")
+        else:
+            body.append("\nNo output captured.\n", style=THEME["muted"])
+
+        body.append("\n")
+        body.append(":work verbose", style=f"bold {THEME['cyan']}")
+        body.append(" for full tool output", style=THEME["muted"])
+        return Panel(
+            body,
+            title=f"[bold {THEME['error']}]Tool failed: {self._format_tool_name(tool_name).title()}[/]",
+            border_style=THEME["error"],
+            box=ROUNDED,
+            padding=(1, 2),
+        )
+
     def _format_tool_name(self, tool_name: str) -> str:
         """Make common tool names read like concise actions."""
         name = tool_name.replace("_", " ").replace("-", " ").strip()
@@ -1561,11 +1899,16 @@ class ConversationLog(RichLog):
         }
         return aliases.get(name.lower(), name)
 
-    def _format_tool_detail(self, tool_name: str, arguments: dict[str, Any], max_length: int) -> str:
+    def _format_tool_detail(
+        self, tool_name: str, arguments: dict[str, Any], max_length: int
+    ) -> str:
         """Return the important target for a tool row without noisy JSON."""
         lower = tool_name.lower()
         keys_by_kind = (
-            (("read", "write", "edit", "patch", "create"), ("path", "file_path", "filePath", "target_file")),
+            (
+                ("read", "write", "edit", "patch", "create"),
+                ("path", "file_path", "filePath", "target_file"),
+            ),
             (("bash", "shell", "terminal", "exec"), ("command", "cmd")),
             (("grep", "search", "repo_search"), ("pattern", "query", "search")),
             (("glob", "list", "ls"), ("path", "directory", "pattern")),

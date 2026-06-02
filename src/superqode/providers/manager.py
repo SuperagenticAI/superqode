@@ -610,30 +610,36 @@ class ProviderManager:
             ProviderInfo(
                 id="anthropic",
                 name="Anthropic",
-                description="Latest Claude Opus 4.6 and Claude 4.5 models from models.dev",
+                description="Latest Claude Opus 4.8, Opus 4.7, Sonnet 4.6, and Haiku 4.5 models from models.dev",
                 requires_api_key=True,
                 configured=self._is_provider_configured("anthropic"),
                 models=[
                     ModelInfo(
-                        "claude-opus-4-6",
-                        "Claude Opus 4.6 (Latest/New)",
+                        "claude-opus-4-8",
+                        "Claude Opus 4.8 (Latest)",
                         "anthropic",
                         context_size=1000000,
                     ),
                     ModelInfo(
-                        "claude-opus-4-5-20251101",
-                        "Claude Opus 4.5 (Latest)",
+                        "claude-opus-4-7",
+                        "Claude Opus 4.7",
+                        "anthropic",
+                        context_size=1000000,
+                    ),
+                    ModelInfo(
+                        "claude-sonnet-4-6",
+                        "Claude Sonnet 4.6",
+                        "anthropic",
+                        context_size=1000000,
+                    ),
+                    ModelInfo(
+                        "claude-opus-4-5",
+                        "Claude Opus 4.5",
                         "anthropic",
                         context_size=200000,
                     ),
                     ModelInfo(
-                        "claude-sonnet-4-5-20250929",
-                        "Claude Sonnet 4.5",
-                        "anthropic",
-                        context_size=200000,
-                    ),
-                    ModelInfo(
-                        "claude-haiku-4-5-20251001",
+                        "claude-haiku-4-5",
                         "Claude Haiku 4.5",
                         "anthropic",
                         context_size=200000,

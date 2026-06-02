@@ -232,9 +232,7 @@ async def test_plugin_hooks_fire_during_loop(tmp_path, plugin_handler_module):
     loop = AgentLoop(
         gateway=gateway,
         tools=tools,
-        config=AgentConfig(
-            provider="synthetic", model="passthrough", working_directory=tmp_path
-        ),
+        config=AgentConfig(provider="synthetic", model="passthrough", working_directory=tmp_path),
         hooks=registry,
     )
     await loop.run("trigger echo")
@@ -247,9 +245,7 @@ async def test_plugin_hooks_fire_during_loop(tmp_path, plugin_handler_module):
 
 
 @pytest.mark.asyncio
-async def test_misbehaving_plugin_hook_does_not_crash_loop(
-    tmp_path, plugin_handler_module
-):
+async def test_misbehaving_plugin_hook_does_not_crash_loop(tmp_path, plugin_handler_module):
     registry = HookRegistry()
     manifest = PluginManifest(
         id="p1",
@@ -266,9 +262,7 @@ async def test_misbehaving_plugin_hook_does_not_crash_loop(
     loop = AgentLoop(
         gateway=PassthroughGateway(),
         tools=ToolRegistry(),
-        config=AgentConfig(
-            provider="synthetic", model="passthrough", working_directory=tmp_path
-        ),
+        config=AgentConfig(provider="synthetic", model="passthrough", working_directory=tmp_path),
         hooks=registry,
     )
     response = await loop.run("hello")
@@ -340,9 +334,7 @@ def test_lifecycle_context_carries_session_info(plugin_handler_module, tmp_path)
     loop = AgentLoop(
         gateway=PassthroughGateway(),
         tools=ToolRegistry(),
-        config=AgentConfig(
-            provider="synthetic", model="passthrough", working_directory=tmp_path
-        ),
+        config=AgentConfig(provider="synthetic", model="passthrough", working_directory=tmp_path),
         hooks=registry,
     )
     asyncio.run(loop.run("hi"))

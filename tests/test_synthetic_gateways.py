@@ -88,7 +88,7 @@ async def test_passthrough_fixed_response_is_sticky():
 async def test_passthrough_call_tool_indicator():
     gw = PassthroughGateway()
     args = {"path": "src/foo.py"}
-    user_msg = f'{CALL_TOOL_INDICATOR} read_file {json.dumps(args)}'
+    user_msg = f"{CALL_TOOL_INDICATOR} read_file {json.dumps(args)}"
     response = await gw.chat_completion(
         messages=[Message(role="user", content=user_msg)],
         model="passthrough",

@@ -147,7 +147,15 @@ class BashTool(Tool):
         except asyncio.TimeoutError:
             process.kill()
             return ToolResult(
-                success=False, output="", error=f"Command timed out after {timeout} seconds"
+                success=False,
+                output="",
+                error=f"Command timed out after {timeout} seconds",
+                metadata={
+                    "command": command,
+                    "cwd": str(cwd),
+                    "timed_out": True,
+                    "timeout": timeout,
+                },
             )
 
         # Decode output
@@ -249,6 +257,13 @@ class BashTool(Tool):
                 success=False,
                 output="".join(output_chunks),
                 error=f"Command timed out after {timeout} seconds",
+                metadata={
+                    "command": command,
+                    "cwd": str(cwd),
+                    "timed_out": True,
+                    "timeout": timeout,
+                    "streamed": True,
+                },
             )
 
         output = "".join(output_chunks)

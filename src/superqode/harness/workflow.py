@@ -204,7 +204,9 @@ async def run_workflow(
         cwd=evidence_cwd,
     )
     validation_failed = validation["status"] == "failed"
-    final_status = "failed" if validation_failed and kernel.spec.validation.fail_on_error else "succeeded"
+    final_status = (
+        "failed" if validation_failed and kernel.spec.validation.fail_on_error else "succeeded"
+    )
     _append_workflow_event(
         kernel,
         workflow_run_id,
@@ -618,7 +620,12 @@ async def _run_validation_steps(
             {"name": step.name, "command": step.command, "timeout": step.timeout},
         )
         result = await asyncio.to_thread(_run_validation_command, step.command, cwd, step.timeout)
-        step_result = {"name": step.name, "command": step.command, "timeout": step.timeout, **result}
+        step_result = {
+            "name": step.name,
+            "command": step.command,
+            "timeout": step.timeout,
+            **result,
+        }
         results.append(step_result)
         _append_workflow_event(
             kernel,

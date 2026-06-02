@@ -228,11 +228,11 @@ AGENTS: Dict[str, AgentDef] = {
         status=AgentStatus.SUPPORTED,
         description="Sophisticated agent workflows in minutes",
         auth_info="API key via config",
-        setup_command="uv tool install fast-agent-mcp",
+        setup_command="uv tool install -U fast-agent-mcp",
         docs_url="https://github.com/evalstate/fast-agent",
         capabilities=["Workflows", "MCP native", "Fast setup"],
         connection_type="stdio",
-        command="fast-agent --acp",
+        command="uvx --from fast-agent-mcp@latest fast-agent-acp",
     ),
     "llmling-agent": AgentDef(
         id="llmling-agent",
@@ -452,6 +452,38 @@ AGENTS: Dict[str, AgentDef] = {
         command="pi-acp",
     ),
 }
+
+
+def _merge_registry_agents_into_legacy_list() -> None:
+    """Backfill the legacy ``AGENTS`` map from the TOML/official ACP catalog.
+
+    Older CLI paths still read this static map directly. The maintained ACP
+    catalog now lives in TOML plus the official docs mirror, so we supplement
+    the old map without overriding curated entries that already have richer
+    capabilities/auth text.
+    """
+    for metadata in get_all_registry_agents().values():
+        agent_id = metadata["short_name"]
+        if not agent_id or agent_id in AGENTS:
+            continue
+        run_command = metadata["run_command"]
+        AGENTS[agent_id] = AgentDef(
+            id=agent_id,
+            name=metadata["name"],
+            protocol=AgentProtocol.ACP,
+            status=AgentStatus.SUPPORTED if run_command else AgentStatus.COMING_SOON,
+            description=metadata["description"],
+            auth_info="See the agent's own ACP/authentication documentation",
+            setup_command=metadata["installation_command"]
+            or "See official ACP agent documentation",
+            docs_url=metadata["url"],
+            capabilities=["ACP"],
+            connection_type="stdio",
+            command=run_command or None,
+        )
+
+
+_merge_registry_agents_into_legacy_list()
 
 
 # =============================================================================

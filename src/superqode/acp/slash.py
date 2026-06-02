@@ -38,9 +38,7 @@ if TYPE_CHECKING:
 
 
 # A handler returns either a string (sync) or an awaitable producing a string.
-SlashCommandHandlerFn = Callable[
-    ["ACPClient", str], Union[str, Awaitable[str]]
-]
+SlashCommandHandlerFn = Callable[["ACPClient", str], Union[str, Awaitable[str]]]
 
 
 class UnknownSlashCommandError(KeyError):
@@ -168,10 +166,7 @@ async def handle_model(client: "ACPClient", _args: str) -> str:
 async def handle_session(client: "ACPClient", _args: str) -> str:
     sid = client.get_session_id() or "<none>"
     resume = "yes" if client.supports_resume() else "no"
-    return (
-        f"session_id: {sid}\n"
-        f"agent supports resume: {resume}"
-    )
+    return f"session_id: {sid}\nagent supports resume: {resume}"
 
 
 async def handle_history(client: "ACPClient", args: str) -> str:
