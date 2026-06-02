@@ -76,9 +76,7 @@ class ToolCallTracker:
                 self._rekey_open_state(state, tool_use_id)
 
         if state is None:
-            state = ToolCallState(
-                tool_use_id=tool_use_id, name=name, kind=kind, index=index
-            )
+            state = ToolCallState(tool_use_id=tool_use_id, name=name, kind=kind, index=index)
             self._open_by_id[tool_use_id] = state
         else:
             # Real name beats generic placeholder. Specialized kind beats 'tool'.

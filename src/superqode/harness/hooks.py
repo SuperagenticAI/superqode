@@ -95,10 +95,7 @@ def _safe_preview(value: Any, *, key: str = "") -> Any:
     if any(part in lowered for part in _SENSITIVE_KEY_PARTS):
         return _REDACTED
     if isinstance(value, dict):
-        return {
-            str(k): _safe_preview(v, key=str(k))
-            for k, v in list(value.items())[:20]
-        }
+        return {str(k): _safe_preview(v, key=str(k)) for k, v in list(value.items())[:20]}
     if isinstance(value, (list, tuple)):
         return [_safe_preview(item) for item in list(value)[:20]]
     if isinstance(value, (str, bytes)):
@@ -159,9 +156,7 @@ def register_store_forwarders(
     """
 
     def emit(event_type: str, data: dict[str, Any]) -> None:
-        event_sink.append(
-            HarnessEvent(type=event_type, data=data, session_id=session_id)
-        )
+        event_sink.append(HarnessEvent(type=event_type, data=data, session_id=session_id))
 
     def on_session_start(ctx: Any, prompt: str = "", *_a: Any) -> None:
         emit("harness.session.start", {"session_id": getattr(ctx, "session_id", session_id)})
@@ -227,9 +222,8 @@ def build_hook_registry(
     # hook deny a call this policy would have allowed.
     from .approval_memory import load_approval_memory_rules
 
-    permission_rules = (
-        tuple(spec.execution_policy.permission_rules)
-        + load_approval_memory_rules(spec)
+    permission_rules = tuple(spec.execution_policy.permission_rules) + load_approval_memory_rules(
+        spec
     )
     if permission_rules:
         from .permissions import build_permission_handler

@@ -92,13 +92,9 @@ def test_hooks_round_trip_serialization():
 
 def test_hook_rule_requires_point_and_handler():
     with pytest.raises(ValueError):
-        harness_spec_from_dict(
-            {"name": "h", "hooks": {"rules": [{"handler": "x:y"}]}}
-        )
+        harness_spec_from_dict({"name": "h", "hooks": {"rules": [{"handler": "x:y"}]}})
     with pytest.raises(ValueError):
-        harness_spec_from_dict(
-            {"name": "h", "hooks": {"rules": [{"point": "stop"}]}}
-        )
+        harness_spec_from_dict({"name": "h", "hooks": {"rules": [{"point": "stop"}]}})
 
 
 def test_hooks_omitted_when_default():
@@ -132,9 +128,7 @@ def test_build_registry_registers_declared_rule():
 def test_build_registry_collects_resolution_errors():
     spec = HarnessSpec(
         name="h",
-        hooks=HooksSpec(
-            rules=(HookRuleSpec(point=STOP, handler="no.such.module:fn"),)
-        ),
+        hooks=HooksSpec(rules=(HookRuleSpec(point=STOP, handler="no.such.module:fn"),)),
     )
     registry, errors = build_hook_registry(spec)
     assert len(errors) == 1
@@ -232,9 +226,7 @@ def test_build_registry_emits_hook_resolution_errors_to_store():
     sink: list[HarnessEvent] = []
     spec = HarnessSpec(
         name="h",
-        hooks=HooksSpec(
-            rules=(HookRuleSpec(point=STOP, handler="no.such.module:fn", name="bad"),)
-        ),
+        hooks=HooksSpec(rules=(HookRuleSpec(point=STOP, handler="no.such.module:fn", name="bad"),)),
     )
     _registry, errors = build_hook_registry(spec, event_sink=sink, session_id="sess-1")
     assert len(errors) == 1

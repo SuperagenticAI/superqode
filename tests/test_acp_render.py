@@ -12,13 +12,37 @@ import pytest
 from superqode.acp.render import (
     NORMAL_DIFF_MAX_LINES,
     count_line_changes,
+    display_title_from_update,
     extract_diff_blocks,
+    extract_raw_output_text,
     extract_text_blocks,
+    extract_tool_arguments,
+    normalize_acp_tool_status,
     render_acp_tool_output,
     render_unified_diff,
     should_suppress_output,
     summarize_diff_blocks,
 )
+
+
+def test_normalize_acp_tool_status_accepts_common_agent_spellings():
+    assert normalize_acp_tool_status("done") == "completed"
+    assert normalize_acp_tool_status("success") == "completed"
+    assert normalize_acp_tool_status("errored") == "failed"
+    assert normalize_acp_tool_status("in-progress") == "running"
+    assert normalize_acp_tool_status("") == "running"
+
+
+def test_display_title_and_arguments_from_update_are_tolerant():
+    update = {"name": "read_file", "arguments": {"path": "a.py"}}
+    assert display_title_from_update(update) == "read_file"
+    assert extract_tool_arguments(update) == {"path": "a.py"}
+
+
+def test_extract_raw_output_text_prefers_stdout_over_dict_dump():
+    assert extract_raw_output_text({"stdout": "ok", "metadata": {"x": 1}}) == "ok"
+    compact = extract_raw_output_text({"metadata": {"x": 1}})
+    assert compact == '{"metadata": {"x": 1}}'
 
 
 # ---------------------------------------------------------------------------

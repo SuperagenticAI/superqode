@@ -25,6 +25,7 @@ Known gaps (deferred to v2 — listed in docs/runtimes.md):
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import uuid
 from pathlib import Path
@@ -194,12 +195,18 @@ class ADKRuntime:
         )
 
         self._session_service = InMemorySessionService()
-        self._runner = Runner(
-            app_name=self._app_name,
-            agent=self._agent,
-            session_service=self._session_service,
-            auto_create_session=True,
-        )
+        runner_kwargs = {
+            "app_name": self._app_name,
+            "agent": self._agent,
+            "session_service": self._session_service,
+        }
+        try:
+            runner_params = inspect.signature(Runner).parameters
+        except (TypeError, ValueError):
+            runner_params = {}
+        if "auto_create_session" in runner_params:
+            runner_kwargs["auto_create_session"] = True
+        self._runner = Runner(**runner_kwargs)
         self._cancelled = False
 
     # ------------------------------------------------------------------

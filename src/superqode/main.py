@@ -1516,9 +1516,13 @@ def harness_evidence(run_id, store_path, json_output):
 
 @harness.command("replay")
 @click.argument("run_id")
-@click.option("--execute", is_flag=True, help="Re-run the prompt instead of only showing the replay plan")
+@click.option(
+    "--execute", is_flag=True, help="Re-run the prompt instead of only showing the replay plan"
+)
 @click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), default=None)
-@click.option("--prompt", default=None, help="Exact prompt to replay when the run did not store one")
+@click.option(
+    "--prompt", default=None, help="Exact prompt to replay when the run did not store one"
+)
 @click.option("--provider", default=None, help="Provider override for --execute")
 @click.option("--model", "model_name", default=None, help="Model override for --execute")
 @click.option("--runtime", "runtime_name", default=None, help="Runtime override for --execute")
@@ -1666,7 +1670,12 @@ def harness_fork(run_id, store_path, after, session_id, json_output):
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def harness_graph(run_id, spec_path, store_path, json_output):
     """Show a planned HarnessSpec graph or persisted event graph for a run."""
-    from superqode.harness import FileHarnessStore, load_harness_spec, plan_harness_graph, render_harness_graph
+    from superqode.harness import (
+        FileHarnessStore,
+        load_harness_spec,
+        plan_harness_graph,
+        render_harness_graph,
+    )
 
     if spec_path is not None:
         graph = plan_harness_graph(load_harness_spec(spec_path))
@@ -2584,16 +2593,6 @@ import rich.box
 
 from superqode.providers import ProviderManager
 from superqode.dialogs import ProviderDialog, ModelDialog, ConnectDialog
-from superqode.tui import (
-    SuperQodeUI,
-    ThinkingSpinner,
-    ResponsePanel,
-    print_disconnect_message,
-    print_exit_message,
-)
-
-# Alias for backward compatibility
-SuperQodeTUI = SuperQodeUI
 
 # LLM provider management
 from superqode.providers.manager import ProviderManager

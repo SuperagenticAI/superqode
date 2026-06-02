@@ -52,7 +52,7 @@ async def get_acp_agent_models(acp_client: Any) -> List[ACPModel]:
 
         models = []
         for m in raw_models:
-            model_id = m.get("id", "")
+            model_id = m.get("id") or m.get("modelId") or m.get("modelID") or m.get("value") or ""
             model_name = m.get("name", model_id)
 
             # Determine if model is free. Prefer dynamic pricing/capability metadata

@@ -118,6 +118,7 @@ Runtime backends are interchangeable execution adapters behind the same harness 
 | `builtin` | default | You want the native SuperQode coding loop, local-model tuning, and the full harness policy surface |
 | `adk` | optional | You want to run through Google ADK while keeping SuperQode harness configuration |
 | `openai-agents` | optional | You want OpenAI Agents SDK behavior, sessions, and tool plumbing |
+| `codex-sdk` | optional | You want official OpenAI Codex SDK behavior through SuperQode runtime and HarnessSpec selection |
 | `deepagents` | optional | You want DeepAgents graph, middleware, and subagent behavior for tool-capable coding harnesses |
 | `pydanticai` | optional | You want PydanticAI behavior with SuperQode tools and HarnessSpec policy |
 
@@ -131,6 +132,12 @@ PydanticAI MCP toolsets from `runtime.config.pydanticai.mcp_config_path`, uses P
 models from `model_policy.fallbacks`, and can enable Logfire instrumentation through `observability.traces`
 or `runtime.config.pydanticai.logfire`. Prefect and DBOS durable wrappers are available through
 `runtime.config.pydanticai.durable`; Temporal still requires an explicit workflow and worker.
+
+The `codex-sdk` backend uses the published `openai-codex` Python package. The local
+`reference/codex/sdk/python` checkout is reference material only; SuperQode runtime code must not import
+or vendor it. `codex-sdk` streams Codex model, command, patch, and turn events into SuperQode's normalized
+harness events. Interactive approval pause/resume is not bridged yet, so unresolved `ASK` approvals are
+rejected by default for safety.
 
 ### CLI
 

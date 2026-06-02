@@ -32,6 +32,8 @@ from .store import (
 )
 from .workflow_presets import apply_workflow_preset
 
+LOCAL_PROVIDER_ALIASES = {"local"}
+
 
 @dataclass(frozen=True)
 class HarnessCheck:
@@ -99,7 +101,10 @@ def inspect_harness(
     inspection = inspect_harness_backend(backend_name, spec, sandbox_backend=sandbox_name)
     graph = plan_harness_graph(spec)
     tools = sorted({tool for agent in spec.agents for tool in agent.tools})
-    skills = sorted({skill for agent in spec.agents for skill in agent.skills} | set(spec.metadata.get("skills", ())))
+    skills = sorted(
+        {skill for agent in spec.agents for skill in agent.skills}
+        | set(spec.metadata.get("skills", ()))
+    )
     return {
         "name": spec.name,
         "version": spec.version,
@@ -242,7 +247,9 @@ def doctor_harness(
         add(
             "compatibility",
             "ok" if inspection.ok else "error",
-            "Backend can run this spec." if inspection.ok else "Backend/spec compatibility is blocked.",
+            "Backend can run this spec."
+            if inspection.ok
+            else "Backend/spec compatibility is blocked.",
             issues=[issue.to_dict() for issue in inspection.issues],
             fix="Select a compatible runtime or adjust the harness flavor/tools.",
         )
@@ -284,10 +291,17 @@ def doctor_harness(
     add("sandbox", sandbox_check["status"], sandbox_check["message"], **sandbox_check["data"])
 
     validation_check = _validation_check(spec, root)
-    add("validation", validation_check["status"], validation_check["message"], **validation_check["data"])
+    add(
+        "validation",
+        validation_check["status"],
+        validation_check["message"],
+        **validation_check["data"],
+    )
 
     store_kind = spec.observability.run_store
-    target_root = _resolve(root, store_root if store_root is not None else spec.context.session_storage)
+    target_root = _resolve(
+        root, store_root if store_root is not None else spec.context.session_storage
+    )
     try:
         create_harness_store(store_kind, target_root)
         _assert_store_writable(store_kind, target_root)
@@ -317,7 +331,9 @@ def doctor_harness(
 
     add(
         "event_graph",
-        "ok" if backend_name in {"builtin", "pydanticai", "openai-agents", "deepagents"} else "warning",
+        "ok"
+        if backend_name in {"builtin", "pydanticai", "openai-agents", "deepagents"}
+        else "warning",
         (
             f"Backend '{backend_name}' emits rich graph events."
             if backend_name in {"builtin", "pydanticai", "openai-agents", "deepagents"}
@@ -385,7 +401,9 @@ def build_harness_evidence(store: FileHarnessStore, run_id: str) -> dict[str, An
         or event.type == "approval_required"
     ]
     validation_events = [event for event in events if event.type.startswith("validation.")]
-    final_event = next((event for event in reversed(events) if event.type == "workflow.result"), None)
+    final_event = next(
+        (event for event in reversed(events) if event.type == "workflow.result"), None
+    )
     completed_event = next(
         (event for event in reversed(events) if event.type == "workflow.run.completed"),
         None,
@@ -425,9 +443,7 @@ def build_harness_evidence(store: FileHarnessStore, run_id: str) -> dict[str, An
             "mode": metadata.get("workflow_mode")
             or (completed_event.data.get("mode") if completed_event else ""),
             "step_events": len(step_events),
-            "completed_steps": [
-                _workflow_step_summary(event) for event in completed_steps
-            ],
+            "completed_steps": [_workflow_step_summary(event) for event in completed_steps],
             "failed_steps": [_workflow_step_summary(event) for event in failed_steps],
             "child_run_ids": child_run_ids,
         },
@@ -472,7 +488,9 @@ def build_harness_replay_plan(store: FileHarnessStore, run_id: str) -> dict[str,
         ),
         None,
     )
-    stored_prompt = run.metadata.get("prompt") if isinstance(run.metadata.get("prompt"), str) else ""
+    stored_prompt = (
+        run.metadata.get("prompt") if isinstance(run.metadata.get("prompt"), str) else ""
+    )
     replayable = bool(stored_prompt)
     return {
         "run": {
@@ -502,7 +520,9 @@ def build_harness_replay_plan(store: FileHarnessStore, run_id: str) -> dict[str,
         "prompt": stored_prompt,
         "limitations": []
         if replayable
-        else ["No full prompt is stored for this run; pass --prompt or set context.prompt_persistence: full."],
+        else [
+            "No full prompt is stored for this run; pass --prompt or set context.prompt_persistence: full."
+        ],
         "commands": {
             "fork": f"superqode harness fork {run.run_id}",
             "events": f"superqode harness events {run.run_id}",
@@ -600,8 +620,7 @@ def render_harness_evidence(evidence: dict[str, Any]) -> str:
         )
     for step in failed_steps:
         lines.append(
-            f"  - failed {step['step_id']}"
-            + (f" ({step['detail']})" if step.get("detail") else "")
+            f"  - failed {step['step_id']}" + (f" ({step['detail']})" if step.get("detail") else "")
         )
     lines.extend(["", _changes_line(changes), _validation_line(validation)])
     approvals = evidence.get("approvals") or []
@@ -682,9 +701,7 @@ def render_harness_inspect(summary: dict[str, Any]) -> str:
         suffix = "" if hooks.get("enabled", True) else " (disabled)"
         lines.append(f"Hooks ({hooks.get('count', 0)}){suffix}:")
         for entry in builtin_entries:
-            lines.append(
-                f"  - {entry['point']}  {entry['handler']} ({entry['rules']} rule(s))"
-            )
+            lines.append(f"  - {entry['point']}  {entry['handler']} ({entry['rules']} rule(s))")
         for entry in hook_entries:
             extra = ""
             if entry.get("matcher"):
@@ -704,7 +721,9 @@ def render_harness_inspect(summary: dict[str, Any]) -> str:
         )
     if not summary["agents"]:
         lines.append("  - prompt step generated at run time")
-    lines.extend(["", "Planned graph:", render_harness_graph(plan_harness_graph_from_summary(summary))])
+    lines.extend(
+        ["", "Planned graph:", render_harness_graph(plan_harness_graph_from_summary(summary))]
+    )
     return "\n".join(lines).rstrip()
 
 
@@ -747,7 +766,9 @@ def render_harness_graph(graph: HarnessEventGraph) -> str:
     for edge in graph.edges:
         children.setdefault(edge.source, []).append(edge.target)
         incoming.add(edge.target)
-    roots = [node.node_id for node in graph.nodes if node.node_id not in incoming] or [graph.nodes[0].node_id]
+    roots = [node.node_id for node in graph.nodes if node.node_id not in incoming] or [
+        graph.nodes[0].node_id
+    ]
     lines: list[str] = []
     seen: set[str] = set()
 
@@ -805,14 +826,18 @@ def _planned_labels(spec: HarnessSpec) -> list[str]:
     return labels
 
 
-def _planned_edges(mode: WorkflowMode, nodes: tuple[HarnessGraphNode, ...]) -> tuple[HarnessGraphEdge, ...]:
+def _planned_edges(
+    mode: WorkflowMode, nodes: tuple[HarnessGraphNode, ...]
+) -> tuple[HarnessGraphEdge, ...]:
     if len(nodes) < 2:
         return ()
     edges: list[HarnessGraphEdge] = []
     if mode == WorkflowMode.PARALLEL:
         root = nodes[0]
         for node in nodes[1:]:
-            edges.append(HarnessGraphEdge(source=root.node_id, target=node.node_id, type="parallel"))
+            edges.append(
+                HarnessGraphEdge(source=root.node_id, target=node.node_id, type="parallel")
+            )
         return tuple(edges)
     if mode == WorkflowMode.ROUTER:
         router = nodes[0]
@@ -842,7 +867,10 @@ def _validation_summary_from_events(events: list[Any]) -> dict[str, Any]:
     if not events:
         return {"enabled": False, "status": "unknown", "steps": []}
     steps = [
-        {"name": event.data.get("name"), "status": "passed" if event.type.endswith(".completed") else "failed"}
+        {
+            "name": event.data.get("name"),
+            "status": "passed" if event.type.endswith(".completed") else "failed",
+        }
         for event in events
         if event.type in {"validation.step.completed", "validation.step.failed"}
     ]
@@ -867,7 +895,9 @@ def _changes_line(changes: dict[str, Any]) -> str:
     if additions or deletions:
         line += f" (+{additions} -{deletions})"
     if files:
-        preview = ", ".join(str(item.get("path") or "") for item in files[:5] if isinstance(item, dict))
+        preview = ", ".join(
+            str(item.get("path") or "") for item in files[:5] if isinstance(item, dict)
+        )
         if preview:
             line += f" [{preview}]"
     return line
@@ -887,16 +917,26 @@ def _model_policy_check(spec: HarnessSpec) -> dict[str, Any]:
     agent_models = sorted({agent.model for agent in spec.agents if agent.model})
     all_models = [*models, *agent_models]
     configured_provider = str(spec.model_policy.config.get("provider") or "").strip()
-    inferred_providers = sorted({_provider_from_model(model) for model in all_models if _provider_from_model(model)})
-    provider = configured_provider or (inferred_providers[0] if len(inferred_providers) == 1 else "")
+    inferred_providers = sorted(
+        {_provider_from_model(model) for model in all_models if _provider_from_model(model)}
+    )
+    provider = configured_provider or (
+        inferred_providers[0] if len(inferred_providers) == 1 else ""
+    )
     warnings: list[str] = []
     errors: list[str] = []
     unknown_models: list[str] = []
 
-    if configured_provider and configured_provider not in PROVIDERS:
+    if (
+        configured_provider
+        and configured_provider not in PROVIDERS
+        and configured_provider not in LOCAL_PROVIDER_ALIASES
+    ):
         errors.append(f"unknown provider '{configured_provider}'")
     if len(inferred_providers) > 1 and not configured_provider:
-        warnings.append("multiple model providers inferred; set model_policy.config.provider explicitly")
+        warnings.append(
+            "multiple model providers inferred; set model_policy.config.provider explicitly"
+        )
     if provider in PROVIDERS:
         provider_def = PROVIDERS[provider]
         expected_models = set(provider_def.example_models) | set(provider_def.free_models)
@@ -965,7 +1005,9 @@ def _tool_check(spec: HarnessSpec) -> dict[str, Any]:
         warnings.append("MCP tools are requested but no MCP server or config path is declared")
     return {
         "status": "error" if missing else "warning" if warnings else "ok",
-        "message": "All requested tools are available." if not missing else "Some requested tools are missing.",
+        "message": "All requested tools are available."
+        if not missing
+        else "Some requested tools are missing.",
         "data": {
             "requested": requested,
             "missing": missing,
@@ -996,7 +1038,9 @@ def _skill_check(spec: HarnessSpec, root: Path) -> dict[str, Any]:
     status = "warning" if missing else "ok"
     return {
         "status": status,
-        "message": "Requested skills are present." if not missing else "Some requested skills were not found.",
+        "message": "Requested skills are present."
+        if not missing
+        else "Some requested skills were not found.",
         "data": {
             "requested": requested,
             "missing": missing,
@@ -1028,7 +1072,10 @@ def _mcp_check(spec: HarnessSpec, root: Path) -> dict[str, Any]:
             return {
                 "status": "error",
                 "message": f"MCP config path does not exist: {config_path}.",
-                "data": {**summary, "fix": "Create the MCP config file or update runtime.config.mcp_config_path."},
+                "data": {
+                    **summary,
+                    "fix": "Create the MCP config file or update runtime.config.mcp_config_path.",
+                },
             }
         servers, errors, warnings = _inspect_mcp_config(config_path, root)
         summary["servers"] = sorted(set(summary["servers"]) | set(servers))
@@ -1071,7 +1118,11 @@ def _permission_check(spec: HarnessSpec) -> tuple[str, str, dict[str, Any]]:
     requested_tools = {tool for agent in spec.agents for tool in agent.tools}
     if spec.is_coding and not policy.allow_write:
         warnings.append("coding harness is read-only")
-    if requested_tools & {"write_file", "create_file", "edit_file", "insert_text", "patch", "multi_edit"} and not policy.allow_write:
+    if (
+        requested_tools
+        & {"write_file", "create_file", "edit_file", "insert_text", "patch", "multi_edit"}
+        and not policy.allow_write
+    ):
         errors.append("write/edit tools are requested but allow_write is false")
     if "bash" in requested_tools and not policy.allow_shell:
         errors.append("bash tool is requested but allow_shell is false")
@@ -1181,7 +1232,10 @@ def _sandbox_check(name: str) -> dict[str, Any]:
         return {
             "status": "error",
             "message": f"Unknown sandbox backend '{name}': {exc}",
-            "data": {"backend": name, "fix": "Use a supported sandbox backend or set sandbox: none."},
+            "data": {
+                "backend": name,
+                "fix": "Use a supported sandbox backend or set sandbox: none.",
+            },
         }
     return {
         "status": "ok",
@@ -1336,8 +1390,12 @@ def _mcp_summary(spec: HarnessSpec) -> dict[str, Any]:
     pydanticai_config = runtime_config.get("pydanticai", {})
     config_path = None
     if isinstance(pydanticai_config, dict):
-        config_path = pydanticai_config.get("mcp_config_path") or pydanticai_config.get("mcp_config")
-    config_path = config_path or runtime_config.get("mcp_config_path") or runtime_config.get("mcp_config")
+        config_path = pydanticai_config.get("mcp_config_path") or pydanticai_config.get(
+            "mcp_config"
+        )
+    config_path = (
+        config_path or runtime_config.get("mcp_config_path") or runtime_config.get("mcp_config")
+    )
     return {"servers": servers, "config_path": str(config_path) if config_path else None}
 
 
@@ -1392,7 +1450,9 @@ def _model_without_provider(model: str) -> str:
 
 def _model_policy_fix(provider: str, errors: list[str], warnings: list[str]) -> str:
     if errors:
-        return "Set model_policy.config.provider to a known provider or remove the invalid provider."
+        return (
+            "Set model_policy.config.provider to a known provider or remove the invalid provider."
+        )
     if provider in PROVIDERS and any("API key" in warning for warning in warnings):
         envs = PROVIDERS[provider].env_vars
         return f"Export one of: {_join(envs)}."
@@ -1451,7 +1511,10 @@ def _resolve(root: Path, value: str | Path) -> Path:
 
 
 def _safe_node_id(value: str) -> str:
-    return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in value).strip("-") or "step"
+    return (
+        "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in value).strip("-")
+        or "step"
+    )
 
 
 def _join(values: list[str] | tuple[str, ...]) -> str:

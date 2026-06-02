@@ -168,7 +168,7 @@ def show_agent(agent_id: str):
         agent: "{agent_id}"
         agent_config:
           provider: "anthropic"
-          model: "claude-sonnet-4-20250514"
+          model: "claude-opus-4-8"
         job_description: |
           Your job description here...[/dim]
 """)

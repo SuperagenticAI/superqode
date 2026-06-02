@@ -883,7 +883,10 @@ class SQLiteHarnessStore:
             metadata=fork_metadata,
         )
         with self._connect() as conn:
-            conn.execute("update runs set flavor = ?, status = ? where run_id = ?", (source.flavor, "forked", fork.run_id))
+            conn.execute(
+                "update runs set flavor = ?, status = ? where run_id = ?",
+                (source.flavor, "forked", fork.run_id),
+            )
         limit = len(source.events) if after is None else max(0, min(after + 1, len(source.events)))
         for event in source.events[:limit]:
             self.append_event(

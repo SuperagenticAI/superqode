@@ -146,6 +146,7 @@ Install only the runtimes you need:
 ```bash
 pip install "superqode[adk]"
 pip install "superqode[openai-agents]"
+pip install "superqode[codex-sdk]"
 pip install "superqode[deepagents]"
 pip install "superqode[pydanticai]"
 ```
@@ -155,6 +156,7 @@ Then select a backend in a spec or at run time:
 ```bash
 superqode harness run --spec harness.yaml --runtime pydanticai --prompt "review this design"
 superqode harness run --spec harness.yaml --runtime openai-agents --prompt "make the smallest safe fix"
+superqode harness run --spec harness.yaml --runtime codex-sdk --prompt "summarize this repository"
 ```
 
 ## Key Features
@@ -163,7 +165,7 @@ superqode harness run --spec harness.yaml --runtime openai-agents --prompt "make
 |---------|-------------|
 | **HarnessSpec** | Define coding, no-tool, local-model, and custom harness behavior with one declarative contract |
 | **Harness runs** | Run sessions with normalized events, run records, typed outputs, and workflow execution |
-| **Pluggable runtimes** | Swap the agent loop: SuperQode native, Google ADK, OpenAI Agents SDK, optional DeepAgents, or optional PydanticAI |
+| **Pluggable runtimes** | Swap the agent loop: SuperQode native, Google ADK, OpenAI Agents SDK, OpenAI Codex SDK, optional DeepAgents, or optional PydanticAI |
 | **Event graph** | Inspect model, tool, approval, sandbox, subagent, memory, and result events across supported runtimes |
 | **Harness doctor** | Preflight backend installation, spec compatibility, sandbox policy, MCP config, approvals, and graph readiness |
 | **Developer TUI** | Interactive sessions with wrapped prompts, quiet streaming logs, compact tool activity, and readable change summaries |
@@ -200,6 +202,7 @@ SuperQode normalizes runtime-specific streams into one harness event graph:
 | `builtin` | Model requests, model deltas, tool calls, tool results, approval pauses, final results |
 | `pydanticai` | Model deltas, tool calls, tool results, final results, approval pauses |
 | `openai-agents` | Model deltas, tool calls, tool results, approval pauses, sandbox markers |
+| `codex-sdk` | Model deltas, command output, patch updates, command/file-change results, turn completion |
 | `deepagents` | Model deltas, tool calls, subagent activity, memory reads/writes, sandbox file/command events, final results |
 | `adk` | Run and stream events with the same graph storage contract |
 

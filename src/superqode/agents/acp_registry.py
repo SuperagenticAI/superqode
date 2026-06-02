@@ -11,6 +11,8 @@ import platform
 from pathlib import Path
 from typing import Any, TypedDict, Literal
 
+from .official_acp import OFFICIAL_ACP_AGENTS
+
 try:
     import tomllib
 except ImportError:
@@ -253,10 +255,10 @@ ACP_AGENTS_REGISTRY: dict[str, AgentMetadata] = {
         "author_name": "fast-agent",
         "author_url": "https://github.com/evalstate",
         "description": "Create and interact with sophisticated Agents and Workflows in minutes. MCP native.",
-        "run_command": "fast-agent --acp",
+        "run_command": "uvx --from fast-agent-mcp@latest fast-agent-acp",
         "status": "available",
-        "installation_command": "uv tool install fast-agent-mcp",
-        "installation_instructions": "Install fast-agent via uv. Native MCP support.",
+        "installation_command": "uv tool install -U fast-agent-mcp",
+        "installation_instructions": "Install/upgrade fast-agent via uv. ACP entry point is fast-agent-acp.",
         "requirements": ["python3.10+", "uv"],
     },
     # =========================================================================
@@ -277,6 +279,35 @@ ACP_AGENTS_REGISTRY: dict[str, AgentMetadata] = {
         "requirements": ["python3", "pip"],
     },
 }
+
+
+def _official_agent_metadata() -> dict[str, AgentMetadata]:
+    """Return ACP docs agents as low-confidence catalog entries.
+
+    The TOML catalog overrides these entries where SuperQode has a known
+    run/install command. These stubs keep the UI and CLI aligned with the
+    official ACP compatibility page without inventing commands.
+    """
+    agents: dict[str, AgentMetadata] = {}
+    for agent in OFFICIAL_ACP_AGENTS:
+        agents[agent["identity"]] = {
+            "identity": agent["identity"],
+            "name": agent["name"],
+            "short_name": agent["short_name"],
+            "url": agent["url"],
+            "author_name": agent["author_name"],
+            "author_url": agent["author_url"],
+            "description": agent["description"],
+            "run_command": "",
+            "status": "available",
+            "installation_command": "",
+            "installation_instructions": (
+                f"{agent['name']} is listed on the official ACP agents page. "
+                "SuperQode does not yet have a curated install command for this agent."
+            ),
+            "requirements": [],
+        }
+    return agents
 
 
 def _current_os_key() -> str:
@@ -361,11 +392,9 @@ def get_all_registry_agents() -> dict[str, AgentMetadata]:
     Returns:
         Dictionary mapping agent identity to metadata.
     """
+    merged = _official_agent_metadata()
+    merged.update(ACP_AGENTS_REGISTRY)
     toml_agents = _read_toml_registry()
-    if not toml_agents:
-        return ACP_AGENTS_REGISTRY.copy()
-
-    merged = ACP_AGENTS_REGISTRY.copy()
     merged.update(toml_agents)
     return merged
 

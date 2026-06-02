@@ -43,10 +43,14 @@ WORKFLOW_PRESETS: dict[str, WorkflowPreset] = {
         agents=(
             AgentSpec(id="security", role="Review security and data-safety risks."),
             AgentSpec(id="tests", role="Review missing or weak tests."),
-            AgentSpec(id="architecture", role="Review design, maintainability, and integration risk."),
+            AgentSpec(
+                id="architecture", role="Review design, maintainability, and integration risk."
+            ),
         ),
         parallelism=3,
-        config={"synthesis_prompt": "Merge the reviewer findings into one prioritized engineering report."},
+        config={
+            "synthesis_prompt": "Merge the reviewer findings into one prioritized engineering report."
+        },
     ),
     "fix-and-verify": WorkflowPreset(
         name="fix-and-verify",
@@ -55,7 +59,9 @@ WORKFLOW_PRESETS: dict[str, WorkflowPreset] = {
         agents=(
             AgentSpec(id="planner", role="Identify the likely fix path and risks."),
             AgentSpec(id="implementer", role="Apply the code change with repository tools."),
-            AgentSpec(id="verifier", role="Run checks, inspect changed files, and summarize evidence."),
+            AgentSpec(
+                id="verifier", role="Run checks, inspect changed files, and summarize evidence."
+            ),
         ),
     ),
     "security-review": WorkflowPreset(
@@ -64,11 +70,18 @@ WORKFLOW_PRESETS: dict[str, WorkflowPreset] = {
         description="Review code through security, data-flow, and dependency-risk lenses.",
         agents=(
             AgentSpec(id="appsec", role="Find application security risks and unsafe patterns."),
-            AgentSpec(id="data-flow", role="Review sensitive data handling, auth boundaries, and leakage risk."),
-            AgentSpec(id="dependency-risk", role="Review dependency, supply-chain, and runtime risk."),
+            AgentSpec(
+                id="data-flow",
+                role="Review sensitive data handling, auth boundaries, and leakage risk.",
+            ),
+            AgentSpec(
+                id="dependency-risk", role="Review dependency, supply-chain, and runtime risk."
+            ),
         ),
         parallelism=3,
-        config={"synthesis_prompt": "Merge the security findings into one prioritized risk report."},
+        config={
+            "synthesis_prompt": "Merge the security findings into one prioritized risk report."
+        },
     ),
     "release-check": WorkflowPreset(
         name="release-check",

@@ -194,7 +194,7 @@ class TestACPClient:
         on_message = AsyncMock()
         client = ACPClient(
             project_root=tmp_path,
-            command="fast-agent --acp",
+            command="uvx --from fast-agent-mcp@latest fast-agent-acp",
             on_message=on_message,
         )
 
@@ -209,6 +209,29 @@ class TestACPClient:
 
         on_message.assert_awaited_once_with("hello")
         assert client.get_message_buffer() == "hello"
+
+    @pytest.mark.asyncio
+    async def test_stop_tolerates_already_exited_process(self, tmp_path):
+        """Live doctor should not crash when an ACP subprocess exits before cleanup."""
+
+        class ExitedProcess:
+            returncode = 2
+
+            def terminate(self):
+                raise ProcessLookupError()
+
+            async def wait(self):
+                return self.returncode
+
+            def kill(self):
+                raise ProcessLookupError()
+
+        client = ACPClient(project_root=tmp_path, command="bad-agent --acp")
+        client._process = ExitedProcess()
+
+        await client.stop()
+
+        assert client._process is None
 
     @pytest.mark.asyncio
     async def test_session_update_handles_commands_mode_and_usage(self, tmp_path):
@@ -313,6 +336,128 @@ class TestACPClient:
             {"sessionId": "session-1", "modelId": "opencode/mimo-v2.5-free"},
         )
         assert client._current_model_id == "opencode/mimo-v2.5-free"
+
+    @pytest.mark.asyncio
+    async def test_new_session_switches_opencode_config_option_model(self, tmp_path, monkeypatch):
+        """OpenCode now exposes model selection through configOptions.
+
+        Regression: when only configOptions were present, SuperQode skipped
+        model switching and OpenCode stayed on its default big-pickle model.
+        """
+        client = ACPClient(
+            project_root=tmp_path,
+            command="opencode acp",
+            model="deepseek/deepseek-v4-pro",
+        )
+        calls = []
+
+        async def fake_call_method(method, *, timeout=None, **params):
+            calls.append((method, params))
+            if method == "session/new":
+                return {
+                    "sessionId": "session-1",
+                    "configOptions": [
+                        {
+                            "id": "model",
+                            "name": "Model",
+                            "category": "model",
+                            "type": "select",
+                            "currentValue": "opencode/big-pickle",
+                            "options": [
+                                {
+                                    "value": "opencode/big-pickle",
+                                    "name": "OpenCode/Big Pickle",
+                                },
+                                {
+                                    "value": "deepseek/deepseek-v4-pro",
+                                    "name": "DeepSeek/DeepSeek V4 Pro",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            if method == "session/set_config_option":
+                return {
+                    "configOptions": [
+                        {
+                            "id": "model",
+                            "category": "model",
+                            "type": "select",
+                            "currentValue": params["value"],
+                            "options": [
+                                {
+                                    "value": "opencode/big-pickle",
+                                    "name": "OpenCode/Big Pickle",
+                                },
+                                {
+                                    "value": "deepseek/deepseek-v4-pro",
+                                    "name": "DeepSeek/DeepSeek V4 Pro",
+                                },
+                            ],
+                        }
+                    ]
+                }
+            return {}
+
+        monkeypatch.setattr(client, "_call_method", fake_call_method)
+
+        await client._new_session()
+
+        assert calls[1] == (
+            "session/set_config_option",
+            {
+                "sessionId": "session-1",
+                "configId": "model",
+                "value": "deepseek/deepseek-v4-pro",
+            },
+        )
+        assert client._current_model_id == "deepseek/deepseek-v4-pro"
+        assert await client.get_current_model() == "deepseek/deepseek-v4-pro"
+        assert await client.get_available_models() == [
+            {
+                "id": "opencode/big-pickle",
+                "modelId": "opencode/big-pickle",
+                "name": "OpenCode/Big Pickle",
+            },
+            {
+                "id": "deepseek/deepseek-v4-pro",
+                "modelId": "deepseek/deepseek-v4-pro",
+                "name": "DeepSeek/DeepSeek V4 Pro",
+            },
+        ]
+
+    @pytest.mark.asyncio
+    async def test_new_session_switches_legacy_id_model_shape(self, tmp_path, monkeypatch):
+        """Some ACP agents advertise availableModels with id rather than modelId."""
+        client = ACPClient(
+            project_root=tmp_path,
+            command="some-agent --acp",
+            model="deepseek/deepseek-v4-pro",
+        )
+        calls = []
+
+        async def fake_call_method(method, *, timeout=None, **params):
+            calls.append((method, params))
+            return {
+                "sessionId": "session-1",
+                "models": {
+                    "currentModelId": "opencode/big-pickle",
+                    "availableModels": [
+                        {"id": "opencode/big-pickle", "name": "Big Pickle"},
+                        {"id": "deepseek/deepseek-v4-pro", "name": "DeepSeek V4 Pro"},
+                    ],
+                },
+            }
+
+        monkeypatch.setattr(client, "_call_method", fake_call_method)
+
+        await client._new_session()
+
+        assert calls[1] == (
+            "session/set_model",
+            {"sessionId": "session-1", "modelId": "deepseek/deepseek-v4-pro"},
+        )
+        assert client._current_model_id == "deepseek/deepseek-v4-pro"
 
     @pytest.mark.asyncio
     async def test_new_session_skips_set_model_when_already_current(self, tmp_path, monkeypatch):
@@ -435,12 +580,14 @@ class TestACPClient:
         assert await client._handle_agent_request(
             "terminal/wait_for_exit", {"terminalId": "ui-terminal-1"}
         ) == {"exitCode": 0, "signal": None}
-        assert await client._handle_agent_request(
-            "terminal/kill", {"terminalId": "ui-terminal-1"}
-        ) == {}
-        assert await client._handle_agent_request(
-            "terminal/release", {"terminalId": "ui-terminal-1"}
-        ) == {}
+        assert (
+            await client._handle_agent_request("terminal/kill", {"terminalId": "ui-terminal-1"})
+            == {}
+        )
+        assert (
+            await client._handle_agent_request("terminal/release", {"terminalId": "ui-terminal-1"})
+            == {}
+        )
 
         assert [name for name, _params in service.calls] == [
             "create",
@@ -457,9 +604,10 @@ class TestACPClient:
         client = ACPClient(project_root=tmp_path, command="opencode acp")
         client._terminals["terminal-1"] = {"process": None}
 
-        assert await client._handle_agent_request(
-            "terminal/release", {"terminalId": "terminal-1"}
-        ) == {}
+        assert (
+            await client._handle_agent_request("terminal/release", {"terminalId": "terminal-1"})
+            == {}
+        )
         assert "terminal-1" not in client._terminals
 
     @pytest.mark.asyncio
@@ -595,9 +743,7 @@ class TestACPClient:
         assert client.get_traffic_log_path() == log_path
 
     @pytest.mark.asyncio
-    async def test_traffic_logging_env_uses_per_agent_default_path(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_traffic_logging_env_uses_per_agent_default_path(self, tmp_path, monkeypatch):
         monkeypatch.setenv("SUPERQODE_HOME", str(tmp_path))
         monkeypatch.setenv("SUPERQODE_ACP_TRAFFIC_LOG", "1")
 

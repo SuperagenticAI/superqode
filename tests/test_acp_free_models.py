@@ -24,6 +24,39 @@ opencode/paid-model
     assert free[0]["context"] == 262144
 
 
+def test_opencode_parser_preserves_provider_model_ids_from_cli_output():
+    output = """
+opencode/big-pickle
+{"name":"Big Pickle","cost":{"input":0,"output":0},"limit":{"context":200000}}
+
+deepseek/deepseek-v4-pro
+{"name":"DeepSeek V4 Pro","cost":{"input":1,"output":1},"limit":{"context":1000000}}
+"""
+
+    models = _parse_opencode_models(output)
+
+    assert [model["id"] for model in models] == [
+        "opencode/big-pickle",
+        "deepseek/deepseek-v4-pro",
+    ]
+    assert [model["provider"] for model in models] == ["opencode", "deepseek"]
+
+
+def test_opencode_json_parser_preserves_non_opencode_provider_ids():
+    output = """
+[
+  {"id": "deepseek/deepseek-v4-pro", "name": "DeepSeek V4 Pro"},
+  {"id": "bare-free-model", "name": "Bare Free Model"}
+]
+"""
+
+    models = _parse_opencode_models(output)
+
+    assert models[0]["id"] == "deepseek/deepseek-v4-pro"
+    assert models[0]["provider"] == "deepseek"
+    assert models[1]["id"] == "opencode/bare-free-model"
+
+
 def test_acp_free_models_reuses_dynamic_opencode_parser():
     output = """
 opencode/fresh-free-model
@@ -46,7 +79,7 @@ async def test_acp_protocol_model_discovery_uses_dynamic_cost_metadata():
         async def get_available_models(self):
             return [
                 {
-                    "id": "agent/new-free",
+                    "modelId": "agent/new-free",
                     "name": "New Free",
                     "cost": {"input": 0, "output": 0},
                     "context_window": 64000,

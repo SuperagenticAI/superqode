@@ -1,0 +1,32 @@
+# OpenClaw
+# https://docs.openclaw.ai
+
+identity = "openclaw.ai"
+name = "OpenClaw"
+short_name = "openclaw"
+url = "https://docs.openclaw.ai"
+protocol = "acp"
+author_name = "OpenClaw"
+author_url = "https://openclaw.ai"
+publisher_name = "SuperQode Team"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "OpenClaw ACP-compatible agent listed by the official Agent Client Protocol documentation."
+tags = ["official-acp", "coding", "openclaw"]
+run_command."*" = ""
+
+help = '''
+# OpenClaw
+
+OpenClaw is listed on the official ACP agents page. Use `openclaw` as the
+SuperQode agent name.
+
+## Connection
+
+SuperQode does not currently ship a curated OpenClaw launch command. Check the
+OpenClaw documentation for the latest ACP command before connecting.
+
+---
+
+**Docs**: https://docs.openclaw.ai
+'''

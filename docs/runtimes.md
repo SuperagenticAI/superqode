@@ -21,6 +21,7 @@ execution engine. When an engine cannot honor a policy, SuperQode reports that c
 | `builtin` | included | SuperQode's native loop. This is the default and the canonical path for local-model and no-tool policy. |
 | `adk` | `pip install superqode[adk]` | Google Agent Development Kit. Uses ADK's `Runner` and `LlmAgent`. |
 | `openai-agents` | `pip install superqode[openai-agents]` | OpenAI Agents SDK v0.17+. Includes SDK sessions, tool bridging, and HITL support. |
+| `codex-sdk` | `pip install superqode[codex-sdk]` | Official OpenAI Codex Python SDK runtime. Drives the published `openai-codex` package and its local app-server. |
 | `deepagents` | `pip install superqode[deepagents]` | Optional DeepAgents 0.6 runtime for graph and middleware-heavy coding harnesses. |
 | `pydanticai` | `pip install superqode[pydanticai]` | Optional PydanticAI runtime with SuperQode JSON-schema tool bridging, approval resume, native MCP config loading, fallback chains, and typed-output-friendly harness support. |
 
@@ -40,6 +41,7 @@ Precedence, highest first:
 ```bash
 superqode --runtime adk
 superqode --runtime openai-agents --print "summarize this repository"
+superqode --runtime codex-sdk --print "summarize this repository"
 superqode harness run --spec harness.yaml --runtime pydanticai --prompt "reason about this design"
 ```
 
@@ -72,6 +74,7 @@ Example output:
 │ ▸  │ builtin       │ ready  │ SuperQode native agent loop (default) │
 │    │ adk           │ ready  │ Google Agent Development Kit          │
 │    │ openai-agents │ ready  │ OpenAI Agents SDK                     │
+│    │ codex-sdk     │ ready  │ OpenAI Codex Python SDK / app-server  │
 │    │ deepagents    │ ready  │ DeepAgents runtime adapter            │
 └────┴───────────────┴────────┴───────────────────────────────────────┘
 ```
@@ -133,6 +136,41 @@ Current limits:
 
 - Native SDK sandbox integrations remain a follow-up.
 - Native SDK MCP server objects are not yet the default bridge.
+
+### `codex-sdk`
+
+Wraps the official OpenAI Codex Python SDK (`openai-codex`) behind the SuperQode runtime contract. The SDK launches the Codex app-server locally and SuperQode talks to it through the SDK client.
+
+Use `codex-sdk` when you want OpenAI Codex SDK behavior while still selecting the backend through SuperQode runtime and HarnessSpec configuration.
+
+Current behavior:
+
+- Uses the published `openai-codex` package installed from `superqode[codex-sdk]`.
+- Starts the Codex SDK app-server through the SDK client; SuperQode does not vendor or import code from `reference/codex/sdk/python`.
+- Maps SuperQode provider/model/cwd/sandbox settings into Codex thread and turn options where the SDK supports them.
+- Streams normalized harness events for model deltas, command output deltas, patch updates, command results, file-change results, and turn completion.
+- Uses Codex SDK cancellation through the active turn interrupt path.
+- Routes Codex command/file approval callbacks through SuperQode's `PermissionManager`.
+
+Current limits:
+
+- Interactive approval pause/resume is not bridged yet. `ALLOW` accepts, `DENY` rejects, and unresolved `ASK` approvals are rejected by default for safety.
+- Native Codex SDK MCP configuration is not yet mapped from SuperQode MCP config.
+- Typed-output handling still belongs to SuperQode's native harness/output layer.
+
+Example:
+
+```bash
+pip install "superqode[codex-sdk]"
+superqode --runtime codex-sdk --print "summarize this repository"
+```
+
+```yaml
+runtime:
+  backend: codex-sdk
+```
+
+The local `reference/codex/sdk/python` checkout is documentation/reference material only. Runtime code must depend on the packaged SDK (`openai-codex`) so installs are reproducible and do not accidentally bind to a local reference tree.
 
 ### `pydanticai`
 

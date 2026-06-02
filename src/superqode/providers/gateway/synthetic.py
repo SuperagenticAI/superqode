@@ -111,9 +111,7 @@ class PassthroughGateway(GatewayInterface):
     def get_model_string(self, provider: str, model: str) -> str:
         return f"{provider}/{model}" if provider else model
 
-    async def test_connection(
-        self, provider: str, model: Optional[str] = None
-    ) -> Dict[str, Any]:
+    async def test_connection(self, provider: str, model: Optional[str] = None) -> Dict[str, Any]:
         return {"ok": True, "provider": provider, "model": model or self.MODEL_NAME}
 
     def _build_response(
@@ -125,7 +123,7 @@ class PassthroughGateway(GatewayInterface):
 
         # Sticky fixed-response indicator: once set, every subsequent turn returns it.
         if last_text.startswith(FIXED_RESPONSE_INDICATOR):
-            self._fixed_response = last_text[len(FIXED_RESPONSE_INDICATOR):].strip()
+            self._fixed_response = last_text[len(FIXED_RESPONSE_INDICATOR) :].strip()
 
         if last_text.startswith(CALL_TOOL_INDICATOR):
             tool_name, arguments = _parse_tool_command(last_text)
@@ -241,9 +239,7 @@ class PlaybackGateway(GatewayInterface):
                 )
             )
 
-    def queue_tool_call(
-        self, name: str, arguments: Optional[Dict[str, Any]] = None
-    ) -> None:
+    def queue_tool_call(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> None:
         """Enqueue a tool-call response."""
         tool_call = {
             "id": f"call_{uuid.uuid4().hex[:12]}",
@@ -277,9 +273,7 @@ class PlaybackGateway(GatewayInterface):
     def get_model_string(self, provider: str, model: str) -> str:
         return f"{provider}/{model}" if provider else model
 
-    async def test_connection(
-        self, provider: str, model: Optional[str] = None
-    ) -> Dict[str, Any]:
+    async def test_connection(self, provider: str, model: Optional[str] = None) -> Dict[str, Any]:
         return {
             "ok": True,
             "provider": provider,

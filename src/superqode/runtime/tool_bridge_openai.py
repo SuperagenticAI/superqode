@@ -12,6 +12,7 @@ The SDK is imported lazily; this module is safe to load without
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 from typing import Any, Callable, Dict, Iterable, List, Optional
@@ -21,6 +22,38 @@ from ..tools.permissions import Permission, PermissionManager
 from .errors import RuntimeNotInstalledError
 
 logger = logging.getLogger(__name__)
+
+
+def construct_function_tool(
+    FunctionToolCls: Any,
+    *,
+    needs_approval: Optional[Callable[..., Any]] = None,
+    **kwargs: Any,
+) -> Any:
+    """Construct an openai-agents FunctionTool across SDK versions.
+
+    Current SDKs accept ``needs_approval`` in the constructor. Some older
+    installed versions do not, but the rest of our bridge is still useful for
+    non-HITL tests and direct invocation. In that case, attach the predicate as
+    a normal instance attribute so SuperQode callers can still inspect/use it.
+    The old SDK will not auto-interrupt on that attribute, but permission DENY
+    remains enforced in ``on_invoke_tool``.
+    """
+    try:
+        accepts_needs_approval = "needs_approval" in inspect.signature(FunctionToolCls).parameters
+    except (TypeError, ValueError):
+        accepts_needs_approval = False
+
+    if needs_approval is not None and accepts_needs_approval:
+        return FunctionToolCls(needs_approval=needs_approval, **kwargs)
+
+    tool = FunctionToolCls(**kwargs)
+    if needs_approval is not None:
+        try:
+            tool.needs_approval = needs_approval
+        except Exception:  # noqa: BLE001 - third-party SDK object may be immutable
+            logger.debug("FunctionTool does not expose needs_approval on this SDK version")
+    return tool
 
 
 def _require_sdk():
@@ -117,7 +150,8 @@ def _bridge_one(
 
         return _format_output(result)
 
-    return FunctionToolCls(
+    return construct_function_tool(
+        FunctionToolCls,
         name=sq_tool.name,
         description=sq_tool.description,
         params_json_schema=sq_tool.parameters or {"type": "object", "properties": {}},

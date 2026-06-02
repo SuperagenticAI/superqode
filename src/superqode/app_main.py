@@ -22,6 +22,7 @@ import json
 import os
 import pty
 import select
+import signal
 import subprocess
 import shutil
 import shlex
@@ -422,6 +423,11 @@ class SelectionAwareInput(TextArea):
         app = self.app
 
         if getattr(app, "_prompt_completion_visible", False):
+            if event.key == "enter":
+                should_submit = getattr(app, "_should_submit_prompt_without_completion", None)
+                if callable(should_submit) and should_submit(self.value):
+                    self._submit_current_value(event)
+                    return
             if event.key == "up":
                 if hasattr(app, "_move_prompt_completion"):
                     app._move_prompt_completion(-1)
@@ -435,7 +441,9 @@ class SelectionAwareInput(TextArea):
                 event.prevent_default()
                 return
             if event.key in ("tab", "right", "enter"):
-                if hasattr(app, "_accept_prompt_completion") and app._accept_prompt_completion(self):
+                if hasattr(app, "_accept_prompt_completion") and app._accept_prompt_completion(
+                    self
+                ):
                     event.stop()
                     event.prevent_default()
                     return
@@ -454,6 +462,14 @@ class SelectionAwareInput(TextArea):
                 return
 
         if event.key == "enter":
+            # In a selection picker, Enter confirms the highlighted item rather
+            # than submitting the (usually empty) prompt buffer. Without this the
+            # keystroke is swallowed by _submit_current_value before the app-level
+            # on_key handler can act on it.
+            if self._handle_selection_enter(app):
+                event.stop()
+                event.prevent_default()
+                return
             self._submit_current_value(event)
             return
 
@@ -521,9 +537,26 @@ class SelectionAwareInput(TextArea):
                     app.action_navigate_connect_type_down()
                 return
 
-            # Don't handle arrow keys for local providers/models in Input widget
-            # Let them bubble up to App-level handler instead
-            # This prevents conflicts and ensures consistent behavior
+            # Handle local provider/model arrows here too. Relying on the event
+            # bubbling to the app-level handler is unreliable because the
+            # underlying TextArea consumes up/down for cursor movement first.
+            if getattr(app, "_awaiting_local_provider", False):
+                event.stop()
+                event.prevent_default()
+                if event.key == "up":
+                    app.action_navigate_local_provider_up()
+                else:
+                    app.action_navigate_local_provider_down()
+                return
+
+            if getattr(app, "_awaiting_local_model", False):
+                event.stop()
+                event.prevent_default()
+                if event.key == "up":
+                    app.action_navigate_local_model_up()
+                else:
+                    app.action_navigate_local_model_down()
+                return
 
             if getattr(app, "_awaiting_model_selection", False):
                 event.stop()
@@ -542,6 +575,37 @@ class SelectionAwareInput(TextArea):
 
         # For all other keys or when not in selection mode, let parent handle it
         # TextArea handles normal editing, wrapping, and cursor movement.
+
+    def _handle_selection_enter(self, app) -> bool:
+        """Confirm the active picker selection on Enter.
+
+        Returns True when Enter was consumed by a selection picker. Mirrors the
+        per-mode dispatch in the app-level on_key handler so behaviour is
+        identical whether or not the prompt input holds focus.
+        """
+        # A pending typed-number buffer (BYOK/local pickers) takes priority so
+        # Enter commits the digits the user just typed instead of the highlight.
+        if getattr(app, "_selection_digit_buffer", ""):
+            if hasattr(app, "_apply_selection_buffer"):
+                app._apply_selection_buffer()
+                return True
+
+        mode_actions = (
+            ("_awaiting_acp_agent_selection", "action_select_highlighted_acp_agent"),
+            ("_awaiting_byok_model", "action_select_highlighted_model"),
+            ("_awaiting_byok_provider", "action_select_highlighted_provider"),
+            ("_awaiting_connect_type", "action_select_highlighted_connect_type"),
+            ("_awaiting_local_provider", "action_select_highlighted_local_provider"),
+            ("_awaiting_local_model", "action_select_highlighted_local_model"),
+            ("_awaiting_model_selection", "action_select_highlighted_acp_model"),
+        )
+        for flag, action_name in mode_actions:
+            if getattr(app, flag, False):
+                action = getattr(app, action_name, None)
+                if callable(action):
+                    action()
+                    return True
+        return False
 
 
 # ============================================================================
@@ -651,7 +715,12 @@ class SuperQodeApp(App):
         Binding("ctrl+t", "toggle_thinking", "Toggle Logs", show=True),
         Binding("ctrl+k", "command_palette", "Commands", show=True),
         Binding("escape", "smart_cancel", "Cancel", show=True),
+        Binding("pageup", "scroll_log_page_up", "Scroll Up", show=False),
+        Binding("pagedown", "scroll_log_page_down", "Scroll Down", show=False),
+        Binding("ctrl+home", "scroll_log_home", "Top", show=False),
+        Binding("ctrl+end", "scroll_log_end", "Bottom", show=False),
         Binding("ctrl+x", "cancel_agent", "Cancel Agent", show=False),
+        Binding("ctrl+g", "stash_draft", "Stash draft", show=False),
         Binding("ctrl+d", "toggle_thinking", "Hide Logs", show=False),
         # Number keys for model selection (1-9)
         Binding("1", "select_model_1", "Model 1", show=False),
@@ -924,37 +993,37 @@ class SuperQodeApp(App):
         """Get Claude models list - synced with providers/models.py."""
         return [
             {
-                "id": "claude-opus-4-6",
-                "name": "Claude Opus 4.6 (Latest/New)",
+                "id": "claude-opus-4-8",
+                "name": "Claude Opus 4.8 (Latest)",
                 "context": 1000000,
-                "desc": "Latest Claude Opus with 1M context",
+                "desc": "Latest Claude Opus from models.dev - 1M context",
                 "recommended": True,
             },
             {
-                "id": "claude-opus-4-5-20251101",
+                "id": "claude-opus-4-7",
+                "name": "Claude Opus 4.7",
+                "context": 1000000,
+                "desc": "Recent Claude Opus with 1M context",
+                "recommended": True,
+            },
+            {
+                "id": "claude-sonnet-4-6",
+                "name": "Claude Sonnet 4.6",
+                "context": 1000000,
+                "desc": "Latest Claude Sonnet coding model - 1M context",
+                "recommended": True,
+            },
+            {
+                "id": "claude-opus-4-5",
                 "name": "Claude Opus 4.5",
                 "context": 200000,
-                "desc": "Most capable Claude - latest flagship",
-                "recommended": True,
+                "desc": "Claude Opus 4.5 alias from models.dev",
             },
             {
-                "id": "claude-sonnet-4-5-20250929",
-                "name": "Claude Sonnet 4.5",
-                "context": 200000,
-                "desc": "Best balance of speed & intelligence",
-                "recommended": True,
-            },
-            {
-                "id": "claude-haiku-4-5-20251001",
+                "id": "claude-haiku-4-5",
                 "name": "Claude Haiku 4.5",
                 "context": 200000,
-                "desc": "Fastest and most cost-effective",
-            },
-            {
-                "id": "claude-sonnet-4-20250514",
-                "name": "Claude Sonnet 4",
-                "context": 200000,
-                "desc": "Previous Sonnet generation",
+                "desc": "Fast and cost-effective Claude model",
             },
         ]
 
@@ -1000,14 +1069,19 @@ class SuperQodeApp(App):
             {"id": "gpt-5.2", "name": "GPT-5.2", "context": 256000},
             {"id": "gpt-5.2-pro", "name": "GPT-5.2 Pro", "context": 256000},
             {
-                "id": "claude-opus-4-6",
-                "name": "Claude Opus 4.6 (Latest/New)",
+                "id": "claude-opus-4-8",
+                "name": "Claude Opus 4.8 (Latest)",
                 "context": 1000000,
             },
             {
-                "id": "claude-opus-4-5-20251101",
-                "name": "Claude Opus 4.5 (Latest)",
-                "context": 200000,
+                "id": "claude-sonnet-4-6",
+                "name": "Claude Sonnet 4.6",
+                "context": 1000000,
+            },
+            {
+                "id": "claude-opus-4-7",
+                "name": "Claude Opus 4.7",
+                "context": 1000000,
             },
             {
                 "id": LATEST_GOOGLE_PRO_MODEL,
@@ -1020,7 +1094,7 @@ class SuperQodeApp(App):
                 "context": 1000000,
             },
             {"id": "gpt-4o", "name": "GPT-4o", "context": 128000},
-            {"id": "claude-sonnet-4-5-20250929", "name": "Claude Sonnet 4.5", "context": 200000},
+            {"id": "claude-haiku-4-5", "name": "Claude Haiku 4.5", "context": 200000},
         ]
 
     def compose(self) -> ComposeResult:
@@ -1051,6 +1125,7 @@ class SuperQodeApp(App):
                             # No restrict parameter - allow all characters including colon
                         )
                     yield Static("", id="prompt-completions")
+                    yield Static("", id="queued-input")
                     yield HintsBar(id="hints")
 
                 # Scanning line animation at TOP (shown when agent is thinking)
@@ -1067,6 +1142,13 @@ class SuperQodeApp(App):
                         min_width=1,
                         max_width=None,
                     )
+
+                # Pinned, auto-updating plan/todo checklist (from todo_write).
+                yield Static("", id="todo-panel")
+
+                # Compact active tool strip. This is separate from the existing
+                # thinking bars/animations, which remain unchanged.
+                yield Static("", id="active-tools")
 
                 # Thinking indicator with changing text at bottom (shown when agent is thinking)
                 yield StreamingThinkingIndicator(id="streaming-thinking")
@@ -1090,9 +1172,62 @@ class SuperQodeApp(App):
         # self._discover_acp_agents()
         # Initialize sidebar width tracking
         self._init_sidebar_resize()
+        # Apply user keybinding overrides, if any
+        self._load_custom_keybindings()
         self.set_timer(0.75, self._prewarm_litellm)
         if os.getenv("SUPERQODE_STARTUP_HEALTH", "").strip().lower() in ("1", "true", "yes"):
             self._run_startup_health_check()
+
+    # Actions users may safely rebind via ~/.superqode/keybindings.json
+    _REBINDABLE_ACTIONS = {
+        "toggle_sidebar",
+        "toggle_thinking",
+        "command_palette",
+        "clear_screen",
+        "stash_draft",
+        "scroll_log_page_up",
+        "scroll_log_page_down",
+        "scroll_log_home",
+        "scroll_log_end",
+        "cancel_agent",
+        "undo_action",
+        "redo_action",
+        "toggle_split_view",
+        "create_checkpoint",
+    }
+
+    def _load_custom_keybindings(self) -> None:
+        """Apply user keybinding overrides from ~/.superqode/keybindings.json.
+
+        Format: a JSON object of {"action_name": "key"} for any action in
+        ``_REBINDABLE_ACTIONS`` (e.g. {"toggle_sidebar": "f2"}).
+        """
+        path = Path.home() / ".superqode" / "keybindings.json"
+        try:
+            if not path.exists():
+                return
+            import json
+
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return
+        if not isinstance(data, dict):
+            return
+        applied = 0
+        for action, key in data.items():
+            if action in self._REBINDABLE_ACTIONS and isinstance(key, str) and key.strip():
+                try:
+                    self.bind(key.strip(), action)
+                    applied += 1
+                except Exception:
+                    pass
+        if applied:
+            try:
+                self.query_one("#log", ConversationLog).add_info(
+                    f"⌨ Applied {applied} custom keybinding(s) from {path}."
+                )
+            except Exception:
+                pass
 
     def _build_palette_commands(self) -> list[PaletteCommand]:
         """Build the command palette from the real TUI command surface."""
@@ -1701,7 +1836,7 @@ class SuperQodeApp(App):
     def _load_welcome(self):
         # Agents are now lazy loaded - no need to preload
         try:
-            from superqode.tui import load_team_config
+            from superqode.team_config import load_team_config
 
             team_name = load_team_config().team_name
         except Exception:
@@ -1713,10 +1848,62 @@ class SuperQodeApp(App):
         # Temporarily disable auto-scroll so we can scroll to top
         log.auto_scroll = False
         log.write(render_welcome(self.agents, team_name))
+        self._maybe_show_onboarding(log)
         # Scroll to top so user sees the attractive header first
         log.scroll_home(animate=False)
         # Re-enable auto-scroll for future messages
         self.set_timer(0.2, lambda: setattr(log, "auto_scroll", True))
+
+    @staticmethod
+    def _onboarding_marker() -> Path:
+        return Path.home() / ".superqode" / ".onboarded"
+
+    def _maybe_show_onboarding(self, log: ConversationLog) -> None:
+        """Show a one-time getting-started card on the very first launch."""
+        marker = self._onboarding_marker()
+        try:
+            if marker.exists():
+                return
+        except Exception:
+            return
+
+        t = Text()
+        t.append("\n  ╭─ ", style=THEME["purple"])
+        t.append("Welcome to SuperQode 👋", style=f"bold {THEME['purple']}")
+        t.append("  first run, here's the 30-second start\n", style=THEME["muted"])
+        t.append("  │\n", style=THEME["purple"])
+        steps = [
+            ("1", "Connect a model", ":connect", "pick ACP, BYOK, or a local provider"),
+            ("2", "Pick a model", "↑/↓ then Enter", "or type the number shown"),
+            ("3", "Start coding", "just type", "describe what you want to build"),
+        ]
+        for num, title, cmd, hint in steps:
+            t.append(f"  │  {num}. ", style=f"bold {THEME['cyan']}")
+            t.append(f"{title}  ", style=f"bold {THEME['text']}")
+            t.append(cmd, style=f"bold {THEME['success']}")
+            t.append(f"  — {hint}\n", style=THEME["muted"])
+        t.append("  │\n", style=THEME["purple"])
+        t.append("  │  Handy: ", style=THEME["muted"])
+        t.append("@file", style=THEME["cyan"])
+        t.append(" reference  •  ", style=THEME["muted"])
+        t.append("PgUp/PgDn", style=THEME["cyan"])
+        t.append(" scroll  •  ", style=THEME["muted"])
+        t.append("Ctrl+G", style=THEME["cyan"])
+        t.append(" stash draft  •  ", style=THEME["muted"])
+        t.append(":transcript", style=THEME["cyan"])
+        t.append(" history  •  ", style=THEME["muted"])
+        t.append("Esc Esc", style=THEME["cyan"])
+        t.append(" rewind\n", style=THEME["muted"])
+        t.append("  ╰─ Type ", style=THEME["purple"])
+        t.append(":help", style=f"bold {THEME['cyan']}")
+        t.append(" anytime. This message won't show again.\n", style=THEME["muted"])
+        log.write(t)
+
+        try:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("1", encoding="utf-8")
+        except Exception:
+            pass
 
     # ========================================================================
     # Sidebar Toggle & File Selection
@@ -1924,6 +2111,40 @@ class SuperQodeApp(App):
         except Exception:
             self._ensure_input_focus()
 
+    def _conversation_log(self) -> ConversationLog | None:
+        try:
+            return self.query_one("#log", ConversationLog)
+        except Exception:
+            return None
+
+    def action_scroll_log_page_up(self) -> None:
+        """Scroll the conversation log up while keeping input focused."""
+        log = self._conversation_log()
+        if log is not None:
+            log.auto_scroll = False
+            log.scroll_page_up(animate=False)
+
+    def action_scroll_log_page_down(self) -> None:
+        """Scroll the conversation log down while keeping input focused."""
+        log = self._conversation_log()
+        if log is not None:
+            log.auto_scroll = False
+            log.scroll_page_down(animate=False)
+
+    def action_scroll_log_home(self) -> None:
+        """Scroll the conversation log to the top."""
+        log = self._conversation_log()
+        if log is not None:
+            log.auto_scroll = False
+            log.scroll_home(animate=False)
+
+    def action_scroll_log_end(self) -> None:
+        """Scroll the conversation log to the bottom and resume follow mode."""
+        log = self._conversation_log()
+        if log is not None:
+            log.scroll_end(animate=False)
+            log.auto_scroll = True
+
     @on(CommandPalette.CommandSelected)
     def on_command_palette_selected(self, event: CommandPalette.CommandSelected) -> None:
         """Route command palette selections through the existing command dispatcher."""
@@ -2066,7 +2287,9 @@ class SuperQodeApp(App):
         # Inline permission prompt: while a permission decision is pending,
         # y/n/a resolve it and escape cancels. Intercepted before the Input
         # widget so the keystroke never lands in the prompt buffer.
-        if getattr(self, "_permission_pending", False):
+        if getattr(self, "_permission_pending", False) and not getattr(
+            self, "_awaiting_agent_question", False
+        ):
             if event.key in ("y", "n", "a", "escape"):
                 event.stop()
                 mapping = {"y": "y", "n": "n", "a": "a", "escape": "n"}
@@ -2363,8 +2586,22 @@ class SuperQodeApp(App):
         if self.is_busy:
             self.action_cancel_agent()
         else:
-            # Do nothing - user can use :exit to quit
-            log.add_info("💡 No agent running. Use :exit to quit.")
+            # Idle: a double-Escape rewinds to the last message for editing.
+            import time as _time
+
+            now = _time.monotonic()
+            last = getattr(self, "_last_idle_escape_at", 0.0)
+            self._last_idle_escape_at = now
+            input_empty = True
+            try:
+                input_empty = not self.query_one("#prompt-input", SelectionAwareInput).value.strip()
+            except Exception:
+                pass
+            if input_empty and self._user_message_history(log) and (now - last) < 0.8:
+                self._last_idle_escape_at = 0.0
+                self._handle_rewind("last", log)
+            else:
+                log.add_info("💡 Press Esc again to rewind your last message  •  :exit to quit")
 
     def _select_model_by_number(self, num: int):
         """Select a model by number when awaiting model selection."""
@@ -3770,9 +4007,129 @@ class SuperQodeApp(App):
                     model=summary["model"],
                     tokens=summary["tokens"],
                     cost=summary["cost"],
+                    context_window=self._resolve_context_window(
+                        summary.get("provider", ""), summary.get("model", "")
+                    ),
                 )
         except Exception:
             pass
+
+    def _update_terminal_title(self, task: str = "") -> None:
+        """Reflect the active model and current task in the terminal/tab title."""
+        agent = getattr(self, "current_agent", "") or getattr(self, "current_model", "") or ""
+        sub_parts = []
+        if agent:
+            sub_parts.append(str(agent))
+        if task:
+            compact = " ".join(str(task).split())
+            sub_parts.append(compact[:40] + ("…" if len(compact) > 40 else ""))
+        try:
+            self.title = "SuperQode"
+            # Textual emits the OS terminal-title escape from title/sub_title.
+            self.sub_title = " · ".join(sub_parts)
+        except Exception:
+            pass
+
+    def _resolve_context_window(self, provider: str, model: str) -> int:
+        """Best-effort lookup of a model's context window for the usage meter."""
+        if not model:
+            return 0
+        try:
+            from superqode.providers.models import get_model_info
+
+            info = get_model_info(provider, model)
+            if info and getattr(info, "context_window", 0):
+                return int(info.context_window)
+        except Exception:
+            pass
+        return 0
+
+    # ========================================================================
+    # Type-ahead message queue
+    # ========================================================================
+
+    def _enqueue_message(self, text: str) -> None:
+        """Queue a message to send once the agent is free, with a live preview."""
+        if not hasattr(self, "_typeahead_queue"):
+            self._typeahead_queue = []
+        self._typeahead_queue.append(text)
+        try:
+            self.query_one("#prompt-input", SelectionAwareInput).value = ""
+        except Exception:
+            pass
+        self._render_queued_input()
+
+    def _render_queued_input(self) -> None:
+        """Render the pending type-ahead queue under the prompt."""
+        queue = getattr(self, "_typeahead_queue", [])
+        try:
+            panel = self.query_one("#queued-input", Static)
+        except Exception:
+            return
+        if not queue:
+            panel.update("")
+            panel.remove_class("visible")
+            return
+        t = Text()
+        t.append(f"  ⏳ queued ({len(queue)})  ", style=f"bold {THEME['warning']}")
+        t.append("sends when the agent is free  •  ", style=THEME["dim"])
+        t.append(":queue clear", style=f"bold {THEME['cyan']}")
+        t.append("\n", style="")
+        for index, msg in enumerate(queue[:5], 1):
+            preview = " ".join(str(msg).split())
+            if len(preview) > 80:
+                preview = preview[:77].rstrip() + "..."
+            t.append(f"    {index}. ", style=THEME["dim"])
+            t.append(preview, style=THEME["muted"])
+            t.append("\n", style="")
+        if len(queue) > 5:
+            t.append(f"    +{len(queue) - 5} more\n", style=THEME["dim"])
+        panel.update(t)
+        panel.add_class("visible")
+
+    def _clear_message_queue(self, log: ConversationLog | None = None) -> None:
+        self._typeahead_queue = []
+        self._render_queued_input()
+        if log is not None:
+            log.add_info("Cleared the queued messages.")
+
+    def _drain_message_queue(self) -> None:
+        """Send the next queued message if the agent is idle."""
+        queue = getattr(self, "_typeahead_queue", [])
+        if not queue or getattr(self, "is_busy", False):
+            return
+        # Don't interrupt selection/question flows.
+        if getattr(self, "_awaiting_agent_question", False) or self._in_selection_mode():
+            return
+        text = queue.pop(0)
+        self._render_queued_input()
+        try:
+            input_widget = self.query_one("#prompt-input", SelectionAwareInput)
+            input_widget.value = text
+            self.post_message(Input.Submitted(input_widget, text))
+        except Exception:
+            pass
+
+    def _in_selection_mode(self) -> bool:
+        return any(
+            getattr(self, flag, False)
+            for flag in (
+                "_awaiting_acp_agent_selection",
+                "_awaiting_byok_provider",
+                "_awaiting_byok_model",
+                "_awaiting_connect_type",
+                "_awaiting_local_provider",
+                "_awaiting_local_model",
+                "_awaiting_model_selection",
+                "_awaiting_recommendation_selection",
+            )
+        )
+
+    def watch_is_busy(self, old: bool, new: bool) -> None:
+        """When the agent becomes idle, drain any queued type-ahead messages."""
+        if old and not new and getattr(self, "_typeahead_queue", []):
+            # Small delay lets the completion render settle before the next turn.
+            self.set_timer(0.2, self._drain_message_queue)
 
     # ========================================================================
     # Input Handling
@@ -4137,13 +4494,9 @@ class SuperQodeApp(App):
         return True
 
     def _handle_command(self, cmd: str, log: ConversationLog):
-        # Command aliases for Vim-friendly shortcuts
+        # Command aliases for Vim-friendly shortcuts. The single-letter
+        # :h/:s/:i shortcuts were retired in favour of the full commands.
         alias_map = {
-            "c": "connect",
-            "q": "quit",
-            "h": "help",
-            "s": "sidebar",
-            "i": "init",
             "m": "mode",
         }
 
@@ -4255,6 +4608,8 @@ class SuperQodeApp(App):
             self._handle_approve(args, log)
         elif c == "reject":
             self._handle_reject(args, log)
+        elif c in ("permissions", "policy"):
+            self._handle_permissions(log)
         elif c == "diff":
             self._handle_diff(args, log)
         elif c == "plan":
@@ -4263,6 +4618,18 @@ class SuperQodeApp(App):
             self._handle_undo(log)
         elif c == "history":
             self._handle_history(args, log)
+        elif c == "transcript":
+            self._handle_select(log, "transcript")
+        elif c == "timeline":
+            self._handle_timeline(log)
+        elif c == "rewind":
+            self._handle_rewind(args, log)
+        elif c in ("paste", "image", "img"):
+            self._handle_paste_image(args, log)
+        elif c == "queue":
+            self._handle_queue(args, log)
+        elif c == "stash":
+            self._handle_stash(args, log)
         elif c == "view":
             self._handle_view(args, log)
         elif c == "search":
@@ -4279,8 +4646,12 @@ class SuperQodeApp(App):
             self._prompt_file_cmd(args, log)
         elif c == "sessions":
             self._show_sessions(log)
+        elif c == "session":
+            self._handle_session(args, log)
         elif c == "resume":
             self._handle_resume_session(args, log)
+        elif c == "update":
+            self._handle_update(args, log)
         elif c in ("fork", "clone"):
             self._handle_fork_session(args, log)
         elif c == "compact":
@@ -4368,6 +4739,18 @@ class SuperQodeApp(App):
         """Show the active tool profile and available tools."""
         from superqode.tools.base import ToolRegistry
 
+        arg = (args or "").strip().lower()
+        if arg in {"recent", "runs", "history"}:
+            log.write(Text(log.format_tool_runs_index() + "\n", style=THEME["text"]))
+            return
+        if arg.isdigit():
+            detail = log.format_tool_run_detail(int(arg))
+            if detail.startswith("No tool run #"):
+                log.add_info(detail)
+                return
+            self._open_text_overlay(detail, f"Tool Run #{int(arg)}")
+            return
+
         active_tools = []
         active_profile = "unknown"
         if hasattr(self, "_pure_mode") and self._pure_mode.session.connected:
@@ -4453,6 +4836,151 @@ class SuperQodeApp(App):
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
 
+    def _handle_timeline(self, log: ConversationLog):
+        """Open a replay-style timeline of the current TUI session."""
+        self._open_text_overlay(log.format_session_timeline(), "Session Timeline")
+
+    def action_stash_draft(self) -> None:
+        """Ctrl+G: set the current prompt draft aside; :stash restores it."""
+        try:
+            input_widget = self.query_one("#prompt-input", SelectionAwareInput)
+        except Exception:
+            return
+        draft = input_widget.value.strip()
+        log = self.query_one("#log", ConversationLog)
+        if not draft:
+            if getattr(self, "_draft_stash", []):
+                log.add_info("Nothing to stash. Use :stash to restore your last draft.")
+            return
+        if not hasattr(self, "_draft_stash"):
+            self._draft_stash = []
+        self._draft_stash.append(draft)
+        input_widget.value = ""
+        log.add_info(f"📥 Stashed draft ({len(self._draft_stash)} saved). Restore with :stash.")
+
+    def _handle_stash(self, args: str, log: ConversationLog):
+        """Manage stashed prompt drafts: restore (pop), list, or clear."""
+        arg = (args or "").strip().lower()
+        stash = getattr(self, "_draft_stash", [])
+        if arg in ("list", "ls"):
+            if not stash:
+                log.add_info("No stashed drafts. Press Ctrl+G while typing to stash one.")
+                return
+            t = Text()
+            t.append("\n  📥 ", style=f"bold {THEME['purple']}")
+            t.append(f"Stashed drafts ({len(stash)})\n\n", style=f"bold {THEME['text']}")
+            for index, draft in enumerate(reversed(stash), 1):
+                preview = " ".join(str(draft).split())
+                if len(preview) > 96:
+                    preview = preview[:93].rstrip() + "..."
+                t.append(f"  {index}. ", style=THEME["dim"])
+                t.append(f"{preview}\n", style=THEME["text"])
+            t.append("\n  ", style="")
+            t.append(":stash", style=f"bold {THEME['cyan']}")
+            t.append(" restores the most recent  •  ", style=THEME["muted"])
+            t.append(":stash clear", style=f"bold {THEME['cyan']}")
+            t.append(" drops all.\n", style=THEME["muted"])
+            log.write(t)
+            return
+        if arg in ("clear", "drop", "reset"):
+            self._draft_stash = []
+            log.add_info("Cleared stashed drafts.")
+            return
+        # Default / "pop": restore the most recent stash into the prompt.
+        if not stash:
+            log.add_info("No stashed drafts. Press Ctrl+G while typing to stash one.")
+            return
+        draft = stash.pop()
+        self._draft_stash = stash
+        self._set_prompt_prefill(draft)
+        log.add_info(f"📤 Restored stashed draft ({len(stash)} remaining). Edit and press Enter.")
+
+    def _handle_queue(self, args: str, log: ConversationLog):
+        """View or clear the type-ahead message queue."""
+        arg = (args or "").strip().lower()
+        queue = getattr(self, "_typeahead_queue", [])
+        if arg in ("clear", "reset", "drop"):
+            self._clear_message_queue(log)
+            return
+        if not queue:
+            log.add_info(
+                "No queued messages. Type while the agent is busy to queue your next message."
+            )
+            return
+        t = Text()
+        t.append("\n  ⏳ ", style=f"bold {THEME['warning']}")
+        t.append(f"Queued messages ({len(queue)})\n\n", style=f"bold {THEME['text']}")
+        for index, msg in enumerate(queue, 1):
+            preview = " ".join(str(msg).split())
+            if len(preview) > 100:
+                preview = preview[:97].rstrip() + "..."
+            t.append(f"  {index}. ", style=THEME["dim"])
+            t.append(f"{preview}\n", style=THEME["text"])
+        t.append("\n  ", style="")
+        t.append(":queue clear", style=f"bold {THEME['cyan']}")
+        t.append(" to drop them.\n", style=THEME["muted"])
+        log.write(t)
+
+    def _user_message_history(self, log: ConversationLog) -> list[str]:
+        """Return prior user messages (oldest first) for rewind/edit."""
+        return [
+            text for role, text, _agent in log._messages if role == "user" and str(text).strip()
+        ]
+
+    def _handle_rewind(self, args: str, log: ConversationLog):
+        """Pull a previous user message back into the prompt to edit and resend.
+
+        ``:rewind`` lists recent user messages; ``:rewind <n>`` loads message #n.
+        With no argument and a single previous message, the latest is loaded.
+        """
+        messages = self._user_message_history(log)
+        if not messages:
+            log.add_info("No previous messages to rewind to yet.")
+            return
+
+        arg = (args or "").strip()
+        if arg.isdigit():
+            index = int(arg)
+            if not (1 <= index <= len(messages)):
+                log.add_info(
+                    f"No message #{index}. Use :rewind to list ({len(messages)} available)."
+                )
+                return
+            self._load_rewind_message(messages[index - 1], index, len(messages), log)
+            return
+        if arg in ("last", "prev", "previous", ""):
+            if arg == "" and len(messages) > 1:
+                # Multiple messages: show the picker so the user can choose.
+                self._show_rewind_list(messages, log)
+                return
+            self._load_rewind_message(messages[-1], len(messages), len(messages), log)
+            return
+        log.add_info("Usage: :rewind  •  :rewind <number>  •  :rewind last")
+
+    def _show_rewind_list(self, messages: list[str], log: ConversationLog):
+        """Show a numbered list of prior user messages for :rewind <n>."""
+        t = Text()
+        t.append("\n  ↩ ", style=f"bold {THEME['purple']}")
+        t.append("Rewind to a previous message\n\n", style=f"bold {THEME['text']}")
+        recent = messages[-9:]
+        start = len(messages) - len(recent) + 1
+        for offset, message in enumerate(recent):
+            number = start + offset
+            preview = " ".join(str(message).split())
+            if len(preview) > 88:
+                preview = preview[:85].rstrip() + "..."
+            t.append(f"  [{number}] ", style=f"bold {THEME['cyan']}")
+            t.append(f"{preview}\n", style=THEME["text"])
+        t.append("\n  Run ", style=THEME["muted"])
+        t.append(":rewind <number>", style=f"bold {THEME['cyan']}")
+        t.append(" to load it into the prompt for editing.\n", style=THEME["muted"])
+        log.write(t)
+
+    def _load_rewind_message(self, message: str, index: int, total: int, log: ConversationLog):
+        """Load a chosen prior message into the prompt for editing."""
+        self._set_prompt_prefill(message)
+        log.add_info(f"Rewound to message {index}/{total}. Edit and press Enter to resend.")
+
     def _skills_cmd(self, args: str, log: ConversationLog):
         """Handle local skill inventory and setup commands.
 
@@ -4516,7 +5044,9 @@ class SuperQodeApp(App):
             skill = skills.get(name)
             if skill is None:
                 lowered = name.lower()
-                skill = next((item for item in skills.values() if item.name.lower() == lowered), None)
+                skill = next(
+                    (item for item in skills.values() if item.name.lower() == lowered), None
+                )
             if skill is None:
                 log.add_error(f"Skill not found: {name}")
                 log.add_info("Use :skills to list loaded skills.")
@@ -4632,7 +5162,9 @@ class SuperQodeApp(App):
                 return
             destination_dir = skills_root / source.stem
             destination_dir.mkdir(parents=True, exist_ok=True)
-            destination = destination_dir / ("SKILL.md" if source.name.upper() == "SKILL.MD" else source.name)
+            destination = destination_dir / (
+                "SKILL.md" if source.name.upper() == "SKILL.MD" else source.name
+            )
             if destination.exists():
                 log.add_error(f"Destination already exists: {destination}")
                 return
@@ -4719,7 +5251,9 @@ class SuperQodeApp(App):
 
         if not skills_root.exists():
             t.append("  warning  ", style=THEME["warning"])
-            t.append("Skills directory does not exist. Use :skills add <name>.\n", style=THEME["text"])
+            t.append(
+                "Skills directory does not exist. Use :skills add <name>.\n", style=THEME["text"]
+            )
             self._show_command_output(log, t)
             return
 
@@ -4859,7 +5393,9 @@ class SuperQodeApp(App):
             if recipe.skills:
                 details.append(f"{len(recipe.skills)} skill(s)")
             if recipe.attachments or recipe.mcp_resources:
-                details.append(f"{len(recipe.attachments) + len(recipe.mcp_resources)} attachment(s)")
+                details.append(
+                    f"{len(recipe.attachments) + len(recipe.mcp_resources)} attachment(s)"
+                )
             if details:
                 t.append(f"      {', '.join(details)}\n", style=THEME["dim"])
             if recipe.path:
@@ -4879,7 +5415,10 @@ class SuperQodeApp(App):
         fields = [
             ("Description", recipe.description),
             ("Path", str(recipe.path) if recipe.path else ""),
-            ("Provider", f"{recipe.provider}/{recipe.model}" if recipe.provider or recipe.model else ""),
+            (
+                "Provider",
+                f"{recipe.provider}/{recipe.model}" if recipe.provider or recipe.model else "",
+            ),
             ("Role", ".".join(part for part in [recipe.mode, recipe.role] if part)),
             ("Harness", recipe.harness),
             ("Skills", ", ".join(recipe.skills)),
@@ -4993,7 +5532,9 @@ class SuperQodeApp(App):
     async def _run_recipe(self, recipe: LocalRecipe, extra: str, log: ConversationLog) -> None:
         issues = self._recipe_issues(recipe)
         if issues:
-            log.add_error(f"Recipe {recipe.name} has {len(issues)} issue(s). Run :recipe doctor {recipe.name}.")
+            log.add_error(
+                f"Recipe {recipe.name} has {len(issues)} issue(s). Run :recipe doctor {recipe.name}."
+            )
             return
         prompt = self._recipe_prompt_text(recipe, extra)
         refs = list(getattr(self, "_attached_refs", []))
@@ -5038,8 +5579,10 @@ class SuperQodeApp(App):
                 log.add_error(f"Could not load recipe harness: {exc}")
                 return
 
-        if recipe.provider and recipe.model and (
-            self.current_provider != recipe.provider or self.current_model != recipe.model
+        if (
+            recipe.provider
+            and recipe.model
+            and (self.current_provider != recipe.provider or self.current_model != recipe.model)
         ):
             try:
                 from superqode.providers.registry import PROVIDERS, ProviderCategory
@@ -5130,6 +5673,14 @@ class SuperQodeApp(App):
 
         return self._static_command_candidates(value)
 
+    @staticmethod
+    def _should_submit_prompt_without_completion(value: str) -> bool:
+        """Return True when Enter should execute the exact command in the prompt."""
+        text = value.strip()
+        if not text.startswith(("/", ":")):
+            return False
+        return text.lower() in {candidate.lower() for candidate in COMMANDS}
+
     def _update_prompt_completion_panel(self, value: str) -> None:
         """Refresh the visible prompt completion panel as the prompt changes."""
         candidates = self._prompt_completion_candidates_for(value)
@@ -5177,7 +5728,9 @@ class SuperQodeApp(App):
             text.append(f"  {marker} ", style=THEME["success"] if selected else THEME["dim"])
             text.append(f"{candidate.label:<28}", style=label_style)
             if candidate.kind:
-                text.append(f"{candidate.kind:<10}", style=THEME["purple"] if selected else THEME["dim"])
+                text.append(
+                    f"{candidate.kind:<10}", style=THEME["purple"] if selected else THEME["dim"]
+                )
             if candidate.description:
                 text.append(candidate.description[:80], style=desc_style)
             text.append("\n")
@@ -5187,9 +5740,9 @@ class SuperQodeApp(App):
     def _move_prompt_completion(self, delta: int) -> None:
         if not self._prompt_completion_candidates:
             return
-        self._prompt_completion_index = (
-            self._prompt_completion_index + delta
-        ) % len(self._prompt_completion_candidates)
+        self._prompt_completion_index = (self._prompt_completion_index + delta) % len(
+            self._prompt_completion_candidates
+        )
         self._render_prompt_completion_panel()
 
     def _accept_prompt_completion(self, input_widget: SelectionAwareInput) -> bool:
@@ -5301,7 +5854,9 @@ class SuperQodeApp(App):
         if not base.exists() or not base.is_dir():
             return []
         try:
-            entries = sorted(base.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower()))
+            entries = sorted(
+                base.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())
+            )
         except OSError:
             return []
         candidates: list[tuple[str, str]] = []
@@ -5363,6 +5918,18 @@ class SuperQodeApp(App):
     @staticmethod
     def _static_command_candidates(value: str) -> list[PromptCompletionCandidate]:
         lowered = value.lower()
+        if lowered in {":c", ":co", ":con", ":conn", ":conne", ":connec"}:
+            commands = [":connect", ":connect acp", ":connect byok", ":connect local"]
+            return [
+                PromptCompletionCandidate(
+                    value=command,
+                    label=command,
+                    description=SuperQodeApp._command_description(command),
+                    kind="command",
+                )
+                for command in commands
+                if command != value
+            ]
         return [
             PromptCompletionCandidate(
                 value=command,
@@ -5370,9 +5937,49 @@ class SuperQodeApp(App):
                 description=SuperQodeApp._command_description(command),
                 kind="command",
             )
-            for command in sorted(dict.fromkeys(COMMANDS), key=str.lower)
+            for command in sorted(
+                dict.fromkeys(COMMANDS),
+                key=lambda command: SuperQodeApp._command_completion_sort_key(lowered, command),
+            )
             if command.lower().startswith(lowered) and command != value
         ][:8]
+
+    @staticmethod
+    def _command_completion_sort_key(lowered_input: str, command: str) -> tuple[int, str]:
+        command_lower = command.lower()
+        priority: dict[str, dict[str, int]] = {
+            ":": {
+                ":connect": 0,
+                ":connect acp": 1,
+                ":connect byok": 2,
+                ":connect local": 3,
+                ":exit": 4,
+                ":quit": 5,
+            },
+            ":c": {
+                ":connect": 0,
+                ":connect acp": 1,
+                ":connect byok": 2,
+                ":connect local": 3,
+                ":clear": 20,
+            },
+            ":co": {
+                ":connect": 0,
+                ":connect acp": 1,
+                ":connect byok": 2,
+                ":connect local": 3,
+            },
+            ":q": {
+                ":quit": 0,
+            },
+            ":e": {
+                ":exit": 0,
+            },
+        }
+        for prefix, scores in priority.items():
+            if lowered_input.startswith(prefix):
+                return (scores.get(command_lower, 10), command_lower)
+        return (10, command_lower)
 
     @staticmethod
     def _command_description(command: str) -> str:
@@ -5385,6 +5992,8 @@ class SuperQodeApp(App):
             ":prompt": "load a prompt file into the input buffer",
             ":model": "inspect or switch active provider/model",
             ":connect": "connect ACP, BYOK, or local runtime",
+            ":exit": "exit SuperQode",
+            ":quit": "exit SuperQode",
             ":status": "show harness status",
             ":tools": "show tool profiles",
         }
@@ -5459,7 +6068,9 @@ class SuperQodeApp(App):
             description=str(recipe_data.get("description") or "").strip(),
             path=path,
             prompt=str(recipe_data.get("prompt") or "").strip(),
-            prompt_file=str(recipe_data.get("prompt_file") or recipe_data.get("promptFile") or "").strip(),
+            prompt_file=str(
+                recipe_data.get("prompt_file") or recipe_data.get("promptFile") or ""
+            ).strip(),
             provider=provider,
             model=model,
             mode=str(recipe_data.get("mode") or "").strip(),
@@ -5471,7 +6082,9 @@ class SuperQodeApp(App):
             mcp_resources=SuperQodeApp._string_tuple(
                 recipe_data.get("mcp_resources") or recipe_data.get("mcpResources")
             ),
-            harness=str(recipe_data.get("harness") or recipe_data.get("harness_spec") or "").strip(),
+            harness=str(
+                recipe_data.get("harness") or recipe_data.get("harness_spec") or ""
+            ).strip(),
             variables=SuperQodeApp._string_tuple(variables),
             raw=dict(recipe_data),
         )
@@ -5639,7 +6252,11 @@ class SuperQodeApp(App):
             label = f"{resource.server_id}/{resource.uri}"
             description = resource.name or resource.mime_type or ""
             if resource.description:
-                description = f"{description} - {resource.description}" if description else resource.description
+                description = (
+                    f"{description} - {resource.description}"
+                    if description
+                    else resource.description
+                )
             candidates.append(
                 PromptCompletionCandidate(
                     value=label,
@@ -5669,7 +6286,9 @@ class SuperQodeApp(App):
 
     @staticmethod
     def _all_skill_completion_candidates() -> list[PromptCompletionCandidate]:
-        loaded = {candidate.label: candidate for candidate in SuperQodeApp._skill_completion_candidates()}
+        loaded = {
+            candidate.label: candidate for candidate in SuperQodeApp._skill_completion_candidates()
+        }
         skills_root = Path.cwd() / ".agents" / "skills"
         if not skills_root.exists():
             return list(loaded.values())
@@ -5943,6 +6562,143 @@ class SuperQodeApp(App):
         self._sync_attachment_prefill()
         log.add_info(f"Attached {len(refs)} reference(s) to the next prompt.")
 
+    _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff"}
+
+    def _is_image_path(self, value: str) -> bool:
+        """True if value looks like a path to a readable image file."""
+        try:
+            path = Path(value.strip().strip("'\"")).expanduser()
+            return path.suffix.lower() in self._IMAGE_EXTENSIONS and path.is_file()
+        except Exception:
+            return False
+
+    def _grab_clipboard_image(self) -> Optional[Path]:
+        """Best-effort capture of an image on the system clipboard to a temp PNG.
+
+        Tries macOS ``pngpaste`` first, then an AppleScript fallback, then
+        Pillow's ImageGrab (cross-platform). Returns the saved path or None.
+        """
+        import shutil
+        import subprocess
+        import sys
+        import tempfile
+
+        target_dir = Path.cwd() / ".superqode" / "pasted"
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            target_dir = Path(tempfile.gettempdir())
+        out = target_dir / f"clipboard-{int(time.time())}.png"
+
+        if shutil.which("pngpaste"):
+            try:
+                result = subprocess.run(["pngpaste", str(out)], capture_output=True, timeout=10)
+                if result.returncode == 0 and out.exists() and out.stat().st_size > 0:
+                    return out
+            except Exception:
+                pass
+
+        if sys.platform == "darwin":
+            script = (
+                "set theData to the clipboard as «class PNGf»\n"
+                f'set theFile to open for access POSIX file "{out}" with write permission\n'
+                "write theData to theFile\nclose access theFile"
+            )
+            try:
+                result = subprocess.run(
+                    ["osascript", "-e", script], capture_output=True, timeout=10
+                )
+                if result.returncode == 0 and out.exists() and out.stat().st_size > 0:
+                    return out
+            except Exception:
+                pass
+
+        try:
+            from PIL import ImageGrab  # type: ignore
+
+            image = ImageGrab.grabclipboard()
+            if image is not None and hasattr(image, "save"):
+                image.save(out, "PNG")
+                if out.exists() and out.stat().st_size > 0:
+                    return out
+        except Exception:
+            pass
+        return None
+
+    def _stage_image_attachment(
+        self, path: Path, log: ConversationLog, *, source: str = ""
+    ) -> bool:
+        """Stage an image file for the next prompt and inform the user."""
+        try:
+            ref = "@" + str(path.relative_to(Path.cwd()))
+        except ValueError:
+            ref = "@" + str(path)
+        if not hasattr(self, "_attached_refs"):
+            self._attached_refs = []
+        self._attached_refs.append(ref)
+        self._attached_refs = list(dict.fromkeys(self._attached_refs))
+        self._sync_attachment_prefill()
+        label = f" ({source})" if source else ""
+        log.add_success(f"🖼  Attached image{label}: {path.name}")
+        model = getattr(self, "current_model", "") or ""
+        if model and not self._model_supports_vision(model):
+            log.add_info(
+                "Note: the active model may not support images. Connect a vision model to use it."
+            )
+        return True
+
+    def _model_supports_vision(self, model: str) -> bool:
+        """Best-effort check whether the active model accepts images."""
+        try:
+            from superqode.providers.models import get_model_info
+
+            info = get_model_info(getattr(self, "current_provider", "") or "", model)
+            if info is not None:
+                return bool(getattr(info, "supports_vision", False))
+        except Exception:
+            pass
+        # Unknown: don't discourage; assume capable.
+        return True
+
+    def _handle_paste_image(self, args: str, log: ConversationLog):
+        """`:paste` — attach an image from a path or the system clipboard."""
+        value = (args or "").strip().strip("'\"")
+        if value:
+            path = Path(value).expanduser()
+            if not path.is_absolute():
+                path = Path.cwd() / path
+            if self._is_image_path(str(path)):
+                self._stage_image_attachment(path, log, source="path")
+            else:
+                log.add_error(f"Not a readable image: {value}")
+            return
+        image_path = self._grab_clipboard_image()
+        if image_path is not None:
+            self._stage_image_attachment(image_path, log, source="clipboard")
+        else:
+            log.add_info(
+                "No image found on the clipboard. Copy an image, then run :paste — "
+                "or use :paste <path-to-image>."
+            )
+
+    def on_paste(self, event) -> None:
+        """Auto-attach when an image file path is pasted into the terminal."""
+        text = (getattr(event, "text", "") or "").strip().strip("'\"")
+        if text and "\n" not in text and self._is_image_path(text):
+            try:
+                log = self.query_one("#log", ConversationLog)
+            except Exception:
+                return
+            path = Path(text).expanduser()
+            if not path.is_absolute():
+                path = Path.cwd() / path
+            self._stage_image_attachment(path, log, source="pasted path")
+            try:
+                event.stop()
+                event.prevent_default()
+            except Exception:
+                pass
+
     def _prompt_file_cmd(self, args: str, log: ConversationLog):
         """Load a prompt file into the input buffer."""
         value = args.strip()
@@ -6197,7 +6953,9 @@ class SuperQodeApp(App):
                         return
                     log.add_info(message)
                 ok = await manager.connect(server_id)
-                log.add_info(f"MCP server {server_id}: {'connected' if ok else 'failed to connect'}")
+                log.add_info(
+                    f"MCP server {server_id}: {'connected' if ok else 'failed to connect'}"
+                )
             else:
                 results = await manager.connect_all()
                 if not results:
@@ -6210,7 +6968,9 @@ class SuperQodeApp(App):
         if subcommand in {"reconnect", "restart"}:
             if subargs:
                 ok = await manager.restart_server(subargs)
-                log.add_info(f"MCP server {subargs}: {'reconnected' if ok else 'failed to reconnect'}")
+                log.add_info(
+                    f"MCP server {subargs}: {'reconnected' if ok else 'failed to reconnect'}"
+                )
             else:
                 configs = manager.get_server_configs()
                 if not configs:
@@ -6334,9 +7094,17 @@ class SuperQodeApp(App):
             if hasattr(config_obj, "url"):
                 target = getattr(config_obj, "url", "")
             else:
-                target = " ".join([getattr(config_obj, "command", ""), *getattr(config_obj, "args", [])])
+                target = " ".join(
+                    [getattr(config_obj, "command", ""), *getattr(config_obj, "args", [])]
+                )
             server_summary = summary.get("servers", {}).get(server_id, {})
-            style = THEME["success"] if state == "connected" else THEME["warning"] if state == "error" else THEME["muted"]
+            style = (
+                THEME["success"]
+                if state == "connected"
+                else THEME["warning"]
+                if state == "error"
+                else THEME["muted"]
+            )
             t.append(f"  {server_id}\n", style=f"bold {THEME['cyan']}")
             t.append("    state      ", style=THEME["muted"])
             t.append(f"{state}\n", style=style)
@@ -6368,6 +7136,147 @@ class SuperQodeApp(App):
         from superqode.agent.session_manager import SessionManager
 
         return SessionManager(storage_dir=".superqode/sessions")
+
+    def _current_session_id(self) -> str:
+        """Resolve the active or most-recent local session id."""
+        try:
+            if hasattr(self, "_pure_mode") and self._pure_mode:
+                sid = self._pure_mode.get_current_session_id()
+                if sid:
+                    return sid
+        except Exception:
+            pass
+        try:
+            sessions = self._get_session_manager().list_all_sessions()
+            if sessions:
+                return sessions[0].session_id
+        except Exception:
+            pass
+        return ""
+
+    def _handle_session(self, args: str, log: ConversationLog):
+        """Session subcommands: `:session` (info) and `:session rename <name>`."""
+        parts = (args or "").strip().split(maxsplit=1)
+        sub = parts[0].lower() if parts else ""
+        manager = self._get_session_manager()
+
+        if sub in ("rename", "name", "title"):
+            rest = parts[1].strip() if len(parts) > 1 else ""
+            if not rest:
+                log.add_info("Usage: :session rename [<id>] <new title>")
+                return
+            # Optional leading id/prefix: "<id> <title...>".
+            sid = ""
+            tokens = rest.split(maxsplit=1)
+            if len(tokens) == 2:
+                candidate = tokens[0]
+                matches = [
+                    s for s in manager.list_all_sessions() if s.session_id.startswith(candidate)
+                ]
+                if len(matches) == 1:
+                    sid = matches[0].session_id
+                    rest = tokens[1].strip()
+            if not sid:
+                sid = self._current_session_id()
+            if not sid:
+                log.add_error("No session to rename yet. Start a conversation first.")
+                return
+            metadata = manager.get_session_info(sid)
+            if metadata is None:
+                log.add_error(f"Session not found: {sid[:8]}")
+                return
+            metadata.title = rest
+            try:
+                manager.store._save_metadata(metadata)
+            except Exception as exc:
+                log.add_error(f"Could not save session title: {exc}")
+                return
+            log.add_success(f"Renamed session {sid[:8]} → “{rest}”")
+            return
+
+        # No/unknown subcommand: show current session info.
+        sid = self._current_session_id()
+        if not sid:
+            log.add_info("No active session. Connect and send a message, or :sessions to list.")
+            return
+        metadata = manager.get_session_info(sid)
+        t = Text()
+        t.append("\n  📂 ", style=f"bold {THEME['purple']}")
+        t.append("Current Session\n\n", style=f"bold {THEME['text']}")
+        t.append("  Id      ", style=THEME["muted"])
+        t.append(f"{sid[:12]}\n", style=f"bold {THEME['cyan']}")
+        if metadata is not None:
+            t.append("  Title   ", style=THEME["muted"])
+            t.append(f"{metadata.title or '(unnamed)'}\n", style=THEME["text"])
+            t.append("  Model   ", style=THEME["muted"])
+            t.append(
+                f"{metadata.provider or '-'} / {metadata.model or 'unknown'}\n", style=THEME["text"]
+            )
+            t.append("  Messages ", style=THEME["muted"])
+            t.append(f"{metadata.message_count}\n", style=THEME["text"])
+        t.append("\n  ", style="")
+        t.append(":session rename <name>", style=f"bold {THEME['cyan']}")
+        t.append(" to label it.\n", style=THEME["muted"])
+        log.write(t)
+
+    def _handle_update(self, args: str, log: ConversationLog):
+        """Check whether a newer SuperQode release is available on PyPI."""
+        from importlib.metadata import version as _pkg_version
+
+        try:
+            current = _pkg_version("superqode")
+        except Exception:
+            current = "unknown"
+        log.add_info(f"Installed SuperQode version: {current}. Checking for updates…")
+        self.run_worker(self._check_update_worker(current, log), exclusive=False)
+
+    async def _check_update_worker(self, current: str, log: ConversationLog):
+        """Fetch the latest version from PyPI without blocking the UI."""
+        import asyncio
+        import json as _json
+        import urllib.request
+
+        def _fetch() -> str:
+            with urllib.request.urlopen("https://pypi.org/pypi/superqode/json", timeout=8) as resp:
+                data = _json.loads(resp.read().decode("utf-8"))
+            return str(data.get("info", {}).get("version", ""))
+
+        try:
+            latest = await asyncio.to_thread(_fetch)
+        except Exception as exc:
+            self._call_ui(log.add_error, f"Could not check for updates: {exc}")
+            return
+        if not latest:
+            self._call_ui(log.add_info, "Could not determine the latest version.")
+            return
+        if self._version_is_newer(latest, current):
+            t = Text()
+            t.append("\n  ⬆ ", style=f"bold {THEME['success']}")
+            t.append(f"Update available: {current} → {latest}\n", style=f"bold {THEME['text']}")
+            t.append("  Upgrade with ", style=THEME["muted"])
+            t.append("uv tool upgrade superqode", style=f"bold {THEME['cyan']}")
+            t.append(" or ", style=THEME["muted"])
+            t.append("pip install -U superqode", style=f"bold {THEME['cyan']}")
+            t.append("\n", style="")
+            self._call_ui(log.write, t)
+        else:
+            self._call_ui(log.add_success, f"SuperQode is up to date ({current}).")
+
+    @staticmethod
+    def _version_is_newer(latest: str, current: str) -> bool:
+        """Compare dotted version strings; True if latest > current."""
+
+        def parse(v: str) -> tuple:
+            out = []
+            for part in str(v).split("."):
+                num = "".join(ch for ch in part if ch.isdigit())
+                out.append(int(num) if num else 0)
+            return tuple(out)
+
+        try:
+            return parse(latest) > parse(current)
+        except Exception:
+            return False
 
     def _show_sessions(self, log: ConversationLog):
         """Show recent local coding sessions."""
@@ -6718,7 +7627,13 @@ class SuperQodeApp(App):
         t.append(report.status, style=f"bold {status_style}")
         t.append("\n\n  Checks\n", style=f"bold {THEME['text']}")
         for check in report.checks:
-            style = THEME["error"] if check.status == "error" else THEME["warning"] if check.status == "warning" else THEME["success"]
+            style = (
+                THEME["error"]
+                if check.status == "error"
+                else THEME["warning"]
+                if check.status == "warning"
+                else THEME["success"]
+            )
             icon = "!" if check.status == "error" else "!" if check.status == "warning" else "✓"
             t.append(f"  {icon} ", style=style)
             t.append(f"{check.name:<14}", style=f"bold {style}")
@@ -6785,7 +7700,10 @@ class SuperQodeApp(App):
         for run in runs[:12]:
             t.append("  ", style="")
             t.append(run.run_id, style=f"bold {THEME['cyan']}")
-            t.append(f"  {run.status}", style=THEME["success"] if run.status == "succeeded" else THEME["warning"])
+            t.append(
+                f"  {run.status}",
+                style=THEME["success"] if run.status == "succeeded" else THEME["warning"],
+            )
             if run.metadata.get("workflow"):
                 t.append("  workflow", style=THEME["purple"])
             t.append(f"  {run.prompt_preview}\n", style=THEME["muted"])
@@ -6822,7 +7740,10 @@ class SuperQodeApp(App):
         t.append("Harness Evidence\n\n", style=f"bold {THEME['text']}")
         t.append("  Run         ", style=THEME["muted"])
         t.append(run["run_id"], style=f"bold {THEME['cyan']}")
-        t.append(f"  {run['status']}\n", style=THEME["success"] if run["status"] == "succeeded" else THEME["warning"])
+        t.append(
+            f"  {run['status']}\n",
+            style=THEME["success"] if run["status"] == "succeeded" else THEME["warning"],
+        )
         t.append("  Harness     ", style=THEME["muted"])
         t.append(f"{run['harness']}  {run['runtime']}", style=THEME["text"])
         t.append("\n  Model       ", style=THEME["muted"])
@@ -6901,7 +7822,10 @@ class SuperQodeApp(App):
         t.append("\n  Persistence ", style=THEME["muted"])
         t.append(str(run.get("prompt_persistence") or "unknown"), style=THEME["text"])
         t.append("  full=", style=THEME["dim"])
-        t.append(str(run.get("has_full_prompt")), style=THEME["success"] if run.get("has_full_prompt") else THEME["warning"])
+        t.append(
+            str(run.get("has_full_prompt")),
+            style=THEME["success"] if run.get("has_full_prompt") else THEME["warning"],
+        )
         t.append("\n  Events      ", style=THEME["muted"])
         t.append(f"{events['count']} ({events['first']} -> {events['last']})", style=THEME["text"])
         if plan.get("limitations"):
@@ -7136,9 +8060,15 @@ class SuperQodeApp(App):
                 steps.insert(0, WorkflowStep(router_prompt, id="router"))
             if mode == WorkflowMode.EVALUATOR_OPTIMIZER:
                 defaults = [
-                    WorkflowStep(f"Create a candidate solution.\n\nTask:\n{prompt}", id="candidate"),
-                    WorkflowStep("Evaluate the candidate for correctness and completeness.", id="evaluator"),
-                    WorkflowStep("Improve the candidate using the evaluator feedback.", id="optimizer"),
+                    WorkflowStep(
+                        f"Create a candidate solution.\n\nTask:\n{prompt}", id="candidate"
+                    ),
+                    WorkflowStep(
+                        "Evaluate the candidate for correctness and completeness.", id="evaluator"
+                    ),
+                    WorkflowStep(
+                        "Improve the candidate using the evaluator feedback.", id="optimizer"
+                    ),
                 ]
                 steps = (steps + defaults[len(steps) :])[:3]
             return steps
@@ -7146,12 +8076,17 @@ class SuperQodeApp(App):
         if mode == WorkflowMode.EVALUATOR_OPTIMIZER:
             return [
                 WorkflowStep(f"Create a candidate solution.\n\nTask:\n{prompt}", id="candidate"),
-                WorkflowStep("Evaluate the candidate for correctness and completeness.", id="evaluator"),
+                WorkflowStep(
+                    "Evaluate the candidate for correctness and completeness.", id="evaluator"
+                ),
                 WorkflowStep("Improve the candidate using the evaluator feedback.", id="optimizer"),
             ]
         if mode == WorkflowMode.ROUTER:
             return [
-                WorkflowStep(f"Route this request to the best execution path.\n\nTask:\n{prompt}", id="router"),
+                WorkflowStep(
+                    f"Route this request to the best execution path.\n\nTask:\n{prompt}",
+                    id="router",
+                ),
                 WorkflowStep(prompt, id="default"),
             ]
         return [WorkflowStep(prompt, id="step-1")]
@@ -7277,7 +8212,9 @@ class SuperQodeApp(App):
         else:
             t.append("not selected", style=THEME["warning"])
         t.append("\n  Task        ", style=THEME["muted"])
-        t.append(prompt or "(no task supplied)", style=THEME["text"] if prompt else THEME["warning"])
+        t.append(
+            prompt or "(no task supplied)", style=THEME["text"] if prompt else THEME["warning"]
+        )
 
         t.append("\n\n  Steps\n", style=f"bold {THEME['text']}")
         for index, step in enumerate(steps, 1):
@@ -7336,13 +8273,18 @@ class SuperQodeApp(App):
         t.append("\n")
 
         overall = "blocked" if blocked else "warnings" if warnings else "ready"
-        overall_style = THEME["error"] if blocked else THEME["warning"] if warnings else THEME["success"]
+        overall_style = (
+            THEME["error"] if blocked else THEME["warning"] if warnings else THEME["success"]
+        )
         t.append("\n  Result      ", style=THEME["muted"])
         t.append(overall, style=f"bold {overall_style}")
         t.append(f"  ({blocked} blocked, {warnings} warning(s))\n", style=THEME["dim"])
         if not blocked:
             t.append("\n  Run with    ", style=THEME["muted"])
-            t.append(f':workflow run "{prompt}"\n' if prompt else ":workflow run <task>\n", style=THEME["cyan"])
+            t.append(
+                f':workflow run "{prompt}"\n' if prompt else ":workflow run <task>\n",
+                style=THEME["cyan"],
+            )
         return t
 
     def _show_workflow_preview(self, log, prompt: str = "") -> None:
@@ -7421,7 +8363,9 @@ class SuperQodeApp(App):
             self._show_workflow_center(log)
             return
         if action not in {"run", "start"}:
-            log.add_info("Usage: :workflow status | :workflow preview <task> | :workflow run <task>")
+            log.add_info(
+                "Usage: :workflow status | :workflow preview <task> | :workflow run <task>"
+            )
             return
 
         prompt = " ".join(rest).strip()
@@ -7435,7 +8379,9 @@ class SuperQodeApp(App):
 
         provider, model = self._workflow_provider_model(spec)
         if not provider or not model:
-            log.add_error("Connect a BYOK/local provider or set model_policy.primary before running workflows.")
+            log.add_error(
+                "Connect a BYOK/local provider or set model_policy.primary before running workflows."
+            )
             return
 
         try:
@@ -7505,7 +8451,9 @@ class SuperQodeApp(App):
         done = Text()
         done.append("\n  ✓ ", style=f"bold {THEME['success']}")
         done.append("Workflow complete", style=f"bold {THEME['text']}")
-        done.append(f"  {result.mode.value}, {len(result.results)} result(s)\n\n", style=THEME["dim"])
+        done.append(
+            f"  {result.mode.value}, {len(result.results)} result(s)\n\n", style=THEME["dim"]
+        )
         if getattr(result, "run_id", ""):
             done.append("Run graph: ", style=THEME["muted"])
             done.append(f":harness graph {result.run_id}\n\n", style=THEME["cyan"])
@@ -7596,16 +8544,33 @@ class SuperQodeApp(App):
             return
         if not pending:
             return
-        log.add_info(
-            f"Tool approval needed ({len(pending)} item(s)). "
-            'Use :approve [N] or :reject [N] ["message"].'
-        )
+        card = Text()
+        card.append("🔐 Tool approval needed\n\n", style=f"bold {THEME['warning']}")
+        card.append(f"{len(pending)} pending item(s)\n", style=THEME["text"])
         for entry in pending:
             tool = entry.get("tool_name") or "<unknown>"
             args_preview = str(entry.get("arguments", {}))
             if len(args_preview) > 120:
                 args_preview = args_preview[:117] + "..."
-            log.add_info(f"  [{entry['index']}] {tool} {args_preview}")
+            card.append("\n[", style=THEME["muted"])
+            card.append(str(entry.get("index", 0)), style=f"bold {THEME['cyan']}")
+            card.append("] ", style=THEME["muted"])
+            card.append(tool, style=f"bold {THEME['text']}")
+            card.append(f"  {args_preview}", style=THEME["muted"])
+        card.append("\n\n")
+        card.append(":approve [N]", style=f"bold {THEME['success']}")
+        card.append("  •  ", style=THEME["dim"])
+        card.append(":reject [N]", style=f"bold {THEME['error']}")
+        card.append(' ["message"]', style=THEME["muted"])
+        log.write(
+            Panel(
+                card,
+                title=f"[bold {THEME['warning']}]Action approval[/]",
+                border_style=THEME["warning"],
+                box=ROUNDED,
+                padding=(1, 2),
+            )
+        )
 
     def _handle_resume_session(self, args: str, log: ConversationLog):
         """Resume a previous local provider session."""
@@ -7828,7 +8793,7 @@ class SuperQodeApp(App):
         log = self.query_one("#log", ConversationLog)
         log.clear()
         try:
-            from superqode.tui import load_team_config
+            from superqode.team_config import load_team_config
 
             team_name = load_team_config().team_name
         except Exception:
@@ -8341,9 +9306,8 @@ team:
                 return
 
         if getattr(self, "is_busy", False):
-            log.add_info(
-                "Agent is already running. Use Esc/Ctrl+X to cancel, or wait for it to finish."
-            )
+            # Type-ahead: queue the message and send it when the agent is free.
+            self._enqueue_message(text)
             return
 
         text, inline_mcp_refs = self._extract_mcp_refs_from_text(text)
@@ -8391,6 +9355,7 @@ team:
 
         log.add_user(text)
         self._last_user_message = text
+        self._update_terminal_title(text)
 
         # Store file context for the message
         self._current_file_context = file_context
@@ -8440,14 +9405,33 @@ team:
             self._pending_agent_question_future = future
             self._permission_pending = True
 
-            lines = [question.question]
+            card = Text()
+            card.append("🤔 Agent needs your input\n\n", style=f"bold {THEME['warning']}")
+            card.append(str(question.question), style=f"bold {THEME['text']}")
+            card.append("\n")
             if getattr(question, "options", None):
-                lines.extend(f"{idx}. {option}" for idx, option in enumerate(question.options, 1))
+                card.append("\n")
+                for idx, option in enumerate(question.options, 1):
+                    card.append(f"  [{idx}] ", style=f"bold {THEME['cyan']}")
+                    card.append(str(option), style=THEME["text"])
+                    card.append("\n")
             if getattr(question, "default", None):
-                lines.append(f"Default: {question.default}")
+                card.append("\n  default: ", style=THEME["muted"])
+                card.append(str(question.default), style=f"bold {THEME['muted']}")
+                card.append("\n")
+            card.append("\n  type a number, or your own answer", style=THEME["muted"])
+            card.append("  •  ", style=THEME["dim"])
+            card.append(":cancel", style=f"bold {THEME['cyan']}")
+            card.append(" to skip", style=THEME["muted"])
 
-            log.add_info("Agent needs your input:")
-            log.add_info("\n".join(lines))
+            log.write(
+                Panel(
+                    card,
+                    border_style=THEME["warning"],
+                    box=ROUNDED,
+                    padding=(1, 2),
+                )
+            )
 
             try:
                 input_widget = self.query_one("#prompt-input", SelectionAwareInput)
@@ -8791,6 +9775,9 @@ team:
                 diff_text = str(metadata.get("diff_text") or "")
                 additions = metadata.get("additions")
                 deletions = metadata.get("deletions")
+                if not diff_text and output_str and self._looks_like_diff(output_str):
+                    diff_text = output_str
+                    output_str = "updated"
 
                 # Try to parse and display JSON nicely
                 if status == "success" and output_str and not diff_text:
@@ -8811,6 +9798,7 @@ team:
                     None,
                     additions if isinstance(additions, int) else None,
                     deletions if isinstance(deletions, int) else None,
+                    metadata,
                 )
             else:
                 _complete_tool_activity(name, "success")
@@ -9712,6 +10700,28 @@ team:
         mode = os.environ.get("SUPERQODE_ACP_CLIENT", "").strip().lower()
         return mode in {"custom", "jsonrpc", "rpc"}
 
+    @staticmethod
+    def _normalize_acp_model_id(agent_type: str, model: str) -> str | None:
+        """Normalize a UI model value before sending it to an ACP agent."""
+        if not model or agent_type not in ("codex", "openhands", "opencode"):
+            return None
+        normalized = model.strip()
+        # "auto"/"default" is a UI placeholder meaning "let the agent
+        # pick its configured default model" — it is NOT a real model id.
+        if normalized.lower() in (
+            "auto",
+            "default",
+            "opencode/auto",
+            "opencode/default",
+        ):
+            return None
+        # OpenCode model ids are provider/model pairs (for example
+        # opencode/big-pickle or deepseek/deepseek-v4...). Only prefix legacy
+        # bare ids; do not rewrite real provider ids.
+        if agent_type == "opencode" and "/" not in normalized:
+            return f"opencode/{normalized}"
+        return normalized
+
     def _run_acp_jsonrpc_client(
         self,
         message: str,
@@ -9808,7 +10818,10 @@ team:
             command = "cagent --acp"
             model_display = f"cagent/{model}" if model else "cagent/auto"
         elif agent_type == "fast-agent":
-            command = os.getenv("SUPERQODE_FAST_AGENT_ACP_COMMAND", "fast-agent --acp")
+            command = os.getenv(
+                "SUPERQODE_FAST_AGENT_ACP_COMMAND",
+                "uvx --from fast-agent-mcp@latest fast-agent-acp",
+            )
             model_display = f"fast-agent/{model}" if model else "fast-agent/auto"
         elif agent_type == "llmling-agent":
             command = "llmling-agent --acp"
@@ -9990,13 +11003,21 @@ team:
             Verbose mode (``log.tool_output_mode == "verbose"``) opts
             back into the full payload.
             """
-            from superqode.acp.render import render_acp_tool_output
+            from superqode.acp.render import (
+                display_title_from_update,
+                extract_tool_arguments,
+                normalize_acp_tool_status,
+                render_acp_tool_output,
+            )
 
-            status = update.get("status", "")
+            status = normalize_acp_tool_status(update.get("status", ""))
             raw_output = update.get("rawOutput") or update.get("output") or update.get("result")
             content = update.get("content")
             kind = update.get("kind") or ""
-            tool_title = update.get("title") or "Tool"
+            tool_title = display_title_from_update(update)
+            raw_input = extract_tool_arguments(update)
+            file_path = raw_input.get("path", raw_input.get("filePath", ""))
+            command = raw_input.get("command", "")
             mode = getattr(log, "tool_output_mode", "normal")
 
             if status == "completed":
@@ -10015,10 +11036,10 @@ team:
                         log.add_tool_call,
                         tool_title,
                         "success",
-                        "",
-                        "",
+                        file_path,
+                        command,
                         "updated",
-                        None,
+                        raw_input,
                         output_str,
                     )
                     return
@@ -10037,9 +11058,10 @@ team:
                         log.add_tool_call,
                         tool_title,
                         "success",
-                        "",
-                        "",
+                        file_path,
+                        command,
                         output_str,
+                        raw_input,
                     )
             elif status == "failed":
                 # Errors are *always* shown, even in minimal mode.
@@ -10059,9 +11081,20 @@ team:
                     log.add_tool_call,
                     tool_title,
                     "error",
-                    "",
-                    "",
+                    file_path,
+                    command,
                     str(error_payload),
+                    raw_input,
+                )
+            elif status == "running":
+                self._call_ui(
+                    log.add_tool_call,
+                    tool_title,
+                    "running",
+                    file_path,
+                    command,
+                    "",
+                    raw_input,
                 )
 
         async def on_plan(entries: list[dict]) -> None:
@@ -10086,7 +11119,9 @@ team:
             size = usage.get("size")
             if isinstance(used, int) and isinstance(size, int) and size:
                 pct = (used / size) * 100
-                self._call_ui(log.add_info, f"Context: {used / 1000:.1f}K/{size / 1000:.1f}K ({pct:.1f}%)")
+                self._call_ui(
+                    log.add_info, f"Context: {used / 1000:.1f}K/{size / 1000:.1f}K ({pct:.1f}%)"
+                )
 
         async def on_permission_request(options: list[dict], tool_call: dict) -> str:
             tool_name = tool_call.get("title", "unknown")
@@ -10128,27 +11163,7 @@ team:
 
         async def run_prompt() -> tuple[str | None, dict]:
             total_start = time.monotonic()
-            model_id = None
-            if model and agent_type in ("codex", "openhands", "opencode"):
-                normalized = model.strip()
-                # "auto"/"default" is a UI placeholder meaning "let the agent
-                # pick its configured default model" — it is NOT a real model id.
-                # Passing a literal "auto" (or "opencode/auto") to session/new
-                # makes opencode return an empty response, which the app then
-                # surfaces as "run failed". Send no model in that case so the
-                # agent falls back to its own default. This mirrors the
-                # special-casing already done in _auto_select_opencode_model.
-                if normalized.lower() in (
-                    "auto",
-                    "default",
-                    "opencode/auto",
-                    "opencode/default",
-                ):
-                    model_id = None
-                else:
-                    model_id = normalized
-                    if agent_type == "opencode" and not model_id.startswith("opencode/"):
-                        model_id = f"opencode/{model_id}"
+            model_id = self._normalize_acp_model_id(agent_type, model)
 
             project_root = Path.cwd()
             client_key = (str(project_root), command, model_id or "")
@@ -10556,6 +11571,7 @@ team:
                         import json
 
                         todos = json.loads(str(output))
+                        self._call_ui(self._set_todos, todos)
                         if todos:
                             formatted_todos = self._format_todo_list(todos)
                             # Count tasks by status
@@ -10735,6 +11751,7 @@ team:
                         import json
 
                         todos = json.loads(result_content)
+                        self._call_ui(self._set_todos, todos)
                         if todos:
                             formatted_todos = self._format_todo_list(todos)
                             # Count tasks by status
@@ -10824,6 +11841,25 @@ team:
         Returns:
             Tuple of (response_dict, was_handled)
         """
+
+        def terminal_output_for_status(terminal: dict) -> str:
+            output_text = str(terminal.get("output") or "").strip()
+            exit_code = terminal.get("exit_code")
+            if exit_code == 0:
+                return output_text
+            if terminal.get("timed_out"):
+                timeout = terminal.get("timeout_seconds")
+                prefix = (
+                    f"Run timed out after {timeout:g}s and was killed."
+                    if isinstance(timeout, (int, float))
+                    else "Run timed out and was killed."
+                )
+            elif exit_code is not None:
+                prefix = f"Run failed (exit {exit_code})."
+            else:
+                prefix = "Run failed."
+            return f"{prefix}\n{output_text}" if output_text else prefix
+
         def emit_terminal_tool(terminal: dict, status: str, output: str = "") -> None:
             command_text = terminal.get("command", "")
             terminal_id = terminal.get("terminal_id", "")
@@ -10840,6 +11876,16 @@ team:
                 command_text,
                 output_text,
                 args,
+                "",
+                None,
+                None,
+                None,
+                {
+                    "command": command_text,
+                    "exit_code": terminal.get("exit_code"),
+                    "timed_out": terminal.get("timed_out", False),
+                    "timeout": terminal.get("timeout_seconds"),
+                },
             )
 
         def emit_terminal_final_once(terminal: dict) -> None:
@@ -10848,7 +11894,7 @@ team:
             terminal["rendered_final"] = True
             exit_code = terminal.get("exit_code")
             status = "success" if exit_code == 0 else "error"
-            emit_terminal_tool(terminal, status, terminal.get("output", ""))
+            emit_terminal_tool(terminal, status, terminal_output_for_status(terminal))
 
         def pty_supported() -> bool:
             return os.name != "nt" and os.getenv("SUPERQODE_ACP_TERMINAL_PTY", "1").lower() not in {
@@ -10883,18 +11929,53 @@ team:
                 return
 
             term_process = terminal["process"]
+            stdout = term_process.stdout
+
+            def read_pipe_chunk() -> str:
+                if stdout is None:
+                    return ""
+                try:
+                    data = os.read(stdout.fileno(), 4096)
+                except (BlockingIOError, OSError, ValueError):
+                    return ""
+                if not data:
+                    return ""
+                return data.decode("utf-8", errors="replace")
+
             if term_process.poll() is not None:
-                remaining, _ = term_process.communicate(timeout=1)
-                if remaining:
-                    terminal["output"] += remaining
+                while True:
+                    try:
+                        readable, _, _ = (
+                            select.select([stdout], [], [], 0.0) if stdout else ([], [], [])
+                        )
+                    except (OSError, ValueError):
+                        break
+                    if not readable:
+                        break
+                    chunk = read_pipe_chunk()
+                    if not chunk:
+                        break
+                    terminal["output"] += chunk
                 terminal["exit_code"] = term_process.returncode
                 return
 
-            readable, _, _ = select.select([term_process.stdout], [], [], timeout)
+            readable, _, _ = select.select([stdout], [], [], timeout) if stdout else ([], [], [])
             if readable:
-                chunk = term_process.stdout.read(4096)
+                chunk = read_pipe_chunk()
                 if chunk:
                     terminal["output"] += chunk
+
+        def kill_terminal_process(term_process: subprocess.Popen) -> None:
+            if os.name != "nt":
+                try:
+                    os.killpg(term_process.pid, signal.SIGKILL)
+                    return
+                except Exception:
+                    pass
+            try:
+                term_process.kill()
+            except Exception:
+                pass
 
         def close_terminal_pty(terminal: dict) -> None:
             master_fd = terminal.pop("master_fd", None)
@@ -10960,6 +12041,7 @@ team:
                         cwd=cwd,
                         env=term_env,
                         text=True,
+                        start_new_session=(os.name != "nt"),
                     )
 
                 terminals[terminal_id] = {
@@ -11011,7 +12093,7 @@ team:
             if terminal:
                 term_process = terminal["process"]
                 try:
-                    timeout = float(params.get("timeoutMs", 120000)) / 1000
+                    timeout = float(params.get("timeoutMs", 300000)) / 1000
                     deadline = time.monotonic() + timeout
                     while term_process.poll() is None:
                         if time.monotonic() >= deadline:
@@ -11024,7 +12106,9 @@ team:
 
                     return {"exitCode": terminal["exit_code"], "signal": None}, True
                 except subprocess.TimeoutExpired:
-                    term_process.kill()
+                    terminal["timed_out"] = True
+                    terminal["timeout_seconds"] = timeout
+                    kill_terminal_process(term_process)
                     try:
                         term_process.wait(timeout=2)
                     except Exception:
@@ -11041,7 +12125,7 @@ team:
             terminal_id = params.get("terminalId", "")
             terminal = terminals.get(terminal_id)
             if terminal and terminal["process"]:
-                terminal["process"].terminate()
+                kill_terminal_process(terminal["process"])
                 close_terminal_pty(terminal)
             return {}, True
 
@@ -11053,6 +12137,52 @@ team:
             return {}, True
 
         return {}, False
+
+    def _set_todos(self, todos: list) -> None:
+        """Update the pinned live todo/plan panel from the latest todo data."""
+        try:
+            panel = self.query_one("#todo-panel", Static)
+        except Exception:
+            return
+        items = [t for t in (todos or []) if isinstance(t, dict)]
+        # Hide once every task is finished (or there are none) to avoid clutter.
+        active = [t for t in items if t.get("status") not in ("completed", "cancelled")]
+        if not items or not active:
+            panel.update("")
+            panel.remove_class("visible")
+            return
+
+        status_icons = {
+            "completed": ("✅", THEME["success"]),
+            "in_progress": ("🔄", THEME["cyan"]),
+            "pending": ("⏳", THEME["muted"]),
+            "cancelled": ("❌", THEME["error"]),
+        }
+        done = sum(1 for t in items if t.get("status") == "completed")
+        t = Text()
+        t.append("  📋 Plan  ", style=f"bold {THEME['purple']}")
+        t.append(f"{done}/{len(items)} done\n", style=THEME["muted"])
+        for index, todo in enumerate(items[:6], 1):
+            status = todo.get("status", "pending")
+            icon, color = status_icons.get(status, ("○", THEME["muted"]))
+            content = " ".join(str(todo.get("content", "")).split())
+            if len(content) > 70:
+                content = content[:67].rstrip() + "..."
+            text_style = THEME["dim"] if status in ("completed", "cancelled") else THEME["text"]
+            t.append(f"  {icon} ", style=color)
+            t.append(content, style=text_style)
+            t.append("\n", style="")
+        if len(items) > 6:
+            t.append(f"  +{len(items) - 6} more\n", style=THEME["dim"])
+        panel.update(t)
+        panel.add_class("visible")
+
+    def _set_todos_from_input(self, tool_input: dict) -> None:
+        """Update the todo panel from a todo_write tool input payload."""
+        if isinstance(tool_input, dict):
+            todos = tool_input.get("todos")
+            if isinstance(todos, list):
+                self._set_todos(todos)
 
     def _format_todo_list(self, todos: list) -> list:
         """Format a TODO list with emojis and nice display."""
@@ -12937,6 +14067,30 @@ team:
         # Get file path from tool input
         file_path = tool_input.get("filePath", tool_input.get("path", tool_input.get("file", "")))
 
+        side_effect_tools = (
+            "write",
+            "edit",
+            "patch",
+            "create",
+            "mkdir",
+            "delete",
+            "remove",
+            "rm",
+            "move",
+            "rename",
+            "replace",
+            "insert",
+            "append",
+            "multi_edit",
+            "apply_patch",
+        )
+
+        # Side-effecting filesystem tools should be visible in ASK mode even
+        # when they target the project. This is the permission dialog users
+        # expect from coding agents before edits land.
+        if any(name in tool_lower for name in side_effect_tools):
+            return True
+
         if file_path:
             # Resolve to absolute path
             try:
@@ -12986,10 +14140,6 @@ team:
         if tool_lower in ("search", "grep", "find", "list", "ls", "glob", "tree"):
             return False
 
-        # Write/edit within project - ask for permission (side effects)
-        if tool_lower in ("write", "edit", "patch", "create", "mkdir"):
-            return True
-
         # Unknown tools - ask for permission to be safe
         return True
 
@@ -13002,38 +14152,45 @@ team:
         # Store the pending tool info for later use when approved
         self._pending_tool_name = tool_name
         self._pending_tool_input = tool_input
+        self._permission_pending = True
 
         # Calculate the reason for permission
         reason = ""
         file_path = tool_input.get("filePath", tool_input.get("path", tool_input.get("file", "")))
+        tool_lower = tool_name.lower()
         if file_path and not os.path.abspath(file_path).startswith(os.getcwd()):
             reason = "outside project"
-        elif tool_name.lower() in ("web", "fetch", "http", "curl", "wget", "browser"):
+        elif any(name in tool_lower for name in ("write", "edit", "patch", "create", "delete")):
+            reason = "file change"
+        elif tool_lower in ("web", "fetch", "http", "curl", "wget", "browser"):
             reason = "external network"
-        elif tool_name.lower() in ("bash", "shell", "terminal"):
+        elif tool_lower in ("bash", "shell", "terminal"):
             reason = "system command"
+        risk_label, risk_style = self._permission_risk(tool_name, tool_input, reason)
 
         prompt = Text()
-        prompt.append("  ⚠ ", style=f"bold {THEME['warning']}")
-        prompt.append("approve ", style=THEME["text"])
+        prompt.append("🔐 Permission required\n\n", style=f"bold {THEME['warning']}")
+        prompt.append("Tool: ", style=THEME["muted"])
         prompt.append(tool_name, style=f"bold {THEME['text']}")
         if reason:
-            prompt.append("  •  ", style=THEME["muted"])
+            prompt.append("  •  ", style=THEME["dim"])
             prompt.append(reason, style=THEME["muted"])
         prompt.append("\n")
+        prompt.append("Risk: ", style=THEME["muted"])
+        prompt.append(risk_label, style=f"bold {risk_style}")
+        prompt.append("\n")
 
-        # One concise argument line for context.
         if tool_input:
-            first_key, first_val = next(iter(tool_input.items()))
-            val_str = str(first_val)
-            if len(val_str) > 120:
-                val_str = val_str[:117] + "…"
-            prompt.append("    ")
-            prompt.append(f"{first_key}: ", style=THEME["muted"])
-            prompt.append(val_str, style=THEME["text"])
             prompt.append("\n")
+            for key, value in list(tool_input.items())[:4]:
+                val_str = str(value)
+                if len(val_str) > 140:
+                    val_str = val_str[:137] + "…"
+                prompt.append(f"  {key}: ", style=THEME["muted"])
+                prompt.append(val_str, style=THEME["text"])
+                prompt.append("\n")
 
-        prompt.append("    ")
+        prompt.append("\n")
         prompt.append("[y]", style=f"bold {THEME['success']}")
         prompt.append("es  ", style=THEME["muted"])
         prompt.append("[n]", style=f"bold {THEME['error']}")
@@ -13043,7 +14200,55 @@ team:
         prompt.append("[esc]", style=f"bold {THEME['muted']}")
         prompt.append(" cancel\n", style=THEME["muted"])
 
-        log.write(prompt)
+        log.write(
+            Panel(
+                prompt,
+                title=f"[bold {THEME['warning']}]Action approval[/]",
+                border_style=THEME["warning"],
+                box=ROUNDED,
+                padding=(1, 2),
+            )
+        )
+        try:
+            input_widget = self.query_one("#prompt-input", SelectionAwareInput)
+            input_widget.placeholder = "Approve tool? y / n / a"
+            input_widget.focus()
+        except Exception:
+            pass
+        self._start_permission_pulse()
+
+    def _permission_risk(
+        self, tool_name: str, tool_input: dict, reason: str = ""
+    ) -> tuple[str, str]:
+        """Return a coarse risk label/color for a permission request."""
+        tool_lower = tool_name.lower()
+        command = str(tool_input.get("command", "") or "").lower()
+        path = str(
+            tool_input.get("filePath", tool_input.get("path", tool_input.get("file", ""))) or ""
+        )
+        dangerous = (
+            "rm -rf",
+            "sudo",
+            "chmod 777",
+            "chown",
+            "mkfs",
+            "dd ",
+            ">/dev/",
+            ":(){",
+        )
+        if any(pattern in command for pattern in dangerous):
+            return "critical", THEME["error"]
+        if reason == "outside project" or path.startswith(("/etc/", "/usr/", "/var/", "/bin/")):
+            return "high", THEME["error"]
+        if reason == "external network":
+            return "high", THEME["warning"]
+        if tool_lower in ("bash", "shell", "terminal") or "exec" in tool_lower:
+            return "medium", THEME["warning"]
+        if any(name in tool_lower for name in ("delete", "remove", "rm")):
+            return "high", THEME["error"]
+        if reason == "file change":
+            return "medium", THEME["warning"]
+        return "low", THEME["success"]
 
     def _show_permission_modal(self, tool_name: str, tool_input: dict, reason: str):
         """Show a modal permission dialog for ASK mode."""
@@ -13334,6 +14539,7 @@ team:
                 log.add_info("Approved")
             except Exception:
                 pass
+            self._reset_input_placeholder()
             return True
         elif response in ("n", "no", "deny", "reject"):
             self._permission_response = "deny"
@@ -13343,6 +14549,7 @@ team:
                 log.add_info("Denied")
             except Exception:
                 pass
+            self._reset_input_placeholder()
             return True
         elif response in ("a", "all", "allow all", "yes all"):
             self._permission_response = "allow_all"
@@ -13359,6 +14566,7 @@ team:
                 log.add_info("All tools approved (AUTO mode)")
             except Exception:
                 pass
+            self._reset_input_placeholder()
             return True
 
         return False
@@ -13608,16 +14816,24 @@ team:
 
         We pre-format diffs in the ACP layer rather than letting
         ``_format_tool_output`` JSON-parse them, so it needs a cheap
-        check to skip the JSON path. A single leading ``@@`` or a line
-        starting with ``+ `` / ``- `` (with a space, to avoid false-
-        positives on markdown list bullets) is enough signal.
+        check to skip the JSON path. Accept standard unified-diff
+        markers (``diff``, ``index``, ``---``/``+++``, ``@@``) plus
+        ACP's compact hunk body lines.
         """
         if not text:
             return False
         head = text.lstrip().splitlines()
-        for line in head[:6]:
+        saw_old = False
+        saw_new = False
+        for line in head[:12]:
             stripped = line.strip()
-            if stripped.startswith("@@"):
+            if stripped.startswith(("diff ", "index ", "@@")):
+                return True
+            if stripped.startswith("--- "):
+                saw_old = True
+            elif stripped.startswith("+++ "):
+                saw_new = True
+            if saw_old and saw_new:
                 return True
             if stripped.startswith(("+ ", "- ", "+\t", "-\t")):
                 return True
@@ -14491,10 +15707,6 @@ team:
         self, response_text: str, name: str, duration: float, log: ConversationLog
     ):
         """Show the final response with proper formatting and word wrapping."""
-        from rich.panel import Panel
-        from rich.syntax import Syntax
-        import re
-
         # Store the response for :copy command
         self._last_response = response_text
 
@@ -14507,264 +15719,15 @@ team:
         sep.append("  ━" * 30 + "\n", style="#a855f7")
         log.write(sep)
 
-        # Clean up the response text - collapse multiple blank lines
-        clean_text = self._strip_markdown(response_text.strip())
-        clean_text = re.sub(r"\n{3,}", "\n\n", clean_text)  # Max 2 newlines
-
-        # Check if response contains markdown code blocks
-        has_code_blocks = "```" in response_text
-
-        if has_code_blocks:
-            # Parse and render code blocks separately for better display
-            self._render_with_code_blocks(response_text.strip(), log)
-        else:
-            # Simple text response - wrap properly
-            self._render_plain_text(clean_text, log)
+        if response_text.strip():
+            log.write_final_response(
+                response_text, agent=name, success=True, trailing_newline=False
+            )
 
         # Simple footer line (no copy/open hints for cleaner UX)
         footer = Text()
         footer.append("\n", style="")
         log.write(footer)
-
-    def _strip_markdown(self, text: str) -> str:
-        """Strip markdown formatting from text for clean display."""
-        import re
-
-        # Don't strip code blocks - they're handled separately
-        # Store code blocks temporarily
-        code_blocks = []
-
-        def save_code_block(match):
-            code_blocks.append(match.group(0))
-            return f"@@SUPERQODE_CODE_BLOCK_{len(code_blocks) - 1}@@"
-
-        text = re.sub(r"```[\w]*\n.*?```", save_code_block, text, flags=re.DOTALL)
-
-        # Strip bold: **text** or __text__
-        text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
-        text = re.sub(r"__(.+?)__", r"\1", text)
-
-        # Strip italic: *text* or _text_ (but not in the middle of words)
-        text = re.sub(r"(?<!\w)\*([^*]+?)\*(?!\w)", r"\1", text)
-        text = re.sub(r"(?<!\w)_([^_]+?)_(?!\w)", r"\1", text)
-
-        # Strip strikethrough: ~~text~~
-        text = re.sub(r"~~(.+?)~~", r"\1", text)
-
-        # Strip inline code: `code` (but keep the text)
-        text = re.sub(r"`([^`]+?)`", r"\1", text)
-
-        # Strip links: [text](url) -> text
-        text = re.sub(r"\[([^\]]+?)\]\([^)]+?\)", r"\1", text)
-
-        # Strip images: ![alt](url) -> alt
-        text = re.sub(r"!\[([^\]]*?)\]\([^)]+?\)", r"\1", text)
-
-        # Strip horizontal rules: --- or *** or ___
-        text = re.sub(r"^[\-\*_]{3,}\s*$", "", text, flags=re.MULTILINE)
-
-        # Strip blockquotes: > text -> text
-        text = re.sub(r"^>\s*", "", text, flags=re.MULTILINE)
-
-        # Restore code blocks
-        for i, block in enumerate(code_blocks):
-            text = text.replace(f"@@SUPERQODE_CODE_BLOCK_{i}@@", block)
-
-        return text
-
-    def _render_with_code_blocks(self, text: str, log: ConversationLog):
-        """Render text that contains code blocks."""
-        from rich.syntax import Syntax
-        from rich.panel import Panel
-        import re
-
-        # Split by code blocks
-        code_pattern = r"```(\w*)\n(.*?)```"
-        parts = re.split(code_pattern, text, flags=re.DOTALL)
-
-        i = 0
-        while i < len(parts):
-            part = parts[i]
-
-            # Check if this is a language identifier (comes before code)
-            if i + 2 < len(parts) and parts[i + 1]:
-                # This part is text before code block - strip markdown
-                if part.strip():
-                    clean_part = self._strip_markdown(part.strip())
-                    self._render_plain_text(clean_part, log)
-
-                # Next is language, then code
-                lang = parts[i + 1] or "text"
-                code = parts[i + 2] if i + 2 < len(parts) else ""
-
-                if code.strip():
-                    # Render code block with syntax highlighting
-                    syntax = Syntax(
-                        code.strip(),
-                        lang,
-                        theme="monokai",
-                        line_numbers=False,
-                        word_wrap=True,
-                        background_color="#000000",
-                    )
-
-                    lang_icons = {
-                        "python": "🐍",
-                        "javascript": "📜",
-                        "typescript": "💠",
-                        "bash": "🖥️",
-                        "shell": "🖥️",
-                        "json": "📋",
-                        "yaml": "📝",
-                        "html": "🌐",
-                        "css": "🎨",
-                        "sql": "🗄️",
-                        "go": "🐹",
-                        "rust": "🦀",
-                        "java": "☕",
-                        "ruby": "💎",
-                    }
-                    icon = lang_icons.get(lang.lower(), "📄")
-
-                    panel = Panel(
-                        syntax,
-                        title=f"[bold #22c55e]{icon} {lang.upper()}[/]",
-                        border_style="#22c55e",
-                        padding=(0, 1),
-                    )
-                    log.write(panel)
-                    log.write(Text("\n"))
-
-                i += 3
-            else:
-                # Regular text part - strip markdown
-                if part.strip():
-                    clean_part = self._strip_markdown(part.strip())
-                    self._render_plain_text(clean_part, log)
-                i += 1
-
-    def _render_plain_text(self, text: str, log: ConversationLog):
-        """Render plain text with proper word wrapping - no markdown syntax."""
-        import textwrap
-        import shutil
-        import re
-
-        # Get terminal width - use full width available
-        try:
-            term_width = shutil.get_terminal_size().columns
-            # Use full width, only account for minimal padding (2 chars on each side)
-            width = term_width - 4  # Minimal padding for readability
-            if width < 40:
-                width = 40  # Minimum reasonable width
-        except Exception:
-            # Fallback: use a reasonable default that's wider
-            width = 120
-
-        # Collapse multiple blank lines first
-        text = re.sub(r"\n{3,}", "\n\n", text)
-
-        # Process line by line
-        lines = text.split("\n")
-        prev_was_blank = False
-
-        for line in lines:
-            line = line.strip()
-
-            if not line:
-                # Only add one blank line, skip consecutive blanks
-                if not prev_was_blank:
-                    log.write(Text(""))
-                    prev_was_blank = True
-                continue
-
-            prev_was_blank = False
-
-            # Check for bullet points (markdown style - , * , or • )
-            if line.startswith(("- ", "* ", "• ")):
-                bullet_text = line[2:].strip()
-                # Strip any remaining markdown from bullet text
-                bullet_text = self._strip_inline_markdown(bullet_text)
-                wrapped = textwrap.fill(bullet_text, width=width - 6)
-                content = Text()
-                content.append("  • ", style="bold #a855f7")
-                first_line = True
-                for wrap_line in wrapped.split("\n"):
-                    if first_line:
-                        content.append(f"{wrap_line}\n", style="#e4e4e7")
-                        first_line = False
-                    else:
-                        content.append(f"    {wrap_line}\n", style="#e4e4e7")
-                log.write(content)
-
-            # Check for numbered lists
-            elif line and line[0].isdigit() and ". " in line[:4]:
-                num_end = line.index(". ")
-                num = line[: num_end + 1]
-                rest = line[num_end + 2 :].strip()
-                # Strip any remaining markdown
-                rest = self._strip_inline_markdown(rest)
-                wrapped = textwrap.fill(rest, width=width - 8)
-                content = Text()
-                content.append(f"  {num} ", style="bold #06b6d4")
-                first_line = True
-                for wrap_line in wrapped.split("\n"):
-                    if first_line:
-                        content.append(f"{wrap_line}\n", style="#e4e4e7")
-                        first_line = False
-                    else:
-                        content.append(f"      {wrap_line}\n", style="#e4e4e7")
-                log.write(content)
-
-            # Check for headers (markdown style)
-            elif line.startswith("#"):
-                header_level = len(line) - len(line.lstrip("#"))
-                header_text = line.lstrip("#").strip()
-                # Strip any markdown from header
-                header_text = self._strip_inline_markdown(header_text)
-                # Wrap header text too if it's long
-                if len(header_text) > width - 10:
-                    header_text = header_text[: width - 13] + "..."
-                content = Text()
-                if header_level == 1:
-                    content.append(f"\n  ═══ {header_text} ═══\n\n", style="bold #a855f7")
-                elif header_level == 2:
-                    content.append(f"\n  ── {header_text} ──\n\n", style="bold #d946ef")
-                else:
-                    content.append(f"\n  {header_text}\n", style="bold #ec4899")
-                log.write(content)
-
-            # Regular paragraph text
-            else:
-                # Strip any remaining markdown
-                clean_line = self._strip_inline_markdown(line)
-                wrapped = textwrap.fill(clean_line, width=width - 4)
-                content = Text()
-                for wrap_line in wrapped.split("\n"):
-                    content.append(f"  {wrap_line}\n", style="#e4e4e7")
-                log.write(content)
-
-    def _strip_inline_markdown(self, text: str) -> str:
-        """Strip inline markdown formatting (bold, italic, code, links)."""
-        import re
-
-        # Strip bold: **text** or __text__
-        text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
-        text = re.sub(r"__(.+?)__", r"\1", text)
-
-        # Strip italic: *text* or _text_
-        text = re.sub(r"(?<![*\w])\*([^*]+?)\*(?![*\w])", r"\1", text)
-        text = re.sub(r"(?<![_\w])_([^_]+?)_(?![_\w])", r"\1", text)
-
-        # Strip strikethrough: ~~text~~
-        text = re.sub(r"~~(.+?)~~", r"\1", text)
-
-        # Strip inline code: `code`
-        text = re.sub(r"`([^`]+?)`", r"\1", text)
-
-        # Strip links: [text](url) -> text
-        text = re.sub(r"\[([^\]]+?)\]\([^)]+?\)", r"\1", text)
-
-        return text
 
     # Keep old method name for compatibility
     def _show_beautiful_response(
@@ -14863,10 +15826,9 @@ team:
         self, response_text: str, name: str, summary: dict, log: ConversationLog
     ):
         """Show a compact final outcome with the answer first."""
-        import re
-
         # Store the response for :copy command
         log._last_response = response_text
+        self._last_response = response_text
 
         duration = summary.get("duration", 0)
         tool_count = summary.get("tool_count", 0)
@@ -14889,11 +15851,16 @@ team:
             except Exception:
                 pass  # If git check fails, continue with empty lists
 
-        log.auto_scroll = False
-        log.clear()
+        # Keep prior turns in the log so users can scroll back through the
+        # whole conversation (PgUp/PgDn). Instead of wiping the view each turn,
+        # divide completed turns with a subtle separator.
+        log.auto_scroll = True
+        separator = Text()
+        separator.append("\n")
+        separator.append("  " + "─" * 44 + "\n", style=SQ_COLORS.text_muted)
+        log.write(separator)
 
         header = Text()
-        header.append("\n")
         header.append("  Done", style=f"bold {SQ_COLORS.success}")
         header.append("  •  ", style=SQ_COLORS.text_muted)
         header.append(name, style=f"bold {SQ_COLORS.text_primary}")
@@ -14918,14 +15885,7 @@ team:
         log.write(header)
 
         if response_text.strip():
-            clean_text = self._strip_markdown(response_text.strip())
-            clean_text = re.sub(r"\n{3,}", "\n\n", clean_text)
-
-            if "```" in response_text:
-                self._render_with_code_blocks(response_text.strip(), log)
-            else:
-                self._render_plain_text(clean_text, log)
-            log.write(Text("\n"))
+            log.write_final_response(response_text, agent=name, success=True)
 
         # File changes are summarized in normal mode and expanded in verbose mode.
         # This keeps the transcript compact while preserving the fast-agent-style
@@ -14939,16 +15899,12 @@ team:
             from rich.console import Console
             from io import StringIO
 
-            changes_section = render_file_changes_section(
-                files_modified, file_diffs, max_files=10
-            )
+            changes_section = render_file_changes_section(files_modified, file_diffs, max_files=10)
 
             console = Console(file=StringIO(), width=120, legacy_windows=False)
             console.print(changes_section)
             if change_mode == "verbose":
-                inline_diffs = render_inline_file_diffs(
-                    files_modified, file_diffs, max_files=10
-                )
+                inline_diffs = render_inline_file_diffs(files_modified, file_diffs, max_files=10)
                 console.print(inline_diffs)
             log.write(console.file.getvalue())
 
@@ -14988,9 +15944,11 @@ team:
         if files_modified:
             self.set_timer(0.2, lambda: self._navigate_to_sidebar_changes(files_modified))
 
-        # Schedule scroll to top with a small delay to ensure content is rendered
-        # Use set_timer to give the UI time to fully render before scrolling
-        self.set_timer(0.1, lambda: log.scroll_home())
+        # Keep the view pinned to the latest response. We no longer clear the
+        # log each turn, so scrolling home would jump away from the answer the
+        # user just asked for — scroll to the end and resume follow mode.
+        log.auto_scroll = True
+        self.set_timer(0.1, lambda: log.scroll_end(animate=False))
 
     def _show_completion_summary(self, name: str, summary: dict, log: ConversationLog):
         """Show completion summary when there's no text response."""
@@ -15064,16 +16022,12 @@ team:
             from io import StringIO
             from superqode.widgets.response_changes import render_inline_file_diffs
 
-            changes_section = render_file_changes_section(
-                files_modified, file_diffs, max_files=10
-            )
+            changes_section = render_file_changes_section(files_modified, file_diffs, max_files=10)
 
             console = Console(file=StringIO(), width=120, legacy_windows=False)
             console.print(changes_section)
             if change_mode == "verbose":
-                inline_diffs = render_inline_file_diffs(
-                    files_modified, file_diffs, max_files=10
-                )
+                inline_diffs = render_inline_file_diffs(files_modified, file_diffs, max_files=10)
                 console.print(inline_diffs)
             log.write(console.file.getvalue())
 
@@ -15816,47 +16770,38 @@ team:
         self._show_command_output(log, help_text)
 
     def _show_pure_tool_call(self, name: str, args: dict, log: ConversationLog):
-        """Show tool call inline - matches ACP format."""
-        # For local models, completely disable thinking logs (including tool calls)
-        if hasattr(self, "_pure_mode") and self._pure_mode.session.connected:
-            from superqode.providers.registry import PROVIDERS, ProviderCategory
-
-            provider = self._pure_mode.session.provider
-            provider_def = PROVIDERS.get(provider)
-            if provider_def and provider_def.category == ProviderCategory.LOCAL:
-                return  # Suppress all thinking logs for local models
-
-        # Use same formatting as ACP for consistency
-        msg = self._format_tool_message_rich(name, args)
-        # Call directly since we're already in the UI thread via call_from_thread from on_tool_call
-        self._show_thinking_line(msg, log)
+        """Show Pure/BYOK/local tool calls through the shared tool renderer."""
+        file_path = args.get("path", args.get("file_path", args.get("filePath", "")))
+        command = args.get("command", "")
+        log.add_tool_call(name, "running", file_path, command, "", args)
 
     def _show_pure_tool_result(self, name: str, result, log: ConversationLog):
-        """Show tool result inline - matches ACP format."""
-        # For local models, completely disable thinking logs (including tool results)
-        if hasattr(self, "_pure_mode") and self._pure_mode.session.connected:
-            from superqode.providers.registry import PROVIDERS, ProviderCategory
-
-            provider = self._pure_mode.session.provider
-            provider_def = PROVIDERS.get(provider)
-            if provider_def and provider_def.category == ProviderCategory.LOCAL:
-                return  # Suppress all thinking logs for local models
-
-        if result.success:
-            # Show detailed result preview (same as ACP)
-            if result.output:
-                result_str = str(result.output)
-                # Show full result, no truncation (same as ACP)
-                # Call directly since we're already in the UI thread via call_from_thread from on_tool_result
-                self._show_thinking_line(f"✅ {name}: {result_str}", log)
-            else:
-                # Call directly since we're already in the UI thread
-                self._show_thinking_line(f"✅ {name} completed", log)
-        else:
-            # Show full error message, no truncation (same as ACP)
-            error_msg = str(result.error) if result.error else "failed"
-            # Call directly since we're already in the UI thread
-            self._show_thinking_line(f"❌ {name} failed: {error_msg}", log)
+        """Show Pure/BYOK/local tool results through the shared tool renderer."""
+        success = bool(getattr(result, "success", False))
+        status = "success" if success else "error"
+        output = getattr(result, "output", "") if success else getattr(result, "error", "")
+        output_str = str(output) if output else ""
+        metadata = getattr(result, "metadata", None) or {}
+        file_path = str(metadata.get("path") or "")
+        diff_text = str(metadata.get("diff_text") or "")
+        additions = metadata.get("additions")
+        deletions = metadata.get("deletions")
+        if not diff_text and output_str and self._looks_like_diff(output_str):
+            diff_text = output_str
+            output_str = "updated"
+        log.add_tool_call(
+            name,
+            status,
+            file_path,
+            "",
+            output_str,
+            None,
+            diff_text,
+            None,
+            additions if isinstance(additions, int) else None,
+            deletions if isinstance(deletions, int) else None,
+            metadata,
+        )
 
     def _show_byok_thinking_line(self, text: str, log: ConversationLog):
         """Show thinking line for BYOK - handles threading correctly.
@@ -16161,7 +17106,7 @@ team:
 
         Args:
             provider: Provider ID (e.g., "ollama", "anthropic")
-            model: Model name (e.g., "llama3.2:3b", "claude-sonnet-4")
+            model: Model name (e.g., "llama3.2:3b", "claude-opus-4-8")
             log: Conversation log for output
             resolved_role: Optional ResolvedRole object for role-based connections
                           (used to inject job description into system prompt)
@@ -16823,10 +17768,13 @@ team:
             if hasattr(self, attr):
                 delattr(self, attr)
 
-        # Reset indices - will be set properly below
-        self._local_highlighted_provider_index = 0
-        if hasattr(self, "_local_highlighted_model_index"):
-            self._local_highlighted_model_index = 0
+        # Reset indices only on a fresh show. Navigation redraws pass
+        # clear_log=False and must preserve the highlighted provider, otherwise
+        # arrow keys move the index and it's immediately reset back to 0 here.
+        if clear_log:
+            self._local_highlighted_provider_index = 0
+            if hasattr(self, "_local_highlighted_model_index"):
+                self._local_highlighted_model_index = 0
 
         from superqode.providers.registry import PROVIDERS, ProviderCategory, get_local_providers
         from superqode.providers.local.discovery import get_discovery_service
@@ -16913,9 +17861,18 @@ team:
             elif provider_id in ("vllm", "sglang", "tgi"):
                 labels.extend(["server", "advanced"])
 
-            t.append(f"    [{idx}] ", style=self._picker_link_style(THEME["dim"], idx))
+            is_highlighted = (idx - 1) == highlighted_idx
+            marker = "▶ " if is_highlighted else "  "
+            name_style = f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['cyan']}"
+            num_style = (
+                self._picker_link_style(f"bold {THEME['success']}", idx)
+                if is_highlighted
+                else self._picker_link_style(THEME["dim"], idx)
+            )
+            t.append(f"  {marker}", style=f"bold {THEME['success']}")
+            t.append(f"[{idx}] ", style=num_style)
             t.append(f"{status_icon} ", style=THEME["success"])
-            t.append(f"{provider_def.name}", style=f"bold {THEME['cyan']}")
+            t.append(f"{provider_def.name}", style=name_style)
             if provider_id in ("vllm", "sglang"):
                 t.append(" [EXPERIMENTAL]", style=f"bold {THEME['warning']}")
             t.append(f" ({provider_id})", style=THEME["muted"])
@@ -17009,7 +17966,7 @@ team:
                     "🔑 BYOK Providers",
                     THEME["success"],
                     "Bring Your Own Key - Direct provider/model connection",
-                    ":connect byok anthropic/claude-4-5-sonnet",
+                    ":connect byok anthropic/claude-opus-4-8",
                 ),
                 (
                     3,
@@ -17232,9 +18189,7 @@ team:
                         )
                     t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
                 else:
-                    t.append(
-                        f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx)
-                    )
+                    t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=THEME["text"])
                     t.append(f"{pdef.name}", style=THEME["muted"])
@@ -17311,9 +18266,7 @@ team:
                         )
                     t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
                 else:
-                    t.append(
-                        f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx)
-                    )
+                    t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=THEME["text"])
                     t.append(f"{pdef.name}", style=THEME["muted"])
@@ -17544,8 +18497,9 @@ team:
                     "5.3",
                     "5.2",
                     "5.1",
-                    "4.6",
+                    "4.8",
                     "4.7",
+                    "4.6",
                     "4.5",
                     "3.2",
                     "3.1",
@@ -17559,9 +18513,10 @@ team:
                     "gemini-3.1-pro",
                     "gemini 3.5",
                     "gemini 3.1",
-                    "claude-opus-4-6",
+                    "claude-opus-4-8",
+                    "claude-opus-4-7",
+                    "claude-sonnet-4-6",
                     "claude-opus-4-5",
-                    "claude-sonnet-4-5",
                     "claude-haiku-4-5",
                     "glm-4.7",
                     "glm-4-plus",
@@ -17643,8 +18598,10 @@ team:
                     ("gpt-5.4", -12),
                     ("gpt-5.3-codex", -11),
                     ("5.3", -11),
-                    ("claude-opus-4-6", -11),
-                    ("4.6", -11),
+                    ("claude-opus-4-8", -12),
+                    ("claude-opus-4-7", -12),
+                    ("claude-sonnet-4-6", -11),
+                    ("claude-opus-4-6", -9),
                     # Latest flagship models (2025-12 releases)
                     ("gpt-5.2", -10),
                     ("5.2", -10),
@@ -17661,8 +18618,7 @@ team:
                     ("deepseek-r1", -9),  # DeepSeek V3.2
                     ("grok-3", -9),
                     ("grok-3-", -9),  # xAI Grok-3
-                    ("claude-opus-4-5", -9),
-                    ("claude-sonnet-4-5", -9),
+                    ("claude-opus-4-5", -8),
                     ("claude-haiku-4-5", -9),  # Claude 4.5
                     # Recent major versions
                     ("gpt-5.1", -8),
@@ -17787,9 +18743,7 @@ team:
             if budget:
                 t.append(f"  💰 Budget-Friendly (< $1/1M):\n", style=f"bold {THEME['cyan']}")
                 for model_id, info in budget[:6]:
-                    t.append(
-                        f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx)
-                    )
+                    t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                     t.append(f"{info.name:<25}", style=f"bold {THEME['text']}")
                     t.append(f"{info.price_display:>12}", style=THEME["gold"])
                     t.append(f" • {info.context_display:>6} ctx", style=THEME["cyan"])
@@ -17810,9 +18764,7 @@ team:
             if free:
                 t.append(f"  🆓 Free Models:\n", style=f"bold {THEME['success']}")
                 for model_id, info in free[:6]:
-                    t.append(
-                        f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx)
-                    )
+                    t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                     t.append(f"{info.name:<25}", style=f"bold {THEME['success']}")
                     t.append(f"{'FREE':>12}", style=THEME["success"])
                     t.append(f" • {info.context_display:>6} ctx", style=THEME["cyan"])
@@ -17840,9 +18792,7 @@ team:
                 sorted_others = latest_others + regular_others
 
                 for model_id, info in sorted_others[:remaining]:
-                    t.append(
-                        f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx)
-                    )
+                    t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                     # Highlight latest models
                     is_latest = get_latest_priority(model_id, info) < 0
                     name_style = f"bold {THEME['success']}" if is_latest else THEME["text"]
@@ -17888,9 +18838,7 @@ team:
                                 t.append(f"  ▶ ", style=f"bold {THEME['success']}")
                                 t.append(
                                     f"[{idx:2}] ",
-                                    style=self._picker_link_style(
-                                        f"bold {THEME['success']}", idx
-                                    ),
+                                    style=self._picker_link_style(f"bold {THEME['success']}", idx),
                                 )
                                 t.append(f"{model}", style=f"bold {THEME['success']}")
                                 t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
@@ -18065,9 +19013,10 @@ team:
                 "glm-4-plus",
                 "deepseek-v3.2",
                 "grok-3",
-                "claude-opus-4-6",
+                "claude-opus-4-8",
+                "claude-opus-4-7",
+                "claude-sonnet-4-6",
                 "claude-opus-4-5",
-                "claude-sonnet-4-5",
                 "claude-haiku-4-5",
                 "preview",
                 "latest",
@@ -18403,9 +19352,7 @@ team:
                         style=self._picker_link_style(f"bold {THEME['success']}", idx),
                     )
                 else:
-                    t.append(
-                        f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx)
-                    )
+                    t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
 
                 # Running status
                 if model.running:
@@ -18559,9 +19506,7 @@ team:
                         style=self._picker_link_style(f"bold {THEME['success']}", idx),
                     )
                 else:
-                    t.append(
-                        f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx)
-                    )
+                    t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
 
                 name_style = (
                     f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}"
@@ -18742,9 +19687,20 @@ team:
                 provider = self.current_provider
                 model = value
             if not provider or not model:
-                log.add_error("No provider/model selected. Use :connect byok or :connect local first.")
+                log.add_error(
+                    "No provider/model selected. Use :connect byok or :connect local first."
+                )
                 return
-            local_providers = {"ds4", "ollama", "lmstudio", "mlx", "vllm", "sglang", "tgi", "huggingface-local"}
+            local_providers = {
+                "ds4",
+                "ollama",
+                "lmstudio",
+                "mlx",
+                "vllm",
+                "sglang",
+                "tgi",
+                "huggingface-local",
+            }
             if provider in local_providers:
                 self._connect_local_mode(provider, model, log)
             else:
@@ -18813,7 +19769,9 @@ team:
                 t.append("\n")
         else:
             t.append("  Capability  ", style=THEME["muted"])
-            t.append("unknown; run :doctor current or :providers <provider>\n", style=THEME["warning"])
+            t.append(
+                "unknown; run :doctor current or :providers <provider>\n", style=THEME["warning"]
+            )
 
         overrides = {
             "reasoning": getattr(self, "_model_reasoning", None),
@@ -18824,7 +19782,10 @@ team:
         active_overrides = {key: val for key, val in overrides.items() if val is not None}
         if active_overrides:
             t.append("  Overrides   ", style=THEME["muted"])
-            t.append(", ".join(f"{key}={val}" for key, val in active_overrides.items()), style=THEME["text"])
+            t.append(
+                ", ".join(f"{key}={val}" for key, val in active_overrides.items()),
+                style=THEME["text"],
+            )
             t.append("\n")
 
         t.append("\n  Commands: ", style=THEME["muted"])
@@ -20548,7 +21509,7 @@ team:
             else:
                 not_installed.append((agent_id, agent_data))
 
-        # ACP agent emojis (from https://zed.dev/acp)
+        # ACP agent emojis (from https://agentclientprotocol.com/get-started/agents)
         agent_emojis = {
             "opencode": "🤖",  # Robot
             "claude": "🧠",  # Brain (Claude Code)
@@ -20557,8 +21518,8 @@ team:
             "geminicli": "💎",  # Gem (Gemini CLI)
             "codex": "📝",  # Memo/code
             "codex.openai.com": "📝",  # Memo/code
-            "moltbot": "🦞",  # Lobster (OpenClaw)
-            "molt.bot": "🦞",  # Lobster (OpenClaw)
+            "openclaw": "🦞",  # OpenClaw
+            "openclaw.ai": "🦞",  # OpenClaw
             "goose": "🪿",  # Goose
             "goose.ai": "🪿",  # Goose
             "kimi": "🔮",  # Crystal ball (Kimi CLI)
@@ -20582,8 +21543,8 @@ team:
         priority_order = {
             "opencode": 0,
             "opencode.ai": 0,
-            "moltbot": 1,
-            "molt.bot": 1,
+            "openclaw": 1,
+            "openclaw.ai": 1,
             "claude": 2,
             "claude.com": 2,
             "codex": 3,
@@ -21034,9 +21995,7 @@ team:
                 t.append("  ", style="")
                 number_style = self._picker_link_style(f"bold {THEME['cyan']}", num)
                 name_style = f"bold {THEME['text']}"
-            t.append(
-                f"[{num}]", style=number_style
-            )
+            t.append(f"[{num}]", style=number_style)
             t.append(f" {model_name:<18}", style=name_style)
 
             if is_recommended:
@@ -21172,9 +22131,7 @@ team:
                 t.append("  ", style="")
                 number_style = self._picker_link_style(f"bold {THEME['cyan']}", num)
                 name_style = f"bold {THEME['text']}"
-            t.append(
-                f"[{num}]", style=number_style
-            )
+            t.append(f"[{num}]", style=number_style)
             t.append(f" {model_name:<18}", style=name_style)
 
             if is_recommended:
@@ -21322,9 +22279,7 @@ team:
                 t.append("  ", style="")
                 number_style = self._picker_link_style(f"bold {THEME['cyan']}", num)
                 name_style = f"bold {THEME['text']}"
-            t.append(
-                f"[{num}]", style=number_style
-            )
+            t.append(f"[{num}]", style=number_style)
             t.append(f" {model_name:<18}", style=name_style)
 
             if is_recommended:
@@ -21471,9 +22426,7 @@ team:
                 t.append("  ", style="")
                 number_style = self._picker_link_style(f"bold {THEME['cyan']}", num)
                 name_style = f"bold {THEME['text']}"
-            t.append(
-                f"[{num}]", style=number_style
-            )
+            t.append(f"[{num}]", style=number_style)
             t.append(f" {model_name:<18}", style=name_style)
 
             if is_recommended:
@@ -21806,7 +22759,7 @@ team:
 
     def _show_team(self, log: ConversationLog):
         try:
-            from superqode.tui import load_team_config
+            from superqode.team_config import load_team_config
 
             config = load_team_config()
 
@@ -21923,7 +22876,10 @@ team:
                     (":models update", "Refresh models database from models.dev"),
                     (":models info", "Show model database information"),
                     (":model", "Show current model card and runtime overrides"),
-                    (":model switch <p>/<m>", "Switch provider/model for native BYOK/local sessions"),
+                    (
+                        ":model switch <p>/<m>",
+                        "Switch provider/model for native BYOK/local sessions",
+                    ),
                     (":model reasoning <value>", "Set reasoning effort for future native runs"),
                     (":model temperature <n>", "Set temperature for future native runs"),
                     (":model doctor", "Check active provider/model readiness"),
@@ -21986,18 +22942,30 @@ team:
                     (":skills enable|disable <name>", "Toggle a local skill's enabled flag"),
                     (":recipes", "List reusable local workflows from .superqode/recipes"),
                     (":recipe run <name>", "Load or run a reusable workflow recipe"),
-                    (":recipe doctor <name>", "Validate recipe prompt, skills, model, and attachments"),
+                    (
+                        ":recipe doctor <name>",
+                        "Validate recipe prompt, skills, model, and attachments",
+                    ),
                     (":status", "Show active provider, model, sandbox/session, branch, approval"),
                     (":doctor tui", "Show full TUI readiness dashboard"),
                     (":harness", "Open the harness overview and show active state"),
                     (":harness <spec.yaml>", "Load a HarnessSpec into the TUI"),
-                    (":harness inspect", "Summarize active HarnessSpec policy, tools, workflow, hooks, validation"),
-                    (":harness doctor", "Check active HarnessSpec readiness, blockers, and fix hints"),
+                    (
+                        ":harness inspect",
+                        "Summarize active HarnessSpec policy, tools, workflow, hooks, validation",
+                    ),
+                    (
+                        ":harness doctor",
+                        "Check active HarnessSpec readiness, blockers, and fix hints",
+                    ),
                     (":harness graph [run_id]", "Show planned graph or persisted run graph"),
                     (":harness runs", "List persisted HarnessSpec runs"),
                     (":harness replay <run_id>", "Show exact replay readiness and next commands"),
                     (":harness fork <run_id> [event]", "Fork a persisted run at an event index"),
-                    (":harness evidence <run_id>", "Show run evidence, changes, validation, and result receipt"),
+                    (
+                        ":harness evidence <run_id>",
+                        "Show run evidence, changes, validation, and result receipt",
+                    ),
                     (":harness events <run_id>", "Show persisted event timeline for a harness run"),
                     (":harness templates", "List built-in HarnessSpec templates"),
                     (":harness off", "Disable the active HarnessSpec"),
@@ -22042,6 +23010,7 @@ team:
                     (":plan", "Show the agent's current plan"),
                     (":history", "Show command history"),
                     (":history clear", "Clear command history"),
+                    (":transcript", "Open selectable conversation transcript"),
                     (":checkpoints", "Show undo/redo checkpoints"),
                     ("/sessions", "Browse saved local provider sessions"),
                     ("/resume <id>", "Resume a session by full id or unique prefix"),
@@ -22071,7 +23040,9 @@ team:
                 [
                     (":edit", "Open external editor (Ctrl+E)"),
                     (":copy", "Copy last response to clipboard (Ctrl+Shift+C)"),
+                    (":copy transcript", "Copy the current conversation transcript"),
                     (":select", "Open selectable text view"),
+                    (":select transcript", "Open selectable conversation transcript"),
                     ("@filename", "Reference a file in your message"),
                     (":diagnostics [path]", "Show code diagnostics for path"),
                 ],
@@ -22158,7 +23129,7 @@ team:
 
     def _show_roles(self, log: ConversationLog):
         try:
-            from superqode.tui import load_team_config
+            from superqode.team_config import load_team_config
 
             config = load_team_config()
 
@@ -22480,15 +23451,20 @@ team:
             log.add_info(f"No {content_type} to copy yet")
             return
 
-        # Strip markdown for clean copy
-        clean_response = self._strip_markdown(content_to_copy)
+        from superqode.rendering.markdown import markdown_to_plain_text
+
+        clean_response = markdown_to_plain_text(content_to_copy)
 
         # Save to file first (always useful)
         output_file = Path.home() / ".superqode" / f"last_{content_type}.txt"
         output_file.parent.mkdir(parents=True, exist_ok=True)
         output_file.write_text(clean_response)
 
-        content_label = "Error" if content_type == "error" else "Response"
+        content_label = {
+            "error": "Error",
+            "prompt": "Prompt",
+            "transcript": "Transcript",
+        }.get(content_type, "Response")
         try:
             # Try to copy to clipboard using pbcopy (macOS) or xclip (Linux)
             import subprocess
@@ -22536,8 +23512,9 @@ team:
             log.add_info("No response or error to open yet")
             return
 
-        # Strip markdown for clean view
-        clean_response = self._strip_markdown(content)
+        from superqode.rendering.markdown import markdown_to_plain_text
+
+        clean_response = markdown_to_plain_text(content)
 
         # Save to file
         output_file = Path.home() / ".superqode" / f"last_{content_type}.txt"
@@ -22774,14 +23751,17 @@ team:
         )
 
         try:
-            branch = subprocess.run(
-                ["git", "branch", "--show-current"],
-                cwd=Path.cwd(),
-                text=True,
-                capture_output=True,
-                check=False,
-                timeout=2,
-            ).stdout.strip() or "-"
+            branch = (
+                subprocess.run(
+                    ["git", "branch", "--show-current"],
+                    cwd=Path.cwd(),
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                    timeout=2,
+                ).stdout.strip()
+                or "-"
+            )
             dirty = subprocess.run(
                 ["git", "status", "--short"],
                 cwd=Path.cwd(),
@@ -22790,7 +23770,12 @@ team:
                 check=False,
                 timeout=2,
             ).stdout.strip()
-            add("Git", "warn" if dirty else "ready", f"{branch}, {'dirty' if dirty else 'clean'}", ":diff")
+            add(
+                "Git",
+                "warn" if dirty else "ready",
+                f"{branch}, {'dirty' if dirty else 'clean'}",
+                ":diff",
+            )
         except Exception:
             add("Git", "warn", "not a git workspace or git unavailable", ":files")
 
@@ -22801,12 +23786,16 @@ team:
                 session_id = self._pure_mode.get_current_session_id() or "-"
             except Exception:
                 session_id = "-"
-        add("Session", "ready" if session_id != "-" else "warn", session_id[:12], ":session current")
+        add(
+            "Session", "ready" if session_id != "-" else "warn", session_id[:12], ":session current"
+        )
 
         blocked = sum(1 for _, status, _, _ in rows if status == "blocked")
         warnings = sum(1 for _, status, _, _ in rows if status == "warn")
         overall = "Blocked" if blocked else "Warnings" if warnings else "Ready"
-        overall_style = THEME["error"] if blocked else THEME["warning"] if warnings else THEME["success"]
+        overall_style = (
+            THEME["error"] if blocked else THEME["warning"] if warnings else THEME["success"]
+        )
 
         t = Text()
         t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
@@ -23246,8 +24235,9 @@ team:
             def action_dismiss(self):
                 self.dismiss()
 
-        # Clean up the response for selection
-        clean_response = self._strip_markdown(content)
+        from superqode.rendering.markdown import markdown_to_plain_text
+
+        clean_response = markdown_to_plain_text(content)
 
         def on_screen_dismissed(_):
             # Return focus to input after screen is dismissed
@@ -23316,6 +24306,70 @@ team:
             msg += " (never allow)"
         log.add_error(msg)
 
+    def _handle_permissions(self, log: ConversationLog):
+        """Show active permission/approval policy and pending decisions."""
+        t = Text()
+        mode = getattr(self, "approval_mode", "ask")
+        mode_style = {
+            "auto": THEME["success"],
+            "ask": THEME["warning"],
+            "deny": THEME["error"],
+        }.get(mode, THEME["text"])
+        t.append("\n  🔐 ", style=f"bold {THEME['warning']}")
+        t.append("Permission Policy\n\n", style=f"bold {THEME['text']}")
+        t.append("  Mode        ", style=THEME["muted"])
+        t.append(f"{mode}\n", style=f"bold {mode_style}")
+        t.append("  Behavior    ", style=THEME["muted"])
+        behavior = {
+            "auto": "auto-approve tool requests",
+            "ask": "ask before risky tools and project edits",
+            "deny": "deny permission requests",
+        }.get(mode, "unknown")
+        t.append(f"{behavior}\n", style=THEME["text"])
+
+        if getattr(self, "_permission_pending", False):
+            tool = getattr(self, "_pending_tool_name", "") or "tool"
+            t.append("  Pending     ", style=THEME["muted"])
+            t.append(f"{tool}\n", style=f"bold {THEME['warning']}")
+        else:
+            t.append("  Pending     none\n", style=THEME["muted"])
+
+        manager = getattr(self, "_approval_manager", None)
+        pending = manager.get_pending() if manager is not None else []
+        t.append("  Approvals   ", style=THEME["muted"])
+        t.append(f"{len(pending)} pending\n", style=f"bold {THEME['text']}")
+        if pending:
+            for index, req in enumerate(pending[:8], 1):
+                target = req.file_path or req.command or req.title
+                t.append(f"    {index}. ", style=THEME["dim"])
+                t.append(req.title, style=f"bold {THEME['text']}")
+                if target:
+                    t.append(f"  {target}", style=THEME["muted"])
+                t.append("\n")
+            if len(pending) > 8:
+                t.append(f"    ... {len(pending) - 8} more\n", style=THEME["muted"])
+
+        always_approve = sorted(getattr(manager, "always_approve", set()) or []) if manager else []
+        always_reject = sorted(getattr(manager, "always_reject", set()) or []) if manager else []
+        t.append("\n  Learned rules\n", style=f"bold {THEME['cyan']}")
+        t.append("    always allow  ", style=THEME["muted"])
+        t.append(", ".join(always_approve) if always_approve else "none", style=THEME["text"])
+        t.append("\n")
+        t.append("    always reject ", style=THEME["muted"])
+        t.append(", ".join(always_reject) if always_reject else "none", style=THEME["text"])
+        t.append("\n")
+
+        t.append("\n  Commands: ", style=THEME["muted"])
+        t.append(":mode auto|ask|deny", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":diff", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":approve", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":reject", style=THEME["cyan"])
+        t.append("\n", style=THEME["muted"])
+        log.write(t)
+
     def _handle_diff(self, args: str, log: ConversationLog):
         """Handle :diff command."""
         from rich.console import Console
@@ -23326,42 +24380,762 @@ team:
         if not hasattr(self, "_diff_viewer") or self._diff_viewer is None:
             self._diff_viewer = DiffViewer(console)
 
+        arg = args.strip().lower()
+
         # Check for mode argument
-        if args.lower() == "split":
+        if arg == "split":
             self._diff_viewer.set_mode(DiffMode.SPLIT)
             log.add_info("Diff mode: split (side-by-side)")
             return
-        elif args.lower() == "unified":
+        elif arg == "unified":
             self._diff_viewer.set_mode(DiffMode.UNIFIED)
             log.add_info("Diff mode: unified")
             return
-        elif args.lower() == "compact":
+        elif arg == "compact":
             self._diff_viewer.set_mode(DiffMode.COMPACT)
             log.add_info("Diff mode: compact")
             return
 
-        # Show pending diffs
-        if self._approval_manager:
-            pending = self._approval_manager.get_pending()
-            if pending:
-                t = Text()
-                t.append(f"\n  📊 ", style=f"bold {THEME['cyan']}")
-                t.append(f"Pending Changes ({len(pending)})\n\n", style=f"bold {THEME['cyan']}")
+        sections: list[tuple[str, str]] = []
 
+        # Include approval-manager pending diffs first, before the git view.
+        approval_manager = getattr(self, "_approval_manager", None)
+        if approval_manager:
+            pending = approval_manager.get_pending()
+            if pending:
+                pending_lines = [f"Pending approval changes ({len(pending)})", ""]
                 for req in pending:
                     if req.old_content is not None and req.new_content:
                         diff = compute_diff(
                             req.old_content, req.new_content, req.file_path or "file"
                         )
-                        t.append(f"  📄 {req.file_path or 'file'}", style=f"bold {THEME['cyan']}")
-                        t.append(f"  +{diff.additions}", style=f"bold {THEME['success']}")
-                        t.append("/", style=THEME["muted"])
-                        t.append(f"-{diff.deletions}\n", style=f"bold {THEME['error']}")
+                        pending_lines.append(
+                            f"# {req.file_path or 'file'}  +{diff.additions} -{diff.deletions}  "
+                            f"approval:{req.id}"
+                        )
+                        import difflib
 
-                log.write(t)
+                        pending_lines.extend(
+                            difflib.unified_diff(
+                                req.old_content.splitlines(),
+                                req.new_content.splitlines(),
+                                fromfile=f"a/{req.file_path or 'file'}",
+                                tofile=f"b/{req.file_path or 'file'}",
+                                lineterm="",
+                            )
+                        )
+                        pending_lines.append("")
+                sections.append(("Pending approvals", "\n".join(pending_lines).strip()))
+
+        sections.extend(self._current_git_diff_sections())
+
+        if not sections:
+            log.add_info("No diffs found. Use :diff split or :diff unified to set mode.")
+            return
+
+        if arg in ("files", "list", "index"):
+            log.write(Text(self._format_diff_file_index(sections) + "\n", style=THEME["text"]))
+            return
+
+        if arg:
+            filtered = self._filter_diff_sections(sections, arg)
+            if not filtered:
+                log.add_info(f"No diff matched: {args.strip()}")
                 return
+            sections = filtered
 
-        log.add_info("No pending diffs. Use :diff split or :diff unified to set mode.")
+        self._open_diff_review_overlay(sections)
+
+    def _current_git_diff_text(self) -> str:
+        """Return a review-grade current diff document.
+
+        Kept for tests and compatibility; ``:diff`` uses the same formatter.
+        """
+        return self._format_diff_review(self._current_git_diff_sections())
+
+    def _current_git_diff_sections(self) -> list[tuple[str, str]]:
+        """Return the current working-tree diff, including staged and untracked files."""
+        chunks: list[tuple[str, str]] = []
+        commands = (
+            ("Working tree", ["git", "diff", "--no-ext-diff", "--"]),
+            ("Staged", ["git", "diff", "--cached", "--no-ext-diff", "--"]),
+        )
+        for label, command in commands:
+            try:
+                result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+            except Exception:
+                continue
+            if result.returncode == 0 and result.stdout.strip():
+                chunks.append((label, result.stdout.rstrip()))
+
+        try:
+            result = subprocess.run(
+                ["git", "ls-files", "--others", "--exclude-standard"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except Exception:
+            result = None
+        if result is not None and result.returncode == 0:
+            untracked_chunks: list[str] = []
+            for raw_path in result.stdout.splitlines():
+                path = raw_path.strip()
+                if not path:
+                    continue
+                file_path = Path(path)
+                if not file_path.is_file():
+                    continue
+                try:
+                    data = file_path.read_text(encoding="utf-8", errors="ignore")
+                except Exception:
+                    continue
+                if len(data) > 200_000:
+                    untracked_chunks.append(
+                        f"diff --git a/{path} b/{path}\nnew file mode 100644\n"
+                        f"--- /dev/null\n+++ b/{path}\n@@\n"
+                        f"# file is too large to preview inline ({len(data):,} bytes)"
+                    )
+                    continue
+                added = "\n".join(f"+{line}" for line in data.splitlines())
+                untracked_chunks.append(
+                    f"diff --git a/{path} b/{path}\nnew file mode 100644\n"
+                    f"--- /dev/null\n+++ b/{path}\n@@ -0,0 +1,{len(data.splitlines())} @@\n"
+                    f"{added}"
+                )
+            if untracked_chunks:
+                chunks.append(("Untracked", "\n\n".join(untracked_chunks)))
+        return chunks
+
+    def _format_diff_review(self, sections: list[tuple[str, str]]) -> str:
+        """Build a review document with a file index and full patches."""
+        sections = [(label, text.strip()) for label, text in sections if text and text.strip()]
+        if not sections:
+            return ""
+
+        all_stats: list[dict[str, Any]] = []
+        for label, text in sections:
+            for stat in self._diff_file_stats(text):
+                stat["section"] = label
+                all_stats.append(stat)
+
+        total_adds = sum(int(item.get("additions") or 0) for item in all_stats)
+        total_dels = sum(int(item.get("deletions") or 0) for item in all_stats)
+        lines: list[str] = [
+            "SuperQode Diff Review",
+            "=" * 22,
+            "",
+            f"Files: {len(all_stats)}   +{total_adds} -{total_dels}",
+            "",
+            "Keys: copy all, search in your terminal/editor, use :diff after more edits.",
+            "",
+        ]
+
+        if all_stats:
+            lines.extend(["Files", "-----"])
+            for index, item in enumerate(all_stats, 1):
+                path = item.get("path") or "(unknown)"
+                section = item.get("section") or "Diff"
+                adds = int(item.get("additions") or 0)
+                dels = int(item.get("deletions") or 0)
+                lines.append(f"{index:>2}. [{section}] {path}  +{adds} -{dels}")
+            lines.append("")
+
+        lines.extend(["Patches", "-------"])
+        for label, text in sections:
+            lines.extend(["", f"## {label}", ""])
+            lines.append(text)
+        return "\n".join(lines).strip()
+
+    def _format_diff_file_index(self, sections: list[tuple[str, str]]) -> str:
+        """Return only the file index for quick review in the log."""
+        stats = self._diff_review_entries(sections)
+        if not stats:
+            return "No changed files."
+        total_adds = sum(int(item.get("additions") or 0) for item in stats)
+        total_dels = sum(int(item.get("deletions") or 0) for item in stats)
+        lines = [f"Changed files ({len(stats)})  +{total_adds} -{total_dels}"]
+        for index, item in enumerate(stats, 1):
+            lines.append(
+                f"  {index:>2}. [{item.get('section')}] {item.get('path')}  "
+                f"+{int(item.get('additions') or 0)} -{int(item.get('deletions') or 0)}"
+            )
+        lines.append("Use :diff <path> to open one file.")
+        return "\n".join(lines)
+
+    def _diff_review_entries(self, sections: list[tuple[str, str]]) -> list[dict[str, Any]]:
+        """Return file-level diff entries for review/navigation."""
+        entries: list[dict[str, Any]] = []
+        for label, text in sections:
+            for path, chunk in self._split_unified_diff_by_file(text):
+                stats = self._diff_file_stats(chunk)
+                stat = stats[0] if stats else {"path": path, "additions": 0, "deletions": 0}
+                entry = {
+                    "section": label,
+                    "path": stat.get("path") or path,
+                    "additions": int(stat.get("additions") or 0),
+                    "deletions": int(stat.get("deletions") or 0),
+                    "patch": chunk,
+                }
+                approval_id = self._diff_chunk_approval_id(chunk)
+                if approval_id:
+                    entry["approval_id"] = approval_id
+                entries.append(entry)
+        return entries
+
+    def _diff_chunk_approval_id(self, chunk: str) -> str:
+        """Extract the pending approval id marker from a synthetic pending diff."""
+        for line in chunk.splitlines()[:3]:
+            marker = "approval:"
+            if marker in line:
+                return line.split(marker, 1)[1].strip().split()[0]
+        return ""
+
+    def _format_diff_entry_review(
+        self,
+        entry: dict[str, Any],
+        *,
+        index: int,
+        total: int,
+    ) -> str:
+        """Build a focused one-file diff review document."""
+        path = entry.get("path") or "(unknown)"
+        section = entry.get("section") or "Diff"
+        adds = int(entry.get("additions") or 0)
+        dels = int(entry.get("deletions") or 0)
+        patch = str(entry.get("patch") or "").strip()
+        return "\n".join(
+            [
+                "SuperQode Diff Review",
+                "=" * 22,
+                "",
+                f"File {index + 1}/{total}: [{section}] {path}   +{adds} -{dels}",
+                "",
+                "Keys: n next, p previous, a all files, y approve pending, r reject pending, Ctrl+C copy, Esc close.",
+                "",
+                "Patch",
+                "-----",
+                patch,
+            ]
+        ).strip()
+
+    def _approve_diff_entry(self, entry: dict[str, Any], *, always: bool = False) -> str:
+        """Approve a pending approval diff entry and apply its file change."""
+        approval_id = str(entry.get("approval_id") or "")
+        manager = getattr(self, "_approval_manager", None)
+        if not approval_id or manager is None:
+            return "This diff entry is not pending approval."
+        request = next((req for req in manager.requests if req.id == approval_id), None)
+        if request is None:
+            return "Approval request is no longer pending."
+        ok = manager.approve(approval_id, always=always)
+        if not ok:
+            return "Approval request is no longer pending."
+        if request.new_content and request.file_path:
+            try:
+                self._file_manager.write(request.file_path, request.new_content)
+            except Exception as exc:
+                return f"Approved, but failed to write {request.file_path}: {exc}"
+        suffix = " (always)" if always else ""
+        return f"Approved: {request.title}{suffix}"
+
+    def _reject_diff_entry(self, entry: dict[str, Any], *, always: bool = False) -> str:
+        """Reject a pending approval diff entry."""
+        approval_id = str(entry.get("approval_id") or "")
+        manager = getattr(self, "_approval_manager", None)
+        if not approval_id or manager is None:
+            return "This diff entry is not pending approval."
+        request = next((req for req in manager.requests if req.id == approval_id), None)
+        if request is None:
+            return "Approval request is no longer pending."
+        ok = manager.reject(approval_id, always=always)
+        if not ok:
+            return "Approval request is no longer pending."
+        suffix = " (never allow)" if always else ""
+        return f"Rejected: {request.title}{suffix}"
+
+    def _open_diff_entry_file(self, entry: dict[str, Any]) -> str:
+        """Open a diff entry's file in the user's editor/default app."""
+        import shlex
+
+        path = str(entry.get("path") or "").strip()
+        if not path or path == "(unknown)" or path.startswith("/dev/"):
+            return "No file path for this diff entry."
+        file_path = Path(path)
+        if not file_path.is_absolute():
+            file_path = Path.cwd() / file_path
+        if not file_path.exists():
+            return f"File not found: {path}"
+        editor = os.environ.get("VISUAL") or os.environ.get("EDITOR")
+        if editor:
+            command = [*shlex.split(editor), str(file_path)]
+        elif sys.platform == "darwin":
+            command = ["open", str(file_path)]
+        elif sys.platform.startswith("win"):
+            command = ["notepad", str(file_path)]
+        else:
+            command = ["xdg-open", str(file_path)]
+        try:
+            subprocess.Popen(command)
+        except Exception as exc:
+            return f"Failed to open {path}: {exc}"
+        return f"Opened: {path}"
+
+    def _filter_diff_sections(
+        self,
+        sections: list[tuple[str, str]],
+        query: str,
+    ) -> list[tuple[str, str]]:
+        """Filter diff sections to hunks whose file path matches query."""
+        query = query.strip().lower()
+        if not query:
+            return sections
+        out: list[tuple[str, str]] = []
+        for label, text in sections:
+            chunks = self._split_unified_diff_by_file(text)
+            matches = [
+                chunk
+                for path, chunk in chunks
+                if query in path.lower() or path.lower().endswith(query)
+            ]
+            if matches:
+                out.append((label, "\n\n".join(matches)))
+        return out
+
+    def _split_unified_diff_by_file(self, diff_text: str) -> list[tuple[str, str]]:
+        """Split unified diff text into ``(path, chunk)`` file entries."""
+        entries: list[tuple[str, str]] = []
+        current_lines: list[str] = []
+        current_path = ""
+
+        def finish() -> None:
+            nonlocal current_lines, current_path
+            if current_lines:
+                entries.append((current_path or "(unknown)", "\n".join(current_lines).rstrip()))
+            current_lines = []
+            current_path = ""
+
+        for line in diff_text.splitlines():
+            if line.startswith("diff --git "):
+                finish()
+                parts = line.split()
+                if len(parts) >= 4:
+                    current_path = parts[3][2:] if parts[3].startswith("b/") else parts[3]
+                current_lines.append(line)
+                continue
+            if line.startswith("# ") and " +" in line and " -" in line:
+                finish()
+                current_path = line[2:].split("  ", 1)[0]
+                current_lines.append(line)
+                continue
+            if not current_lines:
+                continue
+            current_lines.append(line)
+            if line.startswith("+++ b/") and not current_path:
+                current_path = line.removeprefix("+++ b/")
+        finish()
+        return entries
+
+    def _diff_file_stats(self, diff_text: str) -> list[dict[str, Any]]:
+        """Extract per-file path/add/delete counts from unified diff text."""
+        stats: list[dict[str, Any]] = []
+        current: dict[str, Any] | None = None
+
+        def finish() -> None:
+            nonlocal current
+            if current is not None:
+                stats.append(current)
+            current = None
+
+        for line in diff_text.splitlines():
+            if line.startswith("diff --git "):
+                finish()
+                parts = line.split()
+                path = ""
+                if len(parts) >= 4:
+                    path = parts[3]
+                    if path.startswith("b/"):
+                        path = path[2:]
+                current = {"path": path, "additions": 0, "deletions": 0}
+                continue
+            if current is None:
+                if line.startswith("# ") and " +" in line and " -" in line:
+                    current = {"path": line[2:].split("  ", 1)[0], "additions": 0, "deletions": 0}
+                else:
+                    continue
+            if line.startswith("+") and not line.startswith("+++"):
+                current["additions"] = int(current.get("additions") or 0) + 1
+            elif line.startswith("-") and not line.startswith("---"):
+                current["deletions"] = int(current.get("deletions") or 0) + 1
+        finish()
+        return stats
+
+    def _open_diff_review_overlay(self, sections: list[tuple[str, str]]) -> None:
+        """Open an interactive diff review overlay with file navigation."""
+        from textual.binding import Binding
+        from textual.containers import Horizontal, Vertical
+        from textual.screen import ModalScreen
+        from textual.widgets import Button, Static, TextArea
+
+        entries = self._diff_review_entries(sections)
+        full_content = self._format_diff_review(sections)
+        format_entry = self._format_diff_entry_review
+        approve_entry = self._approve_diff_entry
+        reject_entry = self._reject_diff_entry
+        open_entry = self._open_diff_entry_file
+
+        class DiffReviewScreen(ModalScreen):
+            BINDINGS = [
+                Binding("escape", "dismiss", "Close"),
+                Binding("n", "next_file", "Next file"),
+                Binding("p", "previous_file", "Previous file"),
+                Binding("a", "show_all", "All files"),
+                Binding("o", "open_current_file", "Open file"),
+                Binding("x", "copy_current_patch", "Copy patch"),
+                Binding("y", "approve_current", "Approve"),
+                Binding("r", "reject_current", "Reject"),
+                Binding("ctrl+c", "copy_current", "Copy"),
+            ]
+
+            CSS = """
+            DiffReviewScreen {
+                align: center middle;
+            }
+
+            DiffReviewScreen > Vertical {
+                width: 94%;
+                height: 92%;
+                background: #0a0a0a;
+                border: round #7c3aed;
+                padding: 1;
+            }
+
+            DiffReviewScreen .title {
+                text-align: center;
+                color: #a855f7;
+                text-style: bold;
+                height: 2;
+            }
+
+            DiffReviewScreen .status {
+                color: #67e8f9;
+                height: 1;
+                margin-bottom: 1;
+            }
+
+            DiffReviewScreen TextArea {
+                height: 1fr;
+                background: #000000;
+                border: solid #1a1a1a;
+            }
+
+            DiffReviewScreen .hints {
+                text-align: center;
+                color: #71717a;
+                height: 2;
+            }
+
+            DiffReviewScreen .buttons {
+                height: 3;
+                align: center middle;
+            }
+            """
+
+            def __init__(self):
+                super().__init__()
+                self._content = full_content
+                self._title = "Diff Review"
+                self._entries = entries
+                self._index = -1
+                self._current_text = full_content
+
+            def compose(self):
+                with Vertical():
+                    yield Static("🧾 Diff Review", classes="title")
+                    yield Static(self._status_text(), id="diff-status", classes="status")
+                    yield TextArea(self._current_text, id="text-area", read_only=True)
+                    yield Static(
+                        "n/p file • o open • x copy patch • y/r pending approval • a all • Esc close",
+                        classes="hints",
+                    )
+                    with Horizontal(classes="buttons"):
+                        yield Button("Prev", id="prev-file", variant="default")
+                        yield Button("Next", id="next-file", variant="default")
+                        yield Button("All Files", id="show-all", variant="primary")
+                        yield Button("Open", id="open-current", variant="default")
+                        yield Button("Copy Patch", id="copy-patch", variant="default")
+                        yield Button("Approve", id="approve-current", variant="success")
+                        yield Button("Reject", id="reject-current", variant="error")
+                        yield Button("Copy View", id="copy-current", variant="default")
+                        yield Button("Close", id="close-btn", variant="default")
+
+            def on_button_pressed(self, event):
+                if event.button.id == "prev-file":
+                    self.action_previous_file()
+                elif event.button.id == "next-file":
+                    self.action_next_file()
+                elif event.button.id == "show-all":
+                    self.action_show_all()
+                elif event.button.id == "open-current":
+                    self.action_open_current_file()
+                elif event.button.id == "copy-patch":
+                    self.action_copy_current_patch()
+                elif event.button.id == "approve-current":
+                    self.action_approve_current()
+                elif event.button.id == "reject-current":
+                    self.action_reject_current()
+                elif event.button.id == "copy-current":
+                    self.action_copy_current()
+                elif event.button.id == "close-btn":
+                    self.dismiss()
+
+            def action_next_file(self):
+                if not self._entries:
+                    return
+                self._index = 0 if self._index < 0 else (self._index + 1) % len(self._entries)
+                self._refresh_view()
+
+            def action_previous_file(self):
+                if not self._entries:
+                    return
+                self._index = (
+                    len(self._entries) - 1
+                    if self._index < 0
+                    else (self._index - 1) % len(self._entries)
+                )
+                self._refresh_view()
+
+            def action_show_all(self):
+                self._index = -1
+                self._refresh_view()
+
+            def action_open_current_file(self):
+                entry = self._selected_entry()
+                if entry is None:
+                    self._safe_notify("Select a file diff first", severity="warning")
+                    return
+                message = open_entry(entry)
+                self._safe_notify(message, severity="information")
+
+            def action_copy_current_patch(self):
+                entry = self._selected_entry()
+                if entry is None:
+                    self._safe_notify("Select a file diff first", severity="warning")
+                    return
+                self._copy_to_clipboard(str(entry.get("patch") or ""))
+                self._safe_notify("File patch copied", severity="information")
+
+            def action_approve_current(self):
+                entry = self._current_pending_entry()
+                if entry is None:
+                    self._safe_notify("Select a pending approval diff first", severity="warning")
+                    return
+                message = approve_entry(entry)
+                self._safe_notify(message, severity="information")
+                self._remove_current_entry_if_decided(entry)
+
+            def action_reject_current(self):
+                entry = self._current_pending_entry()
+                if entry is None:
+                    self._safe_notify("Select a pending approval diff first", severity="warning")
+                    return
+                message = reject_entry(entry)
+                self._safe_notify(message, severity="warning")
+                self._remove_current_entry_if_decided(entry)
+
+            def action_copy_current(self):
+                self._copy_to_clipboard(self._current_text)
+                self._safe_notify("Diff copied", severity="information")
+
+            def _safe_notify(self, message: str, *, severity: str = "information") -> None:
+                try:
+                    self.notify(message, severity=severity)
+                except Exception:
+                    pass
+
+            def _selected_entry(self) -> dict[str, Any] | None:
+                if self._index < 0 or self._index >= len(self._entries):
+                    return None
+                return self._entries[self._index]
+
+            def _current_pending_entry(self) -> dict[str, Any] | None:
+                entry = self._selected_entry()
+                if entry is None:
+                    return None
+                if not entry.get("approval_id"):
+                    return None
+                return entry
+
+            def _remove_current_entry_if_decided(self, entry: dict[str, Any]) -> None:
+                if entry.get("approval_id") and entry in self._entries:
+                    self._entries.remove(entry)
+                    if not self._entries:
+                        self._index = -1
+                    elif self._index >= len(self._entries):
+                        self._index = len(self._entries) - 1
+                    self._refresh_view()
+
+            def _refresh_view(self):
+                if self._index < 0:
+                    self._current_text = self._content
+                else:
+                    self._current_text = format_entry(
+                        self._entries[self._index],
+                        index=self._index,
+                        total=len(self._entries),
+                    )
+                try:
+                    self.query_one("#text-area", TextArea).load_text(self._current_text)
+                    self.query_one("#diff-status", Static).update(self._status_text())
+                except Exception:
+                    pass
+
+            def _status_text(self) -> str:
+                if not self._entries:
+                    return "No file entries"
+                if self._index < 0:
+                    return f"All files ({len(self._entries)})"
+                entry = self._entries[self._index]
+                return (
+                    f"{self._index + 1}/{len(self._entries)}  "
+                    f"[{entry.get('section')}] {entry.get('path')}  "
+                    f"+{entry.get('additions')} -{entry.get('deletions')}"
+                )
+
+            def _copy_to_clipboard(self, text: str) -> None:
+                try:
+                    import pyperclip
+
+                    pyperclip.copy(text)
+                except Exception:
+                    try:
+                        self.app.copy_to_clipboard(text)
+                    except Exception:
+                        pass
+
+        def on_screen_dismissed(_result=None):
+            self._ensure_input_focus()
+
+        self.push_screen(DiffReviewScreen(), callback=on_screen_dismissed)
+
+    def _open_text_overlay(self, content: str, title: str) -> None:
+        """Open a selectable text overlay for diffs/transcripts/large text."""
+        from textual.screen import ModalScreen
+        from textual.widgets import TextArea, Static, Button
+        from textual.containers import Vertical, Horizontal
+        from textual.binding import Binding
+
+        class TextOverlayScreen(ModalScreen):
+            BINDINGS = [
+                Binding("escape", "dismiss", "Close"),
+                Binding("ctrl+c", "copy_selection", "Copy"),
+            ]
+
+            CSS = """
+            TextOverlayScreen {
+                align: center middle;
+            }
+
+            TextOverlayScreen > Vertical {
+                width: 92%;
+                height: 90%;
+                background: #0a0a0a;
+                border: round #7c3aed;
+                padding: 1;
+            }
+
+            TextOverlayScreen .title {
+                text-align: center;
+                color: #a855f7;
+                text-style: bold;
+                height: 2;
+            }
+
+            TextOverlayScreen TextArea {
+                height: 1fr;
+                background: #000000;
+                border: solid #1a1a1a;
+            }
+
+            TextOverlayScreen .hints {
+                text-align: center;
+                color: #71717a;
+                height: 2;
+            }
+
+            TextOverlayScreen .buttons {
+                height: 3;
+                align: center middle;
+            }
+            """
+
+            def __init__(self, overlay_content: str, overlay_title: str):
+                super().__init__()
+                self._content = overlay_content
+                self._title = overlay_title
+
+            def compose(self):
+                with Vertical():
+                    yield Static(f"🧾 {self._title}", classes="title")
+                    yield TextArea(self._content, id="text-area", read_only=True)
+                    yield Static(
+                        "Scroll to inspect • select text with mouse • Ctrl+C copy • Esc close",
+                        classes="hints",
+                    )
+                    with Horizontal(classes="buttons"):
+                        yield Button("Copy All", id="copy-all", variant="primary")
+                        yield Button("Close", id="close-btn", variant="default")
+
+            def on_button_pressed(self, event):
+                if event.button.id == "copy-all":
+                    self._copy_all()
+                elif event.button.id == "close-btn":
+                    self.dismiss()
+
+            def action_copy_selection(self):
+                try:
+                    selected = self.query_one("#text-area", TextArea).selected_text
+                    if selected:
+                        self._copy_to_clipboard(selected)
+                        self.notify("Selection copied", severity="information")
+                        return
+                except Exception:
+                    pass
+                self._copy_all()
+
+            def _copy_all(self):
+                self._copy_to_clipboard(self._content)
+                self.notify(f"{self._title} copied", severity="information")
+
+            def _copy_to_clipboard(self, text: str):
+                try:
+                    import sys
+
+                    if sys.platform == "darwin":
+                        subprocess.run(["pbcopy"], input=text.encode(), check=True)
+                    elif sys.platform.startswith("linux"):
+                        try:
+                            subprocess.run(
+                                ["xclip", "-selection", "clipboard"],
+                                input=text.encode(),
+                                check=True,
+                            )
+                        except FileNotFoundError:
+                            subprocess.run(
+                                ["xsel", "--clipboard", "--input"], input=text.encode(), check=True
+                            )
+                    elif sys.platform == "win32":
+                        subprocess.run(["clip"], input=text.encode(), check=True)
+                except Exception:
+                    pass
+
+            def action_dismiss(self):
+                self.dismiss()
+
+        def on_screen_dismissed(_):
+            self.set_timer(0.1, self._ensure_input_focus)
+
+        self.push_screen(TextOverlayScreen(content, title), callback=on_screen_dismissed)
 
     def _handle_plan(self, args: str, log: ConversationLog):
         """Handle :plan command."""

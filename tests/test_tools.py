@@ -7,9 +7,15 @@ import tempfile
 from pathlib import Path
 
 from superqode.tools.base import ToolRegistry, ToolContext
-from superqode.tools.file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
+from superqode.tools.file_tools import (
+    ReadFileTool,
+    WriteFileTool,
+    CreateFileTool,
+    ListDirectoryTool,
+)
 from superqode.tools.edit_tools import EditFileTool, InsertTextTool, MultiEditTool, PatchTool
 from superqode.tools.search_tools import GlobTool, RepoSearchTool
+from superqode.tools.shell_tools import BashTool
 
 
 @pytest.fixture
@@ -109,6 +115,19 @@ class TestToolRegistry:
 
         assert registry.list() == []
         assert registry.to_openai_format() == []
+
+
+@pytest.mark.asyncio
+async def test_bash_timeout_result_includes_failure_metadata(tool_context):
+    result = await BashTool().execute(
+        {"command": "python3 -c 'import time; time.sleep(2)'", "timeout": 0.01},
+        tool_context,
+    )
+
+    assert result.success is False
+    assert result.metadata["timed_out"] is True
+    assert result.metadata["timeout"] == 0.01
+    assert "python3" in result.metadata["command"]
 
 
 class TestReadFileTool:

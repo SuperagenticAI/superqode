@@ -818,17 +818,13 @@ class AgentLoop:
         lifecycle_ctx = self._lifecycle_context()
 
         async def _finalize(result: ToolResult) -> ToolResult:
-            await self.hooks.fire(
-                AFTER_TOOL_CALL, lifecycle_ctx, name, arguments, result
-            )
+            await self.hooks.fire(AFTER_TOOL_CALL, lifecycle_ctx, name, arguments, result)
             return result
 
         # Handler hooks can deny a tool call outright or rewrite its arguments
         # before execution. Deny short-circuits; modify swaps in new arguments
         # that the rest of this call (and the after-hook) see.
-        gate = await self.hooks.fire_decision(
-            BEFORE_TOOL_CALL, lifecycle_ctx, name, arguments
-        )
+        gate = await self.hooks.fire_decision(BEFORE_TOOL_CALL, lifecycle_ctx, name, arguments)
         if gate.denied:
             denied = (
                 gate.result
@@ -867,9 +863,7 @@ class AgentLoop:
                         return await _finalize(result)
                     except Exception as e:
                         return await _finalize(
-                            ToolResult(
-                                success=False, output="", error=f"MCP tool error: {str(e)}"
-                            )
+                            ToolResult(success=False, output="", error=f"MCP tool error: {str(e)}")
                         )
             return await _finalize(
                 ToolResult(success=False, output="", error=f"Unknown tool: {name}")
@@ -1070,9 +1064,7 @@ class AgentLoop:
 
         # user_prompt_submit handler hooks may block a prompt outright (DENY),
         # e.g. policy filters. Deny returns immediately without calling the model.
-        submit = await self.hooks.fire_decision(
-            USER_PROMPT_SUBMIT, lifecycle_ctx, user_message
-        )
+        submit = await self.hooks.fire_decision(USER_PROMPT_SUBMIT, lifecycle_ctx, user_message)
         if submit.denied:
             return await _finish(
                 AgentResponse(
@@ -1152,9 +1144,7 @@ class AgentLoop:
             )
 
             lifecycle_ctx = self._lifecycle_context()
-            await self.hooks.fire(
-                BEFORE_LLM_CALL, lifecycle_ctx, messages, tools_to_send
-            )
+            await self.hooks.fire(BEFORE_LLM_CALL, lifecycle_ctx, messages, tools_to_send)
             try:
                 response = await self.gateway.chat_completion(
                     messages=gateway_messages,

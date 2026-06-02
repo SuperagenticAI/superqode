@@ -7,7 +7,7 @@ from superqode.widgets.slash_commands import (
     create_builtin_commands,
     get_command_handler,
 )
-from superqode.tui import SuperQodeCompleter
+from superqode.widgets.slash_complete import DEFAULT_COMMANDS, filter_slash_commands
 
 
 def test_runtime_command_is_in_builtins():
@@ -70,15 +70,18 @@ def test_global_handler_registers_builtin_commands():
     assert args == ""
 
 
-def test_tui_completer_includes_harness_runtime_and_session_commands():
-    from prompt_toolkit.document import Document
+def test_textual_completion_includes_harness_runtime_connect_and_session_commands():
+    harness = filter_slash_commands(DEFAULT_COMMANDS, ":harn")
+    runtime = filter_slash_commands(DEFAULT_COMMANDS, "/runtime")
+    resume = filter_slash_commands(DEFAULT_COMMANDS, "/resume")
+    connect = filter_slash_commands(DEFAULT_COMMANDS, ":c")
 
-    completer = SuperQodeCompleter()
-
-    harness = list(completer.get_completions(Document(":harn"), None))
-    runtime = list(completer.get_completions(Document("/runtime l"), None))
-    resume = list(completer.get_completions(Document(":resume"), None))
-
-    assert any(completion.text == ":harness" for completion in harness)
-    assert any(completion.text == "/runtime list" for completion in runtime)
-    assert any(completion.text == ":resume latest" for completion in resume)
+    assert any(completion.command == ":harness" for completion in harness)
+    assert any(completion.command == "/runtime" for completion in runtime)
+    assert any(completion.command == "/resume" for completion in resume)
+    assert [completion.command for completion in connect[:4]] == [
+        ":connect",
+        ":connect acp",
+        ":connect byok",
+        ":connect local",
+    ]

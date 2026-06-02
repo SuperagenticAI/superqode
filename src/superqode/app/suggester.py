@@ -83,11 +83,11 @@ class CommandSuggester(Suggester):
         if not value.startswith(":"):
             return None
 
-        # Fast path: too short (just ':')
-        if len(value) < 2:
-            return None
-
         value_lower = value.lower()
+        if value_lower in self._colon_commands_lower:
+            return None
+        if value_lower in {":c", ":co", ":con", ":conn", ":conne", ":connec"}:
+            return ":connect"
 
         # Check for mode commands with role patterns: :qe <role>, :dev <role>, :devops <role>
         mode_patterns = [("qe", ":qe"), ("dev", ":dev"), ("devops", ":devops")]
@@ -118,8 +118,48 @@ class CommandSuggester(Suggester):
 
         # Fast matching - use pre-filtered colon commands
         # Find first command that starts with the value
-        for i, cmd_lower in enumerate(self._colon_commands_lower):
+        pairs = sorted(
+            zip(self._colon_commands_lower, self._colon_commands),
+            key=lambda pair: self._sort_key(value_lower, pair[0]),
+        )
+        for cmd_lower, command in pairs:
             if cmd_lower.startswith(value_lower) and cmd_lower != value_lower:
-                return self._colon_commands[i]
+                return command
 
         return None
+
+    @staticmethod
+    def _sort_key(value_lower: str, command_lower: str) -> tuple[int, str]:
+        priority: dict[str, dict[str, int]] = {
+            ":": {
+                ":connect": 0,
+                ":connect acp": 1,
+                ":connect byok": 2,
+                ":connect local": 3,
+                ":exit": 4,
+                ":quit": 5,
+            },
+            ":c": {
+                ":connect": 0,
+                ":connect acp": 1,
+                ":connect byok": 2,
+                ":connect local": 3,
+                ":clear": 20,
+            },
+            ":co": {
+                ":connect": 0,
+                ":connect acp": 1,
+                ":connect byok": 2,
+                ":connect local": 3,
+            },
+            ":q": {
+                ":quit": 0,
+            },
+            ":e": {
+                ":exit": 0,
+            },
+        }
+        for prefix, scores in priority.items():
+            if value_lower.startswith(prefix):
+                return (scores.get(command_lower, 10), command_lower)
+        return (10, command_lower)

@@ -145,10 +145,10 @@ class LiteLLMGateway(GatewayInterface):
 
         Args:
             provider: Provider ID (e.g., "anthropic")
-            model: Model ID (e.g., "claude-sonnet-4-20250514")
+            model: Model ID (e.g., "claude-opus-4-8")
 
         Returns:
-            Full model string for LiteLLM (e.g., "anthropic/claude-sonnet-4-20250514")
+            Full model string for LiteLLM (e.g., "anthropic/claude-opus-4-8")
         """
         # LiteLLM exposes two Ollama backends:
         #   ollama/X      -> POST /api/generate (no tool support)

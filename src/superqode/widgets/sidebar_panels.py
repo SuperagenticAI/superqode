@@ -1339,7 +1339,9 @@ class HarnessPanel(Container):
         model = summary["model_policy"]
         permissions = summary["permissions"]
         text.append("\nRuntime\n", style=f"bold {SQ_COLORS.primary_light}")
-        text.append(f"  backend     {summary['runtime']['backend']}\n", style=SQ_COLORS.text_secondary)
+        text.append(
+            f"  backend     {summary['runtime']['backend']}\n", style=SQ_COLORS.text_secondary
+        )
         text.append(
             f"  workflow    {workflow['mode']}"
             + (f" / {workflow['preset']}" if workflow["preset"] else "")
@@ -1381,7 +1383,9 @@ class HarnessPanel(Container):
             f"  {len(validation['steps'])} step(s)\n",
             style=SQ_COLORS.text_secondary,
         )
-        text.append(f"  store       {summary['observability']['run_store']}\n", style=SQ_COLORS.text_dim)
+        text.append(
+            f"  store       {summary['observability']['run_store']}\n", style=SQ_COLORS.text_dim
+        )
 
         issue_checks = [check for check in report.checks if check.status in {"error", "warning"}]
         if issue_checks:
@@ -1397,7 +1401,9 @@ class HarnessPanel(Container):
 
         text.append("\nPlanned Graph\n", style=f"bold {SQ_COLORS.primary_light}")
         labels = [node.label for node in graph.nodes]
-        text.append(f"  {' -> '.join(labels) if labels else 'empty'}\n", style=SQ_COLORS.text_secondary)
+        text.append(
+            f"  {' -> '.join(labels) if labels else 'empty'}\n", style=SQ_COLORS.text_secondary
+        )
 
         evidence = self._latest_evidence(FileHarnessStore, build_harness_evidence, spec)
         text.append("\nLast Run\n", style=f"bold {SQ_COLORS.primary_light}")
@@ -1406,7 +1412,9 @@ class HarnessPanel(Container):
         else:
             run = evidence["run"]
             changes = evidence["changes"] if isinstance(evidence["changes"], dict) else {}
-            validation_result = evidence["validation"] if isinstance(evidence["validation"], dict) else {}
+            validation_result = (
+                evidence["validation"] if isinstance(evidence["validation"], dict) else {}
+            )
             text.append(f"  {run['run_id']}\n", style=SQ_COLORS.info)
             text.append(f"  status      {run['status']}\n", style=SQ_COLORS.text_secondary)
             text.append(

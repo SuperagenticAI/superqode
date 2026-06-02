@@ -12,7 +12,7 @@ Features:
 Usage:
     :connect                    # Interactive picker
     :connect anthropic          # Pick provider, then model
-    :connect anthropic claude-sonnet-4  # Direct connect
+    :connect anthropic claude-opus-4-8  # Direct connect
     :connect -                  # Switch to previous
     :connect !                  # Show history
 """

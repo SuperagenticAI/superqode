@@ -13,10 +13,15 @@ from .base import (
 )
 from .deepagents import DeepAgentsHarnessBackend
 from .pydanticai import PydanticAIHarnessBackend
-from .runtime import ADKHarnessBackend, OpenAIAgentsHarnessBackend, RuntimeHarnessBackend
+from .runtime import (
+    ADKHarnessBackend,
+    CodexSDKHarnessBackend,
+    OpenAIAgentsHarnessBackend,
+    RuntimeHarnessBackend,
+)
 
 _RUNTIME_BACKENDS = {"builtin"}
-_OPTIONAL_BACKENDS = {"adk", "openai-agents", "deepagents", "pydanticai"}
+_OPTIONAL_BACKENDS = {"adk", "openai-agents", "codex-sdk", "deepagents", "pydanticai"}
 
 
 def create_harness_backend(name: str | None) -> HarnessBackend:
@@ -28,6 +33,8 @@ def create_harness_backend(name: str | None) -> HarnessBackend:
         return ADKHarnessBackend()
     if resolved == "openai-agents":
         return OpenAIAgentsHarnessBackend()
+    if resolved == "codex-sdk":
+        return CodexSDKHarnessBackend()
     if resolved == "deepagents":
         return DeepAgentsHarnessBackend()
     if resolved == "pydanticai":
@@ -120,6 +127,7 @@ def _with_availability(capabilities: HarnessBackendCapabilities) -> HarnessBacke
         "builtin": (None, None),
         "adk": ("google.adk", "pip install superqode[adk]"),
         "openai-agents": ("agents", "pip install superqode[openai-agents]"),
+        "codex-sdk": ("openai_codex", "pip install superqode[codex-sdk]"),
         "deepagents": ("deepagents", "pip install superqode[deepagents]"),
         "pydanticai": ("pydantic_ai", "pip install superqode[pydanticai]"),
     }

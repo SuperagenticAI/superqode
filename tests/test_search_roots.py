@@ -74,9 +74,7 @@ async def test_read_allowed_in_root_write_denied(project_and_ref):
     assert read.success and "magic_helper" in read.output
 
     # Writers ignore search_roots — must stay in the working directory.
-    write = await WriteFileTool().execute(
-        {"path": str(ref / "evil.py"), "content": "x"}, ctx
-    )
+    write = await WriteFileTool().execute({"path": str(ref / "evil.py"), "content": "x"}, ctx)
     assert not write.success
 
 

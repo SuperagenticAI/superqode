@@ -16,7 +16,12 @@ from .registry import (
     inspect_harness_backend,
     known_harness_backend_names,
 )
-from .runtime import ADKHarnessBackend, OpenAIAgentsHarnessBackend, RuntimeHarnessBackend
+from .runtime import (
+    ADKHarnessBackend,
+    CodexSDKHarnessBackend,
+    OpenAIAgentsHarnessBackend,
+    RuntimeHarnessBackend,
+)
 
 __all__ = [
     "HarnessBackend",
@@ -26,6 +31,7 @@ __all__ = [
     "HarnessBackendRequest",
     "HarnessBackendResult",
     "ADKHarnessBackend",
+    "CodexSDKHarnessBackend",
     "DeepAgentsHarnessBackend",
     "OpenAIAgentsHarnessBackend",
     "PydanticAIHarnessBackend",
