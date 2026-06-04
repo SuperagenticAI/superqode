@@ -254,7 +254,19 @@ def _model_supports_tools(provider: str, model: str) -> bool:
         from ..providers.models import MODEL_REGISTRY
 
         model_info = MODEL_REGISTRY.get(provider, {}).get(model)
-        return bool(model_info and model_info.supports_tools)
+        if model_info is not None:
+            return bool(model_info.supports_tools)
+    except Exception:
+        pass
+
+    # Local runtimes use arbitrary, user-chosen model names (e.g. a custom
+    # Ollama tag like "gemma4-31b") that won't be in MODEL_REGISTRY. Fall back to
+    # family-based detection so modern local models (Gemma 4, Qwen 3, Llama 4,
+    # …) actually receive tools and can do agentic coding.
+    try:
+        from ..providers.local.base import likely_supports_tools
+
+        return likely_supports_tools(model)
     except Exception:
         return False
 

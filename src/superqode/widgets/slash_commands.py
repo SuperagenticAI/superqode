@@ -322,7 +322,15 @@ def create_builtin_commands(handlers: dict) -> list[SlashCommand]:
             name="model",
             description="Show or switch model settings",
             handler=handlers.get("model", lambda _: None),
-            aliases=["models"],
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="models",
+            description="Browse the models.dev catalog (:models [search|free|cap X|provider X|providers])",
+            handler=handlers.get("models", lambda _: None),
+            aliases=["catalog"],
             category="session",
         )
     )

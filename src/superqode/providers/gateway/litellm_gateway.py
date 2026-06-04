@@ -12,6 +12,7 @@ Performance features:
 import asyncio
 import concurrent.futures
 import json
+import logging
 import os
 import threading
 import time
@@ -33,7 +34,25 @@ from .base import (
     ToolDefinition,
     Usage,
 )
-from ..registry import PROVIDERS, ProviderDef
+from ..registry import PROVIDERS, ProviderCategory, ProviderDef
+
+logger = logging.getLogger(__name__)
+
+
+def _resolve_provider_def(provider: Optional[str]) -> Optional[ProviderDef]:
+    """Curated registry def, else a models.dev-synthesized one (imported lazily
+    to avoid a circular import at module load)."""
+    if not provider:
+        return None
+    curated = PROVIDERS.get(provider)
+    if curated is not None:
+        return curated
+    try:
+        from ..dynamic import resolve_provider_def
+
+        return resolve_provider_def(provider)
+    except Exception:  # noqa: BLE001 - resolution is best-effort
+        return None
 
 
 # Module-level shared state for prewarming
@@ -164,7 +183,7 @@ class LiteLLMGateway(GatewayInterface):
                 model = model[len("ollama/") :]
             return f"ollama_chat/{model}"
 
-        provider_def = PROVIDERS.get(provider)
+        provider_def = _resolve_provider_def(provider)
 
         if provider_def:
             # OpenAI models should always be provider-qualified for LiteLLM
@@ -227,8 +246,15 @@ class LiteLLMGateway(GatewayInterface):
 
     def _setup_provider_env(self, provider: str) -> None:
         """Set up environment for a provider if needed."""
-        provider_def = PROVIDERS.get(provider)
+        provider_def = _resolve_provider_def(provider)
         if not provider_def:
+            return
+
+        # Dynamic (models.dev-synthesized) providers route as OpenAI-compatible
+        # with api_base/api_key passed explicitly per-request (see
+        # chat_completion). Don't mutate global OPENAI_* env here — that would
+        # clobber a user's real OpenAI credentials.
+        if provider_def.dynamic:
             return
 
         # Handle base URL for local/custom providers
@@ -297,6 +323,22 @@ class LiteLLMGateway(GatewayInterface):
 
             # MLX is handled directly, not through LiteLLM, so no env setup needed
 
+            # Generic local OpenAI-compatible servers (llama.cpp, openai-compatible,
+            # and any future local runtime). They route via litellm's openai/ path,
+            # which needs OPENAI_API_BASE pointed at the local server; without this
+            # they'd silently hit api.openai.com. Handled here so we don't have to
+            # hardcode every runtime.
+            already_handled = {"ollama", "lmstudio", "vllm", "ds4", "sglang", "mlx"}
+            if (
+                base_url
+                and provider not in already_handled
+                and provider_def.category == ProviderCategory.LOCAL
+                and provider_def.litellm_prefix == "openai/"
+            ):
+                clean_url = base_url.rstrip("/")
+                os.environ["OPENAI_API_BASE"] = clean_url
+                os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "sk-local-dummy")
+
         # Ensure API keys are set for cloud providers (LiteLLM reads from environment)
         # Google - supports both GOOGLE_API_KEY and GEMINI_API_KEY
         if provider == "google":
@@ -307,6 +349,24 @@ class LiteLLMGateway(GatewayInterface):
                 if not os.environ.get("GEMINI_API_KEY"):
                     os.environ["GEMINI_API_KEY"] = google_key
 
+    def _apply_dynamic_provider(self, provider: str, request_kwargs: Dict[str, Any]) -> None:
+        """Set api_base/api_key for models.dev-synthesized (dynamic) providers.
+
+        Curated providers are unaffected. Passing these per-request keeps the
+        OpenAI-compatible routing isolated from the user's global OPENAI_* env.
+        """
+        provider_def = _resolve_provider_def(provider)
+        if provider_def is None or not provider_def.dynamic:
+            return
+        from ..dynamic import provider_api_key, resolve_base_url
+
+        base_url = resolve_base_url(provider_def)
+        api_key = provider_api_key(provider_def)
+        if base_url and "api_base" not in request_kwargs:
+            request_kwargs["api_base"] = base_url
+        if api_key and "api_key" not in request_kwargs:
+            request_kwargs["api_key"] = api_key
+
     def _convert_messages(self, messages: List[Message]) -> List[Dict[str, Any]]:
         """Convert Message objects to LiteLLM format."""
         result = []
@@ -315,7 +375,7 @@ class LiteLLMGateway(GatewayInterface):
             if msg.name:
                 m["name"] = msg.name
             if msg.tool_calls:
-                m["tool_calls"] = msg.tool_calls
+                m["tool_calls"] = self._normalize_tool_calls(msg.tool_calls)
             if msg.tool_call_id:
                 m["tool_call_id"] = msg.tool_call_id
             result.append(m)
@@ -523,7 +583,7 @@ class LiteLLMGateway(GatewayInterface):
     # (Ollama-style options, keep_alive, num_ctx). MLX uses the temp-clamp
     # piece of this; the Ollama-specific knobs (keep_alive, num_ctx) are
     # gated on provider == "ollama" inside the shaper itself.
-    _LOCAL_SHAPED_PROVIDERS = {"ollama", "mlx", "lmstudio", "vllm", "sglang", "tgi", "llama-cpp"}
+    _LOCAL_SHAPED_PROVIDERS = {"ollama", "mlx", "lmstudio", "vllm", "sglang", "tgi", "llamacpp"}
 
     # Models whose default Ollama context window is too small (4096) for a
     # coding agent's system + tools prefix. The override is conservative —
@@ -544,6 +604,12 @@ class LiteLLMGateway(GatewayInterface):
         "mixtral": 32768,
         "gpt-oss": 32768,
         "phi": 16384,
+        # Gemma 3 / Gemma 4 train at 128K; cap at a practical 32K like the
+        # Llama/Qwen peers above. Gemma 1/2 are genuinely 8K.
+        "gemma4": 32768,
+        "gemma-4": 32768,
+        "gemma3": 32768,
+        "gemma-3": 32768,
         "gemma2": 8192,
         "gemma": 8192,
     }
@@ -728,11 +794,14 @@ class LiteLLMGateway(GatewayInterface):
             normalized = []
             for tc in tool_calls:
                 if isinstance(tc, dict):
-                    # Already a dict - use as-is
+                    # Already a dict - ensure the required OpenAI "type" field so
+                    # strict parsers (llama.cpp) accept it on the next turn.
+                    if "function" in tc and not tc.get("type"):
+                        tc = {**tc, "type": "function"}
                     normalized.append(tc)
                 else:
                     # Object format (e.g., ChatCompletionDeltaToolCall) - convert to dict
-                    tc_dict = {}
+                    tc_dict: Dict[str, Any] = {"type": getattr(tc, "type", None) or "function"}
 
                     # Extract id if present
                     if hasattr(tc, "id"):
@@ -847,7 +916,97 @@ class LiteLLMGateway(GatewayInterface):
         tool_choice: Optional[str] = None,
         **kwargs,
     ) -> GatewayResponse:
-        """Handle MLX chat completion directly (bypassing LiteLLM auth issues)."""
+        """MLX chat completion.
+
+        Primary path is the in-process engine (``mlx_lm`` via a worker), where
+        SuperQode owns tool-call parsing — no ``mlx_lm.server`` and no reliance
+        on its tool parser. Falls back to the HTTP server path when the engine
+        is unavailable (mlx_lm not installed, worker error) or explicitly
+        disabled via ``SUPERQODE_MLX_INPROCESS=0``.
+        """
+        use_inprocess = os.environ.get("SUPERQODE_MLX_INPROCESS", "1").strip().lower() not in (
+            "0",
+            "false",
+            "no",
+        )
+        if use_inprocess:
+            try:
+                return await self._mlx_inprocess_chat_completion(
+                    messages, model, temperature, max_tokens, tools, tool_choice, **dict(kwargs)
+                )
+            except Exception as exc:  # noqa: BLE001 - fall back to the HTTP server path
+                logger.info("MLX in-process engine unavailable (%s); falling back to server", exc)
+        return await self._mlx_http_chat_completion(
+            messages, model, temperature, max_tokens, tools, tool_choice, **kwargs
+        )
+
+    async def _mlx_inprocess_chat_completion(
+        self,
+        messages: List[Message],
+        model: str,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        tools: Optional[List[ToolDefinition]] = None,
+        tool_choice: Optional[str] = None,
+        **kwargs,
+    ) -> GatewayResponse:
+        """Run MLX generation in-process and parse tool calls ourselves."""
+        import asyncio
+
+        from ..local.mlx_engine import get_mlx_engine
+        from ..local.mlx_tools import parse_tool_calls, resolve_format
+
+        budget_for_credit: Optional[TaskTokenBudget] = kwargs.pop("task_budget", None)
+        fmt = resolve_format(model, kwargs.get("tool_call_format"))
+
+        oai_messages = self._convert_messages(messages)
+        converted_tools = self._convert_tools(tools) if tools else None
+
+        engine = get_mlx_engine()
+        result = await asyncio.to_thread(
+            engine.generate,
+            model=model,
+            messages=oai_messages,
+            tools=converted_tools,
+            max_tokens=max_tokens or 2048,
+            temperature=temperature,
+        )
+
+        content, tool_calls = parse_tool_calls(result.text, fmt)
+
+        usage = None
+        total = result.usage.get("total_tokens") if result.usage else None
+        if total:
+            usage = Usage(
+                prompt_tokens=result.usage.get("prompt_tokens") or 0,
+                completion_tokens=result.usage.get("completion_tokens") or 0,
+                total_tokens=total,
+            )
+            if budget_for_credit is not None:
+                budget_for_credit.credit(total)
+
+        return GatewayResponse(
+            content=content,
+            role="assistant",
+            finish_reason="tool_calls" if tool_calls else "stop",
+            usage=usage,
+            model=model,
+            provider="mlx",
+            tool_calls=tool_calls or None,
+            raw_response={"text": result.text, "backend": result.backend},
+        )
+
+    async def _mlx_http_chat_completion(
+        self,
+        messages: List[Message],
+        model: str,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        tools: Optional[List[ToolDefinition]] = None,
+        tool_choice: Optional[str] = None,
+        **kwargs,
+    ) -> GatewayResponse:
+        """Handle MLX chat completion via the mlx_lm.server HTTP API (fallback)."""
         from ..local.mlx import MLXClient
 
         client = MLXClient()
@@ -1901,6 +2060,9 @@ class LiteLLMGateway(GatewayInterface):
             if google_key:
                 request_kwargs["api_key"] = google_key
 
+        # models.dev-synthesized providers: inject api_base/api_key explicitly.
+        self._apply_dynamic_provider(provider, request_kwargs)
+
         if temperature is not None:
             request_kwargs["temperature"] = temperature
         if max_tokens is not None:
@@ -2167,6 +2329,9 @@ class LiteLLMGateway(GatewayInterface):
             google_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
             if google_key:
                 request_kwargs["api_key"] = google_key
+
+        # models.dev-synthesized providers: inject api_base/api_key explicitly.
+        self._apply_dynamic_provider(provider, request_kwargs)
 
         # Provider-neutral reasoning + structured output (stream path).
         reasoning_effort = kwargs.pop("reasoning_effort", None)

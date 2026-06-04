@@ -16,6 +16,17 @@ def test_openai_gpt54_fallback_candidates():
     ]
 
 
+def test_gemma_num_ctx_modern_vs_legacy():
+    """Gemma 3/4 get a real context window; Gemma 1/2 stay at 8K."""
+    gateway = LiteLLMGateway()
+
+    # Modern Gemma must not be capped at the legacy 8K (cripples agentic loops).
+    assert gateway._ollama_num_ctx_for("gemma4:31b-mlx-bf16") == 32768
+    assert gateway._ollama_num_ctx_for("gemma3:27b-it") == 32768
+    # Gemma 2 is genuinely an 8K model.
+    assert gateway._ollama_num_ctx_for("gemma2:9b-it") == 8192
+
+
 def test_openai_gpt54_pro_fallback_candidates():
     """GPT-5.4 Pro should fall back to the prior Pro tier if unavailable."""
     gateway = LiteLLMGateway()

@@ -239,8 +239,29 @@ class ModelsDev:
         return self._providers.copy()
 
     def get_supported_providers(self) -> Dict[str, ProviderInfo]:
-        """Get only the providers we actively support."""
-        return {pid: info for pid, info in self._providers.items() if pid in SUPPORTED_PROVIDERS}
+        """Get all providers models.dev knows about.
+
+        Previously this filtered to a hardcoded ``SUPPORTED_PROVIDERS`` allowlist
+        (~40). SuperQode now connects to any models.dev provider via the
+        curated registry plus on-demand synthesis (OpenAI-compatible routing),
+        so the full catalog is exposed. ``SUPPORTED_PROVIDERS`` is retained only
+        as a "first-class / recommended" hint (see ``is_curated_provider``).
+        """
+        return dict(self._providers)
+
+    def ensure_cache_loaded(self) -> bool:
+        """Synchronously populate providers/models from the on-disk cache.
+
+        Best-effort and non-blocking (no network). Lets synchronous callers
+        (e.g. the BYOK provider resolver) read models.dev metadata without an
+        await. Returns True if any provider data is available afterwards.
+        """
+        if not self._providers:
+            try:
+                self._load_cache()
+            except Exception:  # noqa: BLE001 - cache is optional
+                pass
+        return bool(self._providers)
 
     def get_provider(self, provider_id: str) -> Optional[ProviderInfo]:
         """Get a specific provider's info."""

@@ -951,6 +951,9 @@ _live_models: Optional[Dict[str, Dict[str, ModelInfo]]] = None
 _use_live_data: bool = False
 
 
+_live_autoload_attempted: bool = False
+
+
 def set_live_models(models: Dict[str, Dict[str, ModelInfo]]) -> None:
     """
     Set live model data from models.dev.
@@ -962,12 +965,45 @@ def set_live_models(models: Dict[str, Dict[str, ModelInfo]]) -> None:
     _use_live_data = True
 
 
+def _maybe_autoload_live_models() -> None:
+    """Populate live models from the on-disk models.dev cache, once, on demand.
+
+    This is what makes new models appear automatically: any consumer of the
+    model lists (CLI, TUI, pickers) transparently picks up the latest models.dev
+    cache without a manual list update or explicit wiring. Sync + offline (reads
+    the cache only); a fresh network refresh still happens via the normal
+    ``models_dev`` paths and overrides this.
+    """
+    global _live_autoload_attempted
+    if _use_live_data or _live_autoload_attempted:
+        return
+    _live_autoload_attempted = True
+    try:
+        from .models_dev import get_models_dev
+
+        client = get_models_dev()
+        if not client.ensure_cache_loaded():
+            return
+        live: Dict[str, Dict[str, ModelInfo]] = {}
+        for provider_id in client.get_providers():
+            models = client.get_models_for_provider(provider_id)
+            if models:
+                live[provider_id] = models
+        if live:
+            set_live_models(live)
+    except Exception:  # noqa: BLE001 - live data is optional
+        pass
+
+
 def get_effective_models() -> Dict[str, Dict[str, ModelInfo]]:
     """
     Get the effective models database.
 
     Returns live data if available, otherwise falls back to hardcoded MODELS.
+    Lazily self-loads the models.dev cache on first use so new models surface
+    automatically.
     """
+    _maybe_autoload_live_models()
     if _use_live_data and _live_models:
         # Live data replaces provider model lists. Keep built-ins only for providers
         # absent from models.dev/cache so stale built-in models do not leak into BYOK.

@@ -346,12 +346,13 @@ MODEL_FAMILIES = {
 
 # Models known to support tool calling
 TOOL_CAPABLE_FAMILIES = {
-    "llama",  # Llama 3.1+
-    "qwen",  # Qwen 2.5+
+    "llama",  # Llama 3.1+ / Llama 4
+    "qwen",  # Qwen 2.5 / 3 / 3.5
     "mistral",  # Mistral/Mixtral
     "deepseek",  # DeepSeek
     "command",  # Command-R
     "hermes",  # Hermes (fine-tuned for tools)
+    "gemma",  # Gemma 3 / Gemma 4 (Gemma 4 has native function calling)
 }
 
 
@@ -416,22 +417,31 @@ def likely_supports_tools(model_id: str) -> bool:
     if family not in TOOL_CAPABLE_FAMILIES:
         return False
 
+    norm = model_lower.replace("_", "-").replace(" ", "-")
+
     # Version-specific checks
     if family == "llama":
-        # Llama 3.1+ supports tools
-        if "llama3.1" in model_lower or "llama3.2" in model_lower or "llama3.3" in model_lower:
-            return True
-        if "llama-3.1" in model_lower or "llama-3.2" in model_lower or "llama-3.3" in model_lower:
-            return True
-        return False
+        # Llama 3.1+ and Llama 4 support tools; Llama 3.0 and earlier don't.
+        return any(
+            v in norm
+            for v in ("llama3.1", "llama-3.1", "llama3.2", "llama-3.2",
+                      "llama3.3", "llama-3.3", "llama4", "llama-4")
+        )
 
     if family == "qwen":
-        # Qwen 2.5+ supports tools well
-        if "qwen2.5" in model_lower or "qwen2-5" in model_lower:
-            return True
-        return False
+        # Qwen 2.5 / 3 / 3.5 support tools well.
+        return any(
+            v in norm
+            for v in ("qwen2.5", "qwen-2.5", "qwen3", "qwen-3")
+        )
 
-    # Mistral/Mixtral generally support tools
+    if family == "gemma":
+        # Gemma 4 has native function calling (6 special tokens, all IT models);
+        # Gemma 3 supports tools via its chat template on modern runtimes.
+        # Gemma 1/2 (and base "gemma") do not reliably tool-call.
+        return any(v in norm for v in ("gemma4", "gemma-4", "gemma3", "gemma-3"))
+
+    # Mistral/Mixtral, Command-R, Hermes, DeepSeek generally support tools.
     if family in ("mistral", "command", "hermes", "deepseek"):
         return True
 

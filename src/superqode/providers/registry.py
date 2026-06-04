@@ -55,6 +55,10 @@ class ProviderDef:
     # Optional hint for how this provider is deployed (for LOCAL providers that also have cloud)
     # Values: "local", "cloud", or None
     deployment_mode: Optional[str] = None
+    # True when this def was synthesized from models.dev metadata rather than
+    # being a curated, first-class entry. Dynamic providers route as
+    # OpenAI-compatible (base_url + api_key passed explicitly).
+    dynamic: bool = False
 
 
 # =============================================================================
@@ -115,7 +119,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
     ),
     "google": ProviderDef(
         id="google",
-        name="Google AI (Gemini)",
+        name="Google AI Studio (Gemini)",
         tier=ProviderTier.TIER1,
         category=ProviderCategory.US_LABS,
         env_vars=["GOOGLE_API_KEY", "GEMINI_API_KEY"],
@@ -125,7 +129,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
             LATEST_GOOGLE_PRO_MODEL,
             LATEST_GOOGLE_FLASH_MODEL,
         ],
-        notes="Latest Gemini Pro and Flash models from models.dev. Great for large codebases.",
+        notes="Gemini API via Google AI Studio. Free key at aistudio.google.com; great for large codebases.",
     ),
     "xai": ProviderDef(
         id="xai",
@@ -490,21 +494,26 @@ PROVIDERS: Dict[str, ProviderDef] = {
         ],
         notes="Enterprise Azure. Use deployment names as model IDs.",
     ),
+    # Google's enterprise platform. As of Google Cloud Next 2026 this is the
+    # "Gemini Enterprise Agent Platform" (the standalone product it replaced was
+    # removed from the Console in May 2026). We keep the internal id "vertex" and
+    # the LiteLLM prefix "vertex_ai/" because Google's SDK/auth routing name is
+    # unchanged — only the product branding moved.
     "vertex": ProviderDef(
         id="vertex",
-        name="Google Vertex AI",
+        name="Google Gemini Enterprise (Agent Platform)",
         tier=ProviderTier.TIER2,
         category=ProviderCategory.MODEL_HOSTS,
         env_vars=["GOOGLE_APPLICATION_CREDENTIALS"],
         optional_env=["VERTEX_PROJECT", "VERTEX_LOCATION"],
         litellm_prefix="vertex_ai/",
-        docs_url="https://cloud.google.com/vertex-ai",
+        docs_url="https://cloud.google.com/products/gemini-enterprise-agent-platform",
         example_models=[
             LATEST_GOOGLE_PRO_MODEL,
             LATEST_GOOGLE_FLASH_MODEL,
             "claude-3-5-sonnet@20241022",
         ],
-        notes="GCP managed. Supports Gemini and Claude.",
+        notes="GCP-managed agent platform. Serves Gemini + Claude and the Model Garden.",
     ),
     "cloudflare": ProviderDef(
         id="cloudflare",
@@ -687,17 +696,10 @@ PROVIDERS: Dict[str, ProviderDef] = {
         example_models=[],
         notes="Any OpenAI-compatible API endpoint.",
     ),
-    "huggingface-local": ProviderDef(
-        id="huggingface-local",
-        name="Hugging Face (Local Cache)",
-        tier=ProviderTier.LOCAL,
-        category=ProviderCategory.LOCAL,
-        env_vars=[],
-        litellm_prefix="huggingface/",
-        docs_url="https://huggingface.co/docs/hub/index",
-        example_models=[],
-        notes="Select locally cached HF models; routes to a local runtime (mlx/tgi/vllm/sglang).",
-    ),
+    # NOTE: "huggingface-local" was removed as a connectable provider — it had
+    # no inference path (downloaded HF weights still need a runtime like Ollama,
+    # mlx_lm.server, vLLM or TGI to serve them). Use `superqode models download`
+    # to fetch from HF, then connect to whichever runtime serves the model.
 }
 
 

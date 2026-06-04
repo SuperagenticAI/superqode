@@ -435,21 +435,29 @@ async def test_agent_stops_when_model_keeps_narrating_tool_use_without_call():
 
 
 @pytest.mark.asyncio
-async def test_generic_local_provider_stays_conservative_with_tools():
-    gateway = ScriptedGateway([GatewayResponse(content="done")])
+async def test_local_tool_gating_is_family_based():
+    # Tool-capable family (Qwen 3) DOES receive tools — local models use family
+    # detection, not a fixed registry, so modern local models (Gemma 4, Qwen 3,
+    # Llama 4) can do agentic coding even with custom Ollama names.
+    gw_capable = ScriptedGateway([GatewayResponse(content="done")])
     loop = AgentLoop(
-        gateway=gateway,
+        gateway=gw_capable,
         tools=ToolRegistry.default(),
-        config=AgentConfig(
-            provider="ollama",
-            model="qwen3:8b",
-        ),
+        config=AgentConfig(provider="ollama", model="qwen3:8b"),
     )
-
     result = await loop.run("read README.md and summarize the setup")
-
     assert result.content == "done"
-    assert gateway.tools_seen[0] is None
+    assert gw_capable.tools_seen[0] is not None
+
+    # Non-tool-capable family (Gemma 2) stays conservative — no tools sent.
+    gw_conservative = ScriptedGateway([GatewayResponse(content="done")])
+    loop2 = AgentLoop(
+        gateway=gw_conservative,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(provider="ollama", model="gemma2:9b"),
+    )
+    await loop2.run("read README.md and summarize the setup")
+    assert gw_conservative.tools_seen[0] is None
 
 
 def _build_loop_system_prompt(

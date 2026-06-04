@@ -19,15 +19,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`:export`** to write the conversation to a self-contained HTML file.
 - **`:compare <models>`** to re-run the last message across several models/runtimes concurrently and read the answers side by side.
 - **`create_skill` tool** making the agent self-extensible — it can author a new `SKILL.md` that is hot-loaded and immediately invocable.
+- **BYOK via models.dev** — a dynamic provider catalog and on-the-fly provider synthesis (`providers/catalog.py`, `providers/dynamic.py`) so any models.dev provider can be connected with an API key, with new models appearing without manual edits. Live `/v1/models` discovery (`providers/live_models.py`) lists a provider's currently-available models.
+- **Hugging Face model toolchain** (`providers/huggingface/fetch.py`, `convert.py`) — Hub search, dry-run size preview, resumable downloads, local cache scan/delete, and MLX convert + upload. The converter auto-detects text (mlx-lm) vs multimodal (mlx-vlm) models.
+- **`superqode models` command group** — `hub`, `download`, `show`, `providers`, `convert-mlx`, `cached`, `rm`, plus `connect setup` guidance.
+- **In-process MLX engine** (`providers/local/mlx_engine.py`, `_mlx_worker.py`) with a family-aware tool-call parser (`mlx_tools.py`) for Qwen / Gemma / generic-JSON formats.
+- **Gemma-optimized harness profiles** — the model policy routes the whole tool-capable Gemma family (Gemma 3 and 4) to a Gemma-tuned profile (minimal system prompt, strict-JSON tool calls).
 
 ### Changed
 
 - Unified the product tagline to **"Your Portable Coding Agent Harness"** across the TUI welcome screen, README, docs, and package metadata, with a refreshed welcome subheading.
 - Updated the README header image and documentation logo.
+- **Family-based local tool gating** — Gemma 3/4, Qwen 2.5/3, and Llama 3.1+/4 get tools; Gemma 1/2 and Llama 3.0 do not. The agent loop falls back to family detection for custom local tags not in the model registry.
+- **Gemma context windows** — modern Gemma (3/4) now use a practical 32K `num_ctx` (matching the Llama/Qwen treatment) instead of the legacy 8K, and Ollama reports their true 128K capability; Gemma 1/2 stay at 8K.
+- Dependencies: `mlx-lm` pinned to `>=0.31` (adds Gemma 4 support) and `mlx-vlm` added for multimodal models.
 
 ### Fixed
 
 - Rewrote the optional `python_repl` (Monty) tool against the real `pydantic-monty` API; it previously targeted a non-existent API and failed at runtime. Each call now runs in a fresh, fully isolated sandbox (no host filesystem, network, or third-party imports), and the `pydantic-monty` version constraint was corrected.
+- **Ollama models not listing** in the TUI — model parsing crashed on `"families": null` (returned by many Ollama models), making model discovery silently return an empty list.
+- **Could not exit the TUI from selection pickers** (local LM Studio / MLX / Ollama, BYOK, ACP) — `:exit` / `:quit` / `:q` now work from any picker, and a command/shell line typed inside a picker is no longer swallowed by item selection.
+- **TUI freeze on quit** — the exit sequence cancelled Textual's own message pump (via `asyncio.all_tasks()`), freezing the app so it had to be killed; it now shuts down cleanly.
 
 ## [0.1.35] - 2026-06-02
 

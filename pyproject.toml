@@ -39,8 +39,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+hf = [
+    # Hugging Face Hub search + download (hf_xet gives chunk-dedup fast transfers).
+    "huggingface_hub[hf_xet]>=1.0.0",
+]
 mlx = [
-    "mlx-lm>=0.28.3,<0.30.0; python_version < '3.14'",
+    # >=0.31 adds the Gemma 4 (gemma4 / Gemma4ForConditionalGeneration) model
+    # class needed to load/convert Gemma 4 weights. Older builds raise
+    # "Model type gemma4 not supported".
+    "mlx-lm>=0.31.0,<0.32.0; python_version < '3.14'",
+    # mlx-vlm handles multimodal models that mlx-lm can't (e.g. plain gemma4
+    # VLMs). Capped <0.6 because 0.6.x requires starlette>=1.0.1, which clashes
+    # with superqode's fastapi/starlette. Newer arches like gemma4_unified that
+    # only 0.6.x supports are converted in an isolated env, not the main venv.
+    "mlx-vlm>=0.5.0,<0.6.0; python_version < '3.14'",
 ]
 monty = [
     "pydantic-monty>=0.0.4",

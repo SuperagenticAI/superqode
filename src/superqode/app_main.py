@@ -592,6 +592,15 @@ class SelectionAwareInput(TextArea):
         per-mode dispatch in the app-level on_key handler so behaviour is
         identical whether or not the prompt input holds focus.
         """
+        # A typed command/shell line must always win over picker selection, so
+        # :exit / :quit / :home / :back / :cancel (and ! shell) work from inside
+        # ANY picker (local LM Studio/MLX/Ollama, BYOK, ACP). Without this, Enter
+        # confirms the highlighted item and the command is never submitted,
+        # trapping the user in the picker.
+        typed = (self.value or "").strip()
+        if typed[:1] in (":", "/", ">", "!"):
+            return False
+
         # A pending typed-number buffer (BYOK/local pickers) takes priority so
         # Enter commits the digits the user just typed instead of the highlight.
         if getattr(app, "_selection_digit_buffer", ""):
@@ -1670,26 +1679,41 @@ class SuperQodeApp(App):
         # Also load models.dev data in background
         await self._load_models_dev_data()
 
+    def _apply_live_models(self, client) -> bool:
+        """Push the client's current provider/model data into the live registry."""
+        from superqode.providers.models import set_live_models
+
+        live_models = {}
+        for provider_id in client.get_providers().keys():
+            provider_models = client.get_models_for_provider(provider_id)
+            if provider_models:
+                live_models[provider_id] = provider_models
+        if live_models:
+            set_live_models(live_models)
+            return True
+        return False
+
     async def _load_models_dev_data(self):
-        """Load model data from models.dev in background."""
+        """Load models from models.dev: cached instantly, then force-refresh.
+
+        Runs in the background so the UI stays responsive. Each TUI launch shows
+        the cached catalog immediately, then pulls a fresh copy from models.dev
+        and swaps it in — so newly launched models appear without any manual
+        list update.
+        """
         try:
             from superqode.providers.models_dev import get_models_dev
-            from superqode.providers.models import set_live_models
 
             client = get_models_dev()
-            success = await client.ensure_loaded()
-
-            if success:
-                # Get all models and update the global models database
-                live_models = {}
-                for provider_id in client.get_providers().keys():
-                    provider_models = client.get_models_for_provider(provider_id)
-                    if provider_models:
-                        live_models[provider_id] = provider_models
-
-                if live_models:
-                    set_live_models(live_models)
-
+            # 1) Instant: whatever is cached on disk.
+            if await client.ensure_loaded():
+                self._apply_live_models(client)
+            # 2) Fresh: force a network refresh and swap in the latest.
+            try:
+                if await client.refresh(force=True):
+                    self._apply_live_models(client)
+            except Exception:
+                pass  # offline / transient — cached data stands
         except Exception:
             # Silent failure - live data is optional
             pass
@@ -3394,39 +3418,31 @@ class SuperQodeApp(App):
     def _scroll_to_highlighted_item(
         self, log: ConversationLog, highlighted_idx: int, total_items: int
     ):
-        """Scroll the log to keep the highlighted item visible in the view.
+        """Scroll the log to keep the highlighted item visible.
 
-        Uses a simpler approach: scroll to home first, then scroll down just enough
-        to show the highlighted item centered in view.
+        Does a single, direct ``scroll_to`` to the target line. The old approach
+        (jump to home, then a timer that scrolled down one line at a time in a
+        loop) caused a visible flicker once navigation passed the visible fold;
+        one synchronous, non-animated scroll is flicker-free.
         """
         try:
             log.auto_scroll = False
 
-            # For small lists, just show from top - no scrolling needed
-            if total_items <= 8:
+            # Small lists fit on screen — just pin to the top.
+            visible_items = 8
+            if total_items <= visible_items or highlighted_idx < visible_items:
                 log.scroll_home(animate=False)
                 return
 
-            # Each item takes approximately 2-4 lines depending on content
-            # Header takes about 5 lines, instructions at bottom take about 10 lines
+            # Approximate line geometry of the rendered picker.
             lines_per_item = 3
             header_lines = 5
-            visible_items = 8  # Approximate visible items in the log
-
-            # If highlighted item is in first visible_items, scroll to top
-            if highlighted_idx < visible_items:
-                log.scroll_home(animate=False)
-            else:
-                # Scroll to show the highlighted item in view
-                # Calculate target scroll position
-                target_offset = (highlighted_idx - visible_items // 2) * lines_per_item
-
-                # Use scroll_to with y offset
-                log.scroll_home(animate=False)
-                # Then scroll down to the target position
-                self.set_timer(
-                    0.05, lambda: self._scroll_down_to_item(log, target_offset, lines_per_item)
-                )
+            # Keep the highlighted item roughly centered in the viewport.
+            target_y = max(
+                0, header_lines + (highlighted_idx - visible_items // 2) * lines_per_item
+            )
+            # One non-animated jump — no home reset, no per-line loop, no timer.
+            log.scroll_to(y=target_y, animate=False)
         except Exception:
             pass  # If scrolling fails, just continue
 
@@ -4553,7 +4569,7 @@ class SuperQodeApp(App):
             self._show_help(log)
         elif c == "clear":
             self.action_clear_screen()
-        elif c in ("exit", "quit"):
+        elif c in ("exit", "quit", "q"):
             self._do_exit(log)
         elif c == "init":
             self._init_config(args, log)
@@ -4633,6 +4649,8 @@ class SuperQodeApp(App):
             self._handle_approve(args, log)
         elif c == "reject":
             self._handle_reject(args, log)
+        elif c in ("models", "catalog"):
+            self._models_cmd(args, log)
         elif c in ("permissions", "policy"):
             self._handle_permissions(log)
         elif c == "diff":
@@ -17438,13 +17456,15 @@ team:
         if hasattr(session, "acp_manager"):
             session.acp_manager = None
         from superqode.providers.registry import PROVIDERS, ProviderCategory
+        from superqode.providers.dynamic import resolve_provider_def
         from superqode.pure_mode import PureMode
         from superqode.agent.system_prompts import SystemPromptLevel
         from superqode.providers.usage import get_usage_tracker
         import os
 
-        # Get provider info
-        provider_def = PROVIDERS.get(provider)
+        # Get provider info. Use the resolver so models.dev-synthesized providers
+        # (not in the curated registry) still get the API-key check below.
+        provider_def = resolve_provider_def(provider)
         provider_name = provider_def.name if provider_def else provider.upper()
 
         # Show experimental warning for vLLM and SGLang
@@ -18092,16 +18112,17 @@ team:
 
         # Filter out unsupported providers from TUI display
         # (they remain in registry for backward compatibility)
-        unsupported_local_providers = {"llamacpp", "ollama-cloud"}
+        unsupported_local_providers = {"ollama-cloud"}
         local_providers = {
             pid: pdef
             for pid, pdef in local_providers.items()
             if pid not in unsupported_local_providers
         }
 
-        # Add HuggingFace to local providers list (it's in MODEL_HOSTS category but available via :connect local)
-        if "huggingface-local" in PROVIDERS:
-            local_providers["huggingface-local"] = PROVIDERS["huggingface-local"]
+        # huggingface-local removed: downloaded HF weights aren't directly
+        # runnable — they need a runtime (Ollama/mlx_lm.server/vLLM/TGI) to
+        # serve them. Use `superqode models download` then connect to that
+        # runtime. (Filtered above via the registry no longer listing it.)
 
         t = Text()
         t.append(f"  ◈ ", style=f"bold {THEME['purple']}")
@@ -18199,7 +18220,7 @@ team:
             log.auto_scroll = False
             log.write(t)
             log.scroll_home(animate=False)
-            self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
         else:
             # Update during navigation - clear and write but preserve scroll position better
             # by not calling scroll_home which resets to top
@@ -18208,7 +18229,7 @@ team:
             log.write(t)
             # Don't scroll to home on navigation updates to reduce flickering
             # The scroll will be adjusted by _scroll_to_highlighted_item if needed
-            self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
 
         # Set up selection handler for local providers
         # CRITICAL: Always set these flags to ensure provider picker is shown, NOT model selection
@@ -18330,14 +18351,14 @@ team:
             log.auto_scroll = False
             log.write(t)
             log.scroll_home(animate=False)
-            self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
         else:
             # Update during navigation - clear and write but don't scroll to home
             log.auto_scroll = False
             log.clear()
             log.write(t)
             # Don't scroll to home on navigation updates to reduce flickering
-            self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
 
         # Set up selection handler
         self._awaiting_connect_type = True
@@ -18520,13 +18541,14 @@ team:
 
             t.append("\n", style="")
 
-        # Show providers grouped by category
+        # Show providers grouped by category. LOCAL/self-hosted providers are
+        # intentionally excluded here — they have their own picker via
+        # `:connect local` and shouldn't clutter the BYOK (cloud key) list.
         for category in [
             ProviderCategory.US_LABS,
             ProviderCategory.CHINA_LABS,
             ProviderCategory.OTHER_LABS,
             ProviderCategory.MODEL_HOSTS,
-            ProviderCategory.LOCAL,
         ]:
             if category not in providers_by_category:
                 continue
@@ -18612,6 +18634,9 @@ team:
         t.append(f"    Or: ", style=THEME["dim"])
         t.append(f":connect byok <provider>/<model>", style=THEME["success"])
         t.append(" for direct connect\n", style=THEME["text"])
+        t.append(f"    Local models? Use ", style=THEME["dim"])
+        t.append(f":connect local", style=THEME["cyan"])
+        t.append(" (Ollama, LM Studio, vLLM, …)\n", style=THEME["dim"])
         t.append(f"    ", style=THEME["dim"])
         t.append(f"R", style=f"bold {THEME['success']}")
         t.append(" to refresh models from API\n", style=THEME["dim"])
@@ -18640,14 +18665,14 @@ team:
             log.write(t)
             log.scroll_home(animate=False)
             # Re-enable auto-scroll after a short delay
-            self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
         else:
             # Update during navigation - clear and write but don't scroll to home
             log.auto_scroll = False
             log.clear()
             log.write(t)
             # Don't scroll to home on navigation updates to reduce flickering
-            self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
 
         # Store for selection handling
         self._byok_connect_list = provider_list
@@ -18744,6 +18769,11 @@ team:
         if not configured:
             t.append(f"\n  ⚠️  ", style=THEME["warning"])
             t.append("API Key Required\n", style=f"bold {THEME['warning']}")
+            t.append(
+                "    'Free' below means $0 per token — the provider still requires\n"
+                "    an account + API key. SuperQode never stores keys.\n",
+                style=THEME["muted"],
+            )
             t.append(f"    Set: ", style=THEME["muted"])
             t.append(
                 f"export {'='.join(provider_def.env_vars[:1])}='your-api-key'\n",
@@ -19069,7 +19099,15 @@ team:
 
             # Show Free models
             if free:
-                t.append(f"  🆓 Free Models:\n", style=f"bold {THEME['success']}")
+                if configured:
+                    t.append(f"  🆓 Free Models ($0/token):\n", style=f"bold {THEME['success']}")
+                else:
+                    t.append(f"  🆓 Free Models ($0/token — ", style=f"bold {THEME['success']}")
+                    t.append(
+                        f"needs {provider_def.env_vars[0] if provider_def.env_vars else 'API key'}",
+                        style=f"bold {THEME['warning']}",
+                    )
+                    t.append("):\n", style=f"bold {THEME['success']}")
                 for model_id, info in free[:6]:
                     t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                     t.append(f"{info.name:<25}", style=f"bold {THEME['success']}")
@@ -19230,14 +19268,14 @@ team:
             log.write(t)
             log.scroll_home(animate=False)
             # Re-enable auto-scroll after a short delay
-            self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
         else:
             # Update during navigation - clear and write but don't scroll to home
             log.auto_scroll = False
             log.clear()
             log.write(t)
             # Don't scroll to home on navigation updates to reduce flickering
-            self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
 
         # Store for selection - use model_list which matches display order
         # This ensures navigation index matches the displayed models
@@ -19760,7 +19798,7 @@ team:
         log.auto_scroll = False
         log.write(t)
         log.scroll_home(animate=False)
-        self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+        log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
 
         # Store for selection
         self._local_model_list = model_list
@@ -19832,7 +19870,7 @@ team:
             log.auto_scroll = False
             log.clear()
             log.write(t)
-            self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
             return
 
         if not models:
@@ -19923,7 +19961,7 @@ team:
         log.auto_scroll = False
         log.write(t)
         log.scroll_home(animate=False)
-        self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+        log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
 
     def _models_cmd(self, args: str, log: ConversationLog):
         """Handle :models command - Show/switch models."""
@@ -22239,14 +22277,14 @@ team:
             log.auto_scroll = False
             log.write(t)
             log.scroll_home(animate=False)
-            self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
         else:
             # Update during navigation - clear and write but don't scroll to home
             log.auto_scroll = False
             log.clear()
             log.write(t)
             # Don't scroll to home on navigation updates to reduce flickering
-            self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
 
         # Set flag to await model selection
         self._awaiting_model_selection = True
@@ -23410,6 +23448,104 @@ team:
 
         self._show_command_output(log, t)
 
+    def _models_cmd(self, args: str, log: ConversationLog):
+        """`:models` — browse the models.dev catalog from the TUI.
+
+        Usage:
+          :models [search terms]
+          :models free
+          :models provider <id>
+          :models cap <tools|vision|reasoning|code|long|json>
+          :models providers
+        Flags can combine, e.g. `:models coder cap code provider deepinfra`.
+        """
+        from superqode.providers.catalog import (
+            load_models_catalog_cached,
+            filter_models,
+            parse_capability,
+            render_models_table,
+            render_providers_table,
+        )
+
+        parts = (args or "").split()
+        if parts and parts[0] in ("providers", "provider-list"):
+            self._show_command_output(log, render_providers_table())
+            return
+
+        live = "live" in parts
+        free = "free" in parts
+        cap = None
+        provider = None
+        terms = []
+        i = 0
+        while i < len(parts):
+            token = parts[i]
+            if token == "cap" and i + 1 < len(parts):
+                cap = parts[i + 1]
+                i += 2
+                continue
+            if token in ("provider", "from") and i + 1 < len(parts):
+                provider = parts[i + 1]
+                i += 2
+                continue
+            if token in ("free", "live"):
+                i += 1
+                continue
+            terms.append(token)
+            i += 1
+        search = " ".join(terms) or None
+
+        if live:
+            if not provider:
+                log.add_error("Live discovery needs a provider: `:models provider <id> live`")
+                return
+            log.add_info(f"Discovering {provider} models live from its endpoint...")
+            self.run_worker(self._models_live_render(provider, log), exclusive=False)
+            return
+
+        if cap and parse_capability(cap) is None:
+            log.add_error("Unknown capability. Use: tools, vision, reasoning, code, long, json.")
+            return
+
+        models = load_models_catalog_cached()
+        if not models:
+            log.add_info(
+                "No model catalog cached yet. Run `superqode models --refresh` once "
+                "(with network) to populate it."
+            )
+            return
+
+        matched = filter_models(
+            models,
+            search=search,
+            provider=provider,
+            capability=parse_capability(cap),
+            free=free,
+            limit=None,
+        )
+        total = len(matched)
+        self._show_command_output(log, render_models_table(matched[:40], total=total))
+
+    async def _models_live_render(self, provider: str, log: ConversationLog):
+        """Worker: query a provider's live /v1/models endpoint and render it."""
+        from superqode.providers.live_models import discover_provider_models
+        from superqode.providers.catalog import render_models_table
+
+        try:
+            result = await discover_provider_models(provider)
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Live discovery failed: {exc}")
+            return
+        note = {
+            "live": f"live from {result.endpoint}",
+            "models.dev": "models.dev catalog (live endpoint unavailable)",
+            "none": "no models found (set the API key / base URL, or check the endpoint)",
+        }.get(result.source, result.source)
+        header = f"# {provider}: {note}\n\n"
+        self._show_command_output(
+            log, header + render_models_table(result.models[:40], total=len(result.models))
+        )
+
     def _show_command_output(self, log: ConversationLog, content, clear_log: bool = True):
         """Clear screen and show command output cleanly, scrolled to top.
 
@@ -23425,14 +23561,14 @@ team:
             log.write(content)
             log.scroll_home(animate=False)
             # Re-enable auto-scroll after a short delay
-            self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
         else:
             # Update during navigation - clear and write but don't scroll to home
             log.auto_scroll = False
             log.clear()
             log.write(content)
             # Don't scroll to home on navigation updates to reduce flickering
-            self.set_timer(0.1, lambda: setattr(log, "auto_scroll", True))
+            log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
 
     def _show_roles(self, log: ConversationLog):
         try:
@@ -23570,17 +23706,13 @@ team:
                 pass
             self._acp_loop_runner = None
 
-        # Cancel all pending workers
+        # Cancel all pending workers (this app's own background tasks).
+        # NOTE: do NOT cancel asyncio.all_tasks() here — that includes
+        # Textual's own message-pump task. Killing it freezes the app so the
+        # goodbye timer below never fires and exit() never runs, forcing the
+        # user to kill the process. Let self.exit() tear down Textual cleanly.
         try:
             self.workers.cancel_all()
-        except Exception:
-            pass
-
-        # Cancel any pending asyncio tasks related to this app
-        try:
-            for task in asyncio.all_tasks():
-                if not task.done() and task != asyncio.current_task():
-                    task.cancel()
         except Exception:
             pass
 

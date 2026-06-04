@@ -434,6 +434,10 @@ class OllamaClient(LocalProviderClient):
         if "phi" in model_lower:
             return 16384
         if "gemma" in model_lower:
+            # Gemma 3 / Gemma 4 train at 128K; Gemma 1/2 are 8K.
+            norm = model_lower.replace("_", "-").replace(" ", "-")
+            if any(v in norm for v in ("gemma3", "gemma-3", "gemma4", "gemma-4")):
+                return 131072
             return 8192
 
         # Default
@@ -441,8 +445,9 @@ class OllamaClient(LocalProviderClient):
 
     def _supports_vision(self, model_id: str, details: Dict) -> bool:
         """Check if model supports vision/images."""
-        # Check families that support vision
-        families = details.get("families", [])
+        # Check families that support vision. Ollama returns "families": null
+        # for many models, so `.get(..., [])` is not enough — coerce None to [].
+        families = details.get("families") or []
         if "clip" in families or "vision" in families:
             return True
 

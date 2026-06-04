@@ -69,12 +69,12 @@ def _select_profile(spec: HarnessSpec, *, provider: str | None, model: str | Non
     ).lower()
 
     if spec.flavor == HarnessFlavor.NO_TOOL:
-        if _mentions_gemma4(haystack):
+        if _mentions_modern_gemma(haystack):
             return "gemma4-no-tool"
         return "no-tool"
     if _mentions_ds4(haystack):
         return "ds4-coding"
-    if _mentions_gemma4(haystack):
+    if _mentions_modern_gemma(haystack):
         return "gemma4-coding"
     return "coding"
 
@@ -184,6 +184,11 @@ def _mentions_ds4(text: str) -> bool:
     return "ds4" in text or "dwarfstar" in text or "deepseek-v4" in text
 
 
-def _mentions_gemma4(text: str) -> bool:
+def _mentions_modern_gemma(text: str) -> bool:
+    """Match the tool-capable Gemma family (Gemma 3 / Gemma 4).
+
+    Both route to the Gemma-optimized profile (MINIMAL system prompt, strict-JSON
+    tool calls). Gemma 1/2 are excluded — they don't reliably tool-call.
+    """
     normalized = text.replace("_", "-").replace(" ", "-")
-    return "gemma4" in normalized or "gemma-4" in normalized
+    return any(v in normalized for v in ("gemma4", "gemma-4", "gemma3", "gemma-3"))

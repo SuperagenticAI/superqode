@@ -65,6 +65,37 @@ def test_ds4_provider_autodetects_ds4_coding_policy():
     assert policy.parallel_tools is False
 
 
+def test_gemma3_autodetects_optimized_gemma_policy():
+    # Gemma 3 (not just Gemma 4) is tool-capable and should get the
+    # Gemma-optimized profile from the generic coding template.
+    spec = get_harness_template("coding")
+
+    policy = resolve_harness_model_policy(
+        spec,
+        provider="ollama",
+        model="gemma3:27b-it",
+    )
+
+    assert policy.profile == "gemma4-coding"
+    assert policy.family == "gemma4"
+    assert policy.system_level == SystemPromptLevel.MINIMAL
+    assert policy.tool_call_format == "strict-json"
+
+
+def test_gemma2_stays_on_generic_coding_policy():
+    # Gemma 1/2 don't reliably tool-call -> must NOT get the Gemma tool profile.
+    spec = get_harness_template("coding")
+
+    policy = resolve_harness_model_policy(
+        spec,
+        provider="ollama",
+        model="gemma2:9b-it",
+    )
+
+    assert policy.profile == "coding"
+    assert policy.family == "general"
+
+
 def test_no_tool_gemma4_policy_keeps_model_only_contract():
     spec = get_harness_template("gemma4-no-tool")
 
