@@ -18,6 +18,7 @@ from .registry import (
 )
 from .runtime import (
     ADKHarnessBackend,
+    ClaudeAgentSDKHarnessBackend,
     CodexSDKHarnessBackend,
     OpenAIAgentsHarnessBackend,
     RuntimeHarnessBackend,
@@ -31,6 +32,7 @@ __all__ = [
     "HarnessBackendRequest",
     "HarnessBackendResult",
     "ADKHarnessBackend",
+    "ClaudeAgentSDKHarnessBackend",
     "CodexSDKHarnessBackend",
     "DeepAgentsHarnessBackend",
     "OpenAIAgentsHarnessBackend",

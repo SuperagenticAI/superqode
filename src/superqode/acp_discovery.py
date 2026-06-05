@@ -6,7 +6,7 @@ and provides a unified interface for connecting to them.
 
 Supported Agents (27+ ACP Agents from Registry):
 - OpenCode (opencode) - Open-source coding agent
-- Gemini CLI (gemini) - Google's reference ACP implementation
+- Gemini CLI (gemini) - Google ACP route for enterprise/API-key users
 - Claude Code (claude) - Anthropic's official CLI coding agent
 - Codex (codex) - OpenAI's code generation agent
 - JetBrains Junie (junie) - JetBrains' AI agent for IDE ecosystem
@@ -151,7 +151,7 @@ class DiscoveredAgent:
 
 KNOWN_AGENTS: List[Dict[str, Any]] = [
     # =========================================================================
-    # 1. Gemini CLI - Google's Reference ACP Implementation
+    # 1. Gemini CLI - Google ACP route for enterprise/API-key users
     # =========================================================================
     {
         "name": "Gemini CLI",
@@ -163,7 +163,10 @@ KNOWN_AGENTS: List[Dict[str, Any]] = [
         ],
         "icon": "✨",
         "color": "#4285f4",
-        "description": "Google's reference ACP implementation showing full potential of agent integration",
+        "description": (
+            "Google Gemini CLI ACP route for enterprise/API-key users. "
+            "Consumer Google AI accounts should migrate to Antigravity CLI."
+        ),
         "website": "https://github.com/google-gemini/gemini-cli",
         "requires_api_key": True,
         "api_key_env_vars": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],

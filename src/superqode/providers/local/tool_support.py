@@ -14,6 +14,7 @@ from superqode.providers.local.base import (
     LocalModel,
     ToolTestResult,
     detect_model_family,
+    likely_supports_tools,
 )
 
 
@@ -79,6 +80,28 @@ TOOL_CAPABLE_MODELS: Dict[str, Dict[str, Any]] = {
         "tool_choice": ["auto", "required"],
         "notes": "Improved tool support in v2",
     },
+    "qwen3": {
+        "supports_tools": True,
+        "parallel_tools": True,
+        "tool_choice": ["auto", "required", "none"],
+        "notes": "Qwen 3 family has strong local tool-calling support",
+        "recommended_params": {"num_ctx": 32768},
+    },
+    # Gemma family
+    "gemma3": {
+        "supports_tools": True,
+        "parallel_tools": False,
+        "tool_choice": ["auto", "none"],
+        "notes": "Gemma 3 supports tools through modern local chat templates",
+        "recommended_params": {"num_ctx": 32768},
+    },
+    "gemma4": {
+        "supports_tools": True,
+        "parallel_tools": False,
+        "tool_choice": ["auto", "none"],
+        "notes": "Gemma 4 instruction models support native function/tool calling",
+        "recommended_params": {"num_ctx": 32768},
+    },
     # Command-R
     "command-r": {
         "supports_tools": True,
@@ -128,7 +151,11 @@ TOOL_QUIRKS: Dict[str, Dict[str, Any]] = {
 NO_TOOL_SUPPORT: Set[str] = {
     "tinyllama",
     "phi-2",
-    "gemma",  # Base Gemma doesn't support tools
+    "gemma2",
+    "gemma-2",
+    "gemma:old",
+    "gemma:7b",
+    "gemma:2b",
     "stablelm",
     "falcon",
     "mpt",
@@ -201,10 +228,11 @@ def get_tool_capability_info(model_id: str) -> ToolCapabilityInfo:
         ToolCapabilityInfo with heuristic-based assessment.
     """
     model_lower = model_id.lower()
+    norm = model_lower.replace("_", "-").replace(" ", "-")
 
     # Check if definitely not supported
     for pattern in NO_TOOL_SUPPORT:
-        if pattern in model_lower:
+        if pattern in norm:
             return ToolCapabilityInfo(
                 model_id=model_id,
                 supports_tools=False,
@@ -226,6 +254,20 @@ def get_tool_capability_info(model_id: str) -> ToolCapabilityInfo:
                 confidence="heuristic",
                 notes=info.get("notes", ""),
             )
+
+    if likely_supports_tools(model_id):
+        family = detect_model_family(model_id)
+        return ToolCapabilityInfo(
+            model_id=model_id,
+            supports_tools=True,
+            parallel_tools=family in {"llama", "qwen", "command", "hermes", "deepseek"},
+            tool_choice_modes=["auto", "none"],
+            recommended_params={"num_ctx": 32768}
+            if family in {"llama", "qwen", "gemma"}
+            else {},
+            confidence="heuristic",
+            notes=f"{family.title()} family/version is expected to support local tool calling",
+        )
 
     # Unknown - check for instruct variant which might support tools
     if any(x in model_lower for x in ["instruct", "chat", "assistant"]):
@@ -461,6 +503,12 @@ def estimate_tool_support(model: LocalModel) -> str:
     Returns:
         Support level: "excellent", "good", "limited", "none", "unknown"
     """
+    if model.supports_tools:
+        info = get_tool_capability_info(model.id)
+        if info.parallel_tools and len(info.tool_choice_modes) >= 3:
+            return "excellent"
+        return "good"
+
     info = get_tool_capability_info(model.id)
 
     if not info.supports_tools:

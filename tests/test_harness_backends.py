@@ -149,6 +149,7 @@ def test_backend_capabilities_are_advertised():
     assert create_harness_backend("openai-agents").capabilities.supports_approvals is True
     assert create_harness_backend("codex-sdk").capabilities.supports_streaming is True
     assert create_harness_backend("codex-sdk").capabilities.supports_approvals is False
+    assert create_harness_backend("codex-sdk").capabilities.supports_mcp is True
     assert create_harness_backend("deepagents").capabilities.supports_no_tool is False
     assert create_harness_backend("pydanticai").capabilities.supports_coding is True
 

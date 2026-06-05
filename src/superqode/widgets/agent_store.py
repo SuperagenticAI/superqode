@@ -884,7 +884,10 @@ def create_sample_agents() -> List[AgentInfo]:
         AgentInfo(
             id="gemini-cli",
             name="Gemini CLI",
-            description="Google's Gemini AI in your terminal with ACP support.",
+            description=(
+                "Google Gemini CLI ACP route for enterprise/API-key users; "
+                "consumer users should migrate to Antigravity CLI."
+            ),
             author="Google",
             version="1.0.0",
             category="code",

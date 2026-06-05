@@ -120,7 +120,31 @@ class CodexSDKHarnessBackend(RuntimeHarnessBackend):
         super().__init__("codex-sdk")
 
 
+class ClaudeAgentSDKHarnessBackend(RuntimeHarnessBackend):
+    """First-class harness adapter name for the Anthropic Claude Agent SDK."""
+
+    def __init__(self) -> None:
+        super().__init__("claude-agent-sdk")
+
+
 def _runtime_capabilities(runtime_name: str) -> HarnessBackendCapabilities:
+    if runtime_name == "claude-agent-sdk":
+        return HarnessBackendCapabilities(
+            backend=runtime_name,
+            supports_coding=True,
+            supports_no_tool=True,
+            supports_streaming=True,
+            supports_approvals=False,
+            supports_sandbox=True,
+            supports_shell=True,
+            supports_mcp=True,
+            supports_typed_output=False,
+            notes=(
+                "Anthropic Claude Agent SDK runtime (API key via ANTHROPIC_API_KEY). "
+                "TUI approval callbacks are bridged via can_use_tool; MCP and slash "
+                "commands resolve through the local Claude Code configuration.",
+            ),
+        )
     if runtime_name == "codex-sdk":
         return HarnessBackendCapabilities(
             backend=runtime_name,
@@ -130,11 +154,13 @@ def _runtime_capabilities(runtime_name: str) -> HarnessBackendCapabilities:
             supports_approvals=False,
             supports_sandbox=True,
             supports_shell=True,
-            supports_mcp=False,
+            supports_mcp=True,
             supports_typed_output=False,
             notes=(
-                "Official Codex SDK runtime. ASK approvals are denied by policy "
-                "until interactive approval bridging is implemented.",
+                "Official Codex SDK runtime. TUI approval callbacks are bridged "
+                "through SuperQode's inline prompt; harness pause/resume approvals "
+                "are not exposed. MCP servers are resolved by the local Codex "
+                "configuration.",
             ),
         )
     if runtime_name == "openai-agents":

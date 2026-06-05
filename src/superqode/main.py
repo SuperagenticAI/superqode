@@ -25,6 +25,8 @@ from typing import Optional, Sequence, Iterable, List, Dict, Any
 import click
 
 from superqode import __version__
+from superqode.runtime import known_runtime_names
+from superqode.providers.connection_profiles import connection_profile_ids
 
 HARNESS_TEMPLATE_CHOICES = (
     "coding",
@@ -634,8 +636,21 @@ class SuperQodeGroup(click.Group):
     "runtime_name",
     envvar="SUPERQODE_RUNTIME",
     default=None,
-    type=click.Choice(["builtin", "adk", "openai-agents"]),
-    help="Agent runtime backend (default: builtin). adk and openai-agents require optional extras.",
+    type=click.Choice(known_runtime_names()),
+    help=(
+        "Agent runtime backend (default: builtin). Non-builtin runtimes "
+        "(adk, openai-agents, pydanticai, codex-sdk) require their optional extras."
+    ),
+)
+@click.option(
+    "--connect",
+    "connect_name",
+    default=None,
+    type=click.Choice(connection_profile_ids()),
+    help=(
+        "Connection source to start with: codex / claude / antigravity / byok / "
+        "local / acp / advanced. e.g. `--connect codex` to use your Codex subscription."
+    ),
 )
 @click.pass_context
 def cli_main(
@@ -655,6 +670,7 @@ def cli_main(
     verbose_logs,
     quiet_logs,
     runtime_name,
+    connect_name=None,
     _headless_messages=None,
 ):
     # Tool-output verbosity propagates through env so the TUI widget
@@ -682,6 +698,21 @@ def cli_main(
         except Exception:  # noqa: BLE001 — startup must remain resilient
             yaml_runtime = None
     effective_runtime = runtime_name or yaml_runtime
+    # A connection profile (e.g. --connect codex) can imply a runtime backend.
+    if connect_name:
+        try:
+            from superqode.providers.connection_profiles import get_connection_profile
+
+            _profile = get_connection_profile(connect_name)
+        except Exception:  # noqa: BLE001 — startup must remain resilient
+            _profile = None
+        if _profile is not None:
+            # Runtime-connector profiles (Codex) map to a runtime backend; an
+            # explicit --runtime still wins.
+            if _profile.connector == "runtime" and _profile.runtime and not runtime_name:
+                effective_runtime = _profile.runtime
+            # Hint the TUI to auto-run the connection on startup.
+            _os.environ["SUPERQODE_CONNECT"] = _profile.id
     if effective_runtime:
         _os.environ["SUPERQODE_RUNTIME"] = effective_runtime
     if harness_path:

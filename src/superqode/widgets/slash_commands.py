@@ -270,6 +270,23 @@ def create_builtin_commands(handlers: dict) -> list[SlashCommand]:
     # prints the inline status table.
     commands.append(
         SlashCommand(
+            name="codex",
+            description="Connect to Codex SDK runtime or show Codex status",
+            handler=handlers.get("codex", lambda _: None),
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="antigravity",
+            description="Show Antigravity CLI status, launch, and Gemini CLI migration help",
+            handler=handlers.get("antigravity", lambda _: None),
+            aliases=["agy"],
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
             name="runtime",
             description="Switch agent runtime (builtin / adk / openai-agents)",
             handler=handlers.get("runtime", lambda _: None),

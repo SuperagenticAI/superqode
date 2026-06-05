@@ -134,7 +134,7 @@ SuperQode includes registry entries for these ACP agents (availability depends o
 - **Claude Code** (ACP adapter: `claude-code-acp`)
 - **Codex** (ACP adapter: `npx @openai/codex-acp` or `codex-acp`)
 - **OpenHands** (`openhands acp`)
-- **Gemini CLI** (`gemini --experimental-acp`)
+- **Gemini CLI** (`gemini --experimental-acp`) — enterprise/API-key ACP route; individual Google AI users should prefer `:connect antigravity`
 - **Goose** (`goose`)
 - **Kimi CLI** (`kimi --acp`)
 - **Augment Code / Auggie** (`auggie --acp`)

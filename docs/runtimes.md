@@ -22,6 +22,7 @@ execution engine. When an engine cannot honor a policy, SuperQode reports that c
 | `adk` | `pip install superqode[adk]` | Google Agent Development Kit. Uses ADK's `Runner` and `LlmAgent`. |
 | `openai-agents` | `pip install superqode[openai-agents]` | OpenAI Agents SDK v0.17+. Includes SDK sessions, tool bridging, and HITL support. |
 | `codex-sdk` | `pip install superqode[codex-sdk]` | Official OpenAI Codex Python SDK runtime. Drives the published `openai-codex` package and its local app-server. |
+| `claude-agent-sdk` | `pip install superqode[claude-agent-sdk]` | Anthropic Claude Agent SDK runtime (API key via `ANTHROPIC_API_KEY`). Drives `claude-agent-sdk` + the local Claude Code CLI; `:claude` exposes model/permission/sessions/slash-commands. |
 | `deepagents` | `pip install superqode[deepagents]` | Optional DeepAgents 0.6 runtime for graph and middleware-heavy coding harnesses. |
 | `pydanticai` | `pip install superqode[pydanticai]` | Optional PydanticAI runtime with SuperQode JSON-schema tool bridging, approval resume, native MCP config loading, fallback chains, and typed-output-friendly harness support. |
 
@@ -57,6 +58,82 @@ superqode:
 ```bash
 SUPERQODE_RUNTIME=adk superqode --print "summarize README.md"
 ```
+
+### TUI
+
+Switch backends from inside a running session — no restart needed:
+
+```text
+:runtime list          # list runtimes with status (ready / missing + install hint / stub)
+:runtime codex-sdk     # swap to a runtime by name; the status-bar badge updates
+```
+
+The swap takes effect on your **next message**, which reconnects on the new
+backend. Precedence (CLI > YAML > env) still applies to the *initial* runtime.
+
+## Connection Sources (`:connect`)
+
+`:connect` chooses **what you connect to** (a product/account), while runtime is
+the engine that executes it. The picker is profile-driven and shows live status:
+
+```text
+:connect
+  [1] ACP agent            Any external ACP agent (incl. your local Claude Code)
+  [2] BYOK provider        Your API key — OpenAI / Anthropic / Gemini / …
+  [3] Local model          Ollama / MLX / vLLM / LM Studio …
+  [4] Codex subscription   Drive OpenAI Codex with your ChatGPT/Codex login (~/.codex)
+  [5] Claude Agent SDK     Use your Anthropic API key via claude-agent-sdk
+  [6] Antigravity CLI      Use Google's local agy CLI; Gemini CLI migration path
+  [7] Advanced runtime     Pick the execution engine (builtin / openai-agents / …)
+```
+
+**Claude** has one headline entry — **Claude Agent SDK** (API key via
+`ANTHROPIC_API_KEY`). Your *local* Claude Code (subscription login) is reached
+through **ACP agent** like any other ACP agent — it is not duplicated as its own
+profile. Neither path implies SuperQode using a Claude Pro/Max subscription.
+
+Direct commands and CLI:
+
+```bash
+:connect codex            # in the TUI — uses your Codex subscription
+:connect claude           # use Claude Agent SDK with ANTHROPIC_API_KEY
+:connect antigravity      # show the local agy handoff + Gemini migration hints
+:connect acp              # generic ACP picker, including local Claude Code
+superqode --connect codex # launch already on Codex
+superqode --connect codex --print "summarize this repo"   # headless
+```
+
+Each source maps to a connector internally: **Codex** → the `codex-sdk` runtime
+(self-contained, `~/.codex` auth); **Claude** → the `claude-agent-sdk` runtime
+(`ANTHROPIC_API_KEY`); **Antigravity** → the local `agy` CLI handoff; **BYOK/Local**
+→ the `builtin` runtime + provider/model, with an optional runtime override;
+**Advanced** → the raw `:runtime` picker.
+
+Only **Codex** is a sanctioned *subscription* SDK path today. Claude has two paths:
+**Claude Code (ACP)** uses your own local Claude CLI, and **Claude Agent SDK** is
+an **API-key** runtime (`claude-agent-sdk`, `ANTHROPIC_API_KEY`) — both shipped.
+**Antigravity CLI** uses Google's local `agy` login/keyring directly, but it is
+currently an external TUI handoff because Google has not documented an ACP/headless
+event stream for `agy`. An Antigravity SDK runtime would be API-key only
+(`GEMINI_API_KEY`) and is separate from this CLI profile.
+
+### Antigravity CLI
+
+Google's Antigravity CLI (`agy`) is the consumer migration path for Gemini CLI:
+
+```text
+:connect antigravity
+:antigravity status
+:antigravity migrate
+```
+
+SuperQode does **not** route `agy` through ACP today. `:connect antigravity` shows
+the current-repository launch command (`cd <repo> && agy`), local install/auth
+status, and Gemini CLI migration commands such as `agy plugin import gemini`.
+
+Gemini CLI remains listed under the generic ACP picker for enterprise/API-key ACP
+users. For Google AI Pro, Ultra, and free Code Assist individual accounts, prefer
+Antigravity CLI.
 
 ## Inspecting Available Runtimes
 
@@ -148,14 +225,24 @@ Current behavior:
 - Uses the published `openai-codex` package installed from `superqode[codex-sdk]`.
 - Starts the Codex SDK app-server through the SDK client; SuperQode does not vendor or import code from `reference/codex/sdk/python`.
 - Maps SuperQode provider/model/cwd/sandbox settings into Codex thread and turn options where the SDK supports them.
-- Streams normalized harness events for model deltas, command output deltas, patch updates, command results, file-change results, and turn completion.
+- Streams normalized harness events for model deltas, command/file output deltas, patch updates, command/file/MCP/dynamic-tool results, and turn completion.
+- Treats a streamed turn as successful only after Codex sends `turn/completed`; a dropped stream raises instead of producing a false `model_result`.
 - Uses Codex SDK cancellation through the active turn interrupt path.
+- Serializes turns per Codex runtime/thread so `cancel()` and approval prompts always apply to the active turn.
 - Routes Codex command/file approval callbacks through SuperQode's `PermissionManager`.
+  In the TUI, Codex approval callbacks are bridged to the inline `y`/`n`/`a`
+  permission prompt and honor SuperQode's approval mode.
+- Forwards Codex command/file/MCP results through SuperQode's existing tool-card callbacks in PureMode.
+- Uses a bounded `openai-codex` dependency range because the adapter translates SDK protocol fields.
 
 Current limits:
 
-- Interactive approval pause/resume is not bridged yet. `ALLOW` accepts, `DENY` rejects, and unresolved `ASK` approvals are rejected by default for safety.
-- Native Codex SDK MCP configuration is not yet mapped from SuperQode MCP config.
+- Programmatic helpers do not display a UI prompt. Local Codex trust/policy in
+  `~/.codex` can avoid approval callbacks; if Codex still asks without a TUI
+  bridge or explicit policy, the default is to reject with a clear message. An
+  explicitly supplied `PermissionManager(default=ALLOW)` or runtime approval
+  callback can approve non-interactively.
+- Native Codex SDK MCP configuration is owned by the local Codex config (`~/.codex`), not mapped from SuperQode MCP config.
 - Typed-output handling still belongs to SuperQode's native harness/output layer.
 
 Example:
@@ -170,7 +257,82 @@ runtime:
   backend: codex-sdk
 ```
 
+In the TUI, switch backends mid-session without restarting:
+
+```text
+:codex                # shorthand for :runtime codex-sdk
+:codex status         # fast SDK/app-server status without starting Codex
+:codex status --probe # start the SDK app-server and list available models
+:codex models         # list models exposed to your local Codex account
+:codex model          # pick a model with arrows, numbers, mouse, or exact id
+:codex model <id>     # set the model override directly
+:codex effort         # pick reasoning effort interactively
+:codex effort high    # set reasoning effort directly: minimal/low/medium/high/xhigh
+:codex sandbox read-only       # override sandbox for future turns
+:codex review         # run a read-only review turn against the current diff
+:codex compact        # compact the active Codex thread
+:codex sessions       # list Codex sessions for this working directory
+:codex resume <id>    # resume an existing Codex thread
+:codex fork <id>      # fork an existing Codex thread
+:codex rename <name>  # rename the active Codex thread
+:codex archive [id]   # archive a Codex thread, defaulting to the active one
+:codex account        # show the current Codex account state
+:runtime list          # shows codex-sdk as "ready" (or the install hint if missing)
+:runtime codex-sdk     # swap backend; the status-bar badge updates
+<your prompt>          # the next message reconnects and runs through Codex
+```
+
+The Codex model picker uses `CodexClient.model_list()` from the local account
+when available, instead of a hardcoded model catalog. `:codex status --probe`
+also caches the returned model list for the picker.
+
+These commands are SuperQode commands mapped to the SDK's typed public APIs; the
+Python SDK does not provide a generic "run a Codex slash command" passthrough.
+`:codex review` intentionally uses the documented public pattern of a
+read-only turn with a review prompt. The lower-level `review/start` protocol is
+not used until the Python SDK exposes a stable public wrapper for it.
+
+Programmatically, the `superqode.codex` helpers wrap the runtime so you don't
+hand-build an `AgentConfig`:
+
+```python
+import asyncio
+from superqode.codex import run_codex, stream_codex, codex_session
+
+# one-shot (synchronous)
+resp = run_codex("Add a docstring to main.py", cwd="myrepo")
+print(resp.content, resp.stopped_reason)
+
+# stream typed harness events
+async def go():
+    async for ev in stream_codex("Write tests for utils.py", cwd="myrepo"):
+        print(ev.type, ev.data)
+asyncio.run(go())
+
+# multi-turn on one Codex thread; list models your account exposes
+with codex_session(cwd="myrepo") as cx:
+    print(cx.models())                       # e.g. gpt-5.5 (default), gpt-5.4, gpt-5.4-mini
+    asyncio.run(cx.run("Summarize the repo"))
+```
+
+The default model is empty (`superqode.codex.DEFAULT_CODEX_MODEL`), which lets
+Codex use your local `~/.codex` default. Override per call with `model=...`.
+Programmatic helpers also accept `approval_callback=...`,
+`permission_manager=...`, and `session_id=...` for non-interactive approval
+policy and session correlation.
+A runnable version of the above is in
+[`examples/codex_sdk_quickstart.py`](../examples/codex_sdk_quickstart.py).
+
 The local `reference/codex/sdk/python` checkout is documentation/reference material only. Runtime code must depend on the packaged SDK (`openai-codex`) so installs are reproducible and do not accidentally bind to a local reference tree.
+
+Set `SUPERQODE_CODEX_REAL_TEST=1` to run the optional real SDK/app-server smoke
+test during development; it is skipped by default because it requires local
+Codex auth and may contact the Codex service.
+
+Performance notes: SuperQode reuses an already-connected Codex runtime when
+`:codex`/`:runtime codex-sdk` is invoked again in the same working directory,
+streams SDK notifications through one background reader thread, and batches
+high-volume command output deltas before updating tool cards.
 
 ### `pydanticai`
 

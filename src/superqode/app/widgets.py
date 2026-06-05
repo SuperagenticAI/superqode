@@ -143,6 +143,10 @@ class ColorfulStatusBar(Static):
     byok_tokens: reactive[int] = reactive(0)
     byok_cost: reactive[float] = reactive(0.0)
     context_window: reactive[int] = reactive(0)
+    # Active runtime + model (e.g. self-contained runtimes like codex-sdk). Shown
+    # in full (no shortening) so the user can see exactly what's selected.
+    active_runtime: reactive[str] = reactive("")
+    active_model: reactive[str] = reactive("")
 
     @staticmethod
     def _format_token_count(tokens: int) -> str:
@@ -212,6 +216,16 @@ class ColorfulStatusBar(Static):
                     result.append(f"${self.byok_cost:.2f}", style="#fbbf24")
                 else:
                     result.append(f"${self.byok_cost:.3f}", style="#fbbf24")
+
+        # Active runtime + model (full, not shortened), e.g. "codex-sdk · gpt-5.5"
+        if self.active_runtime or self.active_model:
+            result.append("  │  ", style="#3f3f46")
+            result.append("🔧 ", style="#06b6d4")
+            if self.active_runtime:
+                result.append(self.active_runtime, style="bold #06b6d4")
+            if self.active_model:
+                sep = " · " if self.active_runtime else ""
+                result.append(f"{sep}{self.active_model}", style="#a1a1aa")
 
         return result
 
@@ -767,10 +781,12 @@ class ConversationLog(RichLog):
     """Chat log with styled messages and rich formatting.
 
     Text Selection:
-    - Hold Shift while dragging to select text (terminal native selection)
-    - Ctrl+Shift+C to copy last response
-    - :copy command to copy to clipboard
-    - :select to open selectable view
+    - Drag with the mouse to select — selection is copied to the clipboard
+      automatically (no command needed).
+    - :copy command to copy the last response/error/transcript.
+    - Shift+drag for the terminal's native selection (fallback for terminals
+      where clipboard access is blocked).
+    - :select to open a plain selectable view.
     """
 
     DEFAULT_CSS = """
@@ -782,6 +798,110 @@ class ConversationLog(RichLog):
         margin: 0;
     }
     """
+
+    def render_line(self, y):
+        """Render a line, tagging each segment with its content ``offset``.
+
+        Mouse text-selection in Textual only *starts* if the segment under the
+        cursor carries a ``style.meta["offset"]`` (content cell, row) — that's
+        how the compositor maps a screen cell back to a position in the widget's
+        content. ``RichLog`` blits cached strips without that meta, so
+        ``get_widget_and_offset_at`` returns ``None`` and no selection is ever
+        created (the conversation looked completely unselectable, regardless of
+        which connector produced the output). We re-tag each rendered segment
+        here. The row we emit (``scroll_y + y``) is the index into ``self.lines``,
+        which is exactly what :meth:`get_selection` extracts from — so selection
+        start/extract stay consistent.
+        """
+        strip = super().render_line(y)
+        try:
+            from rich.segment import Segment
+            from rich.style import Style
+            from textual.strip import Strip
+
+            row = self.scroll_offset[1] + y
+            col = 0
+            segments = []
+            for seg in strip:
+                base = seg.style or Style()
+                segments.append(
+                    Segment(
+                        seg.text,
+                        base + Style.from_meta({"offset": (col, row)}),
+                        seg.control,
+                    )
+                )
+                col += seg.cell_length
+            strip = Strip(segments, strip.cell_length)
+
+            selection = self.text_selection
+            span = selection.get_span(row) if selection is not None else None
+            if span is not None:
+                start, end = span
+                end = strip.cell_length if end == -1 else end
+                if end < start:
+                    start, end = end, start
+                start = max(0, min(start, strip.cell_length))
+                end = max(start, min(end, strip.cell_length))
+                if end > start:
+                    selection_style = Style.parse("bold white on #2563eb")
+                    selected = strip.crop(start, end)
+                    selected = Strip(
+                        [
+                            Segment(
+                                segment.text,
+                                (segment.style or Style()) + selection_style,
+                                segment.control,
+                            )
+                            for segment in selected
+                        ],
+                        selected.cell_length,
+                    )
+                    strip = Strip.join(
+                        [
+                            strip.crop(0, start),
+                            selected,
+                            strip.crop(end, strip.cell_length),
+                        ]
+                    )
+            return strip
+        except Exception:
+            # Never let selection tagging break rendering.
+            return strip
+
+    def get_selection(self, selection):
+        """Extract the text under a mouse selection.
+
+        ``RichLog`` renders to a ``RichVisual`` (not plain ``Text``/``Content``),
+        so the base ``Widget.get_selection`` returns ``None`` — meaning mouse
+        drag-select produces no copyable text. We override it to extract from the
+        widget's own rendered line strips (the exact visual grid the selection
+        offsets index into), so dragging the mouse over the conversation yields
+        real text that the app then copies to the clipboard. Paired with
+        :meth:`render_line`, which makes the selection start in the first place.
+        """
+        lines = getattr(self, "lines", None)
+        if not lines:
+            return None
+        try:
+            selected_lines: list[str] = []
+            for row, strip in enumerate(lines):
+                span = selection.get_span(row)
+                if span is None:
+                    continue
+
+                start, end = span
+                end = strip.cell_length if end == -1 else end
+                if end < start:
+                    start, end = end, start
+
+                selected_lines.append(strip.crop(start, end).text)
+        except Exception:
+            return None
+
+        if not selected_lines:
+            return None
+        return "\n".join(selected_lines), "\n"
 
     def __init__(self, *args, **kwargs):
         # Remove any width-related kwargs that might limit display

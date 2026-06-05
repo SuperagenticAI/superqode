@@ -157,6 +157,10 @@ def test_prompt_height_wraps_and_caps_long_text():
     assert SelectionAwareInput._height_for_text("line 1\nline 2", 40) == 2
 
 
+def test_prompt_default_placeholder_mentions_dictation():
+    assert "dictation" in SelectionAwareInput.DEFAULT_PLACEHOLDER.lower()
+
+
 def test_connect_local_picker_lists_ds4():
     app = make_app()
     log = FakeLog()
@@ -530,17 +534,19 @@ def test_slash_complete_prioritizes_connect_and_quit():
     connect_values = [command.command for command in filter_slash_commands(DEFAULT_COMMANDS, ":c")]
     quit_values = [command.command for command in filter_slash_commands(DEFAULT_COMMANDS, ":q")]
 
-    assert root_values[:6] == [
+    assert root_values[:7] == [
         ":connect",
         ":connect acp",
+        ":connect antigravity",
         ":connect byok",
         ":connect local",
         ":exit",
         ":quit",
     ]
-    assert connect_values[:4] == [
+    assert connect_values[:5] == [
         ":connect",
         ":connect acp",
+        ":connect antigravity",
         ":connect byok",
         ":connect local",
     ]
@@ -1002,23 +1008,26 @@ def test_prompt_completion_prioritizes_full_connect_and_quit_commands():
     connect_values = [candidate.value for candidate in app._prompt_completion_candidates_for(":c")]
     quit_values = [candidate.value for candidate in app._prompt_completion_candidates_for(":q")]
 
-    assert root_values[:6] == [
+    assert root_values[:7] == [
         ":connect",
         ":connect acp",
+        ":connect antigravity",
         ":connect byok",
         ":connect local",
         ":exit",
         ":quit",
     ]
-    assert connect_values[:4] == [
+    assert connect_values[:5] == [
         ":connect",
         ":connect acp",
+        ":connect antigravity",
         ":connect byok",
         ":connect local",
     ]
     assert connect_values == [
         ":connect",
         ":connect acp",
+        ":connect antigravity",
         ":connect byok",
         ":connect local",
     ]
@@ -1027,6 +1036,9 @@ def test_prompt_completion_prioritizes_full_connect_and_quit_commands():
     assert SuperQodeApp._should_submit_prompt_without_completion(":c") is False
     assert SuperQodeApp._should_submit_prompt_without_completion(":q") is False
     assert SuperQodeApp._should_submit_prompt_without_completion(":connect") is True
+    assert SuperQodeApp._should_submit_prompt_without_completion(":connect acp") is True
+    assert SuperQodeApp._should_submit_prompt_without_completion(":connect byok") is True
+    assert SuperQodeApp._should_submit_prompt_without_completion(":connect local") is True
 
 
 def test_command_suggester_prioritizes_full_connect_and_quit_commands():
@@ -2372,6 +2384,73 @@ def test_recommendation_number_connects_local_model():
     assert app._awaiting_recommendation_selection is False
 
 
+def test_local_picker_labels_gemma4_as_tool_capable():
+    from superqode.providers.local import LocalModel
+
+    app = make_app()
+    log = FakeLog()
+    app._local_selected_provider = "ollama"
+    app._local_model_list = ["gemma4:31b-mlx-bf16", "gemma2:9b-it", "gemma:latest"]
+    app._local_cached_models = [
+        LocalModel(id="gemma4:31b-mlx-bf16", name="Gemma 4 31B"),
+        LocalModel(id="gemma2:9b-it", name="Gemma 2 9B"),
+        LocalModel(id="gemma:latest", name="Gemma Base"),
+    ]
+
+    app._redraw_local_provider_models(log)
+
+    text = render_plain(log.items[-1])
+    assert "Gemma 4 31B" in text
+    assert "Good tool support" in text
+    assert "Gemma 2 9B" in text
+    assert "No tool support" in text
+    gemma_base_section = text.split("Gemma Base", 1)[1]
+    assert "No tool support" not in gemma_base_section
+
+
+def test_local_model_navigation_scrolls_to_highlighted_row(monkeypatch):
+    from superqode.providers.local import LocalModel
+
+    app = make_app()
+    log = FakeLog()
+    models = [
+        LocalModel(id=f"model-{idx}", name=f"Model {idx}")
+        for idx in range(1, 11)
+    ]
+    app._awaiting_local_model = True
+    app._local_selected_provider = "ollama"
+    app._local_model_list = [model.id for model in models]
+    app._local_cached_models = models
+    app._local_highlighted_model_index = 4
+
+    scroll_calls = []
+    app.query_one = lambda *args, **kwargs: log
+    app._scroll_to_highlighted_local_model = lambda target_log, idx: scroll_calls.append(
+        (target_log, idx)
+    )
+
+    app.action_navigate_local_model_down()
+
+    assert app._local_highlighted_model_index == 5
+    assert scroll_calls == [(log, 5)]
+
+
+def test_local_model_scroll_calculation_uses_multiline_rows():
+    app = make_app()
+    calls = []
+    log = SimpleNamespace(
+        auto_scroll=True,
+        size=SimpleNamespace(height=10),
+        scroll_to=lambda **kwargs: calls.append(kwargs),
+    )
+
+    app._scroll_to_highlighted_local_model(log, 9)
+
+    assert calls
+    assert calls[-1]["y"] >= 40
+    assert calls[-1]["animate"] is False
+
+
 def test_providers_smoke_command_renders_local_health(monkeypatch):
     app = make_app()
     log = FakeLog()
@@ -2484,3 +2563,24 @@ def test_acp_doctor_command_renders_agent_status(monkeypatch):
     assert "opencode" in text
     assert "missing" in text
     assert "npm install -g opencode" in text
+
+
+def test_colorful_status_bar_shows_full_runtime_and_model():
+    """Regression: the *mounted* status bar (ColorfulStatusBar) must render the
+    active runtime + model in full — earlier code updated an unmounted widget and
+    the byok_model path shortened 'gpt-5.5' to 'gpt'."""
+    from superqode.app.widgets import ColorfulStatusBar
+
+    bar = ColorfulStatusBar()
+    bar.active_runtime = "codex-sdk"
+    bar.active_model = "gpt-5.5"
+    plain = bar.render().plain
+    assert "codex-sdk" in plain
+    assert "gpt-5.5" in plain  # full, not shortened to "gpt"
+
+
+def test_colorful_status_bar_no_badge_when_unset():
+    from superqode.app.widgets import ColorfulStatusBar
+
+    bar = ColorfulStatusBar()
+    assert "🔧" not in bar.render().plain

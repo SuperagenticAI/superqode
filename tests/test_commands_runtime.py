@@ -39,7 +39,14 @@ def test_list_json_emits_array(runner, monkeypatch):
     payload = json.loads(result.output)
     assert isinstance(payload, list)
     names = {entry["name"] for entry in payload}
-    assert names == {"builtin", "adk", "openai-agents", "codex-sdk", "pydanticai"}
+    assert names == {
+        "builtin",
+        "adk",
+        "openai-agents",
+        "codex-sdk",
+        "claude-agent-sdk",
+        "pydanticai",
+    }
     # Exactly one entry is marked active.
     active = [e for e in payload if e["active"]]
     assert len(active) == 1

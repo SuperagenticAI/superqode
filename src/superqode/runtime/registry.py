@@ -81,12 +81,24 @@ def _codex_sdk_factory(**kwargs) -> AgentRuntime:
     return module.CodexSDKRuntime(**kwargs)
 
 
+def _claude_agent_sdk_factory(**kwargs) -> AgentRuntime:
+    try:
+        module = importlib.import_module("superqode.runtime.claude_agent_sdk")
+    except ImportError as exc:
+        raise RuntimeNotInstalledError(
+            "Claude Agent SDK runtime requires the 'claude-agent-sdk' extra. "
+            "Install with: pip install superqode[claude-agent-sdk]"
+        ) from exc
+    return module.ClaudeAgentSDKRuntime(**kwargs)
+
+
 _FACTORIES: dict[str, Callable[..., AgentRuntime]] = {
     "builtin": _builtin_factory,
     "adk": _adk_factory,
     "openai-agents": _openai_agents_factory,
     "pydanticai": _pydanticai_factory,
     "codex-sdk": _codex_sdk_factory,
+    "claude-agent-sdk": _claude_agent_sdk_factory,
 }
 
 _DESCRIPTIONS: dict[str, str] = {
@@ -95,6 +107,7 @@ _DESCRIPTIONS: dict[str, str] = {
     "openai-agents": "OpenAI Agents SDK",
     "pydanticai": "PydanticAI agent framework",
     "codex-sdk": "OpenAI Codex Python SDK / local app-server",
+    "claude-agent-sdk": "Anthropic Claude Agent SDK (API key)",
 }
 
 _OPTIONAL_PACKAGES: dict[str, tuple[str, str]] = {
@@ -103,6 +116,7 @@ _OPTIONAL_PACKAGES: dict[str, tuple[str, str]] = {
     "openai-agents": ("agents", "superqode[openai-agents]"),
     "pydanticai": ("pydantic_ai", "superqode[pydanticai]"),
     "codex-sdk": ("openai_codex", "superqode[codex-sdk]"),
+    "claude-agent-sdk": ("claude_agent_sdk", "superqode[claude-agent-sdk]"),
 }
 
 

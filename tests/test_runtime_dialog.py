@@ -15,7 +15,14 @@ from superqode.runtime import list_runtimes
 def test_dialog_lists_current_runtimes():
     dialog = RuntimeDialog(active="builtin")
     names = {info.name for info in dialog.runtimes}
-    assert names == {"builtin", "adk", "openai-agents", "codex-sdk", "pydanticai"}
+    assert names == {
+        "builtin",
+        "adk",
+        "openai-agents",
+        "codex-sdk",
+        "claude-agent-sdk",
+        "pydanticai",
+    }
 
 
 def test_resolve_numeric_answer():

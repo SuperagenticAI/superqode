@@ -50,11 +50,17 @@ ACP_AGENTS_REGISTRY: dict[str, AgentMetadata] = {
         "url": "https://github.com/google-gemini/gemini-cli",
         "author_name": "Google",
         "author_url": "https://google.com",
-        "description": "Google's reference ACP implementation. Query and edit large codebases, generate apps from images or PDFs.",
+        "description": (
+            "Google Gemini CLI ACP route. Consumer Google AI Pro/Ultra/free Code Assist "
+            "users should migrate to Antigravity CLI; enterprise/API-key users can keep this route."
+        ),
         "run_command": "gemini --experimental-acp",
         "status": "available",
         "installation_command": "npm install -g @anthropic-ai/gemini-cli",
-        "installation_instructions": "Install Gemini CLI via npm. Set GEMINI_API_KEY or GOOGLE_API_KEY.",
+        "installation_instructions": (
+            "Install Gemini CLI via npm and set GEMINI_API_KEY or GOOGLE_API_KEY. "
+            "For consumer Google AI accounts, use Antigravity CLI instead: :connect antigravity."
+        ),
         "requirements": ["node", "npm", "GEMINI_API_KEY or GOOGLE_API_KEY"],
     },
     # =========================================================================

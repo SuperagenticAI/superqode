@@ -107,6 +107,7 @@ class StatusBar(Widget):
     qe_active: reactive[bool] = reactive(False)
     qe_mode: reactive[str] = reactive("")  # "quick" or "deep"
     runtime_name: reactive[str] = reactive("builtin")
+    model: reactive[str] = reactive("")  # active model, shown next to the runtime
 
     def __init__(
         self,
@@ -170,7 +171,9 @@ class StatusBar(Widget):
             return "🔌 No Agent"
 
     def _get_runtime_text(self) -> str:
-        """Get the runtime badge text."""
+        """Get the runtime badge text (with active model when known)."""
+        if self.model:
+            return f"🔧 {self.runtime_name} · {self.model}"
         return f"🔧 {self.runtime_name}"
 
     def _get_project_text(self) -> str:
@@ -195,6 +198,16 @@ class StatusBar(Widget):
 
     def watch_runtime_name(self, _runtime: str) -> None:
         """React to runtime swaps."""
+        if not self.is_mounted:
+            return
+        try:
+            widget = self.query_one("#runtime-indicator", Static)
+            widget.update(self._get_runtime_text())
+        except Exception:
+            pass
+
+    def watch_model(self, _model: str) -> None:
+        """React to active-model changes (shown in the runtime badge)."""
         if not self.is_mounted:
             return
         try:

@@ -79,6 +79,7 @@ _LAZY_IMPORTS = {
     "spec_from_headless_profile": (".compiler", "spec_from_headless_profile"),
     # Runtime backends
     "ADKHarnessBackend": (".backends", "ADKHarnessBackend"),
+    "ClaudeAgentSDKHarnessBackend": (".backends", "ClaudeAgentSDKHarnessBackend"),
     "CodexSDKHarnessBackend": (".backends", "CodexSDKHarnessBackend"),
     "HarnessBackend": (".backends", "HarnessBackend"),
     "HarnessBackendCapabilities": (".backends", "HarnessBackendCapabilities"),
@@ -198,6 +199,7 @@ __all__ = [
     "RESULT_END",
     "RESULT_START",
     "ADKHarnessBackend",
+    "ClaudeAgentSDKHarnessBackend",
     "CodexSDKHarnessBackend",
     "HarnessBackend",
     "HarnessBackendCapabilities",

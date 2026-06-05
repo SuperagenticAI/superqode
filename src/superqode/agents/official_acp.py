@@ -165,7 +165,7 @@ OFFICIAL_ACP_AGENTS: tuple[OfficialACPAgent, ...] = (
         "url": "https://github.com",
         "author_name": "Google",
         "author_url": "https://www.google.com",
-        "description": "Google Gemini CLI with ACP support.",
+        "description": "Google Gemini CLI ACP route; consumer users should migrate to Antigravity CLI.",
     },
     {
         "identity": "copilot.github.com",

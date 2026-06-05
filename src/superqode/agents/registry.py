@@ -83,8 +83,11 @@ AGENTS: Dict[str, AgentDef] = {
         name="Gemini CLI",
         protocol=AgentProtocol.ACP,
         status=AgentStatus.SUPPORTED,
-        description="Google's reference ACP implementation",
-        auth_info="GEMINI_API_KEY or GOOGLE_API_KEY",
+        description=(
+            "Google Gemini CLI ACP route; consumer Google AI users should migrate "
+            "to Antigravity CLI"
+        ),
+        auth_info="Enterprise/API-key route: GEMINI_API_KEY or GOOGLE_API_KEY",
         setup_command="npm install -g @anthropic-ai/gemini-cli",
         docs_url="https://github.com/google-gemini/gemini-cli",
         capabilities=["Large codebases", "Multimodal input", "2M context"],

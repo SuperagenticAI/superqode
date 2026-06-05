@@ -135,9 +135,16 @@ or `runtime.config.pydanticai.logfire`. Prefect and DBOS durable wrappers are av
 
 The `codex-sdk` backend uses the published `openai-codex` Python package. The local
 `reference/codex/sdk/python` checkout is reference material only; SuperQode runtime code must not import
-or vendor it. `codex-sdk` streams Codex model, command, patch, and turn events into SuperQode's normalized
-harness events. Interactive approval pause/resume is not bridged yet, so unresolved `ASK` approvals are
-rejected by default for safety.
+or vendor it. `codex-sdk` streams Codex model, command, file-change, MCP, dynamic-tool, patch, and turn events
+into SuperQode's normalized harness events, only reports streamed completion after Codex sends
+`turn/completed`, and serializes turns per runtime/thread for deterministic cancellation and approval handling.
+MCP servers and trust/policy are resolved through the local Codex configuration (`~/.codex`).
+In the TUI, Codex approval callbacks are bridged to SuperQode's inline approval prompt. Outside the TUI,
+approval callbacks are rejected by default unless an explicit SuperQode `PermissionManager` or runtime approval
+callback allows them non-interactively. The TUI also exposes fast `:codex status` diagnostics plus
+`:codex status --probe` for auth/model probing, shows the active Codex thread id and `~/.codex/sessions`
+directory when available, reuses warm Codex runtimes in the same working directory, uses the live Codex
+model list for the picker, and forwards batched Codex tool events through the existing PureMode tool-card callbacks.
 
 ### CLI
 

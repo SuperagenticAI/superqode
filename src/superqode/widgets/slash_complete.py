@@ -74,6 +74,21 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand("/harness runs", "List persisted harness runs", category="workflow"),
     SlashCommand(":harness runs", "List persisted harness runs", category="workflow"),
     SlashCommand("/runtime", "List or switch runtime backends", category="workflow"),
+    SlashCommand(":codex", "Connect to Codex SDK runtime", category="workflow"),
+    SlashCommand(":codex status", "Show Codex SDK/app-server status", category="workflow"),
+    SlashCommand(":codex models", "List Codex account models", category="workflow"),
+    SlashCommand(":codex model", "Pick or set Codex model for future turns", category="workflow"),
+    SlashCommand(":codex effort", "Pick or set Codex reasoning effort", category="workflow"),
+    SlashCommand(":codex sandbox", "Set Codex sandbox override", category="workflow"),
+    SlashCommand(":codex review", "Run a read-only Codex diff review", category="workflow"),
+    SlashCommand(":codex compact", "Compact the current Codex thread", category="workflow"),
+    SlashCommand(":codex sessions", "List Codex sessions for this repo", category="workflow"),
+    SlashCommand(":codex resume", "Resume a Codex thread", category="workflow"),
+    SlashCommand(":codex fork", "Fork a Codex thread", category="workflow"),
+    SlashCommand(":antigravity", "Show Antigravity CLI launch handoff", category="workflow"),
+    SlashCommand(":antigravity status", "Check local agy CLI status", category="workflow"),
+    SlashCommand(":antigravity migrate", "Show Gemini CLI migration steps", category="workflow"),
+    SlashCommand(":agy", "Alias for Antigravity CLI commands", category="workflow"),
     SlashCommand("/status", "Show runtime, model, harness, and session", category="workflow"),
     SlashCommand("/usage", "Show latest run usage and latency", category="workflow"),
     SlashCommand("/sessions", "List saved sessions", category="workflow"),
@@ -103,6 +118,7 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand("/connect", "Choose ACP, BYOK, or local connection", category="workflow"),
     SlashCommand(":connect", "Choose ACP, BYOK, or local connection", category="workflow"),
     SlashCommand(":connect acp", "Connect to ACP agent", category="workflow"),
+    SlashCommand(":connect antigravity", "Connect via local Antigravity CLI handoff", category="workflow"),
     SlashCommand("/connect byok", "Connect to BYOK provider/model", category="workflow"),
     SlashCommand(":connect byok", "Connect to BYOK provider/model", category="workflow"),
     SlashCommand("/connect local", "Connect to local model provider", category="workflow"),
@@ -131,15 +147,17 @@ def _command_sort_key(query: str, command: str) -> tuple[int, str]:
         ":c": {
             ":connect": 0,
             ":connect acp": 1,
-            ":connect byok": 2,
-            ":connect local": 3,
+            ":connect antigravity": 2,
+            ":connect byok": 3,
+            ":connect local": 4,
             ":clear": 20,
         },
         ":co": {
             ":connect": 0,
             ":connect acp": 1,
-            ":connect byok": 2,
-            ":connect local": 3,
+            ":connect antigravity": 2,
+            ":connect byok": 3,
+            ":connect local": 4,
         },
         ":q": {
             ":quit": 0,
@@ -156,10 +174,11 @@ def _command_sort_key(query: str, command: str) -> tuple[int, str]:
         ":": {
             ":connect": 0,
             ":connect acp": 1,
-            ":connect byok": 2,
-            ":connect local": 3,
-            ":exit": 4,
-            ":quit": 5,
+            ":connect antigravity": 2,
+            ":connect byok": 3,
+            ":connect local": 4,
+            ":exit": 5,
+            ":quit": 6,
         },
     }
     for prefix, scores in priority.items():
@@ -180,7 +199,13 @@ def filter_slash_commands(
 
     query_lower = query.lower()
     if query_lower in {":c", ":co", ":con", ":conn", ":conne", ":connec"}:
-        connect_order = [":connect", ":connect acp", ":connect byok", ":connect local"]
+        connect_order = [
+            ":connect",
+            ":connect acp",
+            ":connect antigravity",
+            ":connect byok",
+            ":connect local",
+        ]
         by_command = {command.command: command for command in commands}
         return [by_command[command] for command in connect_order if command in by_command][
             :max_results

@@ -7,6 +7,7 @@ without the bias of heavy harnesses.
 
 import asyncio
 import os
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional
@@ -77,6 +78,9 @@ class PureMode:
         self.on_tool_result: Optional[Callable[[str, ToolResult], None]] = None
         self.on_thinking: Optional[Callable[[str], Awaitable[None]]] = None
         self.on_stream_chunk: Optional[Callable[[str], None]] = None
+        self.on_permission_request: Optional[Callable[[str, dict[str, Any]], bool]] = None
+        self._runtime_tool_delta_buffers: dict[str, dict[str, Any]] = {}
+        self._runtime_seen_tool_calls: set = set()
 
     def _load_env_harness(self) -> None:
         path = os.getenv("SUPERQODE_HARNESS", "").strip()
@@ -229,6 +233,10 @@ class PureMode:
             session_history_limit=session_history_limit,
         )
 
+        runtime_kwargs: dict[str, Any] = {}
+        if self.runtime_name in ("codex-sdk", "claude-agent-sdk"):
+            runtime_kwargs["approval_callback"] = self.on_permission_request
+
         self._runtime = create_runtime(
             self.runtime_name,
             gateway=self.gateway,
@@ -239,6 +247,7 @@ class PureMode:
             on_thinking=self.on_thinking,
             parallel_tools=parallel_tools,
             include_mcp=_env_flag("SUPERQODE_MCP_SEARCH"),
+            **runtime_kwargs,
         )
         self._agent = getattr(self._runtime, "loop", None)
 
@@ -284,6 +293,14 @@ class PureMode:
             return result.response
 
         if not self._agent:
+            # Self-contained runtimes (e.g. codex-sdk) run via the runtime
+            # directly — there's no builtin AgentLoop.
+            if self._runtime is not None:
+                response = await self._runtime.run(prompt)
+                self.session.total_tool_calls += response.tool_calls_made
+                self.session.total_iterations += response.iterations
+                self.session.total_requests += 1
+                return response
             raise RuntimeError("Not connected. Call connect() first.")
 
         previous_plan_mode = self._agent.config.plan_mode
@@ -322,6 +339,30 @@ class PureMode:
             return
 
         if not self._agent:
+            # Self-contained runtimes (e.g. codex-sdk) have no builtin AgentLoop
+            # (no ``.loop``); stream straight through the runtime instead.
+            if self._runtime is not None:
+                if self.runtime_name in (
+                    "codex-sdk",
+                    "claude-agent-sdk",
+                ) and hasattr(self._runtime, "run_harness_events"):
+                    self._runtime_seen_tool_calls = set()
+                    try:
+                        async for event in self._runtime.run_harness_events(prompt):
+                            chunk = self._handle_runtime_harness_event(event)
+                            if chunk:
+                                if self.on_stream_chunk:
+                                    self.on_stream_chunk(chunk)
+                                yield chunk
+                    finally:
+                        self._flush_runtime_tool_delta_buffers(force=True)
+                else:
+                    async for chunk in self._runtime.run_streaming(prompt):
+                        if self.on_stream_chunk:
+                            self.on_stream_chunk(chunk)
+                        yield chunk
+                self.session.total_requests += 1
+                return
             raise RuntimeError("Not connected. Call connect() first.")
 
         # Reset cancellation flag for new operation
@@ -339,6 +380,104 @@ class PureMode:
             self._agent.config.plan_mode = previous_plan_mode
 
         self.session.total_requests += 1
+
+    def _handle_runtime_harness_event(self, event) -> str:
+        """Forward runtime harness events into PureMode callbacks."""
+        if event.type == "model_delta":
+            return str(event.data.get("text") or "")
+        if event.type == "tool_call":
+            # Some runtimes (Claude) emit an explicit tool_call before the result.
+            name = str(event.data.get("tool_name") or "tool")
+            tool_id = event.data.get("tool_call_id")
+            seen = getattr(self, "_runtime_seen_tool_calls", None)
+            if seen is not None and tool_id is not None:
+                seen.add(tool_id)
+            if self.on_tool_call:
+                args = dict(event.data.get("args") or {}) or self._tool_args_from_runtime_event(event)
+                self.on_tool_call(name, args)
+            return ""
+        if event.type == "tool_delta":
+            name = str(event.data.get("tool_name") or "tool")
+            text = str(event.data.get("text") or "")
+            if text:
+                self._buffer_runtime_tool_delta(name, text)
+            return ""
+        if event.type == "diff":
+            if self.on_tool_result:
+                changes = event.data.get("changes", [])
+                self.on_tool_result(
+                    str(event.data.get("tool_name") or "patch"),
+                    ToolResult(success=True, output="patch updated", metadata={"changes": changes}),
+                )
+            return ""
+        if event.type == "tool_result":
+            name = str(event.data.get("tool_name") or "tool")
+            tool_id = event.data.get("tool_call_id")
+            seen = getattr(self, "_runtime_seen_tool_calls", None)
+            already = seen is not None and tool_id is not None and tool_id in seen
+            # Only synthesize a tool_call card if the runtime didn't already emit
+            # one for this id (Codex emits only tool_result; Claude emits both).
+            if self.on_tool_call and not already:
+                self.on_tool_call(name, self._tool_args_from_runtime_event(event))
+            if self.on_tool_result:
+                self.on_tool_result(
+                    name,
+                    ToolResult(
+                        success=bool(event.data.get("success", True)),
+                        output=str(event.data.get("output") or ""),
+                        error=(
+                            str(event.data.get("error"))
+                            if event.data.get("error") is not None
+                            else None
+                        ),
+                        metadata={
+                            key: value
+                            for key, value in event.data.items()
+                            if key not in {"tool_name", "success", "output", "error"}
+                        },
+                    ),
+                )
+            return ""
+        return ""
+
+    def _buffer_runtime_tool_delta(self, name: str, text: str) -> None:
+        if not self.on_tool_result:
+            return
+        now = time.monotonic()
+        buffer = self._runtime_tool_delta_buffers.setdefault(
+            name,
+            {"text": "", "last_flush": now},
+        )
+        buffer["text"] += text
+        buffered = str(buffer["text"])
+        if "\n" in text or len(buffered) >= 512 or now - float(buffer["last_flush"]) >= 0.1:
+            self.on_tool_result(name, ToolResult(success=True, output=buffered))
+            buffer["text"] = ""
+            buffer["last_flush"] = now
+
+    def _flush_runtime_tool_delta_buffers(self, *, force: bool = False) -> None:
+        if not self.on_tool_result:
+            self._runtime_tool_delta_buffers.clear()
+            return
+        now = time.monotonic()
+        for name, buffer in list(self._runtime_tool_delta_buffers.items()):
+            text = str(buffer.get("text") or "")
+            if not text:
+                continue
+            if force or now - float(buffer.get("last_flush") or now) >= 0.1:
+                self.on_tool_result(name, ToolResult(success=True, output=text))
+                buffer["text"] = ""
+                buffer["last_flush"] = now
+
+    @staticmethod
+    def _tool_args_from_runtime_event(event) -> dict[str, Any]:
+        data = dict(event.data)
+        name = str(data.get("tool_name") or "")
+        if name == "bash":
+            return {"command": data.get("command") or ""}
+        if name == "patch":
+            return {"path": data.get("path") or ""}
+        return {}
 
     async def _ensure_harness_session(self):
         if self._harness_spec is None:

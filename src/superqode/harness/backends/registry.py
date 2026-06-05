@@ -15,13 +15,21 @@ from .deepagents import DeepAgentsHarnessBackend
 from .pydanticai import PydanticAIHarnessBackend
 from .runtime import (
     ADKHarnessBackend,
+    ClaudeAgentSDKHarnessBackend,
     CodexSDKHarnessBackend,
     OpenAIAgentsHarnessBackend,
     RuntimeHarnessBackend,
 )
 
 _RUNTIME_BACKENDS = {"builtin"}
-_OPTIONAL_BACKENDS = {"adk", "openai-agents", "codex-sdk", "deepagents", "pydanticai"}
+_OPTIONAL_BACKENDS = {
+    "adk",
+    "openai-agents",
+    "codex-sdk",
+    "claude-agent-sdk",
+    "deepagents",
+    "pydanticai",
+}
 
 
 def create_harness_backend(name: str | None) -> HarnessBackend:
@@ -35,6 +43,8 @@ def create_harness_backend(name: str | None) -> HarnessBackend:
         return OpenAIAgentsHarnessBackend()
     if resolved == "codex-sdk":
         return CodexSDKHarnessBackend()
+    if resolved == "claude-agent-sdk":
+        return ClaudeAgentSDKHarnessBackend()
     if resolved == "deepagents":
         return DeepAgentsHarnessBackend()
     if resolved == "pydanticai":

@@ -5,6 +5,12 @@ SuperQode App CSS Styles.
 APP_CSS = """
 Screen { background: #000000; }
 
+Screen > .screen--selection {
+    background: #2563eb;
+    color: #ffffff;
+    text-style: bold;
+}
+
 #main-grid { height: 100%; layout: horizontal; }
 
 /* Sidebar - hidden by default */

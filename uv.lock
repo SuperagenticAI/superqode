@@ -504,6 +504,24 @@ wheels = [
 ]
 
 [[package]]
+name = "claude-agent-sdk"
+version = "0.2.91"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "mcp" },
+    { name = "sniffio" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/02/95/b89f19cc9ca617fe107118c2fc469a7fa0a09f476b6f815c24de19905b0d/claude_agent_sdk-0.2.91.tar.gz", hash = "sha256:7080efad1e9816ade813b0499e9d608b803d35b4cbc5c24aaa711a762aa04d82", size = 253641, upload-time = "2026-06-05T05:57:09.906Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/74/62/b2a03a4da8d80be936a78a91e967a615f17d1244daa1b9b30dce597f8ed2/claude_agent_sdk-0.2.91-py3-none-macosx_11_0_arm64.whl", hash = "sha256:b36d4a57da0f406d995d8287850851c8ed0bf8ef86556d57a79dcab49c33308c", size = 64690337, upload-time = "2026-06-05T05:57:12.94Z" },
+    { url = "https://files.pythonhosted.org/packages/de/d5/8ddb8e4f4ca8bd1861603a7821e1a024c6d449730dd47418ab7bb4801839/claude_agent_sdk-0.2.91-py3-none-macosx_11_0_x86_64.whl", hash = "sha256:6ba15bc63ce27cbfc0559aea96570f9b006d75227272aabd821c01f6b9b9228b", size = 66737584, upload-time = "2026-06-05T05:57:17.263Z" },
+    { url = "https://files.pythonhosted.org/packages/5d/7b/5d4adef696898791d00978e7d4edfe85e948c202e8888ad2d6df80d67bb4/claude_agent_sdk-0.2.91-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:c2f72274c4e638fee1109f0d643afa2b44e9344fecb467f4eb364518e6162a0a", size = 74312618, upload-time = "2026-06-05T05:57:21.074Z" },
+    { url = "https://files.pythonhosted.org/packages/22/7f/ba95e469f14ff31f455c96c5380bcff1e605f905daf90d87d0a0b1924a49/claude_agent_sdk-0.2.91-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:4aad60ef6087366bfab8b0cafa92bb1d300dc5a7be2a48a0b0d409db0ece9771", size = 74498418, upload-time = "2026-06-05T05:57:24.679Z" },
+    { url = "https://files.pythonhosted.org/packages/91/04/bb98a5e75d618c5976a492beec2aef68019357438ae26696051c40b9b597/claude_agent_sdk-0.2.91-py3-none-win_amd64.whl", hash = "sha256:50e17c819e45c8b21a9906da35367d908ddeddc78b6c1701f910b951d6b7c5ad", size = 75110928, upload-time = "2026-06-05T05:57:28.893Z" },
+]
+
+[[package]]
 name = "click"
 version = "8.1.8"
 source = { registry = "https://pypi.org/simple" }
@@ -4534,7 +4552,7 @@ wheels = [
 
 [[package]]
 name = "superqode"
-version = "0.1.36"
+version = "0.1.37"
 source = { editable = "." }
 dependencies = [
     { name = "agent-client-protocol" },
@@ -4560,6 +4578,9 @@ a2a = [
 ]
 adk = [
     { name = "google-adk" },
+]
+claude-agent-sdk = [
+    { name = "claude-agent-sdk" },
 ]
 codex-sdk = [
     { name = "openai-codex" },
@@ -4634,6 +4655,7 @@ requires-dist = [
     { name = "anyio", specifier = ">=4.0.0" },
     { name = "bandit", marker = "extra == 'linters'", specifier = ">=1.8.0" },
     { name = "bandit", marker = "extra == 'testing'", specifier = ">=1.8.0" },
+    { name = "claude-agent-sdk", marker = "extra == 'claude-agent-sdk'", specifier = ">=0.2.9,<0.3.0" },
     { name = "click", specifier = ">=8.0.0" },
     { name = "codeoptix", specifier = ">=0.1.3" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.0.0" },
@@ -4659,7 +4681,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.17.0" },
     { name = "openai-agents", marker = "extra == 'openai-agents'", specifier = ">=0.17.4" },
     { name = "openai-agents", extras = ["litellm"], marker = "extra == 'openai-agents'", specifier = ">=0.17.4" },
-    { name = "openai-codex", marker = "extra == 'codex-sdk'" },
+    { name = "openai-codex", marker = "extra == 'codex-sdk'", specifier = ">=0.1.0b2,<0.2.0" },
     { name = "pip-audit", marker = "extra == 'linters'", specifier = ">=2.10.0" },
     { name = "playwright", marker = "extra == 'ui-testing'", specifier = ">=1.49.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.1.0" },
@@ -4685,7 +4707,7 @@ requires-dist = [
     { name = "textual", specifier = ">=0.47.0" },
     { name = "uvicorn", marker = "extra == 'a2a'", specifier = ">=0.32.0" },
 ]
-provides-extras = ["hf", "mlx", "monty", "extras", "a2a", "adk", "openai-agents", "codex-sdk", "deepagents", "pydanticai", "pydanticai-logfire", "dev", "testing", "linters", "ui-testing", "performance", "docs"]
+provides-extras = ["hf", "mlx", "monty", "extras", "a2a", "adk", "openai-agents", "codex-sdk", "claude-agent-sdk", "deepagents", "pydanticai", "pydanticai-logfire", "dev", "testing", "linters", "ui-testing", "performance", "docs"]
 
 [[package]]
 name = "temporalio"

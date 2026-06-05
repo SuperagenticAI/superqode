@@ -10,7 +10,7 @@ author_url = "https://www.google.com"
 publisher_name = "Google"
 publisher_url = "https://github.com/google-gemini/gemini-cli"
 type = "coding"
-description = "Google's reference ACP implementation. Query and edit large codebases, generate apps from images or PDFs, and automate complex workflows, all from your terminal."
+description = "Google's Gemini CLI ACP implementation. Consumer Google AI Pro/Ultra/free Code Assist users should migrate to Antigravity CLI; enterprise/API-key ACP users can keep this route."
 tags = ["google", "gemini", "multimodal", "acp"]
 run_command."*" = "gemini --experimental-acp"
 
@@ -20,9 +20,11 @@ api_key_env_vars = ["GEMINI_API_KEY", "GOOGLE_API_KEY"]
 help = '''
 # Gemini CLI
 
-**Google's Reference ACP Implementation**
+**Google Gemini CLI ACP route**
 
 Query and edit large codebases, generate apps from images or PDFs, and automate complex workflows, all from your terminal.
+
+> Consumer migration note: Google is moving Google AI Pro, Ultra, and free Code Assist individual users to Antigravity CLI. In SuperQode, use `:connect antigravity` for the new `agy` CLI handoff. Keep this Gemini CLI ACP route for enterprise/API-key use cases where Gemini CLI remains supported.
 
 ## Key Features
 
@@ -62,7 +64,8 @@ gemini --experimental-acp
 
 ---
 
-**For latest install instructions**: https://zed.dev/acp/agent/gemini-cli
+**Consumer replacement**: https://antigravity.google/docs/cli-overview
+**For latest ACP install instructions**: https://zed.dev/acp/agent/gemini-cli
 **GitHub**: https://github.com/google-gemini/gemini-cli
 '''
 

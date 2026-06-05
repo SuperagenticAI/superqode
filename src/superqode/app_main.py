@@ -330,6 +330,22 @@ class SelectionAwareInput(TextArea):
 
     MIN_PROMPT_HEIGHT = 1
     MAX_PROMPT_HEIGHT = 6
+    DEFAULT_PLACEHOLDER = "Type, paste, or use OS dictation. Type : for commands."
+
+    # A prompt box should behave like an ordinary text field. TextArea's defaults
+    # are surprising here: Ctrl+A is line-start and Ctrl+U only deletes to the
+    # start of the *current* line — useless for clearing a pasted multi-line
+    # prompt (the user had to quit the app to escape one). Re-map both to the
+    # field semantics people expect; Home still gives line-start.
+    BINDINGS = [
+        Binding("ctrl+a", "select_all", "Select all", show=False),
+        Binding("ctrl+u", "clear_prompt", "Clear prompt", show=True),
+    ]
+
+    def action_clear_prompt(self) -> None:
+        """Clear the entire prompt buffer (every line), not just the current line."""
+        self.load_text("")
+        self._resize_to_content()
 
     def __init__(self, *args, suggester=None, **kwargs) -> None:
         # TextArea doesn't support Input's suggester API. Accept it so the prompt
@@ -420,6 +436,8 @@ class SelectionAwareInput(TextArea):
         return (
             getattr(app, "_awaiting_acp_agent_selection", False)
             or getattr(app, "_awaiting_byok_provider", False)
+            or getattr(app, "_awaiting_codex_effort", False)
+            or getattr(app, "_awaiting_codex_model", False)
             or getattr(app, "_awaiting_connect_type", False)
             or getattr(app, "_awaiting_local_provider", False)
             or getattr(app, "_awaiting_model_selection", False)
@@ -528,6 +546,24 @@ class SelectionAwareInput(TextArea):
                     app.action_navigate_model_down()
                 return
 
+            if getattr(app, "_awaiting_codex_model", False):
+                event.stop()
+                event.prevent_default()
+                if event.key == "up":
+                    app.action_navigate_codex_model_up()
+                else:
+                    app.action_navigate_codex_model_down()
+                return
+
+            if getattr(app, "_awaiting_codex_effort", False):
+                event.stop()
+                event.prevent_default()
+                if event.key == "up":
+                    app.action_navigate_codex_effort_up()
+                else:
+                    app.action_navigate_codex_effort_down()
+                return
+
             if getattr(app, "_awaiting_byok_provider", False):
                 event.stop()
                 event.prevent_default()
@@ -612,6 +648,8 @@ class SelectionAwareInput(TextArea):
             ("_awaiting_acp_agent_selection", "action_select_highlighted_acp_agent"),
             ("_awaiting_byok_model", "action_select_highlighted_model"),
             ("_awaiting_byok_provider", "action_select_highlighted_provider"),
+            ("_awaiting_codex_model", "action_select_highlighted_codex_model"),
+            ("_awaiting_codex_effort", "action_select_highlighted_codex_effort"),
             ("_awaiting_connect_type", "action_select_highlighted_connect_type"),
             ("_awaiting_local_provider", "action_select_highlighted_local_provider"),
             ("_awaiting_local_model", "action_select_highlighted_local_model"),
@@ -847,6 +885,10 @@ class SuperQodeApp(App):
         0  # Track highlighted local provider for keyboard navigation
     )
     _local_highlighted_model_index = 0  # Track highlighted local model for keyboard navigation
+    _codex_highlighted_model_index = 0  # Track highlighted Codex SDK model
+    _codex_highlighted_effort_index = 0  # Track highlighted Codex SDK reasoning effort
+    _awaiting_codex_model = False  # Track if we're waiting for Codex SDK model selection
+    _awaiting_codex_effort = False  # Track if we're waiting for Codex SDK effort selection
     _just_showed_byok_picker = (
         False  # Flag to prevent immediate provider selection after showing picker
     )
@@ -1068,23 +1110,65 @@ class SuperQodeApp(App):
         return self._codex_models
 
     def _get_codex_models(self) -> List[Dict]:
-        """Get Codex/OpenAI models list."""
-        return [
-            {"id": "gpt-5.4", "name": "GPT-5.4 (Latest)", "context": 1000000},
-            {"id": "gpt-5.3-codex", "name": "GPT-5.3 Codex", "context": 256000},
-            {"id": "gpt-5.2", "name": "GPT-5.2", "context": 256000},
-            {"id": "gpt-5.2-pro", "name": "GPT-5.2 Pro", "context": 256000},
-            {"id": "gpt-5.2-chat-latest", "name": "GPT-5.2 Chat", "context": 256000},
-            {"id": "gpt-5.2-codex", "name": "GPT-5.2 Codex", "context": 256000},
-            {"id": "gpt-5.1", "name": "GPT-5.1", "context": 200000},
-            {"id": "gpt-5.1-codex", "name": "GPT-5.1 Codex", "context": 200000},
-            {"id": "gpt-5.1-codex-mini", "name": "GPT-5.1 Codex Mini", "context": 200000},
-            {"id": "gpt-4o-2024-11-20", "name": "GPT-4o (Nov 2024)", "context": 128000},
-            {"id": "gpt-4o", "name": "GPT-4o", "context": 128000},
-            {"id": "gpt-4o-mini", "name": "GPT-4o Mini", "context": 128000},
-            {"id": "o1", "name": "o1 (Reasoning)", "context": 200000},
-            {"id": "o1-mini", "name": "o1-mini", "context": 128000},
-        ]
+        """Get live Codex models exposed to the local Codex account."""
+        try:
+            return self._fetch_live_codex_models()
+        except Exception:
+            # Empty model keeps Codex's local default; avoid stale hardcoded IDs.
+            return [
+                {
+                    "id": "",
+                    "name": "Codex default",
+                    "context": 0,
+                    "desc": "Use the model configured in ~/.codex",
+                }
+            ]
+
+    def _fetch_live_codex_models(self) -> List[Dict]:
+        existing = getattr(self, "_pure_mode", None)
+        runtime = getattr(existing, "_runtime", None) if existing is not None else None
+        if (
+            runtime is not None
+            and getattr(existing, "runtime_name", "") == "codex-sdk"
+            and hasattr(runtime, "models")
+        ):
+            return self._models_from_codex_response(runtime.models())
+
+        from superqode.codex import make_codex_runtime
+
+        probe = make_codex_runtime(cwd=Path.cwd())
+        try:
+            return self._models_from_codex_response(probe.models())
+        finally:
+            probe.close()
+
+    @staticmethod
+    def _models_from_codex_response(models_response) -> List[Dict]:
+        data = list(getattr(models_response, "data", []) or [])
+        models: List[Dict] = []
+        for model in data:
+            model_id = str(getattr(model, "model", getattr(model, "id", model)) or "")
+            if not model_id:
+                continue
+            label = str(
+                getattr(model, "display_name", None)
+                or getattr(model, "displayName", None)
+                or model_id.replace("-", " ").replace("_", " ").title()
+            )
+            efforts = []
+            for option in list(getattr(model, "supported_reasoning_efforts", []) or []):
+                effort = getattr(option, "reasoning_effort", option)
+                efforts.append(str(getattr(effort, "value", effort)))
+            models.append(
+                {
+                    "id": model_id,
+                    "name": label,
+                    "context": 0,
+                    "efforts": efforts,
+                    "hidden": bool(getattr(model, "hidden", False)),
+                }
+            )
+        return models
 
     @property
     def openhands_models(self) -> List[Dict]:
@@ -1152,7 +1236,7 @@ class SuperQodeApp(App):
                     with Horizontal(id="input-box"):
                         yield Static("🖋️ ", id="prompt-symbol")
                         yield SelectionAwareInput(
-                            placeholder="Type here...",
+                            placeholder=SelectionAwareInput.DEFAULT_PLACEHOLDER,
                             id="prompt-input",
                             suggester=CommandSuggester(),
                             # No restrict parameter - allow all characters including colon
@@ -1210,6 +1294,25 @@ class SuperQodeApp(App):
         self.set_timer(0.75, self._prewarm_litellm)
         if os.getenv("SUPERQODE_STARTUP_HEALTH", "").strip().lower() in ("1", "true", "yes"):
             self._run_startup_health_check()
+        # Auto-connect a connection profile if requested via --connect.
+        if os.getenv("SUPERQODE_CONNECT", "").strip():
+            self.set_timer(1.0, self._run_startup_connect)
+
+    def _run_startup_connect(self) -> None:
+        """Dispatch the connection profile named in SUPERQODE_CONNECT (--connect)."""
+        profile_id = os.environ.pop("SUPERQODE_CONNECT", "").strip()
+        if not profile_id:
+            return
+        try:
+            from superqode.providers.connection_profiles import get_connection_profile
+
+            profile = get_connection_profile(profile_id)
+            if profile is None:
+                return
+            log = self.query_one("#log", ConversationLog)
+            self._dispatch_connection_profile(profile, log)
+        except Exception:  # noqa: BLE001 — startup convenience, never fatal
+            pass
 
     # Actions users may safely rebind via ~/.superqode/keybindings.json
     _REBINDABLE_ACTIONS = {
@@ -2125,6 +2228,28 @@ class SuperQodeApp(App):
         log.write(t)
         log._last_error = f"{title}: {message}"
 
+    @staticmethod
+    def _codex_error_hint(message: str) -> str:
+        """Map common Codex SDK/app-server failures to user-facing recovery hints."""
+        lowered = (message or "").lower()
+        if "codex-sdk" in lowered and "install" in lowered:
+            return 'Install the SDK extra: pip install "superqode[codex-sdk]".'
+        if "not logged" in lowered or "login" in lowered or "auth" in lowered:
+            return "Run `codex login`, then retry from SuperQode."
+        if "auth.json" in lowered:
+            return "Run `codex login`; SuperQode uses your ~/.codex auth."
+        if "openai-codex-cli-bin" in lowered or "codex process" in lowered:
+            return 'Reinstall the SDK extra so the app-server binary is present: pip install -U "superqode[codex-sdk]".'
+        if "untrusted" in lowered or "trust" in lowered:
+            return "Trust this project or adjust policy in ~/.codex, then retry."
+        if "model" in lowered and ("unavailable" in lowered or "not found" in lowered):
+            return "Use `:codex status` to list models available to your Codex account."
+        if "approval" in lowered or "permission" in lowered:
+            return "Use the TUI approval prompt, set `:mode auto`, or adjust Codex policy in ~/.codex."
+        if "turn/completed" in lowered:
+            return "The Codex app-server stream ended unexpectedly. Retry; if it repeats, run `:codex status`."
+        return "Run `:codex status` for SDK, app-server, auth, and model diagnostics."
+
     def action_open_editor(self):
         """Open external editor for composing message (Ctrl+E)."""
         log = self.query_one("#log", ConversationLog)
@@ -2270,31 +2395,95 @@ class SuperQodeApp(App):
         else:
             log.add_error(f"No handler for palette command: {event.command.label}")
 
+    @staticmethod
+    def _os_clipboard_copy(text: str) -> bool:
+        """Push ``text`` to the real OS clipboard via the platform CLI.
+
+        Uses pbcopy (macOS), xclip/xsel (Linux), or clip (Windows) — the same
+        proven path as ``:copy``. Returns True only if a backend accepted it.
+        """
+        import subprocess
+        import sys
+
+        if sys.platform == "darwin":
+            candidates = [["pbcopy"]]
+        elif sys.platform.startswith("linux"):
+            candidates = [["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]]
+        elif sys.platform.startswith("win"):
+            candidates = [["clip"]]
+        else:
+            candidates = []
+
+        data = text.encode("utf-8")
+        for cmd in candidates:
+            try:
+                proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+                proc.communicate(data)
+                if proc.returncode == 0:
+                    return True
+            except FileNotFoundError:
+                continue
+            except Exception:
+                continue
+        return False
+
+    def _copy_text_to_clipboard(self, text: str) -> bool:
+        """Copy ``text`` to the clipboard as reliably as possible.
+
+        Tries the real OS clipboard first (pbcopy/xclip/xsel/clip), which is what
+        makes mouse-drag copy actually work locally, then always also emits
+        Textual's OSC 52 ``copy_to_clipboard`` so it still works over SSH/remote
+        sessions where the local CLI can't reach the user's clipboard. Returns
+        True if at least one path succeeded.
+        """
+        if not text:
+            return False
+        copied = self._os_clipboard_copy(text)
+        # Always also emit OSC 52 — harmless when the CLI worked, and the only
+        # path that reaches the *local* clipboard from a remote/SSH session.
+        try:
+            self.copy_to_clipboard(text)
+            copied = True
+        except Exception:
+            pass
+        return copied
+
     @on(events.TextSelected)
     async def on_text_selected(self) -> None:
-        """Automatically copy selected text to clipboard when user selects with mouse.
+        """Automatically copy selected text to the clipboard on mouse-drag select.
 
-        Any visible selection on the screen is copied to the
-        system clipboard and a small notification is shown. This preserves normal
-        Ctrl+C / Ctrl+Z behavior since we rely on Textual's TextSelected event rather
-        than intercepting keyboard shortcuts.
+        Dragging the mouse over the conversation (or anywhere selectable) copies
+        the highlighted text straight to the system clipboard — no ``:copy``
+        needed. We rely on Textual's ``TextSelected`` event rather than
+        intercepting keyboard shortcuts, so Ctrl+C (quit) / Ctrl+Z behavior is
+        preserved.
         """
         try:
             selection = self.screen.get_selected_text()
         except Exception:
             selection = None
 
-        if selection:
-            try:
-                self.copy_to_clipboard(selection)
+        if not selection:
+            return
+
+        try:
+            if self._copy_text_to_clipboard(selection):
                 self.notify(
-                    "Copied selection to clipboard",
-                    title="Automatic copy",
+                    f"Copied {len(selection)} chars to clipboard",
+                    title="Copied",
                     severity="information",
+                    timeout=2,
                 )
-            except Exception:
-                # Best-effort: if clipboard or notifications fail, do nothing
-                pass
+            else:
+                self.notify(
+                    "Couldn't reach the clipboard — try :copy or Shift+drag",
+                    title="Copy failed",
+                    severity="warning",
+                    timeout=3,
+                )
+        except Exception:
+            # Best-effort: never let a copy/notify failure crash the UI.
+            pass
 
     @on(LeaderKeyPopup.KeyPressed)
     def on_leader_key_popup_key_pressed(self, event: LeaderKeyPopup.KeyPressed) -> None:
@@ -2370,6 +2559,26 @@ class SuperQodeApp(App):
                     self.action_navigate_model_down()
                 elif event.key == "enter":
                     self.action_select_highlighted_model()
+
+            elif getattr(self, "_awaiting_codex_model", False):
+                event.stop()
+                handled = True
+                if event.key == "up":
+                    self.action_navigate_codex_model_up()
+                elif event.key == "down":
+                    self.action_navigate_codex_model_down()
+                elif event.key == "enter":
+                    self.action_select_highlighted_codex_model()
+
+            elif getattr(self, "_awaiting_codex_effort", False):
+                event.stop()
+                handled = True
+                if event.key == "up":
+                    self.action_navigate_codex_effort_up()
+                elif event.key == "down":
+                    self.action_navigate_codex_effort_down()
+                elif event.key == "enter":
+                    self.action_select_highlighted_codex_effort()
 
             elif getattr(self, "_awaiting_byok_provider", False):
                 event.stop()
@@ -2584,6 +2793,16 @@ class SuperQodeApp(App):
             self._awaiting_byok_model = False
             log = self.query_one("#log", ConversationLog)
             log.add_info("Selection cancelled. Use :connect to try again.")
+            return
+        if getattr(self, "_awaiting_codex_model", False):
+            self._awaiting_codex_model = False
+            log = self.query_one("#log", ConversationLog)
+            log.add_info("Codex model selection cancelled. Use :codex model to try again.")
+            return
+        if getattr(self, "_awaiting_codex_effort", False):
+            self._awaiting_codex_effort = False
+            log = self.query_one("#log", ConversationLog)
+            log.add_info("Codex effort selection cancelled. Use :codex effort to try again.")
             return
         if getattr(self, "_awaiting_byok_provider", False):
             self._awaiting_byok_provider = False
@@ -2821,6 +3040,8 @@ class SuperQodeApp(App):
             or getattr(self, "_awaiting_byok_provider", False)
             or getattr(self, "_awaiting_local_provider", False)
             or getattr(self, "_awaiting_recommendation_selection", False)
+            or getattr(self, "_awaiting_codex_model", False)
+            or getattr(self, "_awaiting_codex_effort", False)
         ):
             try:
                 prompt_input = self.query_one("#prompt-input", SelectionAwareInput)
@@ -2835,31 +3056,13 @@ class SuperQodeApp(App):
                 pass
             return True
 
-        # 1. Handle connection type selection first
+        # 1. Handle connection type selection first (profile-driven)
         if getattr(self, "_awaiting_connect_type", False):
-            if num == 1:
-                self._awaiting_connect_type = False
-                self._awaiting_byok_provider = False
-                self._awaiting_byok_model = False
-                self._show_agents(log)
-                return True
-            elif num == 2:
-                self._awaiting_connect_type = False
-                self._awaiting_byok_provider = False
-                self._awaiting_byok_model = False
-                if hasattr(self, "_byok_selected_provider"):
-                    delattr(self, "_byok_selected_provider")
-                if hasattr(self, "_byok_connect_list"):
-                    delattr(self, "_byok_connect_list")
-                self._just_showed_byok_picker = True
-                self._show_connect_picker(log)
-                self.set_timer(0.3, lambda: setattr(self, "_just_showed_byok_picker", False))
-                return True
-            elif num == 3:
-                self._awaiting_connect_type = False
-                self._awaiting_byok_provider = False
-                self._awaiting_byok_model = False
-                self._show_local_provider_picker(log)
+            from superqode.providers.connection_profiles import list_connection_profiles
+
+            profiles = list_connection_profiles()
+            if 1 <= num <= len(profiles):
+                self._dispatch_connection_profile(profiles[num - 1], log)
                 return True
             return False
 
@@ -2910,6 +3113,12 @@ class SuperQodeApp(App):
             return False
 
         # 7. Handle OpenCode/other model selection (original behavior)
+        if getattr(self, "_awaiting_codex_model", False):
+            return self._handle_codex_model_selection(str(num), log)
+
+        if getattr(self, "_awaiting_codex_effort", False):
+            return self._handle_codex_effort_selection(str(num), log)
+
         if self._awaiting_model_selection:
             self._select_model_by_number(num)
             return True
@@ -2964,6 +3173,12 @@ class SuperQodeApp(App):
                 self._handle_local_model_selection(str(num), log)
                 return True
             return False
+
+        if getattr(self, "_awaiting_codex_model", False):
+            return self._handle_codex_model_selection(str(num), log)
+
+        if getattr(self, "_awaiting_codex_effort", False):
+            return self._handle_codex_effort_selection(str(num), log)
 
         if getattr(self, "_awaiting_model_selection", False):
             self._select_model_by_number(num)
@@ -3041,6 +3256,12 @@ class SuperQodeApp(App):
             return
         if getattr(self, "_awaiting_local_model", False):
             self._handle_local_model_selection(buf, log)
+            return
+        if getattr(self, "_awaiting_codex_model", False):
+            self._handle_codex_model_selection(buf, log)
+            return
+        if getattr(self, "_awaiting_codex_effort", False):
+            self._handle_codex_effort_selection(buf, log)
             return
 
         # Fallback to universal selection for other modes
@@ -3446,6 +3667,21 @@ class SuperQodeApp(App):
         except Exception:
             pass  # If scrolling fails, just continue
 
+    def _scroll_to_highlighted_local_model(self, log: ConversationLog, highlighted_idx: int):
+        """Scroll the local-model picker so the highlighted multi-line row is visible."""
+        try:
+            log.auto_scroll = False
+            visible_height = max(6, int(getattr(getattr(log, "size", None), "height", 18) or 18))
+            header_lines = 5
+            # Local model rows render as: title, id, details, optional capabilities,
+            # blank line. Use a conservative row height so row 6+ scrolls into view.
+            lines_per_item = 5
+            highlighted_y = header_lines + highlighted_idx * lines_per_item
+            target_y = max(0, highlighted_y - max(2, visible_height // 2))
+            log.scroll_to(y=target_y, animate=False)
+        except Exception:
+            pass
+
     def _scroll_down_to_item(self, log: ConversationLog, target_offset: int, lines_per_item: int):
         """Helper to scroll down to show the highlighted item."""
         try:
@@ -3481,6 +3717,86 @@ class SuperQodeApp(App):
                 log = self.query_one("#log", ConversationLog)
                 self._awaiting_byok_model = False
                 self._connect_byok_mode(provider_id, model, log)
+
+    def action_navigate_codex_model_up(self):
+        """Navigate to previous Codex SDK model."""
+        if not getattr(self, "_awaiting_codex_model", False):
+            return
+        models = getattr(self, "_codex_models", None) or []
+        if not models:
+            return
+        current_idx = getattr(self, "_codex_highlighted_model_index", 0)
+        self._codex_highlighted_model_index = max(0, current_idx - 1)
+        log = self.query_one("#log", ConversationLog)
+        self._show_codex_model_picker(log, clear_log=False, refetch=False)
+        self._scroll_to_highlighted_item(
+            log, self._codex_highlighted_model_index, len(models)
+        )
+        self.set_timer(0.05, self._ensure_input_focus)
+
+    def action_navigate_codex_model_down(self):
+        """Navigate to next Codex SDK model."""
+        if not getattr(self, "_awaiting_codex_model", False):
+            return
+        models = getattr(self, "_codex_models", None) or []
+        if not models:
+            return
+        current_idx = getattr(self, "_codex_highlighted_model_index", 0)
+        self._codex_highlighted_model_index = min(len(models) - 1, current_idx + 1)
+        log = self.query_one("#log", ConversationLog)
+        self._show_codex_model_picker(log, clear_log=False, refetch=False)
+        self._scroll_to_highlighted_item(
+            log, self._codex_highlighted_model_index, len(models)
+        )
+        self.set_timer(0.05, self._ensure_input_focus)
+
+    def action_select_highlighted_codex_model(self):
+        """Select the currently highlighted Codex SDK model."""
+        if not getattr(self, "_awaiting_codex_model", False):
+            return
+        models = getattr(self, "_codex_models", None) or []
+        idx = getattr(self, "_codex_highlighted_model_index", 0)
+        if 0 <= idx < len(models):
+            log = self.query_one("#log", ConversationLog)
+            self._handle_codex_model_selection(str(idx + 1), log)
+
+    def action_navigate_codex_effort_up(self):
+        """Navigate to previous Codex SDK reasoning effort."""
+        if not getattr(self, "_awaiting_codex_effort", False):
+            return
+        options = self._codex_effort_options()
+        current_idx = getattr(self, "_codex_highlighted_effort_index", 0)
+        self._codex_highlighted_effort_index = max(0, current_idx - 1)
+        log = self.query_one("#log", ConversationLog)
+        self._show_codex_effort_picker(log, clear_log=False)
+        self._scroll_to_highlighted_item(
+            log, self._codex_highlighted_effort_index, len(options)
+        )
+        self.set_timer(0.05, self._ensure_input_focus)
+
+    def action_navigate_codex_effort_down(self):
+        """Navigate to next Codex SDK reasoning effort."""
+        if not getattr(self, "_awaiting_codex_effort", False):
+            return
+        options = self._codex_effort_options()
+        current_idx = getattr(self, "_codex_highlighted_effort_index", 0)
+        self._codex_highlighted_effort_index = min(len(options) - 1, current_idx + 1)
+        log = self.query_one("#log", ConversationLog)
+        self._show_codex_effort_picker(log, clear_log=False)
+        self._scroll_to_highlighted_item(
+            log, self._codex_highlighted_effort_index, len(options)
+        )
+        self.set_timer(0.05, self._ensure_input_focus)
+
+    def action_select_highlighted_codex_effort(self):
+        """Select the currently highlighted Codex SDK reasoning effort."""
+        if not getattr(self, "_awaiting_codex_effort", False):
+            return
+        options = self._codex_effort_options()
+        idx = getattr(self, "_codex_highlighted_effort_index", 0)
+        if 0 <= idx < len(options):
+            log = self.query_one("#log", ConversationLog)
+            self._handle_codex_effort_selection(str(idx + 1), log)
 
     def action_navigate_provider_up(self):
         """Navigate to previous provider (arrow up)."""
@@ -3613,8 +3929,7 @@ class SuperQodeApp(App):
             self._local_highlighted_model_index = new_idx
             log = self.query_one("#log", ConversationLog)
             self._redraw_local_provider_models(log)
-            # Scroll to keep highlighted item visible
-            self._scroll_to_highlighted_item(log, new_idx, len(model_list))
+            self._scroll_to_highlighted_local_model(log, new_idx)
             # Ensure input stays focused
             self.set_timer(0.05, self._ensure_input_focus)
 
@@ -3633,8 +3948,7 @@ class SuperQodeApp(App):
             self._local_highlighted_model_index = new_idx
             log = self.query_one("#log", ConversationLog)
             self._redraw_local_provider_models(log)
-            # Scroll to keep highlighted item visible
-            self._scroll_to_highlighted_item(log, new_idx, len(model_list))
+            self._scroll_to_highlighted_local_model(log, new_idx)
             # Ensure input stays focused
             self.set_timer(0.05, self._ensure_input_focus)
 
@@ -3677,8 +3991,10 @@ class SuperQodeApp(App):
         if not getattr(self, "_awaiting_connect_type", False):
             return
 
+        from superqode.providers.connection_profiles import list_connection_profiles
+
         current_idx = getattr(self, "_byok_highlighted_connect_type_index", 0)
-        new_idx = min(2, current_idx + 1)  # 3 types: 0, 1, 2
+        new_idx = min(len(list_connection_profiles()) - 1, current_idx + 1)
         if new_idx != current_idx:
             self._byok_highlighted_connect_type_index = new_idx
             log = self.query_one("#log", ConversationLog)
@@ -3693,56 +4009,73 @@ class SuperQodeApp(App):
         if not getattr(self, "_awaiting_connect_type", False):
             return
 
-        current_idx = getattr(self, "_byok_highlighted_connect_type_index", 0)
-        log = self.query_one("#log", ConversationLog)
-        self._awaiting_connect_type = False
+        from superqode.providers.connection_profiles import list_connection_profiles
 
-        if current_idx == 0:
-            # ACP - Clear BYOK/LOCAL states
-            self._awaiting_byok_provider = False
-            self._awaiting_byok_model = False
-            self._awaiting_local_provider = False
-            self._awaiting_local_model = False
-            self._show_agents(log)
-        elif current_idx == 1:
-            # BYOK - Clear ALL selection states before showing provider picker
-            self._awaiting_byok_provider = False
-            self._awaiting_byok_model = False
-            self._awaiting_acp_agent_selection = False
-            self._awaiting_local_provider = False
-            self._awaiting_local_model = False
-            if hasattr(self, "_byok_selected_provider"):
-                delattr(self, "_byok_selected_provider")
-            if hasattr(self, "_byok_connect_list"):
-                delattr(self, "_byok_connect_list")
-            # Reset highlight index for fresh start
+        profiles = list_connection_profiles()
+        idx = getattr(self, "_byok_highlighted_connect_type_index", 0)
+        if not (0 <= idx < len(profiles)):
+            idx = 0
+        log = self.query_one("#log", ConversationLog)
+        self._dispatch_connection_profile(profiles[idx], log)
+
+    def _reset_connect_selection_states(self) -> None:
+        """Clear transient connect-flow selection state so flows don't interfere."""
+        self._awaiting_connect_type = False
+        self._awaiting_byok_provider = False
+        self._awaiting_byok_model = False
+        self._awaiting_acp_agent_selection = False
+        self._awaiting_local_provider = False
+        self._awaiting_local_model = False
+        self._awaiting_codex_model = False
+        self._awaiting_codex_effort = False
+        for attr in (
+            "_byok_selected_provider",
+            "_byok_connect_list",
+            "_byok_model_list",
+            "_local_selected_provider",
+            "_local_provider_list",
+            "_local_model_list",
+            "_local_cached_models",
+        ):
+            if hasattr(self, attr):
+                delattr(self, attr)
+
+    def _dispatch_connection_profile(self, profile, log: ConversationLog) -> None:
+        """Route a chosen connection profile to its connector.
+
+        See ``providers/connection_profiles.py`` for the connector semantics.
+        Reuses the existing per-connector handlers so the BYOK/local/ACP flows
+        are unchanged.
+        """
+        self._reset_connect_selection_states()
+        conn = profile.connector
+        if conn == "runtime":
+            # Self-contained runtime (e.g. Codex) — auto-connects in _runtime_cmd.
+            self._runtime_cmd(profile.runtime or "", log)
+        elif conn == "acp":
+            # A specific ACP agent (e.g. Claude) by short_name.
+            self._connect_acp_cmd(profile.acp_agent or "", log)
+        elif conn == "byok":
             self._byok_highlighted_provider_index = 0
             self._byok_highlighted_model_index = 0
-            # Set flag to prevent any immediate input processing
             self._just_showed_byok_picker = True
             self._show_byok_providers(log)
-            # Clear the flag after a delay
             self.set_timer(0.3, lambda: setattr(self, "_just_showed_byok_picker", False))
-        elif current_idx == 2:
-            # LOCAL - Clear ALL selection states before showing provider picker
-            self._awaiting_byok_provider = False
-            self._awaiting_byok_model = False
-            self._awaiting_acp_agent_selection = False
-            self._awaiting_local_provider = False  # Will be set in _show_local_provider_picker
-            self._awaiting_local_model = False
-            # Clear any existing local provider/model state
-            if hasattr(self, "_local_selected_provider"):
-                delattr(self, "_local_selected_provider")
-            if hasattr(self, "_local_provider_list"):
-                delattr(self, "_local_provider_list")
-            if hasattr(self, "_local_model_list"):
-                delattr(self, "_local_model_list")
-            if hasattr(self, "_local_cached_models"):
-                delattr(self, "_local_cached_models")
-            # Reset highlight indices
+        elif conn == "local":
             self._local_highlighted_provider_index = 0
             self._local_highlighted_model_index = 0
             self._show_local_provider_picker(log)
+        elif conn == "acp-picker":
+            self._show_agents(log)
+        elif conn == "external-cli":
+            if getattr(profile, "id", "") == "antigravity":
+                self._antigravity_cmd("connect", log)
+            else:
+                log.add_error(f"Unsupported external CLI profile: {getattr(profile, 'id', profile)}")
+        elif conn == "advanced":
+            self._runtime_cmd("", log)
+        else:
+            log.add_error(f"Unknown connection type: {getattr(profile, 'id', profile)}")
 
     def action_navigate_acp_agent_up(self):
         """Navigate to previous ACP agent (arrow up)."""
@@ -4316,44 +4649,27 @@ class SuperQodeApp(App):
                 self._run_shell(cmd, log)
             return
 
-        # Check if awaiting connect type selection
+        # Check if awaiting connect type selection (profile-driven)
         if getattr(self, "_awaiting_connect_type", False):
-            if text.strip() == "1":
-                self._awaiting_connect_type = False
-                # Clear any BYOK state to prevent interference
-                self._awaiting_byok_provider = False
-                self._awaiting_byok_model = False
-                self._show_agents(log)
-                return
-            elif text.strip() == "2":
-                self._awaiting_connect_type = False
-                # Clear any BYOK state before showing provider picker
-                # This is critical to prevent "2" from being processed as provider selection
-                self._awaiting_byok_provider = False
-                self._awaiting_byok_model = False
-                if hasattr(self, "_byok_selected_provider"):
-                    delattr(self, "_byok_selected_provider")
-                if hasattr(self, "_byok_connect_list"):
-                    delattr(self, "_byok_connect_list")
-                # Set flag to prevent this input from being processed as provider selection
-                self._just_showed_byok_picker = True
-                # Clear input to prevent "2" from being processed again
-                event.input.value = ""
-                # Show provider picker immediately
-                self._show_connect_picker(log)
-                # Clear the flag after a delay to allow normal selection
-                self.set_timer(0.3, lambda: setattr(self, "_just_showed_byok_picker", False))
-                return
-            elif text.strip() == "3":
-                self._awaiting_connect_type = False
-                # Clear any BYOK state to prevent interference
-                self._awaiting_byok_provider = False
-                self._awaiting_byok_model = False
-                self._show_local_provider_picker(log)
-                return
+            from superqode.providers.connection_profiles import (
+                get_connection_profile,
+                list_connection_profiles,
+            )
+
+            profiles = list_connection_profiles()
+            choice = text.strip().lower()
+            profile = None
+            if choice.isdigit() and 1 <= int(choice) <= len(profiles):
+                profile = profiles[int(choice) - 1]
             else:
-                log.add_error("Invalid selection. Enter 1 for ACP, 2 for BYOK, or 3 for LOCAL")
+                profile = get_connection_profile(choice)
+            if profile is not None:
+                event.input.value = ""
+                self._dispatch_connection_profile(profile, log)
                 return
+            ids = ", ".join(p.id for p in profiles)
+            log.add_error(f"Invalid selection. Choose 1-{len(profiles)} or a name ({ids}).")
+            return
 
         # Check if awaiting ACP agent selection
         if getattr(self, "_awaiting_acp_agent_selection", False):
@@ -4395,6 +4711,16 @@ class SuperQodeApp(App):
         # Check if awaiting LOCAL model selection
         if getattr(self, "_awaiting_local_model", False):
             if self._handle_local_model_selection(text, log):
+                return
+
+        # Check if awaiting Codex SDK model selection
+        if getattr(self, "_awaiting_codex_model", False):
+            if self._handle_codex_model_selection(text, log):
+                return
+
+        # Check if awaiting Codex SDK reasoning effort selection
+        if getattr(self, "_awaiting_codex_effort", False):
+            if self._handle_codex_effort_selection(text, log):
                 return
 
         # Check if awaiting BYOK model selection
@@ -4600,6 +4926,12 @@ class SuperQodeApp(App):
             self.run_worker(self._a2a_cmd(args, log))
         elif c == "runtime":
             self._runtime_cmd(args, log)
+        elif c == "codex":
+            self._codex_cmd(args, log)
+        elif c == "claude":
+            self._claude_cmd(args, log)
+        elif c in ("antigravity", "agy"):
+            self._antigravity_cmd(args, log)
         elif c == "approve":
             self.run_worker(self._approval_cmd("approve", args, log))
         elif c == "reject":
@@ -4730,6 +5062,17 @@ class SuperQodeApp(App):
                 elif subcmd == "local":
                     # Route to LOCAL connection
                     self._connect_local_cmd(subargs, log)
+                elif subcmd in ("codex", "claude", "antigravity", "advanced", "runtime"):
+                    # Product/runtime connection profiles (Codex, Claude, …).
+                    from superqode.providers.connection_profiles import get_connection_profile
+
+                    profile = get_connection_profile(
+                        "advanced" if subcmd == "runtime" else subcmd
+                    )
+                    if profile is not None:
+                        self._dispatch_connection_profile(profile, log)
+                    else:
+                        log.add_error(f"Unknown connection: {subcmd}")
                 else:
                     # Try to parse as BYOK provider/model (backward compatibility)
                     # But first check if it's a known subcommand that was missed
@@ -5971,6 +6314,8 @@ class SuperQodeApp(App):
             (":connect byok ", self._byok_provider_completion_candidates),
             (":connect local ", self._local_provider_completion_candidates),
             (":theme ", self._theme_completion_candidates),
+            (":runtime ", self._runtime_completion_candidates),
+            (":connect ", self._connect_profile_completion_candidates),
         ]
         for prefix, provider in context_specs:
             if lowered.startswith(prefix):
@@ -5984,6 +6329,54 @@ class SuperQodeApp(App):
             return self._model_switch_candidates(value, ":model switch ")
 
         return self._static_command_candidates(value)
+
+    @staticmethod
+    def _runtime_completion_candidates() -> list[PromptCompletionCandidate]:
+        """Runtime names for `:runtime <name>` completion, with install status."""
+        from superqode.runtime import list_runtimes
+
+        candidates = [
+            PromptCompletionCandidate(
+                value="list",
+                label="list",
+                description="Show all runtimes and their status",
+                kind="runtime",
+            )
+        ]
+        for info in list_runtimes():
+            if info.installed:
+                desc = info.description
+            else:
+                desc = f"not installed — {info.install_hint or 'optional extra required'}"
+            candidates.append(
+                PromptCompletionCandidate(
+                    value=info.name,
+                    label=info.name,
+                    description=desc,
+                    kind="runtime",
+                )
+            )
+        return candidates
+
+    @staticmethod
+    def _connect_profile_completion_candidates() -> list[PromptCompletionCandidate]:
+        """Connection sources for `:connect <profile>` completion, with status."""
+        from superqode.providers.connection_profiles import list_connection_profiles
+
+        candidates: list[PromptCompletionCandidate] = []
+        for profile in list_connection_profiles():
+            desc = profile.description
+            if not profile.available and profile.unavailable_hint:
+                desc = f"needs setup — {profile.unavailable_hint}"
+            candidates.append(
+                PromptCompletionCandidate(
+                    value=profile.id,
+                    label=profile.id,
+                    description=desc,
+                    kind="connect",
+                )
+            )
+        return candidates
 
     @staticmethod
     def _theme_completion_candidates() -> list[PromptCompletionCandidate]:
@@ -6006,7 +6399,17 @@ class SuperQodeApp(App):
         text = value.strip()
         if not text.startswith(("/", ":")):
             return False
-        return text.lower() in {candidate.lower() for candidate in COMMANDS}
+        lowered = text.lower()
+        if lowered in {
+            ":connect acp",
+            ":connect byok",
+            ":connect local",
+            "/connect acp",
+            "/connect byok",
+            "/connect local",
+        }:
+            return True
+        return lowered in {candidate.lower() for candidate in COMMANDS}
 
     def _update_prompt_completion_panel(self, value: str) -> None:
         """Refresh the visible prompt completion panel as the prompt changes."""
@@ -6246,7 +6649,13 @@ class SuperQodeApp(App):
     def _static_command_candidates(value: str) -> list[PromptCompletionCandidate]:
         lowered = value.lower()
         if lowered in {":c", ":co", ":con", ":conn", ":conne", ":connec"}:
-            commands = [":connect", ":connect acp", ":connect byok", ":connect local"]
+            commands = [
+                ":connect",
+                ":connect acp",
+                ":connect antigravity",
+                ":connect byok",
+                ":connect local",
+            ]
             return [
                 PromptCompletionCandidate(
                     value=command,
@@ -6278,23 +6687,26 @@ class SuperQodeApp(App):
             ":": {
                 ":connect": 0,
                 ":connect acp": 1,
-                ":connect byok": 2,
-                ":connect local": 3,
-                ":exit": 4,
-                ":quit": 5,
+                ":connect antigravity": 2,
+                ":connect byok": 3,
+                ":connect local": 4,
+                ":exit": 5,
+                ":quit": 6,
             },
             ":c": {
                 ":connect": 0,
                 ":connect acp": 1,
-                ":connect byok": 2,
-                ":connect local": 3,
+                ":connect antigravity": 2,
+                ":connect byok": 3,
+                ":connect local": 4,
                 ":clear": 20,
             },
             ":co": {
                 ":connect": 0,
                 ":connect acp": 1,
-                ":connect byok": 2,
-                ":connect local": 3,
+                ":connect antigravity": 2,
+                ":connect byok": 3,
+                ":connect local": 4,
             },
             ":q": {
                 ":quit": 0,
@@ -7649,6 +8061,100 @@ class SuperQodeApp(App):
             self._pure_mode = PureMode()
         return self._pure_mode
 
+    def _install_pure_permission_bridge(self, pure, log: ConversationLog) -> None:
+        """Route self-contained runtime approval callbacks through the TUI prompt."""
+
+        def on_permission_request(tool_name: str, arguments: dict) -> bool:
+            return self._request_runtime_permission(tool_name, arguments, log)
+
+        pure.on_permission_request = on_permission_request
+
+    def _set_status_model(self, model: str) -> None:
+        """Show the active model in the visible status bar (ColorfulStatusBar)."""
+        try:
+            from superqode.app.widgets import ColorfulStatusBar
+
+            self.query_one("#status-bar", ColorfulStatusBar).active_model = model or ""
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _set_status_runtime(self, runtime_name: str) -> None:
+        """Show the active runtime in the visible status bar (hidden for builtin)."""
+        try:
+            from superqode.app.widgets import ColorfulStatusBar
+
+            display = "" if runtime_name in ("", "builtin") else runtime_name
+            self.query_one("#status-bar", ColorfulStatusBar).active_runtime = display
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _announce_self_contained_connection(self, runtime_name: str, log: ConversationLog) -> None:
+        """Write a clear 'connected' panel for a self-contained runtime and
+        resolve its active model in the background (so the user can see which
+        model is live and what to do next)."""
+        from superqode.providers.connection_profiles import list_connection_profiles
+
+        label = next(
+            (
+                p.label
+                for p in list_connection_profiles()
+                if p.connector == "runtime" and p.runtime == runtime_name
+            ),
+            runtime_name,
+        )
+        if runtime_name == "claude-agent-sdk":
+            auth_text = "Anthropic API key (ANTHROPIC_API_KEY)"
+            cmd_prefix = ":claude"
+        else:
+            auth_text = "your local Codex login (~/.codex)"
+            cmd_prefix = ":codex"
+        t = Text()
+        t.append("\n  ✓ ", style=f"bold {THEME['success']}")
+        t.append("Connected — ", style=f"bold {THEME['text']}")
+        t.append(f"{label}\n\n", style=f"bold {THEME['success']}")
+        t.append("    Runtime   ", style=THEME["muted"])
+        t.append(f"{runtime_name}\n", style=THEME["text"])
+        t.append("    Auth      ", style=THEME["muted"])
+        t.append(f"{auth_text}\n", style=THEME["text"])
+        t.append("    Model     ", style=THEME["muted"])
+        t.append("resolving…\n", style=THEME["dim"])
+        t.append("\n  Next:\n", style=THEME["muted"])
+        t.append("    • ", style=THEME["dim"])
+        t.append("type a message", style=THEME["cyan"])
+        t.append(" to start coding\n", style=THEME["muted"])
+        t.append("    • ", style=THEME["dim"])
+        t.append(f"{cmd_prefix} model", style=THEME["cyan"])
+        t.append(" to switch model   ", style=THEME["muted"])
+        t.append(f"{cmd_prefix} status", style=THEME["cyan"])
+        t.append(" for diagnostics\n", style=THEME["muted"])
+        log.write(t)
+        self._set_status_runtime(runtime_name)  # badge shows the runtime now
+        self._set_status_model("")  # model fills in once resolved
+        self.run_worker(self._resolve_codex_active_model(log), exclusive=False)
+
+    async def _resolve_codex_active_model(self, log: ConversationLog) -> None:
+        """Query the runtime for the active/default model and surface it."""
+        try:
+            pure = getattr(self, "_pure_mode", None)
+            runtime = getattr(pure, "_runtime", None) if pure is not None else None
+            if runtime is None or not hasattr(runtime, "models"):
+                return
+            resp = await asyncio.to_thread(runtime.models)
+            data = list(getattr(resp, "data", []) or [])
+            chosen = next(
+                (m for m in data if getattr(m, "is_default", False)),
+                data[0] if data else None,
+            )
+            model_id = ""
+            if chosen is not None:
+                model_id = str(getattr(chosen, "model", getattr(chosen, "id", "")) or "")
+            if not model_id:
+                return
+            self._set_status_model(model_id)
+            log.add_info(f"Active Codex model: {model_id}  ·  switch with :codex model")
+        except Exception:  # noqa: BLE001 — best-effort, never fatal
+            pass
+
     def _runtime_cmd(self, args: str, log) -> None:
         """Handle :runtime / :runtime list / :runtime <name>.
 
@@ -7674,13 +8180,9 @@ class SuperQodeApp(App):
             return
 
         if not sub:
-            # Open the picker dialog. The dialog uses prompt_toolkit which
-            # collides with Textual's input loop; for now we fall back to
-            # the inline "list" rendering and instruct the user to switch
-            # via /runtime <name>. The full modal flow lands in Phase 5b.
-            log.add_info("Available runtimes:")
+            # Bare `:runtime` shows the list of runtimes and their status.
+            # Switch with `:runtime <name>` (autocompletion suggests names).
             self._runtime_cmd("list", log)
-            log.add_info("Switch with `:runtime <name>` (e.g. `:runtime adk`).")
             return
 
         # Direct switch by name.
@@ -7699,7 +8201,28 @@ class SuperQodeApp(App):
             return
 
         current = resolve_runtime_name()
-        if sub == current:
+        if sub in self._SELF_CONTAINED_RUNTIMES:
+            existing = getattr(self, "_pure_mode", None)
+            if (
+                existing is not None
+                and getattr(existing, "runtime_name", "") == sub
+                and getattr(existing.session, "connected", False)
+                and Path(getattr(existing.session, "working_directory", Path.cwd())).resolve()
+                == Path.cwd().resolve()
+                and getattr(existing, "_runtime", None) is not None
+            ):
+                self._install_pure_permission_bridge(existing, log)
+                _os.environ["SUPERQODE_RUNTIME"] = sub
+                self._set_status_runtime(sub)
+                self.run_worker(self._resolve_codex_active_model(log), exclusive=False)
+                log.add_info(f"Already connected via {sub}; reusing warm Codex app-server.")
+                return
+        # For self-contained runtimes, ``current`` only reflects the env/runtime
+        # name (which --connect/SUPERQODE_RUNTIME may already have set) — not
+        # whether a session is actually connected. The connected case is handled
+        # above; reaching here means NOT connected, so fall through to
+        # auto-connect instead of short-circuiting.
+        if sub == current and sub not in self._SELF_CONTAINED_RUNTIMES:
             log.add_info(f"Already on runtime '{sub}'.")
             return
 
@@ -7711,16 +8234,982 @@ class SuperQodeApp(App):
                 pass
             self._pure_mode.runtime_name = sub
         # Update the status bar badge if it's mounted.
-        try:
-            from superqode.widgets.status_bar import StatusBar
+        # Update the visible status-bar runtime badge. A non-self-contained swap
+        # clears any stale model; the self-contained path below sets it.
+        self._set_status_runtime(sub)
+        if sub not in self._SELF_CONTAINED_RUNTIMES:
+            self._set_status_model("")
+        # Self-contained runtimes (e.g. codex-sdk) bring their own model + auth
+        # (via their local config like ~/.codex) and don't need a BYOK key or an
+        # ACP connect. Auto-connect so the user can start chatting immediately;
+        # model="" defers entirely to the runtime's local configuration.
+        if sub in self._SELF_CONTAINED_RUNTIMES:
+            try:
+                pure = self._ensure_pure_mode()
+                self._install_pure_permission_bridge(pure, log)
+                pure.runtime_name = sub
+                provider = "anthropic" if sub == "claude-agent-sdk" else "openai"
+                pure.connect(provider=provider, model="", working_directory=Path.cwd())
+                self._announce_self_contained_connection(sub, log)
+            except Exception as exc:  # noqa: BLE001
+                log.add_error(f"Switched to {sub} but auto-connect failed: {exc}")
+        else:
+            log.add_info(
+                f"Runtime swapped: {current} → {sub}. "
+                "Next message will reconnect with the new backend."
+            )
 
-            for status_bar in self.query(StatusBar):
-                status_bar.runtime_name = sub
-        except Exception:  # noqa: BLE001
-            pass
+    # Runtimes that are self-contained (own model + auth) and can be used in the
+    # TUI without a separate :connect step.
+    _SELF_CONTAINED_RUNTIMES = frozenset({"codex-sdk", "claude-agent-sdk"})
+
+    def _codex_cmd(self, args: str, log) -> None:
+        """Handle :codex and Codex SDK runtime subcommands."""
+        raw = (args or "").strip()
+        parts = raw.split(maxsplit=1)
+        sub = parts[0].lower() if parts else "connect"
+        rest = parts[1].strip() if len(parts) > 1 else ""
+        if sub in {"", "connect", "start"}:
+            self._runtime_cmd("codex-sdk", log)
+            return
+        status_expr = f"{sub} {rest}".strip()
+        if status_expr in {"status", "doctor", "status --probe", "status probe", "status models"}:
+            self._codex_status(log, probe=status_expr not in {"status", "doctor"})
+            return
+        if sub in {"models", "model-list"}:
+            self._codex_models_cmd(log, include_hidden="--hidden" in rest.split())
+            return
+        if sub == "model":
+            self._codex_model_cmd(rest, log)
+            return
+        if sub in {"effort", "reasoning"}:
+            self._codex_effort_cmd(rest, log)
+            return
+        if sub == "sandbox":
+            self._codex_sandbox_cmd(rest, log)
+            return
+        if sub == "compact":
+            self._codex_runtime_action(log, "compact", lambda runtime: runtime.compact_thread())
+            return
+        if sub in {"thread", "info"}:
+            self._codex_thread_cmd(log)
+            return
+        if sub in {"sessions", "threads"}:
+            self._codex_sessions_cmd(rest, log)
+            return
+        if sub == "resume":
+            self._codex_resume_cmd(rest, log)
+            return
+        if sub == "fork":
+            self._codex_fork_cmd(rest, log)
+            return
+        if sub == "rename":
+            self._codex_rename_cmd(rest, log)
+            return
+        if sub == "archive":
+            self._codex_archive_cmd(rest, log)
+            return
+        if sub == "account":
+            self._codex_account_cmd(log)
+            return
+        if sub == "logout":
+            self._codex_runtime_action(log, "logout", lambda runtime: runtime.logout())
+            return
+        if sub == "review":
+            self._codex_review_cmd(rest, log)
+            return
+        log.add_error(f"Unknown codex command: {sub}")
         log.add_info(
-            f"Runtime swapped: {current} → {sub}. Next message will reconnect with the new backend."
+            "Usage: :codex [status|models|model|effort|sandbox|review|compact|thread|sessions|resume|fork|rename|archive|account|logout]"
         )
+
+    # ---- Claude Agent SDK :claude command surface --------------------------
+    def _claude_cmd(self, args: str, log) -> None:
+        """Handle :claude / :claude <subcommand> (Claude Agent SDK, API key)."""
+        parts = (args or "").split(maxsplit=1)
+        sub = parts[0].strip().lower() if parts and parts[0].strip() else "connect"
+        rest = parts[1].strip() if len(parts) > 1 else ""
+        if sub in ("connect", "start"):
+            self._runtime_cmd("claude-agent-sdk", log)
+        elif sub in ("status", "doctor"):
+            self._claude_status(log)
+        elif sub == "model":
+            self._claude_model_cmd(rest, log)
+        elif sub in ("permission", "permission-mode", "mode"):
+            self._claude_permission_cmd(rest, log)
+        elif sub in ("sessions", "threads"):
+            self._claude_sessions_cmd(log)
+        elif sub == "resume":
+            if not rest:
+                log.add_info("Usage: :claude resume <session-id>")
+            else:
+                self._claude_runtime_action(log, "resumed session", lambda r: r.resume_thread(rest))
+        elif sub == "rename":
+            if not rest:
+                log.add_info("Usage: :claude rename <name>")
+            else:
+                self._claude_runtime_action(log, "renamed session", lambda r: r.rename_thread(rest))
+        elif sub == "tag":
+            if not rest:
+                log.add_info("Usage: :claude tag <tag>")
+            else:
+                self._claude_runtime_action(log, "tagged session", lambda r: r.tag_thread(rest))
+        elif sub == "commands":
+            self._claude_commands_cmd(log)
+        elif sub == "command":
+            if not rest:
+                log.add_info("Usage: :claude command <name> [args]")
+            else:
+                # Claude slash commands are sent as a "/name args" prompt.
+                self._handle_message(f"/{rest}", log)
+        elif sub == "review":
+            self._handle_message(
+                "Review the current changes/working tree for correctness and risks; "
+                "do not modify files — report findings only.",
+                log,
+            )
+        else:
+            log.add_error(f"Unknown claude command: {sub}")
+            log.add_info(
+                "Usage: :claude [status|model|permission|sessions|resume|rename|tag|commands|command|review]"
+            )
+
+    # ---- Google Antigravity CLI :antigravity command surface -----------------
+    def _antigravity_cmd(self, args: str, log) -> None:
+        """Handle Antigravity CLI handoff/profile commands.
+
+        The current public agy CLI is an interactive terminal UI, not a documented
+        ACP server. Keep SuperQode's integration honest: make it discoverable,
+        migration-aware, and easy to launch from the current repository without
+        pretending we can stream structured tool events yet.
+        """
+        parts = (args or "").split(maxsplit=1)
+        sub = parts[0].strip().lower() if parts and parts[0].strip() else "connect"
+        if sub in ("connect", "start", "launch", "open"):
+            self._show_antigravity_connect(log)
+        elif sub in ("status", "doctor"):
+            self._show_antigravity_status(log)
+        elif sub in ("migrate", "migration", "gemini"):
+            self._show_antigravity_migration(log)
+        elif sub in ("help", "?"):
+            self._show_antigravity_help(log)
+        else:
+            log.add_error(f"Unknown antigravity command: {sub}")
+            log.add_info("Usage: :antigravity [status|migrate|launch|help]")
+
+    def _antigravity_command_line(self) -> str:
+        return f"cd {shlex.quote(str(Path.cwd()))} && agy"
+
+    def _antigravity_version(self) -> str:
+        agy = shutil.which("agy")
+        if not agy:
+            return ""
+        for args in (["agy", "--version"], ["agy", "version"]):
+            try:
+                result = subprocess.run(args, capture_output=True, text=True, timeout=5)
+            except Exception:
+                continue
+            text = (result.stdout or result.stderr or "").strip()
+            if result.returncode == 0 and text:
+                return text.splitlines()[0].strip()
+        return ""
+
+    def _show_antigravity_connect(self, log) -> None:
+        agy_path = shutil.which("agy")
+        command = self._antigravity_command_line()
+        status_style = THEME["success"] if agy_path else THEME["warning"]
+        t = Text()
+        t.append("\n  ")
+        t.append("✓" if agy_path else "⚠", style=f"bold {status_style}")
+        t.append(" Antigravity CLI\n\n", style=f"bold {THEME['text']}")
+        t.append("    Mode      ", style=THEME["muted"])
+        t.append("local agy CLI handoff\n", style=THEME["text"])
+        t.append("    Auth      ", style=THEME["muted"])
+        t.append("Google sign-in/keyring managed by agy\n", style=THEME["text"])
+        t.append("    Status    ", style=THEME["muted"])
+        if agy_path:
+            t.append(f"installed at {agy_path}\n", style=THEME["success"])
+        else:
+            t.append("agy not found on PATH\n", style=THEME["warning"])
+        t.append("\n  Run in a terminal:\n", style=THEME["muted"])
+        t.append(f"    {command}\n", style=THEME["cyan"])
+        t.append("\n  Notes:\n", style=THEME["muted"])
+        t.append("    - Antigravity CLI is currently an interactive TUI, not a documented ACP/headless stream.\n", style=THEME["muted"])
+        t.append("    - Use ", style=THEME["muted"])
+        t.append(":antigravity migrate", style=THEME["cyan"])
+        t.append(" to import Gemini CLI config/plugins.\n", style=THEME["muted"])
+        if not agy_path:
+            t.append("\n  Install:\n", style=THEME["muted"])
+            t.append("    curl -fsSL https://antigravity.google/cli/install.sh | bash\n", style=THEME["cyan"])
+        log.write(
+            Panel(
+                t,
+                title=f"[bold {THEME['cyan']}]Google Antigravity[/]",
+                border_style=THEME["cyan"],
+                box=ROUNDED,
+                padding=(1, 2),
+            )
+        )
+
+    def _show_antigravity_status(self, log) -> None:
+        agy_path = shutil.which("agy")
+        settings = Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
+        version = self._antigravity_version()
+        t = Text()
+        t.append("\n  Antigravity CLI status\n\n", style=f"bold {THEME['text']}")
+        t.append("    Binary    ", style=THEME["muted"])
+        t.append(f"{agy_path or 'not found'}\n", style=THEME["success" if agy_path else "warning"])
+        if version:
+            t.append("    Version   ", style=THEME["muted"])
+            t.append(f"{version}\n", style=THEME["text"])
+        t.append("    Settings  ", style=THEME["muted"])
+        t.append(str(settings), style=THEME["text" if settings.exists() else "dim"])
+        t.append("  ")
+        t.append(
+            "(found)\n" if settings.exists() else "(not found yet)\n",
+            style=THEME["success" if settings.exists() else "dim"],
+        )
+        t.append("    Auth      ", style=THEME["muted"])
+        t.append("OS keyring / browser sign-in handled by agy\n", style=THEME["text"])
+        t.append("\n  Commands:\n", style=THEME["muted"])
+        t.append("    :antigravity launch    ", style=THEME["cyan"])
+        t.append("show the current-repo agy launch command\n", style=THEME["muted"])
+        t.append("    :antigravity migrate   ", style=THEME["cyan"])
+        t.append("show Gemini CLI migration commands\n", style=THEME["muted"])
+        log.write(t)
+
+    def _show_antigravity_migration(self, log) -> None:
+        t = Text()
+        t.append("\n  Gemini CLI -> Antigravity CLI\n\n", style=f"bold {THEME['text']}")
+        t.append(
+            "  Google is moving individual Google AI Pro/Ultra/free Code Assist users "
+            "from Gemini CLI to Antigravity CLI.\n",
+            style=THEME["muted"],
+        )
+        t.append(
+            "  Keep Gemini CLI available for enterprise/API-key ACP users, but prefer "
+            "agy for consumer Google accounts.\n\n",
+            style=THEME["muted"],
+        )
+        t.append("  Migration commands:\n", style=THEME["muted"])
+        t.append("    curl -fsSL https://antigravity.google/cli/install.sh | bash\n", style=THEME["cyan"])
+        t.append("    agy\n", style=THEME["cyan"])
+        t.append("    agy plugin import gemini\n", style=THEME["cyan"])
+        t.append("\n  Paths:\n", style=THEME["muted"])
+        t.append("    Gemini CLI:       ~/.gemini/\n", style=THEME["dim"])
+        t.append("    Antigravity CLI:  ~/.gemini/antigravity-cli/\n", style=THEME["dim"])
+        t.append("\n  SuperQode route:\n", style=THEME["muted"])
+        t.append("    :connect antigravity\n", style=THEME["cyan"])
+        log.write(t)
+
+    def _show_antigravity_help(self, log) -> None:
+        t = Text()
+        t.append("\n  Antigravity in SuperQode\n\n", style=f"bold {THEME['text']}")
+        t.append("  :connect antigravity       ", style=THEME["cyan"])
+        t.append("show agy launch handoff for this repo\n", style=THEME["muted"])
+        t.append("  :antigravity status        ", style=THEME["cyan"])
+        t.append("check binary/settings status\n", style=THEME["muted"])
+        t.append("  :antigravity migrate       ", style=THEME["cyan"])
+        t.append("show Gemini CLI migration steps\n", style=THEME["muted"])
+        t.append(
+            "\n  Structured SuperQode tool cards require an ACP/headless event stream. "
+            "agy does not document that yet.\n",
+            style=THEME["dim"],
+        )
+        log.write(t)
+
+    def _claude_runtime_or_connect(self, log):
+        pure = getattr(self, "_pure_mode", None)
+        runtime = getattr(pure, "_runtime", None) if pure is not None else None
+        if (
+            runtime is not None
+            and getattr(pure, "runtime_name", "") == "claude-agent-sdk"
+            and getattr(getattr(pure, "session", None), "connected", False)
+        ):
+            return runtime
+        self._runtime_cmd("claude-agent-sdk", log)
+        pure = getattr(self, "_pure_mode", None)
+        runtime = getattr(pure, "_runtime", None) if pure is not None else None
+        if runtime is None or getattr(pure, "runtime_name", "") != "claude-agent-sdk":
+            raise RuntimeError("Claude Agent SDK runtime is not connected")
+        return runtime
+
+    def _claude_runtime_action(self, log, label: str, action) -> None:
+        try:
+            runtime = self._claude_runtime_or_connect(log)
+            action(runtime)
+            log.add_success(f"Claude {label}")
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not {label}: {exc}")
+
+    def _claude_status(self, log) -> None:
+        import importlib.util
+        import shutil
+
+        text = Text()
+        text.append("\n  Claude Agent SDK status\n\n", style=f"bold {THEME['cyan']}")
+        sdk_ok = importlib.util.find_spec("claude_agent_sdk") is not None
+        text.append("  SDK          ", style=THEME["muted"])
+        text.append(
+            "installed\n" if sdk_ok else "missing\n",
+            style=THEME["success" if sdk_ok else "error"],
+        )
+        cli_ok = shutil.which("claude") is not None
+        text.append("  Claude CLI   ", style=THEME["muted"])
+        text.append(
+            "found\n" if cli_ok else "not found (install Claude Code)\n",
+            style=THEME["success" if cli_ok else "warning"],
+        )
+        key_ok = bool(os.environ.get("ANTHROPIC_API_KEY"))
+        text.append("  API key      ", style=THEME["muted"])
+        text.append(
+            "ANTHROPIC_API_KEY set\n" if key_ok else "ANTHROPIC_API_KEY not set\n",
+            style=THEME["success" if key_ok else "error"],
+        )
+        pure = getattr(self, "_pure_mode", None)
+        runtime = getattr(pure, "_runtime", None) if pure is not None else None
+        connected = (
+            runtime is not None and getattr(pure, "runtime_name", "") == "claude-agent-sdk"
+        )
+        text.append("  Connected    ", style=THEME["muted"])
+        text.append(
+            "yes\n" if connected else "no (use :claude)\n",
+            style=THEME["success" if connected else "warning"],
+        )
+        if connected:
+            model = getattr(runtime, "config", None)
+            model_id = getattr(model, "model", "") or "Claude Code default"
+            text.append("  Model        ", style=THEME["muted"])
+            text.append(f"{model_id}\n", style=THEME["text"])
+            text.append("  Permission   ", style=THEME["muted"])
+            text.append(f"{getattr(runtime, 'permission_mode', None) or 'default'}\n", style=THEME["text"])
+            cmds = getattr(runtime, "slash_commands", [])
+            text.append("  Slash cmds   ", style=THEME["muted"])
+            text.append(f"{len(cmds)} available\n", style=THEME["text"])
+        if not (sdk_ok and key_ok):
+            text.append("\n  Setup: ", style=THEME["muted"])
+            text.append('pip install "superqode[claude-agent-sdk]"', style=THEME["cyan"])
+            text.append(" + install Claude Code + export ANTHROPIC_API_KEY\n", style=THEME["muted"])
+        log.write(text)
+
+    def _claude_model_cmd(self, model: str, log) -> None:
+        from superqode.runtime.claude_agent_sdk import CLAUDE_MODELS
+
+        if not model:
+            t = Text()
+            t.append("\n  Claude models (curated):\n", style=f"bold {THEME['text']}")
+            for i, (mid, name) in enumerate(CLAUDE_MODELS, 1):
+                t.append(f"    [{i}] ", style=THEME["dim"])
+                t.append(f"{name}", style=THEME["text"])
+                t.append(f"  {mid or '(default)'}\n", style=THEME["muted"])
+            t.append("\n  Set with ", style=THEME["muted"])
+            t.append(":claude model <id>", style=THEME["cyan"])
+            t.append("  (e.g. :claude model claude-opus-4-8)\n", style=THEME["muted"])
+            log.write(t)
+            return
+        chosen = "" if model.lower() in {"default", "none", "auto"} else model
+        try:
+            runtime = self._claude_runtime_or_connect(log)
+            runtime.set_model(chosen)
+            if getattr(self, "_pure_mode", None) is not None:
+                self._pure_mode.session.model = chosen
+            self._set_status_model(chosen)
+            log.add_success(f"Claude model set to {chosen or 'Claude Code default'}")
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not set Claude model: {exc}")
+
+    def _claude_permission_cmd(self, mode: str, log) -> None:
+        modes = ("default", "acceptEdits", "plan", "bypassPermissions", "dontAsk", "auto")
+        if not mode:
+            log.add_info(f"Permission modes: {', '.join(modes)}.  Set with :claude permission <mode>")
+            return
+        try:
+            runtime = self._claude_runtime_or_connect(log)
+            runtime.set_permission_mode(mode)
+            log.add_success(f"Claude permission mode set to {mode}")
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not set permission mode: {exc}")
+
+    def _claude_sessions_cmd(self, log) -> None:
+        try:
+            runtime = self._claude_runtime_or_connect(log)
+            sessions = runtime.list_threads(limit=20)
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not list Claude sessions: {exc}")
+            return
+        t = Text()
+        t.append("\n  Claude sessions\n\n", style=f"bold {THEME['text']}")
+        if not sessions:
+            t.append("  (none)\n", style=THEME["muted"])
+        for s in list(sessions)[:20]:
+            sid = getattr(s, "session_id", getattr(s, "id", "")) or "?"
+            title = getattr(s, "title", "") or ""
+            t.append("  • ", style=THEME["dim"])
+            t.append(f"{sid}", style=THEME["text"])
+            if title:
+                t.append(f"  {title}", style=THEME["muted"])
+            t.append("\n", style="")
+        t.append("\n  Resume with ", style=THEME["muted"])
+        t.append(":claude resume <session-id>\n", style=THEME["cyan"])
+        log.write(t)
+
+    def _claude_commands_cmd(self, log) -> None:
+        runtime = getattr(getattr(self, "_pure_mode", None), "_runtime", None)
+        cmds = list(getattr(runtime, "slash_commands", []) or []) if runtime else []
+        t = Text()
+        t.append("\n  Claude slash commands\n\n", style=f"bold {THEME['text']}")
+        if not cmds:
+            t.append("  (none yet — send a message first so the SDK reports them)\n", style=THEME["muted"])
+        for name in cmds:
+            t.append("  • ", style=THEME["dim"])
+            t.append(f"/{name}\n", style=THEME["cyan"])
+        t.append("\n  Run with ", style=THEME["muted"])
+        t.append(":claude command <name> [args]\n", style=THEME["cyan"])
+        log.write(t)
+
+    def _codex_runtime_or_connect(self, log):
+        pure = getattr(self, "_pure_mode", None)
+        runtime = getattr(pure, "_runtime", None) if pure is not None else None
+        if (
+            runtime is not None
+            and getattr(pure, "runtime_name", "") == "codex-sdk"
+            and getattr(getattr(pure, "session", None), "connected", False)
+        ):
+            return runtime
+        self._runtime_cmd("codex-sdk", log)
+        pure = getattr(self, "_pure_mode", None)
+        runtime = getattr(pure, "_runtime", None) if pure is not None else None
+        if runtime is None or getattr(pure, "runtime_name", "") != "codex-sdk":
+            raise RuntimeError("Codex runtime is not connected")
+        return runtime
+
+    @staticmethod
+    def _codex_obj_dict(obj) -> dict:
+        if obj is None:
+            return {}
+        if isinstance(obj, dict):
+            return dict(obj)
+        if hasattr(obj, "model_dump"):
+            dumped = obj.model_dump(mode="json", by_alias=True)
+            return dumped if isinstance(dumped, dict) else {}
+        return {
+            key: getattr(obj, key)
+            for key in dir(obj)
+            if not key.startswith("_") and not callable(getattr(obj, key))
+        }
+
+    def _codex_runtime_action(self, log, label: str, action) -> None:
+        try:
+            runtime = self._codex_runtime_or_connect(log)
+            action(runtime)
+            log.add_success(f"Codex {label} complete.")
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Codex {label} failed: {exc}")
+
+    @staticmethod
+    def _codex_effort_options() -> list[dict[str, str]]:
+        return [
+            {
+                "id": "default",
+                "name": "Codex default",
+                "desc": "Use the effort configured in ~/.codex or selected by Codex.",
+            },
+            {
+                "id": "minimal",
+                "name": "Minimal",
+                "desc": "Fastest reasoning for small edits and straightforward prompts.",
+            },
+            {
+                "id": "low",
+                "name": "Low",
+                "desc": "Light reasoning for simple coding tasks.",
+            },
+            {
+                "id": "medium",
+                "name": "Medium",
+                "desc": "Balanced reasoning for normal development work.",
+            },
+            {
+                "id": "high",
+                "name": "High",
+                "desc": "Deeper reasoning for complex changes and reviews.",
+            },
+            {
+                "id": "xhigh",
+                "name": "Extra high",
+                "desc": "Maximum reasoning when latency is less important.",
+            },
+        ]
+
+    def _codex_picker_line(
+        self,
+        text: Text,
+        number: int,
+        primary: str,
+        secondary: str,
+        desc: str,
+        *,
+        highlighted: bool,
+    ) -> None:
+        pointer = "> " if highlighted else "  "
+        number_style = self._picker_link_style(
+            f"bold {THEME['success'] if highlighted else THEME['cyan']}", number
+        )
+        primary_style = f"bold {THEME['success'] if highlighted else THEME['text']}"
+        text.append("  ")
+        text.append(pointer, style=f"bold {THEME['success']}" if highlighted else THEME["dim"])
+        text.append(f"[{number}]", style=number_style)
+        text.append(" ")
+        text.append(primary, style=primary_style)
+        if secondary:
+            text.append(f"  {secondary}", style=THEME["muted"])
+        if desc:
+            text.append(f"\n       {desc}", style=THEME["dim"])
+        if highlighted:
+            text.append("  selected", style=f"bold {THEME['success']}")
+        text.append("\n")
+
+    def _show_codex_model_picker(
+        self, log, *, clear_log: bool = True, refetch: bool = True
+    ) -> None:
+        try:
+            if refetch or not getattr(self, "_codex_models", None):
+                runtime = self._codex_runtime_or_connect(log)
+                response = runtime.models()
+                self._codex_models = self._models_from_codex_response(response)
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not list Codex models: {exc}")
+            return
+
+        models = list(getattr(self, "_codex_models", None) or [])
+        if not models:
+            models = [
+                {
+                    "id": "",
+                    "name": "Codex default",
+                    "desc": "Use the model configured in ~/.codex.",
+                    "efforts": [],
+                }
+            ]
+            self._codex_models = models
+
+        self._reset_connect_selection_states()
+        self._awaiting_codex_model = True
+        self._codex_highlighted_model_index = min(
+            getattr(self, "_codex_highlighted_model_index", 0), len(models) - 1
+        )
+
+        current_runtime = getattr(getattr(self, "_pure_mode", None), "_runtime", None)
+        current = getattr(current_runtime, "model", None) or ""
+        text = Text()
+        text.append("\n  Codex model\n\n", style=f"bold {THEME['cyan']}")
+        if current:
+            text.append("  Current override: ", style=THEME["muted"])
+            text.append(current, style=f"bold {THEME['text']}")
+            text.append("\n\n")
+        else:
+            text.append("  Current: Codex default from ~/.codex\n\n", style=THEME["muted"])
+
+        for idx, model in enumerate(models):
+            model_id = str(model.get("id") or "")
+            name = str(model.get("name") or model_id or "Codex default")
+            efforts = ", ".join(model.get("efforts") or [])
+            secondary = model_id if model_id and model_id != name else ""
+            desc = f"effort: {efforts}" if efforts else str(model.get("desc") or "")
+            self._codex_picker_line(
+                text,
+                idx + 1,
+                name,
+                secondary,
+                desc,
+                highlighted=idx == self._codex_highlighted_model_index,
+            )
+
+        text.append("\n  Use Up/Down + Enter, click a number, or type a model id.\n", style=THEME["muted"])
+        text.append("  Esc cancels. ", style=THEME["muted"])
+        text.append(":codex models", style=THEME["cyan"])
+        text.append(" shows a plain list.\n", style=THEME["muted"])
+        self._show_command_output(log, text, clear_log=clear_log)
+
+    def _show_codex_effort_picker(self, log, *, clear_log: bool = True) -> None:
+        self._reset_connect_selection_states()
+        self._awaiting_codex_effort = True
+        options = self._codex_effort_options()
+        self._codex_highlighted_effort_index = min(
+            getattr(self, "_codex_highlighted_effort_index", 0), len(options) - 1
+        )
+        try:
+            runtime = self._codex_runtime_or_connect(log)
+            current = runtime.reasoning_effort or "default"
+        except Exception:
+            current = "default"
+
+        text = Text()
+        text.append("\n  Codex reasoning effort\n\n", style=f"bold {THEME['cyan']}")
+        text.append("  Current: ", style=THEME["muted"])
+        text.append(current, style=f"bold {THEME['text']}")
+        text.append("\n\n")
+        for idx, option in enumerate(options):
+            label = option["name"]
+            option_id = option["id"]
+            if option_id == current:
+                label = f"{label} (current)"
+            self._codex_picker_line(
+                text,
+                idx + 1,
+                label,
+                option_id,
+                option["desc"],
+                highlighted=idx == self._codex_highlighted_effort_index,
+            )
+
+        text.append("\n  Use Up/Down + Enter, click a number, or type an effort name.\n", style=THEME["muted"])
+        text.append("  Esc cancels.\n", style=THEME["muted"])
+        self._show_command_output(log, text, clear_log=clear_log)
+
+    def _handle_codex_model_selection(self, selection: str, log) -> bool:
+        if not getattr(self, "_awaiting_codex_model", False):
+            return False
+        raw = (selection or "").strip()
+        models = list(getattr(self, "_codex_models", None) or [])
+        if not raw:
+            self.action_select_highlighted_codex_model()
+            return True
+
+        selected = None
+        if raw.isdigit():
+            idx = int(raw) - 1
+            if 0 <= idx < len(models):
+                selected = models[idx]
+            else:
+                log.add_error(f"Invalid Codex model selection. Choose 1-{len(models)}.")
+                return True
+        else:
+            lowered = raw.lower()
+            for model in models:
+                model_id = str(model.get("id") or "")
+                name = str(model.get("name") or "")
+                if lowered in {model_id.lower(), name.lower()}:
+                    selected = model
+                    break
+            if selected is None:
+                matches = [
+                    model
+                    for model in models
+                    if lowered in str(model.get("id") or "").lower()
+                    or lowered in str(model.get("name") or "").lower()
+                ]
+                if len(matches) == 1:
+                    selected = matches[0]
+                elif len(matches) > 1:
+                    log.add_error(
+                        f"'{raw}' matches multiple Codex models. Type the exact model id."
+                    )
+                    return True
+            if selected is None:
+                log.add_error(f"Codex model '{raw}' not found.")
+                return True
+
+        self._awaiting_codex_model = False
+        self._apply_codex_model_override(str(selected.get("id") or ""), log)
+        return True
+
+    def _handle_codex_effort_selection(self, selection: str, log) -> bool:
+        if not getattr(self, "_awaiting_codex_effort", False):
+            return False
+        raw = (selection or "").strip().lower()
+        options = self._codex_effort_options()
+        if not raw:
+            self.action_select_highlighted_codex_effort()
+            return True
+
+        selected = None
+        if raw.isdigit():
+            idx = int(raw) - 1
+            if 0 <= idx < len(options):
+                selected = options[idx]
+            else:
+                log.add_error(f"Invalid Codex effort selection. Choose 1-{len(options)}.")
+                return True
+        else:
+            for option in options:
+                if raw in {option["id"], option["name"].lower()}:
+                    selected = option
+                    break
+            if selected is None:
+                log.add_error("Invalid Codex effort. Choose minimal, low, medium, high, xhigh, or default.")
+                return True
+
+        self._awaiting_codex_effort = False
+        self._codex_effort_cmd(selected["id"], log)
+        return True
+
+    def _codex_models_cmd(self, log, *, include_hidden: bool = False) -> None:
+        try:
+            runtime = self._codex_runtime_or_connect(log)
+            response = runtime.models(include_hidden=include_hidden)
+            self._codex_models = self._models_from_codex_response(response)
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not list Codex models: {exc}")
+            return
+
+        text = Text()
+        text.append("\n  Codex models\n\n", style=f"bold {THEME['cyan']}")
+        for model in self._codex_models[:30]:
+            text.append("  ")
+            text.append(str(model.get("id") or ""), style=f"bold {THEME['text']}")
+            name = model.get("name")
+            if name and name != model.get("id"):
+                text.append(f"  {name}", style=THEME["muted"])
+            efforts = model.get("efforts") or []
+            if efforts:
+                text.append(f"  effort: {', '.join(efforts)}", style=THEME["dim"])
+            text.append("\n")
+        if len(self._codex_models) > 30:
+            text.append(f"\n  +{len(self._codex_models) - 30} more hidden/listed models\n", style=THEME["dim"])
+        text.append("\n  Use ", style=THEME["muted"])
+        text.append(":codex model <id>", style=THEME["cyan"])
+        text.append(" to switch future turns.\n", style=THEME["muted"])
+        log.write(text)
+
+    def _codex_model_cmd(self, model: str, log) -> None:
+        if not model:
+            self._show_codex_model_picker(log)
+            return
+        if model.lower() in {"default", "none", "auto"}:
+            self._apply_codex_model_override("", log)
+            return
+        self._apply_codex_model_override(model, log)
+
+    def _apply_codex_model_override(self, model: str, log) -> None:
+        try:
+            runtime = self._codex_runtime_or_connect(log)
+            runtime.set_model(model)
+            if getattr(self, "_pure_mode", None) is not None:
+                self._pure_mode.session.model = model
+            label = model or "Codex default"
+            self._set_status_model(model)  # reflect in the status-bar badge
+            log.add_success(f"Codex model set to {label}")
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not set Codex model: {exc}")
+
+    def _codex_effort_cmd(self, effort: str, log) -> None:
+        if not effort:
+            self._show_codex_effort_picker(log)
+            return
+        try:
+            runtime = self._codex_runtime_or_connect(log)
+            runtime.set_reasoning_effort(effort)
+            current = runtime.reasoning_effort or "default"
+            log.add_success(f"Codex reasoning effort set to {current}")
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not set Codex effort: {exc}")
+
+    def _codex_sandbox_cmd(self, mode: str, log) -> None:
+        if not mode:
+            log.add_info("Usage: :codex sandbox <read-only|workspace-write|full-access|default>")
+            return
+        try:
+            runtime = self._codex_runtime_or_connect(log)
+            runtime.set_sandbox_backend(None if mode in {"default", "none"} else mode)
+            log.add_success(f"Codex sandbox set to {mode}")
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not set Codex sandbox: {exc}")
+
+    def _codex_thread_cmd(self, log) -> None:
+        try:
+            runtime = self._codex_runtime_or_connect(log)
+            thread = runtime.read_thread(include_turns=False).thread
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not read Codex thread: {exc}")
+            return
+        data = self._codex_obj_dict(thread)
+        text = Text()
+        text.append("\n  Codex thread\n\n", style=f"bold {THEME['cyan']}")
+        for key in ("id", "name", "model", "modelProvider", "preview", "path", "cwd"):
+            value = data.get(key)
+            if value:
+                text.append(f"  {key:<14}", style=THEME["muted"])
+                text.append(str(value), style=THEME["text"])
+                text.append("\n")
+        log.write(text)
+
+    def _codex_sessions_cmd(self, args: str, log) -> None:
+        archived = "archived" in args.split() or "--archived" in args.split()
+        try:
+            runtime = self._codex_runtime_or_connect(log)
+            response = runtime.list_threads(limit=20, archived=archived)
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not list Codex sessions: {exc}")
+            return
+        threads = list(getattr(response, "data", []) or getattr(response, "threads", []) or [])
+        text = Text()
+        text.append("\n  Codex sessions\n\n", style=f"bold {THEME['cyan']}")
+        if not threads:
+            text.append("  No Codex sessions returned.\n", style=THEME["muted"])
+        for thread in threads:
+            data = self._codex_obj_dict(thread)
+            tid = str(data.get("id") or "")
+            text.append(f"  {tid[:12]:<14}", style=f"bold {THEME['cyan']}")
+            text.append(str(data.get("name") or data.get("preview") or "(unnamed)")[:80], style=THEME["text"])
+            text.append("\n")
+        text.append("\n  Use ", style=THEME["muted"])
+        text.append(":codex resume <thread_id>", style=THEME["cyan"])
+        text.append(" or ", style=THEME["muted"])
+        text.append(":codex fork <thread_id>", style=THEME["cyan"])
+        text.append(".\n", style=THEME["muted"])
+        log.write(text)
+
+    def _codex_resume_cmd(self, thread_id: str, log) -> None:
+        if not thread_id:
+            log.add_info("Usage: :codex resume <thread_id>")
+            return
+        self._codex_runtime_action(log, f"resume {thread_id[:12]}", lambda runtime: runtime.resume_thread(thread_id))
+
+    def _codex_fork_cmd(self, thread_id: str, log) -> None:
+        if not thread_id:
+            log.add_info("Usage: :codex fork <thread_id>")
+            return
+        self._codex_runtime_action(log, f"fork {thread_id[:12]}", lambda runtime: runtime.fork_thread(thread_id))
+
+    def _codex_rename_cmd(self, name: str, log) -> None:
+        if not name:
+            log.add_info("Usage: :codex rename <thread name>")
+            return
+        self._codex_runtime_action(log, "rename", lambda runtime: runtime.rename_thread(name))
+
+    def _codex_archive_cmd(self, thread_id: str, log) -> None:
+        try:
+            runtime = self._codex_runtime_or_connect(log)
+            target = thread_id or runtime.thread_id
+            if not target:
+                log.add_info("Usage: :codex archive [thread_id]")
+                return
+            runtime.archive_thread(target)
+            log.add_success(f"Codex archived {str(target)[:12]}.")
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not archive Codex thread: {exc}")
+
+    def _codex_account_cmd(self, log) -> None:
+        try:
+            runtime = self._codex_runtime_or_connect(log)
+            response = runtime.account()
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not read Codex account: {exc}")
+            return
+        data = self._codex_obj_dict(response)
+        account = self._codex_obj_dict(data.get("account"))
+        text = Text()
+        text.append("\n  Codex account\n\n", style=f"bold {THEME['cyan']}")
+        for key, value in {**data, **account}.items():
+            if value in (None, "", [], {}):
+                continue
+            text.append(f"  {str(key):<24}", style=THEME["muted"])
+            text.append(str(value)[:120], style=THEME["text"])
+            text.append("\n")
+        log.write(text)
+
+    def _codex_review_cmd(self, prompt: str, log) -> None:
+        try:
+            runtime = self._codex_runtime_or_connect(log)
+            runtime.set_next_turn_sandbox("read-only")
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not start Codex review: {exc}")
+            return
+        review_prompt = prompt or (
+            "Review the current uncommitted diff only. Do not edit files or run commands that modify state. "
+            "Prioritize correctness bugs, regressions, safety risks, and missing tests. "
+            "Return findings first with file/line references where possible."
+        )
+        log.add_user(f":codex review\n{review_prompt}")
+        self._last_user_message = review_prompt
+        self._update_terminal_title("Codex review")
+        self.is_busy = True
+        self._cancel_requested = False
+        self._send_to_pure_mode(review_prompt, log)
+
+    def _codex_status(self, log, *, probe: bool = False) -> None:
+        """Show Codex SDK/app-server/auth status."""
+        from importlib import metadata
+        from superqode.runtime import list_runtimes
+
+        info = next((item for item in list_runtimes() if item.name == "codex-sdk"), None)
+        text = Text()
+        text.append("\n  Codex SDK status\n\n", style=f"bold {THEME['cyan']}")
+
+        installed = bool(info and info.installed)
+        text.append("  Runtime     ", style=THEME["muted"])
+        text.append("ready\n" if installed else "missing\n", style=THEME["success" if installed else "error"])
+
+        for package in ("openai-codex", "openai-codex-cli-bin"):
+            text.append(f"  {package:<12}", style=THEME["muted"])
+            try:
+                text.append(f"{metadata.version(package)}\n", style=THEME["text"])
+            except metadata.PackageNotFoundError:
+                text.append("not installed\n", style=THEME["error"])
+
+        text.append("  Config      ", style=THEME["muted"])
+        text.append(str(Path.home() / ".codex"), style=THEME["text"])
+        text.append("\n")
+
+        active = (
+            getattr(getattr(self, "_pure_mode", None), "runtime_name", "") == "codex-sdk"
+            and getattr(getattr(self, "_pure_mode", None), "session", None) is not None
+            and getattr(self._pure_mode.session, "connected", False)
+        )
+        text.append("  TUI bridge  ", style=THEME["muted"])
+        text.append("connected\n" if active else "not connected\n", style=THEME["success" if active else "warning"])
+        runtime = getattr(getattr(self, "_pure_mode", None), "_runtime", None)
+        thread_id = getattr(runtime, "thread_id", None) if active else None
+        sessions_dir = getattr(runtime, "codex_sessions_dir", str(Path.home() / ".codex" / "sessions"))
+        text.append("  Sessions    ", style=THEME["muted"])
+        text.append(str(sessions_dir), style=THEME["text"])
+        text.append("\n")
+        if thread_id:
+            text.append("  Thread      ", style=THEME["muted"])
+            text.append(str(thread_id), style=THEME["text"])
+            text.append("\n")
+
+        if not installed:
+            text.append("\n  Install     ", style=THEME["muted"])
+            text.append('pip install "superqode[codex-sdk]"\n', style=THEME["cyan"])
+            log.write(text)
+            return
+
+        if not probe:
+            text.append("  Probe       ", style=THEME["muted"])
+            text.append("skipped (fast status)\n", style=THEME["dim"])
+            text.append("  Next        ", style=THEME["muted"])
+            text.append(":codex status --probe", style=THEME["cyan"])
+            text.append(" to start the SDK app-server and list models\n", style=THEME["muted"])
+            log.write(text)
+            return
+
+        try:
+            models = self._fetch_live_codex_models()
+            self._codex_models = models
+            text.append("  Auth/probe  ", style=THEME["muted"])
+            text.append("ok\n", style=THEME["success"])
+            text.append("  Models      ", style=THEME["muted"])
+            if models:
+                names = [str(model.get("id") or model.get("name")) for model in models[:5]]
+                text.append(", ".join(names), style=THEME["text"])
+                if len(models) > 5:
+                    text.append(f" (+{len(models) - 5} more)", style=THEME["dim"])
+                text.append("\n")
+            else:
+                text.append("none returned\n", style=THEME["warning"])
+        except Exception as exc:  # noqa: BLE001
+            text.append("  Auth/probe  ", style=THEME["muted"])
+            text.append("failed\n", style=THEME["error"])
+            text.append("  Hint        ", style=THEME["muted"])
+            text.append(self._codex_error_hint(str(exc)), style=THEME["warning"])
+            text.append("\n")
+            text.append("  Error       ", style=THEME["muted"])
+            text.append(str(exc), style=THEME["text"])
+            text.append("\n")
+
+        log.write(text)
 
     def _harness_cmd(self, args: str, log) -> None:
         """Handle :harness status/list/templates/off/<path>."""
@@ -9939,7 +11428,13 @@ team:
             self.is_busy = False
             return
 
-        if not self._pure_mode._agent and not getattr(self._pure_mode, "harness_enabled", False):
+        # A builtin AgentLoop (._agent), a harness, OR a self-contained runtime
+        # (e.g. codex-sdk, which has no ._agent) all count as initialized.
+        if (
+            not self._pure_mode._agent
+            and not getattr(self._pure_mode, "harness_enabled", False)
+            and getattr(self._pure_mode, "_runtime", None) is None
+        ):
             log.add_error("Agent not initialized. Please reconnect using :connect byok")
             log.add_system("Example: :connect byok ollama/llama3.2")
             self.is_busy = False
@@ -10279,7 +11774,11 @@ team:
                     error_msg,
                     provider=provider,
                     model=model,
-                    hint="Use :retry after fixing the provider or model issue.",
+                    hint=(
+                        self._codex_error_hint(error_msg)
+                        if getattr(self._pure_mode, "runtime_name", "") == "codex-sdk"
+                        else "Use :retry after fixing the provider or model issue."
+                    ),
                 )
 
                 # Show detailed error info
@@ -14521,7 +16020,7 @@ team:
         prompt.append("[n]", style=f"bold {THEME['error']}")
         prompt.append("o  ", style=THEME["muted"])
         prompt.append("[a]", style=f"bold {THEME['cyan']}")
-        prompt.append("lways  ", style=THEME["muted"])
+        prompt.append("llow session  ", style=THEME["muted"])
         prompt.append("[esc]", style=f"bold {THEME['muted']}")
         prompt.append(" cancel\n", style=THEME["muted"])
 
@@ -14541,6 +16040,74 @@ team:
         except Exception:
             pass
         self._start_permission_pulse()
+
+    def _request_runtime_permission(
+        self,
+        tool_name: str,
+        tool_input: dict,
+        log: ConversationLog,
+        *,
+        timeout: float = 60.0,
+    ) -> bool:
+        """Synchronously bridge a runtime approval callback to the TUI prompt."""
+        if self.approval_mode == "deny":
+            try:
+                self._call_ui(log.add_info, f"Denied {tool_name} by approval mode.")
+            except Exception:
+                pass
+            return False
+        if self.approval_mode == "auto":
+            try:
+                self._call_ui(log.add_info, f"Approved {tool_name} by AUTO mode.")
+            except Exception:
+                pass
+            return True
+        if getattr(self, "_runtime_permission_allow_all", False):
+            try:
+                self._call_ui(log.add_info, f"Approved {tool_name} by session approval.")
+            except Exception:
+                pass
+            return True
+
+        if getattr(self, "_permission_pending", False):
+            try:
+                self._call_ui(log.add_error, "Another approval prompt is already pending.")
+            except Exception:
+                pass
+            return False
+
+        self._permission_response = None
+        self._permission_response_event = threading.Event()
+        try:
+            self._call_ui(self._show_permission_prompt, tool_name, tool_input, log)
+        except Exception as exc:
+            self._permission_response_event = None
+            try:
+                self._call_ui(log.add_error, f"Could not show approval prompt: {exc}")
+            except Exception:
+                pass
+            return False
+
+        event = self._permission_response_event
+        resolved = event.wait(timeout)
+
+        if not resolved or getattr(self, "_permission_pending", False):
+            self._permission_pending = False
+            self._permission_response = "deny"
+            self._permission_response_event = None
+            try:
+                self._call_ui(log.add_info, f"Approval timed out for {tool_name}.")
+                self._call_ui(self._reset_input_placeholder)
+            except Exception:
+                pass
+            return False
+
+        response = getattr(self, "_permission_response", None)
+        self._permission_response_event = None
+        if response == "allow_all":
+            self._runtime_permission_allow_all = True
+            return True
+        return response == "allow"
 
     def _permission_risk(
         self, tool_name: str, tool_input: dict, reason: str = ""
@@ -14796,12 +16363,15 @@ team:
                 approved_tools.add(tool_sig)
             try:
                 log = self.query_one("#log", ConversationLog)
-                log.add_info("All tools approved (AUTO mode)")
+                log.add_info("Approved for this session")
             except Exception:
                 pass
 
         # Clear permission state
         self._permission_pending = False
+        event = getattr(self, "_permission_response_event", None)
+        if event is not None:
+            event.set()
         self._reset_input_placeholder()
 
     def _start_permission_pulse(self):
@@ -14851,6 +16421,9 @@ team:
         if response in ("y", "yes", "allow", "ok"):
             self._permission_response = "allow"
             self._permission_pending = False
+            event = getattr(self, "_permission_response_event", None)
+            if event is not None:
+                event.set()
             # Add to approved tools to prevent duplicate prompts
             approved_tools = self._ensure_approved_tools()
             if hasattr(self, "_pending_tool_name") and hasattr(self, "_pending_tool_input"):
@@ -14869,6 +16442,9 @@ team:
         elif response in ("n", "no", "deny", "reject"):
             self._permission_response = "deny"
             self._permission_pending = False
+            event = getattr(self, "_permission_response_event", None)
+            if event is not None:
+                event.set()
             try:
                 log = self.query_one("#log", ConversationLog)
                 log.add_info("Denied")
@@ -14879,6 +16455,9 @@ team:
         elif response in ("a", "all", "allow all", "yes all"):
             self._permission_response = "allow_all"
             self._permission_pending = False
+            event = getattr(self, "_permission_response_event", None)
+            if event is not None:
+                event.set()
             # Add to approved tools
             approved_tools = self._ensure_approved_tools()
             if hasattr(self, "_pending_tool_name") and hasattr(self, "_pending_tool_input"):
@@ -14888,7 +16467,7 @@ team:
                 approved_tools.add(tool_sig)
             try:
                 log = self.query_one("#log", ConversationLog)
-                log.add_info("All tools approved (AUTO mode)")
+                log.add_info("Approved for this session")
             except Exception:
                 pass
             self._reset_input_placeholder()
@@ -14913,7 +16492,7 @@ team:
 
         try:
             input_widget = self.query_one("#prompt-input", SelectionAwareInput)
-            input_widget.placeholder = "Ask anything or type : for commands..."
+            input_widget.placeholder = SelectionAwareInput.DEFAULT_PLACEHOLDER
         except Exception:
             pass
 
@@ -16930,6 +18509,7 @@ team:
 
         self._pure_mode.on_tool_call = on_tool_call
         self._pure_mode.on_tool_result = on_tool_result
+        self._install_pure_permission_bridge(self._pure_mode, log)
 
         # Connect
         self._pure_mode.connect(provider, model, level)
@@ -17560,6 +19140,7 @@ team:
             self._pure_mode.on_tool_call = on_tool_call
             self._pure_mode.on_tool_result = on_tool_result
             self._pure_mode.on_thinking = on_thinking_async
+        self._install_pure_permission_bridge(self._pure_mode, log)
 
         # Use STANDARD for cloud providers, MINIMAL for local to avoid confusion
         from superqode.providers.registry import ProviderCategory
@@ -18277,73 +19858,45 @@ team:
         t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
         t.append("Select Connection Type\n\n", style=f"bold {THEME['text']}")
 
-        # Show connection types with highlighting
-        highlighted_idx = getattr(self, "_byok_highlighted_connect_type_index", 0)
+        # Show connection sources (profile-driven) with highlighting + status
+        from superqode.providers.connection_profiles import list_connection_profiles
 
-        for i, (num, name, color, desc, example) in enumerate(
-            [
-                (
-                    1,
-                    "🔌 ACP Agents",
-                    THEME["pink"],
-                    "Connect via ACP (Agent Communication Protocol)",
-                    ":connect acp opencode",
-                ),
-                (
-                    2,
-                    "🔑 BYOK Providers",
-                    THEME["success"],
-                    "Bring Your Own Key - Direct provider/model connection",
-                    ":connect byok anthropic/claude-opus-4-8",
-                ),
-                (
-                    3,
-                    "💻 LOCAL Providers",
-                    THEME["cyan"],
-                    "Local/self-hosted models - No API key required",
-                    ":connect local ollama/llama3.2",
-                ),
-            ]
-        ):
+        profiles = list_connection_profiles()
+        highlighted_idx = getattr(self, "_byok_highlighted_connect_type_index", 0)
+        if not (0 <= highlighted_idx < len(profiles)):
+            highlighted_idx = 0
+
+        for i, profile in enumerate(profiles):
+            num = i + 1
+            available = profile.available
+            status = "ready" if available else "needs setup"
+            status_color = THEME["success"] if available else THEME["warning"]
             is_highlighted = i == highlighted_idx
             if is_highlighted:
-                t.append(f"  ▶ ", style=f"bold {THEME['success']}")
+                t.append("  ▶ ", style=f"bold {THEME['success']}")
                 t.append(
                     f"[{num}] ",
                     style=self._picker_link_style(f"bold {THEME['success']}", num),
                 )
-                t.append(f"{name}", style=f"bold {THEME['success']}")
-                t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
-                t.append(f"     {desc}\n", style=THEME["muted"])
-                t.append(f"     Example: ", style=THEME["dim"])
-                t.append(f"{example}\n\n", style=THEME["cyan"])
+                t.append(profile.label, style=f"bold {THEME['success']}")
+                t.append("  ← SELECTED\n", style=f"bold {THEME['success']}")
             else:
                 t.append(f"    [{num}] ", style=self._picker_link_style(THEME["dim"], num))
-                t.append(f"{name}", style=f"bold {color}")
+                t.append(profile.label, style=f"bold {THEME['text']}")
                 t.append("\n", style="")
-                t.append(f"     {desc}\n", style=THEME["muted"])
-                t.append(f"     Example: ", style=THEME["dim"])
-                t.append(f"{example}\n\n", style=THEME["cyan"])
+            t.append(f"        {profile.description}\n", style=THEME["muted"])
+            t.append("        ", style="")
+            t.append(status, style=status_color)
+            if not available and profile.unavailable_hint:
+                t.append(f" — {profile.unavailable_hint}", style=THEME["dim"])
+            t.append("\n\n", style="")
 
-        t.append(f"  💡 Quick Connect:\n", style=THEME["muted"])
-        t.append(f"    ⌨️  ", style=THEME["dim"])
-        t.append(f"↑↓", style=THEME["cyan"])
-        t.append(" Arrow keys to navigate  ", style=THEME["dim"])
-        t.append(f"Enter", style=THEME["cyan"])
-        t.append(" to select highlighted type\n", style=THEME["dim"])
-        t.append(f"    Or type ", style=THEME["dim"])
-        t.append("1", style=THEME["cyan"])
-        t.append(" for ACP, ", style=THEME["dim"])
-        t.append("2", style=THEME["cyan"])
-        t.append(" for BYOK, or ", style=THEME["dim"])
-        t.append("3", style=THEME["cyan"])
-        t.append(" for LOCAL\n", style=THEME["dim"])
-        t.append(f"    Or use: ", style=THEME["dim"])
-        t.append(":connect acp", style=THEME["pink"])
-        t.append(", ", style=THEME["dim"])
-        t.append(":connect byok", style=THEME["success"])
-        t.append(", or ", style=THEME["dim"])
-        t.append(":connect local", style=THEME["cyan"])
+        t.append("  💡 ", style=THEME["muted"])
+        t.append("↑↓", style=THEME["cyan"])
+        t.append(" navigate  ", style=THEME["dim"])
+        t.append("Enter", style=THEME["cyan"])
+        t.append(" select  •  or type a number or name, e.g. ", style=THEME["dim"])
+        t.append(":connect codex", style=THEME["cyan"])
         t.append("\n", style="")
 
         if clear_log:
@@ -19797,7 +21350,6 @@ team:
         log.clear()
         log.auto_scroll = False
         log.write(t)
-        log.scroll_home(animate=False)
         log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
 
         # Store for selection
@@ -21137,6 +22689,8 @@ team:
                 t.append("Yes\n", style=THEME["success"])
                 t.append(f"    Parallel Tools: ", style=THEME["muted"])
                 t.append(f"{'Yes' if info.parallel_tools else 'No'}\n", style=THEME["text"])
+            elif info.confidence == "heuristic":
+                t.append("No\n", style=THEME["dim"])
             else:
                 t.append("Unknown (run :local test to verify)\n", style=THEME["dim"])
 
@@ -23904,41 +25458,10 @@ team:
             "prompt": "Prompt",
             "transcript": "Transcript",
         }.get(content_type, "Response")
-        try:
-            # Try to copy to clipboard using pbcopy (macOS) or xclip (Linux)
-            import subprocess
-            import sys
-
-            if sys.platform == "darwin":
-                # macOS
-                process = subprocess.Popen(["pbcopy"], stdin=subprocess.PIPE)
-                process.communicate(clean_response.encode("utf-8"))
-                log.add_success(f"✅ {content_label} copied to clipboard!")
-                log.add_info(f"📄 Also saved to: {output_file}")
-            elif sys.platform.startswith("linux"):
-                # Linux - try xclip first, then xsel
-                try:
-                    process = subprocess.Popen(
-                        ["xclip", "-selection", "clipboard"], stdin=subprocess.PIPE
-                    )
-                    process.communicate(clean_response.encode("utf-8"))
-                    log.add_success(f"✅ {content_label} copied to clipboard!")
-                    log.add_info(f"📄 Also saved to: {output_file}")
-                except FileNotFoundError:
-                    try:
-                        process = subprocess.Popen(
-                            ["xsel", "--clipboard", "--input"], stdin=subprocess.PIPE
-                        )
-                        process.communicate(clean_response.encode("utf-8"))
-                        log.add_success(f"✅ {content_label} copied to clipboard!")
-                        log.add_info(f"📄 Also saved to: {output_file}")
-                    except FileNotFoundError:
-                        log.add_info(f"📄 {content_label} saved to: {output_file}")
-                        log.add_info("💡 Use :open to view and select text")
-            else:
-                log.add_success(f"✅ {content_label} saved to: {output_file}")
-                log.add_info("💡 Use :open to view and select text")
-        except Exception as e:
+        if self._copy_text_to_clipboard(clean_response):
+            log.add_success(f"✅ {content_label} copied to clipboard!")
+            log.add_info(f"📄 Also saved to: {output_file}")
+        else:
             log.add_success(f"✅ {content_label} saved to: {output_file}")
             log.add_info("💡 Use :open to view and select text")
 

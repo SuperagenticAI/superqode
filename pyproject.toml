@@ -72,7 +72,12 @@ openai-agents = [
     "openai-agents[litellm]>=0.17.4",
 ]
 codex-sdk = [
-    "openai-codex",
+    "openai-codex>=0.1.0b2,<0.2.0",
+]
+claude-agent-sdk = [
+    # Anthropic Claude Agent SDK (drives the local Claude Code CLI; API-key auth
+    # via ANTHROPIC_API_KEY). Adapter maps SDK message/block + permission shapes.
+    "claude-agent-sdk>=0.2.9,<0.3.0",
 ]
 deepagents = [
     "deepagents>=0.6.0,<0.7.0",
