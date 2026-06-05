@@ -5,6 +5,26 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.38] - 2026-06-06
+
+### Added
+
+- **OpenAI Codex SDK runtime** (`codex-sdk`) — drive OpenAI Codex from SuperQode using your ChatGPT/Codex login (`~/.codex`), no API key required. A self-contained runtime that owns its own model and auth, with streamed harness events, tool cards, and approval prompts. Models `gpt-5.5` / `gpt-5.4` / `gpt-5.4-mini`. Install with `pip install "superqode[codex-sdk]"`.
+- **`:codex` command surface** — `status`, `models`, `model`, `effort`, `sandbox`, `review`, `compact`, plus full thread/session management (`thread`, `sessions`, `resume`, `fork`, `rename`, `archive`, `account`).
+- **Claude Agent SDK runtime** (`claude-agent-sdk`) — drive Claude Code from SuperQode using your Anthropic API key (`ANTHROPIC_API_KEY`); the adapter maps the SDK's message/block and permission shapes to SuperQode's harness, with tool cards and approvals. Install with `pip install "superqode[claude-agent-sdk]"` (plus the Claude Code CLI).
+- **`:claude` command surface** — `status`, `model`, `permission`, `sessions`, `commands`, `review`.
+- **Connection profiles in `:connect`** — product/account-first connection sources (ACP agent, BYOK provider, Local model, Codex subscription, Claude Agent SDK, Antigravity CLI, Advanced runtime) with per-source availability detection, so picking *what* to connect to is separated from the underlying execution engine (`providers/connection_profiles.py`).
+- **Antigravity CLI handoff** (`:antigravity` / `:agy`) — `status`, `migrate`, `launch` for Google's local `agy` CLI, offered as a recommended Gemini CLI migration path.
+- **Programmatic SDK helpers** — `superqode.codex` (`run_codex`, `stream_codex`, `codex_session`) and `superqode.claude` (`run_claude`, `stream_claude`, `claude_session`) for running Codex/Claude one-shot, streaming typed harness events, or in multi-turn sessions without hand-building an `AgentConfig`. See `examples/codex_sdk_quickstart.py`.
+- **Runtime + model status badges** in the TUI status bar, so the active runtime (e.g. `codex-sdk`) and model are always visible.
+
+### Changed
+
+- **`:connect` is now product-first** — the menu leads with the connection source (ACP → BYOK → Local → Codex → Claude → Antigravity → Advanced); the raw runtime/engine picker moved under *Advanced runtime*.
+- **`:runtime`** extended to select the new self-contained runtimes (`codex-sdk`, `claude-agent-sdk`) alongside `builtin` / `openai-agents` / `pydanticai` / `adk`, with `:runtime list` reporting availability.
+- Prompt completion and slash-command surfaces updated for the new `:codex`, `:claude`, `:antigravity`, and `:connect <source>` commands.
+- Dependencies: `openai-codex` pinned to `>=0.1.0b2,<0.2.0`; added `claude-agent-sdk>=0.2.9,<0.3.0` (under the `claude-agent-sdk` extra).
+
 ## [0.1.36] - 2026-06-03
 
 ### Added
