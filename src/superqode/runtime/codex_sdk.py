@@ -286,7 +286,10 @@ class CodexSDKRuntime:
         if self._uses_default_permission_manager:
             if self._approval_callback is not None:
                 return self._callback_approval_decision(tool_name, arguments)
-            return {"decision": "reject", "reason": self._interactive_approval_unavailable(tool_name)}
+            return {
+                "decision": "reject",
+                "reason": self._interactive_approval_unavailable(tool_name),
+            }
         permission = self._permission_manager.check_permission(tool_name, arguments)
         if permission == Permission.ALLOW:
             return {"decision": "accept"}

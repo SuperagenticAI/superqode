@@ -118,7 +118,9 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand("/connect", "Choose ACP, BYOK, or local connection", category="workflow"),
     SlashCommand(":connect", "Choose ACP, BYOK, or local connection", category="workflow"),
     SlashCommand(":connect acp", "Connect to ACP agent", category="workflow"),
-    SlashCommand(":connect antigravity", "Connect via local Antigravity CLI handoff", category="workflow"),
+    SlashCommand(
+        ":connect antigravity", "Connect via local Antigravity CLI handoff", category="workflow"
+    ),
     SlashCommand("/connect byok", "Connect to BYOK provider/model", category="workflow"),
     SlashCommand(":connect byok", "Connect to BYOK provider/model", category="workflow"),
     SlashCommand("/connect local", "Connect to local model provider", category="workflow"),

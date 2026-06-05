@@ -10,22 +10,49 @@ from superqode.providers.models_dev import ProviderInfo, get_models_dev
 
 
 def _model(provider, mid, **kw):
-    return ModelInfo(id=mid, name=kw.get("name", mid), provider=provider, **{
-        k: v for k, v in kw.items() if k != "name"
-    })
+    return ModelInfo(
+        id=mid,
+        name=kw.get("name", mid),
+        provider=provider,
+        **{k: v for k, v in kw.items() if k != "name"},
+    )
 
 
 @pytest.fixture
 def sample_models():
     return [
-        _model("anthropic", "claude-sonnet", input_price=3.0, output_price=15.0,
-               context_window=200000, capabilities=[ModelCapability.TOOLS, ModelCapability.VISION]),
-        _model("deepinfra", "Qwen2.5-Coder-32B", input_price=0.1, output_price=0.3,
-               context_window=128000, capabilities=[ModelCapability.TOOLS, ModelCapability.CODE]),
-        _model("cohere", "aya-free", input_price=0.0, output_price=0.0,
-               context_window=8000, capabilities=[]),
-        _model("baseten", "llama-70b", input_price=0.5, output_price=0.5,
-               context_window=128000, capabilities=[ModelCapability.TOOLS]),
+        _model(
+            "anthropic",
+            "claude-sonnet",
+            input_price=3.0,
+            output_price=15.0,
+            context_window=200000,
+            capabilities=[ModelCapability.TOOLS, ModelCapability.VISION],
+        ),
+        _model(
+            "deepinfra",
+            "Qwen2.5-Coder-32B",
+            input_price=0.1,
+            output_price=0.3,
+            context_window=128000,
+            capabilities=[ModelCapability.TOOLS, ModelCapability.CODE],
+        ),
+        _model(
+            "cohere",
+            "aya-free",
+            input_price=0.0,
+            output_price=0.0,
+            context_window=8000,
+            capabilities=[],
+        ),
+        _model(
+            "baseten",
+            "llama-70b",
+            input_price=0.5,
+            output_price=0.5,
+            context_window=128000,
+            capabilities=[ModelCapability.TOOLS],
+        ),
     ]
 
 
@@ -39,8 +66,12 @@ def fake_catalog(monkeypatch, sample_models):
         "anthropic": ProviderInfo(id="anthropic", name="Anthropic", env_vars=["ANTHROPIC_API_KEY"]),
         "deepinfra": ProviderInfo(id="deepinfra", name="DeepInfra", env_vars=["DEEPINFRA_API_KEY"]),
         "cohere": ProviderInfo(id="cohere", name="Cohere", env_vars=["COHERE_API_KEY"]),
-        "baseten": ProviderInfo(id="baseten", name="Baseten", env_vars=["BASETEN_API_KEY"],
-                                api_url="https://inference.baseten.co/v1"),
+        "baseten": ProviderInfo(
+            id="baseten",
+            name="Baseten",
+            env_vars=["BASETEN_API_KEY"],
+            api_url="https://inference.baseten.co/v1",
+        ),
     }
     client._models = {}
     for m in sample_models:

@@ -2100,7 +2100,9 @@ def tools_list(profile, json_output):
 @click.pass_context
 @click.option("--search", "-s", default=None, help="Filter by name/id/provider substring")
 @click.option("--provider", "-p", default=None, help="Only this provider id")
-@click.option("--cap", default=None, help="Capability filter: tools|vision|reasoning|code|long|json")
+@click.option(
+    "--cap", default=None, help="Capability filter: tools|vision|reasoning|code|long|json"
+)
 @click.option("--free", is_flag=True, help="Only free models ($0 in/out)")
 @click.option("--max-price", type=float, default=None, help="Max input price ($/1M tokens)")
 @click.option("--curated", is_flag=True, help="Only curated/recommended providers")
@@ -2113,7 +2115,9 @@ def tools_list(profile, json_output):
     help="Query the provider's own /v1/models endpoint (freshest; needs --provider)",
 )
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
-def models(ctx, search, provider, cap, free, max_price, curated, sort, limit, refresh, live, json_output):
+def models(
+    ctx, search, provider, cap, free, max_price, curated, sort, limit, refresh, live, json_output
+):
     """Browse the full models.dev catalog (5000+ models, 130+ providers).
 
     With no subcommand this lists/searches models. See `models providers`.
@@ -2248,7 +2252,9 @@ def models_show(model_ref):
     pdef = resolve_provider_def(m.provider)
     click.echo(f"Model:     {m.id}")
     click.echo(f"Name:      {m.name}")
-    click.echo(f"Provider:  {m.provider}" + ("  (curated)" if is_curated_provider(m.provider) else ""))
+    click.echo(
+        f"Provider:  {m.provider}" + ("  (curated)" if is_curated_provider(m.provider) else "")
+    )
     click.echo(f"Context:   {m.context_window:,} tokens   Max output: {m.max_output:,}")
     click.echo(f"Price:     ${m.input_price}/1M in, ${m.output_price}/1M out")
     click.echo(f"Caps:      {caps_str(m) or '-'}")
@@ -2257,7 +2263,9 @@ def models_show(model_ref):
     if pdef and pdef.docs_url:
         click.echo(f"Docs:      {pdef.docs_url}")
     if len(matches) > 1:
-        click.echo(f"\n({len(matches)} models matched; showing first. Use provider/model to disambiguate.)")
+        click.echo(
+            f"\n({len(matches)} models matched; showing first. Use provider/model to disambiguate.)"
+        )
 
 
 def _fmt_bytes(n: int) -> str:
@@ -2272,7 +2280,11 @@ def _fmt_bytes(n: int) -> str:
 @click.argument("query", required=False, default="")
 @click.option("--gguf", is_flag=True, help="Only GGUF models (Ollama / llama.cpp)")
 @click.option("--mlx", is_flag=True, help="Only MLX models (Apple Silicon)")
-@click.option("--sort", type=click.Choice(["downloads", "likes", "trending_score", "created_at"]), default="downloads")
+@click.option(
+    "--sort",
+    type=click.Choice(["downloads", "likes", "trending_score", "created_at"]),
+    default="downloads",
+)
 @click.option("--limit", type=int, default=25)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def models_hub(query, gguf, mlx, sort, limit, json_output):
@@ -2336,10 +2348,20 @@ def models_hub(query, gguf, mlx, sort, limit, json_output):
     default="auto",
     help="Where to make the model usable (auto-detected by default)",
 )
-@click.option("--quant", default="Q4_K_M", show_default=True, help="GGUF quantization to pick (ollama target)")
-@click.option("--dir", "target_dir", type=click.Path(path_type=Path), default=None, help="Download into this directory")
+@click.option(
+    "--quant", default="Q4_K_M", show_default=True, help="GGUF quantization to pick (ollama target)"
+)
+@click.option(
+    "--dir",
+    "target_dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Download into this directory",
+)
 @click.option("--name", "ollama_name", default=None, help="Ollama model name to register as")
-@click.option("--register/--no-register", default=True, help="Register GGUF with Ollama (ollama target)")
+@click.option(
+    "--register/--no-register", default=True, help="Register GGUF with Ollama (ollama target)"
+)
 @click.option("--yes", "-y", is_flag=True, help="Skip the size confirmation prompt")
 def models_download(repo_id, target, quant, target_dir, ollama_name, register, yes):
     """Download a model from the Hugging Face Hub and make it locally usable.
@@ -2400,8 +2422,10 @@ def models_download(repo_id, target, quant, target_dir, ollama_name, register, y
                     click.echo(f"✓ Registered. Run it: ollama run {name}")
                     click.echo(f"  In SuperQode: connect to ollama and select '{name}'.")
                 else:
-                    click.echo("⚠ Could not register (is Ollama installed/running?). "
-                               f"Register manually: ollama create {name} -f <Modelfile>")
+                    click.echo(
+                        "⚠ Could not register (is Ollama installed/running?). "
+                        f"Register manually: ollama create {name} -f <Modelfile>"
+                    )
         else:
             path = hf.download_repo(repo_id, target_dir=target_dir, allow_patterns=allow_patterns)
             click.echo(f"✓ Downloaded to: {path}")
@@ -2419,7 +2443,9 @@ def models_download(repo_id, target, quant, target_dir, ollama_name, register, y
 @click.option("--q-bits", type=click.Choice(["4", "8"]), default="8", show_default=True)
 @click.option("--no-quantize", is_flag=True, help="Convert without quantizing (full precision)")
 @click.option("--out", "out_dir", type=click.Path(path_type=Path), default=None, help="Output dir")
-@click.option("--upload", "upload_repo", default=None, help="Push to this HF repo (needs write token)")
+@click.option(
+    "--upload", "upload_repo", default=None, help="Push to this HF repo (needs write token)"
+)
 def models_convert_mlx(hf_path, q_bits, no_quantize, out_dir, upload_repo):
     """Convert a Hugging Face model to MLX (optionally upload to your repo).
 
@@ -2444,7 +2470,9 @@ def models_convert_mlx(hf_path, q_bits, no_quantize, out_dir, upload_repo):
     click.echo(f"✓ MLX model written to: {path}")
     if upload_repo:
         click.echo(f"✓ Uploaded to https://huggingface.co/{upload_repo}")
-    click.echo(f"  Use it: superqode models download {upload_repo or path} --to mlx  (then connect to mlx)")
+    click.echo(
+        f"  Use it: superqode models download {upload_repo or path} --to mlx  (then connect to mlx)"
+    )
 
 
 @models.command("cached")
@@ -2461,7 +2489,12 @@ def models_cached(json_output):
         click.echo(
             json.dumps(
                 [
-                    {"repo_id": r.repo_id, "size_bytes": r.size_bytes, "files": r.nb_files, "path": r.path}
+                    {
+                        "repo_id": r.repo_id,
+                        "size_bytes": r.size_bytes,
+                        "files": r.nb_files,
+                        "path": r.path,
+                    }
                     for r in repos
                 ],
                 indent=2,
@@ -3033,7 +3066,9 @@ def connect_setup(provider, json_output):
                     "curated": is_curated_provider(pdef.id),
                     "dynamic": pdef.dynamic,
                     "category": pdef.category.value,
-                    "routing": "openai-compatible" if pdef.litellm_prefix == "openai/" else "native",
+                    "routing": "openai-compatible"
+                    if pdef.litellm_prefix == "openai/"
+                    else "native",
                     "env_vars": list(pdef.env_vars or []),
                     "env_configured": configured,
                     "base_url_env": pdef.base_url_env,

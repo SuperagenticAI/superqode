@@ -35,8 +35,7 @@ async def streamed(prompt: str) -> None:
         if event.type == "model_delta":
             print(event.data.get("text", ""), end="", flush=True)
         elif event.type == "tool_result":
-            print(f"\n[tool {event.data.get('tool_name')} -> "
-                  f"success={event.data.get('success')}]")
+            print(f"\n[tool {event.data.get('tool_name')} -> success={event.data.get('success')}]")
         elif event.type == "turn_complete":
             print(f"\n[turn complete: {event.data.get('status')}]")
 

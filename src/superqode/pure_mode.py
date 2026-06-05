@@ -393,7 +393,9 @@ class PureMode:
             if seen is not None and tool_id is not None:
                 seen.add(tool_id)
             if self.on_tool_call:
-                args = dict(event.data.get("args") or {}) or self._tool_args_from_runtime_event(event)
+                args = dict(event.data.get("args") or {}) or self._tool_args_from_runtime_event(
+                    event
+                )
                 self.on_tool_call(name, args)
             return ""
         if event.type == "tool_delta":

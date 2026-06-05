@@ -224,7 +224,9 @@ class ClaudeAgentSDKRuntime:
             return ("deny", self._interactive_unavailable(tool_name))
         # Normalize Claude's tool names (Bash/Write/Edit) to SuperQode's internal
         # names so bash/write/edit policies + dangerous-command checks apply.
-        permission = self._permission_manager.check_permission(_normalize_tool_name(tool_name), args)
+        permission = self._permission_manager.check_permission(
+            _normalize_tool_name(tool_name), args
+        )
         if permission == Permission.ALLOW:
             return ("allow", "")
         if permission == Permission.ASK and self._approval_callback is not None:
@@ -324,7 +326,9 @@ class ClaudeAgentSDKRuntime:
             return events
         if isinstance(message, ResultMessage):
             status = "error" if getattr(message, "is_error", False) else "completed"
-            self._active_session_id = getattr(message, "session_id", None) or self._active_session_id
+            self._active_session_id = (
+                getattr(message, "session_id", None) or self._active_session_id
+            )
             events.append(
                 HarnessEvent(
                     type="turn_complete",

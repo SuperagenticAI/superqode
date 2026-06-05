@@ -2413,10 +2413,7 @@ def test_local_model_navigation_scrolls_to_highlighted_row(monkeypatch):
 
     app = make_app()
     log = FakeLog()
-    models = [
-        LocalModel(id=f"model-{idx}", name=f"Model {idx}")
-        for idx in range(1, 11)
-    ]
+    models = [LocalModel(id=f"model-{idx}", name=f"Model {idx}") for idx in range(1, 11)]
     app._awaiting_local_model = True
     app._local_selected_provider = "ollama"
     app._local_model_list = [model.id for model in models]

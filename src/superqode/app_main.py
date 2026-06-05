@@ -2245,7 +2245,9 @@ class SuperQodeApp(App):
         if "model" in lowered and ("unavailable" in lowered or "not found" in lowered):
             return "Use `:codex status` to list models available to your Codex account."
         if "approval" in lowered or "permission" in lowered:
-            return "Use the TUI approval prompt, set `:mode auto`, or adjust Codex policy in ~/.codex."
+            return (
+                "Use the TUI approval prompt, set `:mode auto`, or adjust Codex policy in ~/.codex."
+            )
         if "turn/completed" in lowered:
             return "The Codex app-server stream ended unexpectedly. Retry; if it repeats, run `:codex status`."
         return "Run `:codex status` for SDK, app-server, auth, and model diagnostics."
@@ -3729,9 +3731,7 @@ class SuperQodeApp(App):
         self._codex_highlighted_model_index = max(0, current_idx - 1)
         log = self.query_one("#log", ConversationLog)
         self._show_codex_model_picker(log, clear_log=False, refetch=False)
-        self._scroll_to_highlighted_item(
-            log, self._codex_highlighted_model_index, len(models)
-        )
+        self._scroll_to_highlighted_item(log, self._codex_highlighted_model_index, len(models))
         self.set_timer(0.05, self._ensure_input_focus)
 
     def action_navigate_codex_model_down(self):
@@ -3745,9 +3745,7 @@ class SuperQodeApp(App):
         self._codex_highlighted_model_index = min(len(models) - 1, current_idx + 1)
         log = self.query_one("#log", ConversationLog)
         self._show_codex_model_picker(log, clear_log=False, refetch=False)
-        self._scroll_to_highlighted_item(
-            log, self._codex_highlighted_model_index, len(models)
-        )
+        self._scroll_to_highlighted_item(log, self._codex_highlighted_model_index, len(models))
         self.set_timer(0.05, self._ensure_input_focus)
 
     def action_select_highlighted_codex_model(self):
@@ -3769,9 +3767,7 @@ class SuperQodeApp(App):
         self._codex_highlighted_effort_index = max(0, current_idx - 1)
         log = self.query_one("#log", ConversationLog)
         self._show_codex_effort_picker(log, clear_log=False)
-        self._scroll_to_highlighted_item(
-            log, self._codex_highlighted_effort_index, len(options)
-        )
+        self._scroll_to_highlighted_item(log, self._codex_highlighted_effort_index, len(options))
         self.set_timer(0.05, self._ensure_input_focus)
 
     def action_navigate_codex_effort_down(self):
@@ -3783,9 +3779,7 @@ class SuperQodeApp(App):
         self._codex_highlighted_effort_index = min(len(options) - 1, current_idx + 1)
         log = self.query_one("#log", ConversationLog)
         self._show_codex_effort_picker(log, clear_log=False)
-        self._scroll_to_highlighted_item(
-            log, self._codex_highlighted_effort_index, len(options)
-        )
+        self._scroll_to_highlighted_item(log, self._codex_highlighted_effort_index, len(options))
         self.set_timer(0.05, self._ensure_input_focus)
 
     def action_select_highlighted_codex_effort(self):
@@ -4071,7 +4065,9 @@ class SuperQodeApp(App):
             if getattr(profile, "id", "") == "antigravity":
                 self._antigravity_cmd("connect", log)
             else:
-                log.add_error(f"Unsupported external CLI profile: {getattr(profile, 'id', profile)}")
+                log.add_error(
+                    f"Unsupported external CLI profile: {getattr(profile, 'id', profile)}"
+                )
         elif conn == "advanced":
             self._runtime_cmd("", log)
         else:
@@ -5066,9 +5062,7 @@ class SuperQodeApp(App):
                     # Product/runtime connection profiles (Codex, Claude, …).
                     from superqode.providers.connection_profiles import get_connection_profile
 
-                    profile = get_connection_profile(
-                        "advanced" if subcmd == "runtime" else subcmd
-                    )
+                    profile = get_connection_profile("advanced" if subcmd == "runtime" else subcmd)
                     if profile is not None:
                         self._dispatch_connection_profile(profile, log)
                     else:
@@ -8434,13 +8428,19 @@ class SuperQodeApp(App):
         t.append("\n  Run in a terminal:\n", style=THEME["muted"])
         t.append(f"    {command}\n", style=THEME["cyan"])
         t.append("\n  Notes:\n", style=THEME["muted"])
-        t.append("    - Antigravity CLI is currently an interactive TUI, not a documented ACP/headless stream.\n", style=THEME["muted"])
+        t.append(
+            "    - Antigravity CLI is currently an interactive TUI, not a documented ACP/headless stream.\n",
+            style=THEME["muted"],
+        )
         t.append("    - Use ", style=THEME["muted"])
         t.append(":antigravity migrate", style=THEME["cyan"])
         t.append(" to import Gemini CLI config/plugins.\n", style=THEME["muted"])
         if not agy_path:
             t.append("\n  Install:\n", style=THEME["muted"])
-            t.append("    curl -fsSL https://antigravity.google/cli/install.sh | bash\n", style=THEME["cyan"])
+            t.append(
+                "    curl -fsSL https://antigravity.google/cli/install.sh | bash\n",
+                style=THEME["cyan"],
+            )
         log.write(
             Panel(
                 t,
@@ -8492,7 +8492,9 @@ class SuperQodeApp(App):
             style=THEME["muted"],
         )
         t.append("  Migration commands:\n", style=THEME["muted"])
-        t.append("    curl -fsSL https://antigravity.google/cli/install.sh | bash\n", style=THEME["cyan"])
+        t.append(
+            "    curl -fsSL https://antigravity.google/cli/install.sh | bash\n", style=THEME["cyan"]
+        )
         t.append("    agy\n", style=THEME["cyan"])
         t.append("    agy plugin import gemini\n", style=THEME["cyan"])
         t.append("\n  Paths:\n", style=THEME["muted"])
@@ -8568,9 +8570,7 @@ class SuperQodeApp(App):
         )
         pure = getattr(self, "_pure_mode", None)
         runtime = getattr(pure, "_runtime", None) if pure is not None else None
-        connected = (
-            runtime is not None and getattr(pure, "runtime_name", "") == "claude-agent-sdk"
-        )
+        connected = runtime is not None and getattr(pure, "runtime_name", "") == "claude-agent-sdk"
         text.append("  Connected    ", style=THEME["muted"])
         text.append(
             "yes\n" if connected else "no (use :claude)\n",
@@ -8582,7 +8582,9 @@ class SuperQodeApp(App):
             text.append("  Model        ", style=THEME["muted"])
             text.append(f"{model_id}\n", style=THEME["text"])
             text.append("  Permission   ", style=THEME["muted"])
-            text.append(f"{getattr(runtime, 'permission_mode', None) or 'default'}\n", style=THEME["text"])
+            text.append(
+                f"{getattr(runtime, 'permission_mode', None) or 'default'}\n", style=THEME["text"]
+            )
             cmds = getattr(runtime, "slash_commands", [])
             text.append("  Slash cmds   ", style=THEME["muted"])
             text.append(f"{len(cmds)} available\n", style=THEME["text"])
@@ -8621,7 +8623,9 @@ class SuperQodeApp(App):
     def _claude_permission_cmd(self, mode: str, log) -> None:
         modes = ("default", "acceptEdits", "plan", "bypassPermissions", "dontAsk", "auto")
         if not mode:
-            log.add_info(f"Permission modes: {', '.join(modes)}.  Set with :claude permission <mode>")
+            log.add_info(
+                f"Permission modes: {', '.join(modes)}.  Set with :claude permission <mode>"
+            )
             return
         try:
             runtime = self._claude_runtime_or_connect(log)
@@ -8659,7 +8663,10 @@ class SuperQodeApp(App):
         t = Text()
         t.append("\n  Claude slash commands\n\n", style=f"bold {THEME['text']}")
         if not cmds:
-            t.append("  (none yet — send a message first so the SDK reports them)\n", style=THEME["muted"])
+            t.append(
+                "  (none yet — send a message first so the SDK reports them)\n",
+                style=THEME["muted"],
+            )
         for name in cmds:
             t.append("  • ", style=THEME["dim"])
             t.append(f"/{name}\n", style=THEME["cyan"])
@@ -8825,7 +8832,9 @@ class SuperQodeApp(App):
                 highlighted=idx == self._codex_highlighted_model_index,
             )
 
-        text.append("\n  Use Up/Down + Enter, click a number, or type a model id.\n", style=THEME["muted"])
+        text.append(
+            "\n  Use Up/Down + Enter, click a number, or type a model id.\n", style=THEME["muted"]
+        )
         text.append("  Esc cancels. ", style=THEME["muted"])
         text.append(":codex models", style=THEME["cyan"])
         text.append(" shows a plain list.\n", style=THEME["muted"])
@@ -8863,7 +8872,10 @@ class SuperQodeApp(App):
                 highlighted=idx == self._codex_highlighted_effort_index,
             )
 
-        text.append("\n  Use Up/Down + Enter, click a number, or type an effort name.\n", style=THEME["muted"])
+        text.append(
+            "\n  Use Up/Down + Enter, click a number, or type an effort name.\n",
+            style=THEME["muted"],
+        )
         text.append("  Esc cancels.\n", style=THEME["muted"])
         self._show_command_output(log, text, clear_log=clear_log)
 
@@ -8937,7 +8949,9 @@ class SuperQodeApp(App):
                     selected = option
                     break
             if selected is None:
-                log.add_error("Invalid Codex effort. Choose minimal, low, medium, high, xhigh, or default.")
+                log.add_error(
+                    "Invalid Codex effort. Choose minimal, low, medium, high, xhigh, or default."
+                )
                 return True
 
         self._awaiting_codex_effort = False
@@ -8966,7 +8980,10 @@ class SuperQodeApp(App):
                 text.append(f"  effort: {', '.join(efforts)}", style=THEME["dim"])
             text.append("\n")
         if len(self._codex_models) > 30:
-            text.append(f"\n  +{len(self._codex_models) - 30} more hidden/listed models\n", style=THEME["dim"])
+            text.append(
+                f"\n  +{len(self._codex_models) - 30} more hidden/listed models\n",
+                style=THEME["dim"],
+            )
         text.append("\n  Use ", style=THEME["muted"])
         text.append(":codex model <id>", style=THEME["cyan"])
         text.append(" to switch future turns.\n", style=THEME["muted"])
@@ -9051,7 +9068,10 @@ class SuperQodeApp(App):
             data = self._codex_obj_dict(thread)
             tid = str(data.get("id") or "")
             text.append(f"  {tid[:12]:<14}", style=f"bold {THEME['cyan']}")
-            text.append(str(data.get("name") or data.get("preview") or "(unnamed)")[:80], style=THEME["text"])
+            text.append(
+                str(data.get("name") or data.get("preview") or "(unnamed)")[:80],
+                style=THEME["text"],
+            )
             text.append("\n")
         text.append("\n  Use ", style=THEME["muted"])
         text.append(":codex resume <thread_id>", style=THEME["cyan"])
@@ -9064,13 +9084,17 @@ class SuperQodeApp(App):
         if not thread_id:
             log.add_info("Usage: :codex resume <thread_id>")
             return
-        self._codex_runtime_action(log, f"resume {thread_id[:12]}", lambda runtime: runtime.resume_thread(thread_id))
+        self._codex_runtime_action(
+            log, f"resume {thread_id[:12]}", lambda runtime: runtime.resume_thread(thread_id)
+        )
 
     def _codex_fork_cmd(self, thread_id: str, log) -> None:
         if not thread_id:
             log.add_info("Usage: :codex fork <thread_id>")
             return
-        self._codex_runtime_action(log, f"fork {thread_id[:12]}", lambda runtime: runtime.fork_thread(thread_id))
+        self._codex_runtime_action(
+            log, f"fork {thread_id[:12]}", lambda runtime: runtime.fork_thread(thread_id)
+        )
 
     def _codex_rename_cmd(self, name: str, log) -> None:
         if not name:
@@ -9139,7 +9163,10 @@ class SuperQodeApp(App):
 
         installed = bool(info and info.installed)
         text.append("  Runtime     ", style=THEME["muted"])
-        text.append("ready\n" if installed else "missing\n", style=THEME["success" if installed else "error"])
+        text.append(
+            "ready\n" if installed else "missing\n",
+            style=THEME["success" if installed else "error"],
+        )
 
         for package in ("openai-codex", "openai-codex-cli-bin"):
             text.append(f"  {package:<12}", style=THEME["muted"])
@@ -9158,10 +9185,15 @@ class SuperQodeApp(App):
             and getattr(self._pure_mode.session, "connected", False)
         )
         text.append("  TUI bridge  ", style=THEME["muted"])
-        text.append("connected\n" if active else "not connected\n", style=THEME["success" if active else "warning"])
+        text.append(
+            "connected\n" if active else "not connected\n",
+            style=THEME["success" if active else "warning"],
+        )
         runtime = getattr(getattr(self, "_pure_mode", None), "_runtime", None)
         thread_id = getattr(runtime, "thread_id", None) if active else None
-        sessions_dir = getattr(runtime, "codex_sessions_dir", str(Path.home() / ".codex" / "sessions"))
+        sessions_dir = getattr(
+            runtime, "codex_sessions_dir", str(Path.home() / ".codex" / "sessions")
+        )
         text.append("  Sessions    ", style=THEME["muted"])
         text.append(str(sessions_dir), style=THEME["text"])
         text.append("\n")

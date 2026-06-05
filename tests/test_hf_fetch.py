@@ -61,7 +61,9 @@ def fake_hub(monkeypatch):
 
 def test_search_hub_maps_fields_and_filters_gguf(fake_hub):
     _FakeHfApi._models = [
-        _FakeModelInfo("unsloth/Qwen3-GGUF", downloads=1000, likes=5, library_name="gguf", tags=["gguf"]),
+        _FakeModelInfo(
+            "unsloth/Qwen3-GGUF", downloads=1000, likes=5, library_name="gguf", tags=["gguf"]
+        ),
     ]
     out = fetch.search_hub("qwen3", kind="gguf", limit=5)
     assert len(out) == 1
@@ -147,6 +149,7 @@ def test_not_installed_raises(monkeypatch):
 
 # --- Phase 2: cache mgmt + MLX convert ---------------------------------------
 
+
 def test_mlx_allow_patterns_present():
     assert "*.safetensors" in fetch.MLX_ALLOW_PATTERNS
     assert any("gguf" in p.lower() for p in fetch.MLX_ALLOW_PATTERNS) is False  # never pulls GGUF
@@ -155,6 +158,7 @@ def test_mlx_allow_patterns_present():
 def test_scan_cache_maps_repos(fake_hub, monkeypatch):
     class _Rev:
         commit_hash = "abc"
+
     class _Repo:
         repo_id = "acme/model"
         size_on_disk = 5_000_000_000
@@ -162,8 +166,10 @@ def test_scan_cache_maps_repos(fake_hub, monkeypatch):
         last_accessed = 1700000000.0
         repo_path = "/cache/acme"
         revisions = [_Rev()]
+
     class _Info:
         repos = [_Repo()]
+
     monkeypatch.setattr(fake_hub, "scan_cache_dir", lambda: _Info())
     repos = fetch.scan_cache()
     assert len(repos) == 1
@@ -173,20 +179,26 @@ def test_scan_cache_maps_repos(fake_hub, monkeypatch):
 
 def test_delete_cached_matches_pattern(fake_hub, monkeypatch):
     deleted = {}
+
     class _Strategy:
         def execute(self_inner):
             deleted["done"] = True
+
     class _Rev:
         commit_hash = "h1"
+
     class _Repo:
         repo_id = "junk/model-x"
         size_on_disk = 2_000_000_000
         revisions = [_Rev()]
+
     class _Info:
         repos = [_Repo()]
+
         def delete_revisions(self_inner, *hashes):
             deleted["hashes"] = hashes
             return _Strategy()
+
     monkeypatch.setattr(fake_hub, "scan_cache_dir", lambda: _Info())
     count, freed = fetch.delete_cached("junk")
     assert count == 1 and freed == 2_000_000_000
@@ -196,6 +208,7 @@ def test_delete_cached_matches_pattern(fake_hub, monkeypatch):
 def test_delete_cached_no_match(fake_hub, monkeypatch):
     class _Info:
         repos = []
+
     monkeypatch.setattr(fake_hub, "scan_cache_dir", lambda: _Info())
     assert fetch.delete_cached("nope") == (0, 0)
 
@@ -203,7 +216,9 @@ def test_delete_cached_no_match(fake_hub, monkeypatch):
 def test_convert_unavailable_without_mlx(monkeypatch):
     import sys
     from superqode.providers.huggingface import convert as conv
+
     monkeypatch.setitem(sys.modules, "mlx_lm", None)
     import pytest as _pytest
+
     with _pytest.raises(conv.MlxConvertUnavailable):
         conv.convert_to_mlx("google/gemma-4-31b-it")

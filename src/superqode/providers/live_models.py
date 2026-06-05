@@ -187,7 +187,10 @@ async def discover_provider_models(
     catalog = list(client.get_models_for_provider(provider_id).values())
     if catalog:
         return LiveDiscoveryResult(
-            provider=provider_id, models=catalog, source="models.dev", endpoint=effective_base,
+            provider=provider_id,
+            models=catalog,
+            source="models.dev",
+            endpoint=effective_base,
             error=live_error,
         )
     return LiveDiscoveryResult(

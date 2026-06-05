@@ -61,7 +61,7 @@ def test_qwen_multiple_tool_calls_with_prose():
 
 
 def test_gemma_fenced_tool_call():
-    text = "Sure.\n```tool_call\n{\"name\": \"bash\", \"arguments\": {\"cmd\": \"ls\"}}\n```"
+    text = 'Sure.\n```tool_call\n{"name": "bash", "arguments": {"cmd": "ls"}}\n```'
     clean, calls = mlx_tools.parse_tool_calls(text, "gemma")
     assert len(calls) == 1
     name, args = _first(calls)

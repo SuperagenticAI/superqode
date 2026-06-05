@@ -705,7 +705,7 @@ def test_empty_model_defers_to_local_codex_config(fake_codex_sdk, tmp_path):
     _ = runtime.metadata  # triggers start + thread_start
     params = _FakeCodexClient.last_instance.thread_start_params
     assert params["cwd"] == str(tmp_path)
-    assert "model" not in params          # deferred to ~/.codex
+    assert "model" not in params  # deferred to ~/.codex
     assert "approvalPolicy" not in params  # SuperQode imposes nothing
     assert "sandbox" not in params
 

@@ -424,16 +424,21 @@ def likely_supports_tools(model_id: str) -> bool:
         # Llama 3.1+ and Llama 4 support tools; Llama 3.0 and earlier don't.
         return any(
             v in norm
-            for v in ("llama3.1", "llama-3.1", "llama3.2", "llama-3.2",
-                      "llama3.3", "llama-3.3", "llama4", "llama-4")
+            for v in (
+                "llama3.1",
+                "llama-3.1",
+                "llama3.2",
+                "llama-3.2",
+                "llama3.3",
+                "llama-3.3",
+                "llama4",
+                "llama-4",
+            )
         )
 
     if family == "qwen":
         # Qwen 2.5 / 3 / 3.5 support tools well.
-        return any(
-            v in norm
-            for v in ("qwen2.5", "qwen-2.5", "qwen3", "qwen-3")
-        )
+        return any(v in norm for v in ("qwen2.5", "qwen-2.5", "qwen3", "qwen-3"))
 
     if family == "gemma":
         # Gemma 4 has native function calling (6 special tokens, all IT models);

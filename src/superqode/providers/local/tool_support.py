@@ -262,9 +262,7 @@ def get_tool_capability_info(model_id: str) -> ToolCapabilityInfo:
             supports_tools=True,
             parallel_tools=family in {"llama", "qwen", "command", "hermes", "deepseek"},
             tool_choice_modes=["auto", "none"],
-            recommended_params={"num_ctx": 32768}
-            if family in {"llama", "qwen", "gemma"}
-            else {},
+            recommended_params={"num_ctx": 32768} if family in {"llama", "qwen", "gemma"} else {},
             confidence="heuristic",
             notes=f"{family.title()} family/version is expected to support local tool calling",
         )

@@ -66,15 +66,20 @@ def fake_catalog(monkeypatch):
     saved_p, saved_m = dict(client._providers), dict(client._models)
     client._providers = {
         "baseten": ProviderInfo(
-            id="baseten", name="Baseten", env_vars=["BASETEN_API_KEY"],
+            id="baseten",
+            name="Baseten",
+            env_vars=["BASETEN_API_KEY"],
             api_url="https://inference.baseten.co/v1",
         ),
     }
     client._models = {
         "baseten": {
             "known-model": ModelInfo(
-                id="known-model", name="Known", provider="baseten",
-                input_price=1.0, capabilities=[ModelCapability.TOOLS],
+                id="known-model",
+                name="Known",
+                provider="baseten",
+                input_price=1.0,
+                capabilities=[ModelCapability.TOOLS],
             )
         }
     }

@@ -46,7 +46,10 @@ def test_event_mapping_assistant_text_and_tool(tmp_path):
     rt = create_runtime("claude-agent-sdk", config=_cfg(tmp_path))
     names: dict = {}
     msg = AssistantMessage(
-        content=[TextBlock(text="hello"), ToolUseBlock(id="t1", name="Bash", input={"command": "ls"})],
+        content=[
+            TextBlock(text="hello"),
+            ToolUseBlock(id="t1", name="Bash", input={"command": "ls"}),
+        ],
         model="claude-x",
     )
     events = rt._events_from_message(msg, names)
@@ -179,10 +182,16 @@ def test_handle_harness_event_tool_call_then_result_no_double_card():
     pure._runtime_seen_tool_calls = set()
 
     pure._handle_runtime_harness_event(
-        HarnessEvent(type="tool_call", data={"tool_name": "Bash", "tool_call_id": "t1", "args": {"command": "ls"}})
+        HarnessEvent(
+            type="tool_call",
+            data={"tool_name": "Bash", "tool_call_id": "t1", "args": {"command": "ls"}},
+        )
     )
     pure._handle_runtime_harness_event(
-        HarnessEvent(type="tool_result", data={"tool_name": "Bash", "tool_call_id": "t1", "success": True, "output": "x"})
+        HarnessEvent(
+            type="tool_result",
+            data={"tool_name": "Bash", "tool_call_id": "t1", "success": True, "output": "x"},
+        )
     )
     assert len(calls) == 1  # not doubled
     assert results == ["Bash"]

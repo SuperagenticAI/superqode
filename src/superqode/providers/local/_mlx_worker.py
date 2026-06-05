@@ -36,9 +36,7 @@ def _render_prompt(tokenizer, messages, tools):
     """
     if tools:
         try:
-            return tokenizer.apply_chat_template(
-                messages, tools=tools, add_generation_prompt=True
-            )
+            return tokenizer.apply_chat_template(messages, tools=tools, add_generation_prompt=True)
         except Exception:
             pass
     return tokenizer.apply_chat_template(messages, add_generation_prompt=True)
@@ -74,9 +72,7 @@ def main() -> int:
                 _emit({"type": "progress", "phase": "model.loaded", "model_id": model_id})
             model, tokenizer = cache[model_id]
 
-            prompt = _render_prompt(
-                tokenizer, req.get("messages", []), req.get("tools")
-            )
+            prompt = _render_prompt(tokenizer, req.get("messages", []), req.get("tools"))
             max_tokens = int(req.get("max_tokens") or 2048)
 
             pieces = []

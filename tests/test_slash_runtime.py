@@ -102,7 +102,10 @@ def test_textual_completion_includes_harness_runtime_connect_and_session_command
 
     assert any(completion.command == ":harness" for completion in harness)
     assert any(completion.command == "/runtime" for completion in runtime)
-    assert any(completion.command == ":codex" for completion in filter_slash_commands(DEFAULT_COMMANDS, ":cod"))
+    assert any(
+        completion.command == ":codex"
+        for completion in filter_slash_commands(DEFAULT_COMMANDS, ":cod")
+    )
     assert any(completion.command == "/resume" for completion in resume)
     assert [completion.command for completion in connect[:5]] == [
         ":connect",
@@ -154,7 +157,9 @@ def test_codex_model_picker_selection_accepts_number_and_exact_id(monkeypatch):
         {"id": "gpt-5.4-mini", "name": "GPT 5.4 Mini"},
     ]
     selected: list[str] = []
-    monkeypatch.setattr(app, "_apply_codex_model_override", lambda model, log: selected.append(model))
+    monkeypatch.setattr(
+        app, "_apply_codex_model_override", lambda model, log: selected.append(model)
+    )
 
     assert app._handle_codex_model_selection("2", _Log()) is True
     assert selected == ["gpt-5.4-mini"]

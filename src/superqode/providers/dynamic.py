@@ -27,7 +27,17 @@ from .registry import PROVIDERS, ProviderCategory, ProviderDef, ProviderTier
 
 # models.dev provider ids that are local runtimes — synthesize as LOCAL so the
 # UI/categorization stays sensible even when not in the curated registry.
-_LOCAL_IDS = {"ollama", "ollama-cloud", "lmstudio", "llamacpp", "llama-cpp", "mlx", "vllm", "sglang", "tgi"}
+_LOCAL_IDS = {
+    "ollama",
+    "ollama-cloud",
+    "lmstudio",
+    "llamacpp",
+    "llama-cpp",
+    "mlx",
+    "vllm",
+    "sglang",
+    "tgi",
+}
 
 
 def _base_url_env_name(provider_id: str) -> str:

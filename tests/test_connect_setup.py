@@ -19,15 +19,21 @@ def fake_catalog(monkeypatch):
     client._providers = {
         "anthropic": ProviderInfo(id="anthropic", name="Anthropic", env_vars=["ANTHROPIC_API_KEY"]),
         "baseten": ProviderInfo(
-            id="baseten", name="Baseten", env_vars=["BASETEN_API_KEY"],
-            api_url="https://inference.baseten.co/v1", doc_url="https://docs.baseten.co",
+            id="baseten",
+            name="Baseten",
+            env_vars=["BASETEN_API_KEY"],
+            api_url="https://inference.baseten.co/v1",
+            doc_url="https://docs.baseten.co",
         ),
     }
     client._models = {
         "baseten": {
             "llama-70b": ModelInfo(
-                id="llama-70b", name="Llama 70B", provider="baseten",
-                context_window=128000, capabilities=[ModelCapability.TOOLS],
+                id="llama-70b",
+                name="Llama 70B",
+                provider="baseten",
+                context_window=128000,
+                capabilities=[ModelCapability.TOOLS],
             )
         }
     }

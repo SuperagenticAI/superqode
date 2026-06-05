@@ -66,7 +66,10 @@ def test_codex_detect_uses_local_codex_auth(monkeypatch, tmp_path):
 
 def test_available_never_raises():
     bad = ConnectionProfile(
-        id="x", label="X", description="", connector="runtime",
+        id="x",
+        label="X",
+        description="",
+        connector="runtime",
         detect=lambda: (_ for _ in ()).throw(RuntimeError("boom")),
     )
     assert bad.available is False  # swallowed
