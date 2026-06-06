@@ -4850,7 +4850,10 @@ class SuperQodeApp(App):
             t = Text()
             t.append("\n  Vim Mode\n\n", style=f"bold {THEME['purple']}")
             t.append("  Status: ", style=THEME["muted"])
-            t.append(f"{state}\n", style=f"bold {THEME['success'] if self._vim_enabled() else THEME['muted']}")
+            t.append(
+                f"{state}\n",
+                style=f"bold {THEME['success'] if self._vim_enabled() else THEME['muted']}",
+            )
             t.append("  Toggle: ", style=THEME["muted"])
             t.append(":vim on", style=THEME["cyan"])
             t.append(" / ", style=THEME["muted"])
@@ -8424,10 +8427,7 @@ class SuperQodeApp(App):
         elif subcommand in {"revoke", "delete", "rm"}:
             self._share_revoke(rest, log)
         else:
-            log.add_info(
-                "Usage: :share [create|export|import|list|revoke] "
-                "[session-id|path]"
-            )
+            log.add_info("Usage: :share [create|export|import|list|revoke] [session-id|path]")
 
     def _share_dir(self) -> Path:
         return Path(".superqode") / "shares"
@@ -8440,7 +8440,9 @@ class SuperQodeApp(App):
         t.append("  Mode     ", style=THEME["muted"])
         t.append("local/offline artifacts\n", style=THEME["text"])
         t.append("  Current  ", style=THEME["muted"])
-        t.append(f"{current_id or 'none'}\n", style=THEME["cyan"] if current_id else THEME["warning"])
+        t.append(
+            f"{current_id or 'none'}\n", style=THEME["cyan"] if current_id else THEME["warning"]
+        )
         t.append("  Artifacts ", style=THEME["muted"])
         t.append(f"{share_count} in .superqode/shares\n\n", style=THEME["text"])
         t.append("  Commands:\n", style=THEME["muted"])
@@ -8470,7 +8472,9 @@ class SuperQodeApp(App):
             log.add_error(f"Could not create share artifact: {exc}")
             return
         log.add_success(f"Created share artifact -> {artifact_path}")
-        log.add_info("Send this file to another SuperQode user; they can import it with :share import.")
+        log.add_info(
+            "Send this file to another SuperQode user; they can import it with :share import."
+        )
 
     def _share_export(self, tokens: list[str], log: ConversationLog) -> None:
         from superqode.headless import export_session
@@ -8620,7 +8624,11 @@ class SuperQodeApp(App):
         self._show_trust_status(log, doctor=(arg == "doctor"))
 
     def _show_trust_status(self, log: ConversationLog, *, doctor: bool = False) -> None:
-        from superqode.project_trust import get_project_trust, project_risk_signals, trust_store_path
+        from superqode.project_trust import (
+            get_project_trust,
+            project_risk_signals,
+            trust_store_path,
+        )
 
         record = get_project_trust(Path.cwd())
         signals = project_risk_signals(Path.cwd())
@@ -8630,7 +8638,10 @@ class SuperQodeApp(App):
         t.append("  Project  ", style=THEME["muted"])
         t.append(f"{record.path}\n", style=THEME["text"])
         t.append("  Status   ", style=THEME["muted"])
-        t.append("trusted\n" if trusted else "untrusted\n", style=THEME["success"] if trusted else THEME["warning"])
+        t.append(
+            "trusted\n" if trusted else "untrusted\n",
+            style=THEME["success"] if trusted else THEME["warning"],
+        )
         if record.trusted_at:
             t.append("  Since    ", style=THEME["muted"])
             t.append(f"{record.trusted_at}\n", style=THEME["dim"])
@@ -8639,9 +8650,15 @@ class SuperQodeApp(App):
         if signals:
             t.append("\n  Trust-sensitive files:\n", style=THEME["muted"])
             for signal_name in signals:
-                t.append(f"    - {signal_name}\n", style=THEME["warning"] if not trusted else THEME["text"])
+                t.append(
+                    f"    - {signal_name}\n",
+                    style=THEME["warning"] if not trusted else THEME["text"],
+                )
         elif doctor:
-            t.append("\n  No project-local plugins, MCP config, or hooks detected.\n", style=THEME["muted"])
+            t.append(
+                "\n  No project-local plugins, MCP config, or hooks detected.\n",
+                style=THEME["muted"],
+            )
         t.append("\n  Commands: ", style=THEME["muted"])
         t.append(":trust yes", style=THEME["cyan"])
         t.append(", ", style=THEME["muted"])
@@ -8659,7 +8676,9 @@ class SuperQodeApp(App):
         if record.trusted:
             return True
         log.add_error(f"Project is untrusted; refusing to {action}.")
-        log.add_info("Review this workspace, then run :trust yes to allow project-local plugins/MCP.")
+        log.add_info(
+            "Review this workspace, then run :trust yes to allow project-local plugins/MCP."
+        )
         return False
 
     def _ensure_pure_mode(self):
@@ -14706,7 +14725,9 @@ team:
             priority = priority_map.get(str(todo.get("priority") or "medium").lower())
             task = self._plan_manager.add_task(content, priority=priority or TaskPriority.MEDIUM)
             task.id = str(todo.get("id") or index)
-            status = status_map.get(str(todo.get("status") or "pending").lower(), TaskStatus.PENDING)
+            status = status_map.get(
+                str(todo.get("status") or "pending").lower(), TaskStatus.PENDING
+            )
             self._plan_manager.update_status(task.id, status)
 
     def _set_todos_from_input(self, tool_input: dict) -> None:
@@ -20074,7 +20095,9 @@ team:
                         log.add_warning(f"Ollama server not ready: {health.error or 'unavailable'}")
                 else:
                     if not quiet:
-                        log.add_info("Local provider selected. First prompt will validate generation.")
+                        log.add_info(
+                            "Local provider selected. First prompt will validate generation."
+                        )
             else:
                 from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
                 from superqode.providers.gateway.base import Message
@@ -22766,12 +22789,16 @@ team:
                     return
                 changed = enable_plugin(plugin_id, Path.cwd())
                 log.add_success(
-                    f"Enabled plugin {plugin_id}" if changed else f"Plugin {plugin_id} was already enabled"
+                    f"Enabled plugin {plugin_id}"
+                    if changed
+                    else f"Plugin {plugin_id} was already enabled"
                 )
             else:
                 changed = disable_plugin(plugin_id, Path.cwd())
                 log.add_success(
-                    f"Disabled plugin {plugin_id}" if changed else f"Plugin {plugin_id} was already disabled"
+                    f"Disabled plugin {plugin_id}"
+                    if changed
+                    else f"Plugin {plugin_id} was already disabled"
                 )
             return
 
@@ -22963,7 +22990,9 @@ team:
                 log.add_info("Usage: :memory search [local|specmem] <query>")
                 return
             try:
-                results = create_memory_provider(provider_name, project_root=Path.cwd()).search(query)
+                results = create_memory_provider(provider_name, project_root=Path.cwd()).search(
+                    query
+                )
             except Exception as exc:
                 log.add_error(f"Could not search memory: {exc}")
                 return
@@ -23006,7 +23035,9 @@ team:
             out_path = Path(".superqode") / "exports" / f"memory-{provider_name}.json"
             try:
                 out_path.parent.mkdir(parents=True, exist_ok=True)
-                out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+                out_path.write_text(
+                    json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+                )
             except Exception as exc:
                 log.add_error(f"Could not write memory export: {exc}")
                 return
@@ -28175,7 +28206,9 @@ team:
                 self._pending_plan_request = replacement
                 self._pending_plan_status = "pending"
                 self._refresh_plan_status_badge()
-                log.add_success("Plan request updated. Use :plan to review or :plan approve to run.")
+                log.add_success(
+                    "Plan request updated. Use :plan to review or :plan approve to run."
+                )
                 self._render_plan_review(log)
                 return
             if not pending:

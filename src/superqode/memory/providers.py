@@ -56,7 +56,9 @@ class LocalAgentMemoryProvider:
 
     def __init__(self, project_root: str | Path = ".", path: str | Path | None = None):
         self.project_root = Path(project_root).expanduser().resolve()
-        self.path = Path(path).expanduser() if path else default_local_memory_path(self.project_root)
+        self.path = (
+            Path(path).expanduser() if path else default_local_memory_path(self.project_root)
+        )
 
     def _load(self) -> dict:
         if not self.path.exists():
@@ -82,7 +84,9 @@ class LocalAgentMemoryProvider:
 
     def _save(self, data: dict) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        self.path.write_text(
+            json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
 
     def _records(self) -> list[MemoryRecord]:
         return [
@@ -241,10 +245,16 @@ class SpecMemProvider:
                 scope="project",
                 source=self.name,
                 tags=("specmem", path.name),
-                metadata={"path": str(path.relative_to(self.project_root)) if path.is_relative_to(self.project_root) else str(path)},
+                metadata={
+                    "path": str(path.relative_to(self.project_root))
+                    if path.is_relative_to(self.project_root)
+                    else str(path)
+                },
             )
             results.append(
-                MemorySearchResult(record=record, score=hits / max(1, len(terms)), provider=self.name)
+                MemorySearchResult(
+                    record=record, score=hits / max(1, len(terms)), provider=self.name
+                )
             )
         results.sort(key=lambda item: item.score, reverse=True)
         return results[:limit]
@@ -257,10 +267,14 @@ class SpecMemProvider:
         scope: str = "project",
         tags: tuple[str, ...] = (),
     ) -> MemoryRecord:
-        raise NotImplementedError("SpecMem provider is read-only from SuperQode; use `specmem` to write.")
+        raise NotImplementedError(
+            "SpecMem provider is read-only from SuperQode; use `specmem` to write."
+        )
 
     def forget(self, memory_id: str) -> bool:
-        raise NotImplementedError("SpecMem provider is read-only from SuperQode; use `specmem` to edit.")
+        raise NotImplementedError(
+            "SpecMem provider is read-only from SuperQode; use `specmem` to edit."
+        )
 
     def export(self) -> dict:
         return {
@@ -294,7 +308,9 @@ class Mem0Provider:
         try:
             from mem0 import MemoryClient
         except Exception as exc:  # pragma: no cover - exercised via status in unit tests
-            raise RuntimeError("Install `superqode[mem0]` to use the mem0 memory provider.") from exc
+            raise RuntimeError(
+                "Install `superqode[mem0]` to use the mem0 memory provider."
+            ) from exc
         api_key = self._api_key()
         if not api_key:
             raise RuntimeError(f"Set {self.api_key_env} or memory.providers.mem0.api_key.")
@@ -335,7 +351,12 @@ class Mem0Provider:
         content = content.strip()
         if not content:
             raise ValueError("memory content cannot be empty")
-        metadata = {"kind": kind, "scope": scope, "tags": list(tags), "project": str(self.project_root)}
+        metadata = {
+            "kind": kind,
+            "scope": scope,
+            "tags": list(tags),
+            "project": str(self.project_root),
+        }
         response = self._client().add(
             [{"role": "user", "content": content}],
             user_id=self.user_id,
@@ -520,7 +541,12 @@ class SupermemoryProvider:
         response = self._client().add(
             content=content,
             container_tags=container_tags,
-            metadata={"kind": kind, "scope": scope, "tags": list(tags), "project": str(self.project_root)},
+            metadata={
+                "kind": kind,
+                "scope": scope,
+                "tags": list(tags),
+                "project": str(self.project_root),
+            },
         )
         return _record_from_write_response(
             response,
@@ -648,13 +674,21 @@ def _results_from_payload(
         )
         metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
         record = MemoryRecord(
-            id=str(data.get("id") or data.get("memory_id") or hashlib.sha256(str(content).encode()).hexdigest()[:12]),
+            id=str(
+                data.get("id")
+                or data.get("memory_id")
+                or hashlib.sha256(str(content).encode()).hexdigest()[:12]
+            ),
             content=str(content),
             kind=str(metadata.get("kind") or data.get("kind") or default_kind),
             scope=str(metadata.get("scope") or data.get("scope") or "project"),
             source=provider,
             tags=tuple(str(tag) for tag in metadata.get("tags") or data.get("tags") or ()),
-            metadata={key: value for key, value in data.items() if key not in {"memory", "content", "text"}},
+            metadata={
+                key: value
+                for key, value in data.items()
+                if key not in {"memory", "content", "text"}
+            },
         )
         raw_score = data.get("score") or data.get("relevance") or data.get("similarity") or 1.0
         try:

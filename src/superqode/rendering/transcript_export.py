@@ -71,7 +71,11 @@ def render_transcript_markdown(
         lines.append("")
         return "\n".join(lines)
     for record in records:
-        label = record["agent"] if record["role"] in {"agent", "assistant"} and record["agent"] else record["role"]
+        label = (
+            record["agent"]
+            if record["role"] in {"agent", "assistant"} and record["agent"]
+            else record["role"]
+        )
         lines.append(f"## {label}")
         lines.append("")
         lines.append(record["content"].rstrip())

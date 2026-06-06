@@ -110,6 +110,9 @@ class _DispatchStub:
     def _ensure_input_focus(self):
         pass
 
+    def _record_ex_command(self, cmd, c):
+        self.calls.append(("_record_ex_command", cmd, c))
+
 
 @pytest.fixture
 def _dispatch():

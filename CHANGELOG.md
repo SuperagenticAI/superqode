@@ -5,6 +5,25 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.39] - 2026-06-06
+
+### Added
+
+- **Plan mode** — new `plan_mode` config flag that blocks tool execution in the agent loop, allowing side-effect-free planning and review before any action is taken.
+- **Memory system overhaul** — new provider-based memory architecture with `LocalAgentMemoryProvider`, `SpecMemProvider`, `Mem0Provider`, `CogneeProvider`, and `SupermemoryProvider`. Configurable via `memory:` section in `superqode.yaml` with provider-specific settings.
+- **Project trust system** — per-user trust store (`~/.superqode/trust.json`) for project workspaces, with risk signal detection for plugins, MCP configs, and hooks. Mark projects trusted/safe via `set_project_trust()`.
+- **Transcript export** — conversation transcripts can now be exported to portable JSON/text formats via `transcript_export.py`.
+- **Session share artifacts** — new `share_artifacts` module for sharing session context across agents.
+- **Pure mode** — `pure_mode.py` for restricted/safe agent operation.
+- **Developer workflow documentation** — new `docs/developer-workflows.md` guide.
+- **Plan mode tests** (`test_agent_loop_harness.py`), **memory tests** (`test_agent_memory.py`), **project trust tests** (`test_project_trust.py`), **developer workflow doc tests** (`test_developer_workflow_docs.py`), and expanded runtime tests.
+
+### Changed
+
+- `AgentLoop` now checks `config.plan_mode` before executing tools, returning a denied result when active.
+- Memory `__init__.py` exports a unified `create_memory_provider()` factory and `available_memory_providers()` discovery function.
+- Slash completions, TUI widgets, and QE commands updated for plan mode awareness.
+
 ## [0.1.38] - 2026-06-06
 
 ### Added

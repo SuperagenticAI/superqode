@@ -58,7 +58,9 @@ def load_memory_config(project_root: str | Path = ".") -> MemoryConfig:
     providers_raw = raw.get("providers") or {}
     providers: dict[str, MemoryProviderConfig] = {
         "local": MemoryProviderConfig(name="local", enabled=True, settings={}),
-        "specmem": MemoryProviderConfig(name="specmem", enabled=bool(raw.get("specmem_enabled", False)), settings={}),
+        "specmem": MemoryProviderConfig(
+            name="specmem", enabled=bool(raw.get("specmem_enabled", False)), settings={}
+        ),
     }
 
     if isinstance(providers_raw, dict):

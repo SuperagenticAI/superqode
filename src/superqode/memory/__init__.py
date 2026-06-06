@@ -55,7 +55,9 @@ def available_memory_providers(project_root: str | Path = ".") -> list[MemoryPro
         SpecMemProvider(project_root=project_root, config=memory_config.provider("specmem")),
         Mem0Provider(project_root=project_root, config=memory_config.provider("mem0")),
         CogneeProvider(project_root=project_root, config=memory_config.provider("cognee")),
-        SupermemoryProvider(project_root=project_root, config=memory_config.provider("supermemory")),
+        SupermemoryProvider(
+            project_root=project_root, config=memory_config.provider("supermemory")
+        ),
     ]
     return [provider.status() for provider in providers]
 

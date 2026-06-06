@@ -1495,7 +1495,9 @@ class TestMemoryCommand:
                 encoding="utf-8",
             )
 
-            result = runner.invoke(cli_main, ["memory", "status", "--provider", "specmem", "--json"])
+            result = runner.invoke(
+                cli_main, ["memory", "status", "--provider", "specmem", "--json"]
+            )
             assert result.exit_code == 0
             assert json.loads(result.output)["available"] is True
 
@@ -1574,7 +1576,9 @@ class TestPluginsCommand:
             plugin_dir = Path(".superqode/plugins/broken")
             plugin_dir.mkdir(parents=True)
             (plugin_dir / "plugin.json").write_text(
-                json.dumps({"id": "broken", "name": "Broken", "commands": [{"path": "missing.py"}]}),
+                json.dumps(
+                    {"id": "broken", "name": "Broken", "commands": [{"path": "missing.py"}]}
+                ),
                 encoding="utf-8",
             )
 

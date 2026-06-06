@@ -104,7 +104,9 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand("/tree", "Show saved session branches", category="workflow"),
     SlashCommand(":share", "Show local session sharing options", category="workflow"),
     SlashCommand(":share create", "Create a portable share artifact", category="workflow"),
-    SlashCommand(":share export", "Export a saved session as Markdown or JSON", category="workflow"),
+    SlashCommand(
+        ":share export", "Export a saved session as Markdown or JSON", category="workflow"
+    ),
     SlashCommand(":share import", "Import a portable share artifact", category="workflow"),
     SlashCommand(":share list", "List local share artifacts", category="workflow"),
     SlashCommand(":share revoke", "Delete a local share artifact", category="workflow"),

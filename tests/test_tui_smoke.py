@@ -1845,7 +1845,9 @@ def test_live_todos_sync_into_plan_command_state():
 
     app._handle_plan("", log)
 
-    text = "\n".join(render_plain(item) if not isinstance(item, str) else item for item in log.items)
+    text = "\n".join(
+        render_plain(item) if not isinstance(item, str) else item for item in log.items
+    )
     assert "Progress: 1/2 (50%)" in text
     assert "Inspect files" in text
     assert "Patch code" in text
@@ -1859,7 +1861,9 @@ def test_plan_review_renders_pending_request_even_without_todos():
 
     app._handle_plan("", log)
 
-    text = "\n".join(render_plain(item) if not isinstance(item, str) else item for item in log.items)
+    text = "\n".join(
+        render_plain(item) if not isinstance(item, str) else item for item in log.items
+    )
     assert "Plan Review" in text
     assert "fix the parser" in text
     assert "No structured TODOs were emitted yet" in text
@@ -1878,7 +1882,9 @@ def test_plan_edit_replaces_pending_request_and_renders_review():
 
     assert app._pending_plan_request == "new request"
     assert app._pending_plan_status == "pending"
-    text = "\n".join(render_plain(item) if not isinstance(item, str) else item for item in log.items)
+    text = "\n".join(
+        render_plain(item) if not isinstance(item, str) else item for item in log.items
+    )
     assert "new request" in text
     assert "pending" in text
 

@@ -1228,7 +1228,9 @@ def memory_doctor(json_output):
 
 @memory.command("remember")
 @click.argument("text")
-@click.option("--kind", default="note", help="Memory kind: preference, project, decision, procedure, note")
+@click.option(
+    "--kind", default="note", help="Memory kind: preference, project, decision, procedure, note"
+)
 @click.option("--scope", default="project", help="Memory scope: user, project, team")
 @click.option("--tag", "tags", multiple=True, help="Tag to attach")
 def memory_remember(text, kind, scope, tags):
@@ -1257,7 +1259,9 @@ def memory_search(query, provider, limit, json_output):
     from superqode.memory import create_memory_provider
 
     try:
-        results = create_memory_provider(provider, project_root=Path.cwd()).search(query, limit=limit)
+        results = create_memory_provider(provider, project_root=Path.cwd()).search(
+            query, limit=limit
+        )
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     if json_output:
@@ -2314,7 +2318,9 @@ def plugins_enable(plugin_id):
     if not is_project_trusted(Path.cwd()):
         raise click.ClickException("Project is untrusted. Run `superqode trust yes` first.")
     changed = enable_plugin(plugin_id, Path.cwd())
-    click.echo(f"Enabled plugin {plugin_id}" if changed else f"Plugin {plugin_id} was already enabled")
+    click.echo(
+        f"Enabled plugin {plugin_id}" if changed else f"Plugin {plugin_id} was already enabled"
+    )
 
 
 @plugins.command("disable")
@@ -2324,7 +2330,9 @@ def plugins_disable(plugin_id):
     from superqode.plugins import disable_plugin
 
     changed = disable_plugin(plugin_id, Path.cwd())
-    click.echo(f"Disabled plugin {plugin_id}" if changed else f"Plugin {plugin_id} was already disabled")
+    click.echo(
+        f"Disabled plugin {plugin_id}" if changed else f"Plugin {plugin_id} was already disabled"
+    )
 
 
 @cli_main.group()

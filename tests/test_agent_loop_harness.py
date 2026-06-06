@@ -407,9 +407,7 @@ async def test_streaming_plan_mode_blocks_unexpected_tool_calls_before_execution
             self.stream_calls += 1
             if self.stream_calls == 1:
                 yield StreamChunk(
-                    tool_calls=[
-                        _tool_call("write_file", '{"path": "README.md", "content": "bad"}')
-                    ]
+                    tool_calls=[_tool_call("write_file", '{"path": "README.md", "content": "bad"}')]
                 )
             else:
                 yield StreamChunk(content="planned safely")

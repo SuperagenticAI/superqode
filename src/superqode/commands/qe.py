@@ -965,7 +965,9 @@ def qe_feedback(
         console.print("[red]Error:[/red] Must specify feedback type")
         console.print("Options: --valid, --false-positive, --fixed, --wont-fix")
         return 1
-    console.print("[yellow]QE feedback memory has been removed for the upcoming QE refactor.[/yellow]")
+    console.print(
+        "[yellow]QE feedback memory has been removed for the upcoming QE refactor.[/yellow]"
+    )
     console.print("[dim]Use `superqode memory remember ...` for general agent memory.[/dim]")
     return 0
 
@@ -1004,7 +1006,9 @@ def qe_suppressions(path: str, remove: str):
     console.print()
     console.print(Panel("[bold]QE Suppressions[/bold]", border_style="cyan"))
     console.print()
-    console.print("[yellow]QE suppression memory has been removed for the upcoming QE refactor.[/yellow]")
+    console.print(
+        "[yellow]QE suppression memory has been removed for the upcoming QE refactor.[/yellow]"
+    )
     console.print("[dim]Use `superqode memory status` for the new agent memory layer.[/dim]")
 
 
