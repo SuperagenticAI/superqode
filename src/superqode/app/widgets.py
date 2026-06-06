@@ -147,6 +147,7 @@ class ColorfulStatusBar(Static):
     # in full (no shortening) so the user can see exactly what's selected.
     active_runtime: reactive[str] = reactive("")
     active_model: reactive[str] = reactive("")
+    plan_state: reactive[str] = reactive("")
 
     @staticmethod
     def _format_token_count(tokens: int) -> str:
@@ -177,13 +178,7 @@ class ColorfulStatusBar(Static):
             result.append("  │  ", style="#3f3f46")
             result.append(f"{self.byok_provider}", style="bold #10b981")
             if self.byok_model:
-                # Show shortened model name
-                model_short = (
-                    self.byok_model.split("-")[0]
-                    if "-" in self.byok_model
-                    else self.byok_model[:12]
-                )
-                result.append(f"/{model_short}", style="#a1a1aa")
+                result.append(f"/{self.byok_model}", style="#a1a1aa")
 
             # Show usage
             if self.byok_tokens > 0:
@@ -226,6 +221,18 @@ class ColorfulStatusBar(Static):
             if self.active_model:
                 sep = " · " if self.active_runtime else ""
                 result.append(f"{sep}{self.active_model}", style="#a1a1aa")
+
+        if self.plan_state:
+            state = self.plan_state.strip()
+            color = {
+                "ON": "#fbbf24",
+                "pending": "#f59e0b",
+                "active": "#06b6d4",
+                "approved": "#22c55e",
+            }.get(state, "#a855f7")
+            result.append("  │  ", style="#3f3f46")
+            result.append("PLAN", style=f"bold {color}")
+            result.append(f" {state}", style=color)
 
         return result
 
@@ -799,6 +806,75 @@ class ConversationLog(RichLog):
     }
     """
 
+    SEARCH_HIGHLIGHT_STYLE = "bold #111827 on #facc15"
+
+    def set_search_highlight(self, query: str) -> None:
+        self._search_highlight_query = (query or "").strip()
+        try:
+            self.refresh()
+        except Exception:
+            pass
+
+    @staticmethod
+    def _style_strip_span(strip, start: int, end: int, style):
+        from rich.segment import Segment
+        from textual.strip import Strip
+
+        if end <= start:
+            return strip
+        start = max(0, min(start, strip.cell_length))
+        end = max(start, min(end, strip.cell_length))
+        if end <= start:
+            return strip
+        selected = strip.crop(start, end)
+        selected = Strip(
+            [
+                Segment(
+                    segment.text,
+                    (segment.style or style) + style,
+                    segment.control,
+                )
+                for segment in selected
+            ],
+            selected.cell_length,
+        )
+        return Strip.join(
+            [
+                strip.crop(0, start),
+                selected,
+                strip.crop(end, strip.cell_length),
+            ]
+        )
+
+    @classmethod
+    def _highlight_query_in_strip(cls, strip, query: str):
+        from rich.style import Style
+
+        query = (query or "").strip()
+        if not query:
+            return strip
+        line = strip.text
+        lowered_line = line.lower()
+        lowered_query = query.lower()
+        if not lowered_query:
+            return strip
+
+        spans: list[tuple[int, int]] = []
+        start = 0
+        while True:
+            index = lowered_line.find(lowered_query, start)
+            if index < 0:
+                break
+            spans.append((index, index + len(query)))
+            start = index + max(1, len(query))
+        if not spans:
+            return strip
+
+        highlight_style = Style.parse(cls.SEARCH_HIGHLIGHT_STYLE)
+        for start, end in reversed(spans):
+            strip = cls._style_strip_span(strip, start, end, highlight_style)
+        return strip
+
     def render_line(self, y):
         """Render a line, tagging each segment with its content ``offset``.
 
@@ -834,6 +910,11 @@ class ConversationLog(RichLog):
                 col += seg.cell_length
             strip = Strip(segments, strip.cell_length)
 
+            strip = self._highlight_query_in_strip(
+                strip,
+                getattr(self, "_search_highlight_query", ""),
+            )
+
             selection = self.text_selection
             span = selection.get_span(row) if selection is not None else None
             if span is not None:
@@ -845,25 +926,7 @@ class ConversationLog(RichLog):
                 end = max(start, min(end, strip.cell_length))
                 if end > start:
                     selection_style = Style.parse("bold white on #2563eb")
-                    selected = strip.crop(start, end)
-                    selected = Strip(
-                        [
-                            Segment(
-                                segment.text,
-                                (segment.style or Style()) + selection_style,
-                                segment.control,
-                            )
-                            for segment in selected
-                        ],
-                        selected.cell_length,
-                    )
-                    strip = Strip.join(
-                        [
-                            strip.crop(0, start),
-                            selected,
-                            strip.crop(end, strip.cell_length),
-                        ]
-                    )
+                    strip = self._style_strip_span(strip, start, end, selection_style)
             return strip
         except Exception:
             # Never let selection tagging break rendering.
@@ -912,6 +975,7 @@ class ConversationLog(RichLog):
         self._messages: list[tuple[str, str, str]] = []  # (role, text, agent_name)
         self._last_response: str = ""
         self._last_error: str = ""  # Track last error for easy copy
+        self._search_highlight_query: str = ""
         # Track thinking and tool calls for agent sessions
         self._thinking_lines: list[str] = []
         self._tool_calls: list[dict] = []

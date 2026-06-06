@@ -354,72 +354,18 @@ superqode qe clean --all
 
 ---
 
-## feedback
+## feedback and suppressions
 
-Provide feedback on a finding to improve future validation runs.
+QE-specific feedback and suppression memory has been removed for the upcoming QE
+refactor. The commands currently return a refactor notice instead of writing
+memory.
 
-```bash
-superqode qe feedback FINDING_ID [OPTIONS] [PATH]
-```
-
-### Arguments
-
-| Argument | Description |
-|----------|-------------|
-| `FINDING_ID` | The finding ID to provide feedback on |
-
-### Options
-
-| Option | Description |
-|--------|-------------|
-| `--valid` | Mark finding as valid (true positive) |
-| `--false-positive`, `-fp` | Mark as false positive (suppress in future) |
-| `--fixed` | Mark finding as fixed |
-| `--wont-fix` | Mark finding as won't fix |
-| `--reason`, `-r` | Reason for the feedback |
-| `--scope`, `-s` | Scope for suppression: `project` or `team` |
-| `--expires`, `-e` | Suppression expires in N days |
-
-### Examples
+Use the new agent memory layer for project facts, preferences, and procedures:
 
 ```bash
-# Mark as valid
-superqode qe feedback sec-001 --valid
-
-# Mark as false positive
-superqode qe feedback sec-002 --false-positive -r "Intentional for testing"
-
-# Mark as false positive with team scope
-superqode qe feedback sec-003 --false-positive --scope team -r "Known limitation"
-
-# Mark as fixed
-superqode qe feedback perf-001 --fixed -r "Optimized query"
-```
-
----
-
-## suppressions
-
-List or manage finding suppressions.
-
-```bash
-superqode qe suppressions [PATH] [OPTIONS]
-```
-
-### Options
-
-| Option | Description |
-|--------|-------------|
-| `--remove`, `-r` | Remove suppression by ID |
-
-### Examples
-
-```bash
-# List active suppressions
-superqode qe suppressions
-
-# Remove a suppression
-superqode qe suppressions -r abc123
+superqode memory remember "Auth changes require tests/test_auth.py" --kind procedure --tag auth
+superqode memory search "auth tests"
+superqode memory status
 ```
 
 ---

@@ -89,6 +89,16 @@ pydanticai-logfire = [
     "pydantic-ai>=1.98.0,<2.0.0",
     "logfire>=4.0.0",
 ]
+mem0 = [
+    "mem0ai>=2.0.4,<3.0.0",
+]
+supermemory = [
+    "supermemory>=3.45.0,<4.0.0",
+]
+memory-providers = [
+    "mem0ai>=2.0.4,<3.0.0",
+    "supermemory>=3.45.0,<4.0.0",
+]
 dev = [
     "pytest>=8.3.5",
     "pytest-asyncio>=0.24.0",

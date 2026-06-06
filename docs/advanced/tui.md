@@ -118,13 +118,46 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:qe <role>` - Switch to validation role mode (e.g., `:qe security_tester`)
 - `:view <file>` - View file content
 - `:rewind` - Open the rewind overlay (or `:rewind <n>` to jump directly)
+- `:tree` - Show saved session branches and forks
 - `:theme` - Open the theme picker (or `:theme <name>` to apply one)
-- `:export` - Export the conversation to a standalone HTML file
+- `:export html|markdown|json` - Export the current transcript
+- `:share` - Create, import, list, or revoke portable session artifacts
+- `:trust` - Show or change local trust for this project
+- `:plugins` - List, validate, install, enable, or disable plugins
+- `:codex` - Connect to and manage the Codex SDK runtime
+- `:claude` - Connect to and manage the Claude Agent SDK runtime
+- `:antigravity` - Show Antigravity CLI handoff, status, and migration help
+- `:plan <task>` - Ask for a plan only, without native tool execution
+- `:plan approve` - Execute the last planned request with tools enabled
+- `:plan edit [task]` - Edit the pending planned request before execution
+- `:plan reject` - Clear the pending planned request
 - `:compare <models>` - Re-run your last message across several models side by side
 - `:sandbox` - Show or set the local command sandbox mode
 - `:help` - Show all available commands
 
 Tool and file-change output is collapsed by default so normal coding sessions stay readable. Agent thinking/session notes are also hidden by default. Use `Ctrl+T` when you want to see thinking logs, and use `:log verbose` before a task when you want full successful tool output, raw ACP agent session logs, and file names in the session report.
+
+## Plan Mode, TODOs, and Questions
+
+Plan mode gives you a review step before native tools run:
+
+```text
+:plan fix the failing tests     # planning only
+:plan                           # show current plan
+:plan approve                   # run the planned request
+:plan edit adjust the request   # replace the pending request
+:plan reject                    # discard it
+:plan on                        # make future prompts planning-only
+:plan off                       # return to normal execution
+```
+
+For BYOK/local SuperQode AgentLoop sessions, plan mode is enforced in two layers: tool schemas are not sent to the model, and any unexpected tool call is denied before execution. For vendor-owned SDK runtimes, SuperQode also denies approval prompts during plan mode, but tools that a vendor runtime can run without asking still depend on that runtime's own plan/no-tool controls.
+
+Native `todo_write` updates and runtime-native plan events feed the same pinned plan panel and `:plan` view. Codex SDK `turn/plan/updated` / `todo_list` events and Claude Agent SDK `TodoWrite` tool calls are normalized into SuperQode's shared `plan_update` event. This keeps SuperQode's own tools and vendor agent runtimes aligned in one planning surface.
+
+Antigravity CLI is currently an external interactive `agy` handoff in SuperQode, not a structured runtime. It will use the same `plan_update` path when Google exposes a documented ACP/headless event stream.
+
+When an agent needs clarification it can use the `ask_user` tool. The TUI renders an inline question card above the prompt, and your next submitted message answers that question instead of starting a new task. Choice questions accept the option number or option text; empty input uses the default when one is provided.
 
 ## Prompt Input
 
@@ -180,15 +213,126 @@ The choice is saved to `~/.superqode/config.json` and applied on the next launch
 
 ## Export
 
-Save the current conversation to a self-contained, styled HTML file:
+Save the current conversation to HTML, Markdown, or JSON:
 
 ```text
-:export                       # writes .superqode/exports/transcript-<timestamp>.html
-:export ~/notes/session.html  # write to a specific path
+:export                         # writes .superqode/exports/transcript-<timestamp>.html
+:export html ~/notes/session    # writes ~/notes/session.html
+:export markdown ~/notes/session.md
+:export json ~/notes/session.json
 ```
 
-Agent messages keep their markdown (code blocks, lists, headings); the file has
-no external dependencies and can be shared or archived.
+HTML keeps styled markdown. Markdown is good for issue trackers and pull request
+notes. JSON is structured for automation and handoff.
+
+## Sessions And Sharing
+
+Use session commands when you want to inspect, branch, or hand off work:
+
+```text
+:tree
+:session
+:session rename <name>
+:resume <id>
+:fork <new-id>
+:share
+:share create [session] [path]
+:share export [session] [path] [--json|--markdown]
+:share import <artifact.superqode-share.json> [new-session-id]
+:share list
+:share revoke <artifact>
+```
+
+Share artifacts are local/offline `superqode-share-v1` JSON files. They are
+intended for moving a session between machines or teammates without requiring a
+hosted service.
+
+## Project Trust And Plugins
+
+Project trust protects local executable surfaces such as project plugins and MCP
+configuration. Trust is stored outside the repository in `~/.superqode/trust.json`.
+
+```text
+:trust
+:trust status
+:trust doctor
+:trust yes
+:trust no
+:plugins
+:plugins doctor
+:plugins add <local-plugin-dir|plugin.json>
+:plugins enable <id>
+:plugins disable <id>
+```
+
+`:plugins add` and `:plugins enable` require `:trust yes`.
+
+## Runtime-Specific Commands
+
+Codex SDK:
+
+```text
+:codex
+:codex status
+:codex models
+:codex model
+:codex effort
+:codex sandbox
+:codex review
+:codex compact
+:codex thread
+:codex sessions
+:codex resume <thread-id>
+:codex fork <thread-id>
+:codex rename <name>
+:codex archive <thread-id>
+:codex account
+:codex logout
+```
+
+Claude Agent SDK:
+
+```text
+:claude
+:claude status
+:claude model
+:claude permission
+:claude sessions
+:claude resume <session-id>
+:claude rename <name>
+:claude tag <tag>
+:claude commands
+:claude command <name> [args]
+:claude review
+```
+
+Antigravity CLI handoff:
+
+```text
+:antigravity
+:antigravity status
+:antigravity migrate
+:agy status
+```
+
+## Optional Vim Helpers
+
+Vim mode is optional. It adds familiar command aliases without removing the
+normal SuperQode command surface:
+
+```text
+:vim
+:vim on
+:vim off
+:set vim
+:set novim
+:w [path]
+:e <file>
+:ls
+:grep <term>
+q:
+@:
+```
 
 ## Compare Models
 

@@ -84,16 +84,12 @@ These commands help review findings, evidence, reports, logs, and generated arti
 
 ## Feedback And Suppressions
 
-Record whether findings were valid, expected, or fixed:
+QE-specific feedback and suppression memory has been removed for the upcoming QE
+refactor. The compatibility commands now return a refactor notice instead of
+writing learned suppressions.
 
-```bash
-superqode qe feedback finding-001 --valid
-superqode qe feedback finding-002 --false-positive -r "Expected behavior"
-superqode qe feedback finding-003 --fixed -r "Applied patch"
-superqode qe suppressions
-```
-
-Feedback helps reduce repeated false positives and keeps future validation runs focused.
+For general project facts, preferences, procedures, and SpecMem recall, use
+`superqode memory`.
 
 ---
 

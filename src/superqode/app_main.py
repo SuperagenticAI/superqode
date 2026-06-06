@@ -910,6 +910,7 @@ class SuperQodeApp(App):
     _force_plan_once: bool = False  # Run the next native prompt as plan-only
     _force_execute_once: bool = False  # Run the next prompt even if plan mode is enabled
     _pending_plan_request: str = ""  # Last planned request available for approval/execution
+    _pending_plan_status: str = ""  # pending / approved / rejected
 
     def __init__(self):
         super().__init__()
@@ -938,6 +939,12 @@ class SuperQodeApp(App):
         self._prompt_completion_visible = False
         self._history_manager = HistoryManager()
         self._plan_manager = PlanManager()
+        self._vim_experience_enabled = self._env_flag("SUPERQODE_VIM_MODE")
+        self._last_ex_command = ""
+        self._vim_search_query = ""
+        self._vim_search_matches: list[int] = []
+        self._vim_search_index = -1
+        self._vim_search_reverse = False
 
         # PERFORMANCE: Animation manager for throttled animations
         self._animation_manager = None
@@ -4589,6 +4596,15 @@ class SuperQodeApp(App):
 
         # Check for commands FIRST (before selection handlers) so :home, :back, :cancel work
         # Supports both : (vim-style) and / prefix
+        if self._vim_enabled() and text in {"q:", "@:"}:
+            if text == "q:":
+                self._vim_command_history(log)
+            else:
+                self._repeat_last_ex_command(log)
+            return
+        if self._vim_enabled() and self._try_vim_search_input(text, log):
+            return
+
         command_prefix = None
         if text.startswith(":"):
             command_prefix = ":"
@@ -4801,6 +4817,200 @@ class SuperQodeApp(App):
     # Command Handling
     # ========================================================================
 
+    @staticmethod
+    def _env_flag(name: str) -> bool:
+        value = os.environ.get(name, "").strip().lower()
+        return value in {"1", "true", "yes", "on"}
+
+    def _vim_enabled(self) -> bool:
+        return bool(getattr(self, "_vim_experience_enabled", False))
+
+    def _record_ex_command(self, cmd: str, command_name: str) -> None:
+        if not cmd.startswith(":"):
+            return
+        if command_name in {"vim", "set"}:
+            return
+        normalized = ":" + cmd[1:].strip()
+        if normalized in {":", ":history"}:
+            return
+        self._last_ex_command = normalized
+
+    def _vim_cmd(self, args: str, log: ConversationLog) -> None:
+        arg = (args or "").strip().lower()
+        if arg in {"on", "1", "true", "yes"}:
+            self._vim_experience_enabled = True
+            log.add_success("Vim mode enabled. Use q: for command history and @: to repeat.")
+            return
+        if arg in {"off", "0", "false", "no"}:
+            self._vim_experience_enabled = False
+            log.add_success("Vim mode disabled.")
+            return
+        if arg in {"", "status"}:
+            state = "on" if self._vim_enabled() else "off"
+            t = Text()
+            t.append("\n  Vim Mode\n\n", style=f"bold {THEME['purple']}")
+            t.append("  Status: ", style=THEME["muted"])
+            t.append(f"{state}\n", style=f"bold {THEME['success'] if self._vim_enabled() else THEME['muted']}")
+            t.append("  Toggle: ", style=THEME["muted"])
+            t.append(":vim on", style=THEME["cyan"])
+            t.append(" / ", style=THEME["muted"])
+            t.append(":vim off\n", style=THEME["cyan"])
+            t.append("  History: ", style=THEME["muted"])
+            t.append("q:", style=THEME["cyan"])
+            t.append("  Repeat: ", style=THEME["muted"])
+            t.append("@:\n", style=THEME["cyan"])
+            t.append("  Aliases: ", style=THEME["muted"])
+            t.append(":w, :e <file>, :ls, :grep <term>\n", style=THEME["cyan"])
+            self._show_command_output(log, t)
+            return
+        log.add_info("Usage: :vim [on|off|status]")
+
+    def _set_cmd(self, args: str, log: ConversationLog) -> None:
+        arg = (args or "").strip().lower()
+        if arg in {"vim", "vim on"}:
+            self._vim_cmd("on", log)
+            return
+        if arg in {"novim", "no-vim", "vim off"}:
+            self._vim_cmd("off", log)
+            return
+        if arg in {"", "all"}:
+            self._vim_cmd("status", log)
+            return
+        log.add_info("Usage: :set vim | :set novim")
+
+    def _vim_command_history(self, log: ConversationLog) -> None:
+        entries = [
+            entry
+            for entry in self._history_manager.get_recent(50)
+            if str(getattr(entry, "input", "")).startswith(":")
+        ][-20:]
+        if not entries:
+            log.add_info("No Ex command history yet.")
+            return
+
+        t = Text()
+        t.append("\n  q: Command History\n\n", style=f"bold {THEME['purple']}")
+        for index, entry in enumerate(entries, 1):
+            t.append(f"  {index:>2}  ", style=THEME["muted"])
+            t.append(str(entry.input), style=THEME["text"])
+            t.append("\n")
+        t.append("\n  Repeat the latest with ", style=THEME["muted"])
+        t.append("@:", style=THEME["cyan"])
+        t.append(".\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _repeat_last_ex_command(self, log: ConversationLog) -> None:
+        command = getattr(self, "_last_ex_command", "")
+        if not command:
+            log.add_info("No Ex command to repeat yet.")
+            return
+        log.add_info(f"Repeating {command}")
+        self._handle_command(command, log)
+
+    def _try_vim_search_input(self, text: str, log: ConversationLog) -> bool:
+        if text in {"n", "N"}:
+            self._vim_search_next(log, reverse=(text == "N"))
+            return True
+        if text.startswith("?") and len(text) > 1:
+            self._vim_search(log, text[1:].strip(), reverse=True)
+            return True
+        if text.startswith("/") and len(text) > 1 and not self._is_known_slash_input(text):
+            self._vim_search(log, text[1:].strip(), reverse=False)
+            return True
+        return False
+
+    @staticmethod
+    def _is_known_slash_input(text: str) -> bool:
+        candidate = text.strip().lower()
+        if not candidate.startswith("/"):
+            return False
+        try:
+            from superqode.widgets.slash_complete import DEFAULT_COMMANDS
+
+            known = {command.command.lower() for command in DEFAULT_COMMANDS}
+        except Exception:
+            known = {command.lower() for command in COMMANDS if command.startswith("/")}
+        first_word = candidate.split(maxsplit=1)[0]
+        return candidate in known or first_word in known
+
+    def _vim_search(self, log: ConversationLog, query: str, *, reverse: bool = False) -> None:
+        query = (query or "").strip()
+        if not query:
+            self._set_vim_search_highlight(log, "")
+            self._vim_search_feedback(log, "Usage: /pattern or ?pattern")
+            return
+
+        messages = list(getattr(log, "_messages", []))
+        lowered = query.lower()
+        matches = [
+            index
+            for index, (_role, content, _agent) in enumerate(messages)
+            if lowered in str(content).lower()
+        ]
+        self._vim_search_query = query
+        self._vim_search_matches = matches
+        self._vim_search_reverse = reverse
+
+        if not matches:
+            self._vim_search_index = -1
+            self._set_vim_search_highlight(log, "")
+            self._vim_search_feedback(log, f"No matches for {query!r}")
+            return
+
+        self._set_vim_search_highlight(log, query)
+        self._vim_search_index = len(matches) - 1 if reverse else 0
+        self._scroll_to_vim_search_match(log)
+
+    def _vim_search_next(self, log: ConversationLog, *, reverse: bool = False) -> None:
+        matches = getattr(self, "_vim_search_matches", [])
+        if not matches:
+            self._vim_search_feedback(log, "No previous Vim search. Use /pattern or ?pattern.")
+            return
+
+        direction = -1 if reverse else 1
+        self._vim_search_index = (self._vim_search_index + direction) % len(matches)
+        self._scroll_to_vim_search_match(log)
+
+    def _scroll_to_vim_search_match(self, log: ConversationLog) -> None:
+        matches = getattr(self, "_vim_search_matches", [])
+        if not matches or self._vim_search_index < 0:
+            return
+        message_index = matches[self._vim_search_index]
+        try:
+            log.auto_scroll = False
+            messages = list(getattr(log, "_messages", []))
+            target_y = 0
+            for _role, content, _agent in messages[:message_index]:
+                target_y += max(2, len(str(content).splitlines()) + 2)
+            visible_height = max(6, int(getattr(getattr(log, "size", None), "height", 18) or 18))
+            log.scroll_to(y=max(0, target_y - max(1, visible_height // 3)), animate=False)
+        except Exception:
+            pass
+
+        query = getattr(self, "_vim_search_query", "")
+        self._set_vim_search_highlight(log, query)
+        self._vim_search_feedback(
+            log,
+            f"Match {self._vim_search_index + 1}/{len(matches)} for {query!r}. "
+            "Use n/N to navigate.",
+        )
+
+    def _set_vim_search_highlight(self, log: ConversationLog, query: str) -> None:
+        setter = getattr(log, "set_search_highlight", None)
+        if callable(setter):
+            setter(query)
+
+    def _vim_search_feedback(self, log: ConversationLog, message: str) -> None:
+        try:
+            self.notify(message, timeout=2)
+            return
+        except Exception:
+            pass
+        try:
+            log.add_info(message)
+        except Exception:
+            pass
+
     def _try_acp_slash_command(self, name: str, args: str, log: ConversationLog) -> bool:
         """Dispatch a slash command through the ACP local registry if registered.
 
@@ -4879,6 +5089,8 @@ class SuperQodeApp(App):
         else:
             args = parts[1] if len(parts) > 1 else ""
 
+        self._record_ex_command(cmd, c)
+
         # ACP local slash commands win when an agent is connected. They cover
         # introspection commands (:status, :model, :session, :history, etc.)
         # for the connected agent so the agent's own slash surface isn't the
@@ -4889,6 +5101,10 @@ class SuperQodeApp(App):
 
         if c == "help":
             self._show_help(log)
+        elif c == "vim":
+            self._vim_cmd(args, log)
+        elif c == "set":
+            self._set_cmd(args, log)
         elif c == "clear":
             self.action_clear_screen()
         elif c in ("exit", "quit", "q"):
@@ -4995,7 +5211,15 @@ class SuperQodeApp(App):
             self._handle_timeline(log)
         elif c == "rewind":
             self._handle_rewind(args, log)
+        elif c == "tree":
+            self._show_session_tree(log)
+        elif c == "share":
+            self._handle_share(args, log)
+        elif c == "trust":
+            self._handle_trust(args, log)
         elif c == "export":
+            self._handle_export(args, log)
+        elif c == "w":
             self._handle_export(args, log)
         elif c == "sandbox":
             self._handle_sandbox(args, log)
@@ -5009,7 +5233,11 @@ class SuperQodeApp(App):
             self._handle_stash(args, log)
         elif c == "view":
             self._handle_view(args, log)
+        elif c == "e":
+            self._handle_view(args, log)
         elif c == "search":
+            self._handle_search(args, log)
+        elif c == "grep":
             self._handle_search(args, log)
         elif c == "tools":
             self._show_tools(args, log)
@@ -5022,6 +5250,8 @@ class SuperQodeApp(App):
         elif c == "prompt":
             self._prompt_file_cmd(args, log)
         elif c == "sessions":
+            self._show_sessions(log)
+        elif c == "ls":
             self._show_sessions(log)
         elif c == "session":
             self._handle_session(args, log)
@@ -5088,6 +5318,8 @@ class SuperQodeApp(App):
             self._sandbox_cmd(args, log)
         elif c in ("plugins", "plugin"):
             self._plugins_cmd(args, log)
+        elif c == "memory":
+            self._memory_cmd(args, log)
         elif c in ("benchmark", "benchmarks"):
             self._benchmark_cmd(args, log)
         elif c == "usage":
@@ -5321,35 +5553,92 @@ class SuperQodeApp(App):
         self._open_rewind_overlay(log)
 
     def _handle_export(self, args: str, log: ConversationLog) -> None:
-        """Export the current conversation to a standalone HTML file.
-
-        ``:export`` writes to ``.superqode/exports/transcript-<timestamp>.html``;
-        ``:export <path>`` writes to the given path.
-        """
+        """Export the current conversation to HTML, Markdown, or JSON."""
         from superqode.rendering.html_export import render_transcript_html
+        from superqode.rendering.transcript_export import (
+            default_transcript_metadata,
+            render_transcript_json,
+            render_transcript_markdown,
+        )
 
         messages = list(getattr(log, "_messages", []))
         if not messages:
             log.add_info("Nothing to export yet.")
             return
 
-        arg = (args or "").strip()
-        if arg:
-            out_path = Path(arg).expanduser()
-            if out_path.suffix.lower() not in (".html", ".htm"):
-                out_path = out_path.with_suffix(".html")
-        else:
-            stamp = time.strftime("%Y%m%d-%H%M%S")
-            out_path = Path(".superqode") / "exports" / f"transcript-{stamp}.html"
+        try:
+            export_format, out_path = self._resolve_export_target(args)
+        except ValueError as exc:
+            log.add_error(f"Could not parse :export arguments: {exc}")
+            return
+        metadata = default_transcript_metadata(
+            cwd=str(Path.cwd()),
+            runtime=getattr(self, "current_runtime", "") or "",
+            provider=getattr(self, "current_provider", "") or "",
+            model=getattr(self, "current_model", "") or "",
+        )
 
         try:
             out_path.parent.mkdir(parents=True, exist_ok=True)
-            html_doc = render_transcript_html(messages, title="SuperQode Transcript")
-            out_path.write_text(html_doc, encoding="utf-8")
+            if export_format == "json":
+                content = render_transcript_json(messages, metadata=metadata)
+            elif export_format == "markdown":
+                content = render_transcript_markdown(messages, metadata=metadata)
+            else:
+                content = render_transcript_html(messages, title="SuperQode Transcript")
+            out_path.write_text(content, encoding="utf-8")
         except Exception as exc:
             log.add_error(f"Could not export transcript: {exc}")
             return
-        log.add_success(f"Exported transcript → {out_path}")
+        log.add_success(f"Exported {export_format} transcript -> {out_path}")
+
+    def _resolve_export_target(self, args: str) -> tuple[str, Path]:
+        """Resolve ``:export [format] [path]`` into a format and output path."""
+        format_aliases = {
+            "html": "html",
+            "htm": "html",
+            "markdown": "markdown",
+            "md": "markdown",
+            "json": "json",
+        }
+        suffix_by_format = {
+            "html": ".html",
+            "markdown": ".md",
+            "json": ".json",
+        }
+        tokens = shlex.split((args or "").strip()) if (args or "").strip() else []
+        export_format = "html"
+        path_arg = ""
+        if tokens and tokens[0].lower() in format_aliases:
+            export_format = format_aliases[tokens[0].lower()]
+            path_arg = " ".join(tokens[1:]).strip()
+        elif tokens:
+            path_arg = " ".join(tokens).strip()
+            suffix_format = {
+                ".html": "html",
+                ".htm": "html",
+                ".md": "markdown",
+                ".markdown": "markdown",
+                ".json": "json",
+            }.get(Path(path_arg).suffix.lower())
+            if suffix_format:
+                export_format = suffix_format
+
+        suffix = suffix_by_format[export_format]
+        if path_arg:
+            out_path = Path(path_arg).expanduser()
+            if out_path.suffix.lower() not in {
+                ".html",
+                ".htm",
+                ".md",
+                ".markdown",
+                ".json",
+            }:
+                out_path = out_path.with_suffix(suffix)
+            return export_format, out_path
+
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        return export_format, Path(".superqode") / "exports" / f"transcript-{stamp}{suffix}"
 
     def _handle_sandbox(self, args: str, log: ConversationLog) -> None:
         """Show or set the local OS command sandbox.
@@ -6727,6 +7016,12 @@ class SuperQodeApp(App):
             ":connect": "connect ACP, BYOK, or local runtime",
             ":exit": "exit SuperQode",
             ":quit": "exit SuperQode",
+            ":vim": "optional Vim-style command helpers",
+            ":set": "set optional TUI modes",
+            ":w": "export the current transcript",
+            ":e": "view a file",
+            ":ls": "list saved sessions",
+            ":grep": "search the workspace",
             ":status": "show harness status",
             ":tools": "show tool profiles",
         }
@@ -7664,6 +7959,8 @@ class SuperQodeApp(App):
             if len(tokens) < 2:
                 log.add_info("Usage: :mcp add <name> <url|stdio command>")
                 return
+            if not self._ensure_project_trusted_for(log, "add an MCP server"):
+                return
             server_id = tokens[0]
             target = " ".join(shlex.quote(token) for token in tokens[1:])
             ok, message = await self._add_mcp_server_config(manager, server_id, target)
@@ -7679,6 +7976,8 @@ class SuperQodeApp(App):
                 configs = manager.get_server_configs()
                 server_id = subargs
                 if subargs not in configs:
+                    if not self._ensure_project_trusted_for(log, "add an MCP server"):
+                        return
                     server_id = self._mcp_id_from_target(subargs)
                     ok, message = await self._add_mcp_server_config(manager, server_id, subargs)
                     if not ok:
@@ -8047,6 +8346,322 @@ class SuperQodeApp(App):
         t.append(" to branch the active session.\n", style=THEME["muted"])
         self._show_command_output(log, t)
 
+    def _show_session_tree(self, log: ConversationLog):
+        """Show saved sessions grouped by parent/fork relationship."""
+        manager = self._get_session_manager()
+        sessions = manager.list_all_sessions()
+
+        t = Text()
+        t.append("\n  Session Tree\n\n", style=f"bold {THEME['purple']}")
+        if not sessions:
+            t.append("  No sessions found yet.\n", style=THEME["muted"])
+            t.append("  Start a conversation, then use ", style=THEME["muted"])
+            t.append(":fork", style=THEME["cyan"])
+            t.append(" to create a branch.\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+
+        by_id = {session.session_id: session for session in sessions}
+        children: dict[str, list[Any]] = {}
+        roots = []
+        for session in sessions:
+            parent = session.parent_session_id or ""
+            if parent and parent in by_id:
+                children.setdefault(parent, []).append(session)
+            else:
+                roots.append(session)
+        roots.sort(key=lambda item: item.updated_at, reverse=True)
+        for branch in children.values():
+            branch.sort(key=lambda item: item.updated_at, reverse=True)
+
+        current_id = self._current_session_id()
+
+        def add_node(session, prefix: str = "", depth: int = 0) -> None:
+            marker = "* " if session.session_id == current_id else "  "
+            title = session.title or "(unnamed)"
+            model = session.model or "unknown"
+            provider = session.provider or "-"
+            connector = "+- " if depth else ""
+            t.append(f"  {prefix}{connector}{marker}", style=THEME["dim"])
+            t.append(f"{session.session_id[:8]}", style=f"bold {THEME['cyan']}")
+            t.append(f"  {title}\n", style=THEME["text"])
+            t.append(f"  {prefix}{'   ' if depth else ''}   ", style=THEME["dim"])
+            t.append(f"{provider}/{model}", style=THEME["muted"])
+            t.append(f"  {session.message_count} msgs", style=THEME["muted"])
+            t.append(f"  updated {session.updated_at[:19]}\n", style=THEME["dim"])
+            for child in children.get(session.session_id, []):
+                add_node(child, prefix + ("   " if depth else ""), depth + 1)
+
+        for root in roots:
+            add_node(root)
+
+        t.append("\n  * = current session. Use ", style=THEME["muted"])
+        t.append(":resume <id>", style=THEME["cyan"])
+        t.append(" or ", style=THEME["muted"])
+        t.append(":fork <new-id>", style=THEME["cyan"])
+        t.append(" to continue branching.\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _handle_share(self, args: str, log: ConversationLog) -> None:
+        """Create, list, import, and revoke local share artifacts."""
+        try:
+            tokens = shlex.split((args or "").strip())
+        except ValueError as exc:
+            log.add_error(f"Could not parse :share arguments: {exc}")
+            return
+        subcommand = tokens[0].lower() if tokens else "status"
+        rest = tokens[1:]
+        if subcommand in {"", "status"}:
+            self._show_share_status(log)
+        elif subcommand in {"create", "pack", "package"}:
+            self._share_create(rest, log)
+        elif subcommand == "export":
+            self._share_export(rest, log)
+        elif subcommand in {"import", "load"}:
+            self._share_import(rest, log)
+        elif subcommand in {"list", "ls"}:
+            self._share_list(log)
+        elif subcommand in {"revoke", "delete", "rm"}:
+            self._share_revoke(rest, log)
+        else:
+            log.add_info(
+                "Usage: :share [create|export|import|list|revoke] "
+                "[session-id|path]"
+            )
+
+    def _share_dir(self) -> Path:
+        return Path(".superqode") / "shares"
+
+    def _show_share_status(self, log: ConversationLog) -> None:
+        current_id = self._current_session_id()
+        share_count = len(list(self._share_dir().glob("*.superqode-share.json")))
+        t = Text()
+        t.append("\n  Share\n\n", style=f"bold {THEME['purple']}")
+        t.append("  Mode     ", style=THEME["muted"])
+        t.append("local/offline artifacts\n", style=THEME["text"])
+        t.append("  Current  ", style=THEME["muted"])
+        t.append(f"{current_id or 'none'}\n", style=THEME["cyan"] if current_id else THEME["warning"])
+        t.append("  Artifacts ", style=THEME["muted"])
+        t.append(f"{share_count} in .superqode/shares\n\n", style=THEME["text"])
+        t.append("  Commands:\n", style=THEME["muted"])
+        t.append("    :share create [session] [path]\n", style=THEME["cyan"])
+        t.append("    :share export [session] [path] [--json|--markdown]\n", style=THEME["cyan"])
+        t.append("    :share import <artifact> [new-session-id]\n", style=THEME["cyan"])
+        t.append("    :share list  |  :share revoke <artifact>\n", style=THEME["cyan"])
+        self._show_command_output(log, t)
+
+    def _resolve_share_session_id(self, value: str = "") -> str:
+        from superqode.headless import resolve_session_id
+
+        requested = (value or "").strip()
+        if requested:
+            return resolve_session_id(requested, ".superqode/sessions")
+        current_id = self._current_session_id()
+        if not current_id:
+            raise ValueError("No active session. Use :sessions to choose one.")
+        return resolve_session_id(current_id, ".superqode/sessions")
+
+    def _share_create(self, tokens: list[str], log: ConversationLog) -> None:
+        session_arg, path_arg = self._parse_share_session_and_path(tokens)
+        try:
+            session_id = self._resolve_share_session_id(session_arg)
+            artifact_path = self._write_share_artifact(session_id, path_arg)
+        except Exception as exc:
+            log.add_error(f"Could not create share artifact: {exc}")
+            return
+        log.add_success(f"Created share artifact -> {artifact_path}")
+        log.add_info("Send this file to another SuperQode user; they can import it with :share import.")
+
+    def _share_export(self, tokens: list[str], log: ConversationLog) -> None:
+        from superqode.headless import export_session
+
+        fmt = "markdown"
+        cleaned: list[str] = []
+        for token in tokens:
+            lowered = token.lower()
+            if lowered in {"--json", "json"}:
+                fmt = "json"
+            elif lowered in {"--markdown", "--md", "markdown", "md"}:
+                fmt = "markdown"
+            else:
+                cleaned.append(token)
+        session_arg, path_arg = self._parse_share_session_and_path(cleaned)
+        try:
+            session_id = self._resolve_share_session_id(session_arg)
+            content = export_session(session_id, fmt=fmt, storage_dir=".superqode/sessions")
+            suffix = ".json" if fmt == "json" else ".md"
+            out_path = self._share_output_path(session_id, path_arg, suffix, stem="session")
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(content, encoding="utf-8")
+        except Exception as exc:
+            log.add_error(f"Could not export share file: {exc}")
+            return
+        log.add_success(f"Exported {fmt} session -> {out_path}")
+
+    @staticmethod
+    def _parse_share_session_and_path(tokens: list[str]) -> tuple[str, str]:
+        if not tokens:
+            return "", ""
+        if len(tokens) == 1:
+            token = tokens[0]
+            suffix = Path(token).suffix
+            if suffix or "/" in token or token.startswith("."):
+                return "", token
+            return token, ""
+        return tokens[0], tokens[1]
+
+    def _write_share_artifact(self, session_id: str, path_arg: str = "") -> Path:
+        from superqode.session.share_artifacts import create_share_artifact
+
+        return create_share_artifact(
+            session_id,
+            output=path_arg or None,
+            storage_dir=".superqode/sessions",
+        )
+
+    def _share_output_path(
+        self,
+        session_id: str,
+        path_arg: str,
+        suffix: str,
+        *,
+        stem: str,
+    ) -> Path:
+        if path_arg:
+            out_path = Path(path_arg).expanduser()
+            if not out_path.name.lower().endswith(suffix.lower()):
+                out_path = out_path.with_suffix(suffix)
+            return out_path
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        safe_id = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in session_id)
+        return self._share_dir() / f"{stem}-{safe_id}-{stamp}{suffix}"
+
+    def _share_import(self, tokens: list[str], log: ConversationLog) -> None:
+        if not tokens:
+            log.add_info("Usage: :share import <artifact.superqode-share.json> [new-session-id]")
+            return
+        path = Path(tokens[0]).expanduser()
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        new_id = tokens[1] if len(tokens) > 1 else ""
+        try:
+            imported_id = self._import_share_artifact(path, new_id)
+        except Exception as exc:
+            log.add_error(f"Could not import share artifact: {exc}")
+            return
+        log.add_success(f"Imported shared session -> {imported_id}")
+        log.add_info(f"Resume it with :resume {imported_id[:8]}")
+
+    def _import_share_artifact(self, path: Path, new_session_id: str = "") -> str:
+        from superqode.session.share_artifacts import import_share_artifact
+
+        return import_share_artifact(
+            path,
+            new_session_id=new_session_id,
+            storage_dir=".superqode/sessions",
+        )
+
+    def _share_list(self, log: ConversationLog) -> None:
+        from superqode.session.share_artifacts import list_share_artifacts
+
+        artifacts = list_share_artifacts(self._share_dir())
+        t = Text()
+        t.append("\n  Local Share Artifacts\n\n", style=f"bold {THEME['purple']}")
+        if not artifacts:
+            t.append("  No share artifacts found.\n", style=THEME["muted"])
+            t.append("  Create one with ", style=THEME["muted"])
+            t.append(":share create", style=THEME["cyan"])
+            t.append(".\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+        for index, artifact in enumerate(artifacts, 1):
+            t.append(f"  [{index}] ", style=THEME["dim"])
+            t.append(artifact.path.name, style=f"bold {THEME['cyan']}")
+            if artifact.source_session_id:
+                t.append(f"  session {artifact.source_session_id[:8]}", style=THEME["muted"])
+            t.append("\n")
+        t.append("\n  Import: ", style=THEME["muted"])
+        t.append(":share import .superqode/shares/<file>", style=THEME["cyan"])
+        t.append("\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _share_revoke(self, tokens: list[str], log: ConversationLog) -> None:
+        from superqode.session.share_artifacts import revoke_share_artifact
+
+        if not tokens:
+            log.add_info("Usage: :share revoke <artifact-name-or-path>")
+            return
+        try:
+            path = revoke_share_artifact(tokens[0], self._share_dir())
+        except FileNotFoundError:
+            log.add_error(f"Share artifact not found: {tokens[0]}")
+            return
+        except Exception as exc:
+            log.add_error(f"Could not revoke share artifact: {exc}")
+            return
+        log.add_success(f"Revoked local share artifact -> {path}")
+
+    def _handle_trust(self, args: str, log: ConversationLog) -> None:
+        """Show or change local trust for the current project."""
+        from superqode.project_trust import set_project_trust
+
+        arg = (args or "").strip().lower()
+        if arg in {"yes", "on", "trust", "trusted"}:
+            record = set_project_trust(Path.cwd(), True, note="trusted from TUI")
+            log.add_success(f"Trusted project -> {record.path}")
+            return
+        if arg in {"no", "off", "untrust", "untrusted"}:
+            record = set_project_trust(Path.cwd(), False, note="untrusted from TUI")
+            log.add_success(f"Marked project untrusted -> {record.path}")
+            return
+        if arg not in {"", "status", "doctor"}:
+            log.add_info("Usage: :trust [status|yes|no|doctor]")
+            return
+        self._show_trust_status(log, doctor=(arg == "doctor"))
+
+    def _show_trust_status(self, log: ConversationLog, *, doctor: bool = False) -> None:
+        from superqode.project_trust import get_project_trust, project_risk_signals, trust_store_path
+
+        record = get_project_trust(Path.cwd())
+        signals = project_risk_signals(Path.cwd())
+        trusted = record.trusted
+        t = Text()
+        t.append("\n  Project Trust\n\n", style=f"bold {THEME['purple']}")
+        t.append("  Project  ", style=THEME["muted"])
+        t.append(f"{record.path}\n", style=THEME["text"])
+        t.append("  Status   ", style=THEME["muted"])
+        t.append("trusted\n" if trusted else "untrusted\n", style=THEME["success"] if trusted else THEME["warning"])
+        if record.trusted_at:
+            t.append("  Since    ", style=THEME["muted"])
+            t.append(f"{record.trusted_at}\n", style=THEME["dim"])
+        t.append("  Store    ", style=THEME["muted"])
+        t.append(f"{trust_store_path()}\n", style=THEME["dim"])
+        if signals:
+            t.append("\n  Trust-sensitive files:\n", style=THEME["muted"])
+            for signal_name in signals:
+                t.append(f"    - {signal_name}\n", style=THEME["warning"] if not trusted else THEME["text"])
+        elif doctor:
+            t.append("\n  No project-local plugins, MCP config, or hooks detected.\n", style=THEME["muted"])
+        t.append("\n  Commands: ", style=THEME["muted"])
+        t.append(":trust yes", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":trust no", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":trust doctor", style=THEME["cyan"])
+        t.append("\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _ensure_project_trusted_for(self, log: ConversationLog, action: str) -> bool:
+        """Require project trust before enabling project-local executable surfaces."""
+        from superqode.project_trust import get_project_trust
+
+        record = get_project_trust(Path.cwd())
+        if record.trusted:
+            return True
+        log.add_error(f"Project is untrusted; refusing to {action}.")
+        log.add_info("Review this workspace, then run :trust yes to allow project-local plugins/MCP.")
+        return False
+
     def _ensure_pure_mode(self):
         """Ensure the PureMode object exists for session operations."""
         if not hasattr(self, "_pure_mode"):
@@ -8059,6 +8674,15 @@ class SuperQodeApp(App):
         """Route self-contained runtime approval callbacks through the TUI prompt."""
 
         def on_permission_request(tool_name: str, arguments: dict) -> bool:
+            if getattr(self, "_active_plan_mode_for_current_message", False):
+                try:
+                    self._call_ui(
+                        log.add_info,
+                        f"Plan mode blocked runtime approval for {tool_name}.",
+                    )
+                except Exception:
+                    pass
+                return False
             return self._request_runtime_permission(tool_name, arguments, log)
 
         pure.on_permission_request = on_permission_request
@@ -8079,6 +8703,24 @@ class SuperQodeApp(App):
 
             display = "" if runtime_name in ("", "builtin") else runtime_name
             self.query_one("#status-bar", ColorfulStatusBar).active_runtime = display
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _refresh_plan_status_badge(self) -> None:
+        """Show whether plan mode is active or awaiting a decision."""
+        try:
+            from superqode.app.widgets import ColorfulStatusBar
+
+            state = ""
+            pending = getattr(self, "_pending_plan_request", "").strip()
+            pending_status = getattr(self, "_pending_plan_status", "")
+            if pending and pending_status == "pending":
+                state = "pending"
+            elif getattr(self, "_active_plan_mode_for_current_message", False):
+                state = "active"
+            elif getattr(self, "_plan_mode_enabled", False):
+                state = "ON"
+            self.query_one("#status-bar", ColorfulStatusBar).plan_state = state
         except Exception:  # noqa: BLE001
             pass
 
@@ -11200,6 +11842,8 @@ team:
         self._force_execute_once = False
         if plan_requested:
             self._pending_plan_request = text
+            self._pending_plan_status = "pending"
+        self._refresh_plan_status_badge()
 
         log.add_user(text)
         self._last_user_message = text
@@ -14001,6 +14645,7 @@ team:
         except Exception:
             return
         items = [t for t in (todos or []) if isinstance(t, dict)]
+        self._sync_plan_manager_from_todos(items)
         # Hide once every task is finished (or there are none) to avoid clutter.
         active = [t for t in items if t.get("status") not in ("completed", "cancelled")]
         if not items or not active:
@@ -14032,6 +14677,37 @@ team:
             t.append(f"  +{len(items) - 6} more\n", style=THEME["dim"])
         panel.update(t)
         panel.add_class("visible")
+
+    def _sync_plan_manager_from_todos(self, todos: list[dict]) -> None:
+        """Mirror live todo_write/SDK plan updates into :plan state."""
+        self._plan_manager.clear()
+        if not todos:
+            return
+        self._plan_manager.current_plan_name = "Agent Plan"
+        status_map = {
+            "pending": TaskStatus.PENDING,
+            "in_progress": TaskStatus.IN_PROGRESS,
+            "completed": TaskStatus.COMPLETED,
+            "cancelled": TaskStatus.FAILED,
+            "canceled": TaskStatus.FAILED,
+            "failed": TaskStatus.FAILED,
+            "skipped": TaskStatus.SKIPPED,
+        }
+        priority_map = {
+            "low": TaskPriority.LOW,
+            "medium": TaskPriority.MEDIUM,
+            "high": TaskPriority.HIGH,
+            "critical": TaskPriority.CRITICAL,
+        }
+        for index, todo in enumerate(todos, 1):
+            content = " ".join(str(todo.get("content") or todo.get("text") or "").split())
+            if not content:
+                continue
+            priority = priority_map.get(str(todo.get("priority") or "medium").lower())
+            task = self._plan_manager.add_task(content, priority=priority or TaskPriority.MEDIUM)
+            task.id = str(todo.get("id") or index)
+            status = status_map.get(str(todo.get("status") or "pending").lower(), TaskStatus.PENDING)
+            self._plan_manager.update_status(task.id, status)
 
     def _set_todos_from_input(self, tool_input: dict) -> None:
         """Update the todo panel from a todo_write tool input payload."""
@@ -19262,80 +19938,100 @@ team:
         mode_label = "LOCAL" if exec_mode == "local" else "BYOK"
         self._clear_for_workspace(log, f"{mode_label} • {provider_name}")
 
-        # Show connection success message
-        log.add_success(f"✓ Connected to {provider_name}/{model}")
+        try:
+            status_bar = self.query_one("#status-bar", ColorfulStatusBar)
+            status_bar.update_byok_status(provider, model)
+        except Exception:
+            pass
 
-        # For local providers, show setup instructions immediately
-        if provider_def and provider_def.category == ProviderCategory.LOCAL:
-            if provider == "ollama":
-                import os
+        local_host = self._local_provider_host(provider) if is_local else ""
+        self._show_connection_summary(
+            log,
+            mode=exec_mode,
+            provider=provider,
+            provider_name=provider_name,
+            model=model,
+            host=local_host,
+        )
 
-                ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-                log.add_info(f"Ollama host: {ollama_host}")
-                log.add_info("💡 Make sure Ollama is running:")
-                log.add_info("   1. Start Ollama: ollama serve")
-                log.add_info(f"   2. Verify model: ollama list | grep {model}")
-                log.add_info(f"   3. Pull if needed: ollama pull {model}")
-            elif provider == "mlx":
-                # Show MLX-specific guidance
-                log.add_info("💡 MLX models require a running server")
-                log.add_info("To start the MLX server:")
-                log.add_info(
-                    f"   1. [cyan]superqode providers mlx setup[/cyan] - Complete setup guide"
-                )
-                log.add_info(
-                    f"   2. [cyan]superqode providers mlx server --model {model}[/cyan] - Get server command"
-                )
-                log.add_info("   3. Run the server command in a separate terminal")
-                log.add_info("   4. Try your message again")
-                log.add_info("")
-                log.add_info(
-                    "✅ [green]Supported formats:[/green] MLX (.npz), safetensors (auto-converted)"
-                )
-                log.add_info(
-                    "✅ [green]Working architectures:[/green] Standard transformers, QWen, Llama, Mistral, Phi"
-                )
-                log.add_info(
-                    "❌ [red]Not supported:[/red] MoE models (Mixtral, some gpt-oss variants)"
-                )
-            elif provider == "lmstudio":
-                # Show LM Studio-specific guidance
-                log.add_info("💡 LM Studio requires the GUI application and local server")
-                log.add_info("Complete setup:")
-                log.add_info("   1. [cyan]Download LM Studio:[/cyan] https://lmstudio.ai/")
-                log.add_info("   2. [cyan]Open LM Studio application[/cyan]")
-                log.add_info(
-                    "   3. [cyan]Download a model[/cyan] (search for 'qwen3-30b' or 'llama3.2-3b')"
-                )
-                log.add_info("   4. [cyan]Load the model[/cyan] in LM Studio")
-                log.add_info(
-                    "   5. [cyan]Start Local Server[/cyan] (Local Server tab → Start Server)"
-                )
-                log.add_info("   6. [cyan]Try your message again[/cyan]")
-                log.add_info("")
-                log.add_info(
-                    "✅ [green]Supported:[/green] OpenAI-compatible API at localhost:1234/v1/chat/completions"
-                )
-                log.add_info("✅ [green]Models:[/green] Any GGUF model loaded in LM Studio")
-                log.add_info("💡 [yellow]Tip:[/yellow] Test your model in LM Studio's chat first")
-            elif provider == "ds4":
-                import os
-
-                ds4_host = os.getenv("DS4_HOST", "http://127.0.0.1:8000/v1")
-                log.add_info(f"DS4 host: {ds4_host}")
-                log.add_info("💡 Make sure ds4-server is running:")
-                log.add_info(
-                    "   ./ds4-server --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192"
-                )
-                log.add_info("   Models: deepseek-v4-flash, deepseek-chat")
-
-            log.add_info("Checking local server...")
-            log.add_info("(This runs a lightweight health check, not a generation)")
-            self.run_worker(self._test_local_connection(provider, model, log))
+        if is_local:
+            self.run_worker(self._test_local_connection(provider, model, log, quiet=True))
         else:
             log.add_info("Ready to chat! Type your message below.")
 
-    async def _test_local_connection(self, provider: str, model: str, log: ConversationLog):
+    def _local_provider_host(self, provider: str) -> str:
+        import os
+
+        if provider == "ollama":
+            return os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        if provider == "ds4":
+            return os.getenv("DS4_HOST", "http://127.0.0.1:8000/v1")
+        if provider == "lmstudio":
+            return os.getenv("LMSTUDIO_HOST", "http://localhost:1234/v1")
+        if provider == "mlx":
+            return os.getenv("MLX_HOST", "http://127.0.0.1:8080/v1")
+        if provider == "vllm":
+            return os.getenv("VLLM_HOST", "http://127.0.0.1:8000/v1")
+        if provider == "sglang":
+            return os.getenv("SGLANG_HOST", "http://127.0.0.1:30000/v1")
+        if provider == "tgi":
+            return os.getenv("TGI_HOST", "http://127.0.0.1:8080/v1")
+        return ""
+
+    def _show_connection_summary(
+        self,
+        log: ConversationLog,
+        *,
+        mode: str,
+        provider: str,
+        provider_name: str,
+        model: str,
+        host: str = "",
+    ) -> None:
+        t = Text()
+        local = mode == "local"
+        title = "Local Model Connected" if local else "Provider Connected"
+        icon = "✓"
+        color = THEME["success"]
+        t.append(f"\n  {icon} ", style=f"bold {color}")
+        t.append(f"{title}\n\n", style=f"bold {THEME['text']}")
+        t.append("    Method   ", style=THEME["muted"])
+        t.append("Local" if local else "BYOK", style=THEME["text"])
+        t.append("\n")
+        t.append("    Provider ", style=THEME["muted"])
+        t.append(provider_name or provider, style=THEME["text"])
+        t.append("\n")
+        t.append("    Model    ", style=THEME["muted"])
+        t.append(model, style=f"bold {THEME['cyan']}")
+        t.append("\n")
+        if host:
+            t.append("    Host     ", style=THEME["muted"])
+            t.append(host, style=THEME["dim"])
+            t.append("\n")
+        t.append("\n  Ready. Type a message to start.", style=THEME["muted"])
+        if local:
+            t.append(" Use ", style=THEME["muted"])
+            t.append(":local test", style=THEME["cyan"])
+            t.append(" for a manual smoke check.", style=THEME["muted"])
+
+        log.write(
+            Panel(
+                t,
+                title=f"[bold {THEME['cyan']}]Connection[/]",
+                border_style=color,
+                box=ROUNDED,
+                padding=(1, 2),
+            )
+        )
+
+    async def _test_local_connection(
+        self,
+        provider: str,
+        model: str,
+        log: ConversationLog,
+        *,
+        quiet: bool = False,
+    ):
         """Test connection to a local provider."""
         try:
             from superqode.providers.registry import PROVIDERS, ProviderCategory
@@ -19344,19 +20040,21 @@ team:
             provider_def = PROVIDERS.get(provider)
             is_local = provider_def and provider_def.category == ProviderCategory.LOCAL
 
-            # Show what we're testing
-            log.add_info(f"Testing: {provider}/{model}")
+            if not quiet:
+                log.add_info(f"Testing: {provider}/{model}")
 
             if is_local:
                 if provider == "ds4":
                     from superqode.providers.local.ds4 import DS4Client
 
                     ds4_host = os.getenv("DS4_HOST", "http://127.0.0.1:8000/v1")
-                    log.add_info(f"DS4 host: {ds4_host}")
+                    if not quiet:
+                        log.add_info(f"DS4 host: {ds4_host}")
                     client = DS4Client(host=ds4_host)
                     health = await client.get_status()
                     if health.available:
-                        log.add_success(f"✓ DS4 server ready at {ds4_host}")
+                        if not quiet:
+                            log.add_success(f"✓ DS4 server ready at {ds4_host}")
                         # Warm the model so the first real prompt isn't the one
                         # paying the one-time cold load (~81GB paged from disk).
                         await self._warmup_ds4(client, model, log)
@@ -19366,14 +20064,17 @@ team:
                     from superqode.providers.local.ollama import OllamaClient
 
                     ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-                    log.add_info(f"Ollama host: {ollama_host}")
+                    if not quiet:
+                        log.add_info(f"Ollama host: {ollama_host}")
                     health = await OllamaClient(host=ollama_host).get_status()
                     if health.available:
-                        log.add_success(f"✓ Ollama server ready at {ollama_host}")
+                        if not quiet:
+                            log.add_success(f"✓ Ollama server ready at {ollama_host}")
                     else:
                         log.add_warning(f"Ollama server not ready: {health.error or 'unavailable'}")
                 else:
-                    log.add_info("Local provider selected. First prompt will validate generation.")
+                    if not quiet:
+                        log.add_info("Local provider selected. First prompt will validate generation.")
             else:
                 from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
                 from superqode.providers.gateway.base import Message
@@ -22021,32 +22722,307 @@ team:
         self._show_command_output(log, t)
 
     def _plugins_cmd(self, args: str, log: ConversationLog):
-        """Show discovered plugin manifests."""
-        from superqode.plugins import load_plugins
+        """Manage project plugin manifests."""
+        from superqode.plugins import (
+            disable_plugin,
+            disabled_plugin_ids,
+            discover_plugin_manifests,
+            enable_plugin,
+            install_plugin,
+            load_plugin_manifest,
+            load_plugins,
+            validate_plugin_manifest,
+        )
 
-        plugins = load_plugins(Path.cwd())
+        try:
+            tokens = shlex.split((args or "").strip())
+        except ValueError as exc:
+            log.add_error(f"Could not parse :plugins arguments: {exc}")
+            return
+        subcommand = tokens[0].lower() if tokens else "list"
+        subargs = tokens[1:]
+
+        if subcommand in {"add", "install"}:
+            if not subargs:
+                log.add_info("Usage: :plugins add <local-plugin-dir|plugin.json>")
+                return
+            if not self._ensure_project_trusted_for(log, "install a plugin"):
+                return
+            try:
+                plugin = install_plugin(subargs[0], Path.cwd())
+            except Exception as exc:
+                log.add_error(f"Could not install plugin: {exc}")
+                return
+            log.add_success(f"Installed plugin {plugin.id} -> .superqode/plugins/{plugin.id}")
+            return
+
+        if subcommand in {"enable", "disable"}:
+            if not subargs:
+                log.add_info(f"Usage: :plugins {subcommand} <plugin-id>")
+                return
+            plugin_id = subargs[0]
+            if subcommand == "enable":
+                if not self._ensure_project_trusted_for(log, "enable a plugin"):
+                    return
+                changed = enable_plugin(plugin_id, Path.cwd())
+                log.add_success(
+                    f"Enabled plugin {plugin_id}" if changed else f"Plugin {plugin_id} was already enabled"
+                )
+            else:
+                changed = disable_plugin(plugin_id, Path.cwd())
+                log.add_success(
+                    f"Disabled plugin {plugin_id}" if changed else f"Plugin {plugin_id} was already disabled"
+                )
+            return
+
+        if subcommand in {"doctor", "validate"}:
+            paths = discover_plugin_manifests(Path.cwd())
+            if subargs:
+                target = Path(subargs[0]).expanduser()
+                if not target.is_absolute():
+                    target = Path.cwd() / target
+                if target.is_dir():
+                    target = target / "plugin.json"
+                paths = [target]
+            t = Text()
+            t.append("\n  Plugin Doctor\n\n", style=f"bold {THEME['purple']}")
+            if not paths:
+                t.append("  No plugin manifests found.\n", style=THEME["muted"])
+                t.append("  Install one with ", style=THEME["muted"])
+                t.append(":plugins add <path>", style=THEME["cyan"])
+                t.append(".\n", style=THEME["muted"])
+                self._show_command_output(log, t)
+                return
+            ok_count = 0
+            for path in paths:
+                issues = validate_plugin_manifest(path)
+                label = str(path)
+                try:
+                    manifest = load_plugin_manifest(path)
+                    label = f"{manifest.id}  ({path})"
+                except Exception:
+                    pass
+                if not issues:
+                    ok_count += 1
+                    t.append(f"  OK   {label}\n", style=THEME["success"])
+                else:
+                    t.append(f"  FAIL {label}\n", style=THEME["error"])
+                    for issue in issues:
+                        t.append(f"       - {issue}\n", style=THEME["warning"])
+            t.append(f"\n  {ok_count}/{len(paths)} manifests valid.\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+
+        if subcommand not in {"list", "ls", "status"}:
+            log.add_info("Usage: :plugins [list|doctor|add|enable|disable] ...")
+            return
+
+        plugins = []
+        load_errors: list[tuple[Path, str]] = []
+        for path in discover_plugin_manifests(Path.cwd()):
+            try:
+                plugins.append(load_plugin_manifest(path))
+            except Exception as exc:
+                load_errors.append((path, str(exc)))
+        disabled = disabled_plugin_ids(Path.cwd())
         t = Text()
         t.append("\n  ◇ ", style=f"bold {THEME['purple']}")
         t.append("Plugins\n\n", style=f"bold {THEME['text']}")
-        if not plugins:
+        if not plugins and not load_errors:
             t.append("  No plugins found.\n", style=THEME["muted"])
             t.append(
                 "  Expected manifests under .superqode/plugins/*/plugin.json.\n", style=THEME["dim"]
             )
+            t.append("  Install one with ", style=THEME["muted"])
+            t.append(":plugins add <path>", style=THEME["cyan"])
+            t.append(".\n", style=THEME["muted"])
             self._show_command_output(log, t)
             return
 
         for plugin in plugins:
+            enabled = plugin.id not in disabled
+            status = "enabled" if enabled else "disabled"
+            status_style = THEME["success"] if enabled else THEME["warning"]
             t.append(f"  {plugin.id:<24}", style=f"bold {THEME['cyan']}")
             t.append(f"{plugin.version:<10}", style=THEME["success"])
+            t.append(f"{status:<10}", style=status_style)
             t.append(f"{plugin.name}\n", style=THEME["text"])
             if plugin.description:
                 t.append(f"    {plugin.description}\n", style=THEME["muted"])
             if plugin.commands:
-                t.append(f"    commands: {', '.join(plugin.commands.keys())}\n", style=THEME["dim"])
+                commands = [
+                    str(item.get("name") or item.get("command") or item)
+                    for item in plugin.commands
+                    if isinstance(item, dict)
+                ]
+                t.append(f"    commands: {', '.join(commands)}\n", style=THEME["dim"])
             if plugin.tools:
-                t.append(f"    tools: {', '.join(plugin.tools.keys())}\n", style=THEME["dim"])
+                tools = [
+                    str(item.get("name") or item.get("tool") or item)
+                    for item in plugin.tools
+                    if isinstance(item, dict)
+                ]
+                t.append(f"    tools: {', '.join(tools)}\n", style=THEME["dim"])
+            if plugin.path:
+                t.append(f"    {plugin.path}\n", style=THEME["dim"])
+        for path, error in load_errors:
+            t.append(f"  broken manifest  {path}\n", style=THEME["error"])
+            t.append(f"    {error}\n", style=THEME["warning"])
+        t.append("\n  Commands: ", style=THEME["muted"])
+        t.append(":plugins doctor", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":plugins add <path>", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":plugins enable|disable <id>", style=THEME["cyan"])
+        t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
+    def _memory_cmd(self, args: str, log: ConversationLog):
+        """Manage SuperQode agent memory from the TUI."""
+        from superqode.memory import available_memory_providers, create_memory_provider
+
+        try:
+            tokens = shlex.split((args or "").strip())
+        except ValueError as exc:
+            log.add_error(f"Could not parse :memory arguments: {exc}")
+            return
+        subcommand = tokens[0].lower() if tokens else "status"
+        rest = tokens[1:]
+
+        if subcommand in {"", "status"}:
+            provider_name = rest[0] if rest else "local"
+            try:
+                status = create_memory_provider(provider_name, project_root=Path.cwd()).status()
+            except Exception as exc:
+                log.add_error(f"Could not inspect memory provider: {exc}")
+                return
+            t = Text()
+            t.append("\n  Memory\n\n", style=f"bold {THEME['purple']}")
+            t.append("  Provider ", style=THEME["muted"])
+            t.append(f"{status.provider}\n", style=f"bold {THEME['cyan']}")
+            t.append("  Status   ", style=THEME["muted"])
+            state = self._memory_status_state(status)
+            t.append(
+                f"{state}\n",
+                style=THEME["success"] if status.available else THEME["warning"],
+            )
+            t.append("  Records  ", style=THEME["muted"])
+            t.append(f"{status.record_count}\n", style=THEME["text"])
+            if status.path:
+                t.append("  Path     ", style=THEME["muted"])
+                t.append(f"{status.path}\n", style=THEME["dim"])
+            if status.detail:
+                t.append("  Detail   ", style=THEME["muted"])
+                t.append(f"{status.detail}\n", style=THEME["text"])
+            t.append("\n  Commands: ", style=THEME["muted"])
+            t.append(":memory remember", style=THEME["cyan"])
+            t.append(", ", style=THEME["muted"])
+            t.append(":memory search", style=THEME["cyan"])
+            t.append(", ", style=THEME["muted"])
+            t.append(":memory providers", style=THEME["cyan"])
+            t.append("\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+
+        if subcommand in {"providers", "doctor"}:
+            statuses = available_memory_providers(Path.cwd())
+            t = Text()
+            t.append("\n  Memory Providers\n\n", style=f"bold {THEME['purple']}")
+            for status in statuses:
+                state = self._memory_status_state(status)
+                style = THEME["success"] if status.available else THEME["warning"]
+                t.append(f"  {status.provider:<12}", style=f"bold {THEME['cyan']}")
+                t.append(f"{state:<10}", style=style)
+                t.append(f"{status.detail}\n", style=THEME["text"])
+                if status.path:
+                    t.append(f"    {status.path}\n", style=THEME["dim"])
+            self._show_command_output(log, t)
+            return
+
+        if subcommand == "remember":
+            text = " ".join(rest).strip()
+            if not text:
+                log.add_info("Usage: :memory remember <text>")
+                return
+            try:
+                record = create_memory_provider("local", project_root=Path.cwd()).remember(text)
+            except Exception as exc:
+                log.add_error(f"Could not save memory: {exc}")
+                return
+            log.add_success(f"Remembered {record.id}")
+            return
+
+        if subcommand == "search":
+            provider_name = "local"
+            query_parts = rest
+            if len(rest) >= 2 and rest[0] in {"local", "specmem", "mem0", "cognee", "supermemory"}:
+                provider_name = rest[0]
+                query_parts = rest[1:]
+            query = " ".join(query_parts).strip()
+            if not query:
+                log.add_info("Usage: :memory search [local|specmem] <query>")
+                return
+            try:
+                results = create_memory_provider(provider_name, project_root=Path.cwd()).search(query)
+            except Exception as exc:
+                log.add_error(f"Could not search memory: {exc}")
+                return
+            t = Text()
+            t.append("\n  Memory Search\n\n", style=f"bold {THEME['purple']}")
+            if not results:
+                t.append("  No memory matches.\n", style=THEME["muted"])
+            for result in results:
+                record = result.record
+                t.append(f"  {record.id:<12}", style=f"bold {THEME['cyan']}")
+                t.append(f"{result.provider:<8}", style=THEME["muted"])
+                t.append(f"{record.kind:<10}", style=THEME["success"])
+                t.append(f"score={result.score:.2f}\n", style=THEME["dim"])
+                t.append(f"    {record.content}\n", style=THEME["text"])
+            self._show_command_output(log, t)
+            return
+
+        if subcommand == "forget":
+            if not rest:
+                log.add_info("Usage: :memory forget <id>")
+                return
+            try:
+                ok = create_memory_provider("local", project_root=Path.cwd()).forget(rest[0])
+            except Exception as exc:
+                log.add_error(f"Could not forget memory: {exc}")
+                return
+            if ok:
+                log.add_success(f"Forgot {rest[0]}")
+            else:
+                log.add_error(f"Memory not found: {rest[0]}")
+            return
+
+        if subcommand == "export":
+            provider_name = rest[0] if rest else "local"
+            try:
+                payload = create_memory_provider(provider_name, project_root=Path.cwd()).export()
+            except Exception as exc:
+                log.add_error(f"Could not export memory: {exc}")
+                return
+            out_path = Path(".superqode") / "exports" / f"memory-{provider_name}.json"
+            try:
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            except Exception as exc:
+                log.add_error(f"Could not write memory export: {exc}")
+                return
+            log.add_success(f"Exported memory -> {out_path}")
+            return
+
+        log.add_info("Usage: :memory [status|providers|doctor|remember|search|forget|export]")
+
+    def _memory_status_state(self, status) -> str:
+        if getattr(status, "available", False):
+            return "ready"
+        if not getattr(status, "enabled", True):
+            return "disabled"
+        if getattr(status, "installed", None) is False:
+            return "missing"
+        return "missing"
 
     def _benchmark_cmd(self, args: str, log: ConversationLog):
         """Show benchmark harness status and optional task-file guidance."""
@@ -24917,8 +25893,47 @@ team:
                     (":mcp attach <resource>", "Stage an MCP resource for the next prompt"),
                     (":mcp prompts", "List prompts exposed by connected MCP servers"),
                     (":sandbox [backend]", "Show Docker and remote sandbox readiness"),
-                    (":plugins", "Show discovered plugin manifests"),
+                    (":plugins", "List local plugin manifests"),
+                    (":plugins doctor", "Validate plugin manifests and references"),
+                    (":plugins add <path>", "Install a local plugin package"),
+                    (":plugins enable|disable <id>", "Toggle a plugin for this project"),
+                    (":memory", "Show agent memory status"),
+                    (":memory providers", "List local and SpecMem memory providers"),
+                    (":memory remember <text>", "Store an explicit local memory"),
+                    (":memory search <query>", "Search local agent memory"),
+                    (":memory search specmem <q>", "Search .specmem Agent Experience Pack files"),
+                    (":memory forget <id>", "Delete a local memory"),
+                    (":memory export [provider]", "Export local or SpecMem memory JSON"),
                     (":benchmark", "Show benchmark target readiness and CLI usage"),
+                ],
+            ),
+            (
+                "🧰 Developer Workflows",
+                THEME["success"],
+                [
+                    (":tree", "Show saved session branches and forks"),
+                    (":share", "Show local/offline session sharing options"),
+                    (":share create [id]", "Create a portable superqode-share-v1 artifact"),
+                    (":share export [id]", "Export a saved session as Markdown or JSON"),
+                    (":share import <file>", "Import a shared SuperQode session artifact"),
+                    (":share list", "List local share artifacts"),
+                    (":share revoke <file>", "Delete a local share artifact"),
+                    (":export markdown", "Export the current TUI transcript as Markdown"),
+                    (":export json", "Export the current TUI transcript as JSON"),
+                    (":trust", "Show project trust status"),
+                    (":trust doctor", "Show project-local plugins, MCP config, and hooks"),
+                    (":trust yes|no", "Allow or block project-local plugins/MCP on this machine"),
+                    (":connect codex", "Use local Codex subscription via Codex SDK"),
+                    (":codex status", "Show Codex SDK/app-server/account diagnostics"),
+                    (":codex model|effort", "Pick Codex model and reasoning effort"),
+                    (":codex sessions|resume|fork", "Manage Codex threads"),
+                    (":connect claude", "Use local Claude Code through ACP"),
+                    (":claude status", "Show Claude Agent SDK status"),
+                    (":claude model|permission", "Pick Claude model and permission mode"),
+                    (":claude sessions|resume", "Manage Claude Agent SDK sessions"),
+                    (":connect antigravity", "Use local Antigravity CLI handoff"),
+                    (":antigravity status", "Check local agy CLI status"),
+                    (":antigravity migrate", "Show Gemini CLI migration steps"),
                 ],
             ),
             (
@@ -24938,10 +25953,17 @@ team:
                 "📋 Planning & History",
                 THEME["purple"],
                 [
-                    (":plan", "Show the agent's current plan"),
+                    (":plan", "Show the current live plan/TODO state"),
+                    (":plan <task>", "Ask for a plan only; native tools stay disabled"),
+                    (":plan approve", "Execute the last planned request with tools enabled"),
+                    (":plan edit [task]", "Edit the pending planned request"),
+                    (":plan reject", "Clear the pending plan request"),
+                    (":plan on|off", "Toggle persistent planning-only mode"),
                     (":history", "Show command history"),
                     (":history clear", "Clear command history"),
                     (":transcript", "Open selectable conversation transcript"),
+                    (":timeline", "Open replay-style timeline"),
+                    (":rewind", "Edit and resend a previous prompt"),
                     (":checkpoints", "Show undo/redo checkpoints"),
                     ("/sessions", "Browse saved local provider sessions"),
                     ("/resume <id>", "Resume a session by full id or unique prefix"),
@@ -24987,6 +26009,21 @@ team:
                     (":help", "Show this help message"),
                     (":exit", "Exit SuperQode (Ctrl+C)"),
                     (":demo", "Show SuperQode design demo"),
+                ],
+            ),
+            (
+                "⌨️ Optional Vim Mode",
+                THEME["gold"],
+                [
+                    (":vim", "Show optional Vim mode status"),
+                    (":vim on|off", "Enable or disable Vim-style helpers"),
+                    (":set vim|novim", "Vim-style mode aliases"),
+                    (":w", "Export the current transcript"),
+                    (":e <file>", "View a file"),
+                    (":ls", "List sessions"),
+                    (":grep <term>", "Search the workspace"),
+                    ("q:", "Show Ex command history"),
+                    ("@:", "Repeat the last Ex command"),
                 ],
             ),
             (
@@ -27112,6 +28149,7 @@ team:
 
         if arg_lower in ("on", "enable", "enabled"):
             self._plan_mode_enabled = True
+            self._refresh_plan_status_badge()
             log.add_success(
                 "Plan mode enabled. New prompts will analyze only and will not execute native tools."
             )
@@ -27122,10 +28160,37 @@ team:
 
         if arg_lower in ("off", "disable", "disabled"):
             self._plan_mode_enabled = False
+            self._refresh_plan_status_badge()
             log.add_success("Plan mode disabled. New prompts can execute tools again.")
             return
 
-        if arg_lower in ("run", "execute", "apply"):
+        if arg_lower == "review":
+            self._render_plan_review(log)
+            return
+
+        if arg_lower == "edit" or arg_lower.startswith("edit "):
+            pending = getattr(self, "_pending_plan_request", "").strip()
+            replacement = arg_text[4:].strip() if arg_lower.startswith("edit ") else ""
+            if replacement:
+                self._pending_plan_request = replacement
+                self._pending_plan_status = "pending"
+                self._refresh_plan_status_badge()
+                log.add_success("Plan request updated. Use :plan to review or :plan approve to run.")
+                self._render_plan_review(log)
+                return
+            if not pending:
+                log.add_info("No planned request is available. Use :plan <task> first.")
+                return
+            try:
+                input_widget = self.query_one("#prompt-input", SelectionAwareInput)
+                input_widget.value = f":plan {pending}"
+                input_widget.focus()
+                log.add_info("Loaded the planned request into the prompt for editing.")
+            except Exception:
+                log.add_info(f"Edit planned request with: :plan edit {pending}")
+            return
+
+        if arg_lower in ("run", "execute", "apply", "approve"):
             pending = getattr(self, "_pending_plan_request", "").strip()
             if not pending:
                 log.add_info("No planned request is available. Use :plan <task> first.")
@@ -27134,15 +28199,19 @@ team:
                 log.add_info("Agent is already running. Wait for it to finish, then use :plan run.")
                 return
             self._force_execute_once = True
+            self._pending_plan_status = "approved"
+            self._refresh_plan_status_badge()
             log.add_info("Executing the last planned request with tools enabled...")
             self._handle_message(pending, log)
             return
 
-        if arg_lower in ("clear", "reset"):
+        if arg_lower in ("clear", "reset", "reject", "cancel"):
             self._plan_manager.clear()
             self._pending_plan_request = ""
+            self._pending_plan_status = "rejected" if arg_lower in ("reject", "cancel") else ""
             self._force_plan_once = False
             self._force_execute_once = False
+            self._refresh_plan_status_badge()
             log.add_success("Plan cleared")
             return
 
@@ -27159,23 +28228,53 @@ team:
                 return
             self._force_plan_once = True
             self._pending_plan_request = arg_text
+            self._pending_plan_status = "pending"
+            self._refresh_plan_status_badge()
             log.add_info("Planning only. No native tools will be executed.")
             self._handle_message(arg_text, log)
             return
 
-        if not self._plan_manager.tasks:
-            if not arg_text:
-                log.add_info("Usage: :plan <task>, :plan run, :plan on, :plan off, :plan clear")
-                log.add_info("No internal task plan is active yet.")
+        self._render_plan_review(log)
+
+    def _render_plan_review(self, log: ConversationLog) -> None:
+        pending = getattr(self, "_pending_plan_request", "").strip()
+        if not pending and not self._plan_manager.tasks:
+            mode = "ON" if getattr(self, "_plan_mode_enabled", False) else "OFF"
+            log.add_info(f"Plan mode: {mode}")
+            log.add_info(
+                "Usage: :plan <task>, :plan approve, :plan edit, :plan reject, :plan on, :plan off"
+            )
+            log.add_info("No internal task plan is active yet.")
             return
 
         # Render the plan
         t = Text()
         t.append(f"\n  📋 ", style=f"bold {THEME['purple']}")
-        t.append(f"{self._plan_manager.current_plan_name}\n", style=f"bold {THEME['purple']}")
+        t.append("Plan Review\n", style=f"bold {THEME['purple']}")
+        if pending:
+            state = getattr(self, "_pending_plan_status", "") or "pending"
+            state_style = {
+                "pending": THEME["warning"],
+                "approved": THEME["success"],
+                "rejected": THEME["error"],
+            }.get(state, THEME["muted"])
+            t.append("  Request: ", style=THEME["muted"])
+            t.append(pending[:220], style=THEME["text"])
+            if len(pending) > 220:
+                t.append("...", style=THEME["dim"])
+            t.append("\n  State:   ", style=THEME["muted"])
+            t.append(state, style=f"bold {state_style}")
+            t.append("\n\n")
+        else:
+            t.append(f"  {self._plan_manager.current_plan_name}\n\n", style=THEME["muted"])
 
         completed, total, percentage = self._plan_manager.get_progress()
-        t.append(f"  Progress: {completed}/{total} ({percentage:.0f}%)\n\n", style=THEME["muted"])
+        if total:
+            t.append(
+                f"  Progress: {completed}/{total} ({percentage:.0f}%)\n\n", style=THEME["muted"]
+            )
+        else:
+            t.append("  No structured TODOs were emitted yet.\n\n", style=THEME["muted"])
 
         status_icons = {
             TaskStatus.PENDING: ("⏳", THEME["muted"]),
@@ -27198,6 +28297,13 @@ team:
                 )
             t.append("\n", style="")
 
+        t.append("\n  Actions: ", style=THEME["muted"])
+        t.append(":plan approve", style=THEME["cyan"])
+        t.append("  ", style=THEME["dim"])
+        t.append(":plan edit", style=THEME["cyan"])
+        t.append("  ", style=THEME["dim"])
+        t.append(":plan reject", style=THEME["cyan"])
+        t.append("\n", style="")
         log.write(t)
 
     def _handle_undo(self, log: ConversationLog):

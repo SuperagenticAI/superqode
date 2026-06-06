@@ -2,6 +2,7 @@ from rich.console import Console
 from types import SimpleNamespace
 import asyncio
 import concurrent.futures
+import json
 import subprocess
 
 import pytest
@@ -40,6 +41,9 @@ class FakeLog:
 
     def scroll_home(self, animate=False):
         self.scrolled_home = True
+
+    def scroll_to(self, **kwargs):
+        self.scroll_to_kwargs = kwargs
 
     def add_info(self, text):
         self.items.append(text)
@@ -171,6 +175,41 @@ def test_connect_local_picker_lists_ds4():
     assert "DwarfStar 4" in text
     assert "ds4" in text
     assert "recommended" in text
+
+
+def test_connection_summary_renders_compact_local_card():
+    app = make_app()
+    log = FakeLog()
+
+    app._show_connection_summary(
+        log,
+        mode="local",
+        provider="ollama",
+        provider_name="Ollama",
+        model="gemma4:12b-mlx",
+        host="http://localhost:11434",
+    )
+
+    text = render_plain(log.items[-1])
+    assert "Local Model Connected" in text
+    assert "Method" in text
+    assert "Local" in text
+    assert "Ollama" in text
+    assert "gemma4:12b-mlx" in text
+    assert "http://localhost:11434" in text
+    assert "ollama serve" not in text
+    assert "ollama pull" not in text
+
+
+def test_colorful_status_bar_shows_local_provider_and_full_model():
+    from superqode.app.widgets import ColorfulStatusBar
+
+    bar = ColorfulStatusBar()
+    bar.update_byok_status("ollama", "gemma4:12b-mlx")
+
+    plain = bar.render().plain
+    assert "ollama" in plain
+    assert "gemma4:12b-mlx" in plain
 
 
 def test_work_command_renders_last_run_trace():
@@ -500,8 +539,26 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":connect local" in COMMANDS
     assert ":exit" in COMMANDS
     assert ":quit" in COMMANDS
+    assert ":vim" in COMMANDS
+    assert ":set vim" in COMMANDS
+    assert ":w" in COMMANDS
+    assert ":e" in COMMANDS
+    assert ":ls" in COMMANDS
+    assert ":grep" in COMMANDS
     assert ":diff files" in COMMANDS
     assert ":timeline" in COMMANDS
+    assert ":tree" in COMMANDS
+    assert ":share" in COMMANDS
+    assert ":share create" in COMMANDS
+    assert ":share import" in COMMANDS
+    assert ":trust" in COMMANDS
+    assert ":trust yes" in COMMANDS
+    assert ":plugins" in COMMANDS
+    assert ":plugins doctor" in COMMANDS
+    assert ":plugins add" in COMMANDS
+    assert ":memory" in COMMANDS
+    assert ":memory providers" in COMMANDS
+    assert ":memory remember" in COMMANDS
     assert ":permissions" in COMMANDS
     assert ":policy" in COMMANDS
     assert ":c" not in COMMANDS
@@ -518,13 +575,467 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":connect local" in slash_values
     assert ":exit" in slash_values
     assert ":quit" in slash_values
+    assert ":vim" in slash_values
+    assert ":set vim" in slash_values
+    assert ":w" in slash_values
+    assert ":e" in slash_values
+    assert ":ls" in slash_values
+    assert ":grep" in slash_values
     assert ":diff" in slash_values
     assert ":diff files" in slash_values
     assert ":timeline" in slash_values
+    assert ":tree" in slash_values
+    assert "/tree" in slash_values
+    assert ":share" in slash_values
+    assert ":share create" in slash_values
+    assert ":share import" in slash_values
+    assert ":trust" in slash_values
+    assert ":trust yes" in slash_values
+    assert ":plugins" in slash_values
+    assert ":plugins doctor" in slash_values
+    assert ":plugins add" in slash_values
+    assert ":memory" in slash_values
+    assert ":memory providers" in slash_values
+    assert ":memory remember" in slash_values
     assert ":permissions" in slash_values
     assert ":policy" in slash_values
     assert ":c" not in slash_values
     assert ":q" not in slash_values
+
+
+def test_tui_help_surfaces_developer_workflows():
+    app = make_app()
+    log = FakeLog()
+
+    app._show_help(log)
+
+    text = render_plain(log.items[-1])
+    assert "Developer Workflows" in text
+    assert ":share create" in text
+    assert ":share export" in text
+    assert ":share list" in text
+    assert ":share revoke" in text
+    assert ":trust doctor" in text
+    assert ":trust yes|no" in text
+    assert ":plugins doctor" in text
+    assert ":memory remember" in text
+    assert ":memory search specmem" in text
+    assert ":codex status" in text
+    assert ":claude status" in text
+    assert ":antigravity status" in text
+    assert "Optional Vim Mode" in text
+
+
+def test_vim_mode_toggle_and_set_aliases(monkeypatch):
+    monkeypatch.delenv("SUPERQODE_VIM_MODE", raising=False)
+    app = make_app()
+    log = FakeLog()
+
+    assert app._vim_enabled() is False
+
+    app._handle_command(":vim on", log)
+    assert app._vim_enabled() is True
+    assert any("Vim mode enabled" in str(item) for item in log.items)
+
+    app._handle_command(":set novim", log)
+    assert app._vim_enabled() is False
+
+    app._handle_command(":set vim", log)
+    assert app._vim_enabled() is True
+
+
+def test_vim_aliases_route_to_existing_handlers(monkeypatch):
+    app = make_app()
+    log = FakeLog()
+    calls: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(app, "_handle_export", lambda args, _log: calls.append(("export", args)))
+    monkeypatch.setattr(app, "_handle_view", lambda args, _log: calls.append(("view", args)))
+    monkeypatch.setattr(app, "_handle_search", lambda args, _log: calls.append(("search", args)))
+    monkeypatch.setattr(app, "_show_sessions", lambda _log: calls.append(("sessions", "")))
+
+    app._handle_command(":w out/transcript", log)
+    app._handle_command(":e src/superqode/app_main.py", log)
+    app._handle_command(":grep TODO", log)
+    app._handle_command(":ls", log)
+
+    assert calls == [
+        ("export", "out/transcript"),
+        ("view", "src/superqode/app_main.py"),
+        ("search", "TODO"),
+        ("sessions", ""),
+    ]
+
+
+def test_export_writes_markdown_and_json_transcripts(tmp_path, monkeypatch):
+    app = make_app()
+    app.current_runtime = "codex-sdk"
+    app.current_provider = "openai"
+    app.current_model = "gpt-5.5"
+    log = FakeLog()
+    log._messages = [
+        ("user", "summarize this repo", ""),
+        ("agent", "Here is the summary.", "codex"),
+    ]
+    monkeypatch.chdir(tmp_path)
+
+    app._handle_export("markdown exports/session", log)
+    app._handle_export("json exports/session", log)
+
+    md_path = tmp_path / "exports" / "session.md"
+    json_path = tmp_path / "exports" / "session.json"
+    assert md_path.exists()
+    assert json_path.exists()
+    markdown = md_path.read_text(encoding="utf-8")
+    exported_json = json_path.read_text(encoding="utf-8")
+    assert "# SuperQode Transcript" in markdown
+    assert "**Runtime:** codex-sdk" in markdown
+    assert "summarize this repo" in markdown
+    assert '"format": "superqode-transcript-v1"' in exported_json
+    assert '"model": "gpt-5.5"' in exported_json
+    assert '"content": "Here is the summary."' in exported_json
+
+
+def test_export_infers_format_from_suffix(tmp_path, monkeypatch):
+    app = make_app()
+    log = FakeLog()
+    log._messages = [("user", "hello", "")]
+    monkeypatch.chdir(tmp_path)
+
+    app._handle_export(str(tmp_path / "transcript.json"), log)
+
+    exported = (tmp_path / "transcript.json").read_text(encoding="utf-8")
+    assert '"format": "superqode-transcript-v1"' in exported
+    assert '"content": "hello"' in exported
+
+
+def test_session_tree_renders_forks(tmp_path, monkeypatch):
+    from superqode.agent.session_manager import SessionManager
+
+    monkeypatch.chdir(tmp_path)
+    manager = SessionManager(storage_dir=".superqode/sessions")
+    parent_id = manager.start_session("root-session", provider="openai", model="gpt-5")
+    manager.add_user_message("start")
+    child_id = manager.fork_current_session("child-session")
+    child_meta = manager.get_session_info(child_id)
+    assert child_meta is not None
+    child_meta.title = "Forked idea"
+    manager.store._save_metadata(child_meta)
+
+    app = make_app()
+    log = FakeLog()
+    app._show_session_tree(log)
+
+    text = render_plain(log.items[-1])
+    assert "Session Tree" in text
+    assert parent_id[:8] in text
+    assert child_id[:8] in text
+    assert "Forked idea" in text
+    assert "+-" in text
+
+
+def test_share_create_import_list_and_revoke(tmp_path, monkeypatch):
+    from superqode.agent.session_manager import SessionManager
+
+    monkeypatch.chdir(tmp_path)
+    manager = SessionManager(storage_dir=".superqode/sessions")
+    manager.start_session("abc123", provider="test", model="m")
+    manager.add_user_message("hello")
+
+    app = make_app()
+    log = FakeLog()
+
+    app._handle_share("create abc123", log)
+    artifacts = list((tmp_path / ".superqode" / "shares").glob("*.superqode-share.json"))
+    assert len(artifacts) == 1
+    artifact = artifacts[0]
+    assert artifact.exists()
+    payload = json.loads(artifact.read_text(encoding="utf-8"))
+    assert payload["format"] == "superqode-share-v1"
+    assert payload["source_session_id"] == "abc123"
+
+    app._handle_share(f"import {artifact} imported-session", log)
+    imported = manager.get_session_info("imported-session")
+    assert imported is not None
+    assert imported.parent_session_id == "abc123"
+    manager.start_session("imported-session")
+    assert manager.get_messages()[0].content == "hello"
+
+    app._handle_share("list", log)
+    assert artifact.name in render_plain(log.items[-1])
+
+    app._handle_share(f"revoke {artifact}", log)
+    assert not artifact.exists()
+    assert manager.get_session_info("abc123") is not None
+
+
+def test_share_export_markdown_and_json(tmp_path, monkeypatch):
+    from superqode.agent.session_manager import SessionManager
+
+    monkeypatch.chdir(tmp_path)
+    manager = SessionManager(storage_dir=".superqode/sessions")
+    manager.start_session("abc123", provider="test", model="m")
+    manager.add_user_message("hello")
+
+    app = make_app()
+    log = FakeLog()
+    md_path = tmp_path / "session-share.md"
+    json_path = tmp_path / "session-share.json"
+
+    app._handle_share(f"export abc123 {md_path} --markdown", log)
+    app._handle_share(f"export abc123 {json_path} --json", log)
+
+    assert "# SuperQode Session abc123" in md_path.read_text(encoding="utf-8")
+    assert '"session_id": "abc123"' in json_path.read_text(encoding="utf-8")
+
+
+def test_plugins_tui_add_disable_enable_and_doctor(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_TRUST_STORE", str(tmp_path / "trust.json"))
+    source = tmp_path / "demo-plugin"
+    source.mkdir()
+    (source / "plugin.json").write_text(
+        json.dumps(
+            {
+                "id": "demo",
+                "name": "Demo Plugin",
+                "version": "1.0.0",
+                "commands": [{"name": "demo"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    app = make_app()
+    log = FakeLog()
+    app._handle_trust("yes", log)
+
+    app._plugins_cmd(f"add {source}", log)
+    assert (tmp_path / ".superqode" / "plugins" / "demo" / "plugin.json").exists()
+
+    app._plugins_cmd("", log)
+    text = render_plain(log.items[-1])
+    assert "demo" in text
+    assert "enabled" in text
+
+    app._plugins_cmd("disable demo", log)
+    app._plugins_cmd("", log)
+    assert "disabled" in render_plain(log.items[-1])
+
+    app._plugins_cmd("enable demo", log)
+    app._plugins_cmd("doctor", log)
+    doctor = render_plain(log.items[-1])
+    assert "Plugin Doctor" in doctor
+    assert "1/1 manifests valid" in doctor
+
+
+def test_plugins_tui_doctor_reports_broken_manifest(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    plugin_dir = tmp_path / ".superqode" / "plugins" / "broken"
+    plugin_dir.mkdir(parents=True)
+    (plugin_dir / "plugin.json").write_text(
+        json.dumps({"id": "broken", "name": "Broken", "commands": [{"path": "missing.py"}]}),
+        encoding="utf-8",
+    )
+    app = make_app()
+    log = FakeLog()
+
+    app._plugins_cmd("doctor", log)
+
+    text = render_plain(log.items[-1])
+    assert "FAIL broken" in text
+    assert "missing.py" in text
+
+
+def test_trust_tui_status_and_toggle(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_TRUST_STORE", str(tmp_path / "trust.json"))
+    (tmp_path / ".superqode" / "plugins").mkdir(parents=True)
+    app = make_app()
+    log = FakeLog()
+
+    app._handle_trust("", log)
+    text = render_plain(log.items[-1])
+    assert "Project Trust" in text
+    assert "untrusted" in text
+    assert ".superqode/plugins" in text
+
+    app._handle_trust("yes", log)
+    app._handle_trust("status", log)
+    assert "trusted" in render_plain(log.items[-1])
+
+    app._handle_trust("no", log)
+    app._handle_trust("status", log)
+    assert "untrusted" in render_plain(log.items[-1])
+
+
+def test_plugins_add_requires_trusted_project(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_TRUST_STORE", str(tmp_path / "trust.json"))
+    source = tmp_path / "demo-plugin"
+    source.mkdir()
+    (source / "plugin.json").write_text(
+        json.dumps({"id": "demo", "name": "Demo Plugin"}),
+        encoding="utf-8",
+    )
+    app = make_app()
+    log = FakeLog()
+
+    app._plugins_cmd(f"add {source}", log)
+
+    assert not (tmp_path / ".superqode" / "plugins" / "demo" / "plugin.json").exists()
+    assert any("untrusted" in str(item).lower() for item in log.items)
+
+
+def test_memory_tui_remember_search_and_providers(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    app = make_app()
+    log = FakeLog()
+
+    app._memory_cmd("remember Use pnpm in this repo; do not use npm.", log)
+    assert any("Remembered" in str(item) for item in log.items)
+
+    app._memory_cmd("search pnpm", log)
+    text = render_plain(log.items[-1])
+    assert "Memory Search" in text
+    assert "Use pnpm" in text
+
+    app._memory_cmd("providers", log)
+    providers = render_plain(log.items[-1])
+    assert "local" in providers
+    assert "specmem" in providers
+
+
+def test_memory_tui_searches_specmem(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    specmem = tmp_path / ".specmem"
+    specmem.mkdir()
+    (specmem / "agent_context.md").write_text(
+        "Checkout flow requires payment smoke tests.",
+        encoding="utf-8",
+    )
+    app = make_app()
+    log = FakeLog()
+
+    app._memory_cmd("search specmem checkout payment", log)
+
+    text = render_plain(log.items[-1])
+    assert "specmem" in text
+    assert "Checkout flow" in text
+
+
+def test_vim_repeat_replays_last_ex_command(monkeypatch):
+    app = make_app()
+    log = FakeLog()
+    calls: list[str] = []
+
+    monkeypatch.setattr(app, "_show_harness_status", lambda _log: calls.append("status"))
+
+    app._handle_command(":status", log)
+    app._repeat_last_ex_command(log)
+
+    assert calls == ["status", "status"]
+    assert app._last_ex_command == ":status"
+
+
+def test_vim_command_history_lists_colon_commands():
+    app = make_app()
+    log = FakeLog()
+
+    app._history_manager.append_sync(":connect local")
+    app._history_manager.append_sync("plain prompt")
+    app._history_manager.append_sync(":status")
+
+    app._vim_command_history(log)
+    text = render_plain(log.items[-1])
+
+    assert "q: Command History" in text
+    assert ":connect local" in text
+    assert ":status" in text
+    assert "plain prompt" not in text
+
+
+def test_vim_search_finds_and_navigates_conversation_messages(monkeypatch):
+    app = make_app()
+    log = FakeLog()
+    feedback: list[str] = []
+    monkeypatch.setattr(app, "notify", lambda message, **_kwargs: feedback.append(message))
+    log._messages = [
+        ("user", "first question", ""),
+        ("agent", "alpha answer\nwith details", "Agent"),
+        ("error", "beta failure", ""),
+        ("agent", "alpha follow-up", "Agent"),
+    ]
+
+    app._vim_search(log, "alpha")
+    assert app._vim_search_matches == [1, 3]
+    assert app._vim_search_index == 0
+    assert log.scroll_to_kwargs["animate"] is False
+    assert "Match 1/2" in feedback[-1]
+
+    app._vim_search_next(log)
+    assert app._vim_search_index == 1
+    assert "Match 2/2" in feedback[-1]
+
+    app._vim_search_next(log, reverse=True)
+    assert app._vim_search_index == 0
+    assert "Match 1/2" in feedback[-1]
+
+
+def test_vim_search_input_parser_preserves_known_slash_commands(monkeypatch):
+    app = make_app()
+    app._vim_experience_enabled = True
+    log = FakeLog()
+    searches: list[tuple[str, bool]] = []
+    monkeypatch.setattr(
+        app,
+        "_vim_search",
+        lambda _log, query, *, reverse=False: searches.append((query, reverse)),
+    )
+
+    assert app._try_vim_search_input("/connect local", log) is False
+    assert searches == []
+
+    assert app._try_vim_search_input("/traceback", log) is True
+    assert searches == [("traceback", False)]
+
+    assert app._try_vim_search_input("?traceback", log) is True
+    assert searches[-1] == ("traceback", True)
+
+
+def test_vim_search_input_parser_navigates_existing_search(monkeypatch):
+    app = make_app()
+    log = FakeLog()
+    calls: list[bool] = []
+    monkeypatch.setattr(
+        app,
+        "_vim_search_next",
+        lambda _log, *, reverse=False: calls.append(reverse),
+    )
+
+    assert app._try_vim_search_input("n", log) is True
+    assert app._try_vim_search_input("N", log) is True
+    assert calls == [False, True]
+
+
+def test_conversation_log_search_highlight_styles_matching_spans():
+    from rich.segment import Segment
+    from rich.style import Style
+    from textual.strip import Strip
+
+    strip = Strip([Segment("alpha beta alpha", Style())], 16)
+
+    highlighted = ConversationLog._highlight_query_in_strip(strip, "alpha")
+    highlighted_segments = [
+        segment
+        for segment in highlighted
+        if segment.style
+        and segment.style.bgcolor
+        and segment.style.bgcolor.get_truecolor().hex == "#facc15"
+    ]
+
+    assert "".join(segment.text for segment in highlighted_segments) == "alphaalpha"
 
 
 def test_slash_complete_prioritizes_connect_and_quit():
@@ -1309,6 +1820,137 @@ def test_plan_command_without_args_does_not_crash():
 
     assert any("Plan mode:" in str(item) for item in log.items)
     assert any("Usage: :plan" in str(item) for item in log.items)
+
+
+def test_live_todos_sync_into_plan_command_state():
+    app = make_app()
+    log = FakeLog()
+
+    app._sync_plan_manager_from_todos(
+        [
+            {
+                "id": "inspect",
+                "content": "Inspect files",
+                "status": "completed",
+                "priority": "high",
+            },
+            {
+                "id": "patch",
+                "content": "Patch code",
+                "status": "in_progress",
+                "priority": "medium",
+            },
+        ]
+    )
+
+    app._handle_plan("", log)
+
+    text = "\n".join(render_plain(item) if not isinstance(item, str) else item for item in log.items)
+    assert "Progress: 1/2 (50%)" in text
+    assert "Inspect files" in text
+    assert "Patch code" in text
+
+
+def test_plan_review_renders_pending_request_even_without_todos():
+    app = make_app()
+    log = FakeLog()
+    app._pending_plan_request = "fix the parser"
+    app._pending_plan_status = "pending"
+
+    app._handle_plan("", log)
+
+    text = "\n".join(render_plain(item) if not isinstance(item, str) else item for item in log.items)
+    assert "Plan Review" in text
+    assert "fix the parser" in text
+    assert "No structured TODOs were emitted yet" in text
+    assert ":plan approve" in text
+    assert ":plan edit" in text
+    assert ":plan reject" in text
+
+
+def test_plan_edit_replaces_pending_request_and_renders_review():
+    app = make_app()
+    log = FakeLog()
+    app._pending_plan_request = "old request"
+    app._pending_plan_status = "approved"
+
+    app._handle_plan("edit new request", log)
+
+    assert app._pending_plan_request == "new request"
+    assert app._pending_plan_status == "pending"
+    text = "\n".join(render_plain(item) if not isinstance(item, str) else item for item in log.items)
+    assert "new request" in text
+    assert "pending" in text
+
+
+def test_plan_approve_and_reject_aliases():
+    app = make_app()
+    log = FakeLog()
+    handled = []
+    app._handle_message = lambda message, target_log: handled.append((message, target_log))
+
+    app._pending_plan_request = "fix the bug"
+    app._handle_plan("approve", log)
+
+    assert app._force_execute_once is True
+    assert app._pending_plan_status == "approved"
+    assert handled == [("fix the bug", log)]
+
+    app._pending_plan_request = "discard me"
+    app._force_plan_once = True
+    app._force_execute_once = True
+    app._handle_plan("reject", log)
+
+    assert app._pending_plan_request == ""
+    assert app._pending_plan_status == "rejected"
+    assert app._force_plan_once is False
+    assert app._force_execute_once is False
+    assert any("Plan cleared" in str(item) for item in log.items)
+
+
+def test_plan_mode_permission_bridge_denies_runtime_approvals():
+    app = make_app()
+    log = FakeLog()
+    pure = SimpleNamespace(on_permission_request=None)
+    app._active_plan_mode_for_current_message = True
+    app._call_ui = lambda func, *args: func(*args)
+
+    app._install_pure_permission_bridge(pure, log)
+
+    assert pure.on_permission_request("bash", {"command": "touch bad"}) is False
+    assert any("Plan mode blocked runtime approval for bash" in str(item) for item in log.items)
+
+
+def test_colorful_status_bar_shows_plan_badge():
+    from superqode.app.widgets import ColorfulStatusBar
+
+    bar = ColorfulStatusBar()
+    bar.plan_state = "pending"
+
+    plain = bar.render().plain
+    assert "PLAN pending" in plain
+
+
+def test_plan_status_badge_reflects_app_state(monkeypatch):
+    from superqode.app.widgets import ColorfulStatusBar
+
+    app = make_app()
+    bar = ColorfulStatusBar()
+    monkeypatch.setattr(app, "query_one", lambda *_args, **_kwargs: bar)
+
+    app._plan_mode_enabled = True
+    app._refresh_plan_status_badge()
+    assert bar.plan_state == "ON"
+
+    app._pending_plan_request = "fix the parser"
+    app._pending_plan_status = "pending"
+    app._refresh_plan_status_badge()
+    assert bar.plan_state == "pending"
+
+    app._pending_plan_status = "approved"
+    app._plan_mode_enabled = False
+    app._refresh_plan_status_badge()
+    assert bar.plan_state == ""
 
 
 def test_agent_question_input_is_handled_while_busy():

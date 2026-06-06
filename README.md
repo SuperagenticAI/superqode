@@ -177,6 +177,55 @@ superqode harness run --spec harness.yaml --runtime codex-sdk --prompt "summariz
 | **Model policies** | First-class Gemma4, DS4, coding, and no-tool policy profiles for local and hosted models |
 | **Provider UX** | Provider doctor, model listing, guided local provider selection, and dynamic OpenCode free model discovery |
 | **Harness flavors** | Tool-rich coding and model-only no-tool profiles, with room for Bring Your Own Harness specs |
+| **Developer workflows** | Session tree, portable share artifacts, Markdown/JSON export, project trust, and local plugin management |
+
+## Developer Workflows
+
+Use SuperQode as a daily coding-agent harness from the TUI or CLI:
+
+```bash
+superqode --tui
+superqode --print "fix the failing test and summarize the change"
+superqode --runtime codex-sdk --print "review this repo"
+superqode --connect claude --print "summarize the last change"
+```
+
+Inside the TUI, start with `:help` and these commands:
+
+```text
+:connect codex        # Codex SDK with local Codex login
+:connect claude       # Claude Code through ACP
+:connect antigravity  # local Antigravity CLI handoff
+:connect byok         # hosted provider/API-key path
+:connect local        # local model provider
+:tree                 # saved session branches
+:share create         # portable superqode-share-v1 artifact
+:export markdown      # copyable transcript export
+:trust doctor         # project-local plugins/MCP/hooks audit
+:plugins doctor       # plugin manifest validation
+:plan fix the tests   # planning-only review before tools run
+:plan approve         # execute the last planned request
+:plan edit ...        # adjust the pending request before execution
+:memory providers     # local and SpecMem-aware memory status
+:memory remember ...  # explicit local project memory
+```
+
+CLI equivalents:
+
+```bash
+superqode sessions tree
+superqode share create <session-id>
+superqode share import <artifact.superqode-share.json> --session-id imported
+superqode trust doctor
+superqode trust yes
+superqode plugins add ./my-plugin
+superqode plugins doctor
+superqode memory remember "Use pnpm in this repo; do not use npm" --kind preference
+superqode memory search "package manager"
+superqode memory providers  # local default; optional mem0/cognee/supermemory disabled until configured
+```
+
+See [Developer Workflows](docs/developer-workflows.md) for the full command set.
 
 ## How It Works
 

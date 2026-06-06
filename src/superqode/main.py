@@ -996,6 +996,329 @@ def sessions_delete(session_id):
 
 
 @cli_main.group()
+def share():
+    """Create and import local portable session share artifacts."""
+    pass
+
+
+@share.command("create")
+@click.argument("session_id")
+@click.option("--output", "-o", type=click.Path(), help="Write artifact to this path")
+def share_create(session_id, output):
+    """Create a portable superqode-share-v1 artifact."""
+    from superqode.session.share_artifacts import create_share_artifact
+
+    try:
+        path = create_share_artifact(session_id, output=output)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Created share artifact: {path}")
+
+
+@share.command("export")
+@click.argument("session_id")
+@click.option("--format", "fmt", type=click.Choice(["markdown", "json"]), default="markdown")
+@click.option("--output", "-o", type=click.Path(), required=True, help="Write export to file")
+def share_export(session_id, fmt, output):
+    """Export a stored session as Markdown or JSON."""
+    from superqode.session.share_artifacts import export_session_file
+
+    try:
+        path = export_session_file(session_id, fmt=fmt, output=output)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Exported session: {path}")
+
+
+@share.command("import")
+@click.argument("artifact", type=click.Path(exists=True))
+@click.option("--session-id", help="New session id to create")
+def share_import(artifact, session_id):
+    """Import a portable share artifact into local sessions."""
+    from superqode.session.share_artifacts import import_share_artifact
+
+    try:
+        imported_id = import_share_artifact(artifact, new_session_id=session_id or "")
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Imported session: {imported_id}")
+
+
+@share.command("list")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def share_list(json_output):
+    """List managed local share artifacts."""
+    from superqode.session.share_artifacts import list_share_artifacts
+
+    artifacts = list_share_artifacts()
+    if json_output:
+        click.echo(
+            json.dumps(
+                [
+                    {
+                        "path": str(artifact.path),
+                        "source_session_id": artifact.source_session_id,
+                        "created_at": artifact.created_at,
+                    }
+                    for artifact in artifacts
+                ],
+                indent=2,
+            )
+        )
+        return
+    if not artifacts:
+        click.echo("No share artifacts found.")
+        return
+    for artifact in artifacts:
+        suffix = f"  session {artifact.source_session_id}" if artifact.source_session_id else ""
+        click.echo(f"{artifact.path}{suffix}")
+
+
+@share.command("revoke")
+@click.argument("artifact")
+def share_revoke(artifact):
+    """Delete a managed local share artifact."""
+    from superqode.session.share_artifacts import revoke_share_artifact
+
+    try:
+        path = revoke_share_artifact(artifact)
+    except FileNotFoundError as exc:
+        raise click.ClickException(f"share artifact not found: {artifact}") from exc
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Revoked share artifact: {path}")
+
+
+@cli_main.group()
+def trust():
+    """Manage local project trust."""
+    pass
+
+
+def _print_trust_status(json_output: bool = False, doctor: bool = False) -> None:
+    from superqode.project_trust import get_project_trust, project_risk_signals, trust_store_path
+
+    record = get_project_trust(Path.cwd())
+    signals = project_risk_signals(Path.cwd())
+    if json_output:
+        click.echo(
+            json.dumps(
+                {
+                    "path": record.path,
+                    "trusted": record.trusted,
+                    "trusted_at": record.trusted_at,
+                    "store": str(trust_store_path()),
+                    "signals": signals,
+                },
+                indent=2,
+            )
+        )
+        return
+    click.echo(f"Project: {record.path}")
+    click.echo(f"Status: {'trusted' if record.trusted else 'untrusted'}")
+    if record.trusted_at:
+        click.echo(f"Since: {record.trusted_at}")
+    click.echo(f"Store: {trust_store_path()}")
+    if signals:
+        click.echo("Trust-sensitive files:")
+        for signal_name in signals:
+            click.echo(f"  - {signal_name}")
+    elif doctor:
+        click.echo("No project-local plugins, MCP config, or hooks detected.")
+
+
+@trust.command("status")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def trust_status(json_output):
+    """Show trust status for the current project."""
+    _print_trust_status(json_output=json_output)
+
+
+@trust.command("doctor")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def trust_doctor(json_output):
+    """Show trust-sensitive project-local files."""
+    _print_trust_status(json_output=json_output, doctor=True)
+
+
+@trust.command("yes")
+def trust_yes():
+    """Trust the current project on this machine."""
+    from superqode.project_trust import set_project_trust
+
+    record = set_project_trust(Path.cwd(), True, note="trusted from CLI")
+    click.echo(f"Trusted project: {record.path}")
+
+
+@trust.command("no")
+def trust_no():
+    """Mark the current project untrusted on this machine."""
+    from superqode.project_trust import set_project_trust
+
+    record = set_project_trust(Path.cwd(), False, note="untrusted from CLI")
+    click.echo(f"Marked project untrusted: {record.path}")
+
+
+@cli_main.group()
+def memory():
+    """Manage SuperQode agent memory."""
+    pass
+
+
+@memory.command("providers")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def memory_providers(json_output):
+    """List built-in memory providers and readiness."""
+    from superqode.memory import available_memory_providers
+
+    statuses = available_memory_providers(Path.cwd())
+    if json_output:
+        click.echo(json.dumps([status.to_dict() for status in statuses], indent=2))
+        return
+    for status in statuses:
+        state = _memory_status_state(status)
+        click.echo(f"{status.provider:<12} {state:<9} {status.detail}")
+
+
+@memory.command("status")
+@click.option(
+    "--provider",
+    default="local",
+    help="Memory provider: local, specmem, mem0, cognee, or supermemory",
+)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def memory_status(provider, json_output):
+    """Show memory provider status."""
+    from superqode.memory import create_memory_provider
+
+    try:
+        status = create_memory_provider(provider, project_root=Path.cwd()).status()
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(status.to_dict(), indent=2))
+        return
+    click.echo(f"Provider: {status.provider}")
+    click.echo(f"Status: {_memory_status_state(status)}")
+    click.echo(f"Records: {status.record_count}")
+    if status.path:
+        click.echo(f"Path: {status.path}")
+    if status.detail:
+        click.echo(f"Detail: {status.detail}")
+
+
+@memory.command("doctor")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def memory_doctor(json_output):
+    """Check memory provider readiness."""
+    from superqode.memory import available_memory_providers
+
+    statuses = available_memory_providers(Path.cwd())
+    payload = {
+        "providers": [status.to_dict() for status in statuses],
+        "ready": any(status.available for status in statuses),
+    }
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    for status in statuses:
+        state = _memory_status_state(status).upper()
+        click.echo(f"{state} {status.provider}: {status.detail}")
+
+
+@memory.command("remember")
+@click.argument("text")
+@click.option("--kind", default="note", help="Memory kind: preference, project, decision, procedure, note")
+@click.option("--scope", default="project", help="Memory scope: user, project, team")
+@click.option("--tag", "tags", multiple=True, help="Tag to attach")
+def memory_remember(text, kind, scope, tags):
+    """Store an explicit local memory."""
+    from superqode.memory import create_memory_provider
+
+    provider = create_memory_provider("local", project_root=Path.cwd())
+    try:
+        record = provider.remember(text, kind=kind, scope=scope, tags=tuple(tags))
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Remembered {record.id}")
+
+
+@memory.command("search")
+@click.argument("query")
+@click.option(
+    "--provider",
+    default="local",
+    help="Memory provider: local, specmem, mem0, cognee, or supermemory",
+)
+@click.option("--limit", default=8, show_default=True)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def memory_search(query, provider, limit, json_output):
+    """Search memory."""
+    from superqode.memory import create_memory_provider
+
+    try:
+        results = create_memory_provider(provider, project_root=Path.cwd()).search(query, limit=limit)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps([result.to_dict() for result in results], indent=2))
+        return
+    if not results:
+        click.echo("No memory matches.")
+        return
+    for result in results:
+        record = result.record
+        click.echo(f"{record.id}  {result.provider}  {record.kind}  score={result.score:.2f}")
+        click.echo(f"  {record.content}")
+
+
+@memory.command("forget")
+@click.argument("memory_id")
+def memory_forget(memory_id):
+    """Delete a local memory by id or unique prefix."""
+    from superqode.memory import create_memory_provider
+
+    provider = create_memory_provider("local", project_root=Path.cwd())
+    if provider.forget(memory_id):
+        click.echo(f"Forgot {memory_id}")
+    else:
+        raise click.ClickException(f"Memory not found: {memory_id}")
+
+
+@memory.command("export")
+@click.option(
+    "--provider",
+    default="local",
+    help="Memory provider: local, specmem, mem0, cognee, or supermemory",
+)
+@click.option("--output", "-o", type=click.Path(), help="Write JSON to file")
+def memory_export(provider, output):
+    """Export memory provider data as JSON."""
+    from superqode.memory import create_memory_provider
+
+    try:
+        payload = create_memory_provider(provider, project_root=Path.cwd()).export()
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    content = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+    if output:
+        Path(output).write_text(content, encoding="utf-8")
+        click.echo(f"Exported memory to {output}")
+    else:
+        click.echo(content, nl=False)
+
+
+def _memory_status_state(status) -> str:
+    if getattr(status, "available", False):
+        return "ready"
+    if not getattr(status, "enabled", True):
+        return "disabled"
+    if getattr(status, "installed", None) is False:
+        return "missing"
+    return "missing"
+
+
+@cli_main.group()
 def harness():
     """Create, validate, and run SuperQode harness specs."""
     pass
@@ -1871,13 +2194,20 @@ def plugins():
 
 @plugins.command("list")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
-def plugins_list(json_output):
+@click.option("--all", "include_disabled", is_flag=True, help="Include disabled plugins")
+def plugins_list(json_output, include_disabled):
     """List discoverable plugins."""
-    from superqode.plugins import load_plugins
+    from superqode.plugins import disabled_plugin_ids, load_plugins
 
-    loaded = load_plugins(Path.cwd())
+    loaded = load_plugins(Path.cwd(), include_disabled=include_disabled)
+    disabled = disabled_plugin_ids(Path.cwd())
     if json_output:
-        click.echo(json.dumps([plugin.to_dict() for plugin in loaded]))
+        click.echo(
+            json.dumps(
+                [{**plugin.to_dict(), "enabled": plugin.id not in disabled} for plugin in loaded],
+                indent=2,
+            )
+        )
         return
 
     if not loaded:
@@ -1885,7 +2215,8 @@ def plugins_list(json_output):
         return
 
     for plugin in loaded:
-        click.echo(f"{plugin.id}  {plugin.version}  {plugin.name}")
+        state = "enabled" if plugin.id not in disabled else "disabled"
+        click.echo(f"{plugin.id}  {plugin.version}  {state}  {plugin.name}")
 
 
 @plugins.command("show")
@@ -1913,6 +2244,87 @@ def plugins_validate(path):
             click.echo(f"Error: {issue}")
         raise click.ClickException("Plugin manifest is invalid")
     click.echo("Plugin manifest is valid.")
+
+
+@plugins.command("doctor")
+@click.argument("path", required=False, type=click.Path())
+def plugins_doctor(path):
+    """Validate all discoverable plugin manifests, or one path."""
+    from superqode.plugins import (
+        discover_plugin_manifests,
+        load_plugin_manifest,
+        validate_plugin_manifest,
+    )
+
+    if path:
+        target = Path(path)
+        if target.is_dir():
+            target = target / "plugin.json"
+        paths = [target]
+    else:
+        paths = discover_plugin_manifests(Path.cwd())
+    if not paths:
+        click.echo("No plugin manifests found.")
+        return
+    ok_count = 0
+    failed = False
+    for manifest_path in paths:
+        issues = validate_plugin_manifest(manifest_path)
+        label = str(manifest_path)
+        try:
+            label = load_plugin_manifest(manifest_path).id
+        except Exception:
+            pass
+        if issues:
+            failed = True
+            click.echo(f"FAIL {label}")
+            for issue in issues:
+                click.echo(f"  - {issue}")
+        else:
+            ok_count += 1
+            click.echo(f"OK {label}")
+    click.echo(f"{ok_count}/{len(paths)} manifests valid.")
+    if failed:
+        raise click.ClickException("Plugin doctor found issues")
+
+
+@plugins.command("add")
+@click.argument("source", type=click.Path(exists=True))
+def plugins_add(source):
+    """Install a local plugin directory or plugin.json."""
+    from superqode.plugins import install_plugin
+    from superqode.project_trust import is_project_trusted
+
+    if not is_project_trusted(Path.cwd()):
+        raise click.ClickException("Project is untrusted. Run `superqode trust yes` first.")
+    try:
+        plugin = install_plugin(source, Path.cwd())
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Installed plugin {plugin.id}")
+
+
+@plugins.command("enable")
+@click.argument("plugin_id")
+def plugins_enable(plugin_id):
+    """Enable a plugin id for this project."""
+    from superqode.plugins import enable_plugin
+    from superqode.project_trust import is_project_trusted
+
+    if not is_project_trusted(Path.cwd()):
+        raise click.ClickException("Project is untrusted. Run `superqode trust yes` first.")
+    changed = enable_plugin(plugin_id, Path.cwd())
+    click.echo(f"Enabled plugin {plugin_id}" if changed else f"Plugin {plugin_id} was already enabled")
+
+
+@plugins.command("disable")
+@click.argument("plugin_id")
+def plugins_disable(plugin_id):
+    """Disable a plugin id for this project."""
+    from superqode.plugins import disable_plugin
+
+    changed = disable_plugin(plugin_id, Path.cwd())
+    click.echo(f"Disabled plugin {plugin_id}" if changed else f"Plugin {plugin_id} was already disabled")
 
 
 @cli_main.group()

@@ -61,6 +61,51 @@ def test_event_mapping_assistant_text_and_tool(tmp_path):
     assert tool_ev.data["args"] == {"command": "ls"}
 
 
+def test_event_mapping_todowrite_emits_plan_update(tmp_path):
+    from claude_agent_sdk import AssistantMessage, ToolUseBlock
+
+    rt = create_runtime("claude-agent-sdk", config=_cfg(tmp_path))
+    names: dict = {}
+    msg = AssistantMessage(
+        content=[
+            ToolUseBlock(
+                id="todo-1",
+                name="TodoWrite",
+                input={
+                    "todos": [
+                        {
+                            "content": "Inspect files",
+                            "status": "in_progress",
+                            "priority": "high",
+                        },
+                        {"content": "Run tests", "status": "pending"},
+                    ]
+                },
+            ),
+        ],
+        model="claude-x",
+    )
+
+    events = rt._events_from_message(msg, names)
+
+    assert names["todo-1"] == "todo_write"
+    assert [event.type for event in events] == ["plan_update"]
+    assert events[0].data == {
+        "tool_name": "todo_write",
+        "tool_call_id": "todo-1",
+        "todos": [
+            {
+                "id": "1",
+                "content": "Inspect files",
+                "status": "in_progress",
+                "priority": "high",
+            },
+            {"id": "2", "content": "Run tests", "status": "pending", "priority": "medium"},
+        ],
+        "source_event": "claude.tool_use.TodoWrite",
+    }
+
+
 def test_event_mapping_tool_result_and_result(tmp_path):
     from claude_agent_sdk import ResultMessage, ToolResultBlock, UserMessage
 

@@ -833,6 +833,16 @@ class AgentLoop:
             await self.hooks.fire(AFTER_TOOL_CALL, lifecycle_ctx, name, arguments, result)
             return result
 
+        if self.config.plan_mode:
+            return await _finalize(
+                ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Plan mode blocked tool execution: {name}",
+                    metadata={"permission": "plan_mode_denied", "tool": name},
+                )
+            )
+
         # Handler hooks can deny a tool call outright or rewrite its arguments
         # before execution. Deny short-circuits; modify swaps in new arguments
         # that the rest of this call (and the after-hook) see.

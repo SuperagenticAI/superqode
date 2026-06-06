@@ -42,6 +42,15 @@ class TestCLIHelp:
         assert result.exit_code == 0
         assert "Usage:" in result.output or "SuperQode" in result.output
 
+    def test_help_lists_adoption_command_groups(self, runner):
+        result = runner.invoke(cli_main, ["--help"])
+
+        assert result.exit_code == 0
+        assert "share" in result.output
+        assert "trust" in result.output
+        assert "plugins" in result.output
+        assert "memory" in result.output
+
     def test_agents_help(self, runner):
         """Test agents command help."""
         result = runner.invoke(cli_main, ["agents", "--help"])
@@ -1365,6 +1374,140 @@ class TestHeadlessCommand:
             assert payload[0]["children"][0]["session_id"] == "child"
 
 
+class TestShareCommand:
+    """Tests for local share artifact CLI commands."""
+
+    def test_share_create_import_list_and_revoke(self, runner, tmp_path):
+        from superqode.agent.session_manager import SessionManager
+
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            manager = SessionManager(".superqode/sessions")
+            manager.start_session("abc123", provider="test", model="m")
+            manager.add_user_message("hello")
+
+            result = runner.invoke(cli_main, ["share", "create", "abc123"])
+            assert result.exit_code == 0
+            artifacts = list(Path(".superqode/shares").glob("*.superqode-share.json"))
+            assert len(artifacts) == 1
+
+            result = runner.invoke(
+                cli_main,
+                ["share", "import", str(artifacts[0]), "--session-id", "imported"],
+            )
+            assert result.exit_code == 0
+            assert "Imported session: imported" in result.output
+            assert manager.get_session_info("imported") is not None
+
+            result = runner.invoke(cli_main, ["share", "list", "--json"])
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload[0]["source_session_id"] == "abc123"
+
+            result = runner.invoke(cli_main, ["share", "revoke", artifacts[0].name])
+            assert result.exit_code == 0
+            assert not artifacts[0].exists()
+
+    def test_share_export_json_file(self, runner, tmp_path):
+        from superqode.agent.session_manager import SessionManager
+
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            manager = SessionManager(".superqode/sessions")
+            manager.start_session("abc123", provider="test", model="m")
+            manager.add_user_message("hello")
+
+            result = runner.invoke(
+                cli_main,
+                ["share", "export", "abc123", "--format", "json", "--output", "session.json"],
+            )
+
+            assert result.exit_code == 0
+            assert '"session_id": "abc123"' in Path("session.json").read_text()
+
+
+class TestTrustCommand:
+    """Tests for project trust CLI commands."""
+
+    def test_trust_status_yes_no_json(self, runner, tmp_path, monkeypatch):
+        monkeypatch.setenv("SUPERQODE_TRUST_STORE", str(tmp_path / "trust.json"))
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            Path(".superqode/plugins").mkdir(parents=True)
+
+            result = runner.invoke(cli_main, ["trust", "status", "--json"])
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["trusted"] is False
+            assert ".superqode/plugins" in payload["signals"]
+
+            result = runner.invoke(cli_main, ["trust", "yes"])
+            assert result.exit_code == 0
+
+            result = runner.invoke(cli_main, ["trust", "status", "--json"])
+            payload = json.loads(result.output)
+            assert payload["trusted"] is True
+
+            result = runner.invoke(cli_main, ["trust", "no"])
+            assert result.exit_code == 0
+            result = runner.invoke(cli_main, ["trust", "status", "--json"])
+            assert json.loads(result.output)["trusted"] is False
+
+
+class TestMemoryCommand:
+    """Tests for agent memory CLI commands."""
+
+    def test_memory_remember_search_forget_and_export(self, runner, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(
+                cli_main,
+                [
+                    "memory",
+                    "remember",
+                    "Use pnpm in this repo; do not use npm.",
+                    "--kind",
+                    "preference",
+                    "--tag",
+                    "tooling",
+                ],
+            )
+            assert result.exit_code == 0
+            memory_id = result.output.strip().split()[-1]
+
+            result = runner.invoke(cli_main, ["memory", "search", "pnpm", "--json"])
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload[0]["record"]["id"] == memory_id
+            assert payload[0]["record"]["kind"] == "preference"
+
+            result = runner.invoke(cli_main, ["memory", "export", "-o", "memory.json"])
+            assert result.exit_code == 0
+            assert '"provider": "local"' in Path("memory.json").read_text()
+
+            result = runner.invoke(cli_main, ["memory", "forget", memory_id[:6]])
+            assert result.exit_code == 0
+
+    def test_memory_specmem_provider_search(self, runner, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            specmem = Path(".specmem")
+            specmem.mkdir()
+            (specmem / "agent_context.md").write_text(
+                "Checkout flow requires payment smoke tests.",
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(cli_main, ["memory", "status", "--provider", "specmem", "--json"])
+            assert result.exit_code == 0
+            assert json.loads(result.output)["available"] is True
+
+            result = runner.invoke(
+                cli_main,
+                ["memory", "search", "checkout payment", "--provider", "specmem", "--json"],
+            )
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload[0]["provider"] == "specmem"
+
+
 class TestPluginsCommand:
     """Tests for plugin manifest CLI commands."""
 
@@ -1394,6 +1537,52 @@ class TestPluginsCommand:
 
             assert result.exit_code == 0
             assert "valid" in result.output
+
+    def test_plugins_add_requires_trust_then_enable_disable(self, runner, tmp_path, monkeypatch):
+        monkeypatch.setenv("SUPERQODE_TRUST_STORE", str(tmp_path / "trust.json"))
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            source = Path("source")
+            source.mkdir()
+            (source / "plugin.json").write_text(
+                json.dumps({"id": "demo", "name": "Demo", "version": "1.0.0"}),
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(cli_main, ["plugins", "add", "source"])
+            assert result.exit_code != 0
+            assert "untrusted" in result.output.lower()
+
+            assert runner.invoke(cli_main, ["trust", "yes"]).exit_code == 0
+            result = runner.invoke(cli_main, ["plugins", "add", "source"])
+            assert result.exit_code == 0
+            assert Path(".superqode/plugins/demo/plugin.json").exists()
+
+            result = runner.invoke(cli_main, ["plugins", "disable", "demo"])
+            assert result.exit_code == 0
+
+            result = runner.invoke(cli_main, ["plugins", "list", "--all", "--json"])
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload[0]["id"] == "demo"
+            assert payload[0]["enabled"] is False
+
+            result = runner.invoke(cli_main, ["plugins", "enable", "demo"])
+            assert result.exit_code == 0
+
+    def test_plugins_doctor_reports_broken_manifest(self, runner, tmp_path):
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            plugin_dir = Path(".superqode/plugins/broken")
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "plugin.json").write_text(
+                json.dumps({"id": "broken", "name": "Broken", "commands": [{"path": "missing.py"}]}),
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(cli_main, ["plugins", "doctor"])
+
+            assert result.exit_code != 0
+            assert "FAIL broken" in result.output
+            assert "missing.py" in result.output
 
 
 class TestQECommand:

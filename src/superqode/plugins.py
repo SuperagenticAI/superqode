@@ -21,6 +21,7 @@ from __future__ import annotations
 import importlib
 import json
 import logging
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
@@ -30,6 +31,8 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+PLUGIN_STATE_FILE = ".superqode/plugins.json"
 
 
 @dataclass(frozen=True)
@@ -109,6 +112,48 @@ def discover_plugin_manifests(root: str | Path = ".") -> List[Path]:
     return paths
 
 
+def _project_root(root: str | Path = ".") -> Path:
+    return Path(root).expanduser().resolve()
+
+
+def project_plugin_dir(root: str | Path = ".") -> Path:
+    """Return the project-local plugin installation directory."""
+    return _project_root(root) / ".superqode" / "plugins"
+
+
+def plugin_state_path(root: str | Path = ".") -> Path:
+    """Return the project-local plugin state file."""
+    return _project_root(root) / PLUGIN_STATE_FILE
+
+
+def load_plugin_state(root: str | Path = ".") -> Dict[str, Any]:
+    """Load project-local plugin enable/disable state."""
+    path = plugin_state_path(root)
+    if not path.exists():
+        return {"disabled": []}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"disabled": []}
+    disabled = data.get("disabled", [])
+    if not isinstance(disabled, list):
+        disabled = []
+    return {"disabled": [str(item) for item in disabled]}
+
+
+def save_plugin_state(state: Dict[str, Any], root: str | Path = ".") -> None:
+    """Persist project-local plugin enable/disable state."""
+    path = plugin_state_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    disabled = sorted({str(item) for item in state.get("disabled", [])})
+    path.write_text(json.dumps({"disabled": disabled}, indent=2) + "\n", encoding="utf-8")
+
+
+def disabled_plugin_ids(root: str | Path = ".") -> set[str]:
+    """Return ids disabled in the project-local plugin state file."""
+    return set(load_plugin_state(root).get("disabled", []))
+
+
 def load_plugin_manifest(path: str | Path) -> PluginManifest:
     """Load a single plugin manifest."""
     manifest_path = Path(path).expanduser().resolve()
@@ -116,12 +161,68 @@ def load_plugin_manifest(path: str | Path) -> PluginManifest:
     return PluginManifest.from_dict(data, path=manifest_path)
 
 
-def load_plugins(root: str | Path = ".") -> List[PluginManifest]:
+def load_plugins(root: str | Path = ".", *, include_disabled: bool = False) -> List[PluginManifest]:
     """Load all discoverable plugin manifests."""
     plugins: List[PluginManifest] = []
+    disabled = disabled_plugin_ids(root) if not include_disabled else set()
     for path in discover_plugin_manifests(root):
-        plugins.append(load_plugin_manifest(path))
+        manifest = load_plugin_manifest(path)
+        if manifest.id in disabled:
+            continue
+        plugins.append(manifest)
     return plugins
+
+
+def enable_plugin(plugin_id: str, root: str | Path = ".") -> bool:
+    """Enable a project plugin id. Returns True if state changed."""
+    state = load_plugin_state(root)
+    disabled = set(state.get("disabled", []))
+    changed = plugin_id in disabled
+    disabled.discard(plugin_id)
+    state["disabled"] = sorted(disabled)
+    save_plugin_state(state, root)
+    return changed
+
+
+def disable_plugin(plugin_id: str, root: str | Path = ".") -> bool:
+    """Disable a project plugin id. Returns True if state changed."""
+    state = load_plugin_state(root)
+    disabled = set(state.get("disabled", []))
+    changed = plugin_id not in disabled
+    disabled.add(plugin_id)
+    state["disabled"] = sorted(disabled)
+    save_plugin_state(state, root)
+    return changed
+
+
+def _safe_plugin_dir_name(plugin_id: str) -> str:
+    safe = "".join(ch if ch.isalnum() or ch in "-_." else "-" for ch in plugin_id).strip(".-")
+    return safe or "plugin"
+
+
+def install_plugin(source: str | Path, root: str | Path = ".") -> PluginManifest:
+    """Install a local plugin manifest or directory into ``.superqode/plugins``."""
+    source_path = Path(source).expanduser().resolve()
+    if not source_path.exists():
+        raise FileNotFoundError(f"plugin source not found: {source}")
+    manifest_path = source_path / "plugin.json" if source_path.is_dir() else source_path
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"plugin manifest not found: {manifest_path}")
+    manifest = load_plugin_manifest(manifest_path)
+    issues = validate_plugin_manifest(manifest_path)
+    if issues:
+        raise ValueError("; ".join(issues))
+
+    dest_dir = project_plugin_dir(root) / _safe_plugin_dir_name(manifest.id)
+    if dest_dir.exists():
+        raise FileExistsError(f"plugin already installed: {manifest.id}")
+    dest_dir.parent.mkdir(parents=True, exist_ok=True)
+    if source_path.is_dir():
+        shutil.copytree(source_path, dest_dir)
+    else:
+        dest_dir.mkdir(parents=True, exist_ok=False)
+        shutil.copy2(source_path, dest_dir / "plugin.json")
+    return load_plugin_manifest(dest_dir / "plugin.json")
 
 
 @dataclass(frozen=True)
@@ -278,6 +379,28 @@ def validate_plugin_manifest(path: str | Path) -> List[str]:
         collection = getattr(manifest, collection_name)
         if not isinstance(collection, list):
             issues.append(f"{collection_name} must be a list")
+
+    base_dir = Path(path).expanduser().resolve().parent
+    for collection_name in ["tools", "commands", "providers", "context_injectors"]:
+        collection = getattr(manifest, collection_name)
+        if not isinstance(collection, list):
+            continue
+        for index, entry in enumerate(collection):
+            label = f"{collection_name}[{index}]"
+            if not isinstance(entry, dict):
+                issues.append(f"{label} must be a dict")
+                continue
+            for key in ["path", "script", "prompt_file", "schema"]:
+                value = entry.get(key)
+                if not isinstance(value, str) or not value.strip():
+                    continue
+                ref = Path(value).expanduser()
+                if ref.is_absolute():
+                    exists = ref.exists()
+                else:
+                    exists = (base_dir / ref).exists()
+                if not exists:
+                    issues.append(f"{label}.{key} points to a missing file: {value}")
 
     # Validate each event_hook entry shape; surface every problem so users
     # can fix them all in one pass rather than re-running validation.

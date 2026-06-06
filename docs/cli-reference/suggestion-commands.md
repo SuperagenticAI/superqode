@@ -259,18 +259,9 @@ Patches use unified diff format:
 
 ## Providing Feedback
 
-After reviewing suggestions, provide feedback to improve future validation runs:
-
-```bash
-# If the suggestion was helpful
-superqode qe feedback finding-001 --valid
-
-# If the suggestion was wrong
-superqode qe feedback finding-001 --false-positive -r "This is expected behavior"
-
-# If you applied the fix
-superqode qe feedback finding-001 --fixed -r "Applied suggested patch"
-```
+QE-specific suggestion feedback memory has been removed for the upcoming QE
+refactor. The feedback command remains as a compatibility entry point, but it now
+prints a refactor notice instead of learning suppressions or fix patterns.
 
 ---
 

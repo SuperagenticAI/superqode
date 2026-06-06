@@ -313,15 +313,8 @@ superqode qe dashboard
 
 ### Provide Feedback
 
-Help improve accuracy by providing feedback:
-
-```bash
-# Mark as valid
-superqode qe feedback finding-001 --valid
-
-# Mark as false positive
-superqode qe feedback finding-002 --false-positive -r "This is expected behavior"
-```
+QE-specific feedback memory has been removed for the upcoming QE refactor. The
+command remains as a compatibility entry point and prints a refactor notice.
 
 ### Apply Suggested Fixes
 

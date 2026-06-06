@@ -949,117 +949,24 @@ def _show_qr_work_logs(qir_file: Path):
 def qe_feedback(
     finding_id: str, feedback_type: str, reason: str, scope: str, expires: int, path: str
 ):
-    """Provide feedback on a finding to improve future validation runs.
+    """Compatibility entry point for paused QE feedback memory.
 
-    Feedback types:
-    - --valid: Confirm finding is a true positive
-    - --false-positive: Suppress this finding in future runs
-    - --fixed: Mark as fixed (can learn fix pattern)
-    - --wont-fix: Acknowledge but don't fix
+    QE-specific feedback and suppression memory has been removed for the
+    upcoming QE refactor. This command accepts the old flags and reports the
+    refactor state without writing learned suppressions or fix patterns.
 
     Examples:
 
-        superqode qe feedback sec-001 --valid
-
-        superqode qe feedback sec-002 --false-positive -r "Intentional for testing"
-
-        superqode qe feedback sec-003 --false-positive --scope team -r "Known limitation"
-
-        superqode qe feedback perf-001 --fixed -r "Optimized query"
+        superqode memory remember "This project treats generated clients as read-only"
     """
     if not _enterprise_only("validation feedback"):
         return 1
-    from superqode.memory import FeedbackCollector, MemoryStore
-
     if not feedback_type:
         console.print("[red]Error:[/red] Must specify feedback type")
         console.print("Options: --valid, --false-positive, --fixed, --wont-fix")
         return 1
-
-    project_root = Path(path).resolve()
-    collector = FeedbackCollector(project_root)
-
-    # Find the finding in recent reports
-    finding_info = _find_finding_in_qrs(project_root, finding_id)
-    if not finding_info:
-        console.print(
-            f"[yellow]Warning:[/yellow] Finding '{finding_id}' not found in recent reports"
-        )
-        console.print("[dim]Proceeding with limited information[/dim]")
-        finding_info = {
-            "id": finding_id,
-            "title": finding_id,
-            "fingerprint": None,
-            "category": "unknown",
-            "severity": "medium",
-            "found_by": "unknown",
-        }
-
-    console.print()
-    console.print(f"[bold]Finding:[/bold] {finding_info.get('title', finding_id)}")
-    console.print(f"[dim]ID: {finding_id}[/dim]")
-    console.print()
-
-    try:
-        if feedback_type == "valid":
-            collector.mark_valid(
-                finding_id=finding_id,
-                finding_title=finding_info.get("title", finding_id),
-                category=finding_info.get("category", "unknown"),
-                severity=finding_info.get("severity", "medium"),
-                role_name=finding_info.get("found_by", "unknown"),
-                reason=reason,
-            )
-            console.print("[green]✓[/green] Marked as valid (true positive)")
-
-        elif feedback_type == "false_positive":
-            if not reason:
-                console.print("[red]Error:[/red] Reason required for false positive")
-                console.print("Use: --reason 'Your reason here'")
-                return 1
-
-            feedback, suppression = collector.mark_false_positive(
-                finding_id=finding_id,
-                finding_title=finding_info.get("title", finding_id),
-                finding_fingerprint=finding_info.get("fingerprint"),
-                role_name=finding_info.get("found_by", "unknown"),
-                reason=reason,
-                scope=scope,
-                expires_in_days=expires,
-            )
-            console.print("[green]✓[/green] Marked as false positive")
-            console.print(f"[dim]Suppression created: {suppression.id}[/dim]")
-            if scope == "team":
-                console.print("[dim]Saved to .superqode/memory.json (commit to share)[/dim]")
-            if expires:
-                console.print(f"[dim]Expires in {expires} days[/dim]")
-
-        elif feedback_type == "fixed":
-            collector.mark_fixed(
-                finding_id=finding_id,
-                finding_title=finding_info.get("title", finding_id),
-                finding_fingerprint=finding_info.get("fingerprint"),
-                fix_description=reason or "Fixed",
-            )
-            console.print("[green]✓[/green] Marked as fixed")
-
-        elif feedback_type == "wont_fix":
-            collector.mark_wont_fix(
-                finding_id=finding_id,
-                finding_title=finding_info.get("title", finding_id),
-                reason=reason or "Won't fix",
-            )
-            console.print("[green]✓[/green] Marked as won't fix")
-
-        console.print()
-        console.print(
-            "[dim]Feedback recorded. Future validation runs will use this information.[/dim]"
-        )
-
-    except Exception as e:
-        console.print(f"[red]Error recording feedback:[/red] {e}")
-        return 1
-
+    console.print("[yellow]QE feedback memory has been removed for the upcoming QE refactor.[/yellow]")
+    console.print("[dim]Use `superqode memory remember ...` for general agent memory.[/dim]")
     return 0
 
 
@@ -1086,71 +993,19 @@ def _find_finding_in_qrs(project_root: Path, finding_id: str) -> Optional[Dict]:
 @click.argument("path", type=click.Path(exists=True), default=".")
 @click.option("--remove", "-r", help="Remove suppression by ID")
 def qe_suppressions(path: str, remove: str):
-    """List or manage finding suppressions.
+    """Compatibility entry point for paused QE suppressions.
 
-    Suppressions prevent specific findings from appearing in future validation runs.
-    They are created via 'superqode qe feedback --false-positive'.
-
-    Examples:
-
-        superqode qe suppressions           # List active suppressions
-
-        superqode qe suppressions -r abc123  # Remove suppression by ID
+    QE-specific suppression memory has been removed for the upcoming QE
+    refactor. Use explicit noise configuration for validation filtering until
+    the new QE layer is rebuilt.
     """
     if not _enterprise_only("validation suppressions"):
         return 1
-    from superqode.memory import MemoryStore
-
-    project_root = Path(path).resolve()
-    store = MemoryStore(project_root)
-    memory = store.load()
-
-    if remove:
-        if store.remove_suppression(remove):
-            console.print(f"[green]✓[/green] Removed suppression {remove}")
-        else:
-            console.print(f"[red]Suppression not found:[/red] {remove}")
-        return
-
-    # List suppressions
-    active = memory.get_active_suppressions()
-
     console.print()
-    console.print(Panel("[bold]Active Suppressions[/bold]", border_style="cyan"))
+    console.print(Panel("[bold]QE Suppressions[/bold]", border_style="cyan"))
     console.print()
-
-    if not active:
-        console.print("[dim]No active suppressions[/dim]")
-        console.print()
-        console.print("[dim]Create suppressions with:[/dim]")
-        console.print("  superqode qe feedback <finding-id> --false-positive -r 'reason'")
-        return
-
-    table = Table()
-    table.add_column("ID", style="cyan")
-    table.add_column("Pattern")
-    table.add_column("Type")
-    table.add_column("Scope")
-    table.add_column("Reason", style="dim")
-    table.add_column("Expires")
-
-    for supp in active:
-        pattern_display = supp.pattern[:30] + "..." if len(supp.pattern) > 30 else supp.pattern
-        expires = supp.expires_at[:10] if supp.expires_at else "-"
-        table.add_row(
-            supp.id,
-            pattern_display,
-            supp.pattern_type,
-            supp.scope,
-            supp.reason[:25] + "..." if len(supp.reason) > 25 else supp.reason,
-            expires,
-        )
-
-    console.print(table)
-    console.print()
-    console.print(
-        f"[dim]Total: {len(active)} active, {memory.total_suppressions_applied} applied[/dim]"
-    )
+    console.print("[yellow]QE suppression memory has been removed for the upcoming QE refactor.[/yellow]")
+    console.print("[dim]Use `superqode memory status` for the new agent memory layer.[/dim]")
 
 
 def _run_async(coro):

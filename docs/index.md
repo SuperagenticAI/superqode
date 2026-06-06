@@ -15,6 +15,7 @@
 [:octicons-rocket-24: Get Started](getting-started/installation.md){ .md-button .md-button--primary }
 [:octicons-book-24: Learn Concepts](concepts/index.md){ .md-button }
 [:octicons-code-24: CLI Reference](cli-reference/index.md){ .md-button }
+[:octicons-git-branch-24: Developer Workflows](developer-workflows.md){ .md-button }
 
 [Demo video](https://www.youtube.com/watch?v=x2V323HgXRk)
 

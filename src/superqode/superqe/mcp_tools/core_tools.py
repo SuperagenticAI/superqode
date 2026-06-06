@@ -1,10 +1,9 @@
 """
 Core MCP Tools - Always loaded tools for essential operations.
 
-14 core tools:
+11 core tools:
 - fleet_init, agent_spawn, fleet_status
 - test_generate, test_execute, test_report
-- memory_store, memory_retrieve, memory_query
 - quality_analyze, task_orchestrate, task_status
 - tools_discover, tools_load_domain
 """
@@ -97,42 +96,6 @@ async def test_report(
         "status": "generated",
         "format": format,
         "output_path": output_path or f"./reports/test_report.{format}",
-    }
-
-
-async def memory_store(
-    key: str,
-    value: Any,
-    namespace: str = "default",
-    ttl: Optional[int] = None,
-    persist: bool = False,
-    **kwargs,
-) -> Dict[str, Any]:
-    """Store a value in agent memory."""
-    return {"status": "stored", "key": key, "namespace": namespace, "persist": persist, "ttl": ttl}
-
-
-async def memory_retrieve(key: str, namespace: str = "default", **kwargs) -> Dict[str, Any]:
-    """Retrieve a value from agent memory."""
-    return {
-        "status": "retrieved",
-        "key": key,
-        "namespace": namespace,
-        "value": None,
-        "found": False,
-    }
-
-
-async def memory_query(
-    pattern: str, namespace: str = "default", limit: int = 100, **kwargs
-) -> Dict[str, Any]:
-    """Query memory with a pattern."""
-    return {
-        "status": "queried",
-        "pattern": pattern,
-        "namespace": namespace,
-        "results": [],
-        "total": 0,
     }
 
 
@@ -299,52 +262,6 @@ def register_core_tools(registry: MCPToolRegistry) -> None:
                 },
             },
             keywords=["report", "test", "results"],
-        ),
-        MCPTool(
-            name="memory_store",
-            description="Store a value in agent memory",
-            handler=memory_store,
-            domain=ToolDomain.CORE,
-            schema={
-                "type": "object",
-                "properties": {
-                    "key": {"type": "string"},
-                    "value": {},
-                    "namespace": {"type": "string"},
-                    "ttl": {"type": "integer"},
-                    "persist": {"type": "boolean"},
-                },
-                "required": ["key", "value"],
-            },
-            keywords=["store", "memory", "save"],
-        ),
-        MCPTool(
-            name="memory_retrieve",
-            description="Retrieve a value from agent memory",
-            handler=memory_retrieve,
-            domain=ToolDomain.CORE,
-            schema={
-                "type": "object",
-                "properties": {"key": {"type": "string"}, "namespace": {"type": "string"}},
-                "required": ["key"],
-            },
-            keywords=["get", "retrieve", "memory"],
-        ),
-        MCPTool(
-            name="memory_query",
-            description="Query memory with a pattern",
-            handler=memory_query,
-            domain=ToolDomain.CORE,
-            schema={
-                "type": "object",
-                "properties": {
-                    "pattern": {"type": "string"},
-                    "namespace": {"type": "string"},
-                    "limit": {"type": "integer"},
-                },
-                "required": ["pattern"],
-            },
-            keywords=["query", "search", "memory"],
         ),
         MCPTool(
             name="quality_analyze",

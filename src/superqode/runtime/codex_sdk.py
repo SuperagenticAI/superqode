@@ -57,7 +57,62 @@ def _payload_dict(payload: Any) -> dict[str, Any]:
     if hasattr(payload, "model_dump"):
         dumped = payload.model_dump(mode="json", by_alias=True)
         return dumped if isinstance(dumped, dict) else {}
+    if hasattr(payload, "__dict__"):
+        return dict(vars(payload))
     return {}
+
+
+def _todos_from_codex_plan(plan: Any) -> list[dict[str, str]]:
+    todos: list[dict[str, str]] = []
+    for index, item in enumerate(plan or (), 1):
+        data = _payload_dict(item)
+        step = str(data.get("step") or data.get("text") or data.get("content") or "").strip()
+        if not step:
+            continue
+        todos.append(
+            {
+                "id": str(data.get("id") or index),
+                "content": step,
+                "status": _normalize_codex_plan_status(data.get("status")),
+                "priority": str(data.get("priority") or "medium").lower(),
+            }
+        )
+    return todos
+
+
+def _todos_from_codex_todo_items(items: Any) -> list[dict[str, str]]:
+    todos: list[dict[str, str]] = []
+    for index, item in enumerate(items or (), 1):
+        data = _payload_dict(item)
+        text = str(data.get("text") or data.get("step") or data.get("content") or "").strip()
+        if not text:
+            continue
+        todos.append(
+            {
+                "id": str(data.get("id") or index),
+                "content": text,
+                "status": "completed" if bool(data.get("completed")) else "pending",
+                "priority": str(data.get("priority") or "medium").lower(),
+            }
+        )
+    return todos
+
+
+def _normalize_codex_plan_status(value: Any) -> str:
+    raw = str(getattr(value, "value", value) or "").replace("-", "_")
+    normalized = ""
+    for char in raw:
+        if char.isupper() and normalized:
+            normalized += "_"
+        normalized += char.lower()
+    normalized = normalized.strip("_")
+    if normalized in {"inprogress", "in_progress", "active", "running"}:
+        return "in_progress"
+    if normalized in {"complete", "completed", "done"}:
+        return "completed"
+    if normalized in {"cancelled", "canceled", "failed"}:
+        return "cancelled"
+    return "pending"
 
 
 _STREAM_DONE = object()
@@ -466,6 +521,20 @@ class CodexSDKRuntime:
                     },
                 )
             ]
+        if method == "turn/plan/updated":
+            return [
+                HarnessEvent(
+                    type="plan_update",
+                    data={
+                        "tool_name": "todo_write",
+                        "todos": _todos_from_codex_plan(
+                            _payload_value(payload, "plan", default=[])
+                        ),
+                        "explanation": _payload_value(payload, "explanation", default="") or "",
+                        "source_event": method,
+                    },
+                )
+            ]
         if method == "item/completed":
             item = getattr(payload, "item", None)
             root = getattr(item, "root", item)
@@ -480,6 +549,20 @@ class CodexSDKRuntime:
                     return []
                 text = _payload_value(root, "text", default="")
                 return [HarnessEvent(type="model_delta", data={"text": str(text)})] if text else []
+            if item_type == "todo_list":
+                return [
+                    HarnessEvent(
+                        type="plan_update",
+                        data={
+                            "tool_name": "todo_write",
+                            "tool_call_id": getattr(root, "id", None),
+                            "todos": _todos_from_codex_todo_items(
+                                _payload_value(root, "items", default=[])
+                            ),
+                            "source_event": method,
+                        },
+                    )
+                ]
             if item_type == "commandExecution":
                 status = _status_value(getattr(root, "status", ""))
                 output = _payload_value(

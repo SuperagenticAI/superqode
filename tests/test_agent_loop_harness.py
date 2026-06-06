@@ -366,6 +366,74 @@ async def test_streaming_plan_mode_does_not_send_tools():
 
 
 @pytest.mark.asyncio
+async def test_plan_mode_blocks_unexpected_tool_calls_before_execution():
+    gateway = ScriptedGateway(
+        [
+            GatewayResponse(
+                content="",
+                tool_calls=[_tool_call("write_file", '{"path": "README.md", "content": "bad"}')],
+            ),
+            GatewayResponse(content="planned safely"),
+        ]
+    )
+    loop = AgentLoop(
+        gateway=gateway,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(
+            provider="test",
+            model="test-model",
+            plan_mode=True,
+        ),
+        parallel_tools=False,
+    )
+
+    result = await loop.run("plan a README update")
+
+    assert result.content == "planned safely"
+    assert gateway.tools_seen == [None, None]
+    assert "Plan mode blocked tool execution: write_file" in result.messages[-1].content
+
+
+@pytest.mark.asyncio
+async def test_streaming_plan_mode_blocks_unexpected_tool_calls_before_execution():
+    class ToolCallingStreamGateway(ScriptedGateway):
+        def __init__(self):
+            super().__init__([])
+            self.stream_calls = 0
+
+        async def stream_completion(self, *args: Any, **kwargs: Any) -> AsyncIterator[StreamChunk]:
+            self.calls.append(kwargs.get("messages") or args[0])
+            self.tools_seen.append(kwargs.get("tools"))
+            self.stream_calls += 1
+            if self.stream_calls == 1:
+                yield StreamChunk(
+                    tool_calls=[
+                        _tool_call("write_file", '{"path": "README.md", "content": "bad"}')
+                    ]
+                )
+            else:
+                yield StreamChunk(content="planned safely")
+
+    gateway = ToolCallingStreamGateway()
+    loop = AgentLoop(
+        gateway=gateway,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(
+            provider="test",
+            model="test-model",
+            plan_mode=True,
+            max_iterations=2,
+        ),
+        parallel_tools=False,
+    )
+
+    chunks = [chunk async for chunk in loop.run_streaming("plan a README update")]
+
+    assert "".join(chunks) == "planned safely"
+    assert gateway.tools_seen == [None, None]
+
+
+@pytest.mark.asyncio
 async def test_agent_retries_when_model_narrates_tool_use_without_call():
     gateway = ScriptedGateway(
         [

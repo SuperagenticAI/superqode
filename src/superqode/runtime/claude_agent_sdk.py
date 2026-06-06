@@ -47,6 +47,8 @@ _CLAUDE_TOOL_NAMES = {
     "read": "read_file",
     "glob": "glob",
     "grep": "grep",
+    "todowrite": "todo_write",
+    "todoread": "todo_read",
     "webfetch": "web_fetch",
     "websearch": "web_search",
 }
@@ -105,6 +107,53 @@ def _usage_dict(usage: Any) -> dict[str, Any]:
         except Exception:  # noqa: BLE001
             return {}
     return {}
+
+
+def _normalize_todo_status(value: Any) -> str:
+    raw = str(getattr(value, "value", value) or "").replace("-", "_")
+    normalized = ""
+    for char in raw:
+        if char.isupper() and normalized:
+            normalized += "_"
+        normalized += char.lower()
+    normalized = normalized.strip("_")
+    if normalized in {"inprogress", "in_progress", "active", "running"}:
+        return "in_progress"
+    if normalized in {"complete", "completed", "done"}:
+        return "completed"
+    if normalized in {"cancelled", "canceled", "failed"}:
+        return "cancelled"
+    return "pending"
+
+
+def _todos_from_tool_input(tool_input: Any) -> list[dict[str, str]]:
+    if not isinstance(tool_input, dict):
+        return []
+    raw_todos = tool_input.get("todos")
+    if not isinstance(raw_todos, list):
+        return []
+    todos: list[dict[str, str]] = []
+    for index, item in enumerate(raw_todos, 1):
+        if not isinstance(item, dict):
+            continue
+        content = str(
+            item.get("content")
+            or item.get("text")
+            or item.get("task")
+            or item.get("activeForm")
+            or ""
+        ).strip()
+        if not content:
+            continue
+        todos.append(
+            {
+                "id": str(item.get("id") or index),
+                "content": content,
+                "status": _normalize_todo_status(item.get("status")),
+                "priority": str(item.get("priority") or "medium").lower(),
+            }
+        )
+    return todos
 
 
 class ClaudeAgentSDKRuntime:
@@ -297,17 +346,33 @@ class ClaudeAgentSDKRuntime:
                 elif isinstance(block, ThinkingBlock) and getattr(block, "thinking", ""):
                     events.append(HarnessEvent(type="thinking", data={"text": block.thinking}))
                 elif isinstance(block, ToolUseBlock):
-                    tool_names[block.id] = block.name
-                    events.append(
-                        HarnessEvent(
-                            type="tool_call",
-                            data={
-                                "tool_name": block.name,
-                                "tool_call_id": block.id,
-                                "args": dict(block.input or {}),
-                            },
+                    tool_name = _normalize_tool_name(block.name)
+                    tool_input = dict(block.input or {})
+                    if tool_name == "todo_write":
+                        tool_names[block.id] = "todo_write"
+                        events.append(
+                            HarnessEvent(
+                                type="plan_update",
+                                data={
+                                    "tool_name": "todo_write",
+                                    "tool_call_id": block.id,
+                                    "todos": _todos_from_tool_input(tool_input),
+                                    "source_event": "claude.tool_use.TodoWrite",
+                                },
+                            )
                         )
-                    )
+                    else:
+                        tool_names[block.id] = block.name
+                        events.append(
+                            HarnessEvent(
+                                type="tool_call",
+                                data={
+                                    "tool_name": block.name,
+                                    "tool_call_id": block.id,
+                                    "args": tool_input,
+                                },
+                            )
+                        )
             return events
         if isinstance(message, UserMessage):
             for block in getattr(message, "content", []) or []:

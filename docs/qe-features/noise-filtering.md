@@ -13,7 +13,6 @@ Noise filtering helps reduce false positives and focus on important findings by 
 - **Severity filtering**: Only show findings above minimum severity
 - **Known risk suppression**: Suppress acknowledged risks
 - **Rule-based adjustments**: Apply severity rules and adjustments
-- **Memory-based filtering**: Use user feedback to suppress false positives
 
 ---
 
@@ -245,34 +244,21 @@ qe:
 
 ---
 
-## Memory-Based Filtering
+## QE Feedback Memory
 
-Use feedback from previous sessions to suppress false positives.
+QE-specific feedback storage has been removed for the upcoming QE refactor.
+Use `superqode memory` for general project facts, preferences, procedures, and
+SpecMem recall.
 
-### How It Works
-
-When you mark findings as false positives:
-
-```bash
-superqode qe feedback finding-001 --false-positive
-```
-
-The system remembers this and suppresses similar findings in future sessions.
-
-### Automatic Application
-
-Memory-based suppressions are automatically applied if:
-- Finding matches a previously suppressed pattern
-- User feedback indicates false positive
-- Pattern is learned from multiple feedback instances
-
-### Disable Memory Filtering
+The general memory layer does not currently suppress QE findings. Use explicit
+noise configuration for validation filtering until the QE refactor lands.
 
 ```yaml
 qe:
   noise:
-    # Memory filtering is enabled by default
-    # Controlled by feedback system
+    suppress_known_risks: true
+    known_risk_patterns:
+      - "approved exception: SEC-2026-001"
 ```
 
 ---
@@ -314,12 +300,11 @@ max_total_findings: 100
 Noise filters are applied in this order:
 
 1. **Confidence threshold**: Remove low-confidence findings
-2. **Memory suppressions**: Remove learned false positives
-3. **Known risk patterns**: Suppress configured patterns
-4. **Deduplication**: Merge similar findings
-5. **Severity filtering**: Remove below minimum severity
-6. **Severity rules**: Adjust severity based on rules
-7. **Finding limits**: Apply per-file and total limits
+2. **Known risk patterns**: Suppress configured patterns
+3. **Deduplication**: Merge similar findings
+4. **Severity filtering**: Remove below minimum severity
+5. **Severity rules**: Adjust severity based on rules
+6. **Finding limits**: Apply per-file and total limits
 
 ---
 
@@ -400,10 +385,8 @@ min_severity: "low"
 ### 2. Tune Based on Feedback
 
 ```bash
-# Mark false positives
-superqode qe feedback finding-001 --false-positive
-
-# System learns automatically
+superqode memory remember "Ignore generated files under dist/ during review" --kind preference
+superqode memory search "generated files"
 ```
 
 ### 3. Use Known Risk Patterns

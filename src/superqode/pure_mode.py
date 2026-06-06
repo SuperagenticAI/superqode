@@ -412,6 +412,28 @@ class PureMode:
                     ToolResult(success=True, output="patch updated", metadata={"changes": changes}),
                 )
             return ""
+        if event.type == "plan_update":
+            todos = event.data.get("todos")
+            if isinstance(todos, list):
+                args = {"todos": todos}
+                if self.on_tool_call:
+                    self.on_tool_call("todo_write", args)
+                if self.on_tool_result:
+                    import json
+
+                    self.on_tool_result(
+                        "todo_write",
+                        ToolResult(
+                            success=True,
+                            output=json.dumps(todos),
+                            metadata={
+                                "todos": todos,
+                                "explanation": str(event.data.get("explanation") or ""),
+                                "source_event": str(event.data.get("source_event") or ""),
+                            },
+                        ),
+                    )
+            return ""
         if event.type == "tool_result":
             name = str(event.data.get("tool_name") or "tool")
             tool_id = event.data.get("tool_call_id")

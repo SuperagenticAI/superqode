@@ -1,381 +1,311 @@
-# Memory & Learning System
+# Agent Memory Layer
 
-SuperQode learns from your feedback to improve over time. The memory system stores project-specific learnings that persist across validation sessions.
+SuperQode memory is now an agent-memory layer, not a QE suppression store.
 
----
+The goal is to make memory inspectable, configurable, and provider-neutral:
 
-## Overview
+- explicit user/project/team memories
+- SpecMem-aware coding memory
+- optional Mem0, Cognee, and Supermemory providers
+- future MCP memory providers
+- vector databases as storage backends, not the product abstraction
 
-The Memory & Learning System enables SuperQode to:
+## Commands
 
-- **Remember patterns**: Track recurring issues and fixes
-- **Learn from feedback**: Improve based on your corrections
-- **Suppress false positives**: Automatically filter known false positives
-- **Score file risk**: Identify high-risk files based on history
-- **Track role effectiveness**: Measure which validation roles work best for your project
+## Quick Start
 
----
-
-## Components
-
-### MemoryStore
-
-Persistent storage for project learnings:
-
-- **User-local memory**: `~/.superqode/memory/project-{hash}.json`
-- **Team-shared memory**: `.superqode/memory.json` (in repo)
-
-Memory is merged with user-local taking precedence.
-
-### FeedbackCollector
-
-Collects and processes user feedback on findings:
-
-- Marks findings as valid/false positive
-- Records fix patterns
-- Updates role metrics
-- Integrates with ML predictor
-
----
-
-## What Gets Remembered
-
-### Issue Patterns
-
-Recurring issues detected across sessions:
-
-```python
-{
-  "fingerprint": "abc123",
-  "title": "SQL injection vulnerability",
-  "category": "security",
-  "severity": "critical",
-  "occurrences": 5,
-  "first_seen": "2025-01-10T10:00:00",
-  "last_seen": "2025-01-15T14:30:00",
-  "files_affected": ["src/api/users.py", "src/api/orders.py"],
-  "avg_confidence": 0.85
-}
-```
-
-### Suppressions
-
-False positive suppression rules:
-
-```python
-{
-  "pattern": "legacy authentication code",
-  "pattern_type": "fingerprint",
-  "scope": "project",
-  "created_at": "2025-01-10T10:00:00",
-  "created_by": "user",
-  "expires_in_days": null
-}
-```
-
-### Fix Patterns
-
-Successful fix patterns:
-
-```python
-{
-  "finding_type": "sql_injection",
-  "fix_approach": "parameterized_queries",
-  "success_rate": 0.95,
-  "times_used": 10,
-  "files_fixed": ["src/api/users.py", ...]
-}
-```
-
-### File Risk Scores
-
-Risk scores per file based on finding history:
-
-```python
-{
-  "src/api/users.py": 0.85,
-  "src/auth/login.py": 0.92,
-  "src/utils/helpers.py": 0.15
-}
-```
-
-### Role Metrics
-
-Effectiveness tracking per validation role:
-
-```python
-{
-  "security_tester": {
-    "total_findings": 45,
-    "confirmed_findings": 40,
-    "false_positives": 5,
-    "accuracy_rate": 0.89
-  }
-}
-```
-
----
-
-## Feedback Collection
-
-### Mark Finding as Valid
+Start with local memory. It needs no extra dependency and is the default:
 
 ```bash
-superqode qe feedback finding-001 --valid
+superqode memory providers
+superqode memory remember "Use pnpm in this repo; do not use npm" --kind preference --tag tooling
+superqode memory search "package manager"
 ```
 
-Updates:
-- Role metrics (increases confirmed findings)
-- Issue patterns (tracks recurring issues)
-- ML training data (if ML enabled)
+In the TUI:
 
-### Mark as False Positive
+```text
+:memory providers
+:memory remember Use pnpm in this repo; do not use npm
+:memory search package manager
+```
+
+Provider readiness uses these states:
+
+| State | Meaning |
+| --- | --- |
+| `ready` | Provider can be used now |
+| `disabled` | Provider exists but is not enabled in `superqode.yaml` |
+| `missing` | Provider is enabled but its SDK, CLI, workspace, or API key is missing |
+
+Memory is currently retrieved only when you ask for it with `memory search` or
+`:memory search`. SuperQode does not yet auto-inject memories into every agent
+turn.
+
+## Command Reference
+
+TUI:
+
+```text
+:memory
+:memory status
+:memory providers
+:memory doctor
+:memory remember <text>
+:memory search <query>
+:memory search specmem <query>
+:memory forget <id>
+:memory export [local|specmem]
+```
+
+CLI:
 
 ```bash
-superqode qe feedback finding-002 --false-positive -r "Intentional for testing"
+superqode memory status
+superqode memory providers
+superqode memory doctor
+superqode memory remember "This repo uses pnpm, never npm" --kind preference --tag package-manager
+superqode memory search "package manager"
+superqode memory search "auth requirements" --provider specmem
+superqode memory search "auth requirements" --provider mem0
+superqode memory forget <id>
+superqode memory export --provider local -o memory.json
 ```
 
-Creates:
-- Suppression rule
-- Updates role metrics
-- Adds to ML training data
+## Providers
 
-### Mark as Fixed
+Keep `local` as the default provider unless a project has a clear reason to use
+hosted or graph memory:
+
+```yaml
+memory:
+  default_provider: local
+  providers:
+    local:
+      enabled: true
+```
+
+### `local`
+
+Local memory is user-local and project-scoped by default:
+
+```text
+~/.superqode/memory/agent-{project_hash}.json
+```
+
+It stores explicit memories such as:
+
+- preferences
+- project facts
+- procedures
+- decisions
+- repo-specific warnings
+
+Example:
 
 ```bash
-superqode qe feedback finding-003 --fixed -r "Applied suggested patch"
+superqode memory remember "Use pnpm in this repo; do not use npm." --kind preference --tag tooling
+superqode memory remember "Auth changes require tests/test_auth.py." --kind procedure --tag auth
 ```
 
-Records:
-- Fix pattern (approach used)
-- File risk score adjustment
-- Role effectiveness update
+### `specmem`
 
----
+SpecMem is treated as a first-class coding-memory provider. SuperQode detects a
+project `.specmem/` workspace and searches Agent Experience Pack files directly:
 
-## Storage Locations
-
-### User-Local Memory
-
-Location: `~/.superqode/memory/project-{hash}.json`
-
-- Per-user, per-project storage
-- Not committed to repo
-- Takes precedence over team memory
-
-### Team-Shared Memory
-
-Location: `.superqode/memory.json`
-
-- Committed to repository
-- Shared across team
-- Merged with user-local memory
-
-### Merging Strategy
-
-When both exist:
-1. Load user-local memory
-2. Load team-shared memory
-3. Merge (user-local takes precedence)
-4. Use merged result
-
----
-
-## Automatic Learning
-
-### Pattern Detection
-
-The system automatically detects patterns:
-
-- **Recurring issues**: Same issue in multiple files
-- **Common fixes**: Successful fixes applied repeatedly
-- **False positive patterns**: Frequently suppressed findings
-
-### Risk Scoring
-
-File risk scores update automatically:
-
-- Finding detected → increase risk
-- Fix applied → decrease risk
-- Multiple findings → higher risk
-
-### Role Metrics
-
-Role effectiveness tracked automatically:
-
-- Finding confirmed → increase accuracy
-- False positive → decrease accuracy
-- Tracks over time
-
----
-
-## API Usage
-
-### Load Memory
-
-```python
-from superqode.memory import MemoryStore
-
-store = MemoryStore(project_root)
-memory = store.load()
-
-# Access data
-issue_patterns = memory.issue_patterns
-suppressions = memory.suppressions
-file_risk = memory.file_risk_map
+```text
+.specmem/agent_memory.json
+.specmem/agent_context.md
+.specmem/knowledge_index.json
+.specmem/impact_graph.json
 ```
 
-### Collect Feedback
-
-```python
-from superqode.memory import FeedbackCollector
-
-collector = FeedbackCollector(project_root)
-
-# Mark as valid
-collector.mark_valid(
-    finding_id="sec-001",
-    finding_title="SQL injection",
-    category="security",
-    severity="critical",
-    role_name="security_tester"
-)
-
-# Mark as false positive
-collector.mark_false_positive(
-    finding_id="sec-002",
-    finding_title="False positive",
-    finding_fingerprint="abc123",
-    role_name="security_tester",
-    reason="Intentional for testing"
-)
-```
-
-### Update File Risk
-
-```python
-memory = store.load()
-memory.update_file_risk("src/api/users.py", "critical")
-store.save()
-```
-
----
-
-## Use Cases
-
-### 1. Reduce False Positives
+Search SpecMem context:
 
 ```bash
-# First time: mark as false positive
-superqode qe feedback finding-001 --false-positive -r "Known pattern"
-
-# Future sessions: automatically suppressed
+superqode memory status --provider specmem
+superqode memory search "checkout flow" --provider specmem
 ```
 
-### 2. Track Recurring Issues
+In the TUI:
 
-The system tracks issues that appear multiple times:
-
-```
-Issue Pattern: SQL injection in user input
-Occurrences: 5
-Files: users.py, orders.py, products.py
+```text
+:memory search specmem checkout flow
 ```
 
-### 3. Identify High-Risk Files
+SuperQode does not require SpecMem as a dependency. If the `specmem` CLI is
+installed, `memory status --provider specmem` reports it.
 
-Files with high risk scores get more attention:
+SpecMem is not the default provider. Use it explicitly with
+`--provider specmem` or enable it in config if a project wants it listed as an
+active provider:
 
-```python
-# Check file risk
-memory = store.load()
-risk = memory.file_risk_map.get("src/api/users.py", 0.0)
-if risk > 0.8:
-    print("High-risk file - focus testing here")
+```yaml
+memory:
+  default_provider: local
+  providers:
+    specmem:
+      enabled: true
+      root: .specmem
 ```
 
-### 4. Measure Role Effectiveness
+### `mem0`
 
-See which roles work best:
+Mem0 is available as an optional hosted provider through the current `mem0ai`
+SDK.
 
-```python
-metrics = memory.role_metrics.get("security_tester")
-print(f"Accuracy: {metrics.accuracy_rate:.2%}")
-print(f"Confirmed: {metrics.confirmed_findings}")
-```
-
----
-
-## Best Practices
-
-### 1. Provide Regular Feedback
+Install:
 
 ```bash
-# After each validation session
-superqode qe feedback finding-001 --valid
-superqode qe feedback finding-002 --false-positive -r "reason"
+pip install "superqode[mem0]"
 ```
 
-### 2. Share Team Memory
+Configure:
 
-Commit `.superqode/memory.json` to repository:
+```yaml
+memory:
+  default_provider: local
+  providers:
+    mem0:
+      enabled: true
+      api_key_env: MEM0_API_KEY
+      user_id: my-project-or-user
+```
+
+Then:
 
 ```bash
-git add .superqode/memory.json
-git commit -m "Update team memory"
+export MEM0_API_KEY=...
+superqode memory status --provider mem0
+superqode memory remember "User prefers pytest examples" --kind preference
+superqode memory search "pytest examples" --provider mem0
 ```
 
-### 3. Review Suppressions
+### `cognee`
 
-Periodically review suppressions:
+Cognee is available as an optional local or cloud provider through a separately
+installed Cognee SDK or `cognee-cli`. SuperQode calls Cognee's `remember` and
+`recall` operations when available.
+
+Install Cognee separately in an environment compatible with Cognee's dependency
+tree, or expose `cognee-cli` on `PATH`:
 
 ```bash
-superqode qe suppressions
+pip install "cognee>=1.1.2,<2.0.0"
 ```
 
-### 4. Monitor Role Metrics
+Current note: Cognee `1.1.2` depends through `instructor` on `rich<15`, while
+SuperQode uses `rich>=15`. For that reason SuperQode does not currently ship a
+bundled `superqode[cognee]` extra. The adapter remains configurable for
+developers who run Cognee separately or resolve that dependency boundary in
+their own environment.
 
-Check which roles are most effective:
+Configure local Cognee with the environment variables Cognee expects, for
+example `LLM_API_KEY`, or point to Cognee Cloud with `COGNEE_SERVICE_URL` and
+`COGNEE_API_KEY`.
 
-```python
-# High accuracy = role works well for your project
-# Low accuracy = may need different approach
+```yaml
+memory:
+  default_provider: local
+  providers:
+    cognee:
+      enabled: true
+      session_id: superqode
 ```
 
----
+Then:
 
-## Troubleshooting
-
-### Memory Not Persisting
-
-**Check storage location**:
-- User-local: `~/.superqode/memory/`
-- Team-shared: `.superqode/memory.json`
-
-### Suppressions Not Working
-
-**Verify pattern matching**:
-- Pattern type (fingerprint vs. title)
-- Scope (project vs. file)
-- Expiration (if set)
-
-### Risk Scores Not Updating
-
-**Ensure feedback collected**:
 ```bash
-superqode qe feedback finding-001 --valid
+superqode memory status --provider cognee
+superqode memory search "release checklist" --provider cognee
 ```
 
----
+### `supermemory`
 
-## Related Features
+Supermemory is available as an optional hosted provider through the current
+`supermemory` Python SDK.
 
-- [validation Feedback Commands](../cli-reference/qe-commands.md) - Feedback workflow
-- [Noise Filtering](../qe-features/noise-filtering.md) - Filtering false positives
+Install:
 
----
+```bash
+pip install "superqode[supermemory]"
+```
 
-## Next Steps
+Configure:
 
-- [Advanced Features Index](index.md) - All advanced features
-- [Configuration](../configuration/yaml-reference.md) - Memory configuration
+```yaml
+memory:
+  default_provider: local
+  providers:
+    supermemory:
+      enabled: true
+      api_key_env: SUPERMEMORY_API_KEY
+      container_tags:
+        - superqode
+        - my-project
+```
+
+Then:
+
+```bash
+export SUPERMEMORY_API_KEY=...
+superqode memory status --provider supermemory
+superqode memory search "API contract" --provider supermemory
+```
+
+### Install All Optional Providers
+
+```bash
+pip install "superqode[memory-providers]"
+```
+
+`memory-providers` installs Mem0 and Supermemory. Install Cognee separately
+until its dependency tree is compatible with SuperQode's Rich version.
+
+## Memory Is Not A Vector DB
+
+Vector databases are storage backends. The SuperQode memory abstraction is about
+what the agent can safely remember and retrieve.
+
+Useful storage backends for future providers:
+
+| Backend | Fit |
+| --- | --- |
+| LanceDB | Best local-first vector store for coding memory |
+| Chroma | Easy local prototyping |
+| Qdrant | Local/server production vector search |
+| pgvector | Teams already using Postgres |
+| SQLite FTS/BM25 | Deterministic local keyword recall |
+
+SuperQode should keep retrieval hybrid:
+
+```text
+semantic score + keyword match + recency + path relevance + source trust
+```
+
+## Planned Providers
+
+The provider interface is designed to support:
+
+- `mcp`: memory servers exposed through MCP
+- `zep` / Graphiti: temporal graph memory
+
+These should be optional extras or MCP connections, not hard dependencies.
+
+## Trust And Privacy
+
+Memory should be visible and controllable:
+
+- no automatic long-term writes by default
+- no automatic prompt injection yet
+- explicit `remember` for local memory
+- source/provider shown in search results
+- project/team-shared writes should respect project trust
+- secrets should not be stored in memory
+
+Use project trust commands before enabling project-local memory integrations:
+
+```bash
+superqode trust doctor
+superqode trust yes
+```

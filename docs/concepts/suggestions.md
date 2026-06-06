@@ -419,15 +419,9 @@ git commit -m "Fix SQL injection vulnerability"
 
 ### 4. Provide Feedback
 
-Help improve suggestions by providing feedback:
-
-```bash
-# If the fix works well
-superqode qe feedback finding-001 --valid
-
-# If it doesn't work
-superqode qe feedback finding-001 --false-positive -r "Breaks feature X"
-```
+QE-specific suggestion feedback memory has been removed for the upcoming QE
+refactor. The command remains as a compatibility entry point and prints a
+refactor notice.
 
 ---
 

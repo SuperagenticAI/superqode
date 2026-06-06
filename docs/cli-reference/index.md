@@ -70,13 +70,59 @@ superqode sessions show abc123
 superqode sessions export abc123 --format markdown --output session.md
 ```
 
-Plugin manifests:
+Portable session handoff:
+
+```bash
+superqode share create abc123
+superqode share export abc123 --format markdown --output session.md
+superqode share import .superqode/shares/share-abc123.superqode-share.json --session-id imported
+superqode share list --json
+superqode share revoke share-abc123.superqode-share.json
+```
+
+Project trust:
+
+```bash
+superqode trust status
+superqode trust status --json
+superqode trust doctor
+superqode trust yes
+superqode trust no
+```
+
+Plugin manifests and local plugin packages:
 
 ```bash
 superqode plugins list
+superqode plugins list --all --json
 superqode plugins show my-plugin
 superqode plugins validate .superqode/plugins/my-plugin/plugin.json
+superqode plugins doctor
+superqode trust yes
+superqode plugins add ./my-plugin
+superqode plugins disable my-plugin
+superqode plugins enable my-plugin
 ```
+
+Agent memory:
+
+```bash
+superqode memory status
+superqode memory providers
+superqode memory doctor
+superqode memory remember "Use pnpm in this repo; do not use npm" --kind preference --tag tooling
+superqode memory search "package manager"
+superqode memory search "auth requirements" --provider specmem
+superqode memory search "release checklist" --provider mem0
+superqode memory search "release checklist" --provider cognee
+superqode memory search "release checklist" --provider supermemory
+superqode memory forget <id>
+superqode memory export --provider local --output memory.json
+```
+
+`local` is the default provider. `specmem`, `mem0`, `cognee`, and
+`supermemory` are opt-in providers configured under `memory.providers` in
+`superqode.yaml`.
 
 Provider and model guidance:
 
@@ -92,7 +138,7 @@ superqode -p --provider ds4 --model deepseek-v4-flash "summarize this repo"
 
 For DS4, start `ds4-server` separately and point SuperQode at its OpenAI-compatible endpoint with `DS4_HOST` if it is not running on `http://127.0.0.1:8000/v1`.
 
-In the TUI, use `Ctrl+K` for the command palette or type `:status`, `:harness`, `:providers`, `:recommend coding`, `:sandbox`, `:plugins`, and `:benchmark`. Use `Ctrl+1` to open the persistent Harness sidebar tab.
+In the TUI, use `Ctrl+K` for the command palette or type `:status`, `:harness`, `:providers`, `:recommend coding`, `:sandbox`, `:tree`, `:share`, `:trust`, `:plugins`, and `:benchmark`. Use `Ctrl+1` to open the persistent Harness sidebar tab.
 
 Benchmark harness:
 
@@ -234,8 +280,7 @@ superqode sandbox run e2b -- "pytest -q"
 | `superqode qe report` | View latest report |
 | `superqode qe logs` | View agent work logs |
 | `superqode qe dashboard` | Open report in web browser |
-| `superqode qe feedback` | Provide feedback on findings |
-| `superqode qe suppressions` | Manage finding suppressions |
+| `superqode memory` | Manage agent memory for project facts, preferences, and SpecMem recall |
 
 ### Validation Commands
 
@@ -290,6 +335,10 @@ When running the interactive TUI (`superqode`), prefix commands with `:`:
 | `:connect byok <provider> <model>` | Connect directly to BYOK provider |
 | `:connect local <provider> <model>` | Connect directly to local model |
 | `:qe <role>` | Switch to validation role mode (e.g., `:qe security_tester`) |
+| `:plan <task>` | Ask for a plan only without native tool execution |
+| `:plan approve` | Execute the last planned request with tools enabled |
+| `:plan edit [task]` | Edit the pending planned request before execution |
+| `:plan reject` | Clear the pending planned request |
 | `:disconnect` | Disconnect current session |
 | `:status` | Show session status |
 | `:help` | Show help |

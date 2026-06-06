@@ -529,6 +529,89 @@ def test_file_change_output_delta_maps_to_patch_tool_delta(fake_codex_sdk, tmp_p
     }
 
 
+def test_codex_plan_update_maps_to_plan_update(fake_codex_sdk, tmp_path):
+    _FakeThread.next_events = [
+        _FakeNotification(
+            "turn/plan/updated",
+            types.SimpleNamespace(
+                explanation="Need to inspect first",
+                plan=[
+                    types.SimpleNamespace(step="Inspect files", status="inProgress"),
+                    types.SimpleNamespace(step="Run tests", status="pending"),
+                ],
+            ),
+        ),
+        _FakeNotification(
+            "turn/completed",
+            types.SimpleNamespace(turn=types.SimpleNamespace(status="completed")),
+        ),
+    ]
+    runtime = create_runtime("codex-sdk", config=_config(tmp_path))
+
+    async def collect():
+        return [event async for event in runtime.run_harness_events("hello")]
+
+    import asyncio
+
+    events = asyncio.run(collect())
+    plan_update = next(event for event in events if event.type == "plan_update")
+    assert plan_update.data["source_event"] == "turn/plan/updated"
+    assert plan_update.data["explanation"] == "Need to inspect first"
+    assert plan_update.data["todos"] == [
+        {
+            "id": "1",
+            "content": "Inspect files",
+            "status": "in_progress",
+            "priority": "medium",
+        },
+        {"id": "2", "content": "Run tests", "status": "pending", "priority": "medium"},
+    ]
+
+
+def test_codex_todo_list_item_maps_to_plan_update(fake_codex_sdk, tmp_path):
+    _FakeThread.next_events = [
+        _FakeNotification(
+            "item/completed",
+            types.SimpleNamespace(
+                item=types.SimpleNamespace(
+                    root=types.SimpleNamespace(
+                        type="todo_list",
+                        id="todo-list-1",
+                        items=[
+                            types.SimpleNamespace(text="Inspect files", completed=True),
+                            types.SimpleNamespace(text="Run tests", completed=False),
+                        ],
+                    )
+                )
+            ),
+        ),
+        _FakeNotification(
+            "turn/completed",
+            types.SimpleNamespace(turn=types.SimpleNamespace(status="completed")),
+        ),
+    ]
+    runtime = create_runtime("codex-sdk", config=_config(tmp_path))
+
+    async def collect():
+        return [event async for event in runtime.run_harness_events("hello")]
+
+    import asyncio
+
+    events = asyncio.run(collect())
+    plan_update = next(event for event in events if event.type == "plan_update")
+    assert plan_update.data["tool_call_id"] == "todo-list-1"
+    assert plan_update.data["source_event"] == "item/completed"
+    assert plan_update.data["todos"] == [
+        {
+            "id": "1",
+            "content": "Inspect files",
+            "status": "completed",
+            "priority": "medium",
+        },
+        {"id": "2", "content": "Run tests", "status": "pending", "priority": "medium"},
+    ]
+
+
 def test_default_approval_handler_rejects_without_interactive_bridge(fake_codex_sdk, tmp_path):
     runtime = create_runtime("codex-sdk", config=_config(tmp_path))
     runtime.metadata
@@ -662,6 +745,66 @@ def test_pure_mode_forwards_codex_tool_events_to_callbacks(fake_codex_sdk, tmp_p
     assert tool_results[0][0] == "bash"
     assert tool_results[0][1].success is True
     assert tool_results[0][1].output == "clean"
+
+
+def test_pure_mode_forwards_codex_plan_updates_to_todo_callbacks(fake_codex_sdk, tmp_path):
+    from superqode.pure_mode import PureMode
+
+    _FakeThread.next_events = [
+        _FakeNotification(
+            "turn/plan/updated",
+            types.SimpleNamespace(
+                explanation="Plan before edits",
+                plan=[
+                    types.SimpleNamespace(step="Inspect files", status="inProgress"),
+                    types.SimpleNamespace(step="Patch code", status="pending"),
+                ],
+            ),
+        ),
+        _FakeNotification(
+            "turn/completed",
+            types.SimpleNamespace(turn=types.SimpleNamespace(status="completed")),
+        ),
+    ]
+    tool_calls = []
+    tool_results = []
+    pure = PureMode(runtime="codex-sdk")
+    pure.on_tool_call = lambda name, args: tool_calls.append((name, args))
+    pure.on_tool_result = lambda name, result: tool_results.append((name, result))
+    assert pure.connect("openai", "", working_directory=tmp_path) is True
+
+    async def collect():
+        return [chunk async for chunk in pure.run_streaming("hello")]
+
+    import asyncio
+
+    assert asyncio.run(collect()) == []
+    assert tool_calls == [
+        (
+            "todo_write",
+            {
+                "todos": [
+                    {
+                        "id": "1",
+                        "content": "Inspect files",
+                        "status": "in_progress",
+                        "priority": "medium",
+                    },
+                    {
+                        "id": "2",
+                        "content": "Patch code",
+                        "status": "pending",
+                        "priority": "medium",
+                    },
+                ]
+            },
+        )
+    ]
+    assert len(tool_results) == 1
+    assert tool_results[0][0] == "todo_write"
+    assert tool_results[0][1].success is True
+    assert tool_results[0][1].metadata["source_event"] == "turn/plan/updated"
+    assert tool_results[0][1].metadata["explanation"] == "Plan before edits"
 
 
 def test_approval_handler_accepts_allowed_shell(fake_codex_sdk, tmp_path):
