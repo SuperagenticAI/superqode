@@ -226,6 +226,78 @@ superqode sandbox run e2b -- "pytest -q"
 
     [:octicons-arrow-right-24: Init Commands](init-commands.md)
 
+-   **Connect Commands (superqode connect)**
+
+    ---
+
+    Connect to ACP agents, BYOK providers, local models, or self-contained runtimes.
+
+    [:octicons-arrow-right-24: Connect Commands](connect-commands.md)
+
+-   **Model Commands (superqode models)**
+
+    ---
+
+    Browse 5000+ models from 130+ providers; search, download, and convert models.
+
+    [:octicons-arrow-right-24: Model Commands](models-commands.md)
+
+-   **Plugin Commands (superqode plugins)**
+
+    ---
+
+    Install, enable, disable, and validate plugin manifests.
+
+    [:octicons-arrow-right-24: Plugin Commands](plugins-commands.md)
+
+-   **Memory Commands (superqode memory)**
+
+    ---
+
+    Store and search agent memory across local and hosted providers.
+
+    [:octicons-arrow-right-24: Memory Commands](memory-commands.md)
+
+-   **Session Commands (superqode sessions)**
+
+    ---
+
+    List, inspect, export, and delete stored sessions.
+
+    [:octicons-arrow-right-24: Session Commands](sessions-commands.md)
+
+-   **Share Commands (superqode share)**
+
+    ---
+
+    Create, import, and manage portable session artifacts.
+
+    [:octicons-arrow-right-24: Share Commands](share-commands.md)
+
+-   **Trust Commands (superqode trust)**
+
+    ---
+
+    Manage per-project trust for plugins and MCP operations.
+
+    [:octicons-arrow-right-24: Trust Commands](trust-commands.md)
+
+-   **Sandbox Commands (superqode sandbox)**
+
+    ---
+
+    Inspect sandbox providers and run commands in isolation.
+
+    [:octicons-arrow-right-24: Sandbox Commands](sandbox-commands.md)
+
+-   **Runtime Commands (superqode runtime)**
+
+    ---
+
+    List runtime backends and probe dependency readiness.
+
+    [:octicons-arrow-right-24: Runtime Commands](runtime-commands.md)
+
 </div>
 
 ---
@@ -331,3 +403,12 @@ For detailed documentation of each command group:
 - [Agents Commands](agents-commands.md) - ACP agent management
 - [Auth Commands](auth-commands.md) - Authentication and security
 - [Init Commands](init-commands.md) - Project initialization
+- [Connect Commands](connect-commands.md) - Connection profiles and direct connect
+- [Model Commands](models-commands.md) - Model catalog browsing and management
+- [Plugin Commands](plugins-commands.md) - Plugin lifecycle management
+- [Memory Commands](memory-commands.md) - Agent memory operations
+- [Session Commands](sessions-commands.md) - Session listing and inspection
+- [Share Commands](share-commands.md) - Portable session artifact management
+- [Trust Commands](trust-commands.md) - Project trust management
+- [Sandbox Commands](sandbox-commands.md) - Sandbox provider diagnostics
+- [Runtime Commands](runtime-commands.md) - Runtime backend inspection

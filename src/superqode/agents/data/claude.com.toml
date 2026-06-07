@@ -12,7 +12,7 @@ publisher_name = "Zed Industries"
 publisher_url = "https://zed.dev"
 type = "coding"
 description = "Unleash Claude's raw power directly in your terminal. Search million-line codebases instantly."
-tags = ["anthropic", "claude", "powerful"]
+tags = ["anthropic", "claude", "powerful", "official-acp"]
 run_command."*" = "claude-code-acp"
 
 help = '''

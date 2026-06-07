@@ -1,7 +1,7 @@
 [project]
 name = "superqode"
 version = "0.1.39"
-description = "SuperQode: Your Portable Coding Agent Harness"
+description = "SuperQode: Your Portable Universal Coding Agent Harness"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12,<3.14"

@@ -1,0 +1,38 @@
+identity = "poolside.ai"
+name = "Poolside"
+short_name = "poolside"
+url = "https://github.com/poolsideai/pool"
+protocol = "acp"
+author_name = "Poolside AI"
+author_url = "https://poolside.ai"
+publisher_name = "Poolside AI"
+publisher_url = "https://poolside.ai"
+type = "coding"
+description = "AI coding agent by Poolside with ACP support."
+tags = ["coding", "ai-agent", "acp"]
+run_command."*" = "pool acp"
+
+help = '''
+# Poolside
+
+AI coding agent by Poolside.
+
+## Installation
+
+```bash
+# Install Pool CLI
+npm install -g @poolsideai/pool
+```
+
+For ACP mode:
+
+```bash
+pool acp
+```
+
+See https://github.com/poolsideai/pool for details.
+'''
+
+[actions."*".install]
+command = "npm install -g @poolsideai/pool"
+description = "Install Poolside CLI"

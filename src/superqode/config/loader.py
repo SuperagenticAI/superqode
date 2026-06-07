@@ -1,6 +1,7 @@
 """Configuration loader for SuperQode."""
 
 import os
+import warnings
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 import yaml
@@ -29,6 +30,10 @@ class ConfigError(Exception):
     """Configuration loading error."""
 
     pass
+
+
+def _warn_legacy_config(message: str) -> None:
+    warnings.warn(message, DeprecationWarning, stacklevel=3)
 
 
 def find_config_file() -> Optional[Path]:
@@ -112,6 +117,17 @@ def parse_role_config(data: Dict[str, Any]) -> RoleConfig:
     - ACP (mode="acp"): Full coding agent via Agent Client Protocol
     - LOCAL (mode="local"): Local/self-hosted models (no API keys)
     """
+    if "persona" in data:
+        _warn_legacy_config(
+            "`persona` in superqode.yaml is deprecated; use `job_description` instead."
+        )
+    if "coding_agent" in data:
+        _warn_legacy_config(
+            "`coding_agent` in superqode.yaml is deprecated; use `mode` plus `agent` or provider/model fields."
+        )
+    if "mcp" in data:
+        _warn_legacy_config("`mcp` in role config is deprecated; use `mcp_servers` instead.")
+
     handoff = None
     if "handoff" in data:
         handoff = parse_handoff_config(data["handoff"])
@@ -192,6 +208,13 @@ def parse_role_config(data: Dict[str, Any]) -> RoleConfig:
 
 def parse_mode_config(data: Dict[str, Any]) -> ModeConfig:
     """Parse mode configuration."""
+    if "roles" in data:
+        _warn_legacy_config(
+            "`team.*.roles` is a legacy config shape. Prefer HarnessSpec files for repeatable run behavior."
+        )
+    if "deep_analysis_roles" in data:
+        _warn_legacy_config("`deep_analysis_roles` is deprecated and is ignored by current flows.")
+
     mode = ModeConfig(
         description=data.get("description", ""),
         enabled=data.get("enabled", True),
@@ -254,6 +277,11 @@ def parse_error_config(data: Dict[str, Any]) -> ErrorConfig:
 def parse_config(data: Dict[str, Any]) -> Config:
     """Parse the complete configuration."""
     config = Config()
+
+    if "team" in data:
+        _warn_legacy_config(
+            "`team` config is legacy. It remains supported for compatibility, but new projects should use HarnessSpec files."
+        )
 
     # Parse superqode metadata
     if "superqode" in data:

@@ -15,7 +15,7 @@ from superqode.providers.connection_profiles import (
 def test_registry_has_expected_profiles():
     ids = connection_profile_ids()
     # Display order: ACP, BYOK, Local, Codex, Claude, Antigravity, Advanced.
-    assert ids == ["acp", "byok", "local", "codex", "claude", "antigravity", "advanced"]
+    assert ids == ["acp", "byok", "local", "codex", "claude", "antigravity"]
 
 
 def test_codex_profile_is_runtime_connector():
@@ -171,12 +171,6 @@ def test_connect_subcommands_route_to_specific_pickers():
     assert ("connect-picker",) not in stub.calls
 
 
-def test_dispatch_advanced_routes_to_runtime_picker(_dispatch):
-    stub = _DispatchStub()
-    _dispatch(stub, get_connection_profile("advanced"), log=None)
-    assert ("runtime", "") in stub.calls  # bare :runtime picker
-
-
 # --- command + completion surface --------------------------------------------
 
 
@@ -188,7 +182,7 @@ def test_connect_profiles_in_commands_and_completion():
     assert ":connect claude" in COMMANDS
     assert ":connect antigravity" in COMMANDS
     values = {c.value for c in SuperQodeApp._connect_profile_completion_candidates()}
-    assert {"codex", "claude", "antigravity", "byok", "local", "acp", "advanced"} <= values
+    assert {"codex", "claude", "antigravity", "byok", "local", "acp"} <= values
 
 
 def test_no_duplicate_acp_claude_profile():

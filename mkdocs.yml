@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
-site_description: "Your Portable Coding Agent Harness."
+site_description: "Your Portable Universal Coding Agent Harness."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode
@@ -103,14 +103,12 @@ markdown_extensions:
   - pymdownx.emoji:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
-  # - pymdownx.highlight
+  - pymdownx.highlight
   - pymdownx.inlinehilite
   - pymdownx.keys
   - pymdownx.mark
   - pymdownx.smartsymbols
   - pymdownx.snippets:
-      auto_append:
-        - includes/abbreviations.md
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -147,8 +145,6 @@ extra:
 extra_css:
   - stylesheets/extra.css
 
-extra_javascript:
-  - javascripts/extra.js
 
 nav:
   - 🏠 Home: index.md
@@ -174,8 +170,6 @@ nav:
     - 📄 superqode.yaml Reference: configuration/yaml-reference.md
     - 🔧 MCP Configuration: configuration/mcp-config.md
 
-  - 🧭 Workflows:
-
   - 🔌 Providers:
     - providers/index.md
     - 🔑 BYOK Providers: providers/byok.md
@@ -184,9 +178,6 @@ nav:
     - 💻 Local Models: providers/local.md
     - 🌐 OpenResponses: providers/openresponses.md
     - 🎛️ Model Profiles: providers/profiles.md
-
-  - 🔗 Integration:
-    - 🧩 OpenClaw: integration/openclaw.md
 
   - 🔬 Advanced:
     - advanced/index.md
@@ -198,13 +189,34 @@ nav:
     - 🔌 Runtime Backends: runtimes.md
     - 📋 Session Management: advanced/session-management.md
     - 🧭 TUI Reference: advanced/tui.md
+    - 🏗️ Workspace System: advanced/workspace-system.md
+    - 📝 LSP Integration: advanced/lsp-integration.md
+    - 📜 Logging System: advanced/logging-system.md
+    - 🗂️ Model Catalog: advanced/model-catalog.md
+    - 🔗 Connection Profiles: advanced/connection-profiles.md
+    - 🧩 Plugin Authoring: advanced/plugin-authoring.md
+    - 🔐 MCP OAuth: advanced/mcp-oauth.md
+    - 📊 Benchmark Runner: advanced/benchmark-runner.md
+    - 🐍 Python Runtimes API: advanced/python-runtimes.md
+    - 📤 Session Sharing: advanced/session-sharing.md
     - 💻 CLI Reference:
       - cli-reference/index.md
-      - ⚙️ Config Commands: cli-reference/config-commands.md
-      - 🔌 Provider Commands: cli-reference/provider-commands.md
-      - 🤖 Agents Commands: cli-reference/agents-commands.md
-      - 🔐 Auth Commands: cli-reference/auth-commands.md
-      - 🎬 Init Commands: cli-reference/init-commands.md
+      - ⚙️ Config: cli-reference/config-commands.md
+      - 🎬 Init: cli-reference/init-commands.md
+      - 🔌 Providers: cli-reference/provider-commands.md
+      - 📦 Models: cli-reference/models-commands.md
+      - 🤖 Agents: cli-reference/agents-commands.md
+      - 🔗 Connect: cli-reference/connect-commands.md
+      - 🔐 Auth: cli-reference/auth-commands.md
+      - 🛡️ Trust: cli-reference/trust-commands.md
+      - ⏱️ Sessions: cli-reference/sessions-commands.md
+      - 📤 Share: cli-reference/share-commands.md
+      - 🧠 Memory: cli-reference/memory-commands.md
+      - 🔌 Plugins: cli-reference/plugins-commands.md
+      - ⚡ Runtime: cli-reference/runtime-commands.md
+      - 🏖️ Sandbox: cli-reference/sandbox-commands.md
+      - 📊 Benchmark: cli-reference/benchmark-commands.md
+      - 🎛️ Profiles/Tools: cli-reference/profiles-commands.md
+      - 🚀 Serve: cli-reference/serve-commands.md
+      - 🩺 Doctor: cli-reference/doctor-command.md
 
-  - 🏢 Enterprise:
-    - enterprise/index.md

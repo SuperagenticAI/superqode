@@ -1,0 +1,37 @@
+identity = "cline.bot"
+name = "Cline"
+short_name = "cline"
+url = "https://cline.bot/"
+protocol = "acp"
+author_name = "Cline"
+author_url = "https://cline.bot"
+publisher_name = "Cline"
+publisher_url = "https://cline.bot"
+type = "coding"
+description = "AI coding assistant for the terminal with ACP support."
+tags = ["coding", "terminal", "acp"]
+run_command."*" = "cline --acp"
+
+help = '''
+# Cline
+
+AI coding assistant for the terminal.
+
+## Installation
+
+```bash
+npm install -g @cline/cli
+```
+
+For ACP mode:
+
+```bash
+cline --acp
+```
+
+See https://cline.bot/ for details.
+'''
+
+[actions."*".install]
+command = "npm install -g @cline/cli"
+description = "Install Cline CLI"

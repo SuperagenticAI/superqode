@@ -1,0 +1,52 @@
+identity = "cursor.com"
+name = "Cursor"
+short_name = "cursor"
+url = "https://cursor.com/docs/cli/acp"
+protocol = "acp"
+author_name = "Cursor"
+author_url = "https://cursor.com"
+publisher_name = "Cursor"
+publisher_url = "https://cursor.com"
+type = "coding"
+description = "AI-powered code editor with ACP support via its agent CLI."
+tags = ["editor", "coding", "acp"]
+run_command."*" = "agent acp"
+
+help = '''
+# Cursor
+
+AI-powered code editor with ACP support.
+
+## Installation
+
+```bash
+# Install Cursor CLI
+npm install -g @cursorai/cli
+```
+
+For ACP mode:
+
+```bash
+agent acp
+```
+
+See https://cursor.com/docs/cli/acp for the full ACP documentation.
+
+### Authentication
+
+Before using ACP mode, authenticate:
+
+```bash
+agent login
+```
+
+Or pass an API key:
+
+```bash
+agent --api-key "$CURSOR_API_KEY" acp
+```
+'''
+
+[actions."*".install]
+command = "npm install -g @cursorai/cli"
+description = "Install Cursor CLI"

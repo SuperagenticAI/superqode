@@ -8,7 +8,7 @@
 
 # **SuperQode**
 
-### Your Portable Coding Agent Harness.
+### Your Portable Universal Coding Agent Harness.
 
 <p class="tagline">Run coding agents with portable specs, controlled tools, and readable sessions.</p>
 

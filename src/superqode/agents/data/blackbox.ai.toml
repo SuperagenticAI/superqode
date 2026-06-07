@@ -1,0 +1,47 @@
+identity = "blackbox.ai"
+name = "Blackbox AI"
+short_name = "blackbox"
+url = "https://docs.blackbox.ai/features/blackbox-cli/introduction"
+protocol = "acp"
+author_name = "Blackbox AI"
+author_url = "https://blackbox.ai"
+publisher_name = "Blackbox AI"
+publisher_url = "https://blackbox.ai"
+type = "coding"
+description = "AI coding assistant with terminal CLI, multi-provider support and ACP."
+tags = ["coding", "terminal", "multi-provider"]
+run_command."*" = "blackbox acp"
+
+help = '''
+# Blackbox AI
+
+AI coding assistant with terminal CLI supporting multiple model providers.
+
+## Installation
+
+```bash
+# macOS / Linux
+curl -fsSL https://blackbox.ai/install.sh | bash
+
+# Windows (PowerShell)
+iex (irm https://blackbox.ai/install.ps1)
+```
+
+### Configuration
+
+After installation, configure your API key:
+
+```bash
+blackbox configure
+```
+
+For ACP mode:
+
+```bash
+blackbox acp
+```
+'''
+
+[actions."*".install]
+command = "curl -fsSL https://blackbox.ai/install.sh | sh"
+description = "Install Blackbox CLI (see https://docs.blackbox.ai for details)"

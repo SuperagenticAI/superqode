@@ -253,7 +253,7 @@ COMMANDS = [
     ":connect byok",
     ":connect local",
     ":connect acp",
-    ":connect advanced",
+
     ":claude",
     ":claude status",
     ":claude model",

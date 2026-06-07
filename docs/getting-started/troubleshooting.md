@@ -360,4 +360,4 @@ Links:
 
 - [GitHub Issues](https://github.com/SuperagenticAI/superqode/issues)
 - [GitHub Discussions](https://github.com/SuperagenticAI/superqode/discussions)
-- [Support](../../SUPPORT.md)
+- [Support](https://github.com/SuperagenticAI/superqode/blob/main/SUPPORT.md)

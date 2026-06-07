@@ -11,7 +11,7 @@ publisher_name = "SST"
 publisher_url = "https://github.com/sst/opencode"
 type = "coding"
 description = "The AI coding agent built for the terminal with client/server architecture and ACP support via adapter."
-tags = ["open-source", "terminal-first", "github-integration"]
+tags = ["open-source", "terminal-first", "github-integration", "official-acp"]
 run_command."*" = "opencode acp"
 
 help = '''

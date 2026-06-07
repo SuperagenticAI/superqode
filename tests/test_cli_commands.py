@@ -58,6 +58,14 @@ class TestCLIHelp:
         assert result.exit_code == 0
         assert "agents" in result.output.lower() or "acp" in result.output.lower()
 
+    def test_config_help_lists_show_and_validate(self, runner):
+        result = runner.invoke(cli_main, ["config", "--help"])
+
+        assert result.exit_code == 0
+        assert "init" in result.output
+        assert "show" in result.output
+        assert "validate" in result.output
+
     def test_providers_help(self, runner):
         """Test providers command help."""
         result = runner.invoke(cli_main, ["providers", "--help"])
@@ -880,6 +888,12 @@ class TestAgentsCommand:
         # Should not error
         assert result.exit_code == 0 or "Error" not in result.output
 
+    def test_agents_list_accepts_protocol_filter(self, runner):
+        result = runner.invoke(cli_main, ["agents", "list", "--protocol", "acp"])
+
+        assert result.exit_code == 0
+        assert "ACP" in result.output or "Agent" in result.output
+
     def test_agents_show_nonexistent(self, runner):
         """Test agents show with nonexistent agent."""
         result = runner.invoke(cli_main, ["agents", "show", "nonexistent"])
@@ -1622,6 +1636,37 @@ class TestInitCommand:
                 or "Created" in result.output
                 or "already exists" in result.output.lower()
             )
+            assert Path(".superqode/harnesses/coding.yaml").exists()
+            assert Path(".superqode/harnesses/planning.yaml").exists()
+            assert Path(".superqode/harnesses/review.yaml").exists()
+            assert Path(".agents/skills").is_dir()
+            assert Path(".agents/roles").is_dir()
+            content = config_path.read_text()
+            assert "superqode:" in content
+            assert "default:" in content
+            assert "defaults:" not in content
+
+    def test_config_init_creates_referenced_harnesses(self, runner, tmp_path):
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(cli_main, ["config", "init"])
+
+            assert result.exit_code == 0
+            assert Path("superqode.yaml").exists()
+            assert Path(".superqode/harnesses/coding.yaml").exists()
+            show = runner.invoke(cli_main, ["config", "show"])
+            assert show.exit_code == 0
+            assert "superqode:" in show.output
+            assert "gpt-4o-mini" in show.output
+            validate = runner.invoke(cli_main, ["config", "validate"])
+            assert validate.exit_code == 0
+            from superqode.config.loader import load_config
+
+            cfg = load_config(Path("superqode.yaml"))
+            assert cfg.superqode.team_name == "My SuperQode Project"
+            assert cfg.default is not None
+            assert cfg.default.provider == "openai"
+            assert cfg.default.model == "gpt-4o-mini"
+            assert cfg.providers["openai"].api_key_env == "OPENAI_API_KEY"
 
     def test_init_force(self, runner, tmp_path):
         """Test init --force overwrites existing config."""

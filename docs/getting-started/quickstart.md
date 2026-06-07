@@ -41,6 +41,11 @@ Before starting the TUI, make sure you have one of these ready:
 
 See [BYOK providers](../providers/byok.md) or [Local providers](../providers/local.md) for setup guides.
 
+!!! tip "No config file needed"
+    SuperQode runs without a `superqode.yaml`. Just connect a model and start asking.
+    The harness file, project defaults, and MCP servers are all optional extras you
+    add with `superqode init` when you need them.
+
 ---
 
 ## 3. Run The TUI

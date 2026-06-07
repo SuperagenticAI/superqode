@@ -1,0 +1,43 @@
+identity = "hermes-agent.nousresearch.com"
+name = "Hermes Agent"
+short_name = "hermes"
+url = "https://hermes-agent.nousresearch.com/docs/user-guide/features/acp"
+protocol = "acp"
+author_name = "Nous Research"
+author_url = "https://nousresearch.com"
+publisher_name = "Nous Research"
+publisher_url = "https://nousresearch.com"
+type = "coding"
+description = "Open-source coding agent by Nous Research with ACP support."
+tags = ["open-source", "coding", "research", "acp"]
+run_command."*" = "hermes acp"
+
+help = '''
+# Hermes Agent
+
+Open-source coding agent by Nous Research with ACP support.
+
+## Installation
+
+```bash
+pip install 'hermes-agent[acp]'
+```
+
+For ACP mode:
+
+```bash
+hermes acp
+```
+
+Or use the alternative entry point:
+
+```bash
+hermes-acp
+```
+
+See https://hermes-agent.nousresearch.com/docs/user-guide/features/acp for details.
+'''
+
+[actions."*".install]
+command = "pip install 'hermes-agent[acp]'"
+description = "Install Hermes Agent with ACP support"

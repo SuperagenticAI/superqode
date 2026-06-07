@@ -139,7 +139,7 @@ def test_welcome_positions_superqode_as_coding_harness():
 
     text = render_plain(welcome)
 
-    assert "SuperQode = Your Portable Coding Agent Harness" in text
+    assert "SuperQode = Your Portable Universal Coding Agent Harness" in text
     assert ":connect local" in text
     assert "Agentic Code Needs Super Quality Engineering" not in text
 

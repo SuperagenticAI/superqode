@@ -95,144 +95,25 @@ superqode share revoke <artifact>
 
 Use `:tree` or `superqode sessions tree` to inspect fork lineage before sharing.
 
+See [Session Commands](cli-reference/sessions-commands.md) and [Share Commands](cli-reference/share-commands.md) for the full API.
+
 ## Project Trust
 
-Trust is stored outside the repository by default:
+Trust gates plugins and MCP operations. Check status with `:trust status` or `superqode trust status`. Grant trust with `:trust yes` or `superqode trust yes`.
 
-```text
-~/.superqode/trust.json
-```
-
-Trust-sensitive project files:
-
-```text
-.superqode/plugins
-.agents/plugins
-.superqode/mcp.json
-.mcp.json
-.superqode/hooks.json
-```
-
-In the TUI:
-
-```text
-:trust
-:trust status
-:trust doctor
-:trust yes
-:trust no
-```
-
-From the CLI:
-
-```bash
-superqode trust status
-superqode trust status --json
-superqode trust doctor
-superqode trust yes
-superqode trust no
-```
+See [Trust Commands](cli-reference/trust-commands.md) for details.
 
 ## Local Plugin Workflow
 
-Project plugins live under `.superqode/plugins/<id>/plugin.json`.
+Project plugins live under `.superqode/plugins/<id>/plugin.json`. Install with `:plugins add <path>` or `superqode plugins add <path>`. Requires project trust.
 
-In the TUI:
-
-```text
-:trust doctor
-:trust yes
-:plugins
-:plugins doctor
-:plugins add ./my-plugin
-:plugins disable my-plugin
-:plugins enable my-plugin
-```
-
-From the CLI:
-
-```bash
-superqode trust doctor
-superqode trust yes
-superqode plugins list
-superqode plugins list --all --json
-superqode plugins doctor
-superqode plugins add ./my-plugin
-superqode plugins disable my-plugin
-superqode plugins enable my-plugin
-```
-
-`plugins add` and `plugins enable` require project trust. This prevents a cloned
-repository from silently activating project-local plugin or MCP behavior.
+See [Plugin Commands](cli-reference/plugins-commands.md) for the manifest format, hook points, and full CLI reference.
 
 ## Agent Memory Workflow
 
-Use local memory for explicit project facts, preferences, and procedures:
+Store project facts and preferences with `:memory remember "text"` or `superqode memory remember "text"`. Search with `:memory search query`.
 
-```text
-:memory
-:memory providers
-:memory remember This repo uses pnpm, never npm
-:memory search package manager
-:memory forget <id>
-:memory export
-```
-
-CLI:
-
-```bash
-superqode memory status
-superqode memory providers
-superqode memory remember "Use pnpm in this repo; do not use npm" --kind preference --tag tooling
-superqode memory search "package manager"
-superqode memory export --provider local -o memory.json
-```
-
-If a project has SpecMem, search its Agent Experience Pack:
-
-```text
-:memory search specmem checkout flow
-```
-
-```bash
-superqode memory status --provider specmem
-superqode memory search "checkout flow" --provider specmem
-```
-
-Vector databases should be treated as storage backends behind providers, not as
-the memory API itself.
-
-Optional hosted/graph memory providers are disabled by default. Developers can
-enable them per project in `superqode.yaml` while keeping `local` as the default:
-
-```yaml
-memory:
-  default_provider: local
-  providers:
-    mem0:
-      enabled: true
-      api_key_env: MEM0_API_KEY
-    cognee:
-      enabled: false
-    supermemory:
-      enabled: false
-      api_key_env: SUPERMEMORY_API_KEY
-```
-
-Install only the providers you need:
-
-```bash
-pip install "superqode[mem0]"
-pip install "superqode[supermemory]"
-pip install "superqode[memory-providers]"
-```
-
-`memory-providers` installs Mem0 and Supermemory. Cognee is configurable, but
-Cognee `1.1.2` currently depends on `rich<15`, which conflicts with
-SuperQode's `rich>=15`; install/run Cognee separately or expose `cognee-cli`.
-
-See [Agent Memory Layer](advanced/memory.md) for the provider readiness states,
-full onboarding flow, and provider-specific setup.
+See [Memory Commands](cli-reference/memory-commands.md) and [Agent Memory Layer](advanced/memory.md) for provider setup and the full API.
 
 ## Runtime-Specific TUI Commands
 

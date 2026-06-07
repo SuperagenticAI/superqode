@@ -12,7 +12,7 @@ publisher_name = "SuperQode Team"
 publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
 description = "An AI coding assistant built in Rust for autonomous code analysis and modification."
-tags = ["rust", "autonomous", "analysis"]
+tags = ["rust", "autonomous", "analysis", "official-acp"]
 run_command."*" = "code-assistant --acp"
 
 help = '''

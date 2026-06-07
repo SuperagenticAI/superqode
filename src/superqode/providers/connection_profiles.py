@@ -1,9 +1,8 @@
 """Connection profiles — the product/account-level choices in ``:connect``.
 
 A *connection source* is what the user is connecting SuperQode to (Codex
-subscription, Claude, a BYOK provider, a local model, an ACP agent), as opposed
-to the *runtime/engine* that executes it (an advanced detail). Each profile
-declares a ``connector`` that the TUI/CLI dispatches on:
+subscription, Claude, a BYOK provider, a local model, an ACP agent). Each
+profile declares a ``connector`` that the TUI/CLI dispatches on:
 
     runtime     self-contained runtime (own model+auth), e.g. codex-sdk
     acp         a specific ACP agent by short_name, e.g. "claude"
@@ -11,7 +10,6 @@ declares a ``connector`` that the TUI/CLI dispatches on:
     local       the local provider/model picker
     acp-picker  the generic "pick any ACP agent" list
     external-cli a local vendor TUI that does not expose ACP/headless events yet
-    advanced    the raw runtime/engine picker (:runtime)
 
 This module has no TUI dependencies so it can be unit-tested and reused by both
 the TUI and the CLI. New products (Claude Agent SDK, Antigravity) slot in as new
@@ -35,7 +33,7 @@ class ConnectionProfile:
     id: str
     label: str
     description: str
-    connector: str  # runtime | acp | byok | local | acp-picker | external-cli | advanced
+    connector: str  # runtime | acp | byok | local | acp-picker | external-cli
     runtime: Optional[str] = None  # for connector == "runtime"
     acp_agent: Optional[str] = None  # for connector == "acp"
     self_contained: bool = False
@@ -147,13 +145,6 @@ _PROFILES: List[ConnectionProfile] = [
         connector="external-cli",
         detect=_antigravity_cli_ready,
         unavailable_hint="install agy from https://antigravity.google/docs/cli-install and sign in",
-    ),
-    ConnectionProfile(
-        id="advanced",
-        label="Advanced runtime",
-        description="Pick the execution engine (builtin / openai-agents / pydanticai / adk)",
-        connector="advanced",
-        detect=lambda: True,
     ),
 ]
 

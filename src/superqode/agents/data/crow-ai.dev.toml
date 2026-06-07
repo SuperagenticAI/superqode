@@ -1,0 +1,37 @@
+identity = "crow-ai.dev"
+name = "crow-cli"
+short_name = "crow"
+url = "https://crow-ai.dev"
+protocol = "acp"
+author_name = "Crow AI"
+author_url = "https://crow-ai.dev"
+publisher_name = "Crow AI"
+publisher_url = "https://crow-ai.dev"
+type = "coding"
+description = "AI coding agent CLI with ACP support."
+tags = ["coding", "cli", "acp"]
+run_command."*" = "crow acp"
+
+help = '''
+# crow-cli
+
+AI coding agent CLI.
+
+## Installation
+
+```bash
+npm install -g crow-cli
+```
+
+For ACP mode:
+
+```bash
+crow acp
+```
+
+See https://crow-ai.dev for details.
+'''
+
+[actions."*".install]
+command = "npm install -g crow-cli"
+description = "Install crow-cli"

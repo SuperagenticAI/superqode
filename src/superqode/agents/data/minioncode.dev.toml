@@ -1,0 +1,41 @@
+identity = "minioncode.dev"
+name = "Minion Code"
+short_name = "minion"
+url = "https://github.com/femto/minion-code"
+protocol = "acp"
+author_name = "femto"
+author_url = "https://github.com/femto"
+publisher_name = "femto"
+publisher_url = "https://github.com/femto"
+type = "coding"
+description = "Lightweight AI coding agent with ACP support."
+tags = ["open-source", "coding", "lightweight", "acp"]
+run_command."*" = "mcode acp"
+
+help = '''
+# Minion Code
+
+Lightweight AI coding agent with ACP support.
+
+## Installation
+
+```bash
+# Clone and install from source
+git clone https://github.com/femto/minion-code
+cd minion-code
+pip install minionx
+pip install -e .
+```
+
+For ACP mode:
+
+```bash
+mcode acp
+```
+
+See https://github.com/femto/minion-code for details.
+'''
+
+[actions."*".install]
+command = "pip install minionx && pip install -e ."
+description = "Install Minion Code from source"

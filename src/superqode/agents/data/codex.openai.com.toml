@@ -12,7 +12,7 @@ publisher_name = "Zed Industries"
 publisher_url = "https://zed.dev"
 type = "coding"
 description = "OpenAI's code generation agent with streaming terminal output and community adapters."
-tags = ["openai", "codex", "streaming"]
+tags = ["openai", "codex", "streaming", "official-acp"]
 run_command."*" = "codex-acp"
 
 help = '''

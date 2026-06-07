@@ -1,5 +1,10 @@
 # Configuration Reference
 
+!!! tip "No config file needed"
+    Everything works without a `superqode.yaml`. Connect a model and start asking.
+    Configuration is optional — add it later with `superqode init` when you want
+    to pin defaults, add providers, or configure harness checks.
+
 SuperQode configuration is intentionally split:
 
 - `superqode.yaml` stores project defaults, provider definitions, ACP agent definitions, MCP servers, model aliases, gateway settings, and compatibility settings.

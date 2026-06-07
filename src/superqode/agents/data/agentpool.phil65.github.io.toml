@@ -1,0 +1,43 @@
+identity = "agentpool.phil65.github.io"
+name = "AgentPool"
+short_name = "agentpool"
+url = "https://phil65.github.io/agentpool/advanced/acp-integration/"
+protocol = "acp"
+author_name = "Philippe"
+author_url = "https://github.com/phil65"
+publisher_name = "phil65"
+publisher_url = "https://phil65.github.io"
+type = "coding"
+description = "Multi-agent system with ACP support for coding tasks."
+tags = ["multi-agent", "acp", "coding"]
+run_command."*" = "agentpool serve-acp"
+
+help = '''
+# AgentPool
+
+Multi-agent system with ACP support.
+
+## Installation
+
+```bash
+pip install agentpool[coding]
+```
+
+Or use with uvx (no install):
+
+```bash
+uvx --python 3.13 agentpool@latest serve-acp
+```
+
+## Usage
+
+```bash
+agentpool serve-acp [CONFIG]
+```
+
+See https://phil65.github.io/agentpool/cli/serve-acp/ for details.
+'''
+
+[actions."*".install]
+command = "pip install agentpool[coding]"
+description = "Install AgentPool"

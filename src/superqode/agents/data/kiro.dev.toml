@@ -1,0 +1,44 @@
+identity = "kiro.dev"
+name = "Kiro CLI"
+short_name = "kiro"
+url = "https://kiro.dev/docs/cli/acp/"
+protocol = "acp"
+author_name = "Kiro"
+author_url = "https://kiro.dev"
+publisher_name = "Kiro"
+publisher_url = "https://kiro.dev"
+type = "coding"
+description = "Agentic coding CLI with full ACP support for editor integration."
+tags = ["coding", "cli", "acp", "editor"]
+run_command."*" = "kiro-cli acp"
+
+help = '''
+# Kiro CLI
+
+Agentic coding CLI with full ACP support.
+
+## Installation
+
+```bash
+npm install -g kiro-cli
+```
+
+For ACP mode:
+
+```bash
+kiro-cli acp
+```
+
+Use the full path to kiro-cli in editor configurations (IDEs often don't inherit shell PATH):
+
+```bash
+which kiro-cli
+# ~/.local/bin/kiro-cli
+```
+
+See https://kiro.dev/docs/cli/acp/ for the full ACP documentation.
+'''
+
+[actions."*".install]
+command = "npm install -g kiro-cli"
+description = "Install Kiro CLI"

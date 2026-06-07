@@ -360,6 +360,27 @@ STATUS_STYLES = {
     AgentStatus.ERROR: {"color": THEME["error"], "icon": "", "label": "Error"},
 }
 
+# Provenance labels derived from agent tags
+PROVENANCE_MAP: dict[str, tuple[str, str]] = {
+    "official-acp": ("Official ACP", THEME["success"]),
+    "open-source": ("Open Source", THEME["cyan"]),
+    "community": ("Community", THEME["magenta"]),
+    "partner": ("Partner", THEME["purple"]),
+    "experimental": ("Experimental", THEME["warning"]),
+}
+
+
+def get_provenance_from_tags(tags: list[str]) -> list[tuple[str, str]]:
+    """Derive provenance badges from agent tags."""
+    badges = []
+    for tag in tags:
+        if tag in PROVENANCE_MAP:
+            badges.append(PROVENANCE_MAP[tag])
+    # Default to "Community" if no known provenance tag found
+    if not badges:
+        badges.append(("Community", THEME["magenta"]))
+    return badges
+
 CATEGORY_ICONS = {
     "general": "",
     "code": "",
@@ -441,6 +462,13 @@ class AgentCard(Static):
         t.append(f"{status_style['icon']} ", style=status_style["color"])
         t.append(f"{self.agent.name}", style=f"bold {THEME['text']}")
         t.append(f" v{self.agent.version}\n", style=THEME["muted"])
+
+        # Provenance badges
+        provenance = get_provenance_from_tags(self.agent.tags)
+        if provenance:
+            for label, color in provenance:
+                t.append(f"  [{label}]", style=f"bold {color}")
+            t.append("\n", style="")
 
         # Author
         t.append(f"by {self.agent.author}\n", style=THEME["muted"])
@@ -729,6 +757,15 @@ class AgentStoreScreen(Screen):
         )
         content.append(f"Category: {agent.category}\n", style=THEME["muted"])
 
+        # Show provenance badges
+        provenance = get_provenance_from_tags(agent.tags)
+        if provenance:
+            badges_text = "  ".join(f"[{color}]{label}[/{color}]" for label, color in provenance)
+            from rich.markup import escape
+            content.append("Provenance: ", style=THEME["muted"])
+            content.append(f"{badges_text}\n", style=THEME["muted"])
+            content.append("\n", style="")
+
         if agent.tags:
             content.append(f"Tags: {', '.join(agent.tags)}\n", style=THEME["dim"])
 
@@ -854,7 +891,7 @@ def create_sample_agents() -> List[AgentInfo]:
             version="1.0.0",
             category="code",
             status=AgentStatus.INSTALLED,
-            tags=["ai", "coding", "assistant"],
+            tags=["ai", "coding", "assistant", "official-acp"],
             downloads=50000,
             rating=4.8,
             install_command="curl -fsSL https://claude.ai/install.sh | bash && npm install -g @zed-industries/claude-code-acp",
@@ -871,7 +908,7 @@ def create_sample_agents() -> List[AgentInfo]:
             version="0.5.0",
             category="code",
             status=AgentStatus.AVAILABLE,
-            tags=["ai", "coding", "open-source"],
+            tags=["ai", "coding", "open-source", "official-acp"],
             downloads=10000,
             rating=4.5,
             install_command="npm i -g opencode-ai",
@@ -892,7 +929,7 @@ def create_sample_agents() -> List[AgentInfo]:
             version="1.0.0",
             category="code",
             status=AgentStatus.AVAILABLE,
-            tags=["ai", "google", "gemini"],
+            tags=["ai", "google", "gemini", "official-acp"],
             downloads=20000,
             rating=4.6,
             install_command="npm install -g @anthropic-ai/gemini-cli",
@@ -909,7 +946,7 @@ def create_sample_agents() -> List[AgentInfo]:
             version="1.0.0",
             category="code",
             status=AgentStatus.AVAILABLE,
-            tags=["ai", "openai", "coding"],
+            tags=["ai", "openai", "coding", "official-acp"],
             downloads=30000,
             rating=4.4,
             install_command="npm install -g @zed-industries/codex-acp",
@@ -926,7 +963,7 @@ def create_sample_agents() -> List[AgentInfo]:
             version="1.0.0",
             category="code",
             status=AgentStatus.AVAILABLE,
-            tags=["ai", "automation", "coding"],
+            tags=["ai", "automation", "coding", "open-source"],
             downloads=15000,
             rating=4.3,
             install_command="pipx install goose-ai",

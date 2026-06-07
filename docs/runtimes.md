@@ -321,7 +321,7 @@ Programmatic helpers also accept `approval_callback=...`,
 `permission_manager=...`, and `session_id=...` for non-interactive approval
 policy and session correlation.
 A runnable version of the above is in
-[`examples/codex_sdk_quickstart.py`](../examples/codex_sdk_quickstart.py).
+[`examples/codex_sdk_quickstart.py`](https://github.com/SuperagenticAI/superqode/blob/main/examples/codex_sdk_quickstart.py).
 
 The local `reference/codex/sdk/python` checkout is documentation/reference material only. Runtime code must depend on the packaged SDK (`openai-codex`) so installs are reproducible and do not accidentally bind to a local reference tree.
 

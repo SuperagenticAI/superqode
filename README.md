@@ -8,8 +8,8 @@
 <h1 align="center">SuperQode</h1>
 
 <p align="center">
-  <strong>Your Portable Coding Agent Harness.</strong><br>
-  <em>Run coding agents with portable specs, controlled tools, and readable sessions.</em>
+  <strong>Your Portable Universal Coding Agent Harness.</strong><br>
+  <em>Define your harness, connect any agent - local, BYOK, ACP, A2A. The only harness supporting ACP + MCP + A2A with local model optimization.</em>
 </p>
 
 <p align="center">
@@ -35,26 +35,17 @@
 
 ## What is SuperQode?
 
-**SuperQode** is your portable coding agent harness for interactive development, local model workflows, BYOK providers, ACP coding agents, and tool-based repository work. It provides a TUI and CLI so developers can connect to the model or agent runtime they prefer, run file/search/edit/shell tools under policy, and get concise summaries of what changed.
+SuperQode is the **Portable Universal Coding Agent Harness** - define your own harness, connect any agent: local models, BYOK providers, ACP agents, or A2A workflows. It is the only harness that supports all major protocols (ACP + MCP + A2A) with deep local model optimization.
 
-Use one harness spec to choose the runtime, model policy, tools, sandbox rules, approvals, event storage, and output shape for a coding-agent run.
+One TUI and CLI, consistent tool policies, event logging, and session management across every agent type. Define your harness once as a portable spec. Swap runtimes, models, or tools without changing your workflow. Run the same contract locally, on a team machine, or in CI.
 
-**Note (Enterprise):** Enterprise adds deeper automation, evaluation testing, and enterprise integrations.
+```bash
+cd your-project && superqode
+```
 
 ## Core Concepts
 
-SuperQode separates the pieces of an agent system so teams can change one piece without rewriting the rest.
-
-| Concept | What it means in SuperQode |
-|---------|----------------------------|
-| **Harness** | The full contract for a run: flavor, model policy, tools, sandbox, workflow, output, events, and validation |
-| **Runtime** | The engine that executes the harness, such as the native loop, Google ADK, OpenAI Agents SDK, or DeepAgents |
-| **Flavor** | The kind of harness being run, such as tool-rich coding or model-only no-tool |
-| **Tools** | Capabilities granted by policy, including file, search, edit, shell, MCP, todo, and validation tools |
-| **Model policy** | The model-specific behavior for prompt level, temperature, reasoning, tool surface, history, and iteration limits |
-| **Framework adapter** | A bridge that lets an external agent framework run behind the SuperQode harness contract |
-
-The harness is the product contract. Runtimes and framework adapters are execution choices behind that contract.
+SuperQode separates agent systems into interchangeable pieces: the **harness** (run contract: runtime, tools, sandbox, model policy), the **runtime** (execution engine: builtin, ADK, OpenAI Agents SDK, Codex SDK, DeepAgents, or PydanticAI), **tools** (file/search/edit/shell/MCP under policy), and **model policy** (temperature, reasoning, iteration limits). Change any piece without rewriting the rest.
 
 ## Demo Video
 
@@ -161,23 +152,15 @@ superqode harness run --spec harness.yaml --runtime codex-sdk --prompt "summariz
 
 ## Key Features
 
-| Feature | Description |
-|---------|-------------|
-| **HarnessSpec** | Define coding, no-tool, local-model, and custom harness behavior with one declarative contract |
-| **Harness runs** | Run sessions with normalized events, run records, typed outputs, and workflow execution |
-| **Pluggable runtimes** | Swap the agent loop: SuperQode native, Google ADK, OpenAI Agents SDK, OpenAI Codex SDK, optional DeepAgents, or optional PydanticAI |
-| **Event graph** | Inspect model, tool, approval, sandbox, subagent, memory, and result events across supported runtimes |
-| **Harness doctor** | Preflight backend installation, spec compatibility, sandbox policy, MCP config, approvals, and graph readiness |
-| **Developer TUI** | Interactive sessions with wrapped prompts, quiet streaming logs, compact tool activity, and readable change summaries |
-| **Headless CLI** | Run coding tasks and provider checks from scripts or terminals |
-| **Tool system** | File, search, edit, shell, todo, MCP, and optional Monty Python REPL tools |
-| **Sandbox contract** | Use local sandbox policy for read, write, shell, command, grep, glob, and edit access |
-| **Typed outputs** | Ask a harness run to return validated structured data using explicit result delimiters |
-| **Workflow engine** | Run single, chain, parallel, router, orchestrator, and evaluator-optimizer workflows |
-| **Model policies** | First-class Gemma4, DS4, coding, and no-tool policy profiles for local and hosted models |
-| **Provider UX** | Provider doctor, model listing, guided local provider selection, and dynamic OpenCode free model discovery |
-| **Harness flavors** | Tool-rich coding and model-only no-tool profiles, with room for Bring Your Own Harness specs |
-| **Developer workflows** | Session tree, portable share artifacts, Markdown/JSON export, project trust, and local plugin management |
+- **Universal harness** — One portable spec controls runtime, model, tools, sandbox, approvals, and output for any agent
+- **Pluggable runtimes** — Swap between builtin, Google ADK, OpenAI Agents SDK, Codex SDK, DeepAgents, or PydanticAI
+- **Agent-agnostic TUI** — Same interface for Claude Code, Codex, opencode, local models, or BYOK providers
+- **Event graph** — Normalized model, tool, approval, sandbox, and subagent events across all runtimes
+- **Sandbox policy** — Granular read/write/shell/command access control per project
+- **Harness doctor** — Preflight backend installation, spec compatibility, sandbox policy, MCP config, and graph readiness
+- **Portable specs** — Share `harness.yaml` with your team — run the same contract everywhere
+- **Headless CLI** — Run coding tasks and provider checks from scripts or CI
+- **Developer workflows** — Session tree, share artifacts, project trust, plugins, memory, and transcript export
 
 ## Developer Workflows
 

@@ -428,6 +428,7 @@ class SelectionAwareInput(TextArea):
             or getattr(app, "_awaiting_codex_effort", False)
             or getattr(app, "_awaiting_codex_model", False)
             or getattr(app, "_awaiting_connect_type", False)
+            or getattr(app, "_awaiting_runtime_selection", False)
             or getattr(app, "_awaiting_local_provider", False)
             or getattr(app, "_awaiting_model_selection", False)
             # Excluded: _awaiting_byok_model, _awaiting_local_model
@@ -493,7 +494,8 @@ class SelectionAwareInput(TextArea):
         if event.key in ("1", "2", "3", "4", "5", "6", "7", "8", "9"):
             # For BYOK/local provider/model selection, buffer digits for multi-digit entry
             if (
-                getattr(app, "_awaiting_byok_provider", False)
+                getattr(app, "_awaiting_acp_agent_selection", False)
+                or getattr(app, "_awaiting_byok_provider", False)
                 or getattr(app, "_awaiting_local_provider", False)
                 or getattr(app, "_awaiting_byok_model", False)
                 or getattr(app, "_awaiting_local_model", False)
@@ -571,6 +573,15 @@ class SelectionAwareInput(TextArea):
                     app.action_navigate_connect_type_down()
                 return
 
+            if getattr(app, "_awaiting_runtime_selection", False):
+                event.stop()
+                event.prevent_default()
+                if event.key == "up":
+                    app.action_navigate_runtime_up()
+                else:
+                    app.action_navigate_runtime_down()
+                return
+
             # Handle local provider/model arrows here too. Relying on the event
             # bubbling to the app-level handler is unreliable because the
             # underlying TextArea consumes up/down for cursor movement first.
@@ -640,6 +651,7 @@ class SelectionAwareInput(TextArea):
             ("_awaiting_codex_model", "action_select_highlighted_codex_model"),
             ("_awaiting_codex_effort", "action_select_highlighted_codex_effort"),
             ("_awaiting_connect_type", "action_select_highlighted_connect_type"),
+            ("_awaiting_runtime_selection", "action_select_highlighted_runtime"),
             ("_awaiting_local_provider", "action_select_highlighted_local_provider"),
             ("_awaiting_local_model", "action_select_highlighted_local_model"),
             ("_awaiting_model_selection", "action_select_highlighted_acp_model"),
@@ -678,44 +690,39 @@ def render_welcome(agents: List[AgentInfo], team_name: str = "Development Team")
     items.append(Text("\n", style=""))
 
     # ═══════════════════════════════════════════════════════════════════════
-    # DESCRIPTION SECTION - Position SuperQode as a coding agent harness first.
+    # DESCRIPTION SECTION - Tagline + tagline parts + one-liner
     # ═══════════════════════════════════════════════════════════════════════
     desc_text = Text()
-    desc_text.append("SuperQode = Your Portable Coding Agent Harness\n", style="bold #ffffff")
+    desc_text.append("SuperQode = Your Portable Universal Coding Agent Harness\n", style="bold #ffffff")
     desc_text.append("\n", style="")
-    desc_text.append("Your models", style=f"bold {THEME['cyan']}")
+    desc_text.append(TAGLINE_PART1, style=f"bold {THEME['cyan']}")
     desc_text.append("  ·  ", style=THEME["dim"])
-    desc_text.append("Your harness", style=f"bold {THEME['purple']}")
-    desc_text.append("  ·  ", style=THEME["dim"])
-    desc_text.append("Your memory", style=f"bold {THEME['magenta']}")
-    desc_text.append("  ·  ", style=THEME["dim"])
-    desc_text.append("Your Coding Agent", style=f"bold {THEME['pink']}")
-    desc_text.append("\n", style="")
-    desc_text.append("Define your own harness and connect any model — ", style=THEME["muted"])
+    desc_text.append(TAGLINE_PART2, style=f"bold {THEME['gold']}")
+    desc_text.append("\n\n", style="")
+    desc_text.append("Connect any agent: ", style=THEME["muted"])
     desc_text.append("ACP", style=f"bold {THEME['purple']}")
     desc_text.append(", ", style=THEME["muted"])
     desc_text.append("BYOK", style=f"bold {THEME['success']}")
-    desc_text.append(", or ", style=THEME["muted"])
+    desc_text.append(", ", style=THEME["muted"])
     desc_text.append("local", style=f"bold {THEME['cyan']}")
-    desc_text.append(" — your way.\n", style=THEME["muted"])
+    desc_text.append(", or ", style=THEME["muted"])
+    desc_text.append("A2A", style=f"bold {THEME['orange']}")
+    desc_text.append(" - define your harness, any runtime.\n", style=THEME["muted"])
     items.append(Align.center(desc_text))
 
     commands_text = Text()
 
     commands_text.append("Start:\n", style=f"bold {THEME['text']}")
     commands_text.append("  [1] ", style=THEME["dim"])
+    commands_text.append(":connect", style=f"bold {THEME['purple']}")
+    commands_text.append("              choose ACP, BYOK, or local\n", style=THEME["muted"])
+    commands_text.append("  [2] ", style=THEME["dim"])
     commands_text.append(":connect local", style=f"bold {THEME['cyan']}")
     commands_text.append("       local models, DS4, Ollama, MLX\n", style=THEME["muted"])
-    commands_text.append("  [2] ", style=THEME["dim"])
+    commands_text.append("  [3] ", style=THEME["dim"])
     commands_text.append(":connect byok", style=f"bold {THEME['success']}")
     commands_text.append("        direct provider/model connection\n", style=THEME["muted"])
-    commands_text.append("  [3] ", style=THEME["dim"])
-    commands_text.append(":connect", style=f"bold {THEME['purple']}")
-    commands_text.append("             choose ACP, BYOK, or local\n", style=THEME["muted"])
     commands_text.append("  [4] ", style=THEME["dim"])
-    commands_text.append(":recommend coding", style=f"bold {THEME['success']}")
-    commands_text.append("    model recommendations\n", style=THEME["muted"])
-    commands_text.append("  [5] ", style=THEME["dim"])
     commands_text.append("/sessions", style=f"bold {THEME['orange']}")
     commands_text.append("             resume previous work\n\n", style=THEME["muted"])
     commands_text.append("Keys: ", style=THEME["muted"])
@@ -800,6 +807,10 @@ class SuperQodeApp(App):
         Binding("up", "navigate_connect_type_up", "↑ Previous type", show=False),
         Binding("down", "navigate_connect_type_down", "↓ Next type", show=False),
         Binding("enter", "select_highlighted_connect_type", "Select highlighted type", show=False),
+        # Arrow keys for runtime navigation
+        Binding("up", "navigate_runtime_up", "↑ Previous runtime", show=False),
+        Binding("down", "navigate_runtime_down", "↓ Next runtime", show=False),
+        Binding("enter", "select_highlighted_runtime", "Select highlighted runtime", show=False),
         # Arrow keys for ACP agent navigation
         Binding("up", "navigate_acp_agent_up", "↑ Previous agent", show=False),
         Binding("down", "navigate_acp_agent_down", "↓ Next agent", show=False),
@@ -2013,33 +2024,47 @@ class SuperQodeApp(App):
         t = Text()
         t.append("\n  ╭─ ", style=THEME["purple"])
         t.append("Welcome to SuperQode 👋", style=f"bold {THEME['purple']}")
-        t.append("  first run, here's the 30-second start\n", style=THEME["muted"])
+        t.append("  First time? Here's the 30-second start.\n", style=THEME["muted"])
         t.append("  │\n", style=THEME["purple"])
-        steps = [
-            ("1", "Connect a model", ":connect", "pick ACP, BYOK, or a local provider"),
-            ("2", "Pick a model", "↑/↓ then Enter", "or type the number shown"),
-            ("3", "Start coding", "just type", "describe what you want to build"),
-        ]
-        for num, title, cmd, hint in steps:
-            t.append(f"  │  {num}. ", style=f"bold {THEME['cyan']}")
-            t.append(f"{title}  ", style=f"bold {THEME['text']}")
-            t.append(cmd, style=f"bold {THEME['success']}")
-            t.append(f"  — {hint}\n", style=THEME["muted"])
+        t.append("  │  Quick Start\n", style=f"bold {THEME['success']}")
         t.append("  │\n", style=THEME["purple"])
-        t.append("  │  Handy: ", style=THEME["muted"])
-        t.append("@file", style=THEME["cyan"])
-        t.append(" reference  •  ", style=THEME["muted"])
-        t.append("PgUp/PgDn", style=THEME["cyan"])
-        t.append(" scroll  •  ", style=THEME["muted"])
-        t.append("Ctrl+G", style=THEME["cyan"])
-        t.append(" stash draft  •  ", style=THEME["muted"])
-        t.append(":transcript", style=THEME["cyan"])
-        t.append(" history  •  ", style=THEME["muted"])
-        t.append("Esc Esc", style=THEME["cyan"])
-        t.append(" rewind\n", style=THEME["muted"])
-        t.append("  ╰─ Type ", style=THEME["purple"])
+        t.append("  │  1. ", style=f"bold {THEME['cyan']}")
+        t.append("Connect  ", style=f"bold {THEME['text']}")
+        t.append(":connect", style=f"bold {THEME['success']}")
+        t.append("       pick ACP, BYOK, or local provider\n", style=THEME["muted"])
+        t.append("  │  2. ", style=f"bold {THEME['cyan']}")
+        t.append("Pick     ", style=f"bold {THEME['text']}")
+        t.append("↑/↓ then Enter", style=f"bold {THEME['success']}")
+        t.append("  or type a number\n", style=THEME["muted"])
+        t.append("  │  3. ", style=f"bold {THEME['cyan']}")
+        t.append("Start    ", style=f"bold {THEME['text']}")
+        t.append("just type", style=f"bold {THEME['success']}")
+        t.append("       describe what to build\n", style=THEME["muted"])
+        t.append("  │\n", style=THEME["purple"])
+        t.append("  │  Or skip straight in:\n", style=THEME["muted"])
+        t.append("  │  ", style=THEME["muted"])
+        t.append(":recommend coding", style=f"bold {THEME['success']}")
+        t.append("    get model suggestions\n", style=THEME["muted"])
+        t.append("  │  ", style=THEME["muted"])
+        t.append(":acp list", style=f"bold {THEME['purple']}")
+        t.append("             browse all coding agents\n", style=THEME["muted"])
+        t.append("  │  ", style=THEME["muted"])
         t.append(":help", style=f"bold {THEME['cyan']}")
-        t.append(" anytime. This message won't show again.\n", style=THEME["muted"])
+        t.append("                 full command reference\n", style=THEME["muted"])
+        t.append("  │\n", style=THEME["purple"])
+        t.append("  │  ", style=THEME["dim"])
+        t.append("Tips: ", style=THEME["muted"])
+        t.append("@file", style=THEME["cyan"])
+        t.append(" to reference  •  ", style=THEME["dim"])
+        t.append("Ctrl+K", style=THEME["cyan"])
+        t.append(" for palettes  •  ", style=THEME["dim"])
+        t.append("Ctrl+G", style=THEME["cyan"])
+        t.append(" to stash\n", style=THEME["dim"])
+        t.append("  ╰─ This welcome card won't show again - ", style=THEME["purple"])
+        t.append(":help", style=f"bold {THEME['cyan']}")
+        t.append(" anytime  •  ", style=THEME["purple"])
+        t.append("Ctrl+L", style=f"bold {THEME['cyan']}")
+        t.append(" to redraw.\n", style=THEME["purple"])
         log.write(t)
 
         try:
@@ -2595,6 +2620,16 @@ class SuperQodeApp(App):
                 elif event.key == "enter":
                     self.action_select_highlighted_connect_type()
 
+            elif getattr(self, "_awaiting_runtime_selection", False):
+                event.stop()
+                handled = True
+                if event.key == "up":
+                    self.action_navigate_runtime_up()
+                elif event.key == "down":
+                    self.action_navigate_runtime_down()
+                elif event.key == "enter":
+                    self.action_select_highlighted_runtime()
+
             elif getattr(self, "_awaiting_local_provider", False):
                 event.stop()
                 handled = True
@@ -3028,7 +3063,8 @@ class SuperQodeApp(App):
         log = self.query_one("#log", ConversationLog)
         # While awaiting typed selection, inject digits into prompt instead of auto-selecting
         if (
-            getattr(self, "_awaiting_byok_model", False)
+            getattr(self, "_awaiting_acp_agent_selection", False)
+            or getattr(self, "_awaiting_byok_model", False)
             or getattr(self, "_awaiting_local_model", False)
             or getattr(self, "_awaiting_byok_provider", False)
             or getattr(self, "_awaiting_local_provider", False)
@@ -3056,6 +3092,26 @@ class SuperQodeApp(App):
             profiles = list_connection_profiles()
             if 1 <= num <= len(profiles):
                 self._dispatch_connection_profile(profiles[num - 1], log)
+                return True
+            return False
+
+        # 1b. Handle runtime selection
+        if getattr(self, "_awaiting_runtime_selection", False):
+            runtimes = getattr(self, "_runtime_selection_list", [])
+            if runtimes and 1 <= num <= len(runtimes):
+                info = runtimes[num - 1]
+                if not info.installed:
+                    log.add_error(
+                        f"Runtime '{info.name}' is not installed. Run: {info.install_hint or 'pip install ...'}"
+                    )
+                    return True
+                if not info.implemented:
+                    log.add_error(f"Runtime '{info.name}' is a stub and not yet usable.")
+                    return True
+                self._awaiting_runtime_selection = False
+                self._runtime_cmd(info.name, log)
+                if info.name not in self._SELF_CONTAINED_RUNTIMES:
+                    self._show_byok_providers(log)
                 return True
             return False
 
@@ -3238,6 +3294,9 @@ class SuperQodeApp(App):
 
         log = self.query_one("#log", ConversationLog)
 
+        if getattr(self, "_awaiting_acp_agent_selection", False):
+            self._handle_acp_agent_selection(buf, log)
+            return
         if getattr(self, "_awaiting_byok_provider", False):
             self._handle_byok_provider_selection(buf, log)
             return
@@ -4003,9 +4062,152 @@ class SuperQodeApp(App):
         log = self.query_one("#log", ConversationLog)
         self._dispatch_connection_profile(profiles[idx], log)
 
+    def _show_runtime_picker(self, log: ConversationLog, clear_log: bool = True):
+        """Show interactive runtime picker with highlighting and status."""
+        from superqode.runtime import list_runtimes, resolve_runtime_name
+
+        self._awaiting_byok_provider = False
+        self._awaiting_connect_type = False
+
+        runtimes = list_runtimes()
+        highlighted_idx = getattr(self, "_runtime_highlighted_index", 0)
+        if not (0 <= highlighted_idx < len(runtimes)):
+            highlighted_idx = 0
+
+        t = Text()
+        t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
+        t.append("Select Runtime\n\n", style=f"bold {THEME['text']}")
+
+        current = resolve_runtime_name()
+        for i, info in enumerate(runtimes):
+            num = i + 1
+            is_active = info.name == current
+            is_highlighted = i == highlighted_idx
+
+            if info.installed and info.implemented:
+                status = "ready"
+                status_color = THEME["success"]
+            elif not info.installed:
+                status = "needs setup"
+                status_color = THEME["warning"]
+            else:
+                status = "stub"
+                status_color = THEME["warning"]
+
+            line = Text()
+            if is_highlighted:
+                line.append("  ▶ ", style=f"bold {THEME['success']}")
+                line.append(
+                    f"[{num}] ",
+                    style=self._picker_link_style(f"bold {THEME['success']}", num),
+                )
+                label_style = f"bold {THEME['success']}"
+                line.append(info.name, style=label_style)
+                if is_active:
+                    line.append("  ◀ active\n", style=f"bold {THEME['success']}")
+                else:
+                    line.append("\n", style="")
+            else:
+                line.append(f"    [{num}] ", style=self._picker_link_style(THEME["dim"], num))
+                line.append(info.name, style=f"bold {THEME['text']}")
+                if is_active:
+                    line.append("  ◀ active\n", style=THEME["muted"])
+                else:
+                    line.append("\n", style="")
+            line.append(f"        {info.description}\n", style=THEME["muted"])
+            line.append("        ", style="")
+            line.append(status, style=status_color)
+            line.append("\n\n", style="")
+            t.append(line)
+
+        t.append("  💡 ", style=THEME["muted"])
+        t.append("↑↓", style=THEME["cyan"])
+        t.append(" navigate  ", style=THEME["dim"])
+        t.append("Enter", style=THEME["cyan"])
+        t.append(" select  •  or type a number, e.g. ", style=THEME["dim"])
+        t.append("2", style=THEME["cyan"])
+        t.append("\n", style="")
+
+        if clear_log:
+            log.clear()
+            log.auto_scroll = False
+            log.write(t)
+            log.scroll_home(animate=False)
+            log.auto_scroll = True
+        else:
+            log.auto_scroll = False
+            log.clear()
+            log.write(t)
+            log.auto_scroll = True
+
+        self._awaiting_runtime_selection = True
+        self._runtime_highlighted_index = highlighted_idx
+        self._runtime_selection_list = runtimes
+        self.set_timer(0.05, self._ensure_input_focus)
+
+    def action_navigate_runtime_up(self):
+        """Navigate to previous runtime (arrow up)."""
+        if not getattr(self, "_awaiting_runtime_selection", False):
+            return
+        runtimes = getattr(self, "_runtime_selection_list", [])
+        if not runtimes:
+            return
+        current_idx = getattr(self, "_runtime_highlighted_index", 0)
+        new_idx = max(0, current_idx - 1)
+        if new_idx != current_idx:
+            self._runtime_highlighted_index = new_idx
+            log = self.query_one("#log", ConversationLog)
+            self._show_runtime_picker(log, clear_log=False)
+            self.set_timer(0.05, self._ensure_input_focus)
+
+    def action_navigate_runtime_down(self):
+        """Navigate to next runtime (arrow down)."""
+        if not getattr(self, "_awaiting_runtime_selection", False):
+            return
+        runtimes = getattr(self, "_runtime_selection_list", [])
+        if not runtimes:
+            return
+        current_idx = getattr(self, "_runtime_highlighted_index", 0)
+        new_idx = min(len(runtimes) - 1, current_idx + 1)
+        if new_idx != current_idx:
+            self._runtime_highlighted_index = new_idx
+            log = self.query_one("#log", ConversationLog)
+            self._show_runtime_picker(log, clear_log=False)
+            self.set_timer(0.05, self._ensure_input_focus)
+
+    def action_select_highlighted_runtime(self):
+        """Select the currently highlighted runtime (Enter key)."""
+        if not getattr(self, "_awaiting_runtime_selection", False):
+            return
+        runtimes = getattr(self, "_runtime_selection_list", [])
+        if not runtimes:
+            return
+        idx = getattr(self, "_runtime_highlighted_index", 0)
+        if not (0 <= idx < len(runtimes)):
+            idx = 0
+        info = runtimes[idx]
+        if not info.installed:
+            log = self.query_one("#log", ConversationLog)
+            log.add_error(
+                f"Runtime '{info.name}' is not installed. Run: {info.install_hint or 'pip install ...'}"
+            )
+            return
+        if not info.implemented:
+            log = self.query_one("#log", ConversationLog)
+            log.add_error(f"Runtime '{info.name}' is a stub and not yet usable.")
+            return
+        self._awaiting_runtime_selection = False
+        log = self.query_one("#log", ConversationLog)
+        self._runtime_cmd(info.name, log)
+        # Non-self-contained runtimes need a provider to connect; show the
+        # BYOK provider picker so users can complete the connection.
+        if info.name not in self._SELF_CONTAINED_RUNTIMES:
+            self._show_byok_providers(log)
+
     def _reset_connect_selection_states(self) -> None:
         """Clear transient connect-flow selection state so flows don't interfere."""
         self._awaiting_connect_type = False
+        self._awaiting_runtime_selection = False
         self._awaiting_byok_provider = False
         self._awaiting_byok_model = False
         self._awaiting_acp_agent_selection = False
@@ -4059,8 +4261,6 @@ class SuperQodeApp(App):
                 log.add_error(
                     f"Unsupported external CLI profile: {getattr(profile, 'id', profile)}"
                 )
-        elif conn == "advanced":
-            self._runtime_cmd("", log)
         else:
             log.add_error(f"Unknown connection type: {getattr(profile, 'id', profile)}")
 
@@ -4079,9 +4279,7 @@ class SuperQodeApp(App):
             self._acp_highlighted_agent_index = new_idx
             log = self.query_one("#log", ConversationLog)
             self._show_agents(log, clear_log=False)
-            # Don't scroll during navigation to keep item in focus
-            # The item should already be visible after the update
-            # Ensure input stays focused
+            self._scroll_to_highlighted_item(log, new_idx, len(agent_list))
             self.set_timer(0.05, self._ensure_input_focus)
 
     def action_navigate_acp_agent_down(self):
@@ -4099,9 +4297,7 @@ class SuperQodeApp(App):
             self._acp_highlighted_agent_index = new_idx
             log = self.query_one("#log", ConversationLog)
             self._show_agents(log, clear_log=False)
-            # Don't scroll during navigation to keep item in focus
-            # The item should already be visible after the update
-            # Ensure input stays focused
+            self._scroll_to_highlighted_item(log, new_idx, len(agent_list))
             self.set_timer(0.05, self._ensure_input_focus)
 
     def action_select_highlighted_acp_agent(self):
@@ -4560,6 +4756,12 @@ class SuperQodeApp(App):
                 event.input.value = ""  # Clear input
                 return
 
+            # Check if awaiting runtime selection
+            if getattr(self, "_awaiting_runtime_selection", False):
+                self.action_select_highlighted_runtime()
+                event.input.value = ""  # Clear input
+                return
+
             # Empty input with no selection mode - do nothing
             return
 
@@ -4600,6 +4802,7 @@ class SuperQodeApp(App):
             # Handle navigation commands during selection
             if cmd in ("home", "back", "cancel") and (
                 getattr(self, "_awaiting_connect_type", False)
+                or getattr(self, "_awaiting_runtime_selection", False)
                 or getattr(self, "_awaiting_acp_agent_selection", False)
                 or getattr(self, "_awaiting_byok_provider", False)
                 or getattr(self, "_awaiting_byok_model", False)
@@ -4607,6 +4810,7 @@ class SuperQodeApp(App):
             ):
                 # Cancel selection mode
                 self._awaiting_connect_type = False
+                self._awaiting_runtime_selection = False
                 self._awaiting_acp_agent_selection = False
                 self._awaiting_byok_provider = False
                 self._awaiting_byok_model = False
@@ -4666,6 +4870,37 @@ class SuperQodeApp(App):
             ids = ", ".join(p.id for p in profiles)
             log.add_error(f"Invalid selection. Choose 1-{len(profiles)} or a name ({ids}).")
             return
+
+        # Check if awaiting runtime selection (typed number or name)
+        if getattr(self, "_awaiting_runtime_selection", False):
+            runtimes = getattr(self, "_runtime_selection_list", [])
+            if runtimes:
+                choice = text.strip().lower()
+                info = None
+                if choice.isdigit() and 1 <= int(choice) <= len(runtimes):
+                    info = runtimes[int(choice) - 1]
+                else:
+                    for r in runtimes:
+                        if r.name.lower() == choice:
+                            info = r
+                            break
+                if info is not None:
+                    if not info.installed:
+                        log.add_error(
+                            f"Runtime '{info.name}' is not installed. Run: {info.install_hint or 'pip install ...'}"
+                        )
+                        return
+                    if not info.implemented:
+                        log.add_error(f"Runtime '{info.name}' is a stub and not yet usable.")
+                        return
+                    self._awaiting_runtime_selection = False
+                    self._runtime_cmd(info.name, log)
+                    if info.name not in self._SELF_CONTAINED_RUNTIMES:
+                        self._show_byok_providers(log)
+                    return
+                names = ", ".join(r.name for r in runtimes)
+                log.add_error(f"Invalid runtime. Choose 1-{len(runtimes)} or a name ({names}).")
+                return
 
         # Check if awaiting ACP agent selection
         if getattr(self, "_awaiting_acp_agent_selection", False):
@@ -5258,11 +5493,11 @@ class SuperQodeApp(App):
                 elif subcmd == "local":
                     # Route to LOCAL connection
                     self._connect_local_cmd(subargs, log)
-                elif subcmd in ("codex", "claude", "antigravity", "advanced", "runtime"):
+                elif subcmd in ("codex", "claude", "antigravity"):
                     # Product/runtime connection profiles (Codex, Claude, …).
                     from superqode.providers.connection_profiles import get_connection_profile
 
-                    profile = get_connection_profile("advanced" if subcmd == "runtime" else subcmd)
+                    profile = get_connection_profile(subcmd)
                     if profile is not None:
                         self._dispatch_connection_profile(profile, log)
                     else:
@@ -8802,9 +9037,8 @@ class SuperQodeApp(App):
             return
 
         if not sub:
-            # Bare `:runtime` shows the list of runtimes and their status.
-            # Switch with `:runtime <name>` (autocompletion suggests names).
-            self._runtime_cmd("list", log)
+            # Bare `:runtime` shows the interactive runtime picker.
+            self._show_runtime_picker(log)
             return
 
         # Direct switch by name.
@@ -12612,16 +12846,22 @@ memory:
         else:
             # Handle all other ACP-compatible agents generically.
             acp_agents = {
-                "junie",
+                "bub",
+                "cagent",
+                "codeassistant",
+                "fast-agent",
                 "goose",
+                "hermes",
+                "junie",
                 "kimi",
+                "llmlingagent",
+                "minion",
+                "mistral-vibe",
+                "openhands",
+                "pi",
                 "stakpak",
                 "vtcode",
                 "auggie",
-                "code-assistant",
-                "cagent",
-                "fast-agent",
-                "llmling-agent",
                 "amp",
             }
             if short_name in acp_agents:
@@ -12682,20 +12922,24 @@ memory:
             "claude",
             "codex",
             "gemini",
-            "junie",
+            "bub",
+            "cagent",
+            "codeassistant",
+            "fast-agent",
             "goose",
+            "hermes",
+            "junie",
             "kimi",
+            "llmlingagent",
+            "minion",
+            "mistral-vibe",
+            "openhands",
+            "pi",
             "stakpak",
             "vtcode",
             "auggie",
-            "code-assistant",
-            "cagent",
-            "llmling-agent",
             "amp",
         )
-        if agent_type == "fast-agent":
-            self._run_fast_agent_cli(message, model, display_name, log)
-            return
 
         if agent_type in acp_agents:
             self._run_acp_jsonrpc_client(
@@ -13109,6 +13353,10 @@ memory:
             command = "opencode acp"
             model_display = f"opencode/{model}" if model else "opencode/auto"
             # OpenCode handles its own API keys via its config
+        elif agent_type == "openhands":
+            command = "openhands acp"
+            model_display = f"openhands/{model}" if model else "openhands/auto"
+            # OpenHands reads its own configuration from ~/.openhands/settings.json
         elif agent_type == "stakpak":
             command = "stakpak --acp"
             model_display = f"stakpak/{model}" if model else "stakpak/auto"
@@ -13123,9 +13371,9 @@ memory:
                 self._call_ui(log.add_error, "❌ AUGMENT_API_KEY not set. Export it first:")
                 self._call_ui(log.add_info, "  export AUGMENT_API_KEY=your_api_key")
                 return
-        elif agent_type == "code-assistant":
+        elif agent_type == "codeassistant":
             command = "code-assistant --acp"
-            model_display = f"code-assistant/{model}" if model else "code-assistant/auto"
+            model_display = f"codeassistant/{model}" if model else "codeassistant/auto"
         elif agent_type == "cagent":
             command = "cagent --acp"
             model_display = f"cagent/{model}" if model else "cagent/auto"
@@ -13135,9 +13383,24 @@ memory:
                 "uvx --from fast-agent-mcp@latest fast-agent-acp",
             )
             model_display = f"fast-agent/{model}" if model else "fast-agent/auto"
-        elif agent_type == "llmling-agent":
+        elif agent_type == "llmlingagent":
             command = "llmling-agent --acp"
-            model_display = f"llmling-agent/{model}" if model else "llmling-agent/auto"
+            model_display = f"llmlingagent/{model}" if model else "llmlingagent/auto"
+        elif agent_type == "bub":
+            command = "bub acp serve"
+            model_display = f"bub/{model}" if model else "bub/auto"
+        elif agent_type == "hermes":
+            command = "hermes acp"
+            model_display = f"hermes/{model}" if model else "hermes/auto"
+        elif agent_type == "minion":
+            command = "mcode acp"
+            model_display = f"minion/{model}" if model else "minion/auto"
+        elif agent_type == "mistral-vibe":
+            command = "vibe-acp"
+            model_display = f"mistral-vibe/{model}" if model else "mistral-vibe/auto"
+        elif agent_type == "pi":
+            command = "pi-acp"
+            model_display = f"pi/{model}" if model else "pi/auto"
         elif agent_type == "amp":
             command = "acp-amp"
             model_display = f"amp/{model}" if model else "amp/auto"
@@ -23634,6 +23897,14 @@ memory:
         t = Text()
         t.append(f"\n  🤖 ", style=f"bold {THEME['cyan']}")
         t.append("All ACP Coding Agents\n\n", style=f"bold {THEME['cyan']}")
+        t.append(f"  💡 ", style=THEME["muted"])
+        t.append(f"Type a number ", style=THEME["dim"])
+        t.append(f"(1-{len(agents)})", style=THEME["cyan"])
+        t.append(" to select, or use ", style=THEME["dim"])
+        t.append(f"↑↓", style=THEME["cyan"])
+        t.append(" arrows + ", style=THEME["dim"])
+        t.append(f"Enter", style=THEME["cyan"])
+        t.append("\n\n", style=THEME["dim"])
 
         # Separate by installation status
         installed = []
@@ -23776,9 +24047,8 @@ memory:
                         f"{agent_data['name']:<25}  ← SELECTED\n", style=f"bold {THEME['success']}"
                     )
                     if install_cmd:
-                        if len(install_cmd) > 35:
-                            install_cmd = install_cmd[:32] + "..."
-                        t.append(f"         → {install_cmd}\n", style=THEME["cyan"])
+                        t.append(f"         Install: ", style=THEME["dim"])
+                        t.append(f"{install_cmd}\n", style=THEME["cyan"])
                 else:
                     t.append(
                         f"    [{num:2}] ",
@@ -23789,25 +24059,18 @@ memory:
                     t.append(f"{agent_data['name']:<25}", style=THEME["muted"])
 
                     if install_cmd:
-                        # Truncate long commands
-                        if len(install_cmd) > 35:
-                            install_cmd = install_cmd[:32] + "..."
-                        t.append(f" → ", style=THEME["dim"])
+                        t.append(f"\n             Install: ", style=THEME["dim"])
                         t.append(f"{install_cmd}\n", style=THEME["cyan"])
                     else:
-                        t.append(f" → Installation info not available\n", style=THEME["dim"])
+                        t.append(f"\n             No install command available\n", style=THEME["dim"])
             t.append("\n", style="")
 
         t.append(f"  💡 Quick Actions:\n", style=THEME["muted"])
-        t.append(f"    ⌨️  ", style=THEME["dim"])
+        t.append(f"    ", style=THEME["dim"])
         t.append(f"↑↓", style=THEME["cyan"])
-        t.append(" Arrow keys to navigate  ", style=THEME["dim"])
+        t.append(" arrows + ", style=THEME["dim"])
         t.append(f"Enter", style=THEME["cyan"])
-        t.append(" to select highlighted agent\n", style=THEME["dim"])
-        t.append(
-            f"    Or type number (1-{len(all_agents)}) to connect to an installed agent\n",
-            style=THEME["dim"],
-        )
+        t.append(" or type a number\n", style=THEME["dim"])
         t.append(f"    Use ", style=THEME["dim"])
         t.append(f":connect acp <name>", style=THEME["pink"])
         t.append(f" to connect by name\n", style=THEME["dim"])

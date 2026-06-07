@@ -1,0 +1,47 @@
+identity = "pi.dev"
+name = "Pi"
+short_name = "pi"
+url = "https://github.com/earendil-works/pi"
+protocol = "acp"
+author_name = "earendil-works"
+author_url = "https://github.com/earendil-works"
+publisher_name = "svkozak"
+publisher_url = "https://github.com/svkozak"
+type = "coding"
+description = "AI coding agent with ACP support via pi-acp adapter."
+tags = ["open-source", "coding", "acp"]
+run_command."*" = "pi-acp"
+
+help = '''
+# Pi
+
+AI coding agent with ACP support.
+
+## Installation
+
+```bash
+# Install Pi coding agent
+npm install -g @earendil-works/pi-coding-agent
+
+# Install ACP adapter
+npm install -g pi-acp
+```
+
+For ACP mode:
+
+```bash
+pi-acp
+```
+
+Or use via npx (no install):
+
+```bash
+npx -y pi-acp
+```
+
+See https://github.com/svkozak/pi-acp for the ACP adapter.
+'''
+
+[actions."*".install]
+command = "npm install -g @earendil-works/pi-coding-agent && npm install -g pi-acp"
+description = "Install Pi coding agent and ACP adapter"

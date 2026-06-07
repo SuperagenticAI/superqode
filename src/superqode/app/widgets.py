@@ -171,7 +171,7 @@ class ColorfulStatusBar(Static):
             result.append(char, style=f"bold {color}")
         result.append(" ✨", style="bold #fbbf24")
         result.append(" ", style="")
-        result.append("Your Portable Coding Agent Harness", style="")
+        result.append("Your Portable Universal Coding Agent Harness", style="")
 
         # BYOK status (if connected)
         if self.byok_provider:

@@ -649,7 +649,7 @@ class SuperQodeGroup(click.Group):
     type=click.Choice(connection_profile_ids()),
     help=(
         "Connection source to start with: codex / claude / antigravity / byok / "
-        "local / acp / advanced. e.g. `--connect codex` to use your Codex subscription."
+        "local / acp. e.g. `--connect codex` to use your Codex subscription."
     ),
 )
 @click.pass_context
@@ -884,6 +884,67 @@ def doctor(json_output):
 @cli_main.group()
 def config():
     """Manage SuperQode configuration."""
+    pass
+
+
+def _scaffold_project_config(force: bool = False) -> tuple[Path, list[Path]]:
+    """Create project config plus the harness files it references."""
+    import shutil
+    from dataclasses import replace
+
+    from superqode.harness import get_harness_template, save_harness_spec
+
+    config_path = Path.cwd() / "superqode.yaml"
+    if config_path.exists() and not force:
+        raise click.ClickException(
+            f"Configuration already exists at {config_path}. Use --force to overwrite."
+        )
+
+    template_path = Path(__file__).parent / "data" / "superqode-template.yaml"
+    if template_path.exists():
+        shutil.copy2(template_path, config_path)
+    else:
+        config_path.write_text(
+            'superqode:\n  version: "1.0"\n'
+            '  team_name: "My SuperQode Project"\n'
+            '  description: "Portable coding agent harness"\n\n'
+            'default:\n  description: "Default coding model"\n'
+            "  mode: byok\n  provider: openai\n  model: gpt-4o-mini\n\n"
+            "providers:\n"
+            "  openai:\n"
+            "    api_key_env: OPENAI_API_KEY\n"
+            '    description: "OpenAI API"\n'
+            "    recommended_models:\n"
+            "      - gpt-4o-mini\n\n"
+            "mcp_servers: {}\n",
+            encoding="utf-8",
+        )
+
+    harness_dir = Path(".superqode") / "harnesses"
+    harness_specs = {
+        "coding": replace(get_harness_template("coding"), name="coding"),
+        "planning": replace(get_harness_template("no-tool"), name="planning"),
+        "review": replace(get_harness_template("no-tool"), name="review"),
+    }
+    created_harnesses: list[Path] = []
+    for name, spec in harness_specs.items():
+        path = harness_dir / f"{name}.yaml"
+        if force or not path.exists():
+            created_harnesses.append(save_harness_spec(spec, path))
+
+    (Path(".agents") / "skills").mkdir(parents=True, exist_ok=True)
+    (Path(".agents") / "roles").mkdir(parents=True, exist_ok=True)
+    return config_path, created_harnesses
+
+
+try:
+    from superqode.commands.config import config_show as _config_show_cmd
+    from superqode.commands.config import config_validate as _config_validate_cmd
+
+    config.add_command(_config_show_cmd, name="show")
+    config.add_command(_config_validate_cmd, name="validate")
+except Exception:
+    # Optional compatibility commands should not make CLI startup brittle.
     pass
 
 
@@ -2960,35 +3021,11 @@ def models_rm(pattern, yes):
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing configuration")
 def config_init(force):
     """Initialize default SuperQode configuration."""
-    from superqode.config import find_config_file
-    from pathlib import Path
-
-    config_path = find_config_file()
-    if config_path and config_path.exists() and not force:
-        click.echo(f"Configuration already exists at {config_path}")
-        click.echo("Use --force to overwrite")
-        return
-
-    if not config_path:
-        config_path = Path.cwd() / "superqode.yaml"
-
-    template_path = Path(__file__).parent / "data" / "superqode-template.yaml"
-    if template_path.exists():
-        import shutil
-
-        shutil.copy2(template_path, config_path)
-    else:
-        config_path.write_text(
-            "version: 2\n\n"
-            "project:\n  name: My SuperQode Project\n  root: .\n\n"
-            "defaults:\n  harness: coding\n  runtime: builtin\n\n"
-            "harnesses:\n  coding: .superqode/harnesses/coding.yaml\n\n"
-            "memory:\n  enabled: true\n  provider: local\n",
-            encoding="utf-8",
-        )
-
+    config_path, harness_paths = _scaffold_project_config(force=force)
     click.echo(f"Created default configuration at {config_path}")
-    click.echo("Create a harness with: superqode harness init coding")
+    for path in harness_paths:
+        click.echo(f"Created harness spec at {path}")
+    click.echo("Created .agents/skills and .agents/roles")
 
 
 # TUI command
@@ -3008,53 +3045,21 @@ def init_command(force):
 
     Creates a harness-first superqode.yaml.
     """
-    from superqode.config import find_config_file
-    from pathlib import Path
-
-    config_path = find_config_file()
-    if config_path and config_path.exists() and not force:
-        click.echo(f"✓ Configuration already exists at {config_path}")
-        click.echo("  Use --force to overwrite")
+    try:
+        config_path, harness_paths = _scaffold_project_config(force=force)
+    except click.ClickException as exc:
+        click.echo(f"✓ {exc.message}")
         return
 
-    config_path = Path.cwd() / "superqode.yaml"
-
-    # Copy the full configuration from the template
-    template_path = Path(__file__).parent.parent.parent / "superqode-template.yaml"
-    if template_path.exists():
-        import shutil
-
-        shutil.copy2(template_path, config_path)
-        click.echo(f"✓ Created {config_path} with harness defaults")
-    else:
-        # Fallback: create basic config if template not found
-        default_config = """version: 2
-
-project:
-  name: My SuperQode Project
-  root: .
-
-defaults:
-  harness: coding
-  runtime: builtin
-
-harnesses:
-  coding: .superqode/harnesses/coding.yaml
-
-memory:
-  enabled: true
-  provider: local
-"""
-
-        with open(config_path, "w") as f:
-            f.write(default_config)
-        click.echo(f"✓ Created {config_path} with harness defaults")
+    click.echo(f"✓ Created {config_path} with harness defaults")
+    for path in harness_paths:
+        click.echo(f"✓ Created {path}")
 
     click.echo("")
     click.echo("  Quick start:")
     click.echo("    superqode               # Launch TUI")
     click.echo("    superqode harness list-templates")
-    click.echo("    superqode harness init coding")
+    click.echo("    superqode harness validate .superqode/harnesses/coding.yaml")
 
 
 # ACP Agent commands
@@ -3066,9 +3071,19 @@ def agents():
 
 @agents.command("list")
 @click.option("--store", is_flag=True, help="Show agent store interface")
-def agents_list(store):
+@click.option(
+    "--protocol",
+    type=click.Choice(["acp", "external"]),
+    help="Filter by protocol. The active agents command currently lists ACP agents.",
+)
+@click.option("--supported", is_flag=True, help="Accepted for compatibility; ACP agents are shown.")
+def agents_list(store, protocol, supported):
     """List all available ACP coding agents."""
     from superqode.commands.acp import show_agents_list, show_agents_store
+
+    if protocol == "external":
+        click.echo("No external agents are listed by this command. Use `superqode agents list` for ACP agents.")
+        return
 
     if store:
         show_agents_store()
@@ -3574,6 +3589,149 @@ def providers_smoke(provider_id, model, run_prompt, prompt, no_tool_test, json_o
         click.echo(
             f"  run a real local completion with: superqode providers smoke {provider_id} --run"
         )
+
+
+@cli_main.command("help")
+def help_command():
+    """Show categorized help for all SuperQode CLI commands."""
+    from rich.table import Table
+    from rich.console import Console
+
+    console = Console()
+
+    click.echo("")
+    console.print("[bold white]SuperQode CLI Reference[/bold white]")
+    console.print("[dim]Categorized overview of all commands — use [bold]--help[/bold] on any subcommand for details.[/dim]\n")
+
+    categories = [
+        (
+            "🚀  Getting Started",
+            [
+                ("superqode", "Launch the TUI (no subcommand)"),
+                ("superqode tui", "Launch the TUI explicitly"),
+                ("superqode doctor", "Check basic setup and provider readiness"),
+                ("superqode init", "Initialize superqode.yaml in current directory"),
+                ("superqode help", "Show this help overview"),
+            ],
+        ),
+        (
+            "🤖  ACP Agents",
+            [
+                ("superqode agents list", "List all available ACP agents"),
+                ("superqode agents install <name>", "Install an ACP agent"),
+                ("superqode agents show <name>", "Show detailed agent info"),
+                ("superqode agents doctor [name]", "Check agent install and protocol health"),
+                ("superqode agents free-models", "List free-tier models from installed agents"),
+                ("superqode agents connect <name>", "Connect to an ACP agent (deprecated)"),
+            ],
+        ),
+        (
+            "🔌  Connect",
+            [
+                ("superqode connect acp <name>", "Connect to an ACP coding agent"),
+                ("superqode connect byok [provider] [model]", "Connect to a BYOK provider/model"),
+                ("superqode connect local [provider] [model]", "Connect to a local/self-hosted provider"),
+                ("superqode connect setup <provider>", "Show provider setup: env vars, URL, docs"),
+            ],
+        ),
+        (
+            "⚡  Models & Providers",
+            [
+                ("superqode models [options]", "Browse 5000+ models from 130+ providers"),
+                ("superqode providers list", "List all configured providers"),
+                ("superqode providers show <provider>", "Show provider details"),
+                ("superqode providers doctor [provider]", "Show provider config status and hints"),
+                ("superqode providers recommend [task]", "Get model recommendations by task"),
+                ("superqode providers guide [provider]", "Show quality labels and setup help"),
+                ("superqode providers smoke <provider>", "Test a local provider's reachability"),
+            ],
+        ),
+        (
+            "🧰  Harness",
+            [
+                ("superqode harness init [name]", "Scaffold a harness spec from template"),
+                ("superqode harness list-templates", "List built-in harness templates"),
+                ("superqode harness list-backends", "List available runtime backends"),
+                ("superqode harness validate <file>", "Validate a harness spec file"),
+                ("superqode harness run <file>", "Run a harness spec (headless)"),
+                ("superqode harness doctor [name]", "Check spec readiness and blockers"),
+                ("superqode harness graph [run_id]", "Show planned or persisted run graph"),
+                ("superqode harness events <run_id>", "Show persisted event timeline"),
+                ("superqode harness fork <run_id>", "Fork a persisted run"),
+                ("superqode harness replay <run_id>", "Show replay readiness"),
+            ],
+        ),
+        (
+            "📋  Sessions",
+            [
+                ("superqode sessions list", "List stored sessions"),
+                ("superqode sessions show <id>", "Show session details"),
+                ("superqode sessions tree", "Show session branches and forks"),
+                ("superqode sessions export <id>", "Export session as markdown or JSON"),
+                ("superqode sessions delete <id>", "Delete a stored session"),
+            ],
+        ),
+        (
+            "💾  Memory",
+            [
+                ("superqode memory status", "Show memory provider status"),
+                ("superqode memory providers", "List built-in memory providers"),
+                ("superqode memory remember <text>", "Store a memory"),
+                ("superqode memory search <query>", "Search memory"),
+                ("superqode memory forget <id>", "Delete a memory"),
+            ],
+        ),
+        (
+            "🔐  Trust & Plugins",
+            [
+                ("superqode trust status", "Show project trust status"),
+                ("superqode trust doctor", "Show trust-sensitive project files"),
+                ("superqode trust yes|no", "Trust or distrust the current project"),
+                ("superqode plugins list", "List discoverable plugins"),
+                ("superqode plugins show <id>", "Show one plugin manifest"),
+                ("superqode plugins validate <path>", "Validate a plugin manifest"),
+                ("superqode plugins doctor [path]", "Validate all plugin manifests"),
+                ("superqode plugins add <source>", "Install a local plugin"),
+                ("superqode plugins enable|disable <id>", "Toggle a plugin"),
+            ],
+        ),
+        (
+            "📦  Share",
+            [
+                ("superqode share create <session_id>", "Create a portable share artifact"),
+                ("superqode share export <session_id>", "Export session as markdown/JSON"),
+                ("superqode share import <file>", "Import a share artifact"),
+                ("superqode share list", "List managed share artifacts"),
+                ("superqode share revoke <artifact>", "Delete a share artifact"),
+            ],
+        ),
+        (
+            "🔧  Configuration & System",
+            [
+                ("superqode config show", "Show current configuration"),
+                ("superqode config validate", "Validate configuration file"),
+                ("superqode sandbox doctor [backend]", "Check sandbox backend readiness"),
+                ("superqode tools list", "List tools for a harness profile"),
+                ("superqode profiles list", "List built-in harness profiles"),
+                ("superqode runtime list", "List available runtime backends"),
+                ("superqode runtime doctor", "Check runtime backend readiness"),
+                ("superqode benchmark run <tasks>", "Run coding harness benchmarks"),
+            ],
+        ),
+    ]
+
+    for title, cmds in categories:
+        console.print(f"\n  [bold]{title}[/bold]")
+        for cmd, desc in cmds:
+            console.print(f"    [cyan]{cmd:<40}[/cyan] [dim]{desc}[/dim]")
+
+    console.print("\n  [bold]📖  Headless Mode[/bold]")
+    console.print("    [cyan]superqode -p \"<prompt>\"[/cyan]         [dim]Run once and print response[/dim]")
+    console.print("    [cyan]superqode -p --json \"<prompt>\"[/cyan]  [dim]Run once with JSON output[/dim]")
+    console.print("    [cyan]superqode --resume <id>[/cyan]         [dim]Resume a stored session[/dim]")
+    console.print("    [cyan]superqode --fork <id>[/cyan]           [dim]Fork a stored session[/dim]")
+
+    console.print("\n  [dim]Use [bold]superqode <command> --help[/bold] for detailed options on any command.[/dim]\n")
 
 
 # Add provider commands (superqode providers list, superqode providers show, etc.)

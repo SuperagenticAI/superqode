@@ -1,23 +1,19 @@
-version: 2
+superqode:
+  version: "1.0"
+  team_name: "My SuperQode Project"
+  description: "Portable coding agent harness"
 
-project:
-  name: My SuperQode Project
-  root: .
+default:
+  description: "Default coding model"
+  mode: byok
+  provider: openai
+  model: gpt-4o-mini
 
-defaults:
-  harness: coding
-  runtime: builtin
-  provider: ollama
-  model: gemma4:12b-mlx
-
-harnesses:
-  coding: .superqode/harnesses/coding.yaml
-  planning: .superqode/harnesses/planning.yaml
-  review: .superqode/harnesses/review.yaml
-
-memory:
-  enabled: true
-  provider: local
+providers:
+  openai:
+    api_key_env: OPENAI_API_KEY
+    description: "OpenAI API"
+    recommended_models:
+      - gpt-4o-mini
 
 mcp_servers: {}
-providers: {}
