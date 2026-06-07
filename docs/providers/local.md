@@ -584,28 +584,6 @@ python convert.py --outfile model.gguf --outtype f16 model/
 
 ---
 
-## Per-Role Configuration
-
-Use local models for specific roles:
-
-```yaml
-team:
-  modes:
-    qe:
-      roles:
-        # Cloud for critical analysis
-        security_tester:
-          mode: byok
-          provider: anthropic
-          model: claude-sonnet-4
-
-        # Local for high-volume tasks
-        unit_tester:
-          mode: local
-          provider: ollama
-          model: qwen3:8b
-```
-
 ---
 
 ## Performance Tips
@@ -629,7 +607,7 @@ mlx_lm.download mlx-community/Qwen2.5-Coder-7B-4bit  # vs 8bit
 
 ### 3. Keep Server Running
 
-Start servers before validation sessions to avoid startup delays.
+Start servers before SuperQode sessions to avoid startup delays.
 
 ### 4. Use Appropriate Context Length
 

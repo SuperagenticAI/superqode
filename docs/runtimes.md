@@ -61,7 +61,7 @@ SUPERQODE_RUNTIME=adk superqode --print "summarize README.md"
 
 ### TUI
 
-Switch backends from inside a running session — no restart needed:
+Switch backends from inside a running session without restarting:
 
 ```text
 :runtime list          # list runtimes with status (ready / missing + install hint / stub)
@@ -79,7 +79,7 @@ the engine that executes it. The picker is profile-driven and shows live status:
 ```text
 :connect
   [1] ACP agent            Any external ACP agent (incl. your local Claude Code)
-  [2] BYOK provider        Your API key — OpenAI / Anthropic / Gemini / …
+  [2] BYOK provider        Your API key, such as OpenAI, Anthropic, or Gemini
   [3] Local model          Ollama / MLX / vLLM / LM Studio …
   [4] Codex subscription   Drive OpenAI Codex with your ChatGPT/Codex login (~/.codex)
   [5] Claude Agent SDK     Use your Anthropic API key via claude-agent-sdk
@@ -87,15 +87,15 @@ the engine that executes it. The picker is profile-driven and shows live status:
   [7] Advanced runtime     Pick the execution engine (builtin / openai-agents / …)
 ```
 
-**Claude** has one headline entry — **Claude Agent SDK** (API key via
+**Claude** has one headline entry: **Claude Agent SDK** (API key via
 `ANTHROPIC_API_KEY`). Your *local* Claude Code (subscription login) is reached
-through **ACP agent** like any other ACP agent — it is not duplicated as its own
+through **ACP agent** like any other ACP agent. It is not duplicated as its own
 profile. Neither path implies SuperQode using a Claude Pro/Max subscription.
 
 Direct commands and CLI:
 
 ```bash
-:connect codex            # in the TUI — uses your Codex subscription
+:connect codex            # in the TUI, uses your Codex subscription
 :connect claude           # use Claude Agent SDK with ANTHROPIC_API_KEY
 :connect antigravity      # show the local agy handoff + Gemini migration hints
 :connect acp              # generic ACP picker, including local Claude Code
@@ -111,7 +111,7 @@ Each source maps to a connector internally: **Codex** → the `codex-sdk` runtim
 
 Only **Codex** is a sanctioned *subscription* SDK path today. Claude has two paths:
 **Claude Code (ACP)** uses your own local Claude CLI, and **Claude Agent SDK** is
-an **API-key** runtime (`claude-agent-sdk`, `ANTHROPIC_API_KEY`) — both shipped.
+an **API-key** runtime (`claude-agent-sdk`, `ANTHROPIC_API_KEY`). Both are shipped.
 **Antigravity CLI** uses Google's local `agy` login/keyring directly, but it is
 currently an external TUI handoff because Google has not documented an ACP/headless
 event stream for `agy`. An Antigravity SDK runtime would be API-key only

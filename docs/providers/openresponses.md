@@ -124,9 +124,10 @@ Search and retrieve files:
 ### Basic Usage
 
 ```python
-from superqode.providers.gateway import OpenResponsesGateway
+from superqode.providers.gateway import GatewayFactory
 
-gateway = OpenResponsesGateway(
+gateway = GatewayFactory.create(
+    "openresponses",
     base_url="http://localhost:11434",
     reasoning_effort="medium"
 )
@@ -182,7 +183,7 @@ response = await gateway.chat_completion(
 ### Reasoning Configuration
 
 ```python
-gateway = OpenResponsesGateway(
+gateway = GatewayFactory.create("openresponses", 
     base_url="http://localhost:11434",
     reasoning_effort="high",  # Get detailed reasoning
     truncation="auto"         # Auto-truncate if needed
@@ -216,9 +217,10 @@ export OPENRESPONSES_TRUNCATION=auto
 ### Gateway Initialization
 
 ```python
-from superqode.providers.gateway import OpenResponsesGateway
+from superqode.providers.gateway import GatewayFactory
 
-gateway = OpenResponsesGateway(
+gateway = GatewayFactory.create(
+    "openresponses",
     base_url="http://localhost:11434",
     api_key=None,  # Optional for local providers
     reasoning_effort="medium",
@@ -325,7 +327,9 @@ superqode_tools = convert_tools_from_openresponses(openresponses_tools)
 Minimal reasoning, fastest:
 
 ```python
-gateway = OpenResponsesGateway(
+from superqode.providers.gateway import GatewayFactory
+
+gateway = GatewayFactory.create("openresponses", 
     reasoning_effort="low"
 )
 ```
@@ -340,13 +344,13 @@ gateway = OpenResponsesGateway(
 Balanced reasoning:
 
 ```python
-gateway = OpenResponsesGateway(
+gateway = GatewayFactory.create("openresponses", 
     reasoning_effort="medium"
 )
 ```
 
 **Use when:**
-- General validation tasks
+- General analysis tasks
 - Need some insight
 - Balance of speed and detail
 
@@ -355,7 +359,7 @@ gateway = OpenResponsesGateway(
 Detailed reasoning, slower:
 
 ```python
-gateway = OpenResponsesGateway(
+gateway = GatewayFactory.create("openresponses", 
     reasoning_effort="high"
 )
 ```
@@ -374,7 +378,9 @@ gateway = OpenResponsesGateway(
 Automatically truncate if needed:
 
 ```python
-gateway = OpenResponsesGateway(
+from superqode.providers.gateway import GatewayFactory
+
+gateway = GatewayFactory.create("openresponses", 
     truncation="auto"
 )
 ```
@@ -384,7 +390,7 @@ gateway = OpenResponsesGateway(
 Never truncate:
 
 ```python
-gateway = OpenResponsesGateway(
+gateway = GatewayFactory.create("openresponses", 
     truncation="disabled"
 )
 ```
@@ -417,14 +423,16 @@ except GatewayError as e:
 ### 1. Use Appropriate Reasoning Level
 
 ```python
-# Quick tasks
-gateway = OpenResponsesGateway(reasoning_effort="low")
+from superqode.providers.gateway import GatewayFactory
 
-# validation analysis
-gateway = OpenResponsesGateway(reasoning_effort="medium")
+# Quick tasks
+gateway = GatewayFactory.create("openresponses", reasoning_effort="low")
+
+# standard analysis
+gateway = GatewayFactory.create("openresponses", reasoning_effort="medium")
 
 # Deep investigation
-gateway = OpenResponsesGateway(reasoning_effort="high")
+gateway = GatewayFactory.create("openresponses", reasoning_effort="high")
 ```
 
 ### 2. Handle Streaming Efficiently
@@ -515,9 +523,7 @@ logging.basicConfig(level=logging.DEBUG)
 ### With Ollama
 
 ```python
-gateway = OpenResponsesGateway(
-    base_url="http://localhost:11434"
-)
+gateway = GatewayFactory.create("openresponses", base_url="http://localhost:11434")
 
 response = await gateway.chat_completion(
     messages=[{"role": "user", "content": "Test"}],
@@ -528,9 +534,7 @@ response = await gateway.chat_completion(
 ### With vLLM
 
 ```python
-gateway = OpenResponsesGateway(
-    base_url="http://localhost:8000"
-)
+gateway = GatewayFactory.create("openresponses", base_url="http://localhost:8000")
 
 response = await gateway.chat_completion(
     messages=[{"role": "user", "content": "Test"}],

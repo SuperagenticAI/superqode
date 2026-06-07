@@ -6,7 +6,7 @@ Complete guide to configuring Model Context Protocol (MCP) servers in SuperQode.
 
 ## Overview
 
-MCP servers provide tools and resources that agents can use during validation sessions. SuperQode supports:
+MCP servers provide tools and resources that agents can use during SuperQode sessions and harness runs. SuperQode supports:
 
 - **Stdio Transport**: Local process-based servers
 - **HTTP Transport**: HTTP/HTTPS servers
@@ -247,30 +247,9 @@ mcp_servers:
 
 ---
 
-## Per-Role MCP Configuration
+## MCP Server Assignment
 
-Assign MCP servers to specific roles:
-
-```yaml
-team:
-  modes:
-    qe:
-      roles:
-        security_tester:
-          enabled: true
-          mcp_servers:
-            - filesystem
-            - github
-            - brave-search
-
-        api_tester:
-          enabled: true
-          mcp_servers:
-            - postgres
-            - filesystem
-```
-
----
+MCP servers defined in `mcp_servers` are available to all sessions automatically.
 
 ## Environment Variables
 
@@ -374,15 +353,7 @@ mcp_servers:
    superqode providers mcp test filesystem
    ```
 
-3. Verify role has access:
-   ```yaml
-   team:
-     modes:
-       qe:
-         roles:
-           security_tester:
-             mcp_servers: [filesystem]  # Explicit list
-   ```
+3. Verify MCP server connection:
 
 ---
 

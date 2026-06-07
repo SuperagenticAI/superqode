@@ -10,8 +10,6 @@ The goal is to make memory inspectable, configurable, and provider-neutral:
 - future MCP memory providers
 - vector databases as storage backends, not the product abstraction
 
-## Commands
-
 ## Quick Start
 
 Start with local memory. It needs no extra dependency and is the default:

@@ -114,6 +114,12 @@ SuperQode keeps the harness contract stable while allowing different runtimes un
 ## Quick Start
 
 ```bash
+uv tool install superqode
+```
+
+Or with pip:
+
+```bash
 pip install superqode
 ```
 

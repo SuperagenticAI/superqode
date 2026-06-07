@@ -1,38 +1,23 @@
 # Configuration Commands
 
-Commands for viewing, validating, and editing `superqode.yaml`.
+Commands for initializing `superqode.yaml`.
 
-## Show
-
-```bash
-superqode config show
-superqode config show --format json
-superqode config show --section defaults
-```
-
-## Validate
+## Init
 
 ```bash
-superqode config validate
-superqode config validate --fix
+superqode config init
+superqode config init --force
 ```
 
-## Set
+### Options
 
-```bash
-superqode config set defaults.runtime codex-sdk
-superqode config set defaults.harness coding
-superqode config set memory.provider local
-```
+| Option | Description |
+|--------|-------------|
+| `--force` | Overwrite existing configuration |
 
-## Get
+Creates `./superqode.yaml` and `.superqode/` runtime directory if they don't exist.
 
-```bash
-superqode config get defaults.runtime
-superqode config get harnesses.coding
-```
-
-Harness behavior lives in harness specs:
+Harness behavior is configured through harness specs:
 
 ```bash
 superqode harness init coding

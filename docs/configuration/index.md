@@ -1,6 +1,11 @@
 # Configuration Reference
 
-This section provides comprehensive documentation for configuring SuperQode through YAML configuration files.
+SuperQode configuration is intentionally split:
+
+- `superqode.yaml` stores project defaults, provider definitions, ACP agent definitions, MCP servers, model aliases, gateway settings, and compatibility settings.
+- HarnessSpec YAML files store runtime, model policy, tool policy, sandbox behavior, approvals, hooks, checks, observability, workflow, and output behavior.
+
+For a first project, use the getting-started guide. Use this reference when you need exact YAML fields.
 
 ---
 
@@ -12,23 +17,9 @@ This section provides comprehensive documentation for configuring SuperQode thro
 
     ---
 
-    Complete reference for all configuration options with examples and defaults.
+    Complete reference for `superqode.yaml`.
 
     [:octicons-arrow-right-24: YAML Reference](yaml-reference.md)
-
-
-    ---
-
-    Configure harness defaults, providers, memory, and MCP settings.
-
-
--   **Provider Configuration**
-
-    ---
-
-    Configure BYOK, ACP, and local provider settings.
-
-    [:octicons-arrow-right-24: Provider Configuration](../providers/index.md)
 
 -   **MCP Configuration**
 
@@ -38,21 +29,21 @@ This section provides comprehensive documentation for configuring SuperQode thro
 
     [:octicons-arrow-right-24: MCP Configuration](mcp-config.md)
 
--   **Noise Configuration**
+-   **Provider Configuration**
 
     ---
 
-    Configure noise filtering, deduplication, and severity thresholds.
+    Configure BYOK providers, ACP agents, local models, and OpenResponses.
 
-    [:octicons-arrow-right-24: Noise Configuration](noise-config.md)
+    [:octicons-arrow-right-24: Provider Configuration](../providers/index.md)
 
--   **Guidance Configuration**
+-   **Harness System**
 
     ---
 
-    Configure validation guidance prompts, time constraints, and verification requirements.
+    Configure runtime, tools, sandbox, checks, hooks, workflows, output, and events in reusable harness specs.
 
-    [:octicons-arrow-right-24: Guidance Configuration](guidance-config.md)
+    [:octicons-arrow-right-24: Harness System](../advanced/harness-system.md)
 
 </div>
 
@@ -63,352 +54,134 @@ This section provides comprehensive documentation for configuring SuperQode thro
 SuperQode loads configuration from multiple locations in order of precedence:
 
 | Priority | Location | Scope |
-|----------|----------|-------|
-| 1 (highest) | `./superqode.yaml` | Project-specific |
+| --- | --- | --- |
+| 1 | `./superqode.yaml` | Project-specific |
 | 2 | `~/.superqode.yaml` | User-specific |
-| 3 (lowest) | `/etc/superqode/superqode.yaml` | System-wide |
+| 3 | `/etc/superqode/superqode.yaml` | System-wide |
 
-Values in higher-priority files override lower ones.
+Values in higher-priority files override lower-priority files.
 
 ---
 
-## Creating Configuration
-
-### Initialize Project Configuration
+## Create Configuration
 
 ```bash
 superqode config init
 ```
 
-Creates `superqode.yaml` in the current directory.
+Create a harness spec separately when you want repeatable run behavior:
 
-### Optional: User Configuration
-
-If you want user-wide defaults, you can create `~/.superqode.yaml` manually (it has lower precedence than `./superqode.yaml`).
+```bash
+superqode harness init my-coder --template coding --output harness.yaml
+superqode harness doctor --spec harness.yaml
+```
 
 ---
 
-## Minimal Configuration
-
-The simplest valid configuration (ACP recommended):
+## Minimal Project Config
 
 ```yaml
 superqode:
-  version: "2.0"
+  version: "1.0"
+  team_name: "My Project"
+  description: "SuperQode project configuration"
+
+default:
+  mode: byok
+  provider: openai
+  model: gpt-4o-mini
+
+providers:
+  openai:
+    api_key_env: OPENAI_API_KEY
+    recommended_models:
+      - gpt-4o-mini
+```
+
+For ACP:
+
+```yaml
+superqode:
+  version: "1.0"
   team_name: "My Project"
 
 default:
   mode: acp
-  coding_agent: opencode
+  agent: opencode
+
+agents:
+  opencode:
+    description: OpenCode coding agent
+    protocol: acp
+    command: opencode
 ```
 
-Or with BYOK:
+For local models:
 
 ```yaml
 superqode:
-  version: "2.0"
+  version: "1.0"
   team_name: "My Project"
 
 default:
-  mode: byok
-  provider: google
-  model: gemini-3.1-pro-preview
-```
+  mode: local
+  provider: ollama
+  model: qwen3:8b
 
----
-
-## Standard Configuration
-
-A typical project configuration:
-
-```yaml
-superqode:
-  version: "2.0"
-  team_name: "My Project"
-  description: "Quality engineering configuration"
-
-# Gateway settings
-superqode:
-  gateway:
-    type: litellm
-  cost_tracking:
-    enabled: true
-    show_after_task: true
-
-# Default execution mode (ACP recommended, or BYOK with Google)
-default:
-  mode: byok
-  provider: google
-  model: gemini-3.1-pro-preview
-
-# Provider settings
 providers:
-  google:
-    api_key_env: GOOGLE_API_KEY
-    recommended_models:
-      - gemini-3.1-pro-preview
-      - gemini-flash-latest
-
   ollama:
     base_url: http://localhost:11434
-    recommended_models:
-      - qwen3:8b
-      - llama3.2:latest
-
-# validation settings
-qe:
-  output:
-    directory: ".superqode"
-    reports_format: markdown
-
-  allow_suggestions: false
-
-  noise:
-    min_confidence: 0.7
-    min_severity: "low"
-
-# Team roles
-team:
-  modes:
-    qe:
-      description: "Quality engineering roles"
-      enabled: true
-      roles:
-        security_tester:
-          enabled: true
-          mode: byok
-          provider: anthropic
-          model: claude-sonnet-4
 ```
 
 ---
 
-## Configuration Sections
+## Important Sections
 
-### Top-Level Fields
+| Section | Purpose |
+| --- | --- |
+| `superqode` | Global metadata, runtime default, gateway, cost tracking, and error settings |
+| `default` | Default connection mode and provider/model or ACP agent |
+| `providers` | BYOK and local provider metadata |
+| `agents` | ACP agent metadata |
+| `custom_models` | Model aliases with explicit provider and model mapping |
+| `model_aliases` | Short names for provider/model strings |
+| `mcp_servers` | MCP server process and HTTP definitions |
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `version` | string | Configuration format version |
-| `team_name` | string | Team or project name |
-| `description` | string | Configuration description |
-
-### superqode Section
-
-Gateway and global settings:
-
-```yaml
-superqode:
-  gateway:
-    type: litellm  # or openresponses
-  cost_tracking:
-    enabled: true
-    show_after_task: true
-```
-
-### default Section
-
-Default execution mode for all roles:
-
-```yaml
-default:
-  mode: acp           # acp (recommended), byok, or local
-  coding_agent: opencode  # Agent ID (for ACP mode)
-  # Or for BYOK:
-  # mode: byok
-  # provider: google  # Provider ID
-  # model: gemini-3.1-pro-preview  # Model ID
-```
-
-### providers Section
-
-Provider-specific settings:
-
-```yaml
-providers:
-  google:
-    api_key_env: GOOGLE_API_KEY
-    recommended_models:
-      - gemini-3.1-pro-preview
-      - gemini-flash-latest
-```
-
-### qe Section
-
-Quality engineering settings:
-
-```yaml
-qe:
-  allow_suggestions: false
-  noise:
-    min_confidence: 0.7
-```
-
-### team Section
-
-Team modes and roles:
-
-```yaml
-team:
-  modes:
-    qe:
-      roles:
-        security_tester:
-          enabled: true
-```
+Runtime and tool policy belong in HarnessSpec files, not in `superqode.yaml`.
 
 ---
 
-## Viewing Configuration
+## Verify Configuration
 
 ```bash
-# View the current project config
-cat superqode.yaml
-
+superqode providers doctor
+superqode harness validate --spec harness.yaml
+superqode harness doctor --spec harness.yaml
 ```
-
----
-
-## Modifying Configuration
-
-### Using CLI
-
-```bash
-# Update common settings
-```
-
-### Editing Directly
-
-Edit `superqode.yaml` with your preferred editor.
-
----
-
-## Validating Configuration
-
-```bash
-```
-
-This will load your config and surface common configuration and dependency issues.
 
 ---
 
 ## Environment Variables
 
-Configuration can reference environment variables:
-
-```yaml
-providers:
-  google:
-    api_key_env: GOOGLE_API_KEY  # Will read from $GOOGLE_API_KEY
-```
-
-SuperQode respects these environment variables:
-
 | Variable | Description |
-|----------|-------------|
-| `SUPERQODE_CONFIG` | Override config file path |
-| `SUPERQODE_OUTPUT_DIR` | Default output directory |
-| `SUPERQODE_LOG_LEVEL` | Logging level |
-| `SUPERQODE_SEARCH_ROOTS` | Extra **read-only** repo roots that search/read tools may access, outside the working directory (`os.pathsep`-separated). See [Local Code Search](../providers/local.md#local-code-search-no-web-access). |
-| `SUPERQODE_DS4_WARMUP` | Set to `0`/`false` to skip the DS4 model warm-up on connect. See [DS4 Cold Start & Warm-up](../providers/local.md#cold-start-warm-up). |
+| --- | --- |
+| `SUPERQODE_PROVIDER` | Default provider for headless mode |
+| `SUPERQODE_MODEL` | Default model for headless mode |
+| `SUPERQODE_SANDBOX` | Local command sandbox mode |
+| `SUPERQODE_SEARCH_ROOTS` | Extra read-only repo roots that search and read tools may access |
+| `SUPERQODE_DS4_WARMUP` | Set `0` or `false` to skip DS4 warm-up |
+| `OPENAI_API_KEY` | OpenAI API key |
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `GOOGLE_API_KEY` | Google API key |
+| `DEEPSEEK_API_KEY` | DeepSeek API key |
 
----
-
-## Common Patterns
-
-### Multi-Provider Setup
-
-```yaml
-providers:
-  google:
-    api_key_env: GOOGLE_API_KEY
-  anthropic:
-    api_key_env: ANTHROPIC_API_KEY
-  openai:
-    api_key_env: OPENAI_API_KEY
-  ollama:
-    base_url: http://localhost:11434
-
-team:
-  modes:
-    qe:
-      roles:
-        security_tester:
-          mode: acp
-          coding_agent: opencode
-        api_tester:
-          mode: byok
-          provider: google
-          model: gemini-3.1-pro-preview
-        unit_tester:
-          mode: local
-          provider: ollama
-          model: qwen3:8b
-```
-
-### Role-Specific Configuration
-
-```yaml
-team:
-  modes:
-    qe:
-      roles:
-        security_tester:
-          enabled: true
-          mode: acp
-          coding_agent: opencode
-          job_description: |
-            Focus on OWASP Top 10 vulnerabilities,
-            injection attacks, authentication flaws.
-          expert_prompt_enabled: false  # Enterprise
-```
-
-### Noise Filtering
-
-```yaml
-qe:
-  noise:
-    min_confidence: 0.8
-    min_severity: "medium"
-    deduplicate: true
-    max_per_file: 5
-    max_total: 50
-```
-
----
-
-## Troubleshooting
-
-### Configuration Not Found
-
-```
-No configuration found.
-Run 'superqode config init' to create a configuration.
-```
-
-**Solution**: Create a configuration file.
-
-### Invalid YAML Syntax
-
-```
-Error loading configuration: YAML syntax error
-```
-
-**Solution**: Check indentation and formatting.
-
-### Missing API Key
-
-```
-Warning: Provider 'google': GOOGLE_API_KEY not set
-```
-
-**Solution**: Set the environment variable.
+See [Local Code Search](../providers/local.md#local-code-search-no-web-access) for `SUPERQODE_SEARCH_ROOTS`.
 
 ---
 
 ## Next Steps
 
-- [YAML Reference](yaml-reference.md) - Complete configuration reference
-- [MCP Configuration](mcp-config.md) - MCP server setup
-- [Noise Configuration](noise-config.md) - Filtering and deduplication
-- [Guidance Configuration](guidance-config.md) - validation guidance prompts
+- [YAML Reference](yaml-reference.md)
+- [MCP Configuration](mcp-config.md)
+- [Provider Configuration](../providers/index.md)
+- [Harness System](../advanced/harness-system.md)

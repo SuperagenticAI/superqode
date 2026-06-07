@@ -13,7 +13,7 @@ SuperQode includes a rich Terminal User Interface (TUI) for interactive coding-a
 - **Local DS4 Support**: DS4 appears in the local provider picker when configured
 - **Interactive Prompts**: User input with completion
 - **File Browser**: Navigate project files
-- **Agent Switcher**: Switch between validation roles
+- **Agent Switcher**: Switch between agents
 - **Command Palette**: Quick actions
 - **Status Bar**: Session status at a glance
 
@@ -26,7 +26,6 @@ superqode
 # Start with a harness spec
 superqode --harness harness.yaml
 
-# Start with specific role
 ```
 
 ## Common TUI Workflow
@@ -82,7 +81,7 @@ Summarize what changed.
 |-----|--------|
 | `Ctrl+K` | Open command palette |
 | `Ctrl+F` | Toggle file browser |
-| `Ctrl+A` | Switch agent/role |
+| `Ctrl+A` | Switch agent |
 | `Ctrl+S` | Save session |
 | `Ctrl+Q` | Quit |
 | `Ctrl+T` | Toggle agent thinking/session logs |
@@ -452,7 +451,7 @@ superqode:
 |--------|---------|
 | `Prompt` | User input with completion |
 | `FileBrowser` | Navigate project files |
-| `AgentSwitcher` | Switch validation roles |
+| `AgentSwitcher` | Switch between agents |
 | `CommandPalette` | Quick actions |
 | `StatusBar` | Session status |
 | `Throbber` | Loading indicator |
@@ -470,26 +469,20 @@ browser = FileBrowser(root=project_root)
 file = await browser.select_file()
 
 # Agent switcher
-roles = [
-    ("qe.performance_tester", "Performance Testing"),
-]
-switcher = AgentSwitcher(roles)
+switcher = AgentSwitcher()
 selected = await switcher.select()
 ```
 
-## Integration with validation
+## Integration with Harness Workflows
 
-The TUI allows you to interact with agents in validation roles, while validation analysis sessions are run separately via CLI:
+The TUI allows you to interact with agents for coding tasks, while harness-based workflows are run separately via CLI:
 
 ```bash
 # Start TUI
 superqode
 
-# In TUI, switch to validation role
-
-# Run validation analysis via CLI (in separate terminal)
-
-# View validation artifacts (via CLI)
+# Run harness task via CLI (in separate terminal)
+superqode harness run --spec harness.yaml --prompt "analyze this codebase"
 ```
 
 ## Requirements

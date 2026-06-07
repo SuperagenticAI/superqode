@@ -232,11 +232,15 @@ superqode sandbox run e2b -- "pytest -q"
 
 ## Quick Command Reference
 
-### Validation Commands
+### Session And Memory Commands
 
 | Command | Description |
 |---------|-------------|
-| `superqode memory` | Manage agent memory for project facts, preferences, and SpecMem recall |
+| `superqode sessions list` | List saved sessions |
+| `superqode sessions tree` | Show session branches and forks |
+| `superqode share create <session-id>` | Create a portable local session artifact |
+| `superqode memory status` | Show memory provider status |
+| `superqode memory remember "..."` | Store an explicit project fact or preference |
 
 ### Config Commands
 
@@ -256,14 +260,21 @@ superqode sandbox run e2b -- "pytest -q"
 | `superqode providers test PROVIDER` | Test provider connection |
 | `superqode providers mlx ACTION` | Manage MLX models |
 
-### Suggestion Commands
+### Harness Commands
 
 | Command | Description |
 |---------|-------------|
-| `superqode suggestions list` | List verified fix suggestions |
-| `superqode suggestions show ID` | Show suggestion details |
-| `superqode suggestions apply ID` | Apply a suggestion |
-| `superqode suggestions reject ID` | Reject a suggestion |
+| `superqode harness list-templates` | List built-in harness templates |
+| `superqode harness list-backends` | List harness runtime backends |
+| `superqode harness inspect --spec <file>` | Show resolved harness policy |
+| `superqode harness compile --spec <file>` | Compile effective harness settings |
+| `superqode harness diff old.yaml new.yaml` | Compare two harness specs |
+| `superqode harness runs` | List persisted harness runs |
+| `superqode harness events <run-id>` | Show normalized run events |
+| `superqode harness graph <run-id>` | Show event graph |
+| `superqode harness evidence <run-id>` | Show run evidence receipt |
+| `superqode harness replay <run-id>` | Replay or inspect a prior run |
+| `superqode harness fork <run-id>` | Fork persisted run context |
 
 ---
 
@@ -302,9 +313,6 @@ When running the interactive TUI (`superqode`), prefix commands with `:`:
 
 | Variable | Description |
 |----------|-------------|
-| `SUPERQODE_CONFIG` | Path to configuration file |
-| `SUPERQODE_OUTPUT_DIR` | Default output directory |
-| `SUPERQODE_LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `GOOGLE_API_KEY` | Google AI API key |

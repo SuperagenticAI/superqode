@@ -1,429 +1,363 @@
-# Troubleshooting Guide
+# Troubleshooting
 
-This guide helps you resolve common issues when using SuperQode.
+This guide covers the most common SuperQode setup and runtime issues.
 
-## Table of Contents
+## Start With Doctor Commands
 
-- [Installation Issues](#installation-issues)
-- [Agent Connection Problems](#agent-connection-problems)
-- [Validation Analysis Failures](#validation-analysis-failures)
-- [Performance Issues](#performance-issues)
-- [Configuration Problems](#configuration-problems)
-- [Common Error Messages](#common-error-messages)
+Run the checks that match the feature you are using:
+
+```bash
+superqode doctor
+superqode providers doctor
+superqode runtime list
+superqode harness doctor --spec harness.yaml
+superqode sandbox doctor
+superqode memory doctor
+superqode trust doctor
+```
+
+Use JSON output when you need to paste diagnostics into an issue:
+
+```bash
+superqode doctor --json
+superqode providers doctor openai --json
+superqode harness doctor --spec harness.yaml --json
+```
+
+---
 
 ## Installation Issues
 
-### "ModuleNotFoundError" when running SuperQode
+### `ModuleNotFoundError: No module named 'superqode'`
 
-**Problem:**
+Reinstall SuperQode in the environment you are using:
+
 ```bash
-ModuleNotFoundError: No module named 'superqode'
+python -m pip install --upgrade superqode
+python -c "import superqode; print(superqode.__version__)"
 ```
 
-**Solutions:**
+With `uv`:
 
-1. **Install in development mode:**
-   ```bash
-   cd /path/to/superqode
-   pip install -e .
-   ```
-
-2. **Check Python path:**
-   ```bash
-   python -c "import superqode; print('Import successful')"
-   ```
-
-3. **Reinstall:**
-   ```bash
-   pip uninstall superqode
-   pip install superqode
-   ```
-
-### OpenCode Installation Issues
-
-**Problem:**
 ```bash
-❌ OpenCode not found. Install with: npm i -g opencode-ai
+uv tool install --force superqode
+superqode --version
 ```
 
-**Solutions:**
+For source installs:
 
-1. **Install OpenCode globally:**
-   ```bash
-   npm i -g opencode-ai
-   ```
-
-2. **Verify Node.js and npm:**
-   ```bash
-   node --version
-   npm --version
-   ```
-
-3. **Check npm permissions (macOS/Linux):**
-   ```bash
-   sudo npm i -g opencode-ai
-   ```
-
-4. **Manual installation:**
-   ```bash
-   # Clone and install manually
-   git clone https://github.com/sst/opencode.git
-   cd opencode
-   npm install
-   npm run build
-   npm link  # or npm install -g .
-   ```
-
-## Agent Connection Problems
-
-### "Agent not found" or "Agent unavailable"
-
-**Problem:**
 ```bash
-❌ Agent 'opencode' not found
+git clone https://github.com/SuperagenticAI/superqode.git
+cd superqode
+python -m pip install -e .
 ```
 
-**Solutions:**
+### The `superqode` command is not found
 
-1. **Check OpenCode installation:**
-   ```bash
-   opencode --version
-   ```
+Check that the Python scripts directory is on `PATH`:
 
-2. **Verify agent configuration in YAML:**
-   ```yaml
-   team:
-     qe:
-       roles:
-         unit_tester:
-           enabled: true
-   ```
-
-3. **Restart SuperQode:**
-   ```bash
-   # Exit TUI and restart
-   superqode
-   ```
-
-### "ACP connection failed"
-
-**Problem:**
 ```bash
-❌ ACP agent not available for unit_tester, providing graceful degradation
+python -m site --user-base
+python -m pip show superqode
 ```
 
-**Solutions:**
+If you installed with `uv`, check:
 
-1. **Install OpenCode:**
-   ```bash
-   npm i -g opencode-ai
-   ```
-
-2. **Check OpenCode status:**
-   ```bash
-   opencode --help
-   ```
-
-3. **Verify ACP adapter:**
-   ```bash
-   npm install -g @josephschmitt/opencode-acp  # If using ACP adapter
-   ```
-
-## validation Analysis Failures
-
-### "No tests detected" when tests exist
-
-**Problem:**
 ```bash
-Verdict: 🟠 NO TESTS DETECTED - Add tests for proper validation
+uv tool list
 ```
 
-**Solutions:**
+---
 
-1. **Check test file patterns:**
-   - Default patterns: `**/*test* **/*spec* **/test_*`
-   - Python: `test_*.py`, `*test*.py`
-   - JavaScript: `*.test.js`, `*.spec.js`
+## TUI Connection Problems
 
-2. **Run with verbose logging:**
-   ```bash
-   ```
+### The TUI starts but no model is connected
 
-3. **Check file permissions:**
-   ```bash
-   find . -name "*test*" -type f -ls
-   ```
+Open the connection picker:
 
-### "Failed to parse jest JSON output"
-
-**Problem:**
-```bash
-Failed to parse jest JSON output: Expecting value: line 1 column 1 (char 0)
+```text
+:connect
 ```
 
-**Solutions:**
+Or connect directly:
 
-1. **This is usually harmless** - it's just Jest output parsing issues
-2. **To suppress warnings, ensure proper Jest configuration**
-3. **Use different test runners if needed**
-
-### Deep validation not showing agent activity
-
-**Problem:**
-```bash
-# Nothing appears in console
+```text
+:connect byok openai gpt-4o-mini
+:connect local ollama qwen3:8b
+:connect acp opencode
 ```
 
-**Solutions:**
+Then confirm state:
 
-1. **Use verbose flag:**
-   ```bash
-   ```
-
-2. **Check OpenCode installation:**
-   ```bash
-   opencode --version
-   ```
-
-3. **Verify agent roles are enabled:**
-   ```yaml
-   team:
-     qe:
-       roles:
-         api_tester:
-           enabled: true
-         security_tester:
-           enabled: true
-   ```
-
-## Performance Issues
-
-### Slow startup time
-
-**Problem:** SuperQode takes too long to start
-
-**Solutions:**
-
-1. **Use lazy loading** (already implemented)
-2. **Check system resources:**
-   ```bash
-   top  # or htop
-   ```
-
-3. **Close other memory-intensive applications**
-
-### High memory usage during validation
-
-**Problem:** validation analysis uses too much memory
-
-**Solutions:**
-
-1. **Memory limits are already implemented** (50MB per process)
-2. **Run smaller analysis scopes:**
-   ```bash
-   ```
-
-3. **Use worktree isolation:**
-   ```bash
-   ```
-
-### Agent timeouts
-
-**Problem:**
-```bash
-⏰ Agent analysis timed out after 30s
+```text
+:status
 ```
 
-**Solutions:**
+### Provider authentication fails
 
-1. **Increase timeout:**
-   ```bash
-   ```
+Check the provider-specific environment variable:
 
-2. **Use specific roles instead of all:**
-   ```bash
-   ```
-
-## Configuration Problems
-
-### YAML configuration not loading
-
-**Problem:**
 ```bash
-Configuration error: Invalid YAML format
+echo "$OPENAI_API_KEY"
+echo "$ANTHROPIC_API_KEY"
+echo "$GOOGLE_API_KEY"
+superqode auth check openai
+superqode providers doctor openai
 ```
 
-**Solutions:**
+Never place API keys directly in documentation, issues, logs, or committed config. In `superqode.yaml`, reference environment variables:
 
-1. **Validate YAML syntax:**
-   ```bash
-   python -c "import yaml; yaml.safe_load(open('superqode.yaml'))"
-   ```
-
-2. **Check indentation (YAML is space-sensitive)**
-3. **Use online YAML validators**
-
-### Roles not appearing
-
-**Problem:** Expected roles don't show up in TUI
-
-**Solutions:**
-
-1. **Check YAML structure:**
-   ```yaml
-   team:
-     qe:
-       roles:
-         unit_tester:
-           enabled: true
-   ```
-
-2. **Restart SuperQode after config changes**
-3. **Use `superqode config init` to reset configuration**
-
-## Common Error Messages
-
-### "Another validation session is already running"
-
-**Problem:** Multiple validation sessions conflict
-
-**Solution:**
-```bash
-# Check running sessions
-
-# View session logs
+```yaml
+providers:
+  openai:
+    api_key_env: OPENAI_API_KEY
 ```
 
-### "Permission denied" errors
+### ACP agent is unavailable
 
-**Problem:** File system access issues
+List and inspect agents:
 
-**Solutions:**
 ```bash
-# Check permissions
-ls -la /path/to/project
-
-# Fix permissions
-chmod -R u+rwx /path/to/project
-
-# Or run with sudo (not recommended)
+superqode agents list
+superqode agents doctor opencode
+superqode agents doctor opencode --live
 ```
 
-### "Connection refused" for MCP servers
+For OpenCode:
 
-**Problem:** MCP servers not accessible
+```bash
+npm i -g opencode-ai
+opencode --help
+superqode connect acp opencode
+```
 
-**Solutions:**
+---
 
-1. **Check MCP server configuration in YAML**
-2. **Verify MCP server processes are running:**
-   ```bash
-   ps aux | grep mcp
-   ```
+## Harness Problems
 
-3. **Restart MCP servers:**
-   ```yaml
-   mcp:
-     servers:
-       filesystem:
-         command: "npx -y @modelcontextprotocol/server-filesystem /tmp"
-   ```
+### Harness YAML does not validate
 
-### "Import error" for custom modules
+Run:
 
-**Problem:** Python path issues in validation analysis
+```bash
+superqode harness validate --spec harness.yaml
+superqode harness inspect --spec harness.yaml
+```
 
-**Solutions:**
+Common fixes:
 
-1. **Check Python environment:**
-   ```bash
-   which python
-   python -c "import sys; print(sys.path)"
-   ```
+- use `flavor: coding` or `flavor: no_tool`
+- use a known runtime backend such as `builtin`, `openai-agents`, `adk`, `deepagents`, `pydanticai`, or `codex-sdk`
+- keep `execution_policy.allow_write` and `execution_policy.allow_shell` false for no-tool harnesses
+- define `agents` as a YAML list
 
-2. **Use virtual environment:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate
-   pip install superqode
-   ```
+### Optional runtime backend is missing
+
+List backends:
+
+```bash
+superqode harness list-backends
+superqode runtime doctor pydanticai
+```
+
+Install only the backend you need:
+
+```bash
+python -m pip install "superqode[pydanticai]"
+python -m pip install "superqode[deepagents]"
+python -m pip install "superqode[openai-agents]"
+python -m pip install "superqode[adk]"
+python -m pip install "superqode[codex-sdk]"
+```
+
+### A run did something unexpected
+
+Inspect persisted events:
+
+```bash
+superqode harness runs
+superqode harness events <run-id>
+superqode harness graph <run-id>
+superqode harness graph <run-id> --json
+```
+
+Run `doctor` with the same runtime and sandbox overrides:
+
+```bash
+superqode harness doctor --spec harness.yaml --runtime pydanticai --sandbox local
+```
+
+---
+
+## Sandbox And Permission Problems
+
+### Shell commands are blocked
+
+Check the active sandbox and harness policy:
+
+```bash
+superqode sandbox doctor
+superqode harness inspect --spec harness.yaml
+```
+
+In the TUI:
+
+```text
+:sandbox
+:sandbox workspace-write
+:status
+```
+
+If shell should be allowed, the harness must allow it:
+
+```yaml
+execution_policy:
+  sandbox: local
+  approval_profile: balanced
+  allow_shell: true
+  allowed_commands:
+    - uv run pytest
+```
+
+### A tool call is waiting for approval
+
+In the TUI:
+
+```text
+:approve
+:approve 1 always
+:reject
+:reject 1 "use a safer command"
+```
+
+Use `always` only when you intentionally trust similar calls for the current session.
+
+---
+
+## MCP Problems
+
+### MCP server is not available
+
+Check config and dependencies:
+
+```bash
+superqode config init
+node --version
+npx --version
+```
+
+Example `mcp_servers` config:
+
+```yaml
+mcp_servers:
+  filesystem:
+    transport: stdio
+    enabled: true
+    auto_connect: true
+    command: npx
+    args:
+      - -y
+      - "@modelcontextprotocol/server-filesystem"
+      - "."
+```
+
+Use `mcpServers` only when importing external MCP config. New SuperQode config should use `mcp_servers`.
+
+---
+
+## Local Model Problems
+
+### Ollama model does not appear
+
+Check Ollama:
+
+```bash
+ollama list
+ollama serve
+ollama pull qwen3:8b
+superqode providers doctor ollama --live
+```
+
+Connect:
+
+```text
+:connect local ollama qwen3:8b
+```
+
+### DS4 is slow on first request
+
+DS4 may warm up the model on connect. To skip warm-up:
+
+```bash
+export SUPERQODE_DS4_WARMUP=0
+```
+
+Then point SuperQode at the DS4 endpoint if needed:
+
+```bash
+export DS4_HOST=http://127.0.0.1:8000/v1
+superqode providers guide ds4
+```
+
+---
+
+## Session And Export Problems
+
+### You cannot find an old session
+
+```bash
+superqode sessions list
+superqode sessions tree
+superqode sessions show <session-id>
+```
+
+### You need to hand off a session
+
+```bash
+superqode share create <session-id>
+superqode share list
+superqode share import <artifact.superqode-share.json> --session-id imported
+```
+
+### Export failed
+
+Try a specific format and path:
+
+```bash
+superqode sessions export <session-id> --format markdown --output session.md
+superqode sessions export <session-id> --format json --output session.json
+```
+
+---
+
+## Project Trust And Plugins
+
+If plugins, hooks, or MCP config are blocked, inspect project trust:
+
+```bash
+superqode trust status
+superqode trust doctor
+superqode trust yes
+superqode plugins doctor
+```
+
+Only trust projects whose local executable config you have reviewed.
+
+---
 
 ## Getting Help
 
-If these solutions don't resolve your issue:
+When opening an issue, include:
 
-1. **Check the logs:**
-   ```bash
-   ```
+- SuperQode version from `superqode --version`
+- Python version from `python --version`
+- operating system
+- command you ran
+- relevant `doctor --json` output with secrets removed
+- minimal `superqode.yaml` or `harness.yaml` that reproduces the issue
 
-2. **Run with debug output:**
-   ```bash
-   superqode --debug qe run .
-   ```
+Links:
 
-3. **Report issues on GitHub:**
-   - [GitHub Issues](https://github.com/SuperagenticAI/superqode/issues)
-   - Include full error messages and environment details
-
-4. **Email Support:**
-   - Reach out to us at [info@super-agentic.ai](mailto:info@super-agentic.ai)
-
-5. **Community support:**
-   - Check GitHub Discussions
-   - Join the SuperQode community
-
-## Health Check
-
-Run this health check command to diagnose common issues:
-
-```bash
-python -c "
-import sys
-import subprocess
-import shutil
-
-print('🔍 SuperQode Health Check')
-print('=' * 40)
-
-# Check Python version
-print(f'Python: {sys.version}')
-
-# Check required packages
-try:
-    import textual
-    print('✅ Textual available')
-except ImportError:
-    print('❌ Textual missing')
-
-try:
-    import rich
-    print('✅ Rich available')
-except ImportError:
-    print('❌ Rich missing')
-
-# Check OpenCode
-if shutil.which('opencode'):
-    print('✅ OpenCode available')
-    try:
-        result = subprocess.run(['opencode', '--version'], capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            print(f'   Version: {result.stdout.strip()}')
-        else:
-            print('❌ OpenCode not working')
-    except:
-        print('❌ OpenCode check failed')
-else:
-    print('❌ OpenCode not found')
-
-# Check Node.js
-if shutil.which('node'):
-    try:
-        result = subprocess.run(['node', '--version'], capture_output=True, text=True, timeout=5)
-        print(f'✅ Node.js: {result.stdout.strip()}')
-    except:
-        print('❌ Node.js check failed')
-else:
-    print('❌ Node.js not found')
-
-"
-```
+- [GitHub Issues](https://github.com/SuperagenticAI/superqode/issues)
+- [GitHub Discussions](https://github.com/SuperagenticAI/superqode/discussions)
+- [Support](../../SUPPORT.md)

@@ -1,6 +1,6 @@
 # A2A Protocol
 
-The Agent-to-Agent (A2A) protocol enables SuperQode to communicate and coordinate with external A2A-compliant agents. This integration extends SuperQode into a multi-agent orchestration platform while maintaining its validation and evaluation DNA.
+The Agent-to-Agent (A2A) protocol enables SuperQode to communicate and coordinate with external A2A-compliant agents. This integration extends SuperQode into a multi-agent orchestration platform for coding-agent harness workflows.
 
 ---
 
@@ -133,7 +133,6 @@ SuperQode includes pre-built workflow presets for common scenarios:
 
 | Preset | Description | Pattern |
 |--------|-------------|---------|
-| `full_qe` | Complete validation and evaluation: unit, integration, security, lint | Parallel |
 | `pre_commit` | Quick checks before commit: format, lint, unit tests | Parallel |
 | `ci_pipeline` | Full CI pipeline: build, test, security, deps | Sequential |
 | `review_cycle` | Automated code review: style, security, quality, smells | Parallel |
@@ -150,12 +149,12 @@ presets = get_presets()
 print(presets.list_presets("quality"))
 
 # Get preset description
-print(presets.describe_preset("full_qe"))
+print(presets.describe_preset("pre_commit"))
 
 # Run a preset
-result = await presets.run("full_qe", [
+result = await presets.run("pre_commit", [
     {"url": "http://test:8000", "prompt": "Run tests"},
-    {"url": "http://security:8000", "prompt": "Scan for vulnerabilities"},
+    {"url": "http://lint:8000", "prompt": "Run linter"},
 ])
 ```
 
@@ -163,50 +162,31 @@ result = await presets.run("full_qe", [
 
 ## Skill Mapping
 
-A2A skills from external agents can be automatically mapped to SuperQode roles:
+A2A skills from external agents can be mapped to SuperQode capabilities:
 
 ```python
 from superqode.a2a import get_skill_mapper
 
 mapper = get_skill_mapper()
 
-# Get SuperQode role for a skill
-role = mapper.get_role_for_skill("security scanning")
-# Returns: "qe_security"
-
 # Map all skills from an agent card
 mappings = mapper.map_skills(agent_card.skills)
-# Returns list of RoleMapping with confidence scores
+# Returns list of SkillMapping with confidence scores
 ```
-
-### Supported Role Mappings
-
-| Skill Keywords | SuperQode Role |
-|---------------|----------------|
-| unit test, pytest, junit | qe_unit |
-| integration test, api test | qe_integration |
-| security, vulnerability, owasp | qe_security |
-| accessibility, wcag, a11y | qe_accessibility |
-| performance, load test | qe_performance |
-| deploy, ci/cd, docker | devops |
-| development, coding, write code | dev |
-| review, code review | code_review |
-| debug, fix, troubleshoot | debug |
 
 ---
 
-## Running validation with A2A Agents
+## Multi-Agent Analysis with A2A
 
-Integrate external A2A agents into your validation workflow:
+Orchestrate external A2A agents from your workflow:
 
 ```python
 
-
-# Run validation with external A2A agents
-result = await orch.run_a2a_qe([
+# Run analysis with external A2A agents
+result = await orch.run_a2a([
     "http://test-agent:8000",
     "http://security-agent:8000",
-], task="Run full validation analysis")
+], task="Run full analysis")
 ```
 
 ---
@@ -240,7 +220,7 @@ registry.load()
 Run SuperQode as an A2A server so other A2A clients can call it:
 
 ```python
-from superqode.a2a import create_a2A_server
+from superqode.a2a import create_a2a_server
 from superqode.agent import AgentConfig
 
 config = AgentConfig(
@@ -249,13 +229,7 @@ config = AgentConfig(
 )
 
 server = await create_a2a_server(config, server_url="http://localhost:8000")
-```
-
-Then run with uvicorn:
-
-```bash
-pip install uvicorn
-uvicorn superqode.a2a.server:app --port 8000
+await server.start()
 ```
 
 ### Available Endpoints
