@@ -1,13 +1,12 @@
 # CLI Reference
 
-SuperQode provides a CLI for your portable coding agent harness: coding sessions, runtime management, provider setup, validation workflows, agents, and configuration. This reference documents the available commands, options, and usage patterns.
+SuperQode provides a CLI for your portable coding agent harness: coding sessions, runtime management, provider setup, agents, and configuration. This reference documents the available commands, options, and usage patterns.
 
 ---
 
 ## Command Structure
 
 ```bash
-superqode qe [OPTIONS] COMMAND [ARGS]...
 superqode [OPTIONS] COMMAND [ARGS]...
 ```
 
@@ -15,12 +14,12 @@ superqode [OPTIONS] COMMAND [ARGS]...
 
 | Option | CLI | Description |
 |--------|-----|-------------|
-| `--version` | superqode qe, superqode | Show version and exit |
-| `--help` | superqode qe, superqode | Show help message and exit |
+| `--version` | superqode | Show version and exit |
+| `--help` | superqode | Show help message and exit |
 | `--tui` | superqode | Force the Textual TUI (default) |
 | `-p`, `--print` | superqode | Run one headless coding task and print the response |
 | `--mode json` | superqode | Run one headless task and emit structured JSON |
-| `--profile` | superqode | Select harness profile: `build`, `plan`, `review`, or `qe` |
+| `--profile` | superqode | Select harness profile: `build`, `plan`, or `review` |
 | `--provider` | superqode | Override provider for headless mode |
 | `--model` | superqode | Override model for headless mode |
 | `--changes` | superqode | Control post-run change output: `summary`, `files`, `diff`, or `none` |
@@ -35,7 +34,6 @@ superqode -p "summarize this repository"
 superqode -p --changes files "make the small docs fix"
 superqode -p --changes none "answer without a change footer"
 superqode --mode json --profile plan "plan the auth refactor"
-cat failing.log | superqode -p --profile qe "find the likely regression"
 superqode -p --resume abc123 "continue from the last turn"
 superqode -p --fork abc123 "try a safer implementation"
 ```
@@ -47,7 +45,6 @@ Profiles:
 | `build` | Full-access implementation work |
 | `plan` | Read-only planning; shell requires approval and is denied in headless mode |
 | `review` | Read-only code review |
-| `qe` | Quality-engineering/adversarial validation; shell and network require approval |
 
 Inspect the tools and permissions for a profile:
 
@@ -188,14 +185,6 @@ superqode sandbox run e2b -- "pytest -q"
 
 <div class="grid cards" markdown>
 
--   **Validation Commands (superqode qe)**
-
-    ---
-
-    Quality engineering commands for running validation sessions, viewing reports, and managing artifacts.
-
-    [:octicons-arrow-right-24: Validation Commands](qe-commands.md)
-
 -   **Config Commands (superqode config)**
 
     ---
@@ -211,14 +200,6 @@ superqode sandbox run e2b -- "pytest -q"
     Commands for managing BYOK providers, testing connections, and listing available models.
 
     [:octicons-arrow-right-24: Provider Commands](provider-commands.md)
-
--   **Suggestion Commands (superqode suggestions)**
-
-    ---
-
-    Commands for reviewing and applying verified fix suggestions from validation sessions.
-
-    [:octicons-arrow-right-24: Suggestion Commands](suggestion-commands.md)
 
 -   **Agents Commands (superqode agents)**
 
@@ -236,21 +217,6 @@ superqode sandbox run e2b -- "pytest -q"
 
     [:octicons-arrow-right-24: Auth Commands](auth-commands.md)
 
--   **Roles Commands**
-
-    ---
-
-    Commands for viewing and inspecting team roles and their configuration.
-
-    [:octicons-arrow-right-24: Roles Commands](roles-commands.md)
-
--   **Serve Commands**
-
-    ---
-
-    Start LSP and web servers for IDE and browser integration.
-
-    [:octicons-arrow-right-24: Serve Commands](serve-commands.md)
 
 -   **Init Commands**
 
@@ -270,27 +236,7 @@ superqode sandbox run e2b -- "pytest -q"
 
 | Command | Description |
 |---------|-------------|
-| `superqode qe run .` | Run validation session on current directory |
-| `superqode qe run . --mode quick` | Quick 60-second scan |
-| `superqode qe run . --mode deep` | Deep 30-minute analysis |
-| `superqode qe run . -r security_tester` | Run specific role |
-| `superqode qe roles` | List available validation roles |
-| `superqode qe status` | Show workspace status |
-| `superqode qe artifacts` | List validation artifacts |
-| `superqode qe report` | View latest report |
-| `superqode qe logs` | View agent work logs |
-| `superqode qe dashboard` | Open report in web browser |
 | `superqode memory` | Manage agent memory for project facts, preferences, and SpecMem recall |
-
-### Validation Commands
-
-| Command | Description |
-|---------|-------------|
-| `superqode qe run . --mode quick` | Fast validation pass |
-| `superqode qe run . --mode deep` | Broader validation pass |
-| `superqode qe run . -r security_tester` | Focused security validation |
-| `superqode qe roles` | List validation roles |
-| `superqode qe artifacts` | List validation artifacts |
 
 ### Config Commands
 
@@ -298,11 +244,8 @@ superqode sandbox run e2b -- "pytest -q"
 |---------|-------------|
 | `superqode config init` | Create `superqode.yaml` in the current directory (recommended) |
 | `superqode config init --force` | Initialize config (overwrite if present) |
-| `superqode config list-modes` | List configured modes and roles |
-| `superqode config set-model MODE.ROLE MODEL` | Set model for a mode/role |
-| `superqode config set-agent MODE.ROLE AGENT` | Set ACP agent for a mode/role |
-| `superqode config enable-role MODE.ROLE` | Enable a role |
-| `superqode config disable-role MODE.ROLE` | Disable a role |
+| `superqode harness init coding` | Create a reusable coding harness spec |
+| `superqode harness validate --spec <file>` | Validate a harness spec |
 
 ### Provider Commands
 
@@ -334,7 +277,6 @@ When running the interactive TUI (`superqode`), prefix commands with `:`:
 | `:connect acp opencode` | Connect directly to ACP agent |
 | `:connect byok <provider> <model>` | Connect directly to BYOK provider |
 | `:connect local <provider> <model>` | Connect directly to local model |
-| `:qe <role>` | Switch to validation role mode (e.g., `:qe security_tester`) |
 | `:plan <task>` | Ask for a plan only without native tool execution |
 | `:plan approve` | Execute the last planned request with tools enabled |
 | `:plan edit [task]` | Edit the pending planned request before execution |
@@ -376,13 +318,8 @@ When running the interactive TUI (`superqode`), prefix commands with `:`:
 
 For detailed documentation of each command group:
 
-- [Validation Commands](qe-commands.md) - Quality engineering operations
-- [Validation Commands](advanced-validation-commands.md) - Validation workflows and release evidence
 - [Config Commands](config-commands.md) - Configuration management
 - [Provider Commands](provider-commands.md) - Provider management
-- [Suggestion Commands](suggestion-commands.md) - Fix suggestion handling
 - [Agents Commands](agents-commands.md) - ACP agent management
 - [Auth Commands](auth-commands.md) - Authentication and security
-- [Roles Commands](roles-commands.md) - Team roles management
-- [Serve Commands](serve-commands.md) - Server commands for IDE/web
 - [Init Commands](init-commands.md) - Project initialization

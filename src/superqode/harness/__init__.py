@@ -1,18 +1,4 @@
-"""SuperQode harness primitives.
-
-The v2 harness layer is being introduced alongside the existing validation
-harness. ``HarnessSpec`` describes user-owned agent harnesses; ``PatchHarness``
-continues to provide project validation for generated changes.
-"""
-
-from superqode.patch_harness import (
-    HarnessConfig,
-    HarnessFinding,
-    HarnessResult,
-    PatchHarness,
-    ValidationCategory,
-    load_harness_config,
-)
+"""SuperQode harness primitives."""
 from .events import HarnessEvent
 from .loader import (
     harness_spec_from_dict,
@@ -53,8 +39,8 @@ from .spec import (
     ObservabilitySpec,
     PermissionRuleSpec,
     RuntimeSpec,
-    ValidationSpec,
-    ValidationStepSpec,
+    ChecksSpec,
+    CheckStepSpec,
     WorkflowMode,
     WorkflowSpec,
 )
@@ -166,15 +152,10 @@ def __getattr__(name: str):
 
 
 __all__ = [
-    # Validation
-    "PatchHarness",
-    "HarnessFinding",
-    "HarnessResult",
-    "ValidationCategory",
-    "HarnessConfig",
-    "load_harness_config",
     # Agent harness specs
     "AgentSpec",
+    "ChecksSpec",
+    "CheckStepSpec",
     "ContextSpec",
     "ExecutionPolicySpec",
     "HarnessFlavor",
@@ -185,8 +166,6 @@ __all__ = [
     "PermissionRuleSpec",
     "ObservabilitySpec",
     "RuntimeSpec",
-    "ValidationSpec",
-    "ValidationStepSpec",
     "WorkflowMode",
     "WorkflowProgress",
     "WorkflowPreset",

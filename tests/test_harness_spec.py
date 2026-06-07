@@ -15,8 +15,6 @@ from superqode.harness import (
     load_harness_spec,
     spec_from_headless_profile,
 )
-from superqode.patch_harness import PatchHarness
-from superqode.harness.config import CustomHarnessStep, HarnessConfig
 from superqode.tools.permissions import Permission
 
 
@@ -96,7 +94,7 @@ def test_harness_spec_round_trip_preserves_core_fields():
             "context": {"prompt_persistence": "full"},
             "execution_policy": {"allow_write": True, "allow_shell": True},
             "agents": [{"id": "coder", "tools": ["read_file", "bash"]}],
-            "validation": {
+            "checks": {
                 "enabled": True,
                 "custom_steps": [{"name": "tests", "command": "pytest -q", "timeout": 120}],
             },
@@ -113,8 +111,8 @@ def test_harness_spec_round_trip_preserves_core_fields():
     assert restored.execution_policy.allow_write is True
     assert restored.execution_policy.allow_shell is True
     assert restored.agents[0].tools == ("read_file", "bash")
-    assert restored.validation.enabled is True
-    assert restored.validation.custom_steps[0].command == "pytest -q"
+    assert restored.checks.enabled is True
+    assert restored.checks.custom_steps[0].command == "pytest -q"
 
 
 def test_workflow_preset_expands_harness_agents_and_mode():
@@ -132,39 +130,6 @@ def test_workflow_preset_expands_harness_agents_and_mode():
 
     payload = harness_spec_to_dict(spec)
     assert payload["workflow"]["preset"] == "parallel-review"
-
-
-def test_patch_harness_namespace_exports_legacy_validator():
-    assert PatchHarness.__name__ == "PatchHarness"
-
-
-@pytest.mark.asyncio
-async def test_patch_harness_runs_custom_steps_without_shell(tmp_path: Path, monkeypatch):
-    calls = []
-
-    def fake_run(command, **kwargs):
-        calls.append((command, kwargs))
-
-        class Result:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
-        return Result()
-
-    monkeypatch.setattr("superqode.harness.validator.subprocess.run", fake_run)
-    harness = PatchHarness(
-        tmp_path,
-        HarnessConfig(
-            custom_steps=[CustomHarnessStep(name="lint", command='uv run ruff check "src tests"')]
-        ),
-    )
-
-    result = await harness.validate_changes({})
-
-    assert result.success is True
-    assert calls[0][0] == ["uv", "run", "ruff", "check", "src tests"]
-    assert calls[0][1]["shell"] is False
 
 
 @pytest.mark.parametrize("profile_name", ["build", "plan", "review", "no-tool"])

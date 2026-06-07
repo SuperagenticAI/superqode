@@ -349,7 +349,6 @@ rm ~/.superqode/auth.json
 - `superqode providers list` - List available providers
 - `superqode providers test` - Test provider connection
 - `superqode agents show` - Show agent authentication info
-- `superqode roles check` - Check role readiness (includes auth check)
 
 ---
 

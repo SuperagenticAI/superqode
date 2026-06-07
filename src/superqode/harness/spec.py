@@ -129,8 +129,8 @@ class ContextSpec:
 
 
 @dataclass(frozen=True)
-class ValidationStepSpec:
-    """Project validation step."""
+class CheckStepSpec:
+    """Project checks step."""
 
     name: str
     command: str
@@ -139,13 +139,13 @@ class ValidationStepSpec:
 
 
 @dataclass(frozen=True)
-class ValidationSpec:
-    """Validation lifecycle policy."""
+class ChecksSpec:
+    """Checks lifecycle policy."""
 
     enabled: bool = False
     fail_on_error: bool = False
     timeout_seconds: int = 300
-    custom_steps: tuple[ValidationStepSpec, ...] = ()
+    custom_steps: tuple[CheckStepSpec, ...] = ()
     config: dict[str, Any] = field(default_factory=dict)
 
 
@@ -199,7 +199,7 @@ class HarnessSpec:
     agents: tuple[AgentSpec, ...] = ()
     workflow: WorkflowSpec = field(default_factory=WorkflowSpec)
     context: ContextSpec = field(default_factory=ContextSpec)
-    validation: ValidationSpec = field(default_factory=ValidationSpec)
+    checks: ChecksSpec = field(default_factory=ChecksSpec)
     observability: ObservabilitySpec = field(default_factory=ObservabilitySpec)
     hooks: HooksSpec = field(default_factory=HooksSpec)
     metadata: dict[str, Any] = field(default_factory=dict)

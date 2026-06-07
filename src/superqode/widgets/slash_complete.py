@@ -29,9 +29,6 @@ class SlashCommand:
 
 # Default slash commands
 DEFAULT_COMMANDS: list[SlashCommand] = [
-    # Role commands
-    SlashCommand("/dev", "Switch to development mode", category="roles"),
-    SlashCommand("/dev fullstack", "Start full-stack development", category="roles"),
     # Agent commands
     SlashCommand("/agents", "List available agents", "Ctrl+A", category="agents"),
     SlashCommand("/store", "Open agent marketplace", "Ctrl+S", category="agents"),
@@ -45,7 +42,7 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand("/open", "Open a file or bookmark", category="files"),
     SlashCommand("/bookmark", "Manage bookmarks", category="files"),
     # Workflow commands
-    SlashCommand("/handoff", "Hand off work to another role", "Ctrl+H", category="workflow"),
+    SlashCommand("/a2a", "Show agent-to-agent workflow commands", category="workflow"),
     SlashCommand("/context", "View/update work context", "Ctrl+I", category="workflow"),
     SlashCommand("/approve", "Approve a pending tool call", category="workflow"),
     SlashCommand("/reject", "Reject a pending tool call", category="workflow"),

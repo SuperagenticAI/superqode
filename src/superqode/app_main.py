@@ -139,17 +139,6 @@ from superqode.app.theme_bridge import (
     theme_names,
 )
 
-# validation roles that should be highlighted as power roles in the TUI.
-POWER_QE_ROLES = {
-    "unit_tester",
-    "integration_tester",
-    "api_tester",
-    "ui_tester",
-    "accessibility_tester",
-    "security_tester",
-    "usability_tester",
-}
-
 # SuperQode modules
 from superqode.danger import (
     analyze_command,
@@ -1531,7 +1520,7 @@ class SuperQodeApp(App):
             PaletteCommand(
                 "harness_inspect",
                 "Harness Inspect",
-                "Summarize active HarnessSpec policy, tools, workflow, hooks, and validation",
+                "Summarize active HarnessSpec policy, tools, workflow, hooks, and checks",
                 "▤",
                 ":harness inspect",
                 "harness",
@@ -1994,12 +1983,7 @@ class SuperQodeApp(App):
     @work(thread=True)
     def _load_welcome(self):
         # Agents are now lazy loaded - no need to preload
-        try:
-            from superqode.team_config import load_team_config
-
-            team_name = load_team_config().team_name
-        except Exception:
-            team_name = "Development Team"
+        team_name = Path.cwd().name or "SuperQode"
         self._call_ui(self._show_welcome, team_name)
 
     def _show_welcome(self, team_name: str):
@@ -5114,29 +5098,12 @@ class SuperQodeApp(App):
             self._do_exit(log)
         elif c == "init":
             self._init_config(args, log)
-        elif c == "dev":
-            self._set_role("dev", args or "fullstack", log)
-        elif c in ("qa", "qe"):
-            if not self._has_superqode_config():
-                log.add_error("No superqode.yaml found. Run :init to create one.")
-                return
-            self._set_role("qe", args or "fullstack", log)
-        elif c == "devops":
-            self._set_role("devops", args or "fullstack", log)
         elif c in ("home", "disconnect"):
             self._go_home(log)
-        elif c == "roles":
-            self._show_roles(log)
         elif c == "acp":
             self._acp_cmd(args, log)
         elif c in ("agents", "agent"):
             self._agents_cmd(args, log)
-        elif c == "team":
-            self._show_team(log)
-        elif c in ("validation", "superqe"):
-            self._handle_superqe_command(args, log)
-        elif c == "handoff":
-            self._handoff(args, log)
         elif c == "a2a":
             self.run_worker(self._a2a_cmd(args, log))
         elif c == "runtime":
@@ -10085,8 +10052,8 @@ class SuperQodeApp(App):
             ", ".join(summary["mcp"]["servers"]) if summary["mcp"]["servers"] else "none declared",
             style=THEME["text"],
         )
-        t.append("\n  Validation  ", style=THEME["muted"])
-        t.append("enabled" if summary["validation"]["enabled"] else "disabled", style=THEME["text"])
+        t.append("\n  Checks  ", style=THEME["muted"])
+        t.append("enabled" if summary["checks"]["enabled"] else "disabled", style=THEME["text"])
         t.append("\n  Run store   ", style=THEME["muted"])
         t.append(summary["observability"]["run_store"], style=THEME["text"])
 
@@ -10242,7 +10209,7 @@ class SuperQodeApp(App):
         run = evidence["run"]
         workflow = evidence["workflow"]
         changes = evidence["changes"] if isinstance(evidence["changes"], dict) else {}
-        validation = evidence["validation"] if isinstance(evidence["validation"], dict) else {}
+        checks = evidence["checks"] if isinstance(evidence["checks"], dict) else {}
         result = evidence["result"]
         t = Text()
         t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
@@ -10281,9 +10248,9 @@ class SuperQodeApp(App):
             f"{file_count} file(s) (+{int(changes.get('additions') or 0)} -{int(changes.get('deletions') or 0)})",
             style=THEME["text"],
         )
-        t.append("\n  Validation  ", style=THEME["muted"])
-        t.append(str(validation.get("status") or "unknown"), style=THEME["text"])
-        t.append(f"  {len(validation.get('steps') or [])} step(s)", style=THEME["dim"])
+        t.append("\n  Checks  ", style=THEME["muted"])
+        t.append(str(checks.get("status") or "unknown"), style=THEME["text"])
+        t.append(f"  {len(checks.get('steps') or [])} step(s)", style=THEME["dim"])
         t.append("\n  Approvals   ", style=THEME["muted"])
         t.append(f"{len(evidence.get('approvals') or [])} event(s)", style=THEME["text"])
         t.append("\n  Result      ", style=THEME["muted"])
@@ -10444,7 +10411,7 @@ class SuperQodeApp(App):
             return THEME["error"]
         if "completed" in event_type or "result" in event_type:
             return THEME["success"]
-        if event_type.startswith("validation."):
+        if event_type.startswith("checks."):
             return THEME["gold"]
         if event_type.startswith("workflow."):
             return THEME["cyan"]
@@ -11301,12 +11268,7 @@ class SuperQodeApp(App):
     def action_clear_screen(self):
         log = self.query_one("#log", ConversationLog)
         log.clear()
-        try:
-            from superqode.team_config import load_team_config
-
-            team_name = load_team_config().team_name
-        except Exception:
-            team_name = "Development Team"
+        team_name = Path.cwd().name or "SuperQode"
         # Temporarily disable auto-scroll so we can scroll to top
         log.auto_scroll = False
         log.write(render_welcome(self.agents, team_name))
@@ -11360,170 +11322,41 @@ class SuperQodeApp(App):
             import shutil
 
             shutil.copy2(template_path, config_path)
-            log.add_success(f"Created {config_path} with all roles available")
-            log.add_info(
-                "⚡ Power validation roles: unit, integration, api, ui, accessibility, security, usability"
-            )
-            log.add_info(
-                "💡 Update each role's job_description in superqode.yaml for best results."
-            )
+            log.add_success(f"Created {config_path} with harness defaults")
+            log.add_info("💡 Use :connect to choose a runtime, or edit harnesses under .superqode/.")
         else:
             # Fallback: create basic config if template not found
-            default_config = """# =============================================================================
-# SuperQode - Team Configuration
-# =============================================================================
-# Multi-agent software development team
-# Run: superqode (TUI) or superqode --help (CLI)
-# =============================================================================
+            default_config = """version: 2
 
-superqode:
-  version: "1.0"
-  team_name: "Full Stack Development Team"
-  description: "AI-powered software development team"
+project:
+  name: My SuperQode Project
+  root: .
 
-# Default configuration for all roles
-default:
-  mode: "acp"
-  agent: "opencode"
-  agent_config:
-    provider: "opencode"
+defaults:
+  harness: coding
+  runtime: builtin
 
-# =============================================================================
-# TEAM ROLES - Enable the ones you need
-# =============================================================================
-team:
-  # Development roles
-  dev:
-    description: "Software Development"
-    roles:
-      fullstack:
-        description: "Full-stack development and implementation"
-        mode: "acp"
-        agent: "opencode"
-        agent_config:
-          provider: "opencode"
-        enabled: false  # Set to true to enable
-        job_description: |
-          You are a Senior Full-Stack Developer with expertise in modern web technologies.
+harnesses:
+  coding: .superqode/harnesses/coding.yaml
 
-          EXPERTISE:
-          - Frontend: React, Vue.js, Next.js, TypeScript, Tailwind CSS
-          - Backend: Node.js, Python, Go, REST APIs, GraphQL
-          - Databases: PostgreSQL, MongoDB, Redis
-          - DevOps basics: Docker, CI/CD
-
-          RESPONSIBILITIES:
-          - Write clean, maintainable code
-          - Implement features end-to-end
-          - Follow best practices and coding standards
-          - Debug and fix issues
-
-      frontend:
-        description: "Frontend/UI development specialist"
-        mode: "acp"
-        agent: "opencode"
-        agent_config:
-          provider: "opencode"
-        enabled: false  # Set to true to enable
-        job_description: |
-          You are a Senior Frontend Developer specializing in modern web UIs.
-
-          EXPERTISE:
-          - React, Vue.js, Next.js, TypeScript
-          - CSS3, Tailwind CSS, component libraries
-          - State management, testing frameworks
-          - Performance optimization and accessibility
-
-      backend:
-        description: "Backend/API development specialist"
-        mode: "acp"
-        agent: "opencode"
-        agent_config:
-          provider: "opencode"
-        enabled: false  # Set to true to enable
-        job_description: |
-          You are a Senior Backend Developer specializing in APIs and services.
-
-          EXPERTISE:
-          - Node.js, Python, Go, REST APIs
-          - Databases: PostgreSQL, MongoDB, Redis
-          - Authentication and security
-          - API design and documentation
-
-  # validation roles
-  qe:
-    description: "validation and evaluation"
-    roles:
-      fullstack:
-        description: "Full-stack validation engineer"
-        mode: "acp"
-        agent: "opencode"
-        agent_config:
-          provider: "opencode"
-        enabled: false  # Set to true to enable
-        job_description: |
-          You are a Senior QA Engineer with expertise in all testing types.
-
-          EXPERTISE:
-          - Unit testing: Jest, Pytest, Go testing
-          - Integration testing: Supertest, TestContainers
-          - E2E testing: Playwright, Cypress, Selenium
-          - API testing: Postman, REST Client, k6
-          - Performance testing: k6, Artillery, JMeter
-          - Security testing: OWASP ZAP, Burp Suite basics
-          - Test automation frameworks and CI/CD integration
-
-  # DevOps roles
-  devops:
-    description: "DevOps & Infrastructure"
-    roles:
-      fullstack:
-        description: "Full-stack DevOps engineer"
-        mode: "acp"
-        agent: "opencode"
-        agent_config:
-          provider: "opencode"
-        enabled: false  # Set to true to enable
-        job_description: |
-          You are a Senior DevOps Engineer with full-stack infrastructure expertise.
-
-          EXPERTISE:
-          - CI/CD: GitHub Actions, GitLab CI, Jenkins, CircleCI
-          - Containers: Docker, Docker Compose, Podman
-          - Orchestration: Kubernetes, Helm, Kustomize
-          - IaC: Terraform, Pulumi, CloudFormation
-          - Cloud: AWS, GCP, Azure (all major services)
-          - Monitoring: Prometheus, Grafana, Datadog
-          - Logging: ELK Stack, Loki, CloudWatch
-          - Secrets: Vault, AWS Secrets Manager
-
-          RESPONSIBILITIES:
-          - Design and implement CI/CD pipelines
-          - Containerize applications
-          - Set up infrastructure as code
-          - Configure monitoring and alerting
-          - Manage deployments and releases
+memory:
+  enabled: true
+  provider: local
 """
 
             with open(config_path, "w") as f:
                 f.write(default_config)
-            log.add_success(f"Created {config_path} with basic roles available")
-            log.add_info(
-                "⚡ Power validation roles: unit, integration, api, ui, accessibility, security, usability"
-            )
-            log.add_info(
-                "💡 Update each role's job_description in superqode.yaml for best results."
-            )
+            log.add_success(f"Created {config_path} with harness defaults")
+            log.add_info("💡 Use superqode harness init coding to create a harness spec.")
 
         t = Text()
         t.append("\n  Quick start:\n", style=THEME["muted"])
-        t.append("    :qe fullstack     ", style=f"bold {THEME['orange']}")
-        t.append("Start validation (requires superqode.yaml)\n", style=THEME["dim"])
-        t.append("    :roles            ", style=f"bold {THEME['cyan']}")
-        t.append("List available roles\n", style=THEME["dim"])
         t.append("    :connect acp <name> ", style=f"bold {THEME['success']}")
         t.append("Connect an ACP agent\n", style=THEME["dim"])
-        t.append("    Edit superqode.yaml to add or enable roles as needed\n", style=THEME["dim"])
+        t.append("    :connect            ", style=f"bold {THEME['cyan']}")
+        t.append("Open the connection picker\n", style=THEME["dim"])
+        t.append("    superqode harness init coding\n", style=f"bold {THEME['purple']}")
+        t.append("Create a reusable harness spec\n", style=THEME["dim"])
         t.append("\n", style="")
         log.write(t)
 
@@ -11890,19 +11723,8 @@ team:
                 )
             # Use standard subprocess approach (ACP requires separate adapter)
             self._send_to_agent(text, name, log)
-        elif mode != "home" and "." in mode:
-            self.is_busy = True
-            self._cancel_requested = False
-            m, r = mode.split(".", 1)
-            if plan_requested:
-                text = (
-                    "PLAN MODE: Analyze the request and produce a concrete implementation plan. "
-                    "Do not edit files, run commands that modify state, or make changes.\n\n"
-                    f"{text}"
-                )
-            self._send_to_role(text, m, r, log)
         else:
-            log.add_info("Not connected. Use :connect acp <name> or :qe <role> after :init")
+            log.add_info("Not connected. Use :connect to choose a runtime or agent.")
 
     async def _ask_agent_question(self, question, log: ConversationLog):
         """Show an agent question in the TUI and await the next input submission."""
@@ -12080,35 +11902,6 @@ team:
         if file_context:
             text = f"{file_context}\n\n{text}"
             self._current_file_context = ""  # Clear after use
-
-        # Inject persona if we're in a role context (like ACP does)
-        # This provides double reinforcement: system prompt + message-level persona
-        if (
-            hasattr(self, "current_mode")
-            and hasattr(self, "current_role")
-            and self.current_mode
-            and self.current_role
-        ):
-            try:
-                from superqode.config import load_config, resolve_role
-                from superqode.agents.persona import PersonaInjector
-                from superqode.agents.messaging import wrap_message_with_persona
-
-                # Use stored resolved role if available, otherwise resolve it
-                resolved = getattr(self, "_current_resolved_role", None)
-                if not resolved:
-                    resolved = resolve_role(self.current_mode, self.current_role, load_config())
-
-                if resolved:
-                    # Build persona context and wrap message (same as ACP)
-                    injector = PersonaInjector()
-                    persona_context = injector.build_persona(
-                        self.current_mode, self.current_role, resolved
-                    )
-                    text = wrap_message_with_persona(text, persona_context)
-            except Exception as e:
-                # If persona injection fails, continue without it (don't break the flow)
-                pass
 
         # Check if connected
         if not hasattr(self, "_pure_mode"):
@@ -18688,460 +18481,6 @@ team:
         # Schedule scroll to top with a small delay to ensure content is rendered
         self.set_timer(0.1, lambda: log.scroll_home())
 
-    @work(exclusive=True, thread=True)
-    def _send_to_role(self, text: str, mode: str, role: str, log: ConversationLog):
-        """Send message to role - supports both ACP agents (opencode) and SuperQode agents (with tools)."""
-        self._cancel_requested = False
-        self._call_ui(self._start_thinking, f"⚡ Running {mode}.{role}...")
-
-        try:
-            from superqode.config import load_config, resolve_role
-            from superqode.agents.persona import PersonaInjector
-            from superqode.agents.messaging import wrap_message_with_persona
-
-            resolved = resolve_role(mode, role, load_config())
-
-            if not resolved:
-                self._call_ui(self._stop_thinking)
-                self._call_ui(log.add_error, f"Role {mode}.{role} not found")
-                return
-
-            # Handle external ACP agents
-            if resolved.coding_agent == "opencode":
-                # Build persona context and wrap message
-                injector = PersonaInjector()
-                persona_context = injector.build_persona(mode, role, resolved)
-                wrapped_message = wrap_message_with_persona(text, persona_context)
-
-                # Get model from config
-                model_name = None
-                if resolved.agent_config and resolved.agent_config.model:
-                    model_name = resolved.agent_config.model
-                elif resolved.model:
-                    model_name = resolved.model
-                else:
-                    model_name = None
-
-                # Use unified OpenCode runner (same code path as :acp connect opencode)
-                self._run_opencode_unified(
-                    message=wrapped_message,
-                    model=model_name,
-                    display_name=f"{mode}.{role}",
-                    log=log,
-                    persona_context=persona_context,
-                )
-            # Handle BYOK/LOCAL mode - use provider session if connected
-            elif (
-                resolved.execution_mode in ("byok", "local")
-                and resolved.provider
-                and resolved.model
-            ):
-                # Check if provider session is connected (should be from _set_role)
-                session = get_session()
-                if hasattr(self, "_pure_mode") and self._pure_mode.session.connected:
-                    # Use provider session for BYOK/LOCAL
-                    self._send_to_pure_mode(text, log)
-                else:
-                    # Not connected yet, try to connect
-                    self._call_ui(self._stop_thinking)
-                    self._call_ui(
-                        log.add_error, f"Not connected to {resolved.provider}/{resolved.model}"
-                    )
-                    self._call_ui(
-                        log.add_info, f"Connecting to {resolved.provider}/{resolved.model}..."
-                    )
-                    # Store resolved role for persona injection
-                    self._current_resolved_role = resolved
-                    self._connect_byok_mode(
-                        resolved.provider, resolved.model, log, resolved_role=resolved
-                    )
-                    # After connection, send the message
-                    if hasattr(self, "_pure_mode") and self._pure_mode.session.connected:
-                        self._send_to_pure_mode(text, log)
-            # Handle SuperQode agents (with provider/model, full tool access)
-            elif resolved.agent_type == "superqode" and resolved.provider and resolved.model:
-                # Use SuperQodeAgent with AgentLoop (has full codebase access via tools)
-                self._run_superqode_agent(
-                    message=text, mode=mode, role=role, resolved=resolved, log=log
-                )
-            else:
-                self._call_ui(self._stop_thinking)
-                self._call_ui(
-                    log.add_info,
-                    f"🚧 Agent for {mode}.{role} not supported yet (agent_type: {resolved.agent_type}, coding_agent: {resolved.coding_agent})",
-                )
-        except Exception as e:
-            self._agent_process = None
-            self._call_ui(self._stop_thinking)
-            self._call_ui(self._stop_stream_animation)
-            self._call_ui(log.add_error, str(e))
-
-    @work(exclusive=True, thread=True)
-    async def _run_superqode_agent(
-        self, message: str, mode: str, role: str, resolved, log: ConversationLog
-    ):
-        """Run SuperQode agent with full tool access (AgentLoop) and streaming output."""
-        try:
-            from superqode.agents.unified import create_unified_agent
-            from superqode.tools.question_tool import get_question_handler, set_question_handler
-
-            # Create and initialize agent
-            agent = create_unified_agent(resolved)
-            if not await agent.initialize():
-                self._call_ui(self._stop_thinking)
-                self._call_ui(log.add_error, f"Failed to initialize {mode}.{role} agent")
-                return
-
-            self._call_ui(self._stop_thinking)
-
-            # Show agent info
-            model_display = f"{resolved.provider}/{resolved.model}"
-            self._call_ui(log.add_info, f"🤖 Using {model_display} with full codebase access")
-
-            mcp_context = await self._resolve_mcp_attachment_context(log)
-            if mcp_context:
-                message = f"{mcp_context}\n\n{message}"
-
-            # Track tool usage for summary
-            tool_stats = {"tools_called": 0, "files_analyzed": set(), "tool_names": []}
-
-            # Set up tool callbacks to track progress
-            if hasattr(agent, "_agent_loop") and agent._agent_loop:
-
-                def on_tool_call(tool_name: str, args: dict):
-                    tool_stats["tools_called"] += 1
-                    tool_stats["tool_names"].append(tool_name)
-
-                    # Track files being analyzed
-                    if tool_name == "read_file" and "path" in args:
-                        tool_stats["files_analyzed"].add(args["path"])
-                    elif tool_name == "grep" and "path" in args:
-                        tool_stats["files_analyzed"].add(args["path"])
-                    elif tool_name == "code_search" and "path" in args:
-                        tool_stats["files_analyzed"].add(args["path"])
-
-                    # Show progress
-                    file_count = len(tool_stats["files_analyzed"])
-                    self._call_ui(
-                        log.add_info,
-                        f"🔍 Analyzing... ({tool_stats['tools_called']} tools, {file_count} files)",
-                    )
-
-                def on_tool_result(tool_name: str, result):
-                    if not result.success:
-                        self._call_ui(log.add_info, f"⚠️  {tool_name} completed with warnings")
-
-                async def on_thinking(text: str):
-                    """Handle thinking logs from BYOK models."""
-                    # Display thinking logs in the conversation log
-                    # Format similar to ACP thinking logs
-                    self._call_ui(log.add_info, f"💭 {text}")
-
-                agent._agent_loop.on_tool_call = on_tool_call
-                agent._agent_loop.on_tool_result = on_tool_result
-                agent._agent_loop.on_thinking = on_thinking
-
-            # Check if agent supports streaming
-            if hasattr(agent, "send_message_streaming"):
-                # Stream response with timeout to prevent hanging
-                full_response = ""
-                had_content = False
-                streaming_timed_out = False
-                previous_question_handler = get_question_handler()
-
-                async def tui_question_handler(question):
-                    return await self._ask_agent_question(question, log)
-
-                try:
-                    set_question_handler(tui_question_handler)
-
-                    async def stream_with_timeout():
-                        nonlocal full_response, had_content
-                        async for chunk in agent.send_message_streaming(message):
-                            if chunk.strip():
-                                had_content = True
-                                full_response += chunk
-                                self._call_ui(log.add_assistant, chunk)
-
-                    await asyncio.wait_for(stream_with_timeout(), timeout=120.0)
-                except asyncio.TimeoutError:
-                    streaming_timed_out = True
-                    error_msg = (
-                        f"⏰ Streaming timed out for {agent.provider}/{agent.model} after 2 minutes"
-                    )
-                    self._call_ui(log.add_error, error_msg)
-                finally:
-                    if get_question_handler() is tui_question_handler:
-                        set_question_handler(previous_question_handler)
-
-                # If no content was streamed but tools were used, prompt for summary
-                # (only if not timed out)
-                if not had_content and not streaming_timed_out and tool_stats["tools_called"] > 0:
-                    self._call_ui(log.add_info, "💭 Generating analysis summary...")
-                    # The agent should continue and provide a summary
-                    # Wait a bit and check if we get more content
-                    await asyncio.sleep(0.5)
-
-                # Show completion summary
-                self._call_ui(self._stop_stream_animation)
-
-                if tool_stats["tools_called"] > 0 and not streaming_timed_out:
-                    files_count = len(tool_stats["files_analyzed"])
-                    summary = (
-                        f"\n✅ Analysis Complete: "
-                        f"{tool_stats['tools_called']} tools executed, "
-                        f"{files_count} files analyzed"
-                    )
-                    self._call_ui(log.add_info, summary)
-
-                if (
-                    not full_response.strip()
-                    and tool_stats["tools_called"] > 0
-                    and not streaming_timed_out
-                ):
-                    self._call_ui(
-                        log.add_error,
-                        "⚠️  Agent executed tools but did not provide a summary. "
-                        "Please review the tool outputs above.",
-                    )
-
-                # Reset mode badge to HOME after validation testing completes
-                self._call_ui(self._reset_mode_badge_after_qe)
-            else:
-                # Fallback to non-streaming with timeout to prevent hanging
-                previous_question_handler = get_question_handler()
-
-                async def tui_question_handler(question):
-                    return await self._ask_agent_question(question, log)
-
-                try:
-                    set_question_handler(tui_question_handler)
-                    # Add timeout to prevent hanging on slow/unresponsive models
-                    import asyncio
-
-                    response = await asyncio.wait_for(
-                        agent.send_message(message),
-                        timeout=120.0,  # 2 minute timeout
-                    )
-                except asyncio.TimeoutError:
-                    response = None
-                    error_msg = f"⏰ Model {agent.provider}/{agent.model} timed out after 2 minutes"
-                    self._call_ui(log.add_error, error_msg)
-                finally:
-                    if get_question_handler() is tui_question_handler:
-                        set_question_handler(previous_question_handler)
-
-                self._call_ui(self._stop_thinking)
-                self._call_ui(self._stop_stream_animation)
-
-                if response and response.content and response.content.strip():
-                    self._call_ui(log.add_assistant, response.content)
-
-                    # Show stats from metadata
-                    if response.metadata:
-                        tool_calls = response.metadata.get("tool_calls_made", 0)
-                        if tool_calls > 0:
-                            summary = f"\n✅ Analysis Complete: {tool_calls} tools executed"
-                            self._call_ui(log.add_info, summary)
-                elif response is None:
-                    # Already handled timeout error above
-                    pass
-                else:
-                    # No valid response content - show appropriate error
-                    if response and hasattr(response, "error") and response.error:
-                        error_msg = f"Agent error: {response.error}"
-                    elif response and response.content:
-                        # Content exists but is just whitespace
-                        error_msg = "Agent returned empty response (whitespace only)"
-                    else:
-                        error_msg = "No response from agent"
-                    self._call_ui(log.add_error, error_msg)
-
-                # Reset mode badge to HOME after validation testing completes
-                self._call_ui(self._reset_mode_badge_after_qe)
-
-            # Cleanup
-            await agent.cleanup()
-
-        except Exception as e:
-            import traceback
-
-            self._call_ui(self._stop_thinking)
-            self._call_ui(self._stop_stream_animation)
-            self._call_ui(log.add_error, f"Error: {str(e)}")
-            self._call_ui(log.add_info, traceback.format_exc())
-
-    # ========================================================================
-    # Role & Agent Management
-    # ========================================================================
-
-    def _set_role(self, mode: str, role: str, log: ConversationLog):
-        try:
-            from superqode.config import load_config, resolve_role
-
-            # Show safety warnings for validation mode
-            if mode == "qe":
-                safety_warnings = get_safety_warnings()
-
-                # Display warnings in TUI
-                for warning in safety_warnings:
-                    if should_skip_warnings(warning):
-                        continue
-
-                    # Create warning panel
-                    warning_text = Text()
-                    warning_text.append(f"{warning.title}\n\n", style="bold red")
-                    warning_text.append(warning.message, style="white")
-                    warning_text.append("\n\nRecommendations:\n", style="bold yellow")
-
-                    for i, rec in enumerate(warning.recommendations, 1):
-                        warning_text.append(f"{i}. {rec}\n", style="dim cyan")
-
-                    # Choose border color based on severity
-                    border_color = {
-                        WarningSeverity.INFO: "blue",
-                        WarningSeverity.WARNING: "yellow",
-                        WarningSeverity.CRITICAL: "red",
-                    }[warning.severity]
-
-                    panel = Panel(
-                        warning_text,
-                        title=f"⚠️  SAFETY WARNING - {warning.severity.value.upper()}",
-                        border_style=border_color,
-                        padding=(1, 2),
-                    )
-
-                    log.write(panel)
-                    log.write(Text(""))  # Add spacing
-
-                # Add a clear separator after warnings
-                if any(not should_skip_warnings(w) for w in safety_warnings):
-                    log.write(Rule(style="yellow"))
-                    log.write(
-                        Text(
-                            "Please review the safety warnings above before proceeding.\n",
-                            style="bold yellow",
-                        )
-                    )
-
-                # For TUI, we don't require interactive acknowledgment
-                # Users can cancel with :back or :cancel if they change their mind
-                requires_ack = [
-                    w
-                    for w in safety_warnings
-                    if w.requires_acknowledgment and not should_skip_warnings(w)
-                ]
-                if requires_ack:
-                    # Mark warnings as acknowledged for future skipping
-                    for warning in requires_ack:
-                        if warning.skippable_after_first:
-                            mark_warnings_acknowledged(warning)
-
-            # Try to resolve role from team config first
-            resolved = resolve_role(mode, role, load_config())
-
-            # For validation mode, if team config doesn't have the role, try to create a default validation role
-            if not resolved and mode == "qe":
-                from superqode.superqe.roles import get_role
-
-                try:
-                    # Check if this is a valid validation role
-                    qe_role = get_role(role, Path.cwd())
-                    # Create a synthetic ResolvedRole for validation roles
-                    from superqode.config.schema import ResolvedRole
-
-                    resolved = ResolvedRole(
-                        mode=mode,
-                        role=role,
-                        description=f"Validation {role.replace('_', ' ')}",
-                        coding_agent="superqode",  # validation roles use superqode agent
-                        agent_type="superqode",  # validation roles use superqode agent type
-                        agent_id="",
-                        provider="",
-                        model="",
-                        execution_mode="byok",  # validation roles run locally
-                        job_description="",
-                        mcp_servers=[],
-                    )
-                except ValueError:
-                    # Not a valid validation role, resolved remains None
-                    pass
-
-            if resolved:
-                key = f"{mode}.{role}"
-                session = get_session()
-                session.switch_to_role_mode(key)
-                set_mode(key)
-
-                self.current_mode = mode
-                self.current_role = role
-                self.current_agent = ""
-                if (
-                    mode == "qe"
-                    and role in POWER_QE_ROLES
-                    and not getattr(self, "_power_roles_hint_shown", False)
-                ):
-                    log.add_info(f"⚡ Power validation role selected: {role}")
-                    log.add_info(
-                        "💡 Tip: Update this role's job_description in superqode.yaml for best results."
-                    )
-                    self._power_roles_hint_shown = True
-
-                # Reset session for new role
-                self._is_first_message = True
-                self._opencode_session_id = ""
-
-                # Get execution mode from resolved role
-                exec_mode = getattr(resolved, "execution_mode", "acp")
-                agent_id = getattr(resolved, "agent_id", "") or resolved.coding_agent
-
-                # Get model/provider from agent_config if ACP mode
-                model = resolved.model
-                provider = resolved.provider
-                agent_config = getattr(resolved, "agent_config", None)
-                if agent_config:
-                    model = model or getattr(agent_config, "model", "")
-                    provider = provider or getattr(agent_config, "provider", "")
-
-                self.current_model = model or ""
-                self.current_provider = provider or ""
-
-                badge = self.query_one("#mode-badge", ModeBadge)
-                badge.mode = mode
-                badge.role = role
-                badge.agent = agent_id if exec_mode == "acp" else ""
-                badge.model = model or ""
-                badge.provider = provider or ""
-                badge.execution_mode = exec_mode
-
-                # Update session execution mode
-                session.execution_mode = exec_mode
-
-                # Store resolved role for persona injection
-                self._current_resolved_role = resolved
-
-                # If BYOK or LOCAL mode, connect to provider/model
-                if exec_mode in ("byok", "local") and provider and model:
-                    # Connect via BYOK mode (LOCAL uses same connection mechanism)
-                    # Pass resolved role so job description can be injected
-                    self._connect_byok_mode(provider, model, log, resolved_role=resolved)
-                else:
-                    # Clear screen and show fresh workspace
-                    self._clear_for_workspace(log, f"{mode.upper()}.{role.upper()}")
-            else:
-                if mode == "qe":
-                    # Show available validation roles for better user experience
-                    from superqode.superqe.roles import list_roles
-
-                    available_qe_roles = [r["name"] for r in list_roles()]
-                    log.add_error(f"validation role '{role}' not found.")
-                    log.write(f"Available validation roles: {', '.join(available_qe_roles)}")
-                    log.write("Use :qe <role_name> to start a validation session.")
-                else:
-                    log.add_error(f"Role {mode}.{role} not found")
-        except Exception as e:
-            log.add_error(str(e))
-
     def _go_home(self, log: ConversationLog):
         # First, cancel any running agent process
         if self._agent_process is not None:
@@ -19204,8 +18543,8 @@ team:
         # Clear and show homepage
         self.action_clear_screen()
 
-    def _reset_mode_badge_after_qe(self):
-        """Reset mode badge to HOME after validation testing completes."""
+    def _reset_mode_badge_after_role_run(self):
+        """Reset mode badge to HOME after a role run completes."""
         try:
             badge = self.query_one("#mode-badge", ModeBadge)
             badge.mode = "home"
@@ -19262,146 +18601,6 @@ team:
 
         # Clear screen and show fresh workspace
         self._clear_for_workspace(log, f"PURE • {provider}")
-
-    # ========================================================================
-    # validation workflow Commands
-    # ========================================================================
-
-    def _handle_superqe_command(self, args: str, log: ConversationLog):
-        """Handle secondary validation commands in TUI."""
-        from superqode.evaluation import CODEOPTIX_AVAILABLE
-
-        if not CODEOPTIX_AVAILABLE:
-            self._show_command_output(
-                log,
-                Panel(
-                    "🔄 [bold yellow]validation workflow is initializing...[/bold yellow]\n\n"
-                    "CodeOptiX integration is being loaded.\n"
-                    "Please wait a moment and try again.\n\n"
-                    "💡 Meanwhile, you can use basic validation:\n"
-                    "[cyan]:qe run .[/cyan] - Validation workflow with any LLM provider\n\n"
-                    "validation workflow supports: Ollama, OpenAI, Anthropic, Google",
-                    title="⏳ Loading validation workflow",
-                    border_style="yellow",
-                ),
-            )
-            return
-
-        # Parse validation subcommand
-        parts = args.split(maxsplit=1)
-        subcmd = parts[0].lower() if parts else "help"
-        subargs = parts[1] if len(parts) > 1 else ""
-
-        if subcmd == "run":
-            self._superqe_run(subargs, log)
-        elif subcmd == "behaviors":
-            self._superqe_behaviors(log)
-        elif subcmd == "agent-eval":
-            self._superqe_agent_eval(subargs, log)
-        elif subcmd == "scenarios":
-            self._superqe_scenarios(subargs, log)
-        elif subcmd in ("help", ""):
-            self._superqe_help(log)
-        else:
-            self._show_command_output(
-                log, f"[red]Unknown validation workflow command: {subcmd}[/red]"
-            )
-
-    def _superqe_run(self, args: str, log: ConversationLog):
-        """Handle validation run command."""
-        # Parse arguments similar to CLI
-        behaviors = None
-        use_bloom = False
-
-        if args:
-            # Simple parsing: look for --behaviors and --use-bloom
-            if "--behaviors" in args:
-                parts = args.split("--behaviors", 1)
-                if len(parts) > 1:
-                    behaviors_part = parts[1].split("--")[0].strip()
-                    behaviors = behaviors_part
-
-            if "--use-bloom" in args:
-                use_bloom = True
-
-        # Show validation workflow evaluation in progress
-        self._show_command_output(
-            log,
-            Panel(
-                f"🚀 [bold cyan]validation workflow Enhanced Evaluation[/bold cyan]\n\n"
-                f"Behaviors: {behaviors or 'default'}\n"
-                f"Bloom Scenarios: {'Enabled' if use_bloom else 'Disabled'}\n\n"
-                "Running advanced CodeOptiX evaluation...",
-                border_style="cyan",
-            ),
-        )
-
-        # Show Ollama requirement message
-        self._show_command_output(
-            log,
-            Panel(
-                "🔧 [yellow]validation workflow requires Ollama[/yellow]\n\n"
-                "validation workflow uses Ollama for advanced AI-powered evaluation.\n\n"
-                "To run validation workflow evaluations:\n"
-                "1. Install Ollama: [link=https://ollama.ai]https://ollama.ai[/link]\n"
-                "2. Start Ollama: [cyan]ollama serve[/cyan]\n"
-                "3. Pull a model: [cyan]ollama pull llama3.1[/cyan]\n"
-                "4. Run: [cyan]:validation run . --behaviors security-vulnerabilities[/cyan]\n\n"
-                "For basic validation without Ollama: [cyan]:qe run .[/cyan]",
-                border_style="yellow",
-            ),
-        )
-
-    def _superqe_behaviors(self, log: ConversationLog):
-        """Handle validation behaviors command."""
-        from superqode.evaluation.behaviors import get_enhanced_behaviors
-
-        behaviors = get_enhanced_behaviors()
-
-        if behaviors:
-            from rich.table import Table
-
-            table = Table(show_header=True, header_style="bold cyan")
-            table.add_column("Behavior", style="cyan", no_wrap=True)
-            table.add_column("Description", style="white")
-
-            for name, desc in behaviors.items():
-                table.add_row(f"🔬 {name}", desc)
-
-            self._show_command_output(log, table)
-        else:
-            self._show_command_output(log, "[yellow]No enhanced behaviors available[/yellow]")
-
-    def _superqe_agent_eval(self, args: str, log: ConversationLog):
-        """Handle validation agent-eval command."""
-        self._show_command_output(
-            log, "[yellow]Agent evaluation not yet implemented in TUI[/yellow]"
-        )
-
-    def _superqe_scenarios(self, args: str, log: ConversationLog):
-        """Handle validation scenarios command."""
-        self._show_command_output(
-            log, "[yellow]Scenario generation not yet implemented in TUI[/yellow]"
-        )
-
-    def _superqe_help(self, log: ConversationLog):
-        """Show validation workflow help."""
-        help_text = """
-[bold cyan]🚀 validation workflow Commands[/bold cyan]
-
-[cyan]:validation run [options][/cyan] - Run enhanced evaluation
-  Options: --behaviors security-vulnerabilities,test-quality --use-bloom
-
-[cyan]:validation behaviors[/cyan] - List available enhanced behaviors
-
-[cyan]:validation agent-eval[/cyan] - Compare multiple AI agents
-
-[cyan]:validation scenarios[/cyan] - Manage Bloom scenario generation
-
-[green]✨ validation workflow features are fully integrated with SuperQode![/green]
-        """.strip()
-
-        self._show_command_output(log, help_text)
 
     def _show_pure_tool_call(self, name: str, args: dict, log: ConversationLog):
         """Show Pure/BYOK/local tool calls through the shared tool renderer."""
@@ -25511,30 +24710,6 @@ team:
 
         log.add_info(f"No install command found for {agent.name}")
 
-    # ========================================================================
-    # Multi-Agent: Handoff & Context
-    # ========================================================================
-
-    def _handoff(self, args: str, log: ConversationLog):
-        if not args:
-            log.add_info("Usage: :handoff <mode>.<role> [context]")
-            log.add_system("Example: :handoff qa.fullstack Please review the code")
-            return
-
-        parts = args.split(maxsplit=1)
-        target = parts[0]
-        context = parts[1] if len(parts) > 1 else ""
-
-        if "." not in target:
-            log.add_error("Target must be mode.role (e.g., qe.fullstack)")
-            return
-
-        from_role = f"{self.current_mode}.{self.current_role}" if self.current_role else "home"
-        log.add_handoff(from_role, target, context)
-
-        mode, role = target.split(".", 1)
-        self._set_role(mode, role, log)
-
     async def _a2a_cmd(self, args: str, log: ConversationLog):
         """Handle :a2a commands."""
         parts = args.split(maxsplit=1)
@@ -25695,44 +24870,6 @@ team:
 
         self._show_command_output(log, t)
 
-    def _show_team(self, log: ConversationLog):
-        try:
-            from superqode.team_config import load_team_config
-
-            config = load_team_config()
-
-            t = Text()
-            t.append(f"\n  👥 ", style=f"bold {THEME['purple']}")
-            t.append(config.team_name, style=f"bold {THEME['purple']}")
-            t.append("\n\n", style="")
-
-            for mode in ["dev", "qe", "devops"]:
-                roles = config.get_roles_by_mode(mode)
-                if not roles:
-                    continue
-
-                mode_colors = {
-                    "dev": THEME["success"],
-                    "qe": THEME["orange"],
-                    "devops": THEME["cyan"],
-                }
-                mode_icons = {"dev": "💻", "qe": "🧪", "devops": "⚙️"}
-                color = mode_colors.get(mode, THEME["purple"])
-                icon = mode_icons.get(mode, "🔧")
-
-                t.append(f"  {icon} {mode.upper()}\n", style=f"bold {color}")
-                for role in roles:
-                    status = "✅" if role.enabled else "○"
-                    t.append(
-                        f"    {status} ", style=THEME["success"] if role.enabled else THEME["muted"]
-                    )
-                    t.append(f":{mode} {role.role:<12}", style=color)
-                    t.append(f" 📊 {role.model}\n", style=THEME["muted"])
-
-            self._show_command_output(log, t)
-        except Exception as e:
-            log.add_error(str(e))
-
     # ========================================================================
     # Help & Utility
     # ========================================================================
@@ -25747,33 +24884,17 @@ team:
 
         t.append(f"  🔗 ACP (Full Coding Agent)\n", style=f"bold {THEME['cyan']}")
         t.append(f"    :connect acp <name>     ", style=THEME["cyan"])
-        t.append(f"Connect to ACP agent (opencode, claude, etc.)\n", style=THEME["muted"])
-        t.append(f"    :dev <role>             ", style=THEME["cyan"])
-        t.append(f"Connect via role in development mode\n\n", style=THEME["muted"])
+        t.append(f"Connect to ACP agent (opencode, claude, etc.)\n\n", style=THEME["muted"])
 
-        t.append(f"  ⚡ BYOK (Direct LLM + Role Prompts)\n", style=f"bold {THEME['success']}")
+        t.append(f"  ⚡ BYOK (Direct LLM)\n", style=f"bold {THEME['success']}")
         t.append(f"    :connect byok <p> <m>    ", style=THEME["success"])
-        t.append(f"Connect to provider/model with role context\n", style=THEME["muted"])
+        t.append(f"Connect to provider/model\n", style=THEME["muted"])
         t.append(f"    :connect                ", style=THEME["success"])
-        t.append(f"Interactive picker (choose acp, byok, or local)\n", style=THEME["muted"])
-        t.append(f"    :dev <role>             ", style=THEME["success"])
-        t.append(f"Connect via role (if mode=byok in YAML)\n\n", style=THEME["muted"])
+        t.append(f"Interactive picker (choose acp, byok, or local)\n\n", style=THEME["muted"])
 
         t.append(f"  ═══ All Commands ═══\n\n", style=f"bold {THEME['gold']}")
 
         sections = [
-            (
-                "💻 Team Roles",
-                THEME["success"],
-                [
-                    (":init", "Initialize project configuration"),
-                    (":dev <role>", "Connect to role in development mode"),
-                    (":qe <role>", "Connect to role in quality engineering mode"),
-                    (":devops <role>", "Connect to role in DevOps mode"),
-                    (":roles", "Show all roles with execution modes"),
-                    (":team", "Show team configuration"),
-                ],
-            ),
             (
                 "🔌 Connection & Providers",
                 THEME["cyan"],
@@ -25860,9 +24981,9 @@ team:
                 "🔄 Multi-Agent Coordination",
                 THEME["orange"],
                 [
-                    (":handoff <role>", "Hand off current task to another role"),
+                    (":a2a", "Show A2A workflow commands"),
                     (":context", "Show current work context"),
-                    (":disconnect", "Disconnect from current agent/role"),
+                    (":disconnect", "Disconnect from current agent"),
                     (":home", "Go home / disconnect from all"),
                 ],
             ),
@@ -25890,7 +25011,7 @@ team:
                     (":harness <spec.yaml>", "Load a HarnessSpec into the TUI"),
                     (
                         ":harness inspect",
-                        "Summarize active HarnessSpec policy, tools, workflow, hooks, validation",
+                        "Summarize active HarnessSpec policy, tools, workflow, hooks, checks",
                     ),
                     (
                         ":harness doctor",
@@ -25902,7 +25023,7 @@ team:
                     (":harness fork <run_id> [event]", "Fork a persisted run at an event index"),
                     (
                         ":harness evidence <run_id>",
-                        "Show run evidence, changes, validation, and result receipt",
+                        "Show run evidence, changes, checks, and result receipt",
                     ),
                     (":harness events <run_id>", "Show persisted event timeline for a harness run"),
                     (":harness templates", "List built-in HarnessSpec templates"),
@@ -26223,58 +25344,6 @@ team:
             log.write(content)
             # Don't scroll to home on navigation updates to reduce flickering
             log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
-
-    def _show_roles(self, log: ConversationLog):
-        try:
-            from superqode.team_config import load_team_config
-
-            config = load_team_config()
-
-            t = Text()
-            t.append(f"\n  👥 ", style=f"bold {THEME['purple']}")
-            t.append(f"{config.team_name} - Roles\n", style=f"bold {THEME['purple']}")
-
-            for mode in ["dev", "qe", "devops"]:
-                roles = config.get_roles_by_mode(mode)
-                if not roles:
-                    continue
-
-                mode_colors = {
-                    "dev": THEME["success"],
-                    "qe": THEME["orange"],
-                    "devops": THEME["cyan"],
-                }
-                mode_icons = {"dev": "💻", "qe": "🧪", "devops": "⚙️"}
-                color = mode_colors.get(mode, THEME["purple"])
-                icon = mode_icons.get(mode, "🔧")
-
-                t.append(f"\n  {icon} {mode.upper()}\n", style=f"bold {color}")
-                for role in roles:
-                    status = "✅" if role.enabled else "○"
-                    t.append(
-                        f"    {status} ", style=THEME["success"] if role.enabled else THEME["muted"]
-                    )
-                    t.append(f":{mode} {role.role:<15}", style=color)
-                    t.append(f" 📊 {role.model:<12}", style=THEME["muted"])
-                    t.append(f" {role.description}", style=THEME["dim"])
-                    if mode == "qe" and role.role in POWER_QE_ROLES:
-                        t.append(" ⚡ POWER", style=f"bold {THEME['warning']}")
-                    t.append("\n", style=THEME["dim"])
-
-            total = len(config.roles)
-            enabled = config.enabled_count
-            t.append(f"\n  💡 {enabled}/{total} roles enabled\n", style=THEME["muted"])
-            t.append(
-                "  ⚡ Power validation roles: unit, integration, api, ui, accessibility, security, usability\n",
-                style=THEME["muted"],
-            )
-            t.append(
-                "  💡 Tip: Edit each role's job_description in superqode.yaml for better results\n",
-                style=THEME["dim"],
-            )
-            self._show_command_output(log, t)
-        except Exception as e:
-            log.add_error(str(e))
 
     def _show_files(self, log: ConversationLog):
         try:

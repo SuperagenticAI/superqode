@@ -14,7 +14,7 @@ superqode harness run --spec examples/harnesses/coding.yaml --prompt "summarize 
 
 | Example | Use it when | Backend |
 | --- | --- | --- |
-| `coding.yaml` | You want the default repository coding harness with file, search, patch, shell, validation, approvals, and event storage. | `builtin` |
+| `coding.yaml` | You want the default repository coding harness with file, search, patch, shell, checks, approvals, and event storage. | `builtin` |
 | `no-tool.yaml` | You want planning, architecture review, or summarization without filesystem, shell, network, or hidden repository context. | `builtin` |
 | `pydanticai.yaml` | You want PydanticAI with SuperQode tools, fallback models, typed-output-friendly runs, and optional Logfire traces. | `pydanticai` |
 | `deepagents.yaml` | You want a longer-running coding harness with subagent, memory, and rich graph events. | `deepagents` |
@@ -81,7 +81,7 @@ The safest changes are:
 - add or remove `model_policy.fallbacks`
 - adjust `execution_policy.allowed_commands`
 - change `approval_profile` between `deny`, `balanced`, and stricter team policies
-- add project-specific `validation.custom_steps`
+- add project-specific `checks.custom_steps`
 
 Run this before committing a customized spec:
 

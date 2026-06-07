@@ -162,10 +162,10 @@ def inspect_harness(
         "tools": tools,
         "skills": skills,
         "mcp": _mcp_summary(spec),
-        "validation": {
-            "enabled": spec.validation.enabled,
-            "fail_on_error": spec.validation.fail_on_error,
-            "timeout_seconds": spec.validation.timeout_seconds,
+        "checks": {
+            "enabled": spec.checks.enabled,
+            "fail_on_error": spec.checks.fail_on_error,
+            "timeout_seconds": spec.checks.timeout_seconds,
             "steps": [
                 {
                     "name": step.name,
@@ -173,7 +173,7 @@ def inspect_harness(
                     "enabled": step.enabled,
                     "timeout": step.timeout,
                 }
-                for step in spec.validation.custom_steps
+                for step in spec.checks.custom_steps
             ],
         },
         "observability": {
@@ -290,12 +290,12 @@ def doctor_harness(
     sandbox_check = _sandbox_check(sandbox_name)
     add("sandbox", sandbox_check["status"], sandbox_check["message"], **sandbox_check["data"])
 
-    validation_check = _validation_check(spec, root)
+    checks_check = _checks_check(spec, root)
     add(
-        "validation",
-        validation_check["status"],
-        validation_check["message"],
-        **validation_check["data"],
+        "checks",
+        checks_check["status"],
+        checks_check["message"],
+        **checks_check["data"],
     )
 
     store_kind = spec.observability.run_store
@@ -400,7 +400,7 @@ def build_harness_evidence(store: FileHarnessStore, run_id: str) -> dict[str, An
         or event.type.startswith("approval.")
         or event.type == "approval_required"
     ]
-    validation_events = [event for event in events if event.type.startswith("validation.")]
+    checks_events = [event for event in events if event.type.startswith("checks.")]
     final_event = next(
         (event for event in reversed(events) if event.type == "workflow.result"), None
     )
@@ -418,9 +418,9 @@ def build_harness_evidence(store: FileHarnessStore, run_id: str) -> dict[str, An
         if child_run_id and child_run_id not in child_run_ids:
             child_run_ids.append(str(child_run_id))
     metadata = dict(run.metadata)
-    validation = metadata.get("validation")
-    if not isinstance(validation, dict):
-        validation = _validation_summary_from_events(validation_events)
+    checks = metadata.get("checks")
+    if not isinstance(checks, dict):
+        checks = _checks_summary_from_events(checks_events)
     changed_files = metadata.get("changed_files")
     if not isinstance(changed_files, dict):
         changed_files = dict(changes_event.data) if changes_event is not None else {}
@@ -448,7 +448,7 @@ def build_harness_evidence(store: FileHarnessStore, run_id: str) -> dict[str, An
             "child_run_ids": child_run_ids,
         },
         "changes": changed_files,
-        "validation": validation,
+        "checks": checks,
         "approvals": [event.to_dict() for event in approval_events],
         "result": {
             "status": final_event.data.get("status") if final_event else run.status,
@@ -590,7 +590,7 @@ def render_harness_evidence(evidence: dict[str, Any]) -> str:
     run = evidence["run"]
     workflow = evidence["workflow"]
     changes = evidence["changes"] if isinstance(evidence["changes"], dict) else {}
-    validation = evidence["validation"] if isinstance(evidence["validation"], dict) else {}
+    checks = evidence["checks"] if isinstance(evidence["checks"], dict) else {}
     result = evidence["result"]
     graph = evidence["graph"]
     lines = [
@@ -622,7 +622,7 @@ def render_harness_evidence(evidence: dict[str, Any]) -> str:
         lines.append(
             f"  - failed {step['step_id']}" + (f" ({step['detail']})" if step.get("detail") else "")
         )
-    lines.extend(["", _changes_line(changes), _validation_line(validation)])
+    lines.extend(["", _changes_line(changes), _checks_line(checks)])
     approvals = evidence.get("approvals") or []
     lines.append(f"Approvals: {len(approvals)} event(s)")
     lines.append(
@@ -668,7 +668,7 @@ def render_harness_inspect(summary: dict[str, Any]) -> str:
         f"Tools: {_join(summary['tools'])}",
         f"Skills: {_join(summary['skills'])}",
         f"MCP: {_join(summary['mcp']['servers']) if summary['mcp']['servers'] else 'none declared'}",
-        f"Validation: {'enabled' if summary['validation']['enabled'] else 'disabled'}",
+        f"Checks: {'enabled' if summary['checks']['enabled'] else 'disabled'}",
         f"Run store: {summary['observability']['run_store']}",
     ]
 
@@ -863,7 +863,7 @@ def _workflow_step_summary(event) -> dict[str, Any]:
     }
 
 
-def _validation_summary_from_events(events: list[Any]) -> dict[str, Any]:
+def _checks_summary_from_events(events: list[Any]) -> dict[str, Any]:
     if not events:
         return {"enabled": False, "status": "unknown", "steps": []}
     steps = [
@@ -872,7 +872,7 @@ def _validation_summary_from_events(events: list[Any]) -> dict[str, Any]:
             "status": "passed" if event.type.endswith(".completed") else "failed",
         }
         for event in events
-        if event.type in {"validation.step.completed", "validation.step.failed"}
+        if event.type in {"checks.step.completed", "checks.step.failed"}
     ]
     status = "failed" if any(item["status"] == "failed" for item in steps) else "passed"
     return {"enabled": True, "status": status, "steps": steps}
@@ -903,13 +903,13 @@ def _changes_line(changes: dict[str, Any]) -> str:
     return line
 
 
-def _validation_line(validation: dict[str, Any]) -> str:
-    enabled = bool(validation.get("enabled"))
-    status = str(validation.get("status") or "unknown")
-    steps = validation.get("steps") if isinstance(validation.get("steps"), list) else []
+def _checks_line(checks: dict[str, Any]) -> str:
+    enabled = bool(checks.get("enabled"))
+    status = str(checks.get("status") or "unknown")
+    steps = checks.get("steps") if isinstance(checks.get("steps"), list) else []
     if not enabled:
-        return f"Validation: {status}"
-    return f"Validation: {status} ({len(steps)} step(s))"
+        return f"Checks: {status}"
+    return f"Checks: {status} ({len(steps)} step(s))"
 
 
 def _model_policy_check(spec: HarnessSpec) -> dict[str, Any]:
@@ -1252,21 +1252,21 @@ def _sandbox_check(name: str) -> dict[str, Any]:
     }
 
 
-def _validation_check(spec: HarnessSpec, root: Path) -> dict[str, Any]:
-    if not spec.validation.enabled:
+def _checks_check(spec: HarnessSpec, root: Path) -> dict[str, Any]:
+    if not spec.checks.enabled:
         return {
             "status": "warning",
-            "message": "Validation is disabled.",
+            "message": "Checks is disabled.",
             "data": {
                 "enabled": False,
-                "fix": "Add validation.custom_steps when this harness should prove changes before completion.",
+                "fix": "Add checks.custom_steps when this harness should prove changes before completion.",
             },
         }
-    steps = [step for step in spec.validation.custom_steps if step.enabled]
+    steps = [step for step in spec.checks.custom_steps if step.enabled]
     if not steps:
         return {
             "status": "warning",
-            "message": "Validation is enabled but no custom validation steps are configured.",
+            "message": "Checks is enabled but no custom checks steps are configured.",
             "data": {
                 "enabled": True,
                 "steps": [],
@@ -1291,9 +1291,9 @@ def _validation_check(spec: HarnessSpec, root: Path) -> dict[str, Any]:
     return {
         "status": "error" if blockers else "ok",
         "message": (
-            "Validation commands look executable."
+            "Checks commands look executable."
             if not blockers
-            else "Some validation commands are missing or malformed."
+            else "Some checks commands are missing or malformed."
         ),
         "data": {
             "enabled": True,
@@ -1301,7 +1301,7 @@ def _validation_check(spec: HarnessSpec, root: Path) -> dict[str, Any]:
             "missing": missing,
             "malformed": malformed,
             "fix": (
-                "Install missing validation executables or update validation.custom_steps commands."
+                "Install missing checks executables or update checks.custom_steps commands."
                 if blockers
                 else "No action needed."
             ),

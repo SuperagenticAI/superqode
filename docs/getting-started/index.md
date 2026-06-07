@@ -131,7 +131,6 @@ superqode config init
 
 This command will:
 
-1. **Create `superqode.yaml`** using the comprehensive role catalog
 2. **Enable core, implemented roles** and leave the rest disabled
 3. **Let you edit or delete roles** you don’t need
 
@@ -293,7 +292,7 @@ SuperQode uses a **role-based multi-agent architecture** where different AI agen
 | `e2e_tester` | Test complete user workflows | Frontend/Fullstack apps |
 | `fullstack` | Senior validation comprehensive review | Overall quality assessment |
 
-[Learn more about roles →](../concepts/roles.md)
+[Learn more about harness workflows →](../advanced/harness-system.md)
 
 ---
 
@@ -349,8 +348,6 @@ superqode
 :reject
 
 # Note: automated validation sessions are separate CLI workflows:
-# superqode qe run . --mode quick   # Quick 60-second scan
-# superqode qe run . --mode deep    # Comprehensive 30-minute analysis
 ```
 
 ### TUI Commands Reference
@@ -366,7 +363,6 @@ superqode
 | `:runtime list` | Show runtime backends |
 | `:approve` | Approve a pending tool call |
 | `:reject` | Reject a pending tool call |
-| `:qe <role>` | Switch to validation role mode (e.g., `:qe security_tester`) |
 | `:view <file>` | View file content |
 | `:help` | Show all commands |
 | `:quit` | Exit TUI |
@@ -396,46 +392,30 @@ superqode config init
 # 2. Edit superqode.yaml with your model choice
 
 # 3. Run validation session
-superqode qe run . --mode quick
 
 # 4. Run with specific roles
-superqode qe run . --mode deep -r security_tester -r api_tester
 
 # 5. CI/CD output
-superqode qe run . --mode quick --jsonl > results.jsonl
-superqode qe run . --mode quick --junit results.xml
 
 # 6. View artifacts
-superqode qe artifacts .
-superqode qe dashboard
 ```
 
 ### Common CLI Commands
 
 ```bash
 # Quick scan
-superqode qe run . --mode quick
 
 # Deep analysis
-superqode qe run . --mode deep
 
 # Specific roles
-superqode qe run . -r security_tester -r api_tester
 
 # With test generation (Enterprise)
-superqode qe run . --mode deep --generate
 
 # With fix suggestions (Enterprise)
-superqode qe run . --mode deep --allow-suggestions
 
 # CI-friendly output (Enterprise)
-superqode qe run . --mode quick --jsonl
-superqode qe run . --mode quick --junit results.xml
 
 # View results (Enterprise)
-superqode qe artifacts .
-superqode qe dashboard
-superqode qe status
 ```
 
 [Full CLI reference →](../cli-reference/index.md)
@@ -491,11 +471,9 @@ nano superqode.yaml
 # Option A: TUI (exploratory)
 superqode
 # Then: :connect acp opencode
-# Then: :qe security_tester
 # Then: Start asking questions!
 
 # Option B: CLI (automation)
-superqode qe run . --mode quick -r security_tester
 ```
 
 ---
@@ -506,8 +484,8 @@ superqode qe run . --mode quick -r security_tester
 2. **[Your First Session](first-session.md)** - Complete walkthrough
 3. **[Configuration Reference](configuration.md)** - Customize SuperQode
 4. **[Understanding Modes](../concepts/modes.md)** - Deep dive into ACP, BYOK, Local
-5. **[Role-Based Workflows](../concepts/roles.md)** - Learn about each role
-6. **[CI/CD Integration](../integration/cicd.md)** - Add to your pipeline
+5. **[Harness System](../advanced/harness-system.md)** - Define reusable agent workflows
+6. **[Developer Workflows](../developer-workflows.md)** - Adopt SuperQode in your daily loop
 
 ---
 

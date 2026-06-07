@@ -10,7 +10,7 @@ Features:
 - Code completion
 - Hover information
 - Go to definition
-- Designed for SuperQode's QE workflow
+- Designed for SuperQode's agent workflow
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 Apply Patch Tool for Open Responses.
 
 Implements the apply_patch built-in tool for applying unified diff patches
-to files in the workspace. Critical for QIR (Quality Issue Resolution) fixes.
+to files in the workspace. Critical for patch fixes.
 
 Features:
 - Dry-run mode by default for safety

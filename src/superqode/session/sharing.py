@@ -6,7 +6,7 @@ Enables sharing and forking of sessions between users:
 - Import shared sessions
 - Fork sessions to create branches
 - Session links for collaboration
-- Adapted for SuperQode's multi-agent QE workflow
+- Adapted for SuperQode's multi-agent workflow
 """
 
 from __future__ import annotations

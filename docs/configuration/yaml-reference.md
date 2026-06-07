@@ -320,7 +320,7 @@ Quality engineering settings.
 | Field | Type | Description |
 |-------|------|-------------|
 | `quick_scan` | object | Quick scan mode settings |
-| `deep_qe` | object | Deep validation mode settings |
+| `deep` | object | Deep workflow settings |
 
 ```yaml
 qe:
@@ -331,51 +331,11 @@ qe:
       generate_tests: false
       destructive: false
 
-    deep_qe:
+    deep:
       timeout: 1800
       depth: full
       generate_tests: true
       destructive: true
-```
-
-### qe.harness
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `true` | Enable harness validation |
-| `timeout_seconds` | integer | `30` | Validation timeout |
-| `fail_on_error` | boolean | `false` | Fail on validation error |
-| `structural_formats` | [string] | `[json, yaml, toml]` | Structural validation |
-| `python_tools` | [string] | `[ruff, mypy]` | Python linters |
-| `javascript_tools` | [string] | `[eslint]` | JavaScript linters |
-| `typescript_tools` | [string] | `[tsc, eslint]` | TypeScript linters |
-| `go_tools` | [string] | `[go vet, golangci-lint]` | Go linters |
-| `rust_tools` | [string] | `[cargo check]` | Rust linters |
-| `shell_tools` | [string] | `[shellcheck]` | Shell linters |
-| `custom_steps` | [object] | `[]` | Custom command-based harness steps |
-
-#### qe.harness.custom_steps (BYOH)
-
-Each entry defines a project-specific harness command. Commands run from the repo root; non-zero exit
-codes are reported as harness errors.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `name` | string | `command` | Display name for reporting |
-| `command` | string | `""` | Shell command to run |
-| `enabled` | boolean | `true` | Enable the step |
-| `timeout` | integer | `300` | Timeout in seconds |
-
-```yaml
-qe:
-  harness:
-    custom_steps:
-      - name: "contracts"
-        command: "python scripts/check_contracts.py"
-        timeout: 180
-      - name: "smoke-tests"
-        command: "pytest -q tests/smoke"
-        enabled: true
 ```
 
 ### qe.optimize
@@ -625,6 +585,5 @@ team:
 
 ## Next Steps
 
-- [Team Configuration](team.md) - Advanced team setup
 - [Providers](../providers/index.md) - Provider-specific settings
-- [validation Settings](#qe-section) - Quality engineering options
+- [validation Settings](#checks-section) - Harness checks options

@@ -201,8 +201,6 @@ superqode harness doctor --spec harness.yaml --runtime pydanticai
 Validation and evaluation are available as secondary workflows behind the main SuperQode CLI:
 
 ```bash
-superqode qe run . --mode quick
-superqode qe run . --mode deep
 ```
 
 Use these when you want role-based project checks, reports, generated tests, or release validation. For day-to-day coding, start with the harness commands above.
@@ -216,7 +214,7 @@ Use these when you want role-based project checks, reports, generated tests, or 
 3. [Runtime Backends](../runtimes.md)
 4. [Configuration Guide](configuration.md)
 5. [Three Modes](../concepts/modes.md)
-6. [CI/CD Integration](../integration/cicd.md)
+6. [Harness System](../advanced/harness-system.md)
 
 ---
 

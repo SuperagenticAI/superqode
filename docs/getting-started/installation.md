@@ -302,8 +302,6 @@ superqode providers list
 # List agents
 superqode agents list
 
-# List validation roles
-superqode qe roles
 ```
 
 ### Expected Output

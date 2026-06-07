@@ -147,7 +147,6 @@ Verdict: 🟠 NO TESTS DETECTED - Add tests for proper validation
 
 2. **Run with verbose logging:**
    ```bash
-   superqode qe run . --verbose
    ```
 
 3. **Check file permissions:**
@@ -172,7 +171,6 @@ Failed to parse jest JSON output: Expecting value: line 1 column 1 (char 0)
 
 **Problem:**
 ```bash
-superqode qe run . --mode deep
 # Nothing appears in console
 ```
 
@@ -180,7 +178,6 @@ superqode qe run . --mode deep
 
 1. **Use verbose flag:**
    ```bash
-   superqode qe run . --mode deep --verbose
    ```
 
 2. **Check OpenCode installation:**
@@ -224,12 +221,10 @@ superqode qe run . --mode deep
 1. **Memory limits are already implemented** (50MB per process)
 2. **Run smaller analysis scopes:**
    ```bash
-   superqode qe run ./src --mode quick
    ```
 
 3. **Use worktree isolation:**
    ```bash
-   superqode qe run . --worktree
    ```
 
 ### Agent timeouts
@@ -243,12 +238,10 @@ superqode qe run . --mode deep
 
 1. **Increase timeout:**
    ```bash
-   superqode qe run . --timeout 60
    ```
 
 2. **Use specific roles instead of all:**
    ```bash
-   superqode qe run . -r unit_tester
    ```
 
 ## Configuration Problems
@@ -297,10 +290,8 @@ Configuration error: Invalid YAML format
 **Solution:**
 ```bash
 # Check running sessions
-superqode qe status
 
 # View session logs
-superqode qe logs
 ```
 
 ### "Permission denied" errors
@@ -316,7 +307,6 @@ ls -la /path/to/project
 chmod -R u+rwx /path/to/project
 
 # Or run with sudo (not recommended)
-sudo superqode qe run .
 ```
 
 ### "Connection refused" for MCP servers
@@ -364,7 +354,6 @@ If these solutions don't resolve your issue:
 
 1. **Check the logs:**
    ```bash
-   superqode qe logs
    ```
 
 2. **Run with debug output:**
@@ -436,6 +425,5 @@ if shutil.which('node'):
 else:
     print('❌ Node.js not found')
 
-print('\\n💡 Run \"superqode qe run .\" to test validation functionality')
 "
 ```

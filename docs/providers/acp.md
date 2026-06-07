@@ -391,4 +391,3 @@ ACP agents may use significant resources. Monitor:
 
 - [BYOK Providers](byok.md) - Cloud provider setup
 - [Local Providers](local.md) - Self-hosted models
-- [Team Configuration](../configuration/team.md) - Role setup

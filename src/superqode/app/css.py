@@ -64,7 +64,14 @@ CollapsibleSidebar CollapsibleTitle:hover {
 #content { width: 1fr; layout: vertical; }
 
 /* Status bar - ALWAYS visible at top, never hidden */
-#status-bar { height: 2; min-height: 2; background: #0a0a0a; padding: 0 1; border-bottom: solid #27272a; }
+#status-bar {
+    height: 3;
+    min-height: 3;
+    background: #0a0a0a;
+    padding: 1 2 0 2;
+    content-align: left middle;
+    border-bottom: solid #27272a;
+}
 
 /* Scanning line - shown at TOP when agent is thinking */
 #thinking-wave { height: 1; width: 100%; margin: 0; padding: 0; display: none; }

@@ -517,6 +517,4 @@ mcp_servers:
 
 ## Next Steps
 
-- [MCP Tools](../qe-features/mcp-tools.md) - Using MCP tools in validation
 - [YAML Reference](yaml-reference.md) - Complete configuration reference
-- [Team Configuration](team.md) - Role-specific MCP assignment

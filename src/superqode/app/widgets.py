@@ -666,9 +666,7 @@ class ModeBadge(Static):
 
         elif self.role:
             mode_styles = {
-                "dev": (ICONS["dev"], THEME["success"], "💻"),
                 "qa": (ICONS["qa"], THEME["orange"], "🧪"),
-                "devops": (ICONS["devops"], THEME["cyan"], "⚙️"),
             }
             icon, color, emoji = mode_styles.get(self.mode, (ICONS["home"], THEME["purple"], "🏠"))
 

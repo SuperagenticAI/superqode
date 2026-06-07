@@ -2596,32 +2596,6 @@ class CollapsibleSidebar(Container):
         display: block;
     }
 
-    /* QE Dashboard View */
-    CollapsibleSidebar #qe-view {
-        height: 100%;
-        width: 100%;
-        background: #000000;
-        display: none;
-        layout: vertical;
-        padding: 1;
-    }
-
-    CollapsibleSidebar #qe-view.visible {
-        display: block;
-    }
-
-    CollapsibleSidebar #qe-dashboard {
-        height: auto;
-        width: 100%;
-    }
-
-    CollapsibleSidebar #qe-dashboard-fallback {
-        height: 100%;
-        width: 100%;
-        content-align: center middle;
-        text-align: center;
-        color: #71717a;
-    }
     """
 
     BINDINGS = [
@@ -2737,8 +2711,6 @@ class CollapsibleSidebar(Container):
             # NEW: History panel
             with Container(id="history-view"):
                 yield HistoryPanel(id="history-panel")
-
-            # QE dashboard panel is not shown in OSS.
 
     def _render_title(self) -> Text:
         """Render the sidebar title."""

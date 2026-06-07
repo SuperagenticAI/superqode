@@ -24,10 +24,10 @@ logger = logging.getLogger(__name__)
 
 
 class EnhancedQEEngine:
-    """Enhanced Quality Engineering engine with CodeOptiX integration."""
+    """Enhanced quality engine with CodeOptiX integration."""
 
     def __init__(self):
-        """Initialize the enhanced QE engine."""
+        """Initialize the enhanced quality engine."""
         self.codeoptix_engine = None
         self.bloom_generator = None
 

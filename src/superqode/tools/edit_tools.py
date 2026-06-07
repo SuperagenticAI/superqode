@@ -7,7 +7,7 @@ Provides multiple editing strategies:
 - PatchTool: Apply unified diffs (like git patches)
 - MultiEditTool: Batch multiple edits atomically
 
-When a QE session is active, edits are tracked through the WorkspaceManager
+When a workspace tracking session is active, edits are tracked through the WorkspaceManager
 to ensure the immutable repo guarantee.
 """
 
@@ -122,7 +122,7 @@ Usage:
                 "deletions": deletions,
             }
 
-            # Check if QE session is active - route through workspace
+            # Check if workspace tracking is active - route through workspace
             workspace = _get_workspace()
             if workspace:
                 try:
@@ -130,11 +130,11 @@ Usage:
                     workspace.write_file(str(rel_path), new_content)
                     return ToolResult(
                         success=True,
-                        output=f"Replaced {replaced_count} occurrence(s) in {path} (tracked for QE revert)",
+                        output=f"Replaced {replaced_count} occurrence(s) in {path} (tracked for revert)",
                         metadata={
                             "path": str(file_path),
                             "replacements": replaced_count,
-                            "qe_tracked": True,
+                            "workspace_tracked": True,
                             **diff_metadata,
                         },
                     )
@@ -142,7 +142,7 @@ Usage:
                     # Path is outside project root, write directly
                     pass
 
-            # Write back (no QE session or outside project)
+            # Write back (no workspace tracking or outside project)
             file_path.write_text(new_content)
 
             return ToolResult(
@@ -223,7 +223,7 @@ class InsertTextTool(Tool):
                 "deletions": deletions,
             }
 
-            # Check if QE session is active - route through workspace
+            # Check if workspace tracking is active - route through workspace
             workspace = _get_workspace()
             if workspace:
                 try:
@@ -231,18 +231,18 @@ class InsertTextTool(Tool):
                     workspace.write_file(str(rel_path), new_content)
                     return ToolResult(
                         success=True,
-                        output=f"Inserted text at line {line_num} in {path} (tracked for QE revert)",
+                        output=f"Inserted text at line {line_num} in {path} (tracked for revert)",
                         metadata={
                             "path": str(file_path),
                             "line": line_num,
-                            "qe_tracked": True,
+                            "workspace_tracked": True,
                             **diff_metadata,
                         },
                     )
                 except ValueError:
                     pass
 
-            # Write back (no QE session or outside project)
+            # Write back (no workspace tracking or outside project)
             file_path.write_text(new_content)
 
             return ToolResult(
@@ -410,7 +410,7 @@ class PatchTool(Tool):
             output += f"\n\nApplied {applied_hunks}/{total_hunks} hunks"
 
             if workspace:
-                output += " (tracked for QE revert)"
+                output += " (tracked for revert)"
 
             return ToolResult(
                 success=success,
@@ -679,11 +679,11 @@ class MultiEditTool(Tool):
                     workspace.write_file(str(rel_path), content)
                     return ToolResult(
                         success=True,
-                        output=f"Applied {len(edits)} edits to {path} (tracked for QE revert)",
+                        output=f"Applied {len(edits)} edits to {path} (tracked for revert)",
                         metadata={
                             "path": str(file_path),
                             "edit_count": len(edits),
-                            "qe_tracked": True,
+                            "workspace_tracked": True,
                             **diff_metadata,
                         },
                     )

@@ -316,12 +316,12 @@ runtime:
             assert "missing" in mcp_check["servers"]
             assert mcp_check["errors"]
 
-    def test_harness_doctor_json_blocks_missing_validation_command(self, runner):
+    def test_harness_doctor_json_blocks_missing_checks_command(self, runner):
         with runner.isolated_filesystem():
             Path("harness.yaml").write_text(
                 """
 name: demo
-validation:
+checks:
   enabled: true
   custom_steps:
     - name: missing-validator
@@ -338,12 +338,12 @@ validation:
 
             assert result.exit_code == 1
             payload = json.loads(result.output)
-            validation_check = next(
-                check for check in payload["checks"] if check["name"] == "validation"
+            checks_check = next(
+                check for check in payload["checks"] if check["name"] == "checks"
             )
-            assert validation_check["status"] == "error"
-            assert validation_check["missing"] == ["missing-validator"]
-            assert "fix" in validation_check
+            assert checks_check["status"] == "error"
+            assert checks_check["missing"] == ["missing-validator"]
+            assert "fix" in checks_check
 
     def test_harness_graph_spec_json_reports_planned_workflow(self, runner):
         with runner.isolated_filesystem():
@@ -409,7 +409,7 @@ validation:
                     "workflow": True,
                     "workflow_mode": "single",
                     "changed_files": {"file_count": 0, "additions": 0, "deletions": 0, "files": []},
-                    "validation": {"enabled": True, "status": "passed", "steps": []},
+                    "checks": {"enabled": True, "status": "passed", "steps": []},
                 },
             )
             store.append_event(
@@ -687,7 +687,7 @@ validation:
                 "verifier",
             ]
             assert "read_file" in spec["agents"][0]["tools"]
-            assert spec["validation"]["enabled"] is True
+            assert spec["checks"]["enabled"] is True
 
             graph = runner.invoke(
                 cli_main,
@@ -984,7 +984,7 @@ class TestProvidersCommand:
 
         assert result.exit_code == 0
         payload = json.loads(result.output)
-        assert {item["name"] for item in payload} >= {"build", "plan", "review", "qe"}
+        assert {item["name"] for item in payload} >= {"build", "plan", "review"}
 
     def test_tools_list_json(self, runner):
         """Test harness tool listing."""
@@ -1589,99 +1589,6 @@ class TestPluginsCommand:
             assert "missing.py" in result.output
 
 
-class TestQECommand:
-    """Tests for QE commands (superqe CLI)."""
-
-    def test_qe_help(self, runner):
-        """Test qe command help."""
-        from superqode.superqe_cli import superqe
-
-        result = runner.invoke(superqe, ["--help"])
-
-        assert result.exit_code == 0
-        assert "qe" in result.output.lower() or "quality" in result.output.lower()
-
-    def test_jsonl_and_junit_do_not_require_enterprise(self, runner, tmp_path, monkeypatch):
-        """CI output formats should be available in OSS."""
-        from superqode.superqe_cli import superqe
-        import superqode.commands.qe as qe_commands
-        import superqode.superqe as superqe_module
-        import superqode.utils.error_handling as error_handling
-        import superqode.workspace as workspace_module
-
-        def fail_enterprise_check(feature_name):
-            raise AssertionError(f"Unexpected enterprise gate: {feature_name}")
-
-        class FakeResult:
-            success = True
-            total_tests = 0
-            tests_failed = 0
-            duration_seconds = 0.0
-            smoke_result = None
-            sanity_result = None
-            regression_result = None
-
-        class FakeOrchestrator:
-            def __init__(self, *args, **kwargs):
-                pass
-
-            async def quick_scan(self):
-                return FakeResult()
-
-            def export_junit(self, result):
-                return "<testsuites />"
-
-            def cancel(self):
-                pass
-
-        class FakeCoordinator:
-            def __init__(self, *args, **kwargs):
-                pass
-
-            @contextmanager
-            def session(self, *args, **kwargs):
-                yield object()
-
-        monkeypatch.setattr(qe_commands, "_enterprise_only", fail_enterprise_check)
-        monkeypatch.setattr(superqe_module, "QEOrchestrator", FakeOrchestrator)
-        monkeypatch.setattr(workspace_module, "QECoordinator", FakeCoordinator)
-        monkeypatch.setattr(error_handling, "check_dependencies", lambda: True)
-        monkeypatch.setattr(
-            error_handling,
-            "validate_project_structure",
-            lambda path: {"errors": [], "warnings": []},
-        )
-        monkeypatch.setattr(qe_commands, "get_warning_acknowledgment", lambda *args, **kwargs: True)
-
-        with runner.isolated_filesystem(temp_dir=tmp_path):
-            Path("superqode.yaml").write_text("team: {}\n", encoding="utf-8")
-
-            jsonl_result = runner.invoke(superqe, ["run", ".", "--jsonl"])
-            assert jsonl_result.exit_code == 0
-
-            junit_result = runner.invoke(superqe, ["run", ".", "--junit", "results.xml"])
-            assert junit_result.exit_code == 0
-            assert Path("results.xml").read_text(encoding="utf-8") == "<testsuites />"
-
-
-class TestRolesCommand:
-    """Tests for roles commands."""
-
-    def test_roles_help(self, runner):
-        """Test roles command help."""
-        result = runner.invoke(cli_main, ["roles", "--help"])
-
-        assert result.exit_code == 0
-        assert "roles" in result.output.lower()
-
-    def test_roles_list(self, runner):
-        """Test roles list command."""
-        result = runner.invoke(cli_main, ["roles", "list"])
-
-        # Should show role list or handle gracefully
-        assert result.exit_code == 0 or "Error" not in result.output
-
-
 class TestAuthCommand:
     """Tests for auth commands."""
 
@@ -1726,17 +1633,6 @@ class TestInitCommand:
 
             # Should succeed with force flag
             assert result.exit_code == 0 or "Created" in result.output
-
-
-class TestSuggestionsCommand:
-    """Tests for suggestions commands."""
-
-    def test_suggestions_help(self, runner):
-        """Test suggestions command help."""
-        result = runner.invoke(cli_main, ["suggestions", "--help"])
-
-        assert result.exit_code == 0
-        assert "suggestions" in result.output.lower()
 
 
 # Integration tests

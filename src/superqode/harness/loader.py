@@ -20,8 +20,8 @@ from .spec import (
     PermissionRuleSpec,
     ObservabilitySpec,
     RuntimeSpec,
-    ValidationSpec,
-    ValidationStepSpec,
+    ChecksSpec,
+    CheckStepSpec,
     WorkflowMode,
     WorkflowSpec,
 )
@@ -76,7 +76,7 @@ def harness_spec_from_dict(data: dict[str, Any]) -> HarnessSpec:
         agents=_agents(raw.get("agents")),
         workflow=_workflow(raw.get("workflow")),
         context=_context(raw.get("context")),
-        validation=_validation(raw.get("validation")),
+        checks=_checks(raw.get("checks")),
         observability=_observability(raw.get("observability")),
         hooks=_hooks(raw.get("hooks")),
         metadata=dict(raw.get("metadata") or {}) if isinstance(raw.get("metadata"), dict) else {},
@@ -176,10 +176,10 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
             "compaction": spec.context.compaction,
             "memory": spec.context.memory,
         },
-        "validation": {
-            "enabled": spec.validation.enabled,
-            "fail_on_error": spec.validation.fail_on_error,
-            "timeout_seconds": spec.validation.timeout_seconds,
+        "checks": {
+            "enabled": spec.checks.enabled,
+            "fail_on_error": spec.checks.fail_on_error,
+            "timeout_seconds": spec.checks.timeout_seconds,
             "custom_steps": [
                 {
                     "name": step.name,
@@ -187,7 +187,7 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
                     "enabled": step.enabled,
                     "timeout": step.timeout,
                 }
-                for step in spec.validation.custom_steps
+                for step in spec.checks.custom_steps
             ],
         },
         "observability": {
@@ -333,7 +333,7 @@ def harness_spec_json_schema() -> dict[str, Any]:
                     "memory": {"type": "object"},
                 },
             },
-            "validation": {
+            "checks": {
                 "type": "object",
                 "additionalProperties": True,
                 "properties": {
@@ -521,21 +521,21 @@ def _context(value: Any) -> ContextSpec:
     )
 
 
-def _validation(value: Any) -> ValidationSpec:
+def _checks(value: Any) -> ChecksSpec:
     data = value if isinstance(value, dict) else {}
-    steps: list[ValidationStepSpec] = []
+    steps: list[CheckStepSpec] = []
     for index, item in enumerate(data.get("custom_steps") or ()):
         if not isinstance(item, dict):
-            raise ValueError(f"Validation step at index {index} must be a mapping")
+            raise ValueError(f"Checks step at index {index} must be a mapping")
         steps.append(
-            ValidationStepSpec(
+            CheckStepSpec(
                 name=str(item.get("name") or f"step-{index + 1}"),
                 command=str(item.get("command") or ""),
                 enabled=bool(item.get("enabled", True)),
                 timeout=int(item.get("timeout", data.get("timeout_seconds", 300)) or 0),
             )
         )
-    return ValidationSpec(
+    return ChecksSpec(
         enabled=bool(data.get("enabled", False)),
         fail_on_error=bool(data.get("fail_on_error", False)),
         timeout_seconds=int(data.get("timeout_seconds", 300) or 0),

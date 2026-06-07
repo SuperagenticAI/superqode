@@ -381,7 +381,7 @@ All operations are logged for audit:
 ```json
 {
   "timestamp": "2024-01-15T10:30:45Z",
-  "session_id": "qe-abc123",
+  "session_id": "session-abc123",
   "operation": "shell",
   "command": "pytest tests/",
   "permission_level": "moderate",
@@ -399,7 +399,6 @@ All operations are logged for audit:
 ├── audit/
 │   ├── session-abc123.jsonl
 │   └── session-def456.jsonl
-└── qe-artifacts/
 ```
 
 ---

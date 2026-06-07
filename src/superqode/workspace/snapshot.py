@@ -2,7 +2,7 @@
 Snapshot Manager for Ephemeral Workspace.
 
 Captures the state of modified files and enables full reversion
-after QE session completes. Uses efficient in-memory tracking
+after workspace tracking session completes. Uses efficient in-memory tracking
 with disk backup for large files.
 """
 
@@ -54,7 +54,7 @@ class SnapshotManager:
     """
     Manages file snapshots for ephemeral workspace.
 
-    Tracks all file modifications during a QE session and enables
+    Tracks all file modifications during a workspace tracking session and enables
     complete reversion to original state.
 
     Usage:
@@ -94,7 +94,7 @@ class SnapshotManager:
         if self.session_id:
             raise RuntimeError("Session already active. Call revert_all() or end_session() first.")
 
-        self.session_id = session_id or f"qe-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        self.session_id = session_id or f"workspace-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         self.session_start = datetime.now()
 
         # Create temp dir for large file backups

@@ -16,13 +16,11 @@ This section provides comprehensive documentation for configuring SuperQode thro
 
     [:octicons-arrow-right-24: YAML Reference](yaml-reference.md)
 
--   **Team Configuration**
 
     ---
 
-    Configure team modes, roles, and multi-agent settings.
+    Configure harness defaults, providers, memory, and MCP settings.
 
-    [:octicons-arrow-right-24: Team Configuration](team.md)
 
 -   **Provider Configuration**
 
@@ -83,7 +81,6 @@ superqode config init
 ```
 
 Creates `superqode.yaml` in the current directory.
-The generated file includes a comprehensive role catalog; disable or remove roles you don’t need.
 
 ### Optional: User Configuration
 
@@ -268,8 +265,6 @@ team:
 # View the current project config
 cat superqode.yaml
 
-# View configured modes/roles
-superqode config list-modes
 ```
 
 ---
@@ -280,10 +275,6 @@ superqode config list-modes
 
 ```bash
 # Update common settings
-superqode config set-model qe.security_tester claude-opus-4-5
-superqode config set-agent qe.fullstack opencode
-superqode config enable-role qe.security_tester
-superqode config disable-role qe.performance_tester
 ```
 
 ### Editing Directly
@@ -295,7 +286,6 @@ Edit `superqode.yaml` with your preferred editor.
 ## Validating Configuration
 
 ```bash
-superqode qe run . --mode quick
 ```
 
 This will load your config and surface common configuration and dependency issues.
@@ -419,7 +409,6 @@ Warning: Provider 'google': GOOGLE_API_KEY not set
 ## Next Steps
 
 - [YAML Reference](yaml-reference.md) - Complete configuration reference
-- [Team Configuration](team.md) - Advanced team setup
 - [MCP Configuration](mcp-config.md) - MCP server setup
 - [Noise Configuration](noise-config.md) - Filtering and deduplication
 - [Guidance Configuration](guidance-config.md) - validation guidance prompts

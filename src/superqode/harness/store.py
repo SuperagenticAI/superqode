@@ -1112,8 +1112,8 @@ def _node_type(event_type: str) -> str:
         return "run"
     if event_type.startswith("workflow."):
         return "workflow"
-    if event_type.startswith("validation."):
-        return "validation"
+    if event_type.startswith("checks."):
+        return "checks"
     if event_type.startswith("workspace."):
         return "evidence"
     if event_type in {"delta", "thinking"} or event_type.startswith("model_"):
@@ -1128,8 +1128,8 @@ def _node_type(event_type: str) -> str:
         return "mcp"
     if event_type.startswith("subagent_"):
         return "subagent"
-    if event_type.startswith("validation_"):
-        return "validation"
+    if event_type.startswith("checks_"):
+        return "checks"
     if event_type.startswith("typed_output"):
         return "typed_output"
     return "event"

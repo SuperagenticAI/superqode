@@ -720,4 +720,3 @@ mlx_lm.download mlx-community/Qwen2.5-Coder-3B-4bit
 
 - [BYOK Providers](byok.md) - Cloud alternatives
 - [Provider Commands](../cli-reference/provider-commands.md) - CLI reference
-- [Team Configuration](../configuration/team.md) - Role setup

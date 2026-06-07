@@ -147,7 +147,7 @@ from superqode.a2a import get_presets
 presets = get_presets()
 
 # List available presets
-print(presets.list_presets("qe"))
+print(presets.list_presets("quality"))
 
 # Get preset description
 print(presets.describe_preset("full_qe"))
@@ -200,9 +200,7 @@ mappings = mapper.map_skills(agent_card.skills)
 Integrate external A2A agents into your validation workflow:
 
 ```python
-from superqode.evaluation import QEOrchestrator
 
-orch = QEOrchestrator(Path("."))
 
 # Run validation with external A2A agents
 result = await orch.run_a2a_qe([

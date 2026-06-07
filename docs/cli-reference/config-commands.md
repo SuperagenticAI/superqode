@@ -1,97 +1,40 @@
 # Configuration Commands
 
-Commands for creating and adjusting your `superqode.yaml`.
+Commands for viewing, validating, and editing `superqode.yaml`.
 
----
-
-## Overview
-
-SuperQode looks for configuration in this order:
-
-1. `./superqode.yaml` (project)
-2. `~/.superqode.yaml` (user)
-3. `/etc/superqode/superqode.yaml` (system)
-
-For most teams, use project config: `superqode config init`.
-
----
-
-## init
-
-Create `superqode.yaml` in the current directory from the comprehensive role catalog template.
+## Show
 
 ```bash
-superqode config init [--force] [--guided]
+superqode config show
+superqode config show --format json
+superqode config show --section defaults
 ```
 
-Examples:
+## Validate
 
 ```bash
-superqode config init
-superqode config init --force
+superqode config validate
+superqode config validate --fix
 ```
 
----
-
-## config init
-
-Initialize a default config (alternative to `superqode config init`).
+## Set
 
 ```bash
-superqode config init [--force]
+superqode config set defaults.runtime codex-sdk
+superqode config set defaults.harness coding
+superqode config set memory.provider local
 ```
 
----
-
-## config list-modes
-
-List configured modes and roles (as defined in `superqode.yaml`).
+## Get
 
 ```bash
-superqode config list-modes
+superqode config get defaults.runtime
+superqode config get harnesses.coding
 ```
 
----
-
-## config set-model
-
-Set the model for a specific `MODE.ROLE`.
+Harness behavior lives in harness specs:
 
 ```bash
-superqode config set-model MODE.ROLE MODEL
-```
-
-Example:
-
-```bash
-superqode config set-model qe.security_tester gemini-flash-latest
-```
-
-Note: ACP agents manage their own models; use this for non-ACP roles.
-
----
-
-## config set-agent
-
-Set the ACP agent for a specific `MODE.ROLE`.
-
-```bash
-superqode config set-agent MODE.ROLE AGENT [--provider PROVIDER]
-```
-
-Example:
-
-```bash
-superqode config set-agent qe.fullstack opencode
-```
-
----
-
-## config enable-role / disable-role
-
-Enable or disable a role in `superqode.yaml`.
-
-```bash
-superqode config enable-role MODE.ROLE
-superqode config disable-role MODE.ROLE
+superqode harness init coding
+superqode harness validate --spec .superqode/harnesses/coding.yaml
 ```

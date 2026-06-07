@@ -65,7 +65,7 @@ context:
     strategy: aggressive-summary
   memory:
     enabled: false
-validation:
+checks:
   enabled: true
   fail_on_error: false
   timeout_seconds: 300

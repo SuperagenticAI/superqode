@@ -1,4 +1,4 @@
-"""Evaluation and validation APIs."""
+"""Optional evaluation integration APIs."""
 
 try:
     from codeoptix.evaluation import EvaluationEngine as CodeOptiXEngine
@@ -14,37 +14,10 @@ except ImportError:
     BloomIdeationIntegration = None
     CodeOptiXEvolutionEngine = None
 
-from superqode.execution.modes import QEMode
-from superqode.superqe import (
-    QEEvent,
-    QEEventCollector,
-    QEEventEmitter,
-    QEOrchestrator,
-    QESession,
-    QESessionConfig,
-    EventType,
-    emit_event,
-    get_event_emitter,
-    set_event_emitter,
-)
-from superqode.superqe.session import QEStatus
-
 __all__ = [
     "CODEOPTIX_AVAILABLE",
     "CodeOptiXEngine",
     "create_behavior",
     "BloomIdeationIntegration",
     "CodeOptiXEvolutionEngine",
-    "EventType",
-    "QEEvent",
-    "QEEventCollector",
-    "QEEventEmitter",
-    "QEMode",
-    "QEOrchestrator",
-    "QESession",
-    "QESessionConfig",
-    "QEStatus",
-    "emit_event",
-    "get_event_emitter",
-    "set_event_emitter",
 ]

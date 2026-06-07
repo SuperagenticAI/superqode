@@ -1,7 +1,7 @@
 """
 Sandbox environment detection for SuperQode.
 
-Detects whether QE sessions are being run in isolated, safe environments
+Detects whether agent sessions are being run in isolated, safe environments
 and provides recommendations for safe execution.
 """
 
@@ -302,18 +302,18 @@ def get_sandbox_recommendations(detections: Dict[str, Any]) -> List[str]:
     git_status = detections.get("git_status", {})
     if git_status.get("has_uncommitted_changes"):
         recommendations.append(
-            "⚠️  Git repository has uncommitted changes. Consider committing or stashing before QE."
+            "⚠️  Git repository has uncommitted changes. Consider committing or stashing first."
         )
 
     if not git_status.get("is_git_repo"):
         recommendations.append(
-            "💡 Consider initializing a git repository for better change tracking during QE."
+            "💡 Consider initializing a git repository for better change tracking."
         )
 
     # Container recommendations
     container = detections.get("container", {})
     if not container.get("is_container"):
-        recommendations.append("🐳 Consider running QE in a Docker container for better isolation.")
+        recommendations.append("🐳 Consider running agent work in a Docker container for better isolation.")
 
     # Virtual environment recommendations
     venv = detections.get("virtual_env", {})
@@ -326,19 +326,19 @@ def get_sandbox_recommendations(detections: Dict[str, Any]) -> List[str]:
     fs = detections.get("filesystem", {})
     if fs.get("is_production_like"):
         recommendations.append(
-            "🚨 Production-like environment detected. Use sandbox environments for QE testing."
+            "🚨 Production-like environment detected. Use sandbox environments for agent work."
         )
 
     # System load recommendations
     sys_load = detections.get("system_load", {})
     if sys_load.get("high_load"):
-        recommendations.append("⚡ System load is high. QE sessions may impact system performance.")
+        recommendations.append("⚡ System load is high. Agent sessions may impact system performance.")
 
     # Always include general recommendations
     if not recommendations:
         recommendations.extend(
             [
-                "✅ Environment looks suitable for QE testing.",
+                "✅ Environment looks suitable for agent work.",
                 "💡 For maximum safety, consider using git worktrees or Docker containers.",
             ]
         )

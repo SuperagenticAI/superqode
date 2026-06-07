@@ -2956,55 +2956,12 @@ def models_rm(pattern, yes):
     click.echo(f"✓ Deleted {count} repo(s), freed ~{freed_gb:.1f} GB.")
 
 
-@config.command("list-modes")
-def config_list_modes():
-    """List all configured modes and roles."""
-    from superqode.config import load_enabled_modes
-    from rich.console import Console
-    from rich.table import Table
-
-    console = Console()
-    enabled_modes = load_enabled_modes()
-
-    if not enabled_modes:
-        console.print(
-            "[yellow]No modes configured. Run 'superqode init' to create a repo configuration.[/yellow]"
-        )
-        return
-
-    table = Table(title="Configured Modes and Roles")
-    table.add_column("Mode", style="cyan", no_wrap=True)
-    table.add_column("Role", style="magenta", no_wrap=True)
-    table.add_column("Agent", style="green")
-    table.add_column("Description", style="white")
-
-    for mode_name, mode_config in enabled_modes.items():
-        if mode_config.direct_role:
-            table.add_row(
-                mode_name,
-                "(direct)",
-                f"{mode_config.direct_role.coding_agent} ({mode_config.direct_role.agent_type})",
-                mode_config.direct_role.description,
-            )
-        elif mode_config.roles:
-            for role_name, role_config in mode_config.roles.items():
-                table.add_row(
-                    mode_name,
-                    role_name,
-                    f"{role_config.coding_agent} ({role_config.agent_type})",
-                    role_config.description,
-                )
-
-    console.print(table)
-
-
 @config.command("init")
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing configuration")
 def config_init(force):
     """Initialize default SuperQode configuration."""
-    from superqode.config import create_default_config, save_config, find_config_file
+    from superqode.config import find_config_file
     from pathlib import Path
-    import os
 
     config_path = find_config_file()
     if config_path and config_path.exists() and not force:
@@ -3015,139 +2972,23 @@ def config_init(force):
     if not config_path:
         config_path = Path.cwd() / "superqode.yaml"
 
-    # Create default config
-    config = create_default_config()
-    save_config(config, config_path)
+    template_path = Path(__file__).parent / "data" / "superqode-template.yaml"
+    if template_path.exists():
+        import shutil
+
+        shutil.copy2(template_path, config_path)
+    else:
+        config_path.write_text(
+            "version: 2\n\n"
+            "project:\n  name: My SuperQode Project\n  root: .\n\n"
+            "defaults:\n  harness: coding\n  runtime: builtin\n\n"
+            "harnesses:\n  coding: .superqode/harnesses/coding.yaml\n\n"
+            "memory:\n  enabled: true\n  provider: local\n",
+            encoding="utf-8",
+        )
 
     click.echo(f"Created default configuration at {config_path}")
-    click.echo("Edit the file to customize your development team!")
-
-
-@config.command("set-model")
-@click.argument("mode_role", metavar="MODE.ROLE")
-@click.argument("model", metavar="MODEL")
-def config_set_model(mode_role, model):
-    """Set the model for a specific mode/role."""
-    from superqode.config import load_config, save_config, resolve_role
-
-    parts = mode_role.split(".", 1)
-    if len(parts) != 2:
-        click.echo("Error: MODE.ROLE must be in format 'mode.role' (e.g., 'dev.backend')")
-        return
-
-    mode_name, role_name = parts
-    config = load_config()
-
-    resolved_role = resolve_role(mode_name, role_name, config)
-    if not resolved_role:
-        click.echo(f"Error: Role '{mode_role}' not found in configuration")
-        return
-
-    if resolved_role.agent_type == "acp":
-        click.echo("Error: Cannot set model for ACP agents. ACP agents use their own models.")
-        return
-
-    # Update the configuration
-    if role_name:
-        config.team.modes[mode_name].roles[role_name].model = model
-    else:
-        config.team.modes[mode_name].model = model
-
-    save_config(config)
-    click.echo(f"Updated {mode_role} to use model '{model}'")
-
-
-@config.command("set-agent")
-@click.argument("mode_role", metavar="MODE.ROLE")
-@click.argument("agent", metavar="AGENT")
-@click.option("--provider", "-p", help="Provider for SuperQode agents")
-def config_set_agent(mode_role, agent, provider):
-    """Set the agent for a specific mode/role."""
-    from superqode.config import load_config, save_config, resolve_role
-
-    parts = mode_role.split(".", 1)
-    if len(parts) != 2:
-        click.echo("Error: MODE.ROLE must be in format 'mode.role' (e.g., 'dev.backend')")
-        return
-
-    mode_name, role_name = parts
-    config = load_config()
-
-    resolved_role = resolve_role(mode_name, role_name, config)
-    if not resolved_role:
-        click.echo(f"Error: Role '{mode_role}' not found in configuration")
-        return
-
-    # Update the configuration
-    if role_name:
-        config.team.modes[mode_name].roles[role_name].coding_agent = agent
-        if provider:
-            config.team.modes[mode_name].roles[role_name].provider = provider
-    else:
-        config.team.modes[mode_name].coding_agent = agent
-        if provider:
-            config.team.modes[mode_name].provider = provider
-
-    save_config(config)
-    click.echo(
-        f"Updated {mode_role} to use agent '{agent}'{' with provider ' + provider if provider else ''}"
-    )
-
-
-@config.command("enable-role")
-@click.argument("mode_role", metavar="MODE.ROLE")
-def config_enable_role(mode_role):
-    """Enable a disabled role."""
-    from superqode.config import load_config, save_config
-
-    parts = mode_role.split(".", 1)
-    if len(parts) != 2:
-        click.echo("Error: MODE.ROLE must be in format 'mode.role' (e.g., 'dev.mobile')")
-        return
-
-    mode_name, role_name = parts
-    config = load_config()
-
-    if mode_name not in config.team.modes:
-        click.echo(f"Error: Mode '{mode_name}' not found")
-        return
-
-    mode_config = config.team.modes[mode_name]
-    if role_name not in mode_config.roles:
-        click.echo(f"Error: Role '{role_name}' not found in mode '{mode_name}'")
-        return
-
-    mode_config.roles[role_name].enabled = True
-    save_config(config)
-    click.echo(f"Enabled role '{mode_role}'")
-
-
-@config.command("disable-role")
-@click.argument("mode_role", metavar="MODE.ROLE")
-def config_disable_role(mode_role):
-    """Disable an enabled role."""
-    from superqode.config import load_config, save_config
-
-    parts = mode_role.split(".", 1)
-    if len(parts) != 2:
-        click.echo("Error: MODE.ROLE must be in format 'mode.role' (e.g., 'dev.mobile')")
-        return
-
-    mode_name, role_name = parts
-    config = load_config()
-
-    if mode_name not in config.team.modes:
-        click.echo(f"Error: Mode '{mode_name}' not found")
-        return
-
-    mode_config = config.team.modes[mode_name]
-    if role_name not in mode_config.roles:
-        click.echo(f"Error: Role '{role_name}' not found in mode '{mode_name}'")
-        return
-
-    mode_config.roles[role_name].enabled = False
-    save_config(config)
-    click.echo(f"Disabled role '{mode_role}'")
+    click.echo("Create a harness with: superqode harness init coding")
 
 
 # TUI command
@@ -3165,12 +3006,10 @@ def tui_command():
 def init_command(force):
     """Initialize SuperQode in current directory.
 
-    Creates a superqode.yaml with all team roles enabled
-    configured to use OpenCode with free models.
+    Creates a harness-first superqode.yaml.
     """
     from superqode.config import find_config_file
     from pathlib import Path
-    import os
 
     config_path = find_config_file()
     if config_path and config_path.exists() and not force:
@@ -3186,102 +3025,36 @@ def init_command(force):
         import shutil
 
         shutil.copy2(template_path, config_path)
-        click.echo(f"✓ Created {config_path} with all roles available")
+        click.echo(f"✓ Created {config_path} with harness defaults")
     else:
         # Fallback: create basic config if template not found
-        default_config = """# =============================================================================
-# SuperQode - Team Configuration
-# =============================================================================
-# Multi-agent software development team
-# Run: superqode (TUI) or superqode --help (CLI)
-# =============================================================================
+        default_config = """version: 2
 
-superqode:
-  version: "1.0"
-  team_name: "Full Stack Development Team"
-  description: "AI-powered software development team"
+project:
+  name: My SuperQode Project
+  root: .
 
-# Default configuration for all roles
-default:
-  mode: "acp"
-  agent: "opencode"
-  agent_config:
-    provider: "opencode"
-    model: "minimax-m2.5-free"
+defaults:
+  harness: coding
+  runtime: builtin
 
-# =============================================================================
-# TEAM ROLES - All enabled by default
-# =============================================================================
-team:
-  # Development roles
-  dev:
-    description: "Software Development"
-    roles:
-      fullstack:
-        description: "Full-stack development"
-        mode: "acp"
-        agent: "opencode"
-        agent_config:
-          provider: "opencode"
-          model: "minimax-m2.5-free"
-        enabled: false
-        job_description: |
-          You are a Senior Full-Stack Developer.
-          Write clean, maintainable code. Follow best practices.
-          Implement features end-to-end across frontend and backend.
+harnesses:
+  coding: .superqode/harnesses/coding.yaml
 
-  # validation roles
-  qe:
-    description: "validation and evaluation"
-    roles:
-      fullstack:
-        description: "Full-stack validation engineer"
-        mode: "acp"
-        agent: "opencode"
-        agent_config:
-          provider: "opencode"
-          model: "nemotron-3-super-free"
-        enabled: false
-        job_description: |
-          You are a Senior validation Engineer.
-          Review code for bugs, security issues, and best practices.
-          Write and run tests. Validate requirements are met.
-
-  # DevOps roles
-  devops:
-    description: "DevOps & Infrastructure"
-    roles:
-      fullstack:
-        description: "Full-stack DevOps engineer"
-        mode: "acp"
-        agent: "opencode"
-        agent_config:
-          provider: "opencode"
-          model: "gpt-5-nano"
-        enabled: false
-        job_description: |
-          You are a Senior DevOps Engineer.
-          Design CI/CD pipelines, containerize apps, manage infrastructure.
-          Ensure security, monitoring, and deployment best practices.
-
-# =============================================================================
-# Available free models: big-pickle, minimax-m2.5-free, nemotron-3-super-free,
-#                        gpt-5-nano, hy3-preview-free, ling-2.6-flash-free,
-#                        trinity-large-preview-free, qwen3.6-plus-free
-# =============================================================================
+memory:
+  enabled: true
+  provider: local
 """
 
         with open(config_path, "w") as f:
             f.write(default_config)
-        click.echo(f"✓ Created {config_path} with basic roles available")
+        click.echo(f"✓ Created {config_path} with harness defaults")
 
     click.echo("")
     click.echo("  Quick start:")
     click.echo("    superqode               # Launch TUI")
-    click.echo("    superqode qe roles            # List configured validation roles")
-    click.echo("    superqode qe run .            # Run validation using your superqode.yaml")
-    click.echo("")
-    click.echo("  Edit superqode.yaml to add or enable roles as needed.")
+    click.echo("    superqode harness list-templates")
+    click.echo("    superqode harness init coding")
 
 
 # ACP Agent commands
@@ -3581,9 +3354,6 @@ from superqode.providers.manager import ProviderManager
 from superqode.commands.providers import providers as providers_cmd
 from superqode.commands.agents import agents as agents_cmd_new
 from superqode.commands.auth import auth as auth_cmd
-from superqode.commands.qe import qe as qe_cmd
-from superqode.commands.roles import roles as roles_cmd
-from superqode.commands.suggestions import suggestions as suggestions_cmd
 from superqode.commands.serve import serve as serve_cmd
 
 
@@ -3811,15 +3581,6 @@ cli_main.add_command(providers_cmd, name="providers")
 
 # Add auth commands (superqode auth info, superqode auth check, etc.)
 cli_main.add_command(auth_cmd, name="auth")
-
-# Add validation commands (superqode qe ...)
-cli_main.add_command(qe_cmd, name="qe")
-
-# Add roles commands (superqode roles list, superqode roles info, etc.)
-cli_main.add_command(roles_cmd, name="roles")
-
-# Add suggestions commands (superqode suggestions list, superqode suggestions apply, etc.)
-cli_main.add_command(suggestions_cmd, name="suggestions")
 
 # Add Server commands (superqode serve lsp, superqode serve web, etc.)
 cli_main.add_command(serve_cmd, name="serve")

@@ -6,7 +6,7 @@ Provides comprehensive session persistence including:
 - Session state (files, tasks, quality issues)
 - Session forking and sharing
 - Export to various formats
-- Tailored for SuperQode's multi-agent QE workflow
+- Tailored for SuperQode's multi-agent workflow
 """
 
 from __future__ import annotations

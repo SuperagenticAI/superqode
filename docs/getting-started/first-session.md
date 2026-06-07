@@ -199,8 +199,6 @@ Use `:connect` again if you want to switch provider or model.
 Validation workflows are separate from normal TUI coding sessions. Run them from the terminal when you want role-based project checks, generated reports, or release validation:
 
 ```bash
-superqode qe run . --mode quick
-superqode qe run . --mode deep
 ```
 
 For day-to-day implementation, stay in the TUI and use focused prompts plus harness policy.

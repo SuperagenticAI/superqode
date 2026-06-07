@@ -98,5 +98,4 @@ superqode:
 ## Next Steps
 
 - [Configuration Reference](../configuration/yaml-reference.md) - Full config options
-- [Validation Features](../qe-features/index.md) - validation features overview
 - [CLI Reference](../cli-reference/index.md) - Command reference

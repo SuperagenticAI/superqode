@@ -1,7 +1,7 @@
 """
 Simple Desktop Notifications for SuperQode.
 
-Provides optional desktop notifications for long-running tasks and QE runs.
+Provides optional desktop notifications for long-running tasks and agent runs.
 Uses OS built-in tools without external dependencies:
 - macOS: osascript (AppleScript)
 - Linux: notify-send (libnotify)
@@ -277,11 +277,11 @@ def notify_qe_complete(
     success: bool = True,
 ) -> bool:
     """
-    Notify when a QE run completes.
+    Notify when a agent run completes.
 
     Args:
         findings_count: Number of findings discovered.
-        duration_seconds: How long the QE run took.
+        duration_seconds: How long the agent run took.
         success: Whether the run completed successfully.
 
     Returns:
@@ -295,15 +295,15 @@ def notify_qe_complete(
 
     if success:
         if findings_count == 0:
-            title = "QE Complete - No Issues!"
+            title = "Agent Run Complete - No Issues!"
             message = f"All checks passed in {duration_str}"
             level = NotificationLevel.SUCCESS
         else:
-            title = f"QE Complete - {findings_count} Finding{'s' if findings_count != 1 else ''}"
+            title = f"Agent Run Complete - {findings_count} Finding{'s' if findings_count != 1 else ''}"
             message = f"Completed in {duration_str}. Review findings in SuperQode."
             level = NotificationLevel.WARNING
     else:
-        title = "QE Run Failed"
+        title = "Agent Run Failed"
         message = f"Run failed after {duration_str}. Check logs for details."
         level = NotificationLevel.ERROR
 

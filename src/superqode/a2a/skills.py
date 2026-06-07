@@ -1,7 +1,7 @@
 """
 A2A Skill to SuperQode Role Mapping.
 
-Maps A2A agent skills to SuperQode QE/Dev/DevOps roles for seamless integration.
+Maps A2A agent skills to SuperQode quality/Dev/DevOps roles for seamless integration.
 """
 
 from __future__ import annotations

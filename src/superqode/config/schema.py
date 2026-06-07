@@ -74,7 +74,7 @@ class RoleConfig:
     handoff: Optional[HandoffConfig] = None
     cross_validation: Optional[CrossValidationConfig] = None
 
-    # Expert prompt configuration (for QE roles)
+    # Expert prompt configuration (for agent roles)
     expert_prompt_enabled: bool = False  # Default: OSS disables expert prompts
     expert_prompt: Optional[str] = None  # Optional: custom expert prompt override
 
@@ -89,8 +89,8 @@ class ModeConfig:
     description: str
     enabled: bool = True
     roles: Dict[str, RoleConfig] = field(default_factory=dict)
-    # For QE mode: specify which roles to run in deep analysis
-    # If empty, uses all enabled QE roles
+    # For agent mode: specify which roles to run in deep analysis
+    # If empty, uses all enabled agent roles
     deep_analysis_roles: List[str] = field(default_factory=list)
     # For direct modes (no sub-roles)
     coding_agent: Optional[str] = None
@@ -196,236 +196,6 @@ class ErrorConfig:
 
 
 @dataclass
-class OutputConfig:
-    """Configuration for QE output."""
-
-    directory: str = ".superqode"
-    reports_format: Literal["markdown", "html", "json"] = "markdown"
-    keep_history: bool = True
-
-
-@dataclass
-class QEModeConfig:
-    """Configuration for a QE execution mode."""
-
-    timeout: int = 60  # Timeout in seconds
-    depth: Literal["shallow", "full"] = "shallow"
-    generate_tests: bool = False
-    destructive: bool = False  # Can run stress/load tests
-
-
-@dataclass
-class ExecutionRoleConfig:
-    """Configuration for execution roles (smoke/sanity/regression).
-
-    These are hard-constraint runners - they execute existing tests only.
-    No discovery, no inference, no generation.
-    """
-
-    test_pattern: str = "**/test_*.py"
-    fail_fast: bool = False
-    allow_generation: bool = False  # Always False for execution roles
-    detect_flakes: bool = False
-
-
-@dataclass
-class TestGenerationConfig:
-    """Configuration for test generation."""
-
-    output_dir: str = ".superqode/qe-artifacts/generated-tests"
-    frameworks: Dict[str, str] = field(
-        default_factory=lambda: {
-            "python": "pytest",
-            "javascript": "jest",
-            "go": "go test",
-        }
-    )
-    coverage_target: int = 80
-
-
-@dataclass
-class HarnessToolConfig:
-    """Configuration for a harness validation tool."""
-
-    name: str = ""
-    enabled: bool = True
-    args: List[str] = field(default_factory=list)
-    timeout_seconds: int = 10
-
-
-@dataclass
-class HarnessLanguageConfig:
-    """Configuration for a language's harness validators."""
-
-    enabled: bool = True
-    tools: List[str] = field(default_factory=list)
-    extensions: List[str] = field(default_factory=list)
-
-
-@dataclass
-class HarnessConfig:
-    """Configuration for patch harness validation."""
-
-    enabled: bool = True
-    timeout_seconds: int = 30
-    fail_on_error: bool = False
-
-    # Structural validators (JSON, YAML, TOML)
-    structural_formats: List[str] = field(default_factory=lambda: ["json", "yaml", "toml"])
-
-    # Language validators
-    python_tools: List[str] = field(default_factory=lambda: ["ruff", "mypy"])
-    javascript_tools: List[str] = field(default_factory=lambda: ["eslint"])
-    typescript_tools: List[str] = field(default_factory=lambda: ["tsc", "eslint"])
-    go_tools: List[str] = field(default_factory=lambda: ["go vet", "golangci-lint"])
-    rust_tools: List[str] = field(default_factory=lambda: ["cargo check"])
-    shell_tools: List[str] = field(default_factory=lambda: ["shellcheck"])
-
-
-@dataclass
-class GuidanceModeConfig:
-    """Configuration for QE guidance mode."""
-
-    timeout_seconds: int = 60
-    verification_first: bool = True
-    fail_fast: bool = False
-    exploration_allowed: bool = False
-    destructive_testing: bool = False
-    focus_areas: List[str] = field(default_factory=list)
-    forbidden_actions: List[str] = field(default_factory=list)
-
-
-@dataclass
-class GuidanceConfig:
-    """Configuration for QE guidance prompts."""
-
-    enabled: bool = True
-    require_proof: bool = True  # Must verify before claiming success
-
-    # Mode-specific settings
-    quick_scan: GuidanceModeConfig = field(
-        default_factory=lambda: GuidanceModeConfig(
-            timeout_seconds=60,
-            verification_first=True,
-            fail_fast=True,
-            focus_areas=["Run smoke tests", "Validate critical paths"],
-        )
-    )
-
-    deep_qe: GuidanceModeConfig = field(
-        default_factory=lambda: GuidanceModeConfig(
-            timeout_seconds=1800,
-            verification_first=True,
-            exploration_allowed=True,
-            destructive_testing=True,
-            focus_areas=["Comprehensive coverage", "Edge cases", "Security", "Performance"],
-        )
-    )
-
-    # Anti-patterns to detect
-    anti_patterns: List[str] = field(
-        default_factory=lambda: [
-            "skip_verification",
-            "unconditional_success",
-            "weaken_tests",
-        ]
-    )
-
-
-@dataclass
-class NoiseConfig:
-    """Configuration for noise filtering in QE findings."""
-
-    min_confidence: float = 0.7  # Filter findings below this threshold
-    deduplicate: bool = True  # Remove similar findings
-    min_severity: Literal["low", "medium", "high", "critical"] = "low"
-    suppress_known_risks: bool = False  # Suppress acknowledged risks
-    max_per_file: int = 10  # Max findings per file
-    max_total: int = 100  # Max total findings
-
-
-@dataclass
-class SuggestionConfig:
-    """Configuration for the allow_suggestions workflow.
-
-    When enabled, SuperQode will:
-    1. Detect bugs during QE analysis
-    2. Fix bugs in an isolated workspace (Add-on)
-    3. Verify fixes by running tests
-    4. Prove improvement with before/after metrics
-    5. Report outcomes with evidence
-    6. Add findings to QIR with fix verification
-    7. REVERT all changes (original code restored)
-    8. Preserve patches for user to accept/reject
-    """
-
-    enabled: bool = False  # OFF by default - never modify without consent
-    verify_fixes: bool = True  # Run tests to verify suggested fixes
-    require_proof: bool = True  # Require before/after metrics
-    auto_generate_tests: bool = False  # Generate regression tests for fixes
-    max_fix_attempts: int = 3  # Max attempts to fix an issue
-    revert_on_failure: bool = True  # Revert if fix verification fails
-
-
-@dataclass
-class QEConfig:
-    """QE-specific configuration."""
-
-    # Output settings
-    output: OutputConfig = field(default_factory=OutputConfig)
-
-    # Suggestion workflow (allow_suggestions mode)
-    # When enabled, agents can demonstrate fixes in an isolated workspace, then revert
-    allow_suggestions: bool = False  # CRITICAL: OFF by default
-    suggestions: SuggestionConfig = field(default_factory=SuggestionConfig)
-
-    # Noise filtering
-    noise: NoiseConfig = field(default_factory=NoiseConfig)
-
-    # Execution modes
-    modes: Dict[str, QEModeConfig] = field(
-        default_factory=lambda: {
-            "quick_scan": QEModeConfig(
-                timeout=60, depth="shallow", generate_tests=False, destructive=False
-            ),
-            "deep_qe": QEModeConfig(
-                timeout=1800, depth="full", generate_tests=True, destructive=True
-            ),
-        }
-    )
-
-    # Execution roles (hard constraints)
-    execution_roles: Dict[str, ExecutionRoleConfig] = field(
-        default_factory=lambda: {
-            "smoke": ExecutionRoleConfig(test_pattern="**/test_smoke*.py", fail_fast=True),
-            "sanity": ExecutionRoleConfig(test_pattern="**/test_sanity*.py", fail_fast=False),
-            "regression": ExecutionRoleConfig(test_pattern="**/test_*.py", detect_flakes=True),
-        }
-    )
-
-    # Test generation settings
-    test_generation: TestGenerationConfig = field(default_factory=TestGenerationConfig)
-
-    # Patch Harness - validates patches before including in QIR
-    harness: HarnessConfig = field(default_factory=HarnessConfig)
-
-    # QE Guidance - system prompts for time-constrained QE
-    guidance: GuidanceConfig = field(default_factory=GuidanceConfig)
-
-    # SuperOpt optimization hook (command-based)
-    optimize: "OptimizeConfig" = field(default_factory=lambda: OptimizeConfig())
-
-
-@dataclass
-class OptimizeConfig:
-    """Configuration for SuperOpt command-based optimization."""
-
-    enabled: bool = False
-    command: str = ""
-    timeout_seconds: int = 300
-
-
-@dataclass
 class SuperQodeConfig:
     """Top-level SuperQode configuration."""
 
@@ -440,9 +210,6 @@ class SuperQodeConfig:
     gateway: GatewayConfig = field(default_factory=GatewayConfig)
     cost_tracking: CostTrackingConfig = field(default_factory=CostTrackingConfig)
     errors: ErrorConfig = field(default_factory=ErrorConfig)
-
-    # QE-specific configuration
-    qe: QEConfig = field(default_factory=QEConfig)
 
 
 @dataclass

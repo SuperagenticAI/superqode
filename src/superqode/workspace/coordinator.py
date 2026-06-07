@@ -1,29 +1,29 @@
 """
-QE Coordinator - Session coordination with locking and epoch system.
+workspace Coordinator - Session coordination with locking and epoch system.
 
 Inspired by EveryCode's review_coord.rs implementation.
 
 Features:
-- Lock-based coordination prevents concurrent deep QE runs
-- Snapshot epochs detect if files changed during QE (stale results)
+- Lock-based coordination prevents concurrent deep workspace runs
+- Snapshot epochs detect if files changed during workspace (stale results)
 - Per-repo scoping using path hash
 - Automatic cleanup of stale locks from dead processes
 
 Usage:
-    coordinator = QECoordinator(project_root)
+    coordinator = WorkspaceCoordinator(project_root)
 
     # Try to acquire lock
-    lock = coordinator.acquire_lock("qe-session-001", mode="deep")
+    lock = coordinator.acquire_lock("workspace-session-001", mode="deep")
     if lock is None:
-        print("Another QE session is running")
+        print("Another workspace tracking session is running")
         return
 
     try:
-        # Run QE...
+        # Run workspace...
 
         # Check if results are stale
         if coordinator.is_result_stale(lock):
-            print("Warning: Code changed during QE run")
+            print("Warning: Code changed during workspace run")
     finally:
         coordinator.release_lock(lock)
 """
@@ -43,8 +43,8 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class QELock:
-    """Lock information for a QE session."""
+class WorkspaceLock:
+    """Lock information for a workspace tracking session."""
 
     session_id: str
     pid: int
@@ -52,28 +52,28 @@ class QELock:
     mode: str  # "quick" or "deep"
     git_head: Optional[str]
     snapshot_epoch: int
-    intent: str  # Description of the QE task
+    intent: str  # Description of the workspace task
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "QELock":
+    def from_dict(cls, data: Dict[str, Any]) -> "WorkspaceLock":
         return cls(**data)
 
 
-class QECoordinator:
+class WorkspaceCoordinator:
     """
-    Coordinate QE sessions to prevent conflicts and detect stale results.
+    Coordinate workspace tracking sessions to prevent conflicts and detect stale results.
 
     Guarantees:
-    - Only one deep QE session at a time per repository
+    - Only one deep workspace tracking session at a time per repository
     - Quick scans can run in parallel
-    - Detects if code changed during QE (stale results)
+    - Detects if code changed during workspace (stale results)
     - Auto-cleanup of locks from dead processes
     """
 
-    STATE_DIR = Path.home() / ".superqode" / "state" / "qe"
+    STATE_DIR = Path.home() / ".superqode" / "state" / "workspace"
 
     def __init__(self, project_root: Path):
         self.project_root = project_root.resolve()
@@ -104,7 +104,7 @@ class QECoordinator:
         return self.scope_dir / "snapshot.epoch"
 
     # =========================================================================
-    # Epoch System - Detect file changes during QE
+    # Epoch System - Detect file changes during workspace
     # =========================================================================
 
     def get_snapshot_epoch(self) -> int:
@@ -127,9 +127,9 @@ class QECoordinator:
         self.epoch_file.write_text(str(new_epoch))
         return new_epoch
 
-    def is_result_stale(self, lock: QELock) -> bool:
+    def is_result_stale(self, lock: WorkspaceLock) -> bool:
         """
-        Check if QE results are stale due to code changes.
+        Check if workspace results are stale due to code changes.
 
         Returns True if the snapshot epoch changed since the lock was acquired.
         """
@@ -137,25 +137,25 @@ class QECoordinator:
         return current_epoch > lock.snapshot_epoch
 
     # =========================================================================
-    # Locking System - Coordinate QE sessions
+    # Locking System - Coordinate workspace tracking sessions
     # =========================================================================
 
     def acquire_lock(
         self,
         session_id: str,
         mode: str = "quick",
-        intent: str = "QE session",
-    ) -> Optional[QELock]:
+        intent: str = "workspace tracking session",
+    ) -> Optional[WorkspaceLock]:
         """
-        Try to acquire a QE lock.
+        Try to acquire a workspace lock.
 
         Args:
             session_id: Unique session identifier
             mode: "quick" or "deep"
-            intent: Description of the QE task
+            intent: Description of the workspace task
 
         Returns:
-            QELock if acquired, None if another session holds the lock
+            WorkspaceLock if acquired, None if another session holds the lock
         """
         # Clean up stale locks first
         self._clear_stale_locks()
@@ -163,18 +163,18 @@ class QECoordinator:
         # Check existing lock
         existing = self.read_lock()
         if existing is not None:
-            # Deep QE blocks everything
+            # Deep workspace blocks everything
             if existing.mode == "deep":
-                logger.info(f"Blocked by deep QE session: {existing.session_id}")
+                logger.info(f"Blocked by deep workspace tracking session: {existing.session_id}")
                 return None
 
-            # New deep QE blocks if any session exists
+            # New deep workspace blocks if any session exists
             if mode == "deep":
-                logger.info(f"Cannot start deep QE - session active: {existing.session_id}")
+                logger.info(f"Cannot start deep workspace - session active: {existing.session_id}")
                 return None
 
         # Create new lock
-        lock = QELock(
+        lock = WorkspaceLock(
             session_id=session_id,
             pid=os.getpid(),
             started_at=datetime.now().isoformat(),
@@ -194,7 +194,7 @@ class QECoordinator:
             with os.fdopen(fd, "w") as f:
                 json.dump(lock.to_dict(), f, indent=2)
 
-            logger.info(f"Acquired QE lock: {session_id} ({mode})")
+            logger.info(f"Acquired workspace lock: {session_id} ({mode})")
             return lock
 
         except FileExistsError:
@@ -202,8 +202,8 @@ class QECoordinator:
             logger.info("Lock acquisition race - another session won")
             return None
 
-    def release_lock(self, lock: QELock) -> None:
-        """Release a QE lock."""
+    def release_lock(self, lock: WorkspaceLock) -> None:
+        """Release a workspace lock."""
         if not self.lock_file.exists():
             return
 
@@ -211,18 +211,18 @@ class QECoordinator:
             current = self.read_lock()
             if current and current.session_id == lock.session_id:
                 self.lock_file.unlink()
-                logger.info(f"Released QE lock: {lock.session_id}")
+                logger.info(f"Released workspace lock: {lock.session_id}")
         except OSError as e:
             logger.warning(f"Failed to release lock: {e}")
 
-    def read_lock(self) -> Optional[QELock]:
+    def read_lock(self) -> Optional[WorkspaceLock]:
         """Read the current lock if any."""
         if not self.lock_file.exists():
             return None
 
         try:
             data = json.loads(self.lock_file.read_text())
-            return QELock.from_dict(data)
+            return WorkspaceLock.from_dict(data)
         except (json.JSONDecodeError, KeyError, OSError):
             return None
 
@@ -283,25 +283,25 @@ class QECoordinator:
         self,
         session_id: str,
         mode: str = "quick",
-        intent: str = "QE session",
-    ) -> "QESessionContext":
+        intent: str = "workspace tracking session",
+    ) -> "WorkspaceSessionContext":
         """
-        Context manager for QE sessions.
+        Context manager for workspace tracking sessions.
 
         Usage:
             with coordinator.session("my-session", mode="deep") as lock:
                 if lock:
-                    # Run QE...
+                    # Run workspace...
         """
-        return QESessionContext(self, session_id, mode, intent)
+        return WorkspaceSessionContext(self, session_id, mode, intent)
 
 
-class QESessionContext:
-    """Context manager for QE sessions with automatic lock management."""
+class WorkspaceSessionContext:
+    """Context manager for workspace tracking sessions with automatic lock management."""
 
     def __init__(
         self,
-        coordinator: QECoordinator,
+        coordinator: WorkspaceCoordinator,
         session_id: str,
         mode: str,
         intent: str,
@@ -310,9 +310,9 @@ class QESessionContext:
         self.session_id = session_id
         self.mode = mode
         self.intent = intent
-        self.lock: Optional[QELock] = None
+        self.lock: Optional[WorkspaceLock] = None
 
-    def __enter__(self) -> Optional[QELock]:
+    def __enter__(self) -> Optional[WorkspaceLock]:
         self.lock = self.coordinator.acquire_lock(
             self.session_id,
             self.mode,
@@ -329,10 +329,10 @@ class QESessionContext:
 # Global Epoch Notification
 # =============================================================================
 
-_global_coordinator: Optional[QECoordinator] = None
+_global_coordinator: Optional[WorkspaceCoordinator] = None
 
 
-def set_global_coordinator(coordinator: QECoordinator) -> None:
+def set_global_coordinator(coordinator: WorkspaceCoordinator) -> None:
     """Set the global coordinator for epoch notifications."""
     global _global_coordinator
     _global_coordinator = coordinator
@@ -348,6 +348,6 @@ def notify_file_change() -> None:
         _global_coordinator.bump_snapshot_epoch()
 
 
-def get_global_coordinator() -> Optional[QECoordinator]:
+def get_global_coordinator() -> Optional[WorkspaceCoordinator]:
     """Get the global coordinator if set."""
     return _global_coordinator

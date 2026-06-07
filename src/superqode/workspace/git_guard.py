@@ -1,5 +1,5 @@
 """
-Git Guard - Prevents Git Operations During QE Sessions.
+Git Guard - Prevents Git Operations During workspace Sessions.
 
 Ensures the immutable repo guarantee by blocking all git operations
 that could permanently alter the repository state.
@@ -151,36 +151,36 @@ class GitGuard:
     BLOCK_REASONS = {
         "commit": "Commits would permanently alter the repository history",
         "push": "Push would send changes to remote repository",
-        "pull": "Pull could introduce external changes during QE session",
-        "fetch": "Fetch is unnecessary during ephemeral QE session",
+        "pull": "Pull could introduce external changes during workspace tracking session",
+        "fetch": "Fetch is unnecessary during ephemeral workspace tracking session",
         "merge": "Merge would alter branch history",
         "rebase": "Rebase would rewrite commit history",
         "cherry-pick": "Cherry-pick would create new commits",
         "revert": "Revert would create new commits",
         "reset": "Reset could lose tracked changes",
         "checkout": "Checkout could overwrite working changes",
-        "switch": "Branch switching is not allowed during QE",
+        "switch": "Branch switching is not allowed during workspace",
         "restore": "Restore could overwrite working changes",
         "add": "Staging changes is not needed in ephemeral workspace",
         "rm": "Git rm would stage deletions",
         "mv": "Git mv would stage renames",
         "clean": "Git clean could remove untracked files",
         "stash": "Stashing is not needed in ephemeral workspace",
-        "tag": "Creating tags is not allowed during QE",
-        "branch": "Creating/deleting branches is not allowed during QE",
+        "tag": "Creating tags is not allowed during workspace",
+        "branch": "Creating/deleting branches is not allowed during workspace",
         "init": "Repository initialization is not allowed",
-        "clone": "Cloning is not allowed during QE session",
+        "clone": "Cloning is not allowed during workspace tracking session",
     }
 
     SUGGESTIONS = {
-        "commit": "Changes are automatically tracked and reverted. Use QIR to document findings.",
-        "push": "All findings are saved to .superqode/qe-artifacts/ for review.",
+        "commit": "Changes are automatically tracked and reverted. Use report to document findings.",
+        "push": "All findings are saved to .superqode/artifacts/ for review.",
         "add": "File tracking is automatic in ephemeral workspace.",
         "checkout": "File modifications are tracked and will be reverted automatically.",
         "reset": "Use 'superqode revert' to manually revert specific changes.",
-        "clean": "Ephemeral files are cleaned up automatically after QE session.",
+        "clean": "Ephemeral files are cleaned up automatically after workspace tracking session.",
         "stash": "All changes are ephemeral - no need to stash.",
-        "branch": "QE runs in ephemeral mode - no branch needed.",
+        "branch": "workspace runs in ephemeral mode - no branch needed.",
     }
 
     def __init__(self, enabled: bool = True):
@@ -288,7 +288,7 @@ class GitGuard:
             operation_type=GitOperationType.WRITE,
             is_blocked=True,
             reason=f"Unknown git subcommand '{subcommand}' - blocked for safety",
-            suggestion="Only read operations (status, log, diff, show) are allowed during QE.",
+            suggestion="Only read operations (status, log, diff, show) are allowed during workspace.",
         )
 
     def is_blocked(self, command: str) -> bool:
@@ -342,8 +342,8 @@ class GitGuard:
             [
                 "",
                 "SuperQode runs in ephemeral mode - all changes are",
-                "automatically tracked and reverted after QE completes.",
-                "Findings are preserved in .superqode/qe-artifacts/",
+                "automatically tracked and reverted after workspace completes.",
+                "Findings are preserved in .superqode/artifacts/",
             ]
         )
 

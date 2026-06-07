@@ -21,7 +21,7 @@ from superqode.workspace import (
     GitOperationBlocked,
     SnapshotManager,
 )
-from superqode.workspace.manager import QESessionConfig, QEMode
+from superqode.workspace.manager import WorkspaceSessionConfig, WorkspaceMode
 
 
 class TestSnapshotManager:
@@ -33,7 +33,7 @@ class TestSnapshotManager:
         session_id = snapshot.start_session()
 
         assert session_id is not None
-        assert session_id.startswith("qe-")
+        assert session_id.startswith("workspace-")
 
     def test_capture_existing_file(self, tmp_path):
         """Test capturing an existing file."""
@@ -196,7 +196,7 @@ class TestArtifactManager:
         assert artifact.original_file == "src/main.py"
 
         # Verify file exists
-        patch_path = tmp_path / ".superqode" / "qe-artifacts" / "patches" / artifact.name
+        patch_path = tmp_path / ".superqode" / "artifacts" / "patches" / artifact.name
         assert patch_path.exists()
 
         # Verify it's a valid unified diff
@@ -222,7 +222,7 @@ class TestArtifactManager:
 
         # Verify file exists
         test_path = (
-            tmp_path / ".superqode" / "qe-artifacts" / "generated-tests" / "unit" / "test_main.py"
+            tmp_path / ".superqode" / "artifacts" / "generated-tests" / "unit" / "test_main.py"
         )
         assert test_path.exists()
 
@@ -241,7 +241,7 @@ class TestArtifactManager:
         assert artifact.type == ArtifactType.QR
 
         # Verify both MD and JSON exist
-        qr_dir = tmp_path / ".superqode" / "qe-artifacts" / "qr"
+        qr_dir = tmp_path / ".superqode" / "artifacts" / "qr"
         md_files = list(qr_dir.glob("*.md"))
         json_files = list(qr_dir.glob("*.json"))
 
@@ -276,7 +276,7 @@ class TestWorkspaceManager:
         workspace.initialize()
 
         assert (tmp_path / ".superqode").exists()
-        assert (tmp_path / ".superqode" / "qe-artifacts").exists()
+        assert (tmp_path / ".superqode" / "artifacts").exists()
 
     def test_session_lifecycle(self, tmp_path):
         """Test starting and ending a session."""
@@ -351,60 +351,3 @@ class TestWorkspaceManager:
         patches = workspace.artifacts.list_patches()
         assert len(patches) == 1
 
-
-class TestQRGenerator:
-    """Tests for QR generation."""
-
-    def test_generate_markdown(self):
-        """Test generating QR markdown."""
-        from superqode.qr import QRGenerator
-        from superqode.qr.generator import QRData, Finding
-        from datetime import datetime
-
-        data = QRData(
-            session_id="test-123",
-            mode="quick_scan",
-            started_at=datetime.now(),
-            ended_at=datetime.now(),
-            target_description="Test project",
-            findings=[
-                Finding(
-                    id="finding-001",
-                    severity="critical",
-                    category="security",
-                    title="SQL Injection",
-                    description="User input not sanitized",
-                    file_path="src/db.py",
-                    line_start=42,
-                ),
-            ],
-        )
-
-        generator = QRGenerator(data)
-        markdown = generator.generate_markdown()
-
-        assert "Validation Report" in markdown
-        assert "test-123" in markdown
-        assert "SQL Injection" in markdown
-        assert "FAIL" in markdown  # Critical finding = fail
-
-    def test_generate_json(self):
-        """Test generating QR JSON."""
-        from superqode.qr import QRGenerator
-        from superqode.qr.generator import QRData
-        from datetime import datetime
-
-        data = QRData(
-            session_id="test-456",
-            mode="deep_qe",
-            started_at=datetime.now(),
-            ended_at=datetime.now(),
-        )
-
-        generator = QRGenerator(data)
-        json_data = generator.generate_json()
-
-        assert json_data["session_id"] == "test-456"
-        assert json_data["mode"] == "deep_qe"
-        assert json_data["verdict"] == "pass"  # No findings
-        assert "summary" in json_data

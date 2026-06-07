@@ -23,10 +23,10 @@ class WorkflowPreset:
 
 
 # Pre-defined presets
-QE_PRESETS = {
-    "full_qe": WorkflowPreset(
-        name="Full QE",
-        description="Run complete quality engineering: unit, integration, security, lint",
+QUALITY_PRESETS = {
+    "full_quality": WorkflowPreset(
+        name="Full Quality",
+        description="Run complete quality checks: unit, integration, security, lint",
         agents=[
             {"url": "", "prompt": "Run unit tests and report results", "name": "unit_tests"},
             {
@@ -110,27 +110,27 @@ class A2APresets:
         presets = A2APresets()
 
         # List available presets
-        for name in presets.list_presets("qe"):
+        for name in presets.list_presets("quality"):
             print(name)
 
         # Run a preset
-        result = await presets.run("qe", "full_qe", agent_urls)
+        result = await presets.run("full_quality", agent_urls)
     """
 
     def __init__(self):
-        self._presets = {**QE_PRESETS, **DEVOPS_PRESETS}
+        self._presets = {**QUALITY_PRESETS, **DEVOPS_PRESETS}
 
     def list_presets(self, category: Optional[str] = None) -> List[str]:
         """List available presets.
 
         Args:
-            category: Filter by category ("qe" or "devops")
+            category: Filter by category ("quality" or "devops")
 
         Returns:
             List of preset names
         """
-        if category == "qe":
-            return list(QE_PRESETS.keys())
+        if category == "quality":
+            return list(QUALITY_PRESETS.keys())
         elif category == "devops":
             return list(DEVOPS_PRESETS.keys())
         else:
@@ -142,7 +142,7 @@ class A2APresets:
 
     def list_categories(self) -> List[str]:
         """List preset categories."""
-        return ["qe", "devops"]
+        return ["quality", "devops"]
 
     async def run(
         self,

@@ -81,7 +81,7 @@ context:
     strategy: summarize-when-large
   memory:
     enabled: true
-validation:
+checks:
   enabled: true
   fail_on_error: false
   timeout_seconds: 300

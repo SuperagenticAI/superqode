@@ -27,7 +27,6 @@ superqode
 superqode --harness harness.yaml
 
 # Start with specific role
-superqode --role qe.security_tester
 ```
 
 ## Common TUI Workflow
@@ -57,7 +56,7 @@ Summarize what changed.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ SuperQode - Validation Session: qe-20260108-143052                  ×│
+│ SuperQode - Session: session-20260108-143052                  ×│
 ├─────────────────────────────────────────────────────────────────┤
 │ Sidebar        │ Main Content Area                              │
 │                │                                                 │
@@ -94,7 +93,6 @@ Summarize what changed.
 | `@` | Open the file-mention picker in the prompt |
 | `Tab` | Accept completion / next widget |
 | `Shift+Tab` | Previous widget |
-| `:` | Command mode (for commands like `:connect`, `:qe`, etc.) |
 
 ## Quick Actions
 
@@ -115,7 +113,6 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:log minimal` - Show status-only tool activity
 - `:log normal` - Show compact tool summaries
 - `:log verbose` - Show full tool outputs and changed file names
-- `:qe <role>` - Switch to validation role mode (e.g., `:qe security_tester`)
 - `:view <file>` - View file content
 - `:rewind` - Open the rewind overlay (or `:rewind <n>` to jump directly)
 - `:tree` - Show saved session branches and forks
@@ -397,7 +394,6 @@ The BYOK model view includes capability labels:
 
 Local providers include DS4, Ollama, LM Studio, MLX, vLLM, and SGLang when supported by the current installation.
 
-Note: validation analysis sessions are run via CLI, not TUI commands. Use `superqode qe run .` in your terminal to start validation sessions.
 
 ## Harnesses In The TUI
 
@@ -475,7 +471,6 @@ file = await browser.select_file()
 
 # Agent switcher
 roles = [
-    ("qe.security_tester", "Security Testing"),
     ("qe.performance_tester", "Performance Testing"),
 ]
 switcher = AgentSwitcher(roles)
@@ -491,15 +486,10 @@ The TUI allows you to interact with agents in validation roles, while validation
 superqode
 
 # In TUI, switch to validation role
-:qe security_tester
 
 # Run validation analysis via CLI (in separate terminal)
-superqode qe run . --mode quick
-superqode qe run . --mode deep
 
 # View validation artifacts (via CLI)
-superqode qe artifacts .
-superqode qe dashboard
 ```
 
 ## Requirements

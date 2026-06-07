@@ -6,7 +6,6 @@ Initialize SuperQode validation configuration in a repository (creates `superqod
 
 ## init
 
-Create `superqode.yaml` in the current directory from the comprehensive role catalog template.
 
 ```bash
 superqode config init [--force] [--guided]
@@ -15,7 +14,6 @@ superqode config init [--force] [--guided]
 ### What It Does
 
 - Creates/overwrites `./superqode.yaml`
-- Uses the comprehensive role catalog template (disable or remove roles you don’t need)
 - Creates `.superqode/` runtime directory (artifacts, history, temp)
 
 ### Examples
@@ -39,12 +37,8 @@ superqode config init --force
 # Inspect configuration
 cat superqode.yaml
 
-# List configured modes/roles (SuperQode CLI)
-superqode config list-modes
 
 # Run a quick scan
-superqode qe run . --mode quick
 
 # View the latest report
-superqode qe report
 ```

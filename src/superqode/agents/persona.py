@@ -112,7 +112,7 @@ CRITICAL RULES:
         """Build persona context from resolved role configuration.
 
         Args:
-            mode: The mode name (e.g., "dev", "qe")
+            mode: The mode name (e.g., "dev", "devops")
             role: The role name (e.g., "fullstack", "api_tester")
             resolved_role: The ResolvedRole object from config loader
 

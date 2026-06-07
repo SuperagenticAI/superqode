@@ -14,11 +14,11 @@ are stored, and what output should be returned.
 | --- | --- |
 | Runtime | Use `builtin`, Google ADK, OpenAI Agents SDK, DeepAgents, PydanticAI, or another supported backend |
 | Model policy | Pick primary models, fallbacks, reasoning, temperature, history, and iteration limits |
-| Tools | Enable repository tools, shell, MCP, validation, or no tools |
+| Tools | Enable repository tools, shell, MCP, checks, or no tools |
 | Sandbox policy | Set read, write, shell, command, and network boundaries |
 | Approvals | Pause risky tool calls for review before they run |
 | Events | Store run timelines and graph views for debugging |
-| Output | Return plain text, typed results, validation state, and run records |
+| Output | Return plain text, typed results, checks state, and run records |
 
 ### What Users Configure
 
@@ -27,10 +27,10 @@ Users configure a harness by selecting:
 - flavor: `coding` or `no_tool`
 - runtime: `builtin`, `adk`, `openai-agents`, `deepagents`, `pydanticai`, or custom
 - model policy: hosted model, local model, Gemma4 profile, DS4 profile, fallbacks, and reasoning defaults
-- tools: repository tools, shell, MCP, validation, or no tools
+- tools: repository tools, shell, MCP, checks, or no tools
 - sandbox policy: read, write, shell, command, and network boundaries
 - workflow: single step, chain, parallel workers, router, orchestrator, or evaluator-optimizer
-- output: plain text, typed result, events, validation state, and run records
+- output: plain text, typed result, events, checks state, and run records
 
 This lets the same harness contract run through different engines while preserving the user-facing behavior.
 
@@ -46,7 +46,7 @@ It gives the model controlled capabilities:
 - file read/search/edit tools
 - shell and test execution under policy
 - MCP tools when configured
-- validation hooks
+- checks hooks
 - patch/diff reporting
 - session memory and compaction
 - approval gates for risky operations
@@ -66,7 +66,7 @@ It bets on model capability alone:
 - no write access
 - no implicit repo mutation path
 - prompt, context, and model policy only
-- optional structured output validation
+- optional structured output checks
 - optional final-answer scoring/evaluation
 - reasoning disabled where provider APIs support it
 
@@ -90,7 +90,7 @@ harness:
     fallback: ds4-local
   execution_policy:
     approval_profile: balanced
-  validation:
+  checks:
     enabled: true
 ```
 
@@ -106,7 +106,7 @@ The compiler decides what capabilities are legal for each flavor:
 | File edit/write | policy-controlled | no |
 | Shell/tests | policy-controlled | no |
 | MCP tools | policy-controlled | no |
-| Validation harness | yes | optional, output-only |
+| Checks harness | yes | optional, output-only |
 | Multi-agent delegation | yes | optional, model-only |
 
 ### Runtime Backends
@@ -163,7 +163,7 @@ superqode harness run --spec harness.yaml --prompt "summarize this repository"
 ```
 
 Use `--schema` on `harness validate` to print the HarnessSpec JSON Schema for editor integration and CI
-validation.
+checks.
 
 Use `harness list-backends` to see the backend capability snapshot without loading a spec. It reports coding,
 no-tool, streaming, approval, sandbox, shell, MCP, typed-output support, dependency availability, and install
@@ -199,7 +199,7 @@ readable output.
 ### Event Graph
 
 Every HarnessSpec run writes normalized events and a graph view of the execution. The graph turns runtime
-events into typed nodes such as run, model, tool, approval, sandbox, MCP, subagent, validation, and typed
+events into typed nodes such as run, model, tool, approval, sandbox, MCP, subagent, checks, and typed
 output nodes. Edges preserve execution order and mark pauses, resumes, and tool-style calls.
 
 Use the graph commands after a run:
@@ -311,7 +311,7 @@ harness:
     approval_profile: balanced
   agents:
     - id: coder
-      tools: [filesystem, search, edit, shell, validation]
+      tools: [filesystem, search, edit, shell, checks]
       skills: [repo-navigation, implementation]
 ```
 
@@ -350,28 +350,28 @@ harness:
 
 ---
 
-## Validation Harness Overview
+## Checks Harness Overview
 
-Validation is a secondary lifecycle capability inside the broader harness system. A coding harness can call
-validation after it edits files, produces a patch, or returns structured suggestions.
+Checks is a secondary lifecycle capability inside the broader harness system. A coding harness can call
+checks after it edits files, produces a patch, or returns structured suggestions.
 
-Validation can check:
+Checks can check:
 
 - **Syntactic correctness**: Code parses correctly
 - **Type safety**: Type checking passes
 - **Style compliance**: Linting rules followed
 - **No regressions**: Changes don't break existing code
 
-Validation does not define the product identity and does not replace runtime policy. It is an optional proof
+Checks does not define the product identity and does not replace runtime policy. It is an optional proof
 step that can be attached to coding, workflow, or typed-output runs.
 
 ---
 
-## Validation Types
+## Checks Types
 
-### Structural Validation
+### Structural Checks
 
-Parsing validation for structured formats:
+Parsing checks for structured formats:
 
 - **JSON**: Valid JSON syntax
 - **YAML**: Valid YAML syntax
@@ -379,9 +379,9 @@ Parsing validation for structured formats:
 
 **Runs on**: All changes to structured files
 
-### Language Validation
+### Language Checks
 
-Language-specific validation:
+Language-specific checks:
 
 - **Python**: mypy, ruff, pyright
 - **JavaScript**: eslint, tsc
@@ -401,7 +401,7 @@ Language-specific validation:
 ```yaml
 superqode:
   harness:
-    validation:
+    checks:
       enabled: true
       timeout_seconds: 30
       fail_on_error: false
@@ -453,190 +453,33 @@ superqode:
 
 ---
 
-## How It Works
+## How Checks Work
 
-### 1. Change Or Suggestion Generation
+Harness checks are ordinary commands declared in the HarnessSpec. They run after the workflow completes and
+are recorded as `checks.step.*` events plus a `checks` block in the run metadata.
 
-The harness produces a file change, patch, or structured suggestion during a coding run.
-
-### 2. Validation Hook
-
-The validation hook checks the affected files or patch:
-
-```python
-harness = PatchHarness(project_root)
-result = await harness.validate_changes({
-    "src/api/users.py": "new code content"
-})
+```yaml
+checks:
+  enabled: true
+  fail_on_error: false
+  custom_steps:
+    - name: lint
+      command: uv run ruff check src tests
+      timeout: 300
+    - name: tests
+      command: uv run pytest
+      timeout: 600
 ```
 
-### 3. Validation Result
+Project checks belong in the HarnessSpec, not in project-level legacy configuration.
 
-Result includes:
+Each step:
 
-- **Success**: All validations passed
-- **Findings**: Validation errors/warnings
-- **Tools run**: Which validators executed
-- **Duration**: Validation time
-
-### 4. Result Inclusion
-
-The final result can include validation state alongside text, typed data, events, and diffs:
-
-```python
-if result.success:
-    output.add_validation_state(result)
-else:
-    output.add_validation_failures(result.findings)
-```
-
----
-
-## Validation Categories
-
-### Structural
-
-**Parsing validation** - ensures files are valid:
-
-```python
-{
-  "tool": "structural-parse",
-  "category": "structural",
-  "file": "config.json",
-  "message": "Invalid JSON: unexpected token",
-  "severity": "error"
-}
-```
-
-### Syntactic
-
-**Syntax validation** - language syntax:
-
-```python
-{
-  "tool": "mypy",
-  "category": "syntactic",
-  "file": "src/api/users.py",
-  "line": 42,
-  "message": "Missing type annotation",
-  "severity": "error"
-}
-```
-
-### Type
-
-**Type checking** - static type analysis:
-
-```python
-{
-  "tool": "mypy",
-  "category": "type",
-  "file": "src/api/users.py",
-  "line": 45,
-  "message": "Incompatible types: int vs str",
-  "severity": "error"
-}
-```
-
-### Stylistic
-
-**Code style** - formatting and style rules:
-
-```python
-{
-  "tool": "ruff",
-  "category": "stylistic",
-  "file": "src/api/users.py",
-  "line": 50,
-  "message": "Line too long (120 > 100)",
-  "severity": "warning"
-}
-```
-
-### Functional
-
-**Runtime validation** - execution checks:
-
-```python
-{
-  "tool": "harness",
-  "category": "functional",
-  "file": null,
-  "message": "Harness validation timed out",
-  "severity": "warning"
-}
-```
-
----
-
-## Tool Detection
-
-Harness automatically detects available tools:
-
-```python
-# Checks if tool exists
-if shutil.which("mypy"):
-    # Run mypy validation
-    ...
-```
-
-### Tool Availability
-
-- **Not found**: Tool skipped, no error
-- **Found**: Tool runs validation
-- **Timeout**: Validation times out gracefully
-
----
-
-## Validation Workflow
-
-### Temporary Workspace
-
-Validation happens in isolated temp workspace:
-
-1. Create temporary directory
-2. Stage changed files
-3. Run validators
-4. Collect findings
-5. Clean up temp directory
-
-### Parallel Validation
-
-Multiple validators run in parallel when possible:
-
-- Structural validation (instant)
-- Language validators (parallel by file)
-- Tool execution (timeout-protected)
-
----
-
-## Results
-
-### HarnessResult
-
-```python
-@dataclass
-class HarnessResult:
-    success: bool
-    findings: List[HarnessFinding]
-    tools_run: List[str]
-    duration_seconds: float
-    files_validated: int
-```
-
-### HarnessFinding
-
-```python
-@dataclass
-class HarnessFinding:
-    tool: str
-    category: ValidationCategory
-    file: Optional[Path]
-    message: str
-    line: Optional[int]
-    column: Optional[int]
-    severity: str  # "error", "warning", "info"
-```
+- runs from the configured working directory
+- uses `shlex` command parsing, not a shell string
+- records stdout/stderr previews
+- reports `passed` or `failed`
+- can fail the whole harness run when `checks.fail_on_error` is true
 
 ---
 
@@ -644,7 +487,7 @@ class HarnessFinding:
 
 ### With Coding Harness Runs
 
-Validation can run automatically after a coding harness produces a patch:
+Checks can run automatically after a coding harness produces a patch:
 
 ```python
 patch = agent.generate_suggestion()
@@ -653,7 +496,7 @@ result = await harness.validate_changes(patch)
 if result.success:
     # Include in final output
 else:
-    # Report validation issues
+    # Report checks issues
 ```
 
 ### With Suggestions
@@ -667,14 +510,14 @@ superqode --print "inspect this package and suggest the smallest safe cleanup"
 
 ### With Event Output
 
-Harness events can include validation results:
+Harness events can include checks results:
 
 ```json
 {
   "changes": [
     {
       "patch": "...",
-      "validation": {
+      "checks": {
         "success": true,
         "tools_run": ["mypy", "ruff"],
         "findings": []
@@ -728,7 +571,7 @@ harness:
 
 ### Bring Your Own Harness (BYOH)
 
-Use `custom_steps` to run project-specific validation commands as part of the harness. Each step runs in the
+Use `custom_steps` to run project-specific checks commands as part of the harness. Each step runs in the
 repo root, and a non-zero exit code is reported as a harness error.
 
 ```yaml
@@ -767,7 +610,7 @@ harness:
 
 ### 2. Set Timeouts
 
-Prevent long-running validations:
+Prevent long-running checkss:
 
 ```yaml
 harness:
@@ -778,7 +621,7 @@ harness:
 
 ```yaml
 harness:
-  fail_on_error: false  # Report validation failures without failing the whole run
+  fail_on_error: false  # Report checks failures without failing the whole run
 ```
 
 ### 4. Tool Installation
@@ -817,7 +660,7 @@ pip install mypy ruff
 
 ### Timeout Errors
 
-**Symptom**: Validation times out
+**Symptom**: Checks times out
 
 **Solution**: Increase timeout or optimize validators:
 

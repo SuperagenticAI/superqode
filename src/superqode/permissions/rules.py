@@ -6,7 +6,7 @@ Provides granular control over what operations agents can perform:
 - Tool-specific permissions
 - Directory-scoped rules
 - Allow/Deny/Ask actions
-- Optimized for SuperQode's multi-agent QE workflow
+- Optimized for SuperQode's multi-agent workflow
 """
 
 from __future__ import annotations

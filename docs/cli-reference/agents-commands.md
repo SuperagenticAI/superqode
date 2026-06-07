@@ -146,7 +146,6 @@ Usage in superqode.yaml:
 
 - `superqode connect acp <agent>` - Connect to an ACP agent
 - `superqode providers list` - List BYOK providers
-- `superqode config list-modes` - View configured modes and roles
 
 ---
 
@@ -225,4 +224,3 @@ The output includes setup commands and prerequisites.
 
 - [Provider Commands](provider-commands.md) - BYOK provider management
 - [Config Commands](config-commands.md) - Configuration management
-- [Team Configuration](../configuration/team.md) - Team and role setup

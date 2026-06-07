@@ -165,32 +165,16 @@ nav:
 
   - 📚 Concepts:
     - concepts/index.md
-    - 🧪 Release Validation: concepts/release-validation.md
     - 🔌 Three Modes: concepts/modes.md
-    - 📁 Ephemeral Workspace: concepts/workspace.md
-    - 👥 Role-Based Workflows: concepts/roles.md
-    - 📊 Validation Reports: concepts/qr.md
-    - 💡 Allow Suggestions: concepts/suggestions.md
     - 🔐 Authentication: concepts/authentication.md
 
 
   - ⚙️ Configuration:
     - configuration/index.md
     - 📄 superqode.yaml Reference: configuration/yaml-reference.md
-    - 👥 Team Configuration: configuration/team.md
     - 🔧 MCP Configuration: configuration/mcp-config.md
-    - 🔇 Noise Configuration: configuration/noise-config.md
-    - 📖 Guidance Configuration: configuration/guidance-config.md
 
   - 🧭 Workflows:
-    - Validation & Evaluation: qe-features/index.md
-    - 🔇 Noise Filtering: qe-features/noise-filtering.md
-    - 💬 Natural Language Validation: qe-features/natural-language-qe.md
-    - 📜 Constitution System: qe-features/constitution.md
-    - ✅ Fix Verifier: qe-features/fix-verifier.md
-    - 🔧 MCP Tools: qe-features/mcp-tools.md
-    - 🧪 Test Generation: qe-features/test-generation.md
-    - 📁 Artifacts & Reports: qe-features/artifacts.md
 
   - 🔌 Providers:
     - providers/index.md
@@ -202,11 +186,6 @@ nav:
     - 🎛️ Model Profiles: providers/profiles.md
 
   - 🔗 Integration:
-    - integration/index.md
-    - 🔄 CI/CD Integration: integration/cicd.md
-    - 📝 IDE Integration: integration/ide.md
-    - 🐙 GitHub Actions: integration/github-actions.md
-    - 🦊 GitLab CI: integration/gitlab-ci.md
     - 🧩 OpenClaw: integration/openclaw.md
 
   - 🔬 Advanced:
@@ -221,26 +200,11 @@ nav:
     - 🧭 TUI Reference: advanced/tui.md
     - 💻 CLI Reference:
       - cli-reference/index.md
-      - 🔍 Validation Commands: cli-reference/qe-commands.md
       - ⚙️ Config Commands: cli-reference/config-commands.md
       - 🔌 Provider Commands: cli-reference/provider-commands.md
-      - 💡 Suggestion Commands: cli-reference/suggestion-commands.md
       - 🤖 Agents Commands: cli-reference/agents-commands.md
       - 🔐 Auth Commands: cli-reference/auth-commands.md
-      - 👥 Roles Commands: cli-reference/roles-commands.md
-      - 🌐 Serve Commands: cli-reference/serve-commands.md
       - 🎬 Init Commands: cli-reference/init-commands.md
-      - 🧪 Validation Commands: cli-reference/advanced-validation-commands.md
-    - 📖 API Reference:
-      - api-reference/index.md
-      - 📊 JSONL Events: api-reference/jsonl-events.md
-      - 🐍 Python SDK: api-reference/python-sdk.md
 
   - 🏢 Enterprise:
     - enterprise/index.md
-    - 💬 Natural Language Validation: qe-features/natural-language-qe.md
-    - ✅ Fix Verifier: qe-features/fix-verifier.md
-    - 🧪 Test Generation: qe-features/test-generation.md
-    - 🔄 CI Outputs: integration/cicd.md
-    - 📝 IDE / LSP: integration/ide.md
-    - 🌐 Server Commands: cli-reference/serve-commands.md

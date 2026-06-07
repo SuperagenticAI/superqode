@@ -9,7 +9,7 @@ from .spec import (
     HarnessSpec,
     ModelPolicySpec,
     RuntimeSpec,
-    ValidationSpec,
+    ChecksSpec,
 )
 
 
@@ -50,7 +50,7 @@ def coding_template(*, name: str = "superqode-coding", backend: str = "builtin")
                 skills=("repo-navigation", "implementation"),
             ),
         ),
-        validation=ValidationSpec(enabled=True),
+        checks=ChecksSpec(enabled=True),
         metadata={"template": "coding"},
     )
 

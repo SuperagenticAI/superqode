@@ -1,5 +1,5 @@
 """
-Diff Tracker - Track file changes during QE for patch generation.
+Diff Tracker - Track file changes during workspace for patch generation.
 
 Inspired by EveryCode's turn_diff_tracker.rs implementation.
 
@@ -15,7 +15,7 @@ Usage:
     # Before modifying a file
     tracker.capture_baseline(Path("src/main.py"))
 
-    # After QE session
+    # After workspace tracking session
     patch = tracker.get_unified_diff()
     print(patch)
 """
@@ -71,7 +71,7 @@ class FileChange:
 
 class DiffTracker:
     """
-    Track file changes during a QE session for patch generation.
+    Track file changes during a workspace tracking session for patch generation.
 
     Maintains baseline snapshots of files before first modification,
     then generates unified diffs comparing baseline to current state.
@@ -420,7 +420,7 @@ def generate_patch_file(
 
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         output_path = (
-            project_root / ".superqode" / "qe-artifacts" / "patches" / f"qe-{timestamp}.patch"
+            project_root / ".superqode" / "artifacts" / "patches" / f"workspace-{timestamp}.patch"
         )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

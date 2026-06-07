@@ -262,7 +262,7 @@ agents:
     tools: [read_file, grep]
 workflow:
   mode: single
-validation:
+checks:
   enabled: true
   custom_steps:
     - name: syntax
@@ -408,7 +408,7 @@ context:
     store.append_event(
         run.run_id,
         HarnessEvent(
-            type="validation.step.completed",
+            type="checks.step.completed",
             run_id=run.run_id,
             data={"name": "tests", "returncode": 0},
         ),
@@ -447,7 +447,7 @@ context:
     assert run.run_id in text
     assert "workflow.step.completed" in text
     assert "step_id=coder" in text
-    assert "validation.step.completed" in text
+    assert "checks.step.completed" in text
     assert "harness.permission.check" in text
     assert "tool=bash" in text
     assert "arg_keys=api_key,command" in text

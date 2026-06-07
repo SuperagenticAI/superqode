@@ -1371,16 +1371,16 @@ class HarnessPanel(Container):
         text.append(self._preview_line("tools", summary["tools"]), style=SQ_COLORS.text_secondary)
         text.append(self._preview_line("skills", summary["skills"]), style=SQ_COLORS.text_secondary)
 
-        text.append("\nMCP / Validation\n", style=f"bold {SQ_COLORS.primary_light}")
+        text.append("\nMCP / Checks\n", style=f"bold {SQ_COLORS.primary_light}")
         mcp_servers = summary["mcp"]["servers"]
         text.append(
             f"  mcp         {', '.join(mcp_servers) if mcp_servers else 'none declared'}\n",
             style=SQ_COLORS.text_secondary,
         )
-        validation = summary["validation"]
+        checks = summary["checks"]
         text.append(
-            f"  validation  {'enabled' if validation['enabled'] else 'disabled'}"
-            f"  {len(validation['steps'])} step(s)\n",
+            f"  checks  {'enabled' if checks['enabled'] else 'disabled'}"
+            f"  {len(checks['steps'])} step(s)\n",
             style=SQ_COLORS.text_secondary,
         )
         text.append(
@@ -1412,8 +1412,8 @@ class HarnessPanel(Container):
         else:
             run = evidence["run"]
             changes = evidence["changes"] if isinstance(evidence["changes"], dict) else {}
-            validation_result = (
-                evidence["validation"] if isinstance(evidence["validation"], dict) else {}
+            checks_result = (
+                evidence["checks"] if isinstance(evidence["checks"], dict) else {}
             )
             text.append(f"  {run['run_id']}\n", style=SQ_COLORS.info)
             text.append(f"  status      {run['status']}\n", style=SQ_COLORS.text_secondary)
@@ -1423,7 +1423,7 @@ class HarnessPanel(Container):
                 style=SQ_COLORS.text_secondary,
             )
             text.append(
-                f"  validation  {validation_result.get('status') or 'unknown'}\n",
+                f"  checks  {checks_result.get('status') or 'unknown'}\n",
                 style=SQ_COLORS.text_secondary,
             )
             text.append(f"  :harness evidence {run['run_id']}\n", style=SQ_COLORS.text_dim)

@@ -18,9 +18,8 @@ if TYPE_CHECKING:
 class StatusBar(Widget):
     """
     Bottom status bar showing:
-    - Current mode/role (HOME, DEV.FULLSTACK, validation.QUICK, etc.)
+    - Current runtime/mode
     - Connected agent and status
-    - Validation workflow status when active
     - Current project directory
     - Keyboard shortcut hints
 
@@ -54,11 +53,6 @@ class StatusBar(Widget):
         min-width: 20;
     }
 
-    StatusBar #mode-indicator.qe-mode {
-        color: #ff00ff;
-        background: #330033;
-    }
-
     StatusBar #agent-indicator {
         color: #00ff00;
         text-style: bold;
@@ -67,23 +61,6 @@ class StatusBar(Widget):
 
     StatusBar #agent-indicator.disconnected {
         color: #ffaa00;
-    }
-
-    StatusBar #qe-indicator {
-        color: #ff00ff;
-        text-style: bold;
-        min-width: 0;
-    }
-
-    StatusBar #qe-indicator.active {
-        color: #00ff00;
-        background: #003300;
-        min-width: 18;
-    }
-
-    StatusBar #qe-indicator.inactive {
-        color: #666666;
-        display: none;
     }
 
     StatusBar #project-indicator {
@@ -104,8 +81,6 @@ class StatusBar(Widget):
     agent_connected: reactive[bool] = reactive(False)
     project_path: reactive[str] = reactive("")
     task_count: reactive[int] = reactive(0)
-    qe_active: reactive[bool] = reactive(False)
-    qe_mode: reactive[str] = reactive("")  # "quick" or "deep"
     runtime_name: reactive[str] = reactive("builtin")
     model: reactive[str] = reactive("")  # active model, shown next to the runtime
 
@@ -115,8 +90,6 @@ class StatusBar(Widget):
         agent_name: str = "",
         agent_connected: bool = False,
         project_path: str | None = None,
-        qe_active: bool = False,
-        qe_mode: str = "",
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -124,8 +97,6 @@ class StatusBar(Widget):
         self.agent_name = agent_name
         self.agent_connected = agent_connected
         self.project_path = project_path or Path.cwd().name
-        self.qe_active = qe_active
-        self.qe_mode = qe_mode
 
     def compose(self) -> ComposeResult:
         """Compose the status bar layout."""
@@ -133,7 +104,6 @@ class StatusBar(Widget):
             yield Static(self._get_mode_text(), id="mode-indicator", classes="status-section")
             yield Static(self._get_agent_text(), id="agent-indicator", classes="status-section")
             yield Static(self._get_runtime_text(), id="runtime-indicator", classes="status-section")
-            yield Static(self._get_qe_text(), id="qe-indicator", classes="status-section inactive")
             yield Static(self._get_project_text(), id="project-indicator", classes="status-section")
             yield Static(
                 self._get_shortcuts_text(), id="shortcuts-indicator", classes="status-section"
@@ -144,22 +114,12 @@ class StatusBar(Widget):
         mode_icons = {
             "HOME": "🏠",
             "DEV": "💻",
-            "QA": "🧪",
-            "validation": "🔬",
             "DEVOPS": "⚙️",
         }
         # Extract base mode for icon
         base_mode = self.mode.split(".")[0].upper() if "." in self.mode else self.mode.upper()
         icon = mode_icons.get(base_mode, "🔧")
         return f"{icon} {self.mode}"
-
-    def _get_qe_text(self) -> str:
-        """Get the validation status indicator text."""
-        if self.qe_active:
-            mode_emoji = "⚡" if self.qe_mode == "quick" else "🔬"
-            mode_name = "QUICK" if self.qe_mode == "quick" else "DEEP"
-            return f"{mode_emoji} VALIDATION:{mode_name}"
-        return ""
 
     def _get_agent_text(self) -> str:
         """Get the agent indicator text."""
@@ -257,33 +217,6 @@ class StatusBar(Widget):
         except Exception:
             pass
 
-    def watch_qe_active(self, active: bool) -> None:
-        """React to validation active state changes."""
-        if not self.is_mounted:
-            return
-        self._update_qe_indicator()
-
-    def watch_qe_mode(self, mode: str) -> None:
-        """React to validation mode changes."""
-        if not self.is_mounted:
-            return
-        self._update_qe_indicator()
-
-    def _update_qe_indicator(self) -> None:
-        """Update the validation indicator widget."""
-        try:
-            qe_widget = self.query_one("#qe-indicator", Static)
-            qe_widget.update(self._get_qe_text())
-            qe_widget.set_class(self.qe_active, "active")
-            qe_widget.set_class(not self.qe_active, "inactive")
-
-            # Also update mode indicator class for validation mode
-            mode_widget = self.query_one("#mode-indicator", Static)
-            is_qe = self.mode.upper().startswith("validation")
-            mode_widget.set_class(is_qe, "qe-mode")
-        except Exception:
-            pass
-
     def set_connected(self, agent_name: str, connected: bool = True) -> None:
         """Set the connection state."""
         self.agent_name = agent_name
@@ -296,8 +229,3 @@ class StatusBar(Widget):
     def set_tasks(self, count: int) -> None:
         """Set the task count."""
         self.task_count = count
-
-    def set_qe_status(self, active: bool, mode: str = "") -> None:
-        """Set the validation workspace status."""
-        self.qe_active = active
-        self.qe_mode = mode

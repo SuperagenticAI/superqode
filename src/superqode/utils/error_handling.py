@@ -181,7 +181,7 @@ def check_dependencies():
         print("⚠️  Dependency Issues Found:")
         for issue in issues:
             print(f"   • {issue}")
-        print("\n🔧 Fix these issues before running SuperQode QE features.")
+        print("\n🔧 Fix these issues before running SuperQode features.")
 
     return len(issues) == 0
 
