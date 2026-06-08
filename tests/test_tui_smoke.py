@@ -154,11 +154,13 @@ def test_opencode_acp_model_normalization_preserves_provider_ids():
 
 
 def test_prompt_height_wraps_and_caps_long_text():
-    assert SelectionAwareInput._height_for_text("", 40) == 1
-    assert SelectionAwareInput._height_for_text("short prompt", 40) == 1
+    # Prompt starts at a 3-line minimum and grows up to an 8-line cap.
+    assert SelectionAwareInput._height_for_text("", 40) == 3
+    assert SelectionAwareInput._height_for_text("short prompt", 40) == 3
     assert SelectionAwareInput._height_for_text("x" * 90, 40) == 3
-    assert SelectionAwareInput._height_for_text("x" * 1000, 40) == 6
-    assert SelectionAwareInput._height_for_text("line 1\nline 2", 40) == 2
+    assert SelectionAwareInput._height_for_text("x" * 400, 40) == 8
+    assert SelectionAwareInput._height_for_text("x" * 1000, 40) == 8
+    assert SelectionAwareInput._height_for_text("line 1\nline 2", 40) == 3
 
 
 def test_prompt_default_placeholder_mentions_dictation():
@@ -1984,6 +1986,9 @@ def test_agent_question_input_is_handled_while_busy():
 
 def test_acp_terminal_output_renders_as_tool_call():
     app = make_app()
+    # Full tool rows are the verbose-mode rendering; calm mode folds them into
+    # a tidy summary line, so opt into verbose for these structural assertions.
+    app.thinking_verbosity = "verbose"
     app._call_ui = lambda func, *args: func(*args)
     app._show_thinking_line = lambda text, log: log.add_info(text)
     log = FakeLog()
@@ -2021,6 +2026,7 @@ def test_acp_terminal_output_renders_as_tool_call():
 def test_acp_terminal_timeout_reports_timeout(monkeypatch):
     monkeypatch.setenv("SUPERQODE_ACP_TERMINAL_PTY", "0")
     app = make_app()
+    app.thinking_verbosity = "verbose"  # assert full tool rows, not calm summary
     app._call_ui = lambda func, *args: func(*args)
     app._show_thinking_line = lambda text, log: log.add_info(text)
     log = FakeLog()
@@ -2499,6 +2505,9 @@ def test_tool_diff_is_visible_in_normal_mode():
 
 def test_pure_tool_result_uses_shared_diff_renderer():
     app = make_app()
+    # The shared diff renderer is the verbose-mode path; calm mode shows a tidy
+    # one-liner instead, so opt into verbose for this assertion.
+    app.thinking_verbosity = "verbose"
     log = ConversationLog()
     writes = []
     log.write = lambda content, *args, **kwargs: writes.append(content)
@@ -2522,6 +2531,27 @@ def test_pure_tool_result_uses_shared_diff_renderer():
     assert "Edit" in rendered
     assert "app.py" in rendered
     assert "@@ -1 +1 @@" in rendered
+
+
+def test_pure_tool_result_calm_mode_is_one_tidy_line():
+    app = make_app()
+    app.thinking_verbosity = "normal"  # calm (default)
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    app._show_pure_tool_result(
+        "edit_file",
+        SimpleNamespace(success=True, output="", metadata={"path": "app.py", "diff_text": "x"}),
+        log,
+    )
+
+    rendered = "\n".join(render_plain(item) for item in writes)
+    # Tidy summary line, no raw diff content.
+    assert "edit" in rendered
+    assert "app.py" in rendered
+    assert "@@" not in rendered
+    assert app._calm_actions == 1
 
 
 def test_permission_needed_for_project_edit_but_not_read(tmp_path, monkeypatch):

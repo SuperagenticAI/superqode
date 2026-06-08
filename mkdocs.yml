@@ -181,6 +181,8 @@ nav:
 
   - 🔬 Advanced:
     - advanced/index.md
+    - 🪟 Local Context & Compaction: advanced/local-context.md
+    - 🔍 Multi-Repo Search & Edit Safety: advanced/multi-repo-search.md
     - 🔒 Safety & Permissions: advanced/safety-permissions.md
     - 🧠 Memory & Learning: advanced/memory.md
     - 🔧 Tools System: advanced/tools-system.md

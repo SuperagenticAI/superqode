@@ -97,6 +97,73 @@ async def test_repo_search_spans_root(project_and_ref):
 
 def test_grep_rg_command_has_no_bad_flag():
     # ripgrep has no --git-ignore flag; passing it made rg exit 2 / return nothing.
-    cmd = GrepTool()._build_rg_command("foo", Path("/tmp"), None, False)
-    assert "--git-ignore" not in cmd
-    assert cmd.startswith("rg ")
+    # Args are now an argv list (no shell) with structured --json output.
+    args = GrepTool._build_rg_args("rg", "foo", [Path("/tmp")], None, False)
+    assert "--git-ignore" not in args
+    assert args[0] == "rg"
+    assert "--json" in args
+    assert "--no-config" in args
+    # Pattern is passed after `--` so regex metacharacters are never shell-parsed.
+    assert args[-2:] == ["foo", "/tmp"]
+    assert "--" in args
+
+
+def test_grep_rg_args_fan_out_multiple_roots():
+    # Multiple roots are passed in one invocation (ripgrep is multi-threaded).
+    args = GrepTool._build_rg_args("rg", "foo", [Path("/a"), Path("/b")], None, False)
+    assert args[-3:] == ["foo", "/a", "/b"]
+
+
+@pytest.mark.asyncio
+async def test_grep_all_repos_fans_out_and_labels(project_and_ref):
+    proj, ref = project_and_ref
+    (proj / "a.py").write_text("shared_token = 1\n")
+    (ref / "lib.py").write_text("use(shared_token)\n")
+    ctx = ToolContext(session_id="t", working_directory=proj, search_roots=[ref])
+    res = await GrepTool().execute({"pattern": "shared_token", "all_repos": True}, ctx)
+    assert res.success
+    assert res.metadata.get("repos") == 2
+    # Matches from both repos are labeled by repo name.
+    assert f"{proj.name}/a.py" in res.output
+    assert f"{ref.name}/lib.py" in res.output
+
+
+@pytest.mark.asyncio
+async def test_grep_absolute_path_in_scope_allowed(project_and_ref):
+    proj, ref = project_and_ref
+    ctx = ToolContext(session_id="t", working_directory=proj, search_roots=[ref])
+    # Absolute path to a registered root is honored silently.
+    res = await GrepTool().execute({"pattern": "magic_helper", "path": str(ref)}, ctx)
+    assert res.success and "magic_helper" in res.output
+
+
+@pytest.mark.asyncio
+async def test_grep_absolute_path_out_of_scope_blocked(project_and_ref, monkeypatch):
+    proj, ref = project_and_ref
+    monkeypatch.delenv("SUPERQODE_ALLOW_EXTERNAL_SEARCH", raising=False)
+    with tempfile.TemporaryDirectory() as outside:
+        outside_p = Path(outside)
+        (outside_p / "secret.py").write_text("magic_helper\n")
+        ctx = ToolContext(session_id="t", working_directory=proj, search_roots=[ref])
+        res = await GrepTool().execute({"pattern": "magic_helper", "path": str(outside_p)}, ctx)
+        assert res.success is False
+        assert ":workspace add" in (res.error or "")
+
+
+def test_workspace_registry_roundtrip(tmp_path, monkeypatch):
+    import superqode.search_registry as reg
+
+    monkeypatch.setattr(reg, "WORKSPACE_FILE", tmp_path / "workspace.json")
+    r1 = tmp_path / "repo1"
+    r2 = tmp_path / "repo2"
+    r1.mkdir()
+    r2.mkdir()
+
+    reg.add_workspace_root(str(r1))
+    reg.add_workspace_root(str(r2))
+    reg.add_workspace_root(str(r1))  # duplicate ignored
+    assert len(reg.list_workspace_roots()) == 2
+    assert reg.remove_workspace_root(str(r1)) is True
+    assert len(reg.list_workspace_roots()) == 1
+    with pytest.raises(ValueError):
+        reg.add_workspace_root(str(tmp_path / "does_not_exist"))

@@ -491,11 +491,38 @@ npm install -g typescript eslint
 go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 ```
 
+## Expose Harnesses Over MCP
+
+A harness isn't only runnable from the TUI — you can expose your HarnessSpec
+workflows as **MCP tools** so any MCP client (Claude Desktop, IDEs, other agents)
+can discover and run them. This complements the A2A and ACP servers.
+
+```bash
+superqode mcp                      # stdio (for Claude Desktop, etc.)
+superqode mcp --http --port 8765   # streamable HTTP
+superqode mcp --dir ./harnesses    # point at a specific spec directory
+```
+
+It exposes three tools:
+
+- `list_harnesses` — the HarnessSpec files it found.
+- `describe_harness(harness)` — a spec's workflow mode, runtime, and agents.
+- `run_harness(harness, task, provider?, model?)` — run the workflow, return the result.
+
+Specs are discovered under `.superqode/harness/`, `.superqode/harnesses/`,
+`harness/`, or `harnesses/` (or `--dir`). The provider/model resolve from the
+tool arguments → `SUPERQODE_MCP_PROVIDER` / `SUPERQODE_MCP_MODEL` →
+the spec's `model_policy.primary`.
+
+---
+
 ## Related Features
 
 - [Configuration](../configuration/yaml-reference.md) - Project config reference
 - [Examples](../examples.md) - Ready-to-run harness examples
 - [Safety & Permissions](safety-permissions.md) - Sandbox and approval policy
+- [Local Context & Compaction](local-context.md) - Context detection for local models
+- [Multi-Repo Search & Edit Safety](multi-repo-search.md) - Cross-repo search
 
 ---
 

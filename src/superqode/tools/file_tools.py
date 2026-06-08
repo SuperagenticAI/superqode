@@ -19,6 +19,7 @@ from .validation import (
 )
 from .file_tracking import record_file_read
 from .diff_utils import build_unified_diff, diff_stats
+from .post_edit import verify_edit
 
 
 def _get_workspace():
@@ -181,10 +182,14 @@ class WriteFileTool(Tool):
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(content)
 
-            return ToolResult(
-                success=True,
-                output=f"Successfully wrote {len(content)} bytes to {path}",
-                metadata={"path": str(file_path), "size": len(content), **diff_metadata},
+            return await verify_edit(
+                ToolResult(
+                    success=True,
+                    output=f"Successfully wrote {len(content)} bytes to {path}",
+                    metadata={"path": str(file_path), "size": len(content), **diff_metadata},
+                ),
+                file_path,
+                ctx,
             )
 
         except Exception as e:
@@ -255,10 +260,14 @@ class CreateFileTool(Tool):
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(content)
 
-            return ToolResult(
-                success=True,
-                output=f"Successfully created {path} ({len(content)} bytes)",
-                metadata={"path": str(file_path), "size": len(content), **diff_metadata},
+            return await verify_edit(
+                ToolResult(
+                    success=True,
+                    output=f"Successfully created {path} ({len(content)} bytes)",
+                    metadata={"path": str(file_path), "size": len(content), **diff_metadata},
+                ),
+                file_path,
+                ctx,
             )
 
         except Exception as e:

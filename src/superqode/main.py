@@ -880,6 +880,27 @@ def doctor(json_output):
     click.echo("Next: run `superqode` for the TUI or `superqode -p 'summarize this repo'`.")
 
 
+@cli_main.command("mcp")
+@click.option("--http", is_flag=True, help="Serve over streamable HTTP instead of stdio")
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8765, show_default=True, type=int)
+@click.option("--dir", "harness_dir", default=None, help="Directory of harness specs")
+def mcp(http, host, port, harness_dir):
+    """Expose SuperQode harnesses over MCP (stdio by default).
+
+    Any MCP client (Claude Desktop, IDEs, other agents) can then discover and
+    run your HarnessSpec workflows. Complements the A2A and ACP servers.
+    """
+    from superqode.mcp.harness_server import run_server
+
+    if not http:
+        # stdio talks JSON-RPC on stdout; keep human chatter on stderr only.
+        click.echo("Starting SuperQode harness MCP server on stdio…", err=True)
+    else:
+        click.echo(f"Starting SuperQode harness MCP server on http://{host}:{port}")
+    run_server("http" if http else "stdio", host, port, harness_dir)
+
+
 # Configuration management commands - defined before main() for proper registration
 @cli_main.group()
 def config():

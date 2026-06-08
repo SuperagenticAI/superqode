@@ -22,6 +22,7 @@ from superqode.tools.display import format_tool_call_compact
 from .constants import (
     ASCII_LOGO,
     TAGLINE_PART1,
+    TAGLINE_PART2,
     GRADIENT,
     RAINBOW,
     THEME,
@@ -271,7 +272,7 @@ class GradientTagline(Static):
 
         result.append("  •  ", style="bold #71717a")
 
-        part2 = "Automate Your SDLC"
+        part2 = TAGLINE_PART2
         for i, char in enumerate(part2):
             color_idx = int(i / len(part2) * len(self.PART2_GRADIENT))
             color_idx = min(color_idx, len(self.PART2_GRADIENT) - 1)
@@ -506,6 +507,9 @@ class StreamingThinkingIndicator(Static):
     """Animated thinking indicator for streaming."""
 
     is_active = reactive(False)
+    # When set (normal thinking mode), shows this steady status instead of the
+    # cycling whimsical phrases - e.g. "Working… (step 2)".
+    status = reactive("")
     SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
     THINKING_PHRASES = [
@@ -570,6 +574,17 @@ class StreamingThinkingIndicator(Static):
         result = Text()
 
         spinner_idx = int(t * 10) % len(self.SPINNER_FRAMES)
+
+        # Steady status (normal mode) - calm spinner + fixed label, no confetti.
+        if self.status:
+            color = "#a855f7"
+            result.append(f"  {self.SPINNER_FRAMES[spinner_idx]} ", style=f"bold {color}")
+            result.append(self.status, style=f"bold {color}")
+            dots = "." * (int(t * 2) % 4)
+            result.append(dots, style=color)
+            result.append("   ", style="")
+            return result
+
         phrase_idx = int(t / 1.5) % len(self.THINKING_PHRASES)
 
         colors = [
@@ -718,13 +733,13 @@ class HintsBar(Static):
         # t.append("\n", style="")
 
         hints = [
-            ("🏠 :home", THEME["cyan"]),
-            ("❓ :help", THEME["purple"]),
-            ("🚀 :init", THEME["success"]),
-            ("📚 :sidebar", THEME["cyan"]),
             ("🔌 :connect", THEME["pink"]),
-            ("⌨ PgUp/PgDn", THEME["muted"]),
-            ("📜 :transcript", THEME["cyan"]),
+            ("🚀 :init", THEME["success"]),
+            ("🧩 :harness", THEME["purple"]),
+            ("🧠 :memory", THEME["cyan"]),
+            ("🏠 :home", THEME["cyan"]),
+            ("🔎 Ctrl+T detail", THEME["gold"]),
+            ("❓ :help", THEME["purple"]),
             ("👋 :exit", THEME["orange"]),
         ]
         for i, (hint, color) in enumerate(hints):

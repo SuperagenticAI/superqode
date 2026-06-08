@@ -19,6 +19,7 @@ from .base import Tool, ToolResult, ToolContext
 from .validation import validate_path_in_working_directory
 from .file_tracking import check_file_unchanged
 from .diff_utils import build_unified_diff, diff_stats
+from .post_edit import verify_edit
 from ..agent.edit_strategies import replace_with_strategies
 
 
@@ -145,10 +146,18 @@ Usage:
             # Write back (no workspace tracking or outside project)
             file_path.write_text(new_content)
 
-            return ToolResult(
-                success=True,
-                output=f"Replaced {replaced_count} occurrence(s) in {path}",
-                metadata={"path": str(file_path), "replacements": replaced_count, **diff_metadata},
+            return await verify_edit(
+                ToolResult(
+                    success=True,
+                    output=f"Replaced {replaced_count} occurrence(s) in {path}",
+                    metadata={
+                        "path": str(file_path),
+                        "replacements": replaced_count,
+                        **diff_metadata,
+                    },
+                ),
+                file_path,
+                ctx,
             )
 
         except Exception as e:
@@ -245,10 +254,14 @@ class InsertTextTool(Tool):
             # Write back (no workspace tracking or outside project)
             file_path.write_text(new_content)
 
-            return ToolResult(
-                success=True,
-                output=f"Inserted text at line {line_num} in {path}",
-                metadata={"path": str(file_path), "line": line_num, **diff_metadata},
+            return await verify_edit(
+                ToolResult(
+                    success=True,
+                    output=f"Inserted text at line {line_num} in {path}",
+                    metadata={"path": str(file_path), "line": line_num, **diff_metadata},
+                ),
+                file_path,
+                ctx,
             )
 
         except Exception as e:
@@ -412,7 +425,7 @@ class PatchTool(Tool):
             if workspace:
                 output += " (tracked for revert)"
 
-            return ToolResult(
+            patch_result = ToolResult(
                 success=success,
                 output=output,
                 error=None if success else f"Failed to apply {total_hunks - applied_hunks} hunks",
@@ -427,6 +440,19 @@ class PatchTool(Tool):
                     ),
                 },
             )
+
+            # Run post-edit verification on directly-written files (skip when a
+            # workspace worktree owns the writes - the project path is stale then).
+            if success and not workspace:
+                primary = patch_result.metadata.get("path")
+                if primary:
+                    try:
+                        patch_result = await verify_edit(
+                            patch_result, Path(primary), ctx
+                        )
+                    except Exception:
+                        pass
+            return patch_result
 
         except Exception as e:
             return ToolResult(success=False, output="", error=f"Patch error: {str(e)}")
@@ -692,10 +718,18 @@ class MultiEditTool(Tool):
 
             file_path.write_text(content)
 
-            return ToolResult(
-                success=True,
-                output=f"Applied {len(edits)} edits to {path}",
-                metadata={"path": str(file_path), "edit_count": len(edits), **diff_metadata},
+            return await verify_edit(
+                ToolResult(
+                    success=True,
+                    output=f"Applied {len(edits)} edits to {path}",
+                    metadata={
+                        "path": str(file_path),
+                        "edit_count": len(edits),
+                        **diff_metadata,
+                    },
+                ),
+                file_path,
+                ctx,
             )
 
         except Exception as e:

@@ -317,8 +317,9 @@ class SelectionAwareInput(TextArea):
     and directly calls the app's navigation/selection actions when in selection mode.
     """
 
-    MIN_PROMPT_HEIGHT = 1
-    MAX_PROMPT_HEIGHT = 6
+    # Start tall enough to invite longer prompts; grow up to the max, then scroll.
+    MIN_PROMPT_HEIGHT = 3
+    MAX_PROMPT_HEIGHT = 8
     DEFAULT_PLACEHOLDER = "Type, paste, or use OS dictation. Type : for commands."
 
     # A prompt box should behave like an ordinary text field. TextArea's defaults
@@ -670,21 +671,46 @@ class SelectionAwareInput(TextArea):
 # ============================================================================
 
 
-def render_welcome(agents: List[AgentInfo], team_name: str = "Development Team") -> Group:
+def render_welcome(
+    agents: List[AgentInfo],
+    team_name: str = "Development Team",
+    width: Optional[int] = None,
+) -> Group:
     from rich.align import Align
+
+    # Responsive layout: the ASCII logo and feature columns have a natural
+    # width (~62 cols). When the terminal is wider we centre everything in the
+    # middle of the screen; when it's narrower we left-align (and let text wrap)
+    # so nothing is clipped off the left edge. `width` is the usable log width;
+    # None means "unknown" → assume wide and centre.
+    logo_lines = [line for line in ASCII_LOGO.strip().split("\n") if line]
+    logo_width = max((len(line) for line in logo_lines), default=0)
+    content_width = max(logo_width, 62)
+    centered = width is None or width >= content_width
+    align = "center" if centered else "left"
+
+    def place(renderable):
+        return Align.center(renderable) if centered else renderable
 
     items = []
 
     # ═══════════════════════════════════════════════════════════════════════
-    # BIG ASCII LOGO with gradient - the hero element (centered)
+    # BIG ASCII LOGO with gradient - the hero element
     # ═══════════════════════════════════════════════════════════════════════
     logo_text = Text()
-    logo_text.append("\n", style="")
-    lines = ASCII_LOGO.strip().split("\n")
-    for i, line in enumerate(lines):
-        color = GRADIENT[i % len(GRADIENT)]
-        logo_text.append(f"{line}\n", style=f"bold {color}")
-    items.append(Align.center(logo_text))
+    # Extra top padding so the logo sits nearer the vertical middle on open.
+    logo_text.append("\n\n", style="")
+    if width is not None and width < logo_width:
+        # Too narrow for the ASCII art - fall back to a compact wordmark so the
+        # banner never gets chopped mid-glyph.
+        logo_text.append("✦ ", style=f"bold {GRADIENT[0]}")
+        logo_text.append("SuperQode", style=f"bold {GRADIENT[3 % len(GRADIENT)]}")
+        logo_text.append(" ✦\n", style=f"bold {GRADIENT[-1]}")
+    else:
+        for i, line in enumerate(logo_lines):
+            color = GRADIENT[i % len(GRADIENT)]
+            logo_text.append(f"{line}\n", style=f"bold {color}")
+    items.append(place(logo_text))
 
     # Spacing
     items.append(Text("\n", style=""))
@@ -692,39 +718,72 @@ def render_welcome(agents: List[AgentInfo], team_name: str = "Development Team")
     # ═══════════════════════════════════════════════════════════════════════
     # DESCRIPTION SECTION - Tagline + tagline parts + one-liner
     # ═══════════════════════════════════════════════════════════════════════
-    desc_text = Text()
+    desc_text = Text(justify=align)
     desc_text.append("SuperQode = Your Portable Universal Coding Agent Harness\n", style="bold #ffffff")
     desc_text.append("\n", style="")
-    desc_text.append(TAGLINE_PART1, style=f"bold {THEME['cyan']}")
+
+    # Single differentiator line: three accented segments + a muted local-model
+    # tail, dim separators throughout. Wording lives in TAGLINE_PART1/PART2.
+    seg_colors = [THEME["purple"], THEME["cyan"], THEME["gold"]]
+    segments = [s.strip() for s in TAGLINE_PART1.split("·")]
+    for i, segment in enumerate(segments):
+        if i:
+            desc_text.append("  ·  ", style=THEME["dim"])
+        color = seg_colors[i % len(seg_colors)]
+        desc_text.append(segment, style=f"bold {color}")
     desc_text.append("  ·  ", style=THEME["dim"])
-    desc_text.append(TAGLINE_PART2, style=f"bold {THEME['gold']}")
-    desc_text.append("\n\n", style="")
-    desc_text.append("Connect any agent: ", style=THEME["muted"])
-    desc_text.append("ACP", style=f"bold {THEME['purple']}")
-    desc_text.append(", ", style=THEME["muted"])
-    desc_text.append("BYOK", style=f"bold {THEME['success']}")
-    desc_text.append(", ", style=THEME["muted"])
-    desc_text.append("local", style=f"bold {THEME['cyan']}")
-    desc_text.append(", or ", style=THEME["muted"])
-    desc_text.append("A2A", style=f"bold {THEME['orange']}")
-    desc_text.append(" - define your harness, any runtime.\n", style=THEME["muted"])
-    items.append(Align.center(desc_text))
+    local_line = TAGLINE_PART2
+    if "Local Models" in local_line:
+        prefix, _, _ = local_line.partition("Local Models")
+        desc_text.append(prefix, style=THEME["muted"])
+        desc_text.append("Local Models", style=f"bold {THEME['cyan']}")
+    else:
+        desc_text.append(local_line, style=THEME["muted"])
+    desc_text.append("\n", style="")
+    items.append(place(desc_text))
 
-    commands_text = Text()
+    # Spacing
+    items.append(Text("\n", style=""))
 
-    commands_text.append("Start:\n", style=f"bold {THEME['text']}")
-    commands_text.append("  [1] ", style=THEME["dim"])
-    commands_text.append(":connect", style=f"bold {THEME['purple']}")
-    commands_text.append("              choose ACP, BYOK, or local\n", style=THEME["muted"])
-    commands_text.append("  [2] ", style=THEME["dim"])
-    commands_text.append(":connect local", style=f"bold {THEME['cyan']}")
-    commands_text.append("       local models, DS4, Ollama, MLX\n", style=THEME["muted"])
-    commands_text.append("  [3] ", style=THEME["dim"])
-    commands_text.append(":connect byok", style=f"bold {THEME['success']}")
-    commands_text.append("        direct provider/model connection\n", style=THEME["muted"])
-    commands_text.append("  [4] ", style=THEME["dim"])
-    commands_text.append("/sessions", style=f"bold {THEME['orange']}")
-    commands_text.append("             resume previous work\n\n", style=THEME["muted"])
+    # ═══════════════════════════════════════════════════════════════════════
+    # FEATURE LINES - sell each pillar subtly (icon + label + dim one-liner).
+    # Rendered as a single left-aligned block, then centered as a whole so the
+    # label/description columns stay aligned.
+    # ═══════════════════════════════════════════════════════════════════════
+    features = [
+        ("Harness as Code", "declarative HarnessSpec, portable runtimes", THEME["purple"]),
+        ("Any Connection", "ACP · MCP · A2A · BYOK · local · SDKs", THEME["cyan"]),
+        ("Local-First", "tuned + optimized for local models", THEME["gold"]),
+    ]
+    label_width = max(len(label) for label, _, _ in features) + 2
+    features_text = Text()
+    for label, desc, color in features:
+        features_text.append("⬡  ", style=color)
+        features_text.append(label.ljust(label_width), style=f"bold {color}")
+        features_text.append(f"{desc}\n", style=THEME["muted"])
+    items.append(place(features_text))
+
+    # Spacing
+    items.append(Text("\n", style=""))
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # QUICK START + KEYS - centered, one entry per line (no column padding so
+    # justify=center keeps every row visually centered).
+    # ═══════════════════════════════════════════════════════════════════════
+    commands_text = Text(justify=align)
+    commands_text.append("Quick Start\n", style=f"bold {THEME['text']}")
+    starts = [
+        ("1", ":connect", "choose ACP, BYOK, or local", THEME["purple"]),
+        ("2", ":connect local", "local models · DS4 · Ollama · MLX", THEME["cyan"]),
+        ("3", ":connect byok", "direct provider / model connection", THEME["success"]),
+        ("4", "/sessions", "resume previous work", THEME["orange"]),
+    ]
+    for num, cmd, desc, color in starts:
+        commands_text.append(f"[{num}] ", style=THEME["dim"])
+        commands_text.append(cmd, style=f"bold {color}")
+        commands_text.append("  →  ", style=THEME["dim"])
+        commands_text.append(f"{desc}\n", style=THEME["muted"])
+    commands_text.append("\n", style="")
     commands_text.append("Keys: ", style=THEME["muted"])
     commands_text.append("Ctrl+K", style=f"bold {THEME['cyan']}")
     commands_text.append(" commands  •  ", style=THEME["muted"])
@@ -733,7 +792,7 @@ def render_welcome(agents: List[AgentInfo], team_name: str = "Development Team")
     commands_text.append(":help", style=f"bold {THEME['cyan']}")
     commands_text.append(" reference\n", style=THEME["muted"])
 
-    items.append(Align.center(commands_text))
+    items.append(place(commands_text))
 
     return Group(*items)
 
@@ -864,6 +923,9 @@ class SuperQodeApp(App):
     is_busy = reactive(False)
     sidebar_visible = reactive(False)
     show_thinking_logs = reactive(True)  # Toggle for thinking logs visibility (default enabled)
+    # "normal" folds the agent loop's per-iteration bookkeeping into the live
+    # throbber and rate-limits reasoning; "verbose" prints every line as before.
+    thinking_verbosity = reactive("normal")
     show_verbose_agent_logs = reactive(False)  # Show raw [agent] session logs (verbose mode)
     approval_mode = reactive(
         "ask"
@@ -1285,6 +1347,13 @@ class SuperQodeApp(App):
     def on_mount(self):
         # Focus input after a short delay to ensure widgets are fully ready
         self.set_timer(0.1, self._focus_input_on_ready)
+        # Give the prompt box a subtle titled border for polish.
+        try:
+            input_box = self.query_one("#input-box")
+            input_box.border_title = "✎ Build"
+            input_box.border_subtitle = "Enter to send · : for commands · @ for files"
+        except Exception:
+            pass
         self._load_welcome()
         # Sync approval mode to hints bar
         self._sync_approval_mode()
@@ -1719,6 +1788,30 @@ class SuperQodeApp(App):
                 ":mode",
                 "safety",
             ),
+            PaletteCommand(
+                "context",
+                "Context Window",
+                "Show/pin the detected context window + compaction budgets",
+                "🪟",
+                ":context",
+                "harness",
+            ),
+            PaletteCommand(
+                "workspace",
+                "Search Workspace",
+                "Register repos for fast multi-repo (--all-repos) search",
+                "📁",
+                ":workspace list",
+                "harness",
+            ),
+            PaletteCommand(
+                "thinking",
+                "Thinking Detail",
+                "Cycle thinking-log detail (Normal / Verbose / Off)",
+                "🔎",
+                ":thinking",
+                "system",
+            ),
             PaletteCommand("help", "Help", "Show command reference", "?", ":help", "system"),
             PaletteCommand(
                 "clear", "Clear", "Clear the conversation view", "⌫", "Ctrl+L", "system"
@@ -1997,15 +2090,61 @@ class SuperQodeApp(App):
         team_name = Path.cwd().name or "SuperQode"
         self._call_ui(self._show_welcome, team_name)
 
+    def _welcome_width(self, log) -> Optional[int]:
+        """Usable inner width of the log, used to lay the welcome out responsively."""
+        try:
+            w = log.scrollable_content_region.width
+            return w if w and w > 0 else None
+        except Exception:
+            return None
+
     def _show_welcome(self, team_name: str):
         log = self.query_one("#log", ConversationLog)
         # Temporarily disable auto-scroll so we can scroll to top
         log.auto_scroll = False
-        log.write(render_welcome(self.agents, team_name))
+        # expand=True makes the renderable fill the full log width so the
+        # centered welcome blocks sit in the middle of the screen, not the left.
+        log.write(
+            render_welcome(self.agents, team_name, width=self._welcome_width(log)),
+            expand=True,
+        )
+        # Mark that the log currently shows only the welcome, so resizes can
+        # re-flow it responsively until the user starts interacting.
+        self._welcome_active = True
         self._maybe_show_onboarding(log)
         # Scroll to top so user sees the attractive header first
         log.scroll_home(animate=False)
         # Re-enable auto-scroll for future messages
+        self.set_timer(0.2, lambda: setattr(log, "auto_scroll", True))
+
+    def on_resize(self, event: events.Resize) -> None:
+        """Re-flow the welcome screen when only it is shown and the size changes."""
+        if not getattr(self, "_welcome_active", False):
+            return
+        existing = getattr(self, "_welcome_resize_timer", None)
+        if existing is not None:
+            try:
+                existing.stop()
+            except Exception:
+                pass
+        # Debounce: resize fires rapidly while dragging the terminal edge.
+        self._welcome_resize_timer = self.set_timer(0.12, self._rerender_welcome)
+
+    def _rerender_welcome(self) -> None:
+        if not getattr(self, "_welcome_active", False):
+            return
+        try:
+            log = self.query_one("#log", ConversationLog)
+        except Exception:
+            return
+        team_name = Path.cwd().name or "SuperQode"
+        log.auto_scroll = False
+        log.clear()
+        log.write(
+            render_welcome(self.agents, team_name, width=self._welcome_width(log)),
+            expand=True,
+        )
+        log.scroll_home(animate=False)
         self.set_timer(0.2, lambda: setattr(log, "auto_scroll", True))
 
     @staticmethod
@@ -2668,19 +2807,39 @@ class SuperQodeApp(App):
     # Leader keys are now handled entirely through the popup widget system
     # This ensures zero latency when typing in the input field
 
-    def action_toggle_thinking(self):
-        """Toggle visibility of thinking/log output."""
-        self.show_thinking_logs = not self.show_thinking_logs
-        log = self.query_one("#log", ConversationLog)
+    # Ctrl+T cycles through these thinking-log states in order.
+    _THINKING_CYCLE = ("normal", "verbose", "off")
 
-        # Also toggle on the current TUI logger if one exists
-        if hasattr(self, "_current_tui_logger") and self._current_tui_logger:
+    def _current_thinking_state(self) -> str:
+        if not self.show_thinking_logs:
+            return "off"
+        return "verbose" if self.thinking_verbosity == "verbose" else "normal"
+
+    def _apply_thinking_state(self, state: str) -> None:
+        """Set the reactive flags for a thinking state ('normal'|'verbose'|'off')."""
+        if state == "off":
+            self.show_thinking_logs = False
+        else:
+            self.show_thinking_logs = True
+            self.thinking_verbosity = "verbose" if state == "verbose" else "normal"
+        # Mirror onto the current TUI logger if one exists.
+        if getattr(self, "_current_tui_logger", None):
             self._current_tui_logger.logger.config.show_thinking = self.show_thinking_logs
 
-        if self.show_thinking_logs:
-            log.add_info("Thinking logs: ON - agent reasoning/session notes are visible")
-        else:
-            log.add_info("Thinking logs: OFF - compact stream view enabled")
+    def action_toggle_thinking(self):
+        """Cycle thinking-log detail: Normal → Verbose → Off."""
+        current = self._current_thinking_state()
+        nxt = self._THINKING_CYCLE[
+            (self._THINKING_CYCLE.index(current) + 1) % len(self._THINKING_CYCLE)
+        ]
+        self._apply_thinking_state(nxt)
+        log = self.query_one("#log", ConversationLog)
+        blurbs = {
+            "normal": "Thinking: NORMAL — iterations fold into a live status, reasoning is trimmed",
+            "verbose": "Thinking: VERBOSE — full per-iteration reasoning and loop logs",
+            "off": "Thinking: OFF — compact stream view, only tool calls and the answer",
+        }
+        log.add_info(blurbs[nxt])
 
     def action_undo_action(self):
         """Undo the last agent operation."""
@@ -4409,6 +4568,7 @@ class SuperQodeApp(App):
         try:
             thinking_indicator = self.query_one("#streaming-thinking", StreamingThinkingIndicator)
             thinking_indicator.is_active = False
+            thinking_indicator.status = ""
             thinking_indicator.remove_class("visible")
         except Exception:
             pass
@@ -4455,11 +4615,18 @@ class SuperQodeApp(App):
         self.is_busy = True
         self._thinking_start = time.time()
         self._thinking_idx = 0
+        # Reset per-turn thinking state (live status step + reasoning rate limiter).
+        self._thinking_step = 0
+        self._last_thinking_flush = 0.0
+        self._calm_actions = 0
 
         # Show streaming thinking indicator with changing text
         try:
             thinking_indicator = self.query_one("#streaming-thinking", StreamingThinkingIndicator)
             thinking_indicator.is_active = True
+            # Start each turn with the whimsical phrases; loop bookkeeping in
+            # normal mode will swap in a steady "Working… (step N)" status.
+            thinking_indicator.status = ""
             thinking_indicator.add_class("visible")
         except Exception:
             pass
@@ -4495,10 +4662,18 @@ class SuperQodeApp(App):
         """
         self.is_busy = False
 
+        # Calm mode: commit the end-of-turn action roll-up before tearing down.
+        if self._is_calm_output() and getattr(self, "_calm_actions", 0) > 0:
+            try:
+                self._show_calm_summary(self.query_one("#log", ConversationLog))
+            except Exception:
+                pass
+
         # Hide streaming thinking indicator
         try:
             thinking_indicator = self.query_one("#streaming-thinking", StreamingThinkingIndicator)
             thinking_indicator.is_active = False
+            thinking_indicator.status = ""
             thinking_indicator.remove_class("visible")
         except Exception:
             pass
@@ -4696,6 +4871,10 @@ class SuperQodeApp(App):
         """Handle input submission - only processes on Enter, doesn't interfere with typing."""
         if event.input.id != "prompt-input":
             return
+
+        # The user is now interacting; the log will hold more than the welcome,
+        # so stop re-flowing it on resize.
+        self._welcome_active = False
 
         text = event.value.strip()
         # If a selection digit buffer is active, clear its timer to avoid double-select
@@ -5535,6 +5714,12 @@ class SuperQodeApp(App):
             self._set_approval_mode(args, log)
         elif c == "log":
             self._handle_log_verbosity(args, log)
+        elif c == "thinking":
+            self._handle_thinking_verbosity(args, log)
+        elif c == "workspace":
+            self._handle_workspace(args, log)
+        elif c == "context":
+            self._handle_context(args, log)
         elif c == "redo":
             self._handle_redo(log)
         elif c == "checkpoints":
@@ -11505,7 +11690,12 @@ class SuperQodeApp(App):
         team_name = Path.cwd().name or "SuperQode"
         # Temporarily disable auto-scroll so we can scroll to top
         log.auto_scroll = False
-        log.write(render_welcome(self.agents, team_name))
+        log.write(
+            render_welcome(self.agents, team_name, width=self._welcome_width(log)),
+            expand=True,
+        )
+        # Welcome is the only thing on screen again - allow responsive re-flow.
+        self._welcome_active = True
         # Scroll to top so user sees the attractive header first
         log.scroll_home(animate=False)
         # Re-enable auto-scroll for future messages
@@ -11655,6 +11845,202 @@ memory:
         else:
             log.add_error(f"Invalid mode: {mode}")
             log.add_system("Valid modes: auto, ask, deny")
+
+    def _active_agent_loop(self):
+        """The live AgentLoop for the current BYOK/local session, if any."""
+        pure = getattr(self, "_pure_mode", None)
+        return getattr(pure, "_agent", None) if pure is not None else None
+
+    def _handle_context(self, args: str, log: ConversationLog):
+        """Show or override the context window used for adaptive compaction.
+
+        :context              show detected window, source, and compaction budgets
+        :context <tokens>     pin the window (e.g. :context 8192)
+        :context auto         clear the override and re-detect from the server
+        """
+        agent = self._active_agent_loop()
+        if agent is None:
+            log.add_error("No active model session. Connect a local/BYOK model first.")
+            return
+
+        arg = args.strip().lower()
+
+        if arg in ("", "show", "status"):
+            self.run_worker(self._context_show_worker(agent, log), exclusive=False)
+            return
+
+        if arg in ("auto", "detect", "reprobe", "re-probe"):
+            agent.config.context_window = 0
+            agent._cached_context_window = 0
+            self.run_worker(self._context_show_worker(agent, log, redetect=True), exclusive=False)
+            return
+
+        try:
+            tokens = int(arg.replace("k", "000") if arg.endswith("k") else arg)
+        except ValueError:
+            log.add_error("Usage: :context [<tokens> | auto]")
+            return
+        if tokens < 512:
+            log.add_error("Context window must be at least 512 tokens.")
+            return
+
+        agent.config.context_window = tokens
+        agent._cached_context_window = tokens
+        agent._context_window_source = "configured"
+        threshold, keep_recent, window = agent._compaction_budgets()
+        log.add_success(f"🪟 Context window pinned to {window:,} tokens")
+        log.add_system(
+            f"Compaction triggers at {threshold:,} tokens · keeps ~{keep_recent:,} recent."
+        )
+
+    async def _context_show_worker(self, agent, log, redetect: bool = False) -> None:
+        try:
+            if redetect:
+                await agent._ensure_context_window()
+            else:
+                # Resolve once if it hasn't been (e.g. before the first turn).
+                if not getattr(agent, "_cached_context_window", 0):
+                    await agent._ensure_context_window()
+            threshold, keep_recent, window = agent._compaction_budgets()
+            source = getattr(agent, "_context_window_source", "unknown")
+        except Exception as exc:
+            self._call_ui(log.add_error, f"Context detection failed: {exc}")
+            return
+
+        t = Text()
+        t.append("\n  🪟 ", style=f"bold {THEME['cyan']}")
+        t.append("Context window\n\n", style=f"bold {THEME['text']}")
+        t.append(f"    Window:      {window:,} tokens  ", style=THEME["text"])
+        t.append(f"({source})\n", style=THEME["muted"])
+        t.append(f"    Compact at:  {threshold:,} tokens\n", style=THEME["muted"])
+        t.append(f"    Keep recent: ~{keep_recent:,} tokens\n", style=THEME["muted"])
+        auto = os.environ.get("SUPERQODE_AUTO_COMPACT", "").strip().lower()
+        on = auto not in ("0", "false", "no", "off")
+        t.append(
+            f"    Auto-compact: {'ON' if on else 'OFF'}\n", style=THEME["success" if on else "muted"]
+        )
+        t.append("\n    ", style="")
+        t.append(":context <n>", style=f"bold {THEME['cyan']}")
+        t.append(" to pin  ·  ", style=THEME["muted"])
+        t.append(":context auto", style=f"bold {THEME['cyan']}")
+        t.append(" to re-detect\n", style=THEME["muted"])
+        self._call_ui(self._show_command_output, log, t)
+
+    def _handle_workspace(self, args: str, log: ConversationLog):
+        """Manage the multi-repo search workspace: :workspace add|remove|list."""
+        from superqode.search_registry import (
+            add_workspace_root,
+            list_workspace_roots,
+            remove_workspace_root,
+        )
+
+        parts = args.strip().split(maxsplit=1)
+        sub = (parts[0].lower() if parts else "list") or "list"
+        target = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub in ("add", "a"):
+            if not target:
+                log.add_error("Usage: :workspace add <path>")
+                return
+            try:
+                added = add_workspace_root(target)
+            except ValueError as exc:
+                log.add_error(str(exc))
+                return
+            log.add_success(f"📁 Added to workspace: {added}")
+            log.add_system("Search it with `--all-repos` (or pass its absolute path).")
+            return
+
+        if sub in ("remove", "rm", "del", "delete"):
+            if not target:
+                log.add_error("Usage: :workspace remove <path>")
+                return
+            removed = remove_workspace_root(target)
+            if removed:
+                log.add_success(f"🗑️  Removed from workspace: {target}")
+            else:
+                log.add_info(f"Not in workspace: {target}")
+            return
+
+        if sub in ("list", "ls", ""):
+            roots = list_workspace_roots()
+            t = Text()
+            t.append("Search workspace\n\n", style=f"bold {THEME['purple']}")
+            if not roots:
+                t.append("  No repos registered yet.\n\n", style=THEME["muted"])
+                t.append("  Add one with ", style=THEME["muted"])
+                t.append(":workspace add <path>", style=f"bold {THEME['cyan']}")
+                t.append("\n", style="")
+            else:
+                for r in roots:
+                    t.append("  📁 ", style=THEME["cyan"])
+                    t.append(f"{r}\n", style=THEME["text"])
+                t.append(
+                    f"\n  {len(roots)} repo(s) · search all with ", style=THEME["muted"]
+                )
+                t.append("--all-repos", style=f"bold {THEME['cyan']}")
+                t.append("\n", style="")
+            self._show_command_output(log, t)
+            return
+
+        log.add_error(f"Unknown :workspace action: {sub}")
+        log.add_system("Valid: add <path>, remove <path>, list")
+
+    def _handle_thinking_verbosity(self, args: str, log: ConversationLog):
+        """Handle :thinking command to control thinking-log detail.
+
+        Usage: :thinking [normal|verbose|off]   (no arg shows current state)
+        """
+        level = args.strip().lower()
+        aliases = {
+            "normal": "normal",
+            "summary": "normal",
+            "calm": "normal",
+            "verbose": "verbose",
+            "full": "verbose",
+            "debug": "verbose",
+            "off": "off",
+            "hide": "off",
+            "none": "off",
+        }
+
+        if not level:
+            current = self._current_thinking_state()
+            t = Text()
+            t.append("Thinking-log detail\n\n", style=f"bold {THEME['purple']}")
+            rows = [
+                ("normal", "◆", THEME["cyan"], "Iterations fold into a live status; reasoning trimmed"),
+                ("verbose", "◈", THEME["purple"], "Every iteration + full streamed reasoning"),
+                ("off", "◇", THEME["muted"], "Hidden; only tool calls and the final answer"),
+            ]
+            for lvl, icon, color, desc in rows:
+                marker = " ◀ current" if current == lvl else ""
+                t.append(f"    {icon} ", style=color)
+                t.append(f":thinking {lvl:<8}", style=f"bold {color}")
+                t.append(f" - {desc}", style=THEME["muted"])
+                if marker:
+                    t.append(marker, style=f"bold {color}")
+                t.append("\n", style="")
+            t.append("\n  💡 ", style=THEME["muted"])
+            t.append("Ctrl+T cycles Normal → Verbose → Off\n", style=THEME["dim"])
+            self._show_command_output(log, t)
+            return
+
+        if level not in aliases:
+            log.add_error(f"Invalid thinking level: {level}")
+            log.add_system("Valid levels: normal, verbose, off")
+            return
+
+        state = aliases[level]
+        self._apply_thinking_state(state)
+        icons = {"normal": "◆", "verbose": "◈", "off": "◇"}
+        descs = {
+            "normal": "Iterations fold into a live status; reasoning is trimmed",
+            "verbose": "Showing every iteration and the full streamed reasoning",
+            "off": "Thinking logs hidden — only tool calls and the final answer",
+        }
+        log.add_success(f"{icons[state]} Thinking: {state.upper()}")
+        log.add_system(descs[state])
 
     def _handle_log_verbosity(self, args: str, log: ConversationLog):
         """Handle :log command to control log verbosity."""
@@ -12284,8 +12670,11 @@ memory:
                     raise
 
         def on_tool_call(name: str, args: dict):
-            """Handle tool call - ALWAYS visible."""
+            """Handle tool call - calm mode folds it into the live throbber."""
             _record_tool_activity(name, args)
+            if self._is_calm_output():
+                _safe_call(self._calm_tool_running, name, args, log)
+                return
             file_path = args.get("path", args.get("file_path", args.get("filePath", "")))
             command = args.get("command", "")
             if not file_path and not command:
@@ -12299,12 +12688,17 @@ memory:
             _safe_call(log.add_tool_call, name, "running", file_path, command, "", args)
 
         def on_tool_result(name: str, result):
-            """Handle tool result - ALWAYS visible with JSON parsing."""
+            """Handle tool result - calm mode shows one tidy line; verbose full."""
             from superqode.tools.base import ToolResult
 
             if isinstance(result, ToolResult):
                 status = "success" if result.success else "error"
                 _complete_tool_activity(name, status)
+                if self._is_calm_output():
+                    meta = result.metadata or {}
+                    done_args = {"path": meta.get("path")} if meta.get("path") else {}
+                    _safe_call(self._calm_tool_done, name, done_args, log, result.success)
+                    return
                 output = result.output if result.output else result.error
                 output_str = str(output) if output else ""
                 metadata = result.metadata or {}
@@ -12346,6 +12740,9 @@ memory:
                 )
             else:
                 _complete_tool_activity(name, "success")
+                if self._is_calm_output():
+                    _safe_call(self._calm_tool_done, name, {}, log, True)
+                    return
                 output_str = str(result) if result else ""
 
                 # Try JSON parsing first
@@ -12359,10 +12756,21 @@ memory:
 
         async def on_thinking_async(text: str):
             """Handle thinking - toggleable with Ctrl+T."""
-            if text and text.strip():
-                # Use log.add_thinking for cleaner, categorized output with varied emojis
-                # This matches ACP style and avoids the "brain emoji" overload
-                _safe_call(log.add_thinking, text, "general")
+            if not (text and text.strip()):
+                return
+            # Normal mode: fold the agent loop's per-iteration bookkeeping into
+            # the live throbber instead of writing each line to the scrollback.
+            loop_status = self._thinking_loop_status(text)
+            if loop_status is not None and self.thinking_verbosity != "verbose":
+                self._call_ui(self._set_thinking_status, loop_status)
+                return
+            # Calm mode: keep raw reasoning quiet; just pulse the throbber.
+            if self.thinking_verbosity != "verbose":
+                self._call_ui(self._set_thinking_status, "💭 Thinking…")
+                self._call_ui(self._maybe_show_thinking_hint, log)
+                return
+            # Verbose: cleaner, categorized output with varied emojis (ACP style).
+            _safe_call(log.add_thinking, text, "general")
 
         # Set callbacks on pure_mode (for both local and cloud providers)
         self._pure_mode.on_tool_call = on_tool_call
@@ -13444,10 +13852,21 @@ memory:
         last_thinking_time = [0.0]  # Use list to allow mutation in nested function
 
         def _flush_thinking_buffer():
-            """Flush accumulated thinking chunks to display."""
+            """Flush accumulated thinking chunks to display.
+
+            In normal mode the reasoning is condensed to a single trimmed line so
+            it reads as a calm summary rather than a wall of streamed text. In
+            verbose mode the full thought is shown verbatim.
+            """
             if thinking_buffer:
                 full_text = "".join(thinking_buffer).strip()
                 if full_text:
+                    if self.thinking_verbosity != "verbose":
+                        # Collapse whitespace and cap length for a tidy one-liner.
+                        condensed = " ".join(full_text.split())
+                        if len(condensed) > 240:
+                            condensed = condensed[:237].rstrip() + "…"
+                        full_text = condensed
                     self._call_ui(self._show_thinking_line, f"💭 {full_text}", log)
                 thinking_buffer.clear()
 
@@ -13480,8 +13899,13 @@ memory:
             # Handle raw agent stdout logs - these show what the agent is doing
             # The [agent] prefix comes from non-JSON output from the agent process
             if text.startswith("[agent]"):
-                # Show agent activity by default (useful to see what agent is doing)
                 clean_text = text[8:]  # Remove "[agent] " prefix
+                # Calm mode: surface it live in the throbber, don't fill scrollback.
+                if self._is_calm_output():
+                    snippet = " ".join(clean_text.split())[:60]
+                    if snippet:
+                        self._call_ui(self._set_thinking_status, f"📡 {snippet}")
+                    return
                 self._call_ui(self._show_thinking_line, f"📡 {clean_text}", log)
                 return
 
@@ -13492,7 +13916,22 @@ memory:
                 self._call_ui(log.add_error, clean_text)
                 return
 
+            # Normal mode: fold the agent loop's per-iteration bookkeeping into
+            # the live throbber rather than printing each line. Verbose mode lets
+            # these flow through to the scrollback as before.
+            loop_status = self._thinking_loop_status(text)
+            if loop_status is not None and self.thinking_verbosity != "verbose":
+                self._call_ui(self._set_thinking_status, loop_status)
+                return
+
             if not self.show_thinking_logs:
+                return
+
+            # Calm mode: keep raw reasoning out of the scrollback - just show a
+            # quiet "Thinking…" pulse and the one-time toggle hint.
+            if self.thinking_verbosity != "verbose":
+                self._call_ui(self._set_thinking_status, "💭 Thinking…")
+                self._call_ui(self._maybe_show_thinking_hint, log)
                 return
 
             # Buffer thinking chunks and display as complete thoughts
@@ -13551,8 +13990,12 @@ memory:
                     if file_path not in files_read:
                         files_read.append(file_path)
 
-            # ALWAYS show tool calls - this is the agent's actual work
+            # Calm mode: fold the action into the live throbber instead of a row.
             command = raw_input.get("command", "")
+            if self._is_calm_output():
+                self._call_ui(self._calm_tool_running, title, raw_input, log)
+                return
+            # Verbose: show the tool call row - the agent's actual work.
             self._call_ui(
                 log.add_tool_call,
                 title,
@@ -13594,6 +14037,17 @@ memory:
             file_path = raw_input.get("path", raw_input.get("filePath", ""))
             command = raw_input.get("command", "")
             mode = getattr(log, "tool_output_mode", "normal")
+
+            # Calm mode: one tidy line on completion/failure, throbber while
+            # running - no raw output/diffs (flip to :thinking verbose for all).
+            if self._is_calm_output():
+                if status == "completed":
+                    self._call_ui(self._calm_tool_done, tool_title, raw_input, log, True)
+                elif status == "failed":
+                    self._call_ui(self._calm_tool_done, tool_title, raw_input, log, False)
+                elif status == "running":
+                    self._call_ui(self._calm_tool_running, tool_title, raw_input, log)
+                return
 
             if status == "completed":
                 output_str = render_acp_tool_output(
@@ -14442,6 +14896,15 @@ memory:
                 "terminalId": terminal_id,
                 "command": command_text,
             }
+            # Calm mode: throbber while running, one tidy line when finished.
+            if self._is_calm_output():
+                if status == "running":
+                    self._call_ui(self._calm_tool_running, "terminal", args, log)
+                else:
+                    self._call_ui(
+                        self._calm_tool_done, "terminal", args, log, status != "error"
+                    )
+                return
             output_text = output.strip()
             self._call_ui(
                 log.add_tool_call,
@@ -17876,6 +18339,147 @@ memory:
         ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
         return ansi_escape.sub("", text)
 
+    # Phrases the agent loop emits purely as bookkeeping. In normal mode these
+    # are folded into the live throbber instead of spamming the scrollback.
+    _LOOP_BOOKKEEPING_MARKERS = (
+        "calling model",
+        "iteration",
+        "processing request",
+        "received response",
+        "response complete",
+        "reached maximum iterations",
+    )
+
+    def _thinking_loop_status(self, text: str) -> Optional[str]:
+        """If `text` is agent-loop bookkeeping, return a compact live-status label.
+
+        Returns None for genuine reasoning/content, which should be shown normally.
+        """
+        if not text:
+            return None
+        stripped = text.strip()
+        lowered = stripped.lower()
+        if not any(marker in lowered for marker in self._LOOP_BOOKKEEPING_MARKERS):
+            return None
+        if "reached maximum iterations" in lowered:
+            return "Reached max iterations"
+        match = re.search(r"iteration\s+(\d+)", lowered)
+        if match:
+            return f"Working… (step {match.group(1)})"
+        return "Working…"
+
+    def _set_thinking_status(self, status: str) -> None:
+        """Update the live throbber's steady status label (normal thinking mode)."""
+        try:
+            indicator = self.query_one("#streaming-thinking", StreamingThinkingIndicator)
+            indicator.status = status
+        except Exception:
+            pass
+
+    # ── Calm-mode presentation ──────────────────────────────────────────────
+    # In calm mode (anything but :thinking verbose) we don't dump raw reasoning
+    # or full tool output. Instead a live throbber shows the current action and
+    # each finished tool commits one tidy line; verbose restores full detail.
+    _CALM_VERB_ICONS = {
+        "read": "📄",
+        "write": "📝",
+        "edit": "✏️",
+        "patch": "✏️",
+        "create": "📝",
+        "delete": "🗑️",
+        "run": "⚡",
+        "search": "🔍",
+        "find": "🔍",
+        "fetch": "🌐",
+        "todo": "✅",
+        "think": "💭",
+    }
+
+    def _is_calm_output(self) -> bool:
+        """True when we should present a calm, summarized view (not verbose)."""
+        return getattr(self, "thinking_verbosity", "normal") != "verbose"
+
+    def _calm_verb_target(self, name: str, args: Optional[dict] = None) -> tuple:
+        """Map a tool name + args to a friendly (verb, short target) pair."""
+        args = args or {}
+        try:
+            log = self.query_one("#log", ConversationLog)
+            verb = log._format_tool_name(name)
+        except Exception:
+            verb = (name or "tool").replace("_", " ").split(" ")[0].lower()
+        target = (
+            args.get("path")
+            or args.get("file_path")
+            or args.get("filePath")
+            or args.get("command")
+            or args.get("pattern")
+            or args.get("query")
+            or ""
+        )
+        target = str(target).strip()
+        if target and "/" in target and " " not in target:
+            parts = target.rstrip("/").split("/")
+            target = "/".join(parts[-2:]) if len(parts) > 1 else parts[-1]
+        if len(target) > 52:
+            target = "…" + target[-51:]
+        return verb, target
+
+    def _maybe_show_thinking_hint(self, log: ConversationLog) -> None:
+        """Once per session, tell the user how to see full detail."""
+        if getattr(self, "_thinking_hint_shown", False):
+            return
+        self._thinking_hint_shown = True
+        t = Text()
+        t.append("  💡 ", style=THEME["muted"])
+        t.append("Ctrl+T", style=f"bold {THEME['cyan']}")
+        t.append(" or ", style=THEME["muted"])
+        t.append(":thinking verbose", style=f"bold {THEME['cyan']}")
+        t.append(" to see full reasoning & tool detail\n", style=THEME["muted"])
+        log.write(t)
+
+    def _calm_tool_running(self, name: str, args: Optional[dict], log: ConversationLog) -> None:
+        """Update the live throbber with the in-progress action."""
+        verb, target = self._calm_verb_target(name, args)
+        icon = self._CALM_VERB_ICONS.get(verb, "✷")
+        label = verb.capitalize()
+        status = f"{icon} {label} {target}…" if target else f"{icon} {label}…"
+        self._set_thinking_status(status)
+        self._maybe_show_thinking_hint(log)
+
+    def _calm_tool_done(
+        self, name: str, args: Optional[dict], log: ConversationLog, ok: bool = True
+    ) -> None:
+        """Commit one tidy line for a finished tool (no raw output/diff)."""
+        verb, target = self._calm_verb_target(name, args)
+        self._calm_actions = getattr(self, "_calm_actions", 0) + 1
+        icon = "✷" if ok else "✗"
+        color = THEME["success"] if ok else THEME["error"]
+        t = Text()
+        t.append(f"  {icon} ", style=f"bold {color}")
+        t.append(f"{verb:<7}", style=f"bold {THEME['text']}")
+        if target:
+            t.append(f" {target}", style=THEME["muted"])
+        t.append("\n", style="")
+        log.write(t)
+
+    def _show_calm_summary(self, log: ConversationLog) -> None:
+        """End-of-turn roll-up line shown in calm mode."""
+        actions = getattr(self, "_calm_actions", 0)
+        if actions <= 0:
+            return
+        elapsed = 0.0
+        if getattr(self, "_thinking_start", 0):
+            elapsed = max(0.0, time.time() - self._thinking_start)
+        noun = "action" if actions == 1 else "actions"
+        t = Text()
+        t.append("  ✓ ", style=f"bold {THEME['success']}")
+        t.append(f"done · {actions} {noun}", style=THEME["muted"])
+        if elapsed:
+            t.append(f" · {elapsed:.1f}s", style=THEME["dim"])
+        t.append("\n", style="")
+        log.write(t)
+        self._calm_actions = 0
+
     def _show_thinking_line(self, line: str, log: ConversationLog):
         """Show a thinking/log line - SuperQode quantum style.
 
@@ -18867,6 +19471,10 @@ memory:
 
     def _show_pure_tool_call(self, name: str, args: dict, log: ConversationLog):
         """Show Pure/BYOK/local tool calls through the shared tool renderer."""
+        # Calm mode: surface the action in the live throbber, not a full row.
+        if self._is_calm_output():
+            self._calm_tool_running(name, args, log)
+            return
         file_path = args.get("path", args.get("file_path", args.get("filePath", "")))
         command = args.get("command", "")
         log.add_tool_call(name, "running", file_path, command, "", args)
@@ -18874,6 +19482,12 @@ memory:
     def _show_pure_tool_result(self, name: str, result, log: ConversationLog):
         """Show Pure/BYOK/local tool results through the shared tool renderer."""
         success = bool(getattr(result, "success", False))
+        # Calm mode: one tidy line per finished tool, no raw output/diff.
+        if self._is_calm_output():
+            metadata = getattr(result, "metadata", None) or {}
+            args = {"path": metadata.get("path")} if metadata.get("path") else {}
+            self._calm_tool_done(name, args, log, ok=success)
+            return
         status = "success" if success else "error"
         output = getattr(result, "output", "") if success else getattr(result, "error", "")
         output_str = str(output) if output else ""
@@ -19307,30 +19921,41 @@ memory:
             # Schedule UI update on the next event loop tick
             self.call_later(self._show_pure_tool_result, name, result, log)
 
+        is_local_provider = bool(
+            provider_def and provider_def.category == ProviderCategory.LOCAL
+        )
+
         async def on_thinking_async(text: str):
-            """Handle thinking logs from AgentLoop - same formatting as ACP.
+            """Handle thinking logs from AgentLoop - honors the :thinking toggle.
 
-            For local models, completely disable thinking logs - only show the animation.
+            OFF  -> nothing. NORMAL -> loop bookkeeping folds into the live
+            throbber ("Working… step N"); for local models the raw reasoning is
+            kept quiet so the screen stays clean. VERBOSE -> show everything,
+            so users can see exactly what a local/ACP/BYOK model is doing.
             """
-            # For local models, completely disable all thinking logs
-            # Only the animation (_start_thinking) will be shown, not individual thinking log lines
-            if provider_def and provider_def.category == ProviderCategory.LOCAL:
-                return  # Suppress all thinking logs for local models
-
+            if not (text and text.strip()):
+                return
+            if not self.show_thinking_logs:
+                return  # OFF
+            loop_status = self._thinking_loop_status(text)
+            if loop_status is not None and self.thinking_verbosity != "verbose":
+                self.call_later(self._set_thinking_status, loop_status)
+                return
+            # Calm mode stays quiet beyond the throbber to avoid flooding; flip
+            # to :thinking verbose (or Ctrl+T) to see the full reasoning.
+            if self.thinking_verbosity != "verbose":
+                self.call_later(self._set_thinking_status, "💭 Thinking…")
+                self.call_later(self._maybe_show_thinking_hint, log)
+                return
             # Schedule UI update on the next event loop tick
             # ACP uses call_from_thread() because it runs in a separate subprocess
             self.call_later(self._show_thinking_line, text, log)
 
-        # For local models, completely disable thinking logs by setting callback to None
-        # This prevents the agent from even trying to call on_thinking
-        if provider_def and provider_def.category == ProviderCategory.LOCAL:
-            self._pure_mode.on_tool_call = on_tool_call
-            self._pure_mode.on_tool_result = on_tool_result
-            self._pure_mode.on_thinking = None  # Completely disable thinking logs for local models
-        else:
-            self._pure_mode.on_tool_call = on_tool_call
-            self._pure_mode.on_tool_result = on_tool_result
-            self._pure_mode.on_thinking = on_thinking_async
+        # Thinking is always wired now; the handler above gates by verbosity so
+        # the :thinking / Ctrl+T toggle works for local, BYOK, and ACP alike.
+        self._pure_mode.on_tool_call = on_tool_call
+        self._pure_mode.on_tool_result = on_tool_result
+        self._pure_mode.on_thinking = on_thinking_async
         self._install_pure_permission_bridge(self._pure_mode, log)
 
         # Use STANDARD for cloud providers, MINIMAL for local to avoid confusion
@@ -25226,6 +25851,36 @@ memory:
                 ],
             ),
             (
+                "🔍 Search & Context (local-optimized)",
+                THEME["cyan"],
+                [
+                    (":context", "Show the detected context window + compaction budgets"),
+                    (":context <tokens>", "Pin the context window (e.g. :context 8192 / 16k)"),
+                    (":context auto", "Re-detect the loaded window from the local server"),
+                    (":workspace add <path>", "Register a repo for multi-repo search"),
+                    (":workspace list", "List registered search repos"),
+                    (":workspace remove <path>", "Unregister a repo"),
+                    (
+                        "(ask: \"search all repos\")",
+                        "grep/glob fan out across the workspace (all_repos)",
+                    ),
+                    (":thinking", "Show thinking-log detail (Ctrl+T cycles Normal/Verbose/Off)"),
+                    (":thinking verbose", "Show full per-iteration reasoning + tool detail"),
+                    (
+                        "env SUPERQODE_AUTO_COMPACT=0",
+                        "Disable adaptive auto-compaction (on by default)",
+                    ),
+                    (
+                        "env SUPERQODE_VERIFY_EDITS=0",
+                        "Disable post-edit diagnostics (lint/syntax after edits)",
+                    ),
+                    (
+                        "env SUPERQODE_FORMAT_ON_EDIT=1",
+                        "Auto-format files after the agent edits them",
+                    ),
+                ],
+            ),
+            (
                 "🤗 HuggingFace",
                 THEME["pink"],
                 [
@@ -25291,6 +25946,10 @@ memory:
                     (":harness events <run_id>", "Show persisted event timeline for a harness run"),
                     (":harness templates", "List built-in HarnessSpec templates"),
                     (":harness off", "Disable the active HarnessSpec"),
+                    (
+                        "$ superqode mcp",
+                        "Expose harnesses over MCP (stdio; --http for HTTP) for any MCP client",
+                    ),
                     (":retry", "Retry the last user prompt"),
                     (":work [verbose]", "Show last run tools, files, and commands"),
                     (":copy error", "Copy the latest error to clipboard"),
