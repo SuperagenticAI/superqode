@@ -1,4 +1,4 @@
-"""Tests for B7 — generalized MCP OAuth (fast-agent gap audit).
+"""Tests for generalized MCP OAuth.
 
 Three areas:
 1. HuggingFace token auto-injection (``mcp/hf_auth.py``).

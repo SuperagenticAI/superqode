@@ -1,5 +1,5 @@
 """
-Safety warning system for SuperQode QE sessions.
+Safety warning system for SuperQode agent sessions.
 
 Provides prominent warnings about destructive actions, token consumption,
 and sandbox environment requirements.
@@ -55,7 +55,7 @@ SANDBOX_WARNING = SafetyWarning(
     type=WarningType.SANDBOX_ENVIRONMENT,
     severity=WarningSeverity.CRITICAL,
     title="⚠️  Use Sandbox Environment",
-    message="QE agents can modify/delete code files and execute shell commands. Use isolated environments, never run on production code.",
+    message="Agents can modify/delete code files and execute shell commands. Use isolated environments, never run on production code.",
     recommendations=[
         "Use git worktrees or Docker containers for isolation",
         "Backup important files first",
@@ -67,8 +67,8 @@ SANDBOX_WARNING = SafetyWarning(
 DESTRUCTIVE_WARNING = SafetyWarning(
     type=WarningType.DESTRUCTIVE_ACTIONS,
     severity=WarningSeverity.WARNING,
-    title="⚠️  QE May Break Code",
-    message="QE agents intentionally break and test code aggressively. Changes are temporary but can introduce bugs or delete files.",
+    title="⚠️  Agents May Change Code",
+    message="Agents can modify code and run commands. Changes may introduce bugs or delete files if approved.",
     recommendations=[
         "Use version control - all changes will be reverted",
         "Monitor system resources during testing",
@@ -81,7 +81,7 @@ TOKEN_WARNING = SafetyWarning(
     type=WarningType.TOKEN_CONSUMPTION,
     severity=WarningSeverity.INFO,
     title="ℹ️  API Token Usage",
-    message="QE sessions consume API tokens. Monitor your usage and set spending limits if needed.",
+    message="Agent sessions consume API tokens. Monitor your usage and set spending limits if needed.",
     recommendations=[
         "Check your API provider dashboard for usage",
         "Set spending limits on your accounts",
@@ -94,7 +94,7 @@ PRODUCTION_WARNING = SafetyWarning(
     type=WarningType.PRODUCTION_CODE,
     severity=WarningSeverity.CRITICAL,
     title="🚨 Production Code Detected",
-    message="Running QE on production code is dangerous. QE agents will break and test code aggressively. Stop and use a sandbox environment.",
+    message="Running agents on production code is dangerous. Stop and use a sandbox environment.",
     recommendations=[
         "Create a sandbox environment first",
         "Use git worktrees or Docker for isolation",

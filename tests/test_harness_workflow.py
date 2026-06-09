@@ -12,8 +12,8 @@ from superqode.harness import (
     WorkflowMode,
     WorkflowSpec,
     WorkflowStep,
-    ValidationSpec,
-    ValidationStepSpec,
+    ChecksSpec,
+    CheckStepSpec,
     get_harness_template,
     init_harness,
     run_workflow,
@@ -164,20 +164,20 @@ async def test_workflow_persists_parent_run_graph(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_workflow_persists_validation_and_evidence(monkeypatch, tmp_path):
+async def test_workflow_persists_checks_and_evidence(monkeypatch, tmp_path):
     backend = RecordingBackend()
     monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda name: backend)
     store = FileHarnessStore(tmp_path / "store")
     spec = replace(
         get_harness_template("no-tool"),
         workflow=WorkflowSpec(mode=WorkflowMode.SINGLE),
-        validation=ValidationSpec(
+        checks=ChecksSpec(
             enabled=True,
             fail_on_error=True,
             custom_steps=(
-                ValidationStepSpec(
+                CheckStepSpec(
                     name="smoke",
-                    command=f"{sys.executable} -c \"print('validation ok')\"",
+                    command=f"{sys.executable} -c \"print('checks ok')\"",
                 ),
             ),
         ),
@@ -190,7 +190,7 @@ async def test_workflow_persists_validation_and_evidence(monkeypatch, tmp_path):
         provider="test",
         model="model",
         working_directory=tmp_path,
-        session_id="workflow-validation",
+        session_id="workflow-checks",
     )
 
     run = store.get_run(result.run_id)
@@ -198,29 +198,29 @@ async def test_workflow_persists_validation_and_evidence(monkeypatch, tmp_path):
     assert run.status == "succeeded"
     event_types = [event.type for event in run.events]
     assert "workspace.changes.captured" in event_types
-    assert "validation.step.started" in event_types
-    assert "validation.step.completed" in event_types
+    assert "checks.step.started" in event_types
+    assert "checks.step.completed" in event_types
     assert "workflow.result" in event_types
-    assert run.metadata["validation"]["status"] == "passed"
+    assert run.metadata["checks"]["status"] == "passed"
     assert run.metadata["changed_files"]["file_count"] == 0
     graph = store.get_event_graph(result.run_id)
-    assert "validation" in {node.type for node in graph.nodes}
+    assert "checks" in {node.type for node in graph.nodes}
     assert "evidence" in {node.type for node in graph.nodes}
 
 
 @pytest.mark.asyncio
-async def test_workflow_marks_run_failed_when_required_validation_fails(monkeypatch, tmp_path):
+async def test_workflow_marks_run_failed_when_required_checks_fails(monkeypatch, tmp_path):
     backend = RecordingBackend()
     monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda name: backend)
     store = FileHarnessStore(tmp_path / "store")
     spec = replace(
         get_harness_template("no-tool"),
         workflow=WorkflowSpec(mode=WorkflowMode.SINGLE),
-        validation=ValidationSpec(
+        checks=ChecksSpec(
             enabled=True,
             fail_on_error=True,
             custom_steps=(
-                ValidationStepSpec(
+                CheckStepSpec(
                     name="fail",
                     command=f'{sys.executable} -c "import sys; sys.exit(7)"',
                 ),
@@ -235,14 +235,14 @@ async def test_workflow_marks_run_failed_when_required_validation_fails(monkeypa
         provider="test",
         model="model",
         working_directory=tmp_path,
-        session_id="workflow-validation-fail",
+        session_id="workflow-checks-fail",
     )
 
     run = store.get_run(result.run_id)
     assert run is not None
     assert run.status == "failed"
-    assert run.metadata["validation"]["status"] == "failed"
-    assert run.metadata["validation"]["steps"][0]["returncode"] == 7
+    assert run.metadata["checks"]["status"] == "failed"
+    assert run.metadata["checks"]["steps"][0]["returncode"] == 7
 
 
 @pytest.mark.asyncio

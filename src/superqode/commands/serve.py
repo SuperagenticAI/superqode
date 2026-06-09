@@ -2,7 +2,6 @@
 SuperQode Server Commands.
 
 Start various SuperQode servers:
-- LSP server for IDE integration
 - Web server for browser-based TUI
 """
 
@@ -24,72 +23,6 @@ def serve():
     """Server commands for IDE and web integration."""
     if not require_enterprise("Server integrations"):
         raise SystemExit(1)
-
-
-@serve.command("lsp")
-@click.option(
-    "--transport",
-    "-t",
-    type=click.Choice(["stdio", "tcp"]),
-    default="stdio",
-    help="Transport mode: stdio (default) for editors, tcp for debugging",
-)
-@click.option("--port", "-p", default=9000, help="Port for TCP transport (default: 9000)")
-@click.option("--project", type=click.Path(exists=True), default=".", help="Project root directory")
-@click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
-def serve_lsp(transport: str, port: int, project: str, verbose: bool):
-    """Start the LSP server for IDE integration.
-
-    The LSP server exposes validation findings as diagnostics in your IDE.
-    Supports VSCode, Neovim, and other LSP-compatible editors.
-
-    Examples:
-
-        superqode serve lsp                    # Start in stdio mode (for editors)
-
-        superqode serve lsp -t tcp -p 9000    # Start in TCP mode (for debugging)
-
-    VSCode Setup:
-        1. Install the SuperQode VSCode extension
-        2. The extension will automatically connect to the LSP server
-
-    Neovim Setup (with nvim-lspconfig):
-        require('lspconfig.configs').superqode = {
-            default_config = {
-                cmd = { 'superqode', 'serve', 'lsp' },
-                filetypes = { '*' },
-                root_dir = function(fname)
-                    return vim.fn.getcwd()
-                end,
-            },
-        }
-        require('lspconfig').superqode.setup{}
-    """
-    import logging
-
-    if verbose:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
-
-    from superqode.server import start_lsp_server
-
-    project_root = Path(project).resolve()
-
-    if transport == "tcp":
-        console.print(f"[cyan]Starting SuperQode LSP server on port {port}[/cyan]")
-        console.print("[dim]Connect your editor to localhost:{port}[/dim]")
-    else:
-        # stdio mode - don't print to stdout as it interferes with LSP
-        import sys
-
-        sys.stderr.write("SuperQode LSP server starting (stdio mode)\n")
-
-    start_lsp_server(
-        project_root=project_root,
-        transport=transport,
-        port=port,
-    )
 
 
 @serve.command("web")

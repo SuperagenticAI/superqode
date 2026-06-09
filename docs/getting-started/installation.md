@@ -244,9 +244,9 @@ superqode providers test anthropic
     opencode --version
     ```
 
-### For Full validation Capabilities
+### Linting and Type Checking
 
-Install language-specific linters for harness validation:
+Install language-specific linters for code analysis in harness runs:
 
 === "Python"
 
@@ -302,8 +302,6 @@ superqode providers list
 # List agents
 superqode agents list
 
-# List validation roles
-superqode qe roles
 ```
 
 ### Expected Output

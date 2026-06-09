@@ -11,7 +11,7 @@ publisher_name = "SuperQode Team"
 publisher_url = "https://github.com/your-org/superqode"
 type = "coding"
 description = "Kimi CLI is a new CLI agent that can help you with your software development tasks and terminal operations."
-tags = ["moonshot-ai", "kimi", "chinese"]
+tags = ["moonshot-ai", "kimi", "chinese", "official-acp"]
 run_command."*" = "kimi --acp"
 
 help = '''

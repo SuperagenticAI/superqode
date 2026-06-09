@@ -110,14 +110,6 @@ def inspect_harness_backend(
                 message=f"Backend '{backend.name}' may ignore sandbox backend '{selected_sandbox}'.",
             )
         )
-    if spec.validation.enabled and not capabilities.supports_typed_output:
-        issues.append(
-            HarnessBackendIssue(
-                severity="warning",
-                code="typed_output_unsupported",
-                message=f"Backend '{backend.name}' does not support typed-output validation.",
-            )
-        )
     issues.extend(_model_policy_issues(backend.name, spec))
 
     return HarnessBackendInspection(

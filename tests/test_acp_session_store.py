@@ -1,4 +1,4 @@
-"""Tests for ACP session persistence (A3 from the fast-agent gap audit).
+"""Tests for ACP session persistence.
 
 Three layers:
 

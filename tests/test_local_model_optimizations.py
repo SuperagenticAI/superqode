@@ -307,6 +307,12 @@ async def test_mlx_chat_clamps_temperature_and_extracts_inline_tool_calls(monkey
     import superqode.providers.local.mlx as mlx_mod
     from superqode.providers.gateway.base import Message, ToolDefinition
 
+    # Exercise the HTTP/MLXClient path this test mocks. Without this, a host
+    # with ``mlx_lm`` installed (Apple Silicon) would take the in-process engine
+    # path and never hit the mocked boundary. CI (Linux, no mlx_lm) already
+    # falls back to HTTP; pinning it keeps the test deterministic everywhere.
+    monkeypatch.setenv("SUPERQODE_MLX_INPROCESS", "0")
+
     captured: dict = {}
 
     async def fake_async_request(self, method, endpoint, data, timeout=120.0):

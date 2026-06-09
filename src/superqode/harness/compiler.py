@@ -10,7 +10,7 @@ from ..tools.permissions import Permission, PermissionConfig, ToolGroup
 
 def spec_from_headless_profile(name: str) -> HarnessSpec:
     """Return a HarnessSpec equivalent for an existing headless profile."""
-    from .spec import AgentSpec, ExecutionPolicySpec, RuntimeSpec, ValidationSpec
+    from .spec import AgentSpec, ExecutionPolicySpec, RuntimeSpec, ChecksSpec
 
     profiles = get_harness_profiles()
     if name not in profiles:
@@ -44,7 +44,7 @@ def spec_from_headless_profile(name: str) -> HarnessSpec:
                 system_prompt=profile.job_description or None,
             ),
         ),
-        validation=ValidationSpec(enabled=profile.name == "build"),
+        checks=ChecksSpec(enabled=profile.name == "build"),
         metadata={
             "source": "headless_profile",
             "system_level": profile.system_level.value,

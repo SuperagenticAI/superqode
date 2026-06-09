@@ -12,7 +12,7 @@ publisher_name = "SuperQode Team"
 publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
 description = "A powerful, easy-to-use, customizable multi-agent runtime that orchestrates AI agents."
-tags = ["multi-agent", "orchestration", "runtime"]
+tags = ["multi-agent", "orchestration", "runtime", "official-acp"]
 run_command."*" = "cagent --acp"
 
 help = '''

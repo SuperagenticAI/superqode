@@ -134,7 +134,7 @@ SuperQode includes registry entries for these ACP agents (availability depends o
 - **Claude Code** (ACP adapter: `claude-code-acp`)
 - **Codex** (ACP adapter: `npx @openai/codex-acp` or `codex-acp`)
 - **OpenHands** (`openhands acp`)
-- **Gemini CLI** (`gemini --experimental-acp`) — enterprise/API-key ACP route; individual Google AI users should prefer `:connect antigravity`
+- **Gemini CLI** (`gemini --experimental-acp`): enterprise/API-key ACP route. Individual Google AI users should prefer `:connect antigravity`
 - **Goose** (`goose`)
 - **Kimi CLI** (`kimi --acp`)
 - **Augment Code / Auggie** (`auggie --acp`)
@@ -175,19 +175,6 @@ agents:
       - shell_execution
       - mcp_tools
       - multi_turn
-```
-
-### Per-Role Configuration
-
-```yaml
-team:
-  modes:
-    qe:
-      roles:
-        fullstack:
-          mode: acp
-          coding_agent: opencode
-          description: "Senior validation using OpenCode"
 ```
 
 ---
@@ -341,42 +328,11 @@ ls -la ~/.local/share/opencode/auth.json
 
 ### 1. Use for Complex Tasks
 
-ACP excels at multi-step tasks:
-
-```yaml
-team:
-  modes:
-    qe:
-      roles:
-        fullstack:
-          mode: acp
-          coding_agent: opencode
-          job_description: |
-            Perform comprehensive validation review:
-            - Analyze code structure
-            - Run tests
-            - Check security issues
-            - Generate fix patches
-```
+ACP excels at multi-step tasks. Use it when you need file editing, shell access, and tool integration.
 
 ### 2. Combine with BYOK
 
-Use ACP for complex roles, BYOK for simple ones:
-
-```yaml
-team:
-  modes:
-    qe:
-      roles:
-        security_tester:
-          mode: byok
-          provider: anthropic
-          model: claude-sonnet-4
-
-        fullstack:
-          mode: acp
-          coding_agent: opencode
-```
+Use ACP for complex automation, BYOK for simpler analysis tasks. Switch between them with `:connect`.
 
 ### 3. Monitor Resource Usage
 
@@ -391,4 +347,3 @@ ACP agents may use significant resources. Monitor:
 
 - [BYOK Providers](byok.md) - Cloud provider setup
 - [Local Providers](local.md) - Self-hosted models
-- [Team Configuration](../configuration/team.md) - Role setup

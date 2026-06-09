@@ -11,7 +11,7 @@ publisher_name = "SuperQode Team"
 publisher_url = "https://github.com/your-org/superqode"
 type = "coding"
 description = "An AI agent that brings Augment Code's power to the terminal with ACP support for Zed, Neovim, and Emacs."
-tags = ["augment", "code-analysis", "multi-editor"]
+tags = ["augment", "code-analysis", "multi-editor", "official-acp"]
 run_command."*" = "auggie --acp"
 
 help = '''

@@ -1,0 +1,37 @@
+identity = "qoder.com"
+name = "Qoder CLI"
+short_name = "qoder"
+url = "https://docs.qoder.com/cli/acp"
+protocol = "acp"
+author_name = "Qoder"
+author_url = "https://qoder.com"
+publisher_name = "Qoder"
+publisher_url = "https://qoder.com"
+type = "coding"
+description = "AI coding CLI with ACP support."
+tags = ["coding", "cli", "acp"]
+run_command."*" = "qoder acp"
+
+help = '''
+# Qoder CLI
+
+AI coding CLI with ACP support.
+
+## Installation
+
+```bash
+npm install -g qoder-cli
+```
+
+For ACP mode:
+
+```bash
+qoder acp
+```
+
+See https://docs.qoder.com/cli/acp for details.
+'''
+
+[actions."*".install]
+command = "npm install -g qoder-cli"
+description = "Install Qoder CLI"

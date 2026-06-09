@@ -298,7 +298,6 @@ class EnhancedStatusBar(Static):
         result.append("│  ", style="#27272a")
         mode_icons = {
             "home": "🏠",
-            "qe": "🔍",
             "agent": "🤖",
             "chat": "💬",
             "review": "📝",

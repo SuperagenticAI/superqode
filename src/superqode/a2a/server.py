@@ -35,7 +35,7 @@ class A2AServerConfig(BaseModel):
     """Configuration for A2A server."""
 
     name: str = "SuperQode"
-    description: str = "Quality-oriented coding agent with QE, Dev, DevOps modes"
+    description: str = "Coding agent with development and operations modes"
     version: str = "1.0"
     url: str = "http://localhost:8000"
     streaming: bool = True

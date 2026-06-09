@@ -1,7 +1,7 @@
 """
 Safety warning system for SuperQode.
 
-Provides warnings about destructive QE actions, token consumption,
+Provides warnings about destructive agent actions, token consumption,
 and sandbox environment recommendations.
 """
 

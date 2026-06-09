@@ -1,5 +1,5 @@
 """
-Harness Accelerator - Performance Optimizations for QE.
+Harness Accelerator - Performance optimizations for harness runs.
 
 Centralized performance optimizations for the SuperQode harness:
 - Pre-computed tool definitions (compute once, reuse)
@@ -43,7 +43,7 @@ class Accelerator:
     """Centralized performance optimizations for SuperQode.
 
     Provides caching, prewarming, and parallel execution utilities
-    to minimize latency during QE sessions.
+    to minimize latency during agent sessions.
     """
 
     _instance: Optional["Accelerator"] = None

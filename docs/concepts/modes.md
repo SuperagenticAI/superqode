@@ -1,260 +1,161 @@
-# Three Execution Modes
+# Three Connection Modes
 
-SuperQode supports three distinct execution modes for connecting to AI models and agents. Each mode has different capabilities and use cases.
+SuperQode can connect to intelligence in three main ways: ACP agents, BYOK providers, and local model servers. The connection mode decides where model work happens. A harness decides what capabilities are allowed during a run.
 
 ---
 
 ## Overview
 
-| Mode | Description | Capabilities | Best For |
-|------|-------------|--------------|----------|
-| **ACP** | Agent Client Protocol | File editing, shell, MCP | Advanced automation |
-| **BYOK** | Bring Your Own Key | Chat, streaming, analysis | Cloud providers |
-| **Local** | Local/Self-hosted | Chat + streaming (+ tool calling if supported) | Privacy, cost control |
+| Mode | What it connects to | Best for |
+| --- | --- | --- |
+| ACP | External coding agents that speak Agent Client Protocol | Full coding-agent workflows where the agent owns its model and tools |
+| BYOK | Hosted model providers using your API keys | Cloud models, automation, model comparison, and direct provider usage |
+| Local | Local or self-hosted model servers | Privacy, offline work, cost control, and local model experiments |
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    EXECUTION MODES                           │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │     ACP     │  │    BYOK     │  │    LOCAL    │         │
-│  ├─────────────┤  ├─────────────┤  ├─────────────┤         │
-│  │ Agent       │  │ Your API    │  │ Self-hosted │         │
-│  │ Protocol    │  │ Keys        │  │ Models      │         │
-│  ├─────────────┤  ├─────────────┤  ├─────────────┤         │
-│  │ OpenCode    │  │ LiteLLM     │  │ Ollama      │         │
-│  │ Claude Code │  │ Gateway     │  │ vLLM        │         │
-│  │ Aider       │  │             │  │ LM Studio   │         │
-│  └─────────────┘  └─────────────┘  └─────────────┘         │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+Start from the TUI:
+
+```text
+:connect
 ```
 
----
+Direct examples:
 
-## ACP Mode (Agent Client Protocol)
-
-### What is ACP?
-
-ACP mode connects to full-featured coding agents that can edit files, run shell commands, and use MCP tools. The agent manages its own LLM interactions.
-
-### How It Works
-
-1. SuperQode connects to an ACP-compatible agent
-2. Agent spawns and handles LLM communication
-3. Agent has full coding capabilities
-4. SuperQode orchestrates and displays results
-
-### Capabilities
-
-| Capability | Supported |
-|------------|-----------|
-| Chat completion | ✓ |
-| Streaming | ✓ |
-| Tool calling | ✓ |
-| File editing | ✓ |
-| Shell execution | ✓ |
-| MCP tools | ✓ |
-| Extended thinking | ✓ |
-| Multi-file changes | ✓ |
-
-### Supported Agents
-
-| Agent | Status | Capabilities |
-|-------|--------|--------------|
-| **OpenCode** | Supported | File editing, shell, MCP, 75+ providers |
-| **Claude Code** | Coming Soon | Native Claude integration |
-| **Aider** | Coming Soon | Git-integrated pair programming |
-| **Cursor** | Planned | IDE integration |
-
-### Usage
-
-```bash
-# Install OpenCode first
-npm i -g opencode-ai
-
-# Connect via TUI
+```text
 :connect acp opencode
-
-# Connect via CLI
-superqode connect acp opencode
-```
-
-### Configuration
-
-```yaml
-# superqode.yaml
-default:
-  mode: acp
-  coding_agent: opencode
-
-agents:
-  opencode:
-    description: "OpenCode coding agent"
-    protocol: acp
-    command: opencode
-    capabilities:
-      - file_editing
-      - shell_execution
-      - mcp_tools
-```
-
-### Agent Capabilities
-
-ACP agents can:
-
-- **Edit Files**: Create, modify, and delete files
-- **Run Commands**: Execute shell commands with streaming output
-- **Use MCP Tools**: Access Model Context Protocol tools
-- **Multi-file Operations**: Make coordinated changes across files
-- **Extended Thinking**: Show reasoning process
-
----
-
-## BYOK Mode (Bring Your Own Key)
-
-### What is BYOK?
-
-BYOK mode allows you to use cloud AI providers by providing your own API keys. SuperQode never stores your keys-they're read from environment variables.
-
-### How It Works
-
-1. You set API keys as environment variables
-2. SuperQode connects via LiteLLM gateway
-3. Direct API calls to the provider
-4. Responses streamed back to you
-
-### Capabilities
-
-| Capability | Supported |
-|------------|-----------|
-| Chat completion | ✓ |
-| Streaming | ✓ |
-| Tool calling | ✓ (if model supports) |
-| File editing | ✗ (no agent) |
-| Shell execution | ✗ (no agent) |
-| MCP tools | ✗ (no agent) |
-| Extended thinking | ✓ (Claude) |
-| Cost tracking | ✓ |
-
-### Supported Providers
-
-=== "US Labs (Tier 1)"
-
-    | Provider | Models | Free Tier |
-    |----------|--------|-----------|
-    | Google AI | Gemini 3 Pro, Gemini 3, Gemini 2.5 Flash | Yes |
-    | Anthropic | Claude Opus 4.5, Sonnet 4.5, Haiku 4.5 | No |
-    | OpenAI | GPT-5.4, GPT-4o, o1 | No |
-    | xAI | Grok 3, Grok 2 | No |
-    | Mistral AI | Mistral Large, Codestral | No |
-    | Groq | Llama 3.3, Mixtral | Yes |
-
-=== "China Labs"
-
-    | Provider | Models |
-    |----------|--------|
-    | Zhipu | GLM-4, GLM-4V |
-    | Alibaba | Qwen-Max, Qwen-Plus |
-    | Deepseek | Deepseek-V3, Deepseek-R1 |
-
-=== "Model Hosts"
-
-    | Provider | Models |
-    |----------|--------|
-    | OpenRouter | 95+ models |
-    | Together AI | 200+ open models |
-    | Fireworks AI | Optimized inference |
-    | Replicate | Community models |
-
-### Usage
-
-```bash
-# Set API key
-export GOOGLE_API_KEY=your-api-key-here
-
-# Connect via TUI
-:connect byok google gemini-3.1-pro-preview
-
-# Connect via CLI
-superqode connect byok google gemini-3.1-pro-preview
-```
-
-### Configuration
-
-```yaml
-# superqode.yaml
-default:
-  mode: byok
-  provider: google
-  model: gemini-3.1-pro-preview
-
-providers:
-  google:
-    api_key_env: GOOGLE_API_KEY
-    recommended_models:
-      - gemini-3.1-pro-preview
-      - gemini-flash-latest
-```
-
-## Local Mode
-
-### What is Local Mode?
-
-Local mode connects to self-hosted LLM servers running on your infrastructure. No API keys required-models run locally.
-
-### How It Works
-
-1. You run a local model server (Ollama, vLLM, etc.)
-2. SuperQode connects to the local endpoint
-3. All inference happens on your hardware
-4. Complete privacy-no data leaves your machine
-
-### Capabilities
-
-| Capability | Supported |
-|------------|-----------|
-| Chat completion | ✓ |
-| Streaming | ✓ |
-| Tool calling | ✓ (if model supports) |
-| File editing | ✗ (no agent) |
-| Shell execution | ✗ (no agent) |
-| MCP tools | ✗ (no agent) |
-| Cost tracking | ✗ (free) |
-
-### Supported Providers
-
-| Provider | Default Port | Description |
-|----------|--------------|-------------|
-| **Ollama** | 11434 | Easy local deployment |
-| **LM Studio** | 1234 | GUI-based local models |
-| **vLLM** | 8000 | High-performance inference |
-| **SGLang** | 30000 | Structured generation |
-| **MLX-LM** | 8000 | Apple Silicon optimized |
-| **TGI** | 80 | Text Generation Inference |
-| **llama.cpp** | 8080 | C++ inference |
-
-### Usage
-
-```bash
-# Start Ollama
-ollama serve
-
-# Pull a model
-ollama pull qwen3:8b
-
-# Connect via TUI
+:connect byok openai gpt-4o-mini
 :connect local ollama qwen3:8b
+```
 
-# Connect via CLI
+CLI equivalents:
+
+```bash
+superqode connect acp opencode
+superqode connect byok openai gpt-4o-mini
 superqode connect local ollama qwen3:8b
 ```
 
-### Configuration
+---
+
+## ACP
+
+ACP mode connects SuperQode to an external coding agent. The agent manages its own model calls and may expose file editing, shell execution, MCP tools, and agent-specific slash commands.
+
+Use ACP when:
+
+- you want a full coding agent rather than a direct model call
+- the agent already has its own auth and provider setup
+- you want SuperQode's TUI, sessions, exports, and command surface around that agent
+- you need agent-owned MCP or shell behavior
+
+Common commands:
+
+```bash
+superqode agents list
+superqode agents show opencode
+superqode agents doctor opencode
+superqode agents doctor opencode --live
+superqode connect acp opencode
+```
+
+Example config:
 
 ```yaml
-# superqode.yaml
+default:
+  mode: acp
+  agent: opencode
+
+agents:
+  opencode:
+    description: OpenCode coding agent
+    protocol: acp
+    command: opencode
+```
+
+`coding_agent` is still accepted for older configs, but new config should use `agent`.
+
+---
+
+## BYOK
+
+BYOK mode connects to hosted providers with your own API keys. SuperQode reads keys from environment variables and does not require secrets in YAML.
+
+Use BYOK when:
+
+- you want direct access to hosted models
+- you need model comparison or provider switching
+- you want API-key-based automation
+- you want cost and model metadata where available
+
+Set an API key:
+
+```bash
+export OPENAI_API_KEY=your-key
+export ANTHROPIC_API_KEY=your-key
+export GOOGLE_API_KEY=your-key
+```
+
+Connect:
+
+```text
+:connect byok openai gpt-4o-mini
+```
+
+Check setup:
+
+```bash
+superqode providers doctor openai
+superqode providers guide openai
+superqode models --provider openai
+```
+
+Example config:
+
+```yaml
+default:
+  mode: byok
+  provider: openai
+  model: gpt-4o-mini
+
+providers:
+  openai:
+    api_key_env: OPENAI_API_KEY
+    recommended_models:
+      - gpt-4o-mini
+      - gpt-4o
+```
+
+---
+
+## Local
+
+Local mode connects to model servers running on your machine or infrastructure.
+
+Use local mode when:
+
+- repository contents should stay on your machine
+- you want no per-token API cost
+- you are evaluating local coding models
+- you need offline or self-hosted workflows
+
+Supported local provider paths include Ollama, LM Studio, MLX, vLLM, SGLang, TGI, and DS4 where installed and configured.
+
+Ollama example:
+
+```bash
+ollama serve
+ollama pull qwen3:8b
+superqode providers doctor ollama --live
+```
+
+Connect:
+
+```text
+:connect local ollama qwen3:8b
+```
+
+Example config:
+
+```yaml
 default:
   mode: local
   provider: ollama
@@ -263,132 +164,64 @@ default:
 providers:
   ollama:
     base_url: http://localhost:11434
-    type: openai-compatible
     recommended_models:
       - qwen3:8b
-      - llama3.2:latest
-      - codellama:13b
-
-  vllm:
-    base_url: http://localhost:8000
-    type: openai-compatible
 ```
 
-### Recommended Local Models
-
-For validation tasks, these models work well:
-
-| Model | Size | Good For |
-|-------|------|----------|
-| qwen3:8b | 8B | General validation, fast |
-| llama3.2:8b | 8B | General purpose |
-| codellama:13b | 13B | Code analysis |
-| deepseek-coder:6.7b | 6.7B | Code generation |
-| mistral:7b | 7B | Fast inference |
+Local tool support depends on the model family and provider. SuperQode has model-family policies for known local models and can fall back to no-tool or reduced-tool operation when a model cannot reliably call tools.
 
 ---
 
-## Mode Comparison
+## Connection Mode Versus Runtime
 
-### Feature Matrix
+Connection mode answers: "What product, provider, agent, or local server am I connected to?"
 
-| Feature | BYOK | ACP | Local |
-|---------|------|-----|-------|
-| Chat completion | ✓ | ✓ | ✓ |
-| Streaming | ✓ | ✓ | ✓ |
-| Tool calling | ✓* | ✓ | ✓* |
-| File editing | ✗ | ✓ | ✗ |
-| Shell execution | ✗ | ✓ | ✗ |
-| MCP tools | ✗ | ✓ | ✗ |
-| Extended thinking | ✓* | ✓ | ✓* |
-| Cost tracking | ✓ | ✗ | ✗ |
-| Privacy | ✗ | ✗ | ✓ |
-| No API key needed | ✗ | ✓** | ✓ |
+Runtime answers: "Which execution engine runs the harness?"
 
-*Model-dependent
-**Agent handles its own auth
+Examples:
 
-### When to Use Each Mode
+| Choice | Meaning |
+| --- | --- |
+| `:connect byok openai gpt-4o-mini` | Use a hosted OpenAI model through SuperQode's provider path |
+| `:connect local ollama qwen3:8b` | Use a local Ollama model |
+| `:connect acp opencode` | Use an ACP coding agent |
+| `:runtime pydanticai` | Switch the runtime backend for compatible harness runs |
+| `superqode harness run --spec harness.yaml --runtime openai-agents` | Run a harness through the OpenAI Agents SDK adapter |
 
-=== "Use ACP When"
-
-    - You need full coding agent capabilities
-    - File editing and shell execution are required
-    - You want to use MCP tools
-    - You need multi-file coordinated changes
-    - You want the agent to handle its own LLM
-
-=== "Use BYOK When"
-
-    - You need cloud model capabilities
-    - You want to use specific providers (Google Gemini, Anthropic, OpenAI)
-    - You need extended thinking (Claude/Gemini)
-    - Cost tracking is important
-    - You don't need file editing in validation
-
-=== "Use Local When"
-
-    - Privacy is paramount
-    - You want to avoid API costs
-    - You have sufficient local compute
-    - Internet connectivity is limited
-    - You're running in an air-gapped environment
+See [Runtime Backends](../runtimes.md) for backend details.
 
 ---
 
-## Mixing Modes
+## Choosing A Mode
 
-You can configure different roles to use different modes:
+| Need | Recommended mode |
+| --- | --- |
+| Full external coding agent | ACP |
+| Hosted model with your own key | BYOK |
+| Private local inference | Local |
+| Repeatable repository automation | Any mode plus a HarnessSpec |
+| Pure planning without tools | Any mode plus a no-tool harness |
+| Model comparison | BYOK or local, using `:compare` |
 
-```yaml
-team:
-  modes:
-    qe:
-      roles:
-        security_tester:
-          mode: acp  # Agent for comprehensive security testing
-          coding_agent: opencode
+---
 
-        api_tester:
-          mode: byok  # Cloud model for API analysis
-          provider: google
-          model: gemini-3.1-pro-preview
+## Safety Notes
 
-        unit_tester:
-          mode: local  # Local model for cost-effective testing
-          provider: ollama
-          model: qwen3:8b
+Connection mode does not by itself grant capabilities. The effective capabilities come from the active runtime, harness, provider, and approval policy.
+
+For repeatable safety, use a HarnessSpec:
+
+```bash
+superqode harness init planner --template no-tool --output planner.yaml
+superqode harness init coder --template coding --output coder.yaml
+superqode harness doctor --spec coder.yaml
 ```
 
----
-
-## OpenResponses Gateway
-
-For advanced local model usage, SuperQode supports the OpenResponses specification:
-
-```yaml
-superqode:
-  gateway:
-    type: openresponses
-    openresponses:
-      base_url: http://localhost:11434
-      reasoning_effort: medium
-      truncation: auto
-      enable_apply_patch: true
-      enable_code_interpreter: true
-```
-
-OpenResponses provides:
-
-- Unified API across providers
-- 45+ streaming event types
-- Built-in tools (apply_patch, code_interpreter)
-- Reasoning/thinking content support
-
----
+Review [Safety & Permissions](../advanced/safety-permissions.md) before allowing shell or write access in important repositories.
 
 ## Next Steps
 
-- [Ephemeral Workspace](workspace.md) - How code isolation works
-- [Role-Based Workflows](roles.md) - Understanding testing roles
-- [Providers](../providers/index.md) - Detailed provider documentation
+- [Authentication](authentication.md)
+- [Provider Configuration](../providers/index.md)
+- [Runtime Backends](../runtimes.md)
+- [Harness System](../advanced/harness-system.md)

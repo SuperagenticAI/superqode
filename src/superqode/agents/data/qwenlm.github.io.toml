@@ -1,0 +1,37 @@
+identity = "qwenlm.github.io"
+name = "Qwen Code"
+short_name = "qwen"
+url = "https://github.com/QwenLM/qwen-code"
+protocol = "acp"
+author_name = "QwenLM"
+author_url = "https://github.com/QwenLM"
+publisher_name = "QwenLM"
+publisher_url = "https://github.com/QwenLM"
+type = "coding"
+description = "AI coding agent by QwenLM with ACP support."
+tags = ["open-source", "coding", "qwen", "acp"]
+run_command."*" = "qwen-code acp"
+
+help = '''
+# Qwen Code
+
+AI coding agent by QwenLM with ACP support.
+
+## Installation
+
+```bash
+pip install qwen-code
+```
+
+For ACP mode:
+
+```bash
+qwen-code acp
+```
+
+See https://github.com/QwenLM/qwen-code for details.
+'''
+
+[actions."*".install]
+command = "pip install qwen-code"
+description = "Install Qwen Code"

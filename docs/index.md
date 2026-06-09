@@ -8,7 +8,7 @@
 
 # **SuperQode**
 
-### Your Portable Coding Agent Harness.
+### Your Portable Universal Coding Agent Harness.
 
 <p class="tagline">Run coding agents with portable specs, controlled tools, and readable sessions.</p>
 
@@ -112,6 +112,12 @@ SuperQode keeps the harness contract stable while allowing different runtimes un
 ```
 
 ## Quick Start
+
+```bash
+uv tool install superqode
+```
+
+Or with pip:
 
 ```bash
 pip install superqode

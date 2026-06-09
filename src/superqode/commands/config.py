@@ -51,8 +51,8 @@ def config_show(path: str, fmt: str, section: Optional[str]):
     """
     from superqode.config import load_config
 
-    project_root = Path(path).resolve()
-    config_file = project_root / "superqode.yaml"
+    selected_path = Path(path).resolve()
+    config_file = selected_path if selected_path.is_file() else selected_path / "superqode.yaml"
 
     if not config_file.exists():
         console.print("[yellow]No configuration found.[/yellow]")
@@ -61,7 +61,7 @@ def config_show(path: str, fmt: str, section: Optional[str]):
 
     # Load and parse config
     try:
-        cfg = load_config(project_root)
+        cfg = load_config(config_file)
     except Exception as e:
         console.print(f"[red]Error loading configuration:[/red] {e}")
         return 1
@@ -123,8 +123,8 @@ def config_validate(path: str, fix: bool):
     """
     from superqode.config import load_config
 
-    project_root = Path(path).resolve()
-    config_file = project_root / "superqode.yaml"
+    selected_path = Path(path).resolve()
+    config_file = selected_path if selected_path.is_file() else selected_path / "superqode.yaml"
 
     console.print()
     console.print(Panel("[bold]Configuration Validation[/bold]", border_style="cyan"))
@@ -143,19 +143,31 @@ def config_validate(path: str, fix: bool):
         import yaml
 
         with open(config_file) as f:
-            raw_config = yaml.safe_load(f)
+            raw_config = yaml.safe_load(f) or {}
         console.print("[green]✓[/green] YAML syntax is valid")
     except yaml.YAMLError as e:
         console.print(f"[red]✗[/red] YAML syntax error: {e}")
         return 1
 
-    # Check required sections
-    if "superqode" not in raw_config:
-        issues.append("Missing 'superqode' section")
-    else:
+    # Check recognized config shape. v2 configs use root-level version/project/defaults,
+    # while older configs use a nested superqode section.
+    if "superqode" in raw_config:
         if "version" not in raw_config.get("superqode", {}):
             warnings.append("Missing 'superqode.version' field")
-        console.print("[green]✓[/green] 'superqode' section present")
+        console.print("[green]✓[/green] legacy 'superqode' section present")
+    elif "version" in raw_config or "project" in raw_config or "defaults" in raw_config:
+        console.print("[green]✓[/green] v2 configuration shape detected")
+    else:
+        issues.append("Missing recognized SuperQode configuration fields")
+
+    harnesses = raw_config.get("harnesses", {})
+    if isinstance(harnesses, dict) and harnesses:
+        for name, harness_path in harnesses.items():
+            resolved = (config_file.parent / str(harness_path)).resolve()
+            if resolved.exists():
+                console.print(f"[green]✓[/green] harness '{name}' exists")
+            else:
+                warnings.append(f"Harness '{name}' points to missing file: {harness_path}")
 
     # Check MCP servers config (if present)
     mcp_config = raw_config.get("mcp_servers", {})
@@ -183,7 +195,7 @@ def config_validate(path: str, fix: bool):
 
     # Load full config to check for errors
     try:
-        cfg = load_config(project_root)
+        cfg = load_config(config_file)
         console.print("[green]✓[/green] Configuration loads successfully")
     except Exception as e:
         issues.append(f"Configuration load error: {e}")

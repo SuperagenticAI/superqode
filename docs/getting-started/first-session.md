@@ -194,16 +194,25 @@ Use `:connect` again if you want to switch provider or model.
 
 ---
 
-## 8. Run Validation When Needed
+## 8. Run Checks When Needed
 
-Validation workflows are separate from normal TUI coding sessions. Run them from the terminal when you want role-based project checks, generated reports, or release validation:
+If your harness defines checks, ask the agent to run the narrowest useful one after making changes. You can also put the command directly in `checks.custom_steps` so the policy travels with the harness.
 
-```bash
-superqode qe run . --mode quick
-superqode qe run . --mode deep
+```yaml
+checks:
+  enabled: true
+  custom_steps:
+    - name: unit-tests
+      command: uv run pytest tests/test_config_loader.py
+      enabled: true
+      timeout: 300
 ```
 
-For day-to-day implementation, stay in the TUI and use focused prompts plus harness policy.
+For normal implementation work, stay in the TUI and use focused prompts plus harness policy:
+
+```text
+Make the smallest safe fix and run the configured unit test.
+```
 
 ---
 

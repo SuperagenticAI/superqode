@@ -7,20 +7,20 @@ Benefits over file snapshots:
 - Git handles all the complexity
 - Preserves build caches (target/, node_modules/, __pycache__/)
 - Can test specific commits
-- Multiple worktrees for parallel QE
+- Multiple worktrees for parallel workspace
 - Native git integration
 
 Usage:
     manager = GitWorktreeManager(project_root)
 
-    # Create QE worktree
+    # Create workspace worktree
     worktree = await manager.create_qe_worktree(
-        session_id="qe-20260108",
+        session_id="workspace-20260108",
         base_ref="HEAD",
         copy_uncommitted=True,
     )
 
-    # Run QE in worktree...
+    # Run workspace in worktree...
 
     # Cleanup
     await manager.remove_worktree(worktree)
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class WorktreeInfo:
-    """Information about a QE worktree."""
+    """Information about a workspace worktree."""
 
     path: Path
     session_id: str
@@ -64,11 +64,11 @@ class WorktreeInfo:
 
 class GitWorktreeManager:
     """
-    Manage git worktrees for QE sessions.
+    Manage git worktrees for workspace tracking sessions.
 
-    Creates isolated worktrees for QE analysis while:
+    Creates isolated worktrees for workspace analysis while:
     - Preserving build caches for faster test runs
-    - Supporting multiple parallel QE sessions
+    - Supporting multiple parallel workspace tracking sessions
     - Enabling testing of specific commits
     """
 
@@ -101,7 +101,7 @@ class GitWorktreeManager:
     @property
     def worktree_base(self) -> Path:
         """Base directory for this repo's worktrees."""
-        return self.WORKTREE_ROOT / self.repo_name / "qe"
+        return self.WORKTREE_ROOT / self.repo_name / "workspace"
 
     def _find_git_root(self) -> Path:
         """Find the git repository root."""
@@ -175,7 +175,7 @@ class GitWorktreeManager:
         keep_gitignored: bool = True,
     ) -> WorktreeInfo:
         """
-        Create an isolated worktree for a QE session.
+        Create an isolated worktree for a workspace tracking session.
 
         Args:
             session_id: Unique session identifier
@@ -223,7 +223,7 @@ class GitWorktreeManager:
         # Register worktree
         await self._register_worktree(info)
 
-        logger.info(f"Created QE worktree: {worktree_path} @ {base_commit[:8]}")
+        logger.info(f"Created workspace worktree: {worktree_path} @ {base_commit[:8]}")
 
         return info
 
@@ -321,7 +321,7 @@ class GitWorktreeManager:
         return copied
 
     async def remove_worktree(self, worktree: WorktreeInfo, force: bool = False) -> None:
-        """Remove a QE worktree."""
+        """Remove a workspace worktree."""
         if not worktree.path.exists():
             logger.debug(f"Worktree already removed: {worktree.path}")
             return
@@ -346,7 +346,7 @@ class GitWorktreeManager:
         logger.info(f"Removed worktree: {worktree.path}")
 
     async def list_worktrees(self) -> List[WorktreeInfo]:
-        """List all QE worktrees for this repository."""
+        """List all workspace worktrees for this repository."""
         worktrees = []
 
         registry_file = self.SESSION_REGISTRY / f"{self.repo_name}.json"
@@ -421,13 +421,13 @@ class GitWorktreeManager:
             pass
 
 
-async def prepare_qe_worktree(
+async def prepare_workspace_worktree(
     project_root: Path,
     session_id: str,
     base_ref: str = "HEAD",
 ) -> WorktreeInfo:
     """
-    Convenience function to prepare a QE worktree.
+    Convenience function to prepare a workspace worktree.
 
     Creates or reuses a worktree pinned to base_ref with uncommitted changes.
     """

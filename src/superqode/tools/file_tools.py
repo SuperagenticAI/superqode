@@ -4,7 +4,7 @@ File Tools - Minimal, Transparent File Operations.
 NO fancy algorithms, NO hidden context, NO opinionated formatting.
 Just raw file operations that let the model do its thing.
 
-When a QE session is active, writes are routed through the WorkspaceManager
+When a workspace tracking session is active, writes are routed through the WorkspaceManager
 to ensure the immutable repo guarantee.
 """
 
@@ -19,6 +19,7 @@ from .validation import (
 )
 from .file_tracking import record_file_read
 from .diff_utils import build_unified_diff, diff_stats
+from .post_edit import verify_edit
 
 
 def _get_workspace():
@@ -116,7 +117,7 @@ class ReadFileTool(Tool):
 class WriteFileTool(Tool):
     """Write content to a file. Creates directories if needed.
 
-    When a QE session is active, writes go through the WorkspaceManager
+    When a workspace tracking session is active, writes go through the WorkspaceManager
     to ensure changes can be tracked and reverted.
     """
 
@@ -156,7 +157,7 @@ class WriteFileTool(Tool):
                 "additions": additions,
                 "deletions": deletions,
             }
-            # Check if QE session is active - route through workspace
+            # Check if workspace tracking is active - route through workspace
             workspace = _get_workspace()
             if workspace:
                 # Get relative path for workspace
@@ -165,11 +166,11 @@ class WriteFileTool(Tool):
                     workspace.write_file(str(rel_path), content)
                     return ToolResult(
                         success=True,
-                        output=f"Successfully wrote {len(content)} bytes to {path} (tracked for QE revert)",
+                        output=f"Successfully wrote {len(content)} bytes to {path} (tracked for revert)",
                         metadata={
                             "path": str(file_path),
                             "size": len(content),
-                            "qe_tracked": True,
+                            "workspace_tracked": True,
                             **diff_metadata,
                         },
                     )
@@ -177,14 +178,18 @@ class WriteFileTool(Tool):
                     # Path is outside project root, write directly
                     pass
 
-            # Direct write (no QE session or outside project)
+            # Direct write (no workspace tracking or outside project)
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(content)
 
-            return ToolResult(
-                success=True,
-                output=f"Successfully wrote {len(content)} bytes to {path}",
-                metadata={"path": str(file_path), "size": len(content), **diff_metadata},
+            return await verify_edit(
+                ToolResult(
+                    success=True,
+                    output=f"Successfully wrote {len(content)} bytes to {path}",
+                    metadata={"path": str(file_path), "size": len(content), **diff_metadata},
+                ),
+                file_path,
+                ctx,
             )
 
         except Exception as e:
@@ -241,11 +246,11 @@ class CreateFileTool(Tool):
                     workspace.write_file(str(rel_path), content)
                     return ToolResult(
                         success=True,
-                        output=f"Successfully created {path} ({len(content)} bytes, tracked for QE revert)",
+                        output=f"Successfully created {path} ({len(content)} bytes, tracked for revert)",
                         metadata={
                             "path": str(file_path),
                             "size": len(content),
-                            "qe_tracked": True,
+                            "workspace_tracked": True,
                             **diff_metadata,
                         },
                     )
@@ -255,10 +260,14 @@ class CreateFileTool(Tool):
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(content)
 
-            return ToolResult(
-                success=True,
-                output=f"Successfully created {path} ({len(content)} bytes)",
-                metadata={"path": str(file_path), "size": len(content), **diff_metadata},
+            return await verify_edit(
+                ToolResult(
+                    success=True,
+                    output=f"Successfully created {path} ({len(content)} bytes)",
+                    metadata={"path": str(file_path), "size": len(content), **diff_metadata},
+                ),
+                file_path,
+                ctx,
             )
 
         except Exception as e:

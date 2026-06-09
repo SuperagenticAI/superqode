@@ -2,11 +2,11 @@
 SuperQode Workspace Module.
 
 Provides ephemeral-edit workspace with immutable repo guarantee.
-Agents can freely modify code for QA without touching the repo permanently.
+Agents can modify code in tracked sessions without touching the repo permanently.
 
 Features:
 - Git worktree-based isolation
-- QE session coordination with locking
+- workspace tracking session coordination with locking
 - Diff tracking for patch generation
 - Artifact management
 - Git-based snapshots for robust state tracking
@@ -17,8 +17,8 @@ from .manager import WorkspaceManager, WorkspaceState
 from .artifacts import ArtifactManager, ArtifactType
 from .git_guard import GitGuard, GitOperationBlocked
 from .snapshot import SnapshotManager
-from .worktree import GitWorktreeManager, WorktreeInfo, prepare_qe_worktree
-from .coordinator import QECoordinator, QELock, notify_file_change
+from .worktree import GitWorktreeManager, WorktreeInfo, prepare_workspace_worktree
+from .coordinator import WorkspaceCoordinator, WorkspaceLock, notify_file_change
 from .diff_tracker import DiffTracker, ChangeType, generate_patch_file
 
 # New advanced features
@@ -50,10 +50,10 @@ __all__ = [
     # Git worktree
     "GitWorktreeManager",
     "WorktreeInfo",
-    "prepare_qe_worktree",
+    "prepare_workspace_worktree",
     # Coordination
-    "QECoordinator",
-    "QELock",
+    "WorkspaceCoordinator",
+    "WorkspaceLock",
     "notify_file_change",
     # Diff tracking
     "DiffTracker",

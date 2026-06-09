@@ -22,8 +22,7 @@ superqode agents list [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `--protocol` | Filter by protocol: `acp` or `external` |
-| `--supported` | Show only supported agents |
+| `--store` | Show agent store interface |
 
 ### Examples
 
@@ -31,37 +30,9 @@ superqode agents list [OPTIONS]
 # List all agents
 superqode agents list
 
-# List only ACP agents
-superqode agents list --protocol acp
-
-# List only supported agents
-superqode agents list --supported
+# Show agent store
+superqode agents list --store
 ```
-
-### Output
-
-Shows a table with:
-- **Agent**: Agent identifier
-- **Name**: Full agent name
-- **Protocol**: ACP or EXTERNAL
-- **Status**: [CORRECT] Supported, 🔜 Coming Soon, or  Experimental
-- **Description**: Brief agent description
-
-### Example Output
-
-```
-Coding Agents
-┌───────────┬──────────────────┬──────────┬─────────────────────┬────────────────────────────┐
-│ Agent     │ Name             │ Protocol │ Status              │ Description                │
-├───────────┼──────────────────┼──────────┼─────────────────────┼────────────────────────────┤
-│ opencode  │ OpenCode         │ ACP      │ [CORRECT] Supported        │ Full-featured coding agent │
-│ codex     │ Codex            │ ACP      │ Experimental         │ OpenAI ACP adapter         │
-└───────────┴──────────────────┴──────────┴─────────────────────┴────────────────────────────┘
-
-Total: 15 agents, 8 supported
-```
-
-The actual list is generated from built-in agent cards plus any local agent definitions on your machine.
 
 ---
 
@@ -70,14 +41,14 @@ The actual list is generated from built-in agent cards plus any local agent defi
 Show detailed information about a specific agent.
 
 ```bash
-superqode agents show AGENT_ID
+superqode agents show AGENT
 ```
 
 ### Arguments
 
 | Argument | Description |
 |----------|-------------|
-| `AGENT_ID` | Agent identifier (e.g., `opencode`, `claude`) |
+| `AGENT` | Agent identifier (e.g., `opencode`, `claude`) |
 
 ### Examples
 
@@ -89,55 +60,60 @@ superqode agents show opencode
 superqode agents show claude
 ```
 
-### Output
+---
 
-Displays detailed agent information including:
-- Agent name and identifier
-- Protocol type
-- Status (Supported/Coming Soon/Experimental)
-- Connection type
-- Description
-- Capabilities
-- Authentication requirements
-- Setup instructions
-- Configuration example
+## agents doctor
 
-### Example Output
+Check ACP agent installation, setup, and optional protocol health.
 
+```bash
+superqode agents doctor [AGENT] [OPTIONS]
 ```
-Agent: SST OpenCode
-ID: opencode
-Protocol: ACP
-Status: [CORRECT] Supported
-Connection: stdio
 
-Description:
-  Full-featured coding agent with file editing, shell access, MCP support
+### Options
 
-Capabilities:
-  • File editing
-  • Shell command execution
-  • MCP tool integration
-  • Git operations
+| Option | Description |
+|--------|-------------|
+| `--live` | Start the ACP agent and check protocol support |
+| `--timeout` | Live protocol check timeout in seconds (default: 10.0) |
+| `--json` | Emit JSON output |
 
-Authentication:
-  Managed by OpenCode CLI (run `opencode /connect`)
+---
 
-Setup:
-  npm i -g opencode-ai
+## agents install
 
-Usage in superqode.yaml:
-  team:
-    dev:
-      roles:
-        my-role:
-          mode: "acp"
-          agent: "opencode"
-          agent_config:
-            provider: "anthropic"
-            model: "claude-sonnet-4-20250514"
-          job_description: |
-            Your job description here...
+Install an ACP coding agent.
+
+```bash
+superqode agents install AGENT
+```
+
+---
+
+## agents free-models
+
+List free-tier models discovered across all installed ACP agents.
+
+```bash
+superqode agents free-models [OPTIONS]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--agent` | Only show free models from this agent |
+| `--refresh` | Skip the discovery cache and re-probe live |
+| `--json` | Emit JSON instead of a table |
+
+---
+
+## agents store
+
+Show the agent store interface.
+
+```bash
+superqode agents store
 ```
 
 ---
@@ -146,83 +122,3 @@ Usage in superqode.yaml:
 
 - `superqode connect acp <agent>` - Connect to an ACP agent
 - `superqode providers list` - List BYOK providers
-- `superqode config list-modes` - View configured modes and roles
-
----
-
-## Agent Status Types
-
-| Status | Description |
-|--------|-------------|
-| **[CORRECT] Supported** | Fully tested and ready for production use |
-| **🔜 Coming Soon** | Planned for future release |
-| ** Experimental** | Available but may have limitations |
-
----
-
-## Common Workflows
-
-### Discover Available Agents
-
-```bash
-# See all available agents
-superqode agents list
-
-# Filter to only supported ACP agents
-superqode agents list --protocol acp --supported
-```
-
-### Get Agent Details
-
-```bash
-# View details for a specific agent
-superqode agents show opencode
-```
-
-### Configure Agent in Team
-
-After finding an agent, add it to your `superqode.yaml`:
-
-```yaml
-team:
-  dev:
-    roles:
-      coding_assistant:
-        mode: "acp"
-        agent: "opencode"  # From agents list
-        agent_config:
-          provider: "anthropic"
-          model: "claude-sonnet-4-20250514"
-        job_description: |
-          You are a coding assistant...
-```
-
----
-
-## Troubleshooting
-
-### Agent Not Found
-
-```
-Error: Agent 'unknown-agent' not found
-```
-
-**Solution**: Use `superqode agents list` to see available agents.
-
-### Agent Installation
-
-Some agents require installation before use. Check the agent's setup instructions:
-
-```bash
-superqode agents show <agent-id>
-```
-
-The output includes setup commands and prerequisites.
-
----
-
-## Next Steps
-
-- [Provider Commands](provider-commands.md) - BYOK provider management
-- [Config Commands](config-commands.md) - Configuration management
-- [Team Configuration](../configuration/team.md) - Team and role setup

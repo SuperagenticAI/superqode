@@ -1,14 +1,4 @@
-"""
-Execution module - Hard-constrained test execution roles.
-
-These are "dumb runners" that execute existing tests without
-discovery, inference, or generation.
-
-Roles:
-- Smoke Tester: Runs smoke tests, fail-fast, no discovery
-- Sanity Tester: Runs sanity tests, verifies recent changes
-- Regression Tester: Runs full regression suite, detects flakes
-"""
+"""Execution module for local runners and runtime configuration."""
 
 from .runner import (
     TestRunner,
@@ -19,7 +9,7 @@ from .runner import (
     TestSuiteResult,
 )
 from .linter import LinterRunner, LinterRunResult
-from .modes import ExecutionMode, QuickScanConfig, DeepQEConfig
+from .modes import ExecutionMode
 
 __all__ = [
     "TestRunner",
@@ -31,6 +21,4 @@ __all__ = [
     "LinterRunner",
     "LinterRunResult",
     "ExecutionMode",
-    "QuickScanConfig",
-    "DeepQEConfig",
 ]

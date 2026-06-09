@@ -110,6 +110,9 @@ Full support with optimized prompts (Enterprise adds prompt packs):
 | Anthropic | Claude Opus 4.5, Sonnet 4, Haiku 4 |
 | OpenAI | GPT-4o, o1 |
 | Google | Gemini 2.5 Pro/Flash |
+| Deepseek | Deepseek V3, R1 |
+| Mistral | Mistral Large |
+| xAI | Grok |
 
 ### Tier 2 (Supported)
 
@@ -117,9 +120,7 @@ Tested and supported:
 
 | Provider | Models |
 |----------|--------|
-| Deepseek | Deepseek V3, R1 |
-| Mistral | Mistral Large |
-| xAI | Grok |
+| (Model hosts and smaller providers) | Various models |
 
 ### Local Tier
 
@@ -132,6 +133,9 @@ Self-hosted options:
 | LM Studio | GUI-based local models |
 | MLX | General Apple Silicon model serving |
 | vLLM | High-performance inference |
+| SGLang | Efficient structured generation |
+| TGI | Text Generation Inference |
+| llama.cpp | Lightweight CPU-first inference |
 
 ---
 
@@ -186,24 +190,6 @@ providers:
       - qwen3:8b
 ```
 
-### Per-Role Configuration
-
-```yaml
-team:
-  modes:
-    qe:
-      roles:
-        security_tester:
-          mode: byok
-          provider: anthropic
-          model: claude-sonnet-4
-
-        unit_tester:
-          mode: local
-          provider: ollama
-          model: qwen3:8b
-```
-
 ---
 
 ## Provider Categories
@@ -242,6 +228,10 @@ team:
 | `lmstudio` | 1234 | GUI interface |
 | `mlx` | 8080 | Apple Silicon |
 | `vllm` | 8000 | Production |
+| `sglang` | 30000 | Structured generation |
+| `tgi` | 8080 | Hugging Face TGI |
+| `llamacpp` | 8080 | Lightweight CPU inference |
+| `ds4` | 8000 | Local DS4 server |
 
 ---
 

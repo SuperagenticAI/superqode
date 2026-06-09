@@ -1,0 +1,50 @@
+identity = "bub.dev"
+name = "Bub"
+short_name = "bub"
+url = "https://github.com/bubbuild/bub"
+protocol = "acp"
+author_name = "Bub Build"
+author_url = "https://github.com/bubbuild"
+publisher_name = "Bub Build"
+publisher_url = "https://github.com/bubbuild"
+type = "coding"
+description = "AI coding agent with ACP support via bub-acp-server adapter."
+tags = ["open-source", "coding", "acp"]
+run_command."*" = "bub acp serve"
+
+help = '''
+# Bub
+
+AI coding agent with ACP support.
+
+## Installation
+
+```bash
+# Install ACP adapter in Bub environment
+bub install bub-acp-server@main
+```
+
+Or install from source:
+
+```bash
+uv pip install "git+https://github.com/bubbuild/bub-contrib.git#subdirectory=packages/bub-acp-server"
+```
+
+Run the ACP server:
+
+```bash
+bub acp serve
+```
+
+Or use the standalone entry point:
+
+```bash
+bub-acp-server
+```
+
+See https://github.com/bubbuild/bub-contrib/tree/main/packages/bub-acp-server
+'''
+
+[actions."*".install]
+command = "bub install bub-acp-server@main"
+description = "Install Bub ACP adapter"

@@ -139,17 +139,6 @@ from superqode.app.theme_bridge import (
     theme_names,
 )
 
-# validation roles that should be highlighted as power roles in the TUI.
-POWER_QE_ROLES = {
-    "unit_tester",
-    "integration_tester",
-    "api_tester",
-    "ui_tester",
-    "accessibility_tester",
-    "security_tester",
-    "usability_tester",
-}
-
 # SuperQode modules
 from superqode.danger import (
     analyze_command,
@@ -328,8 +317,9 @@ class SelectionAwareInput(TextArea):
     and directly calls the app's navigation/selection actions when in selection mode.
     """
 
-    MIN_PROMPT_HEIGHT = 1
-    MAX_PROMPT_HEIGHT = 6
+    # Start tall enough to invite longer prompts; grow up to the max, then scroll.
+    MIN_PROMPT_HEIGHT = 3
+    MAX_PROMPT_HEIGHT = 8
     DEFAULT_PLACEHOLDER = "Type, paste, or use OS dictation. Type : for commands."
 
     # A prompt box should behave like an ordinary text field. TextArea's defaults
@@ -439,6 +429,7 @@ class SelectionAwareInput(TextArea):
             or getattr(app, "_awaiting_codex_effort", False)
             or getattr(app, "_awaiting_codex_model", False)
             or getattr(app, "_awaiting_connect_type", False)
+            or getattr(app, "_awaiting_runtime_selection", False)
             or getattr(app, "_awaiting_local_provider", False)
             or getattr(app, "_awaiting_model_selection", False)
             # Excluded: _awaiting_byok_model, _awaiting_local_model
@@ -504,7 +495,8 @@ class SelectionAwareInput(TextArea):
         if event.key in ("1", "2", "3", "4", "5", "6", "7", "8", "9"):
             # For BYOK/local provider/model selection, buffer digits for multi-digit entry
             if (
-                getattr(app, "_awaiting_byok_provider", False)
+                getattr(app, "_awaiting_acp_agent_selection", False)
+                or getattr(app, "_awaiting_byok_provider", False)
                 or getattr(app, "_awaiting_local_provider", False)
                 or getattr(app, "_awaiting_byok_model", False)
                 or getattr(app, "_awaiting_local_model", False)
@@ -582,6 +574,15 @@ class SelectionAwareInput(TextArea):
                     app.action_navigate_connect_type_down()
                 return
 
+            if getattr(app, "_awaiting_runtime_selection", False):
+                event.stop()
+                event.prevent_default()
+                if event.key == "up":
+                    app.action_navigate_runtime_up()
+                else:
+                    app.action_navigate_runtime_down()
+                return
+
             # Handle local provider/model arrows here too. Relying on the event
             # bubbling to the app-level handler is unreliable because the
             # underlying TextArea consumes up/down for cursor movement first.
@@ -651,6 +652,7 @@ class SelectionAwareInput(TextArea):
             ("_awaiting_codex_model", "action_select_highlighted_codex_model"),
             ("_awaiting_codex_effort", "action_select_highlighted_codex_effort"),
             ("_awaiting_connect_type", "action_select_highlighted_connect_type"),
+            ("_awaiting_runtime_selection", "action_select_highlighted_runtime"),
             ("_awaiting_local_provider", "action_select_highlighted_local_provider"),
             ("_awaiting_local_model", "action_select_highlighted_local_model"),
             ("_awaiting_model_selection", "action_select_highlighted_acp_model"),
@@ -669,66 +671,121 @@ class SelectionAwareInput(TextArea):
 # ============================================================================
 
 
-def render_welcome(agents: List[AgentInfo], team_name: str = "Development Team") -> Group:
+def render_welcome(
+    agents: List[AgentInfo],
+    team_name: str = "Development Team",
+    width: Optional[int] = None,
+) -> Group:
     from rich.align import Align
+
+    # Responsive layout: the ASCII logo and feature columns have a natural
+    # width (~62 cols). When the terminal is wider we centre everything in the
+    # middle of the screen; when it's narrower we left-align (and let text wrap)
+    # so nothing is clipped off the left edge. `width` is the usable log width;
+    # None means "unknown" → assume wide and centre.
+    logo_lines = [line for line in ASCII_LOGO.strip().split("\n") if line]
+    logo_width = max((len(line) for line in logo_lines), default=0)
+    content_width = max(logo_width, 62)
+    centered = width is None or width >= content_width
+    align = "center" if centered else "left"
+
+    def place(renderable):
+        return Align.center(renderable) if centered else renderable
 
     items = []
 
     # ═══════════════════════════════════════════════════════════════════════
-    # BIG ASCII LOGO with gradient - the hero element (centered)
+    # BIG ASCII LOGO with gradient - the hero element
     # ═══════════════════════════════════════════════════════════════════════
     logo_text = Text()
-    logo_text.append("\n", style="")
-    lines = ASCII_LOGO.strip().split("\n")
-    for i, line in enumerate(lines):
-        color = GRADIENT[i % len(GRADIENT)]
-        logo_text.append(f"{line}\n", style=f"bold {color}")
-    items.append(Align.center(logo_text))
+    # Extra top padding so the logo sits nearer the vertical middle on open.
+    logo_text.append("\n\n", style="")
+    if width is not None and width < logo_width:
+        # Too narrow for the ASCII art - fall back to a compact wordmark so the
+        # banner never gets chopped mid-glyph.
+        logo_text.append("✦ ", style=f"bold {GRADIENT[0]}")
+        logo_text.append("SuperQode", style=f"bold {GRADIENT[3 % len(GRADIENT)]}")
+        logo_text.append(" ✦\n", style=f"bold {GRADIENT[-1]}")
+    else:
+        for i, line in enumerate(logo_lines):
+            color = GRADIENT[i % len(GRADIENT)]
+            logo_text.append(f"{line}\n", style=f"bold {color}")
+    items.append(place(logo_text))
 
     # Spacing
     items.append(Text("\n", style=""))
 
     # ═══════════════════════════════════════════════════════════════════════
-    # DESCRIPTION SECTION - Position SuperQode as a coding agent harness first.
+    # DESCRIPTION SECTION - Tagline + tagline parts + one-liner
     # ═══════════════════════════════════════════════════════════════════════
-    desc_text = Text()
-    desc_text.append("SuperQode = Your Portable Coding Agent Harness\n", style="bold #ffffff")
+    desc_text = Text(justify=align)
+    desc_text.append(
+        "SuperQode = Your Portable Universal Coding Agent Harness\n", style="bold #ffffff"
+    )
     desc_text.append("\n", style="")
-    desc_text.append("Your models", style=f"bold {THEME['cyan']}")
+
+    # Single differentiator line: three accented segments + a muted local-model
+    # tail, dim separators throughout. Wording lives in TAGLINE_PART1/PART2.
+    seg_colors = [THEME["purple"], THEME["cyan"], THEME["gold"]]
+    segments = [s.strip() for s in TAGLINE_PART1.split("·")]
+    for i, segment in enumerate(segments):
+        if i:
+            desc_text.append("  ·  ", style=THEME["dim"])
+        color = seg_colors[i % len(seg_colors)]
+        desc_text.append(segment, style=f"bold {color}")
     desc_text.append("  ·  ", style=THEME["dim"])
-    desc_text.append("Your harness", style=f"bold {THEME['purple']}")
-    desc_text.append("  ·  ", style=THEME["dim"])
-    desc_text.append("Your memory", style=f"bold {THEME['magenta']}")
-    desc_text.append("  ·  ", style=THEME["dim"])
-    desc_text.append("Your Coding Agent", style=f"bold {THEME['pink']}")
+    local_line = TAGLINE_PART2
+    if "Local Models" in local_line:
+        prefix, _, _ = local_line.partition("Local Models")
+        desc_text.append(prefix, style=THEME["muted"])
+        desc_text.append("Local Models", style=f"bold {THEME['cyan']}")
+    else:
+        desc_text.append(local_line, style=THEME["muted"])
     desc_text.append("\n", style="")
-    desc_text.append("Define your own harness and connect any model — ", style=THEME["muted"])
-    desc_text.append("ACP", style=f"bold {THEME['purple']}")
-    desc_text.append(", ", style=THEME["muted"])
-    desc_text.append("BYOK", style=f"bold {THEME['success']}")
-    desc_text.append(", or ", style=THEME["muted"])
-    desc_text.append("local", style=f"bold {THEME['cyan']}")
-    desc_text.append(" — your way.\n", style=THEME["muted"])
-    items.append(Align.center(desc_text))
+    items.append(place(desc_text))
 
-    commands_text = Text()
+    # Spacing
+    items.append(Text("\n", style=""))
 
-    commands_text.append("Start:\n", style=f"bold {THEME['text']}")
-    commands_text.append("  [1] ", style=THEME["dim"])
-    commands_text.append(":connect local", style=f"bold {THEME['cyan']}")
-    commands_text.append("       local models, DS4, Ollama, MLX\n", style=THEME["muted"])
-    commands_text.append("  [2] ", style=THEME["dim"])
-    commands_text.append(":connect byok", style=f"bold {THEME['success']}")
-    commands_text.append("        direct provider/model connection\n", style=THEME["muted"])
-    commands_text.append("  [3] ", style=THEME["dim"])
-    commands_text.append(":connect", style=f"bold {THEME['purple']}")
-    commands_text.append("             choose ACP, BYOK, or local\n", style=THEME["muted"])
-    commands_text.append("  [4] ", style=THEME["dim"])
-    commands_text.append(":recommend coding", style=f"bold {THEME['success']}")
-    commands_text.append("    model recommendations\n", style=THEME["muted"])
-    commands_text.append("  [5] ", style=THEME["dim"])
-    commands_text.append("/sessions", style=f"bold {THEME['orange']}")
-    commands_text.append("             resume previous work\n\n", style=THEME["muted"])
+    # ═══════════════════════════════════════════════════════════════════════
+    # FEATURE LINES - sell each pillar subtly (icon + label + dim one-liner).
+    # Rendered as a single left-aligned block, then centered as a whole so the
+    # label/description columns stay aligned.
+    # ═══════════════════════════════════════════════════════════════════════
+    features = [
+        ("Harness as Code", "declarative HarnessSpec, portable runtimes", THEME["purple"]),
+        ("Any Connection", "ACP · MCP · A2A · BYOK · local · SDKs", THEME["cyan"]),
+        ("Local-First", "tuned + optimized for local models", THEME["gold"]),
+    ]
+    label_width = max(len(label) for label, _, _ in features) + 2
+    features_text = Text()
+    for label, desc, color in features:
+        features_text.append("⬡  ", style=color)
+        features_text.append(label.ljust(label_width), style=f"bold {color}")
+        features_text.append(f"{desc}\n", style=THEME["muted"])
+    items.append(place(features_text))
+
+    # Spacing
+    items.append(Text("\n", style=""))
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # QUICK START + KEYS - centered, one entry per line (no column padding so
+    # justify=center keeps every row visually centered).
+    # ═══════════════════════════════════════════════════════════════════════
+    commands_text = Text(justify=align)
+    commands_text.append("Quick Start\n", style=f"bold {THEME['text']}")
+    starts = [
+        ("1", ":connect", "choose ACP, BYOK, or local", THEME["purple"]),
+        ("2", ":connect local", "local models · DS4 · Ollama · MLX", THEME["cyan"]),
+        ("3", ":connect byok", "direct provider / model connection", THEME["success"]),
+        ("4", "/sessions", "resume previous work", THEME["orange"]),
+    ]
+    for num, cmd, desc, color in starts:
+        commands_text.append(f"[{num}] ", style=THEME["dim"])
+        commands_text.append(cmd, style=f"bold {color}")
+        commands_text.append("  →  ", style=THEME["dim"])
+        commands_text.append(f"{desc}\n", style=THEME["muted"])
+    commands_text.append("\n", style="")
     commands_text.append("Keys: ", style=THEME["muted"])
     commands_text.append("Ctrl+K", style=f"bold {THEME['cyan']}")
     commands_text.append(" commands  •  ", style=THEME["muted"])
@@ -737,7 +794,7 @@ def render_welcome(agents: List[AgentInfo], team_name: str = "Development Team")
     commands_text.append(":help", style=f"bold {THEME['cyan']}")
     commands_text.append(" reference\n", style=THEME["muted"])
 
-    items.append(Align.center(commands_text))
+    items.append(place(commands_text))
 
     return Group(*items)
 
@@ -811,6 +868,10 @@ class SuperQodeApp(App):
         Binding("up", "navigate_connect_type_up", "↑ Previous type", show=False),
         Binding("down", "navigate_connect_type_down", "↓ Next type", show=False),
         Binding("enter", "select_highlighted_connect_type", "Select highlighted type", show=False),
+        # Arrow keys for runtime navigation
+        Binding("up", "navigate_runtime_up", "↑ Previous runtime", show=False),
+        Binding("down", "navigate_runtime_down", "↓ Next runtime", show=False),
+        Binding("enter", "select_highlighted_runtime", "Select highlighted runtime", show=False),
         # Arrow keys for ACP agent navigation
         Binding("up", "navigate_acp_agent_up", "↑ Previous agent", show=False),
         Binding("down", "navigate_acp_agent_down", "↓ Next agent", show=False),
@@ -864,6 +925,9 @@ class SuperQodeApp(App):
     is_busy = reactive(False)
     sidebar_visible = reactive(False)
     show_thinking_logs = reactive(True)  # Toggle for thinking logs visibility (default enabled)
+    # "normal" folds the agent loop's per-iteration bookkeeping into the live
+    # throbber and rate-limits reasoning; "verbose" prints every line as before.
+    thinking_verbosity = reactive("normal")
     show_verbose_agent_logs = reactive(False)  # Show raw [agent] session logs (verbose mode)
     approval_mode = reactive(
         "ask"
@@ -1285,6 +1349,13 @@ class SuperQodeApp(App):
     def on_mount(self):
         # Focus input after a short delay to ensure widgets are fully ready
         self.set_timer(0.1, self._focus_input_on_ready)
+        # Give the prompt box a subtle titled border for polish.
+        try:
+            input_box = self.query_one("#input-box")
+            input_box.border_title = "✎ Build"
+            input_box.border_subtitle = "Enter to send · : for commands · @ for files"
+        except Exception:
+            pass
         self._load_welcome()
         # Sync approval mode to hints bar
         self._sync_approval_mode()
@@ -1531,7 +1602,7 @@ class SuperQodeApp(App):
             PaletteCommand(
                 "harness_inspect",
                 "Harness Inspect",
-                "Summarize active HarnessSpec policy, tools, workflow, hooks, and validation",
+                "Summarize active HarnessSpec policy, tools, workflow, hooks, and checks",
                 "▤",
                 ":harness inspect",
                 "harness",
@@ -1718,6 +1789,30 @@ class SuperQodeApp(App):
                 "🔐",
                 ":mode",
                 "safety",
+            ),
+            PaletteCommand(
+                "context",
+                "Context Window",
+                "Show/pin the detected context window + compaction budgets",
+                "🪟",
+                ":context",
+                "harness",
+            ),
+            PaletteCommand(
+                "workspace",
+                "Search Workspace",
+                "Register repos for fast multi-repo (--all-repos) search",
+                "📁",
+                ":workspace list",
+                "harness",
+            ),
+            PaletteCommand(
+                "thinking",
+                "Thinking Detail",
+                "Cycle thinking-log detail (Normal / Verbose / Off)",
+                "🔎",
+                ":thinking",
+                "system",
             ),
             PaletteCommand("help", "Help", "Show command reference", "?", ":help", "system"),
             PaletteCommand(
@@ -1994,23 +2089,64 @@ class SuperQodeApp(App):
     @work(thread=True)
     def _load_welcome(self):
         # Agents are now lazy loaded - no need to preload
-        try:
-            from superqode.team_config import load_team_config
-
-            team_name = load_team_config().team_name
-        except Exception:
-            team_name = "Development Team"
+        team_name = Path.cwd().name or "SuperQode"
         self._call_ui(self._show_welcome, team_name)
+
+    def _welcome_width(self, log) -> Optional[int]:
+        """Usable inner width of the log, used to lay the welcome out responsively."""
+        try:
+            w = log.scrollable_content_region.width
+            return w if w and w > 0 else None
+        except Exception:
+            return None
 
     def _show_welcome(self, team_name: str):
         log = self.query_one("#log", ConversationLog)
         # Temporarily disable auto-scroll so we can scroll to top
         log.auto_scroll = False
-        log.write(render_welcome(self.agents, team_name))
+        # expand=True makes the renderable fill the full log width so the
+        # centered welcome blocks sit in the middle of the screen, not the left.
+        log.write(
+            render_welcome(self.agents, team_name, width=self._welcome_width(log)),
+            expand=True,
+        )
+        # Mark that the log currently shows only the welcome, so resizes can
+        # re-flow it responsively until the user starts interacting.
+        self._welcome_active = True
         self._maybe_show_onboarding(log)
         # Scroll to top so user sees the attractive header first
         log.scroll_home(animate=False)
         # Re-enable auto-scroll for future messages
+        self.set_timer(0.2, lambda: setattr(log, "auto_scroll", True))
+
+    def on_resize(self, event: events.Resize) -> None:
+        """Re-flow the welcome screen when only it is shown and the size changes."""
+        if not getattr(self, "_welcome_active", False):
+            return
+        existing = getattr(self, "_welcome_resize_timer", None)
+        if existing is not None:
+            try:
+                existing.stop()
+            except Exception:
+                pass
+        # Debounce: resize fires rapidly while dragging the terminal edge.
+        self._welcome_resize_timer = self.set_timer(0.12, self._rerender_welcome)
+
+    def _rerender_welcome(self) -> None:
+        if not getattr(self, "_welcome_active", False):
+            return
+        try:
+            log = self.query_one("#log", ConversationLog)
+        except Exception:
+            return
+        team_name = Path.cwd().name or "SuperQode"
+        log.auto_scroll = False
+        log.clear()
+        log.write(
+            render_welcome(self.agents, team_name, width=self._welcome_width(log)),
+            expand=True,
+        )
+        log.scroll_home(animate=False)
         self.set_timer(0.2, lambda: setattr(log, "auto_scroll", True))
 
     @staticmethod
@@ -2029,33 +2165,47 @@ class SuperQodeApp(App):
         t = Text()
         t.append("\n  ╭─ ", style=THEME["purple"])
         t.append("Welcome to SuperQode 👋", style=f"bold {THEME['purple']}")
-        t.append("  first run, here's the 30-second start\n", style=THEME["muted"])
+        t.append("  First time? Here's the 30-second start.\n", style=THEME["muted"])
         t.append("  │\n", style=THEME["purple"])
-        steps = [
-            ("1", "Connect a model", ":connect", "pick ACP, BYOK, or a local provider"),
-            ("2", "Pick a model", "↑/↓ then Enter", "or type the number shown"),
-            ("3", "Start coding", "just type", "describe what you want to build"),
-        ]
-        for num, title, cmd, hint in steps:
-            t.append(f"  │  {num}. ", style=f"bold {THEME['cyan']}")
-            t.append(f"{title}  ", style=f"bold {THEME['text']}")
-            t.append(cmd, style=f"bold {THEME['success']}")
-            t.append(f"  — {hint}\n", style=THEME["muted"])
+        t.append("  │  Quick Start\n", style=f"bold {THEME['success']}")
         t.append("  │\n", style=THEME["purple"])
-        t.append("  │  Handy: ", style=THEME["muted"])
-        t.append("@file", style=THEME["cyan"])
-        t.append(" reference  •  ", style=THEME["muted"])
-        t.append("PgUp/PgDn", style=THEME["cyan"])
-        t.append(" scroll  •  ", style=THEME["muted"])
-        t.append("Ctrl+G", style=THEME["cyan"])
-        t.append(" stash draft  •  ", style=THEME["muted"])
-        t.append(":transcript", style=THEME["cyan"])
-        t.append(" history  •  ", style=THEME["muted"])
-        t.append("Esc Esc", style=THEME["cyan"])
-        t.append(" rewind\n", style=THEME["muted"])
-        t.append("  ╰─ Type ", style=THEME["purple"])
+        t.append("  │  1. ", style=f"bold {THEME['cyan']}")
+        t.append("Connect  ", style=f"bold {THEME['text']}")
+        t.append(":connect", style=f"bold {THEME['success']}")
+        t.append("       pick ACP, BYOK, or local provider\n", style=THEME["muted"])
+        t.append("  │  2. ", style=f"bold {THEME['cyan']}")
+        t.append("Pick     ", style=f"bold {THEME['text']}")
+        t.append("↑/↓ then Enter", style=f"bold {THEME['success']}")
+        t.append("  or type a number\n", style=THEME["muted"])
+        t.append("  │  3. ", style=f"bold {THEME['cyan']}")
+        t.append("Start    ", style=f"bold {THEME['text']}")
+        t.append("just type", style=f"bold {THEME['success']}")
+        t.append("       describe what to build\n", style=THEME["muted"])
+        t.append("  │\n", style=THEME["purple"])
+        t.append("  │  Or skip straight in:\n", style=THEME["muted"])
+        t.append("  │  ", style=THEME["muted"])
+        t.append(":recommend coding", style=f"bold {THEME['success']}")
+        t.append("    get model suggestions\n", style=THEME["muted"])
+        t.append("  │  ", style=THEME["muted"])
+        t.append(":acp list", style=f"bold {THEME['purple']}")
+        t.append("             browse all coding agents\n", style=THEME["muted"])
+        t.append("  │  ", style=THEME["muted"])
         t.append(":help", style=f"bold {THEME['cyan']}")
-        t.append(" anytime. This message won't show again.\n", style=THEME["muted"])
+        t.append("                 full command reference\n", style=THEME["muted"])
+        t.append("  │\n", style=THEME["purple"])
+        t.append("  │  ", style=THEME["dim"])
+        t.append("Tips: ", style=THEME["muted"])
+        t.append("@file", style=THEME["cyan"])
+        t.append(" to reference  •  ", style=THEME["dim"])
+        t.append("Ctrl+K", style=THEME["cyan"])
+        t.append(" for palettes  •  ", style=THEME["dim"])
+        t.append("Ctrl+G", style=THEME["cyan"])
+        t.append(" to stash\n", style=THEME["dim"])
+        t.append("  ╰─ This welcome card won't show again - ", style=THEME["purple"])
+        t.append(":help", style=f"bold {THEME['cyan']}")
+        t.append(" anytime  •  ", style=THEME["purple"])
+        t.append("Ctrl+L", style=f"bold {THEME['cyan']}")
+        t.append(" to redraw.\n", style=THEME["purple"])
         log.write(t)
 
         try:
@@ -2611,6 +2761,16 @@ class SuperQodeApp(App):
                 elif event.key == "enter":
                     self.action_select_highlighted_connect_type()
 
+            elif getattr(self, "_awaiting_runtime_selection", False):
+                event.stop()
+                handled = True
+                if event.key == "up":
+                    self.action_navigate_runtime_up()
+                elif event.key == "down":
+                    self.action_navigate_runtime_down()
+                elif event.key == "enter":
+                    self.action_select_highlighted_runtime()
+
             elif getattr(self, "_awaiting_local_provider", False):
                 event.stop()
                 handled = True
@@ -2649,19 +2809,39 @@ class SuperQodeApp(App):
     # Leader keys are now handled entirely through the popup widget system
     # This ensures zero latency when typing in the input field
 
-    def action_toggle_thinking(self):
-        """Toggle visibility of thinking/log output."""
-        self.show_thinking_logs = not self.show_thinking_logs
-        log = self.query_one("#log", ConversationLog)
+    # Ctrl+T cycles through these thinking-log states in order.
+    _THINKING_CYCLE = ("normal", "verbose", "off")
 
-        # Also toggle on the current TUI logger if one exists
-        if hasattr(self, "_current_tui_logger") and self._current_tui_logger:
+    def _current_thinking_state(self) -> str:
+        if not self.show_thinking_logs:
+            return "off"
+        return "verbose" if self.thinking_verbosity == "verbose" else "normal"
+
+    def _apply_thinking_state(self, state: str) -> None:
+        """Set the reactive flags for a thinking state ('normal'|'verbose'|'off')."""
+        if state == "off":
+            self.show_thinking_logs = False
+        else:
+            self.show_thinking_logs = True
+            self.thinking_verbosity = "verbose" if state == "verbose" else "normal"
+        # Mirror onto the current TUI logger if one exists.
+        if getattr(self, "_current_tui_logger", None):
             self._current_tui_logger.logger.config.show_thinking = self.show_thinking_logs
 
-        if self.show_thinking_logs:
-            log.add_info("Thinking logs: ON - agent reasoning/session notes are visible")
-        else:
-            log.add_info("Thinking logs: OFF - compact stream view enabled")
+    def action_toggle_thinking(self):
+        """Cycle thinking-log detail: Normal → Verbose → Off."""
+        current = self._current_thinking_state()
+        nxt = self._THINKING_CYCLE[
+            (self._THINKING_CYCLE.index(current) + 1) % len(self._THINKING_CYCLE)
+        ]
+        self._apply_thinking_state(nxt)
+        log = self.query_one("#log", ConversationLog)
+        blurbs = {
+            "normal": "Thinking: NORMAL — iterations fold into a live status, reasoning is trimmed",
+            "verbose": "Thinking: VERBOSE — full per-iteration reasoning and loop logs",
+            "off": "Thinking: OFF — compact stream view, only tool calls and the answer",
+        }
+        log.add_info(blurbs[nxt])
 
     def action_undo_action(self):
         """Undo the last agent operation."""
@@ -3044,7 +3224,8 @@ class SuperQodeApp(App):
         log = self.query_one("#log", ConversationLog)
         # While awaiting typed selection, inject digits into prompt instead of auto-selecting
         if (
-            getattr(self, "_awaiting_byok_model", False)
+            getattr(self, "_awaiting_acp_agent_selection", False)
+            or getattr(self, "_awaiting_byok_model", False)
             or getattr(self, "_awaiting_local_model", False)
             or getattr(self, "_awaiting_byok_provider", False)
             or getattr(self, "_awaiting_local_provider", False)
@@ -3072,6 +3253,26 @@ class SuperQodeApp(App):
             profiles = list_connection_profiles()
             if 1 <= num <= len(profiles):
                 self._dispatch_connection_profile(profiles[num - 1], log)
+                return True
+            return False
+
+        # 1b. Handle runtime selection
+        if getattr(self, "_awaiting_runtime_selection", False):
+            runtimes = getattr(self, "_runtime_selection_list", [])
+            if runtimes and 1 <= num <= len(runtimes):
+                info = runtimes[num - 1]
+                if not info.installed:
+                    log.add_error(
+                        f"Runtime '{info.name}' is not installed. Run: {info.install_hint or 'pip install ...'}"
+                    )
+                    return True
+                if not info.implemented:
+                    log.add_error(f"Runtime '{info.name}' is a stub and not yet usable.")
+                    return True
+                self._awaiting_runtime_selection = False
+                self._runtime_cmd(info.name, log)
+                if info.name not in self._SELF_CONTAINED_RUNTIMES:
+                    self._show_byok_providers(log)
                 return True
             return False
 
@@ -3254,6 +3455,9 @@ class SuperQodeApp(App):
 
         log = self.query_one("#log", ConversationLog)
 
+        if getattr(self, "_awaiting_acp_agent_selection", False):
+            self._handle_acp_agent_selection(buf, log)
+            return
         if getattr(self, "_awaiting_byok_provider", False):
             self._handle_byok_provider_selection(buf, log)
             return
@@ -4019,9 +4223,152 @@ class SuperQodeApp(App):
         log = self.query_one("#log", ConversationLog)
         self._dispatch_connection_profile(profiles[idx], log)
 
+    def _show_runtime_picker(self, log: ConversationLog, clear_log: bool = True):
+        """Show interactive runtime picker with highlighting and status."""
+        from superqode.runtime import list_runtimes, resolve_runtime_name
+
+        self._awaiting_byok_provider = False
+        self._awaiting_connect_type = False
+
+        runtimes = list_runtimes()
+        highlighted_idx = getattr(self, "_runtime_highlighted_index", 0)
+        if not (0 <= highlighted_idx < len(runtimes)):
+            highlighted_idx = 0
+
+        t = Text()
+        t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
+        t.append("Select Runtime\n\n", style=f"bold {THEME['text']}")
+
+        current = resolve_runtime_name()
+        for i, info in enumerate(runtimes):
+            num = i + 1
+            is_active = info.name == current
+            is_highlighted = i == highlighted_idx
+
+            if info.installed and info.implemented:
+                status = "ready"
+                status_color = THEME["success"]
+            elif not info.installed:
+                status = "needs setup"
+                status_color = THEME["warning"]
+            else:
+                status = "stub"
+                status_color = THEME["warning"]
+
+            line = Text()
+            if is_highlighted:
+                line.append("  ▶ ", style=f"bold {THEME['success']}")
+                line.append(
+                    f"[{num}] ",
+                    style=self._picker_link_style(f"bold {THEME['success']}", num),
+                )
+                label_style = f"bold {THEME['success']}"
+                line.append(info.name, style=label_style)
+                if is_active:
+                    line.append("  ◀ active\n", style=f"bold {THEME['success']}")
+                else:
+                    line.append("\n", style="")
+            else:
+                line.append(f"    [{num}] ", style=self._picker_link_style(THEME["dim"], num))
+                line.append(info.name, style=f"bold {THEME['text']}")
+                if is_active:
+                    line.append("  ◀ active\n", style=THEME["muted"])
+                else:
+                    line.append("\n", style="")
+            line.append(f"        {info.description}\n", style=THEME["muted"])
+            line.append("        ", style="")
+            line.append(status, style=status_color)
+            line.append("\n\n", style="")
+            t.append(line)
+
+        t.append("  💡 ", style=THEME["muted"])
+        t.append("↑↓", style=THEME["cyan"])
+        t.append(" navigate  ", style=THEME["dim"])
+        t.append("Enter", style=THEME["cyan"])
+        t.append(" select  •  or type a number, e.g. ", style=THEME["dim"])
+        t.append("2", style=THEME["cyan"])
+        t.append("\n", style="")
+
+        if clear_log:
+            log.clear()
+            log.auto_scroll = False
+            log.write(t)
+            log.scroll_home(animate=False)
+            log.auto_scroll = True
+        else:
+            log.auto_scroll = False
+            log.clear()
+            log.write(t)
+            log.auto_scroll = True
+
+        self._awaiting_runtime_selection = True
+        self._runtime_highlighted_index = highlighted_idx
+        self._runtime_selection_list = runtimes
+        self.set_timer(0.05, self._ensure_input_focus)
+
+    def action_navigate_runtime_up(self):
+        """Navigate to previous runtime (arrow up)."""
+        if not getattr(self, "_awaiting_runtime_selection", False):
+            return
+        runtimes = getattr(self, "_runtime_selection_list", [])
+        if not runtimes:
+            return
+        current_idx = getattr(self, "_runtime_highlighted_index", 0)
+        new_idx = max(0, current_idx - 1)
+        if new_idx != current_idx:
+            self._runtime_highlighted_index = new_idx
+            log = self.query_one("#log", ConversationLog)
+            self._show_runtime_picker(log, clear_log=False)
+            self.set_timer(0.05, self._ensure_input_focus)
+
+    def action_navigate_runtime_down(self):
+        """Navigate to next runtime (arrow down)."""
+        if not getattr(self, "_awaiting_runtime_selection", False):
+            return
+        runtimes = getattr(self, "_runtime_selection_list", [])
+        if not runtimes:
+            return
+        current_idx = getattr(self, "_runtime_highlighted_index", 0)
+        new_idx = min(len(runtimes) - 1, current_idx + 1)
+        if new_idx != current_idx:
+            self._runtime_highlighted_index = new_idx
+            log = self.query_one("#log", ConversationLog)
+            self._show_runtime_picker(log, clear_log=False)
+            self.set_timer(0.05, self._ensure_input_focus)
+
+    def action_select_highlighted_runtime(self):
+        """Select the currently highlighted runtime (Enter key)."""
+        if not getattr(self, "_awaiting_runtime_selection", False):
+            return
+        runtimes = getattr(self, "_runtime_selection_list", [])
+        if not runtimes:
+            return
+        idx = getattr(self, "_runtime_highlighted_index", 0)
+        if not (0 <= idx < len(runtimes)):
+            idx = 0
+        info = runtimes[idx]
+        if not info.installed:
+            log = self.query_one("#log", ConversationLog)
+            log.add_error(
+                f"Runtime '{info.name}' is not installed. Run: {info.install_hint or 'pip install ...'}"
+            )
+            return
+        if not info.implemented:
+            log = self.query_one("#log", ConversationLog)
+            log.add_error(f"Runtime '{info.name}' is a stub and not yet usable.")
+            return
+        self._awaiting_runtime_selection = False
+        log = self.query_one("#log", ConversationLog)
+        self._runtime_cmd(info.name, log)
+        # Non-self-contained runtimes need a provider to connect; show the
+        # BYOK provider picker so users can complete the connection.
+        if info.name not in self._SELF_CONTAINED_RUNTIMES:
+            self._show_byok_providers(log)
+
     def _reset_connect_selection_states(self) -> None:
         """Clear transient connect-flow selection state so flows don't interfere."""
         self._awaiting_connect_type = False
+        self._awaiting_runtime_selection = False
         self._awaiting_byok_provider = False
         self._awaiting_byok_model = False
         self._awaiting_acp_agent_selection = False
@@ -4075,8 +4422,6 @@ class SuperQodeApp(App):
                 log.add_error(
                     f"Unsupported external CLI profile: {getattr(profile, 'id', profile)}"
                 )
-        elif conn == "advanced":
-            self._runtime_cmd("", log)
         else:
             log.add_error(f"Unknown connection type: {getattr(profile, 'id', profile)}")
 
@@ -4095,9 +4440,7 @@ class SuperQodeApp(App):
             self._acp_highlighted_agent_index = new_idx
             log = self.query_one("#log", ConversationLog)
             self._show_agents(log, clear_log=False)
-            # Don't scroll during navigation to keep item in focus
-            # The item should already be visible after the update
-            # Ensure input stays focused
+            self._scroll_to_highlighted_item(log, new_idx, len(agent_list))
             self.set_timer(0.05, self._ensure_input_focus)
 
     def action_navigate_acp_agent_down(self):
@@ -4115,9 +4458,7 @@ class SuperQodeApp(App):
             self._acp_highlighted_agent_index = new_idx
             log = self.query_one("#log", ConversationLog)
             self._show_agents(log, clear_log=False)
-            # Don't scroll during navigation to keep item in focus
-            # The item should already be visible after the update
-            # Ensure input stays focused
+            self._scroll_to_highlighted_item(log, new_idx, len(agent_list))
             self.set_timer(0.05, self._ensure_input_focus)
 
     def action_select_highlighted_acp_agent(self):
@@ -4229,6 +4570,7 @@ class SuperQodeApp(App):
         try:
             thinking_indicator = self.query_one("#streaming-thinking", StreamingThinkingIndicator)
             thinking_indicator.is_active = False
+            thinking_indicator.status = ""
             thinking_indicator.remove_class("visible")
         except Exception:
             pass
@@ -4275,11 +4617,18 @@ class SuperQodeApp(App):
         self.is_busy = True
         self._thinking_start = time.time()
         self._thinking_idx = 0
+        # Reset per-turn thinking state (live status step + reasoning rate limiter).
+        self._thinking_step = 0
+        self._last_thinking_flush = 0.0
+        self._calm_actions = 0
 
         # Show streaming thinking indicator with changing text
         try:
             thinking_indicator = self.query_one("#streaming-thinking", StreamingThinkingIndicator)
             thinking_indicator.is_active = True
+            # Start each turn with the whimsical phrases; loop bookkeeping in
+            # normal mode will swap in a steady "Working… (step N)" status.
+            thinking_indicator.status = ""
             thinking_indicator.add_class("visible")
         except Exception:
             pass
@@ -4315,10 +4664,18 @@ class SuperQodeApp(App):
         """
         self.is_busy = False
 
+        # Calm mode: commit the end-of-turn action roll-up before tearing down.
+        if self._is_calm_output() and getattr(self, "_calm_actions", 0) > 0:
+            try:
+                self._show_calm_summary(self.query_one("#log", ConversationLog))
+            except Exception:
+                pass
+
         # Hide streaming thinking indicator
         try:
             thinking_indicator = self.query_one("#streaming-thinking", StreamingThinkingIndicator)
             thinking_indicator.is_active = False
+            thinking_indicator.status = ""
             thinking_indicator.remove_class("visible")
         except Exception:
             pass
@@ -4517,6 +4874,10 @@ class SuperQodeApp(App):
         if event.input.id != "prompt-input":
             return
 
+        # The user is now interacting; the log will hold more than the welcome,
+        # so stop re-flowing it on resize.
+        self._welcome_active = False
+
         text = event.value.strip()
         # If a selection digit buffer is active, clear its timer to avoid double-select
         if hasattr(self, "_selection_digit_timer") and self._selection_digit_timer:
@@ -4576,6 +4937,12 @@ class SuperQodeApp(App):
                 event.input.value = ""  # Clear input
                 return
 
+            # Check if awaiting runtime selection
+            if getattr(self, "_awaiting_runtime_selection", False):
+                self.action_select_highlighted_runtime()
+                event.input.value = ""  # Clear input
+                return
+
             # Empty input with no selection mode - do nothing
             return
 
@@ -4616,6 +4983,7 @@ class SuperQodeApp(App):
             # Handle navigation commands during selection
             if cmd in ("home", "back", "cancel") and (
                 getattr(self, "_awaiting_connect_type", False)
+                or getattr(self, "_awaiting_runtime_selection", False)
                 or getattr(self, "_awaiting_acp_agent_selection", False)
                 or getattr(self, "_awaiting_byok_provider", False)
                 or getattr(self, "_awaiting_byok_model", False)
@@ -4623,6 +4991,7 @@ class SuperQodeApp(App):
             ):
                 # Cancel selection mode
                 self._awaiting_connect_type = False
+                self._awaiting_runtime_selection = False
                 self._awaiting_acp_agent_selection = False
                 self._awaiting_byok_provider = False
                 self._awaiting_byok_model = False
@@ -4682,6 +5051,37 @@ class SuperQodeApp(App):
             ids = ", ".join(p.id for p in profiles)
             log.add_error(f"Invalid selection. Choose 1-{len(profiles)} or a name ({ids}).")
             return
+
+        # Check if awaiting runtime selection (typed number or name)
+        if getattr(self, "_awaiting_runtime_selection", False):
+            runtimes = getattr(self, "_runtime_selection_list", [])
+            if runtimes:
+                choice = text.strip().lower()
+                info = None
+                if choice.isdigit() and 1 <= int(choice) <= len(runtimes):
+                    info = runtimes[int(choice) - 1]
+                else:
+                    for r in runtimes:
+                        if r.name.lower() == choice:
+                            info = r
+                            break
+                if info is not None:
+                    if not info.installed:
+                        log.add_error(
+                            f"Runtime '{info.name}' is not installed. Run: {info.install_hint or 'pip install ...'}"
+                        )
+                        return
+                    if not info.implemented:
+                        log.add_error(f"Runtime '{info.name}' is a stub and not yet usable.")
+                        return
+                    self._awaiting_runtime_selection = False
+                    self._runtime_cmd(info.name, log)
+                    if info.name not in self._SELF_CONTAINED_RUNTIMES:
+                        self._show_byok_providers(log)
+                    return
+                names = ", ".join(r.name for r in runtimes)
+                log.add_error(f"Invalid runtime. Choose 1-{len(runtimes)} or a name ({names}).")
+                return
 
         # Check if awaiting ACP agent selection
         if getattr(self, "_awaiting_acp_agent_selection", False):
@@ -5114,29 +5514,12 @@ class SuperQodeApp(App):
             self._do_exit(log)
         elif c == "init":
             self._init_config(args, log)
-        elif c == "dev":
-            self._set_role("dev", args or "fullstack", log)
-        elif c in ("qa", "qe"):
-            if not self._has_superqode_config():
-                log.add_error("No superqode.yaml found. Run :init to create one.")
-                return
-            self._set_role("qe", args or "fullstack", log)
-        elif c == "devops":
-            self._set_role("devops", args or "fullstack", log)
         elif c in ("home", "disconnect"):
             self._go_home(log)
-        elif c == "roles":
-            self._show_roles(log)
         elif c == "acp":
             self._acp_cmd(args, log)
         elif c in ("agents", "agent"):
             self._agents_cmd(args, log)
-        elif c == "team":
-            self._show_team(log)
-        elif c in ("validation", "superqe"):
-            self._handle_superqe_command(args, log)
-        elif c == "handoff":
-            self._handoff(args, log)
         elif c == "a2a":
             self.run_worker(self._a2a_cmd(args, log))
         elif c == "runtime":
@@ -5291,11 +5674,11 @@ class SuperQodeApp(App):
                 elif subcmd == "local":
                     # Route to LOCAL connection
                     self._connect_local_cmd(subargs, log)
-                elif subcmd in ("codex", "claude", "antigravity", "advanced", "runtime"):
+                elif subcmd in ("codex", "claude", "antigravity"):
                     # Product/runtime connection profiles (Codex, Claude, …).
                     from superqode.providers.connection_profiles import get_connection_profile
 
-                    profile = get_connection_profile("advanced" if subcmd == "runtime" else subcmd)
+                    profile = get_connection_profile(subcmd)
                     if profile is not None:
                         self._dispatch_connection_profile(profile, log)
                     else:
@@ -5333,6 +5716,12 @@ class SuperQodeApp(App):
             self._set_approval_mode(args, log)
         elif c == "log":
             self._handle_log_verbosity(args, log)
+        elif c == "thinking":
+            self._handle_thinking_verbosity(args, log)
+        elif c == "workspace":
+            self._handle_workspace(args, log)
+        elif c == "context":
+            self._handle_context(args, log)
         elif c == "redo":
             self._handle_redo(log)
         elif c == "checkpoints":
@@ -8835,9 +9224,8 @@ class SuperQodeApp(App):
             return
 
         if not sub:
-            # Bare `:runtime` shows the list of runtimes and their status.
-            # Switch with `:runtime <name>` (autocompletion suggests names).
-            self._runtime_cmd("list", log)
+            # Bare `:runtime` shows the interactive runtime picker.
+            self._show_runtime_picker(log)
             return
 
         # Direct switch by name.
@@ -10085,8 +10473,8 @@ class SuperQodeApp(App):
             ", ".join(summary["mcp"]["servers"]) if summary["mcp"]["servers"] else "none declared",
             style=THEME["text"],
         )
-        t.append("\n  Validation  ", style=THEME["muted"])
-        t.append("enabled" if summary["validation"]["enabled"] else "disabled", style=THEME["text"])
+        t.append("\n  Checks  ", style=THEME["muted"])
+        t.append("enabled" if summary["checks"]["enabled"] else "disabled", style=THEME["text"])
         t.append("\n  Run store   ", style=THEME["muted"])
         t.append(summary["observability"]["run_store"], style=THEME["text"])
 
@@ -10242,7 +10630,7 @@ class SuperQodeApp(App):
         run = evidence["run"]
         workflow = evidence["workflow"]
         changes = evidence["changes"] if isinstance(evidence["changes"], dict) else {}
-        validation = evidence["validation"] if isinstance(evidence["validation"], dict) else {}
+        checks = evidence["checks"] if isinstance(evidence["checks"], dict) else {}
         result = evidence["result"]
         t = Text()
         t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
@@ -10281,9 +10669,9 @@ class SuperQodeApp(App):
             f"{file_count} file(s) (+{int(changes.get('additions') or 0)} -{int(changes.get('deletions') or 0)})",
             style=THEME["text"],
         )
-        t.append("\n  Validation  ", style=THEME["muted"])
-        t.append(str(validation.get("status") or "unknown"), style=THEME["text"])
-        t.append(f"  {len(validation.get('steps') or [])} step(s)", style=THEME["dim"])
+        t.append("\n  Checks  ", style=THEME["muted"])
+        t.append(str(checks.get("status") or "unknown"), style=THEME["text"])
+        t.append(f"  {len(checks.get('steps') or [])} step(s)", style=THEME["dim"])
         t.append("\n  Approvals   ", style=THEME["muted"])
         t.append(f"{len(evidence.get('approvals') or [])} event(s)", style=THEME["text"])
         t.append("\n  Result      ", style=THEME["muted"])
@@ -10444,7 +10832,7 @@ class SuperQodeApp(App):
             return THEME["error"]
         if "completed" in event_type or "result" in event_type:
             return THEME["success"]
-        if event_type.startswith("validation."):
+        if event_type.startswith("checks."):
             return THEME["gold"]
         if event_type.startswith("workflow."):
             return THEME["cyan"]
@@ -11301,15 +11689,15 @@ class SuperQodeApp(App):
     def action_clear_screen(self):
         log = self.query_one("#log", ConversationLog)
         log.clear()
-        try:
-            from superqode.team_config import load_team_config
-
-            team_name = load_team_config().team_name
-        except Exception:
-            team_name = "Development Team"
+        team_name = Path.cwd().name or "SuperQode"
         # Temporarily disable auto-scroll so we can scroll to top
         log.auto_scroll = False
-        log.write(render_welcome(self.agents, team_name))
+        log.write(
+            render_welcome(self.agents, team_name, width=self._welcome_width(log)),
+            expand=True,
+        )
+        # Welcome is the only thing on screen again - allow responsive re-flow.
+        self._welcome_active = True
         # Scroll to top so user sees the attractive header first
         log.scroll_home(animate=False)
         # Re-enable auto-scroll for future messages
@@ -11360,170 +11748,43 @@ class SuperQodeApp(App):
             import shutil
 
             shutil.copy2(template_path, config_path)
-            log.add_success(f"Created {config_path} with all roles available")
+            log.add_success(f"Created {config_path} with harness defaults")
             log.add_info(
-                "⚡ Power validation roles: unit, integration, api, ui, accessibility, security, usability"
-            )
-            log.add_info(
-                "💡 Update each role's job_description in superqode.yaml for best results."
+                "💡 Use :connect to choose a runtime, or edit harnesses under .superqode/."
             )
         else:
             # Fallback: create basic config if template not found
-            default_config = """# =============================================================================
-# SuperQode - Team Configuration
-# =============================================================================
-# Multi-agent software development team
-# Run: superqode (TUI) or superqode --help (CLI)
-# =============================================================================
+            default_config = """version: 2
 
-superqode:
-  version: "1.0"
-  team_name: "Full Stack Development Team"
-  description: "AI-powered software development team"
+project:
+  name: My SuperQode Project
+  root: .
 
-# Default configuration for all roles
-default:
-  mode: "acp"
-  agent: "opencode"
-  agent_config:
-    provider: "opencode"
+defaults:
+  harness: coding
+  runtime: builtin
 
-# =============================================================================
-# TEAM ROLES - Enable the ones you need
-# =============================================================================
-team:
-  # Development roles
-  dev:
-    description: "Software Development"
-    roles:
-      fullstack:
-        description: "Full-stack development and implementation"
-        mode: "acp"
-        agent: "opencode"
-        agent_config:
-          provider: "opencode"
-        enabled: false  # Set to true to enable
-        job_description: |
-          You are a Senior Full-Stack Developer with expertise in modern web technologies.
+harnesses:
+  coding: .superqode/harnesses/coding.yaml
 
-          EXPERTISE:
-          - Frontend: React, Vue.js, Next.js, TypeScript, Tailwind CSS
-          - Backend: Node.js, Python, Go, REST APIs, GraphQL
-          - Databases: PostgreSQL, MongoDB, Redis
-          - DevOps basics: Docker, CI/CD
-
-          RESPONSIBILITIES:
-          - Write clean, maintainable code
-          - Implement features end-to-end
-          - Follow best practices and coding standards
-          - Debug and fix issues
-
-      frontend:
-        description: "Frontend/UI development specialist"
-        mode: "acp"
-        agent: "opencode"
-        agent_config:
-          provider: "opencode"
-        enabled: false  # Set to true to enable
-        job_description: |
-          You are a Senior Frontend Developer specializing in modern web UIs.
-
-          EXPERTISE:
-          - React, Vue.js, Next.js, TypeScript
-          - CSS3, Tailwind CSS, component libraries
-          - State management, testing frameworks
-          - Performance optimization and accessibility
-
-      backend:
-        description: "Backend/API development specialist"
-        mode: "acp"
-        agent: "opencode"
-        agent_config:
-          provider: "opencode"
-        enabled: false  # Set to true to enable
-        job_description: |
-          You are a Senior Backend Developer specializing in APIs and services.
-
-          EXPERTISE:
-          - Node.js, Python, Go, REST APIs
-          - Databases: PostgreSQL, MongoDB, Redis
-          - Authentication and security
-          - API design and documentation
-
-  # validation roles
-  qe:
-    description: "validation and evaluation"
-    roles:
-      fullstack:
-        description: "Full-stack validation engineer"
-        mode: "acp"
-        agent: "opencode"
-        agent_config:
-          provider: "opencode"
-        enabled: false  # Set to true to enable
-        job_description: |
-          You are a Senior QA Engineer with expertise in all testing types.
-
-          EXPERTISE:
-          - Unit testing: Jest, Pytest, Go testing
-          - Integration testing: Supertest, TestContainers
-          - E2E testing: Playwright, Cypress, Selenium
-          - API testing: Postman, REST Client, k6
-          - Performance testing: k6, Artillery, JMeter
-          - Security testing: OWASP ZAP, Burp Suite basics
-          - Test automation frameworks and CI/CD integration
-
-  # DevOps roles
-  devops:
-    description: "DevOps & Infrastructure"
-    roles:
-      fullstack:
-        description: "Full-stack DevOps engineer"
-        mode: "acp"
-        agent: "opencode"
-        agent_config:
-          provider: "opencode"
-        enabled: false  # Set to true to enable
-        job_description: |
-          You are a Senior DevOps Engineer with full-stack infrastructure expertise.
-
-          EXPERTISE:
-          - CI/CD: GitHub Actions, GitLab CI, Jenkins, CircleCI
-          - Containers: Docker, Docker Compose, Podman
-          - Orchestration: Kubernetes, Helm, Kustomize
-          - IaC: Terraform, Pulumi, CloudFormation
-          - Cloud: AWS, GCP, Azure (all major services)
-          - Monitoring: Prometheus, Grafana, Datadog
-          - Logging: ELK Stack, Loki, CloudWatch
-          - Secrets: Vault, AWS Secrets Manager
-
-          RESPONSIBILITIES:
-          - Design and implement CI/CD pipelines
-          - Containerize applications
-          - Set up infrastructure as code
-          - Configure monitoring and alerting
-          - Manage deployments and releases
+memory:
+  enabled: true
+  provider: local
 """
 
             with open(config_path, "w") as f:
                 f.write(default_config)
-            log.add_success(f"Created {config_path} with basic roles available")
-            log.add_info(
-                "⚡ Power validation roles: unit, integration, api, ui, accessibility, security, usability"
-            )
-            log.add_info(
-                "💡 Update each role's job_description in superqode.yaml for best results."
-            )
+            log.add_success(f"Created {config_path} with harness defaults")
+            log.add_info("💡 Use superqode harness init coding to create a harness spec.")
 
         t = Text()
         t.append("\n  Quick start:\n", style=THEME["muted"])
-        t.append("    :qe fullstack     ", style=f"bold {THEME['orange']}")
-        t.append("Start validation (requires superqode.yaml)\n", style=THEME["dim"])
-        t.append("    :roles            ", style=f"bold {THEME['cyan']}")
-        t.append("List available roles\n", style=THEME["dim"])
         t.append("    :connect acp <name> ", style=f"bold {THEME['success']}")
         t.append("Connect an ACP agent\n", style=THEME["dim"])
-        t.append("    Edit superqode.yaml to add or enable roles as needed\n", style=THEME["dim"])
+        t.append("    :connect            ", style=f"bold {THEME['cyan']}")
+        t.append("Open the connection picker\n", style=THEME["dim"])
+        t.append("    superqode harness init coding\n", style=f"bold {THEME['purple']}")
+        t.append("Create a reusable harness spec\n", style=THEME["dim"])
         t.append("\n", style="")
         log.write(t)
 
@@ -11588,6 +11849,206 @@ team:
         else:
             log.add_error(f"Invalid mode: {mode}")
             log.add_system("Valid modes: auto, ask, deny")
+
+    def _active_agent_loop(self):
+        """The live AgentLoop for the current BYOK/local session, if any."""
+        pure = getattr(self, "_pure_mode", None)
+        return getattr(pure, "_agent", None) if pure is not None else None
+
+    def _handle_context(self, args: str, log: ConversationLog):
+        """Show or override the context window used for adaptive compaction.
+
+        :context              show detected window, source, and compaction budgets
+        :context <tokens>     pin the window (e.g. :context 8192)
+        :context auto         clear the override and re-detect from the server
+        """
+        agent = self._active_agent_loop()
+        if agent is None:
+            log.add_error("No active model session. Connect a local/BYOK model first.")
+            return
+
+        arg = args.strip().lower()
+
+        if arg in ("", "show", "status"):
+            self.run_worker(self._context_show_worker(agent, log), exclusive=False)
+            return
+
+        if arg in ("auto", "detect", "reprobe", "re-probe"):
+            agent.config.context_window = 0
+            agent._cached_context_window = 0
+            self.run_worker(self._context_show_worker(agent, log, redetect=True), exclusive=False)
+            return
+
+        try:
+            tokens = int(arg.replace("k", "000") if arg.endswith("k") else arg)
+        except ValueError:
+            log.add_error("Usage: :context [<tokens> | auto]")
+            return
+        if tokens < 512:
+            log.add_error("Context window must be at least 512 tokens.")
+            return
+
+        agent.config.context_window = tokens
+        agent._cached_context_window = tokens
+        agent._context_window_source = "configured"
+        threshold, keep_recent, window = agent._compaction_budgets()
+        log.add_success(f"🪟 Context window pinned to {window:,} tokens")
+        log.add_system(
+            f"Compaction triggers at {threshold:,} tokens · keeps ~{keep_recent:,} recent."
+        )
+
+    async def _context_show_worker(self, agent, log, redetect: bool = False) -> None:
+        try:
+            if redetect:
+                await agent._ensure_context_window()
+            else:
+                # Resolve once if it hasn't been (e.g. before the first turn).
+                if not getattr(agent, "_cached_context_window", 0):
+                    await agent._ensure_context_window()
+            threshold, keep_recent, window = agent._compaction_budgets()
+            source = getattr(agent, "_context_window_source", "unknown")
+        except Exception as exc:
+            self._call_ui(log.add_error, f"Context detection failed: {exc}")
+            return
+
+        t = Text()
+        t.append("\n  🪟 ", style=f"bold {THEME['cyan']}")
+        t.append("Context window\n\n", style=f"bold {THEME['text']}")
+        t.append(f"    Window:      {window:,} tokens  ", style=THEME["text"])
+        t.append(f"({source})\n", style=THEME["muted"])
+        t.append(f"    Compact at:  {threshold:,} tokens\n", style=THEME["muted"])
+        t.append(f"    Keep recent: ~{keep_recent:,} tokens\n", style=THEME["muted"])
+        auto = os.environ.get("SUPERQODE_AUTO_COMPACT", "").strip().lower()
+        on = auto not in ("0", "false", "no", "off")
+        t.append(
+            f"    Auto-compact: {'ON' if on else 'OFF'}\n",
+            style=THEME["success" if on else "muted"],
+        )
+        t.append("\n    ", style="")
+        t.append(":context <n>", style=f"bold {THEME['cyan']}")
+        t.append(" to pin  ·  ", style=THEME["muted"])
+        t.append(":context auto", style=f"bold {THEME['cyan']}")
+        t.append(" to re-detect\n", style=THEME["muted"])
+        self._call_ui(self._show_command_output, log, t)
+
+    def _handle_workspace(self, args: str, log: ConversationLog):
+        """Manage the multi-repo search workspace: :workspace add|remove|list."""
+        from superqode.search_registry import (
+            add_workspace_root,
+            list_workspace_roots,
+            remove_workspace_root,
+        )
+
+        parts = args.strip().split(maxsplit=1)
+        sub = (parts[0].lower() if parts else "list") or "list"
+        target = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub in ("add", "a"):
+            if not target:
+                log.add_error("Usage: :workspace add <path>")
+                return
+            try:
+                added = add_workspace_root(target)
+            except ValueError as exc:
+                log.add_error(str(exc))
+                return
+            log.add_success(f"📁 Added to workspace: {added}")
+            log.add_system("Search it with `--all-repos` (or pass its absolute path).")
+            return
+
+        if sub in ("remove", "rm", "del", "delete"):
+            if not target:
+                log.add_error("Usage: :workspace remove <path>")
+                return
+            removed = remove_workspace_root(target)
+            if removed:
+                log.add_success(f"🗑️  Removed from workspace: {target}")
+            else:
+                log.add_info(f"Not in workspace: {target}")
+            return
+
+        if sub in ("list", "ls", ""):
+            roots = list_workspace_roots()
+            t = Text()
+            t.append("Search workspace\n\n", style=f"bold {THEME['purple']}")
+            if not roots:
+                t.append("  No repos registered yet.\n\n", style=THEME["muted"])
+                t.append("  Add one with ", style=THEME["muted"])
+                t.append(":workspace add <path>", style=f"bold {THEME['cyan']}")
+                t.append("\n", style="")
+            else:
+                for r in roots:
+                    t.append("  📁 ", style=THEME["cyan"])
+                    t.append(f"{r}\n", style=THEME["text"])
+                t.append(f"\n  {len(roots)} repo(s) · search all with ", style=THEME["muted"])
+                t.append("--all-repos", style=f"bold {THEME['cyan']}")
+                t.append("\n", style="")
+            self._show_command_output(log, t)
+            return
+
+        log.add_error(f"Unknown :workspace action: {sub}")
+        log.add_system("Valid: add <path>, remove <path>, list")
+
+    def _handle_thinking_verbosity(self, args: str, log: ConversationLog):
+        """Handle :thinking command to control thinking-log detail.
+
+        Usage: :thinking [normal|verbose|off]   (no arg shows current state)
+        """
+        level = args.strip().lower()
+        aliases = {
+            "normal": "normal",
+            "summary": "normal",
+            "calm": "normal",
+            "verbose": "verbose",
+            "full": "verbose",
+            "debug": "verbose",
+            "off": "off",
+            "hide": "off",
+            "none": "off",
+        }
+
+        if not level:
+            current = self._current_thinking_state()
+            t = Text()
+            t.append("Thinking-log detail\n\n", style=f"bold {THEME['purple']}")
+            rows = [
+                (
+                    "normal",
+                    "◆",
+                    THEME["cyan"],
+                    "Iterations fold into a live status; reasoning trimmed",
+                ),
+                ("verbose", "◈", THEME["purple"], "Every iteration + full streamed reasoning"),
+                ("off", "◇", THEME["muted"], "Hidden; only tool calls and the final answer"),
+            ]
+            for lvl, icon, color, desc in rows:
+                marker = " ◀ current" if current == lvl else ""
+                t.append(f"    {icon} ", style=color)
+                t.append(f":thinking {lvl:<8}", style=f"bold {color}")
+                t.append(f" - {desc}", style=THEME["muted"])
+                if marker:
+                    t.append(marker, style=f"bold {color}")
+                t.append("\n", style="")
+            t.append("\n  💡 ", style=THEME["muted"])
+            t.append("Ctrl+T cycles Normal → Verbose → Off\n", style=THEME["dim"])
+            self._show_command_output(log, t)
+            return
+
+        if level not in aliases:
+            log.add_error(f"Invalid thinking level: {level}")
+            log.add_system("Valid levels: normal, verbose, off")
+            return
+
+        state = aliases[level]
+        self._apply_thinking_state(state)
+        icons = {"normal": "◆", "verbose": "◈", "off": "◇"}
+        descs = {
+            "normal": "Iterations fold into a live status; reasoning is trimmed",
+            "verbose": "Showing every iteration and the full streamed reasoning",
+            "off": "Thinking logs hidden — only tool calls and the final answer",
+        }
+        log.add_success(f"{icons[state]} Thinking: {state.upper()}")
+        log.add_system(descs[state])
 
     def _handle_log_verbosity(self, args: str, log: ConversationLog):
         """Handle :log command to control log verbosity."""
@@ -11890,19 +12351,8 @@ team:
                 )
             # Use standard subprocess approach (ACP requires separate adapter)
             self._send_to_agent(text, name, log)
-        elif mode != "home" and "." in mode:
-            self.is_busy = True
-            self._cancel_requested = False
-            m, r = mode.split(".", 1)
-            if plan_requested:
-                text = (
-                    "PLAN MODE: Analyze the request and produce a concrete implementation plan. "
-                    "Do not edit files, run commands that modify state, or make changes.\n\n"
-                    f"{text}"
-                )
-            self._send_to_role(text, m, r, log)
         else:
-            log.add_info("Not connected. Use :connect acp <name> or :qe <role> after :init")
+            log.add_info("Not connected. Use :connect to choose a runtime or agent.")
 
     async def _ask_agent_question(self, question, log: ConversationLog):
         """Show an agent question in the TUI and await the next input submission."""
@@ -12081,35 +12531,6 @@ team:
             text = f"{file_context}\n\n{text}"
             self._current_file_context = ""  # Clear after use
 
-        # Inject persona if we're in a role context (like ACP does)
-        # This provides double reinforcement: system prompt + message-level persona
-        if (
-            hasattr(self, "current_mode")
-            and hasattr(self, "current_role")
-            and self.current_mode
-            and self.current_role
-        ):
-            try:
-                from superqode.config import load_config, resolve_role
-                from superqode.agents.persona import PersonaInjector
-                from superqode.agents.messaging import wrap_message_with_persona
-
-                # Use stored resolved role if available, otherwise resolve it
-                resolved = getattr(self, "_current_resolved_role", None)
-                if not resolved:
-                    resolved = resolve_role(self.current_mode, self.current_role, load_config())
-
-                if resolved:
-                    # Build persona context and wrap message (same as ACP)
-                    injector = PersonaInjector()
-                    persona_context = injector.build_persona(
-                        self.current_mode, self.current_role, resolved
-                    )
-                    text = wrap_message_with_persona(text, persona_context)
-            except Exception as e:
-                # If persona injection fails, continue without it (don't break the flow)
-                pass
-
         # Check if connected
         if not hasattr(self, "_pure_mode"):
             log.add_error("Not connected to a model. Use :connect byok to select a provider/model.")
@@ -12257,8 +12678,11 @@ team:
                     raise
 
         def on_tool_call(name: str, args: dict):
-            """Handle tool call - ALWAYS visible."""
+            """Handle tool call - calm mode folds it into the live throbber."""
             _record_tool_activity(name, args)
+            if self._is_calm_output():
+                _safe_call(self._calm_tool_running, name, args, log)
+                return
             file_path = args.get("path", args.get("file_path", args.get("filePath", "")))
             command = args.get("command", "")
             if not file_path and not command:
@@ -12272,12 +12696,17 @@ team:
             _safe_call(log.add_tool_call, name, "running", file_path, command, "", args)
 
         def on_tool_result(name: str, result):
-            """Handle tool result - ALWAYS visible with JSON parsing."""
+            """Handle tool result - calm mode shows one tidy line; verbose full."""
             from superqode.tools.base import ToolResult
 
             if isinstance(result, ToolResult):
                 status = "success" if result.success else "error"
                 _complete_tool_activity(name, status)
+                if self._is_calm_output():
+                    meta = result.metadata or {}
+                    done_args = {"path": meta.get("path")} if meta.get("path") else {}
+                    _safe_call(self._calm_tool_done, name, done_args, log, result.success)
+                    return
                 output = result.output if result.output else result.error
                 output_str = str(output) if output else ""
                 metadata = result.metadata or {}
@@ -12319,6 +12748,9 @@ team:
                 )
             else:
                 _complete_tool_activity(name, "success")
+                if self._is_calm_output():
+                    _safe_call(self._calm_tool_done, name, {}, log, True)
+                    return
                 output_str = str(result) if result else ""
 
                 # Try JSON parsing first
@@ -12332,10 +12764,21 @@ team:
 
         async def on_thinking_async(text: str):
             """Handle thinking - toggleable with Ctrl+T."""
-            if text and text.strip():
-                # Use log.add_thinking for cleaner, categorized output with varied emojis
-                # This matches ACP style and avoids the "brain emoji" overload
-                _safe_call(log.add_thinking, text, "general")
+            if not (text and text.strip()):
+                return
+            # Normal mode: fold the agent loop's per-iteration bookkeeping into
+            # the live throbber instead of writing each line to the scrollback.
+            loop_status = self._thinking_loop_status(text)
+            if loop_status is not None and self.thinking_verbosity != "verbose":
+                self._call_ui(self._set_thinking_status, loop_status)
+                return
+            # Calm mode: keep raw reasoning quiet; just pulse the throbber.
+            if self.thinking_verbosity != "verbose":
+                self._call_ui(self._set_thinking_status, "💭 Thinking…")
+                self._call_ui(self._maybe_show_thinking_hint, log)
+                return
+            # Verbose: cleaner, categorized output with varied emojis (ACP style).
+            _safe_call(log.add_thinking, text, "general")
 
         # Set callbacks on pure_mode (for both local and cloud providers)
         self._pure_mode.on_tool_call = on_tool_call
@@ -12819,16 +13262,22 @@ team:
         else:
             # Handle all other ACP-compatible agents generically.
             acp_agents = {
-                "junie",
+                "bub",
+                "cagent",
+                "codeassistant",
+                "fast-agent",
                 "goose",
+                "hermes",
+                "junie",
                 "kimi",
+                "llmlingagent",
+                "minion",
+                "mistral-vibe",
+                "openhands",
+                "pi",
                 "stakpak",
                 "vtcode",
                 "auggie",
-                "code-assistant",
-                "cagent",
-                "fast-agent",
-                "llmling-agent",
                 "amp",
             }
             if short_name in acp_agents:
@@ -12889,20 +13338,24 @@ team:
             "claude",
             "codex",
             "gemini",
-            "junie",
+            "bub",
+            "cagent",
+            "codeassistant",
+            "fast-agent",
             "goose",
+            "hermes",
+            "junie",
             "kimi",
+            "llmlingagent",
+            "minion",
+            "mistral-vibe",
+            "openhands",
+            "pi",
             "stakpak",
             "vtcode",
             "auggie",
-            "code-assistant",
-            "cagent",
-            "llmling-agent",
             "amp",
         )
-        if agent_type == "fast-agent":
-            self._run_fast_agent_cli(message, model, display_name, log)
-            return
 
         if agent_type in acp_agents:
             self._run_acp_jsonrpc_client(
@@ -13316,6 +13769,10 @@ team:
             command = "opencode acp"
             model_display = f"opencode/{model}" if model else "opencode/auto"
             # OpenCode handles its own API keys via its config
+        elif agent_type == "openhands":
+            command = "openhands acp"
+            model_display = f"openhands/{model}" if model else "openhands/auto"
+            # OpenHands reads its own configuration from ~/.openhands/settings.json
         elif agent_type == "stakpak":
             command = "stakpak --acp"
             model_display = f"stakpak/{model}" if model else "stakpak/auto"
@@ -13330,9 +13787,9 @@ team:
                 self._call_ui(log.add_error, "❌ AUGMENT_API_KEY not set. Export it first:")
                 self._call_ui(log.add_info, "  export AUGMENT_API_KEY=your_api_key")
                 return
-        elif agent_type == "code-assistant":
+        elif agent_type == "codeassistant":
             command = "code-assistant --acp"
-            model_display = f"code-assistant/{model}" if model else "code-assistant/auto"
+            model_display = f"codeassistant/{model}" if model else "codeassistant/auto"
         elif agent_type == "cagent":
             command = "cagent --acp"
             model_display = f"cagent/{model}" if model else "cagent/auto"
@@ -13342,9 +13799,24 @@ team:
                 "uvx --from fast-agent-mcp@latest fast-agent-acp",
             )
             model_display = f"fast-agent/{model}" if model else "fast-agent/auto"
-        elif agent_type == "llmling-agent":
+        elif agent_type == "llmlingagent":
             command = "llmling-agent --acp"
-            model_display = f"llmling-agent/{model}" if model else "llmling-agent/auto"
+            model_display = f"llmlingagent/{model}" if model else "llmlingagent/auto"
+        elif agent_type == "bub":
+            command = "bub acp serve"
+            model_display = f"bub/{model}" if model else "bub/auto"
+        elif agent_type == "hermes":
+            command = "hermes acp"
+            model_display = f"hermes/{model}" if model else "hermes/auto"
+        elif agent_type == "minion":
+            command = "mcode acp"
+            model_display = f"minion/{model}" if model else "minion/auto"
+        elif agent_type == "mistral-vibe":
+            command = "vibe-acp"
+            model_display = f"mistral-vibe/{model}" if model else "mistral-vibe/auto"
+        elif agent_type == "pi":
+            command = "pi-acp"
+            model_display = f"pi/{model}" if model else "pi/auto"
         elif agent_type == "amp":
             command = "acp-amp"
             model_display = f"amp/{model}" if model else "amp/auto"
@@ -13388,10 +13860,21 @@ team:
         last_thinking_time = [0.0]  # Use list to allow mutation in nested function
 
         def _flush_thinking_buffer():
-            """Flush accumulated thinking chunks to display."""
+            """Flush accumulated thinking chunks to display.
+
+            In normal mode the reasoning is condensed to a single trimmed line so
+            it reads as a calm summary rather than a wall of streamed text. In
+            verbose mode the full thought is shown verbatim.
+            """
             if thinking_buffer:
                 full_text = "".join(thinking_buffer).strip()
                 if full_text:
+                    if self.thinking_verbosity != "verbose":
+                        # Collapse whitespace and cap length for a tidy one-liner.
+                        condensed = " ".join(full_text.split())
+                        if len(condensed) > 240:
+                            condensed = condensed[:237].rstrip() + "…"
+                        full_text = condensed
                     self._call_ui(self._show_thinking_line, f"💭 {full_text}", log)
                 thinking_buffer.clear()
 
@@ -13424,8 +13907,13 @@ team:
             # Handle raw agent stdout logs - these show what the agent is doing
             # The [agent] prefix comes from non-JSON output from the agent process
             if text.startswith("[agent]"):
-                # Show agent activity by default (useful to see what agent is doing)
                 clean_text = text[8:]  # Remove "[agent] " prefix
+                # Calm mode: surface it live in the throbber, don't fill scrollback.
+                if self._is_calm_output():
+                    snippet = " ".join(clean_text.split())[:60]
+                    if snippet:
+                        self._call_ui(self._set_thinking_status, f"📡 {snippet}")
+                    return
                 self._call_ui(self._show_thinking_line, f"📡 {clean_text}", log)
                 return
 
@@ -13436,7 +13924,22 @@ team:
                 self._call_ui(log.add_error, clean_text)
                 return
 
+            # Normal mode: fold the agent loop's per-iteration bookkeeping into
+            # the live throbber rather than printing each line. Verbose mode lets
+            # these flow through to the scrollback as before.
+            loop_status = self._thinking_loop_status(text)
+            if loop_status is not None and self.thinking_verbosity != "verbose":
+                self._call_ui(self._set_thinking_status, loop_status)
+                return
+
             if not self.show_thinking_logs:
+                return
+
+            # Calm mode: keep raw reasoning out of the scrollback - just show a
+            # quiet "Thinking…" pulse and the one-time toggle hint.
+            if self.thinking_verbosity != "verbose":
+                self._call_ui(self._set_thinking_status, "💭 Thinking…")
+                self._call_ui(self._maybe_show_thinking_hint, log)
                 return
 
             # Buffer thinking chunks and display as complete thoughts
@@ -13495,8 +13998,12 @@ team:
                     if file_path not in files_read:
                         files_read.append(file_path)
 
-            # ALWAYS show tool calls - this is the agent's actual work
+            # Calm mode: fold the action into the live throbber instead of a row.
             command = raw_input.get("command", "")
+            if self._is_calm_output():
+                self._call_ui(self._calm_tool_running, title, raw_input, log)
+                return
+            # Verbose: show the tool call row - the agent's actual work.
             self._call_ui(
                 log.add_tool_call,
                 title,
@@ -13538,6 +14045,17 @@ team:
             file_path = raw_input.get("path", raw_input.get("filePath", ""))
             command = raw_input.get("command", "")
             mode = getattr(log, "tool_output_mode", "normal")
+
+            # Calm mode: one tidy line on completion/failure, throbber while
+            # running - no raw output/diffs (flip to :thinking verbose for all).
+            if self._is_calm_output():
+                if status == "completed":
+                    self._call_ui(self._calm_tool_done, tool_title, raw_input, log, True)
+                elif status == "failed":
+                    self._call_ui(self._calm_tool_done, tool_title, raw_input, log, False)
+                elif status == "running":
+                    self._call_ui(self._calm_tool_running, tool_title, raw_input, log)
+                return
 
             if status == "completed":
                 output_str = render_acp_tool_output(
@@ -14386,6 +14904,13 @@ team:
                 "terminalId": terminal_id,
                 "command": command_text,
             }
+            # Calm mode: throbber while running, one tidy line when finished.
+            if self._is_calm_output():
+                if status == "running":
+                    self._call_ui(self._calm_tool_running, "terminal", args, log)
+                else:
+                    self._call_ui(self._calm_tool_done, "terminal", args, log, status != "error")
+                return
             output_text = output.strip()
             self._call_ui(
                 log.add_tool_call,
@@ -17820,6 +18345,147 @@ team:
         ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
         return ansi_escape.sub("", text)
 
+    # Phrases the agent loop emits purely as bookkeeping. In normal mode these
+    # are folded into the live throbber instead of spamming the scrollback.
+    _LOOP_BOOKKEEPING_MARKERS = (
+        "calling model",
+        "iteration",
+        "processing request",
+        "received response",
+        "response complete",
+        "reached maximum iterations",
+    )
+
+    def _thinking_loop_status(self, text: str) -> Optional[str]:
+        """If `text` is agent-loop bookkeeping, return a compact live-status label.
+
+        Returns None for genuine reasoning/content, which should be shown normally.
+        """
+        if not text:
+            return None
+        stripped = text.strip()
+        lowered = stripped.lower()
+        if not any(marker in lowered for marker in self._LOOP_BOOKKEEPING_MARKERS):
+            return None
+        if "reached maximum iterations" in lowered:
+            return "Reached max iterations"
+        match = re.search(r"iteration\s+(\d+)", lowered)
+        if match:
+            return f"Working… (step {match.group(1)})"
+        return "Working…"
+
+    def _set_thinking_status(self, status: str) -> None:
+        """Update the live throbber's steady status label (normal thinking mode)."""
+        try:
+            indicator = self.query_one("#streaming-thinking", StreamingThinkingIndicator)
+            indicator.status = status
+        except Exception:
+            pass
+
+    # ── Calm-mode presentation ──────────────────────────────────────────────
+    # In calm mode (anything but :thinking verbose) we don't dump raw reasoning
+    # or full tool output. Instead a live throbber shows the current action and
+    # each finished tool commits one tidy line; verbose restores full detail.
+    _CALM_VERB_ICONS = {
+        "read": "📄",
+        "write": "📝",
+        "edit": "✏️",
+        "patch": "✏️",
+        "create": "📝",
+        "delete": "🗑️",
+        "run": "⚡",
+        "search": "🔍",
+        "find": "🔍",
+        "fetch": "🌐",
+        "todo": "✅",
+        "think": "💭",
+    }
+
+    def _is_calm_output(self) -> bool:
+        """True when we should present a calm, summarized view (not verbose)."""
+        return getattr(self, "thinking_verbosity", "normal") != "verbose"
+
+    def _calm_verb_target(self, name: str, args: Optional[dict] = None) -> tuple:
+        """Map a tool name + args to a friendly (verb, short target) pair."""
+        args = args or {}
+        try:
+            log = self.query_one("#log", ConversationLog)
+            verb = log._format_tool_name(name)
+        except Exception:
+            verb = (name or "tool").replace("_", " ").split(" ")[0].lower()
+        target = (
+            args.get("path")
+            or args.get("file_path")
+            or args.get("filePath")
+            or args.get("command")
+            or args.get("pattern")
+            or args.get("query")
+            or ""
+        )
+        target = str(target).strip()
+        if target and "/" in target and " " not in target:
+            parts = target.rstrip("/").split("/")
+            target = "/".join(parts[-2:]) if len(parts) > 1 else parts[-1]
+        if len(target) > 52:
+            target = "…" + target[-51:]
+        return verb, target
+
+    def _maybe_show_thinking_hint(self, log: ConversationLog) -> None:
+        """Once per session, tell the user how to see full detail."""
+        if getattr(self, "_thinking_hint_shown", False):
+            return
+        self._thinking_hint_shown = True
+        t = Text()
+        t.append("  💡 ", style=THEME["muted"])
+        t.append("Ctrl+T", style=f"bold {THEME['cyan']}")
+        t.append(" or ", style=THEME["muted"])
+        t.append(":thinking verbose", style=f"bold {THEME['cyan']}")
+        t.append(" to see full reasoning & tool detail\n", style=THEME["muted"])
+        log.write(t)
+
+    def _calm_tool_running(self, name: str, args: Optional[dict], log: ConversationLog) -> None:
+        """Update the live throbber with the in-progress action."""
+        verb, target = self._calm_verb_target(name, args)
+        icon = self._CALM_VERB_ICONS.get(verb, "✷")
+        label = verb.capitalize()
+        status = f"{icon} {label} {target}…" if target else f"{icon} {label}…"
+        self._set_thinking_status(status)
+        self._maybe_show_thinking_hint(log)
+
+    def _calm_tool_done(
+        self, name: str, args: Optional[dict], log: ConversationLog, ok: bool = True
+    ) -> None:
+        """Commit one tidy line for a finished tool (no raw output/diff)."""
+        verb, target = self._calm_verb_target(name, args)
+        self._calm_actions = getattr(self, "_calm_actions", 0) + 1
+        icon = "✷" if ok else "✗"
+        color = THEME["success"] if ok else THEME["error"]
+        t = Text()
+        t.append(f"  {icon} ", style=f"bold {color}")
+        t.append(f"{verb:<7}", style=f"bold {THEME['text']}")
+        if target:
+            t.append(f" {target}", style=THEME["muted"])
+        t.append("\n", style="")
+        log.write(t)
+
+    def _show_calm_summary(self, log: ConversationLog) -> None:
+        """End-of-turn roll-up line shown in calm mode."""
+        actions = getattr(self, "_calm_actions", 0)
+        if actions <= 0:
+            return
+        elapsed = 0.0
+        if getattr(self, "_thinking_start", 0):
+            elapsed = max(0.0, time.time() - self._thinking_start)
+        noun = "action" if actions == 1 else "actions"
+        t = Text()
+        t.append("  ✓ ", style=f"bold {THEME['success']}")
+        t.append(f"done · {actions} {noun}", style=THEME["muted"])
+        if elapsed:
+            t.append(f" · {elapsed:.1f}s", style=THEME["dim"])
+        t.append("\n", style="")
+        log.write(t)
+        self._calm_actions = 0
+
     def _show_thinking_line(self, line: str, log: ConversationLog):
         """Show a thinking/log line - SuperQode quantum style.
 
@@ -18688,460 +19354,6 @@ team:
         # Schedule scroll to top with a small delay to ensure content is rendered
         self.set_timer(0.1, lambda: log.scroll_home())
 
-    @work(exclusive=True, thread=True)
-    def _send_to_role(self, text: str, mode: str, role: str, log: ConversationLog):
-        """Send message to role - supports both ACP agents (opencode) and SuperQode agents (with tools)."""
-        self._cancel_requested = False
-        self._call_ui(self._start_thinking, f"⚡ Running {mode}.{role}...")
-
-        try:
-            from superqode.config import load_config, resolve_role
-            from superqode.agents.persona import PersonaInjector
-            from superqode.agents.messaging import wrap_message_with_persona
-
-            resolved = resolve_role(mode, role, load_config())
-
-            if not resolved:
-                self._call_ui(self._stop_thinking)
-                self._call_ui(log.add_error, f"Role {mode}.{role} not found")
-                return
-
-            # Handle external ACP agents
-            if resolved.coding_agent == "opencode":
-                # Build persona context and wrap message
-                injector = PersonaInjector()
-                persona_context = injector.build_persona(mode, role, resolved)
-                wrapped_message = wrap_message_with_persona(text, persona_context)
-
-                # Get model from config
-                model_name = None
-                if resolved.agent_config and resolved.agent_config.model:
-                    model_name = resolved.agent_config.model
-                elif resolved.model:
-                    model_name = resolved.model
-                else:
-                    model_name = None
-
-                # Use unified OpenCode runner (same code path as :acp connect opencode)
-                self._run_opencode_unified(
-                    message=wrapped_message,
-                    model=model_name,
-                    display_name=f"{mode}.{role}",
-                    log=log,
-                    persona_context=persona_context,
-                )
-            # Handle BYOK/LOCAL mode - use provider session if connected
-            elif (
-                resolved.execution_mode in ("byok", "local")
-                and resolved.provider
-                and resolved.model
-            ):
-                # Check if provider session is connected (should be from _set_role)
-                session = get_session()
-                if hasattr(self, "_pure_mode") and self._pure_mode.session.connected:
-                    # Use provider session for BYOK/LOCAL
-                    self._send_to_pure_mode(text, log)
-                else:
-                    # Not connected yet, try to connect
-                    self._call_ui(self._stop_thinking)
-                    self._call_ui(
-                        log.add_error, f"Not connected to {resolved.provider}/{resolved.model}"
-                    )
-                    self._call_ui(
-                        log.add_info, f"Connecting to {resolved.provider}/{resolved.model}..."
-                    )
-                    # Store resolved role for persona injection
-                    self._current_resolved_role = resolved
-                    self._connect_byok_mode(
-                        resolved.provider, resolved.model, log, resolved_role=resolved
-                    )
-                    # After connection, send the message
-                    if hasattr(self, "_pure_mode") and self._pure_mode.session.connected:
-                        self._send_to_pure_mode(text, log)
-            # Handle SuperQode agents (with provider/model, full tool access)
-            elif resolved.agent_type == "superqode" and resolved.provider and resolved.model:
-                # Use SuperQodeAgent with AgentLoop (has full codebase access via tools)
-                self._run_superqode_agent(
-                    message=text, mode=mode, role=role, resolved=resolved, log=log
-                )
-            else:
-                self._call_ui(self._stop_thinking)
-                self._call_ui(
-                    log.add_info,
-                    f"🚧 Agent for {mode}.{role} not supported yet (agent_type: {resolved.agent_type}, coding_agent: {resolved.coding_agent})",
-                )
-        except Exception as e:
-            self._agent_process = None
-            self._call_ui(self._stop_thinking)
-            self._call_ui(self._stop_stream_animation)
-            self._call_ui(log.add_error, str(e))
-
-    @work(exclusive=True, thread=True)
-    async def _run_superqode_agent(
-        self, message: str, mode: str, role: str, resolved, log: ConversationLog
-    ):
-        """Run SuperQode agent with full tool access (AgentLoop) and streaming output."""
-        try:
-            from superqode.agents.unified import create_unified_agent
-            from superqode.tools.question_tool import get_question_handler, set_question_handler
-
-            # Create and initialize agent
-            agent = create_unified_agent(resolved)
-            if not await agent.initialize():
-                self._call_ui(self._stop_thinking)
-                self._call_ui(log.add_error, f"Failed to initialize {mode}.{role} agent")
-                return
-
-            self._call_ui(self._stop_thinking)
-
-            # Show agent info
-            model_display = f"{resolved.provider}/{resolved.model}"
-            self._call_ui(log.add_info, f"🤖 Using {model_display} with full codebase access")
-
-            mcp_context = await self._resolve_mcp_attachment_context(log)
-            if mcp_context:
-                message = f"{mcp_context}\n\n{message}"
-
-            # Track tool usage for summary
-            tool_stats = {"tools_called": 0, "files_analyzed": set(), "tool_names": []}
-
-            # Set up tool callbacks to track progress
-            if hasattr(agent, "_agent_loop") and agent._agent_loop:
-
-                def on_tool_call(tool_name: str, args: dict):
-                    tool_stats["tools_called"] += 1
-                    tool_stats["tool_names"].append(tool_name)
-
-                    # Track files being analyzed
-                    if tool_name == "read_file" and "path" in args:
-                        tool_stats["files_analyzed"].add(args["path"])
-                    elif tool_name == "grep" and "path" in args:
-                        tool_stats["files_analyzed"].add(args["path"])
-                    elif tool_name == "code_search" and "path" in args:
-                        tool_stats["files_analyzed"].add(args["path"])
-
-                    # Show progress
-                    file_count = len(tool_stats["files_analyzed"])
-                    self._call_ui(
-                        log.add_info,
-                        f"🔍 Analyzing... ({tool_stats['tools_called']} tools, {file_count} files)",
-                    )
-
-                def on_tool_result(tool_name: str, result):
-                    if not result.success:
-                        self._call_ui(log.add_info, f"⚠️  {tool_name} completed with warnings")
-
-                async def on_thinking(text: str):
-                    """Handle thinking logs from BYOK models."""
-                    # Display thinking logs in the conversation log
-                    # Format similar to ACP thinking logs
-                    self._call_ui(log.add_info, f"💭 {text}")
-
-                agent._agent_loop.on_tool_call = on_tool_call
-                agent._agent_loop.on_tool_result = on_tool_result
-                agent._agent_loop.on_thinking = on_thinking
-
-            # Check if agent supports streaming
-            if hasattr(agent, "send_message_streaming"):
-                # Stream response with timeout to prevent hanging
-                full_response = ""
-                had_content = False
-                streaming_timed_out = False
-                previous_question_handler = get_question_handler()
-
-                async def tui_question_handler(question):
-                    return await self._ask_agent_question(question, log)
-
-                try:
-                    set_question_handler(tui_question_handler)
-
-                    async def stream_with_timeout():
-                        nonlocal full_response, had_content
-                        async for chunk in agent.send_message_streaming(message):
-                            if chunk.strip():
-                                had_content = True
-                                full_response += chunk
-                                self._call_ui(log.add_assistant, chunk)
-
-                    await asyncio.wait_for(stream_with_timeout(), timeout=120.0)
-                except asyncio.TimeoutError:
-                    streaming_timed_out = True
-                    error_msg = (
-                        f"⏰ Streaming timed out for {agent.provider}/{agent.model} after 2 minutes"
-                    )
-                    self._call_ui(log.add_error, error_msg)
-                finally:
-                    if get_question_handler() is tui_question_handler:
-                        set_question_handler(previous_question_handler)
-
-                # If no content was streamed but tools were used, prompt for summary
-                # (only if not timed out)
-                if not had_content and not streaming_timed_out and tool_stats["tools_called"] > 0:
-                    self._call_ui(log.add_info, "💭 Generating analysis summary...")
-                    # The agent should continue and provide a summary
-                    # Wait a bit and check if we get more content
-                    await asyncio.sleep(0.5)
-
-                # Show completion summary
-                self._call_ui(self._stop_stream_animation)
-
-                if tool_stats["tools_called"] > 0 and not streaming_timed_out:
-                    files_count = len(tool_stats["files_analyzed"])
-                    summary = (
-                        f"\n✅ Analysis Complete: "
-                        f"{tool_stats['tools_called']} tools executed, "
-                        f"{files_count} files analyzed"
-                    )
-                    self._call_ui(log.add_info, summary)
-
-                if (
-                    not full_response.strip()
-                    and tool_stats["tools_called"] > 0
-                    and not streaming_timed_out
-                ):
-                    self._call_ui(
-                        log.add_error,
-                        "⚠️  Agent executed tools but did not provide a summary. "
-                        "Please review the tool outputs above.",
-                    )
-
-                # Reset mode badge to HOME after validation testing completes
-                self._call_ui(self._reset_mode_badge_after_qe)
-            else:
-                # Fallback to non-streaming with timeout to prevent hanging
-                previous_question_handler = get_question_handler()
-
-                async def tui_question_handler(question):
-                    return await self._ask_agent_question(question, log)
-
-                try:
-                    set_question_handler(tui_question_handler)
-                    # Add timeout to prevent hanging on slow/unresponsive models
-                    import asyncio
-
-                    response = await asyncio.wait_for(
-                        agent.send_message(message),
-                        timeout=120.0,  # 2 minute timeout
-                    )
-                except asyncio.TimeoutError:
-                    response = None
-                    error_msg = f"⏰ Model {agent.provider}/{agent.model} timed out after 2 minutes"
-                    self._call_ui(log.add_error, error_msg)
-                finally:
-                    if get_question_handler() is tui_question_handler:
-                        set_question_handler(previous_question_handler)
-
-                self._call_ui(self._stop_thinking)
-                self._call_ui(self._stop_stream_animation)
-
-                if response and response.content and response.content.strip():
-                    self._call_ui(log.add_assistant, response.content)
-
-                    # Show stats from metadata
-                    if response.metadata:
-                        tool_calls = response.metadata.get("tool_calls_made", 0)
-                        if tool_calls > 0:
-                            summary = f"\n✅ Analysis Complete: {tool_calls} tools executed"
-                            self._call_ui(log.add_info, summary)
-                elif response is None:
-                    # Already handled timeout error above
-                    pass
-                else:
-                    # No valid response content - show appropriate error
-                    if response and hasattr(response, "error") and response.error:
-                        error_msg = f"Agent error: {response.error}"
-                    elif response and response.content:
-                        # Content exists but is just whitespace
-                        error_msg = "Agent returned empty response (whitespace only)"
-                    else:
-                        error_msg = "No response from agent"
-                    self._call_ui(log.add_error, error_msg)
-
-                # Reset mode badge to HOME after validation testing completes
-                self._call_ui(self._reset_mode_badge_after_qe)
-
-            # Cleanup
-            await agent.cleanup()
-
-        except Exception as e:
-            import traceback
-
-            self._call_ui(self._stop_thinking)
-            self._call_ui(self._stop_stream_animation)
-            self._call_ui(log.add_error, f"Error: {str(e)}")
-            self._call_ui(log.add_info, traceback.format_exc())
-
-    # ========================================================================
-    # Role & Agent Management
-    # ========================================================================
-
-    def _set_role(self, mode: str, role: str, log: ConversationLog):
-        try:
-            from superqode.config import load_config, resolve_role
-
-            # Show safety warnings for validation mode
-            if mode == "qe":
-                safety_warnings = get_safety_warnings()
-
-                # Display warnings in TUI
-                for warning in safety_warnings:
-                    if should_skip_warnings(warning):
-                        continue
-
-                    # Create warning panel
-                    warning_text = Text()
-                    warning_text.append(f"{warning.title}\n\n", style="bold red")
-                    warning_text.append(warning.message, style="white")
-                    warning_text.append("\n\nRecommendations:\n", style="bold yellow")
-
-                    for i, rec in enumerate(warning.recommendations, 1):
-                        warning_text.append(f"{i}. {rec}\n", style="dim cyan")
-
-                    # Choose border color based on severity
-                    border_color = {
-                        WarningSeverity.INFO: "blue",
-                        WarningSeverity.WARNING: "yellow",
-                        WarningSeverity.CRITICAL: "red",
-                    }[warning.severity]
-
-                    panel = Panel(
-                        warning_text,
-                        title=f"⚠️  SAFETY WARNING - {warning.severity.value.upper()}",
-                        border_style=border_color,
-                        padding=(1, 2),
-                    )
-
-                    log.write(panel)
-                    log.write(Text(""))  # Add spacing
-
-                # Add a clear separator after warnings
-                if any(not should_skip_warnings(w) for w in safety_warnings):
-                    log.write(Rule(style="yellow"))
-                    log.write(
-                        Text(
-                            "Please review the safety warnings above before proceeding.\n",
-                            style="bold yellow",
-                        )
-                    )
-
-                # For TUI, we don't require interactive acknowledgment
-                # Users can cancel with :back or :cancel if they change their mind
-                requires_ack = [
-                    w
-                    for w in safety_warnings
-                    if w.requires_acknowledgment and not should_skip_warnings(w)
-                ]
-                if requires_ack:
-                    # Mark warnings as acknowledged for future skipping
-                    for warning in requires_ack:
-                        if warning.skippable_after_first:
-                            mark_warnings_acknowledged(warning)
-
-            # Try to resolve role from team config first
-            resolved = resolve_role(mode, role, load_config())
-
-            # For validation mode, if team config doesn't have the role, try to create a default validation role
-            if not resolved and mode == "qe":
-                from superqode.superqe.roles import get_role
-
-                try:
-                    # Check if this is a valid validation role
-                    qe_role = get_role(role, Path.cwd())
-                    # Create a synthetic ResolvedRole for validation roles
-                    from superqode.config.schema import ResolvedRole
-
-                    resolved = ResolvedRole(
-                        mode=mode,
-                        role=role,
-                        description=f"Validation {role.replace('_', ' ')}",
-                        coding_agent="superqode",  # validation roles use superqode agent
-                        agent_type="superqode",  # validation roles use superqode agent type
-                        agent_id="",
-                        provider="",
-                        model="",
-                        execution_mode="byok",  # validation roles run locally
-                        job_description="",
-                        mcp_servers=[],
-                    )
-                except ValueError:
-                    # Not a valid validation role, resolved remains None
-                    pass
-
-            if resolved:
-                key = f"{mode}.{role}"
-                session = get_session()
-                session.switch_to_role_mode(key)
-                set_mode(key)
-
-                self.current_mode = mode
-                self.current_role = role
-                self.current_agent = ""
-                if (
-                    mode == "qe"
-                    and role in POWER_QE_ROLES
-                    and not getattr(self, "_power_roles_hint_shown", False)
-                ):
-                    log.add_info(f"⚡ Power validation role selected: {role}")
-                    log.add_info(
-                        "💡 Tip: Update this role's job_description in superqode.yaml for best results."
-                    )
-                    self._power_roles_hint_shown = True
-
-                # Reset session for new role
-                self._is_first_message = True
-                self._opencode_session_id = ""
-
-                # Get execution mode from resolved role
-                exec_mode = getattr(resolved, "execution_mode", "acp")
-                agent_id = getattr(resolved, "agent_id", "") or resolved.coding_agent
-
-                # Get model/provider from agent_config if ACP mode
-                model = resolved.model
-                provider = resolved.provider
-                agent_config = getattr(resolved, "agent_config", None)
-                if agent_config:
-                    model = model or getattr(agent_config, "model", "")
-                    provider = provider or getattr(agent_config, "provider", "")
-
-                self.current_model = model or ""
-                self.current_provider = provider or ""
-
-                badge = self.query_one("#mode-badge", ModeBadge)
-                badge.mode = mode
-                badge.role = role
-                badge.agent = agent_id if exec_mode == "acp" else ""
-                badge.model = model or ""
-                badge.provider = provider or ""
-                badge.execution_mode = exec_mode
-
-                # Update session execution mode
-                session.execution_mode = exec_mode
-
-                # Store resolved role for persona injection
-                self._current_resolved_role = resolved
-
-                # If BYOK or LOCAL mode, connect to provider/model
-                if exec_mode in ("byok", "local") and provider and model:
-                    # Connect via BYOK mode (LOCAL uses same connection mechanism)
-                    # Pass resolved role so job description can be injected
-                    self._connect_byok_mode(provider, model, log, resolved_role=resolved)
-                else:
-                    # Clear screen and show fresh workspace
-                    self._clear_for_workspace(log, f"{mode.upper()}.{role.upper()}")
-            else:
-                if mode == "qe":
-                    # Show available validation roles for better user experience
-                    from superqode.superqe.roles import list_roles
-
-                    available_qe_roles = [r["name"] for r in list_roles()]
-                    log.add_error(f"validation role '{role}' not found.")
-                    log.write(f"Available validation roles: {', '.join(available_qe_roles)}")
-                    log.write("Use :qe <role_name> to start a validation session.")
-                else:
-                    log.add_error(f"Role {mode}.{role} not found")
-        except Exception as e:
-            log.add_error(str(e))
-
     def _go_home(self, log: ConversationLog):
         # First, cancel any running agent process
         if self._agent_process is not None:
@@ -19204,8 +19416,8 @@ team:
         # Clear and show homepage
         self.action_clear_screen()
 
-    def _reset_mode_badge_after_qe(self):
-        """Reset mode badge to HOME after validation testing completes."""
+    def _reset_mode_badge_after_role_run(self):
+        """Reset mode badge to HOME after a role run completes."""
         try:
             badge = self.query_one("#mode-badge", ModeBadge)
             badge.mode = "home"
@@ -19263,148 +19475,12 @@ team:
         # Clear screen and show fresh workspace
         self._clear_for_workspace(log, f"PURE • {provider}")
 
-    # ========================================================================
-    # validation workflow Commands
-    # ========================================================================
-
-    def _handle_superqe_command(self, args: str, log: ConversationLog):
-        """Handle secondary validation commands in TUI."""
-        from superqode.evaluation import CODEOPTIX_AVAILABLE
-
-        if not CODEOPTIX_AVAILABLE:
-            self._show_command_output(
-                log,
-                Panel(
-                    "🔄 [bold yellow]validation workflow is initializing...[/bold yellow]\n\n"
-                    "CodeOptiX integration is being loaded.\n"
-                    "Please wait a moment and try again.\n\n"
-                    "💡 Meanwhile, you can use basic validation:\n"
-                    "[cyan]:qe run .[/cyan] - Validation workflow with any LLM provider\n\n"
-                    "validation workflow supports: Ollama, OpenAI, Anthropic, Google",
-                    title="⏳ Loading validation workflow",
-                    border_style="yellow",
-                ),
-            )
-            return
-
-        # Parse validation subcommand
-        parts = args.split(maxsplit=1)
-        subcmd = parts[0].lower() if parts else "help"
-        subargs = parts[1] if len(parts) > 1 else ""
-
-        if subcmd == "run":
-            self._superqe_run(subargs, log)
-        elif subcmd == "behaviors":
-            self._superqe_behaviors(log)
-        elif subcmd == "agent-eval":
-            self._superqe_agent_eval(subargs, log)
-        elif subcmd == "scenarios":
-            self._superqe_scenarios(subargs, log)
-        elif subcmd in ("help", ""):
-            self._superqe_help(log)
-        else:
-            self._show_command_output(
-                log, f"[red]Unknown validation workflow command: {subcmd}[/red]"
-            )
-
-    def _superqe_run(self, args: str, log: ConversationLog):
-        """Handle validation run command."""
-        # Parse arguments similar to CLI
-        behaviors = None
-        use_bloom = False
-
-        if args:
-            # Simple parsing: look for --behaviors and --use-bloom
-            if "--behaviors" in args:
-                parts = args.split("--behaviors", 1)
-                if len(parts) > 1:
-                    behaviors_part = parts[1].split("--")[0].strip()
-                    behaviors = behaviors_part
-
-            if "--use-bloom" in args:
-                use_bloom = True
-
-        # Show validation workflow evaluation in progress
-        self._show_command_output(
-            log,
-            Panel(
-                f"🚀 [bold cyan]validation workflow Enhanced Evaluation[/bold cyan]\n\n"
-                f"Behaviors: {behaviors or 'default'}\n"
-                f"Bloom Scenarios: {'Enabled' if use_bloom else 'Disabled'}\n\n"
-                "Running advanced CodeOptiX evaluation...",
-                border_style="cyan",
-            ),
-        )
-
-        # Show Ollama requirement message
-        self._show_command_output(
-            log,
-            Panel(
-                "🔧 [yellow]validation workflow requires Ollama[/yellow]\n\n"
-                "validation workflow uses Ollama for advanced AI-powered evaluation.\n\n"
-                "To run validation workflow evaluations:\n"
-                "1. Install Ollama: [link=https://ollama.ai]https://ollama.ai[/link]\n"
-                "2. Start Ollama: [cyan]ollama serve[/cyan]\n"
-                "3. Pull a model: [cyan]ollama pull llama3.1[/cyan]\n"
-                "4. Run: [cyan]:validation run . --behaviors security-vulnerabilities[/cyan]\n\n"
-                "For basic validation without Ollama: [cyan]:qe run .[/cyan]",
-                border_style="yellow",
-            ),
-        )
-
-    def _superqe_behaviors(self, log: ConversationLog):
-        """Handle validation behaviors command."""
-        from superqode.evaluation.behaviors import get_enhanced_behaviors
-
-        behaviors = get_enhanced_behaviors()
-
-        if behaviors:
-            from rich.table import Table
-
-            table = Table(show_header=True, header_style="bold cyan")
-            table.add_column("Behavior", style="cyan", no_wrap=True)
-            table.add_column("Description", style="white")
-
-            for name, desc in behaviors.items():
-                table.add_row(f"🔬 {name}", desc)
-
-            self._show_command_output(log, table)
-        else:
-            self._show_command_output(log, "[yellow]No enhanced behaviors available[/yellow]")
-
-    def _superqe_agent_eval(self, args: str, log: ConversationLog):
-        """Handle validation agent-eval command."""
-        self._show_command_output(
-            log, "[yellow]Agent evaluation not yet implemented in TUI[/yellow]"
-        )
-
-    def _superqe_scenarios(self, args: str, log: ConversationLog):
-        """Handle validation scenarios command."""
-        self._show_command_output(
-            log, "[yellow]Scenario generation not yet implemented in TUI[/yellow]"
-        )
-
-    def _superqe_help(self, log: ConversationLog):
-        """Show validation workflow help."""
-        help_text = """
-[bold cyan]🚀 validation workflow Commands[/bold cyan]
-
-[cyan]:validation run [options][/cyan] - Run enhanced evaluation
-  Options: --behaviors security-vulnerabilities,test-quality --use-bloom
-
-[cyan]:validation behaviors[/cyan] - List available enhanced behaviors
-
-[cyan]:validation agent-eval[/cyan] - Compare multiple AI agents
-
-[cyan]:validation scenarios[/cyan] - Manage Bloom scenario generation
-
-[green]✨ validation workflow features are fully integrated with SuperQode![/green]
-        """.strip()
-
-        self._show_command_output(log, help_text)
-
     def _show_pure_tool_call(self, name: str, args: dict, log: ConversationLog):
         """Show Pure/BYOK/local tool calls through the shared tool renderer."""
+        # Calm mode: surface the action in the live throbber, not a full row.
+        if self._is_calm_output():
+            self._calm_tool_running(name, args, log)
+            return
         file_path = args.get("path", args.get("file_path", args.get("filePath", "")))
         command = args.get("command", "")
         log.add_tool_call(name, "running", file_path, command, "", args)
@@ -19412,6 +19488,12 @@ team:
     def _show_pure_tool_result(self, name: str, result, log: ConversationLog):
         """Show Pure/BYOK/local tool results through the shared tool renderer."""
         success = bool(getattr(result, "success", False))
+        # Calm mode: one tidy line per finished tool, no raw output/diff.
+        if self._is_calm_output():
+            metadata = getattr(result, "metadata", None) or {}
+            args = {"path": metadata.get("path")} if metadata.get("path") else {}
+            self._calm_tool_done(name, args, log, ok=success)
+            return
         status = "success" if success else "error"
         output = getattr(result, "output", "") if success else getattr(result, "error", "")
         output_str = str(output) if output else ""
@@ -19845,30 +19927,39 @@ team:
             # Schedule UI update on the next event loop tick
             self.call_later(self._show_pure_tool_result, name, result, log)
 
+        is_local_provider = bool(provider_def and provider_def.category == ProviderCategory.LOCAL)
+
         async def on_thinking_async(text: str):
-            """Handle thinking logs from AgentLoop - same formatting as ACP.
+            """Handle thinking logs from AgentLoop - honors the :thinking toggle.
 
-            For local models, completely disable thinking logs - only show the animation.
+            OFF  -> nothing. NORMAL -> loop bookkeeping folds into the live
+            throbber ("Working… step N"); for local models the raw reasoning is
+            kept quiet so the screen stays clean. VERBOSE -> show everything,
+            so users can see exactly what a local/ACP/BYOK model is doing.
             """
-            # For local models, completely disable all thinking logs
-            # Only the animation (_start_thinking) will be shown, not individual thinking log lines
-            if provider_def and provider_def.category == ProviderCategory.LOCAL:
-                return  # Suppress all thinking logs for local models
-
+            if not (text and text.strip()):
+                return
+            if not self.show_thinking_logs:
+                return  # OFF
+            loop_status = self._thinking_loop_status(text)
+            if loop_status is not None and self.thinking_verbosity != "verbose":
+                self.call_later(self._set_thinking_status, loop_status)
+                return
+            # Calm mode stays quiet beyond the throbber to avoid flooding; flip
+            # to :thinking verbose (or Ctrl+T) to see the full reasoning.
+            if self.thinking_verbosity != "verbose":
+                self.call_later(self._set_thinking_status, "💭 Thinking…")
+                self.call_later(self._maybe_show_thinking_hint, log)
+                return
             # Schedule UI update on the next event loop tick
             # ACP uses call_from_thread() because it runs in a separate subprocess
             self.call_later(self._show_thinking_line, text, log)
 
-        # For local models, completely disable thinking logs by setting callback to None
-        # This prevents the agent from even trying to call on_thinking
-        if provider_def and provider_def.category == ProviderCategory.LOCAL:
-            self._pure_mode.on_tool_call = on_tool_call
-            self._pure_mode.on_tool_result = on_tool_result
-            self._pure_mode.on_thinking = None  # Completely disable thinking logs for local models
-        else:
-            self._pure_mode.on_tool_call = on_tool_call
-            self._pure_mode.on_tool_result = on_tool_result
-            self._pure_mode.on_thinking = on_thinking_async
+        # Thinking is always wired now; the handler above gates by verbosity so
+        # the :thinking / Ctrl+T toggle works for local, BYOK, and ACP alike.
+        self._pure_mode.on_tool_call = on_tool_call
+        self._pure_mode.on_tool_result = on_tool_result
+        self._pure_mode.on_thinking = on_thinking_async
         self._install_pure_permission_bridge(self._pure_mode, log)
 
         # Use STANDARD for cloud providers, MINIMAL for local to avoid confusion
@@ -24435,6 +24526,14 @@ team:
         t = Text()
         t.append(f"\n  🤖 ", style=f"bold {THEME['cyan']}")
         t.append("All ACP Coding Agents\n\n", style=f"bold {THEME['cyan']}")
+        t.append(f"  💡 ", style=THEME["muted"])
+        t.append(f"Type a number ", style=THEME["dim"])
+        t.append(f"(1-{len(agents)})", style=THEME["cyan"])
+        t.append(" to select, or use ", style=THEME["dim"])
+        t.append(f"↑↓", style=THEME["cyan"])
+        t.append(" arrows + ", style=THEME["dim"])
+        t.append(f"Enter", style=THEME["cyan"])
+        t.append("\n\n", style=THEME["dim"])
 
         # Separate by installation status
         installed = []
@@ -24577,9 +24676,8 @@ team:
                         f"{agent_data['name']:<25}  ← SELECTED\n", style=f"bold {THEME['success']}"
                     )
                     if install_cmd:
-                        if len(install_cmd) > 35:
-                            install_cmd = install_cmd[:32] + "..."
-                        t.append(f"         → {install_cmd}\n", style=THEME["cyan"])
+                        t.append(f"         Install: ", style=THEME["dim"])
+                        t.append(f"{install_cmd}\n", style=THEME["cyan"])
                 else:
                     t.append(
                         f"    [{num:2}] ",
@@ -24590,25 +24688,20 @@ team:
                     t.append(f"{agent_data['name']:<25}", style=THEME["muted"])
 
                     if install_cmd:
-                        # Truncate long commands
-                        if len(install_cmd) > 35:
-                            install_cmd = install_cmd[:32] + "..."
-                        t.append(f" → ", style=THEME["dim"])
+                        t.append(f"\n             Install: ", style=THEME["dim"])
                         t.append(f"{install_cmd}\n", style=THEME["cyan"])
                     else:
-                        t.append(f" → Installation info not available\n", style=THEME["dim"])
+                        t.append(
+                            f"\n             No install command available\n", style=THEME["dim"]
+                        )
             t.append("\n", style="")
 
         t.append(f"  💡 Quick Actions:\n", style=THEME["muted"])
-        t.append(f"    ⌨️  ", style=THEME["dim"])
+        t.append(f"    ", style=THEME["dim"])
         t.append(f"↑↓", style=THEME["cyan"])
-        t.append(" Arrow keys to navigate  ", style=THEME["dim"])
+        t.append(" arrows + ", style=THEME["dim"])
         t.append(f"Enter", style=THEME["cyan"])
-        t.append(" to select highlighted agent\n", style=THEME["dim"])
-        t.append(
-            f"    Or type number (1-{len(all_agents)}) to connect to an installed agent\n",
-            style=THEME["dim"],
-        )
+        t.append(" or type a number\n", style=THEME["dim"])
         t.append(f"    Use ", style=THEME["dim"])
         t.append(f":connect acp <name>", style=THEME["pink"])
         t.append(f" to connect by name\n", style=THEME["dim"])
@@ -25511,30 +25604,6 @@ team:
 
         log.add_info(f"No install command found for {agent.name}")
 
-    # ========================================================================
-    # Multi-Agent: Handoff & Context
-    # ========================================================================
-
-    def _handoff(self, args: str, log: ConversationLog):
-        if not args:
-            log.add_info("Usage: :handoff <mode>.<role> [context]")
-            log.add_system("Example: :handoff qa.fullstack Please review the code")
-            return
-
-        parts = args.split(maxsplit=1)
-        target = parts[0]
-        context = parts[1] if len(parts) > 1 else ""
-
-        if "." not in target:
-            log.add_error("Target must be mode.role (e.g., qe.fullstack)")
-            return
-
-        from_role = f"{self.current_mode}.{self.current_role}" if self.current_role else "home"
-        log.add_handoff(from_role, target, context)
-
-        mode, role = target.split(".", 1)
-        self._set_role(mode, role, log)
-
     async def _a2a_cmd(self, args: str, log: ConversationLog):
         """Handle :a2a commands."""
         parts = args.split(maxsplit=1)
@@ -25695,44 +25764,6 @@ team:
 
         self._show_command_output(log, t)
 
-    def _show_team(self, log: ConversationLog):
-        try:
-            from superqode.team_config import load_team_config
-
-            config = load_team_config()
-
-            t = Text()
-            t.append(f"\n  👥 ", style=f"bold {THEME['purple']}")
-            t.append(config.team_name, style=f"bold {THEME['purple']}")
-            t.append("\n\n", style="")
-
-            for mode in ["dev", "qe", "devops"]:
-                roles = config.get_roles_by_mode(mode)
-                if not roles:
-                    continue
-
-                mode_colors = {
-                    "dev": THEME["success"],
-                    "qe": THEME["orange"],
-                    "devops": THEME["cyan"],
-                }
-                mode_icons = {"dev": "💻", "qe": "🧪", "devops": "⚙️"}
-                color = mode_colors.get(mode, THEME["purple"])
-                icon = mode_icons.get(mode, "🔧")
-
-                t.append(f"  {icon} {mode.upper()}\n", style=f"bold {color}")
-                for role in roles:
-                    status = "✅" if role.enabled else "○"
-                    t.append(
-                        f"    {status} ", style=THEME["success"] if role.enabled else THEME["muted"]
-                    )
-                    t.append(f":{mode} {role.role:<12}", style=color)
-                    t.append(f" 📊 {role.model}\n", style=THEME["muted"])
-
-            self._show_command_output(log, t)
-        except Exception as e:
-            log.add_error(str(e))
-
     # ========================================================================
     # Help & Utility
     # ========================================================================
@@ -25747,33 +25778,17 @@ team:
 
         t.append(f"  🔗 ACP (Full Coding Agent)\n", style=f"bold {THEME['cyan']}")
         t.append(f"    :connect acp <name>     ", style=THEME["cyan"])
-        t.append(f"Connect to ACP agent (opencode, claude, etc.)\n", style=THEME["muted"])
-        t.append(f"    :dev <role>             ", style=THEME["cyan"])
-        t.append(f"Connect via role in development mode\n\n", style=THEME["muted"])
+        t.append(f"Connect to ACP agent (opencode, claude, etc.)\n\n", style=THEME["muted"])
 
-        t.append(f"  ⚡ BYOK (Direct LLM + Role Prompts)\n", style=f"bold {THEME['success']}")
+        t.append(f"  ⚡ BYOK (Direct LLM)\n", style=f"bold {THEME['success']}")
         t.append(f"    :connect byok <p> <m>    ", style=THEME["success"])
-        t.append(f"Connect to provider/model with role context\n", style=THEME["muted"])
+        t.append(f"Connect to provider/model\n", style=THEME["muted"])
         t.append(f"    :connect                ", style=THEME["success"])
-        t.append(f"Interactive picker (choose acp, byok, or local)\n", style=THEME["muted"])
-        t.append(f"    :dev <role>             ", style=THEME["success"])
-        t.append(f"Connect via role (if mode=byok in YAML)\n\n", style=THEME["muted"])
+        t.append(f"Interactive picker (choose acp, byok, or local)\n\n", style=THEME["muted"])
 
         t.append(f"  ═══ All Commands ═══\n\n", style=f"bold {THEME['gold']}")
 
         sections = [
-            (
-                "💻 Team Roles",
-                THEME["success"],
-                [
-                    (":init", "Initialize project configuration"),
-                    (":dev <role>", "Connect to role in development mode"),
-                    (":qe <role>", "Connect to role in quality engineering mode"),
-                    (":devops <role>", "Connect to role in DevOps mode"),
-                    (":roles", "Show all roles with execution modes"),
-                    (":team", "Show team configuration"),
-                ],
-            ),
             (
                 "🔌 Connection & Providers",
                 THEME["cyan"],
@@ -25842,6 +25857,36 @@ team:
                 ],
             ),
             (
+                "🔍 Search & Context (local-optimized)",
+                THEME["cyan"],
+                [
+                    (":context", "Show the detected context window + compaction budgets"),
+                    (":context <tokens>", "Pin the context window (e.g. :context 8192 / 16k)"),
+                    (":context auto", "Re-detect the loaded window from the local server"),
+                    (":workspace add <path>", "Register a repo for multi-repo search"),
+                    (":workspace list", "List registered search repos"),
+                    (":workspace remove <path>", "Unregister a repo"),
+                    (
+                        '(ask: "search all repos")',
+                        "grep/glob fan out across the workspace (all_repos)",
+                    ),
+                    (":thinking", "Show thinking-log detail (Ctrl+T cycles Normal/Verbose/Off)"),
+                    (":thinking verbose", "Show full per-iteration reasoning + tool detail"),
+                    (
+                        "env SUPERQODE_AUTO_COMPACT=0",
+                        "Disable adaptive auto-compaction (on by default)",
+                    ),
+                    (
+                        "env SUPERQODE_VERIFY_EDITS=0",
+                        "Disable post-edit diagnostics (lint/syntax after edits)",
+                    ),
+                    (
+                        "env SUPERQODE_FORMAT_ON_EDIT=1",
+                        "Auto-format files after the agent edits them",
+                    ),
+                ],
+            ),
+            (
                 "🤗 HuggingFace",
                 THEME["pink"],
                 [
@@ -25860,9 +25905,9 @@ team:
                 "🔄 Multi-Agent Coordination",
                 THEME["orange"],
                 [
-                    (":handoff <role>", "Hand off current task to another role"),
+                    (":a2a", "Show A2A workflow commands"),
                     (":context", "Show current work context"),
-                    (":disconnect", "Disconnect from current agent/role"),
+                    (":disconnect", "Disconnect from current agent"),
                     (":home", "Go home / disconnect from all"),
                 ],
             ),
@@ -25890,7 +25935,7 @@ team:
                     (":harness <spec.yaml>", "Load a HarnessSpec into the TUI"),
                     (
                         ":harness inspect",
-                        "Summarize active HarnessSpec policy, tools, workflow, hooks, validation",
+                        "Summarize active HarnessSpec policy, tools, workflow, hooks, checks",
                     ),
                     (
                         ":harness doctor",
@@ -25902,11 +25947,15 @@ team:
                     (":harness fork <run_id> [event]", "Fork a persisted run at an event index"),
                     (
                         ":harness evidence <run_id>",
-                        "Show run evidence, changes, validation, and result receipt",
+                        "Show run evidence, changes, checks, and result receipt",
                     ),
                     (":harness events <run_id>", "Show persisted event timeline for a harness run"),
                     (":harness templates", "List built-in HarnessSpec templates"),
                     (":harness off", "Disable the active HarnessSpec"),
+                    (
+                        "$ superqode mcp",
+                        "Expose harnesses over MCP (stdio; --http for HTTP) for any MCP client",
+                    ),
                     (":retry", "Retry the last user prompt"),
                     (":work [verbose]", "Show last run tools, files, and commands"),
                     (":copy error", "Copy the latest error to clipboard"),
@@ -26223,58 +26272,6 @@ team:
             log.write(content)
             # Don't scroll to home on navigation updates to reduce flickering
             log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
-
-    def _show_roles(self, log: ConversationLog):
-        try:
-            from superqode.team_config import load_team_config
-
-            config = load_team_config()
-
-            t = Text()
-            t.append(f"\n  👥 ", style=f"bold {THEME['purple']}")
-            t.append(f"{config.team_name} - Roles\n", style=f"bold {THEME['purple']}")
-
-            for mode in ["dev", "qe", "devops"]:
-                roles = config.get_roles_by_mode(mode)
-                if not roles:
-                    continue
-
-                mode_colors = {
-                    "dev": THEME["success"],
-                    "qe": THEME["orange"],
-                    "devops": THEME["cyan"],
-                }
-                mode_icons = {"dev": "💻", "qe": "🧪", "devops": "⚙️"}
-                color = mode_colors.get(mode, THEME["purple"])
-                icon = mode_icons.get(mode, "🔧")
-
-                t.append(f"\n  {icon} {mode.upper()}\n", style=f"bold {color}")
-                for role in roles:
-                    status = "✅" if role.enabled else "○"
-                    t.append(
-                        f"    {status} ", style=THEME["success"] if role.enabled else THEME["muted"]
-                    )
-                    t.append(f":{mode} {role.role:<15}", style=color)
-                    t.append(f" 📊 {role.model:<12}", style=THEME["muted"])
-                    t.append(f" {role.description}", style=THEME["dim"])
-                    if mode == "qe" and role.role in POWER_QE_ROLES:
-                        t.append(" ⚡ POWER", style=f"bold {THEME['warning']}")
-                    t.append("\n", style=THEME["dim"])
-
-            total = len(config.roles)
-            enabled = config.enabled_count
-            t.append(f"\n  💡 {enabled}/{total} roles enabled\n", style=THEME["muted"])
-            t.append(
-                "  ⚡ Power validation roles: unit, integration, api, ui, accessibility, security, usability\n",
-                style=THEME["muted"],
-            )
-            t.append(
-                "  💡 Tip: Edit each role's job_description in superqode.yaml for better results\n",
-                style=THEME["dim"],
-            )
-            self._show_command_output(log, t)
-        except Exception as e:
-            log.add_error(str(e))
 
     def _show_files(self, log: ConversationLog):
         try:

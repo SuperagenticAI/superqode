@@ -1,6 +1,8 @@
 # Core Concepts
 
-Understanding SuperQode's core concepts is essential for effective validation and evaluation. This section explains the fundamental ideas that power SuperQode.
+SuperQode is a portable coding agent harness. It gives developers one repeatable contract for model choice, runtime backend, tool access, sandbox policy, approvals, session history, event capture, and output handling.
+
+Use this section to understand the pieces that make a SuperQode run predictable across local models, hosted providers, ACP agents, and optional runtime SDKs.
 
 ---
 
@@ -8,11 +10,11 @@ Understanding SuperQode's core concepts is essential for effective validation an
 
 <div class="grid cards" markdown>
 
--   **Three Execution Modes**
+-   **Three Connection Modes**
 
     ---
 
-    Learn about BYOK, ACP, and Local modes for connecting to AI models and agents.
+    Learn how SuperQode connects to ACP agents, BYOK providers, and local model servers.
 
     [:octicons-arrow-right-24: Explore modes](modes.md)
 
@@ -20,235 +22,154 @@ Understanding SuperQode's core concepts is essential for effective validation an
 
     ---
 
-    Understand how SuperQode handles API keys with full transparency.
+    Understand how API keys, local agent auth, and provider setup work.
 
     [:octicons-arrow-right-24: Learn about auth](authentication.md)
 
--   **Ephemeral Workspace**
+-   **Harness System**
 
     ---
 
-    Understand how SuperQode isolates changes and protects your code during testing.
+    Define runtime, model policy, tools, sandbox behavior, checks, hooks, events, and output rules in one spec.
 
-    [:octicons-arrow-right-24: Learn about workspaces](workspace.md)
+    [:octicons-arrow-right-24: Learn harnesses](../advanced/harness-system.md)
 
--   **Role-Based Workflows**
-
-    ---
-
-    Discover the different testing roles and how they work together.
-
-    [:octicons-arrow-right-24: Explore roles](roles.md)
-
--   **Validation Reports**
+-   **Runtime Backends**
 
     ---
 
-    Learn about reports - research-grade forensic reports with evidence and recommendations.
+    Run the same harness through the builtin loop, OpenAI Agents SDK, Google ADK, DeepAgents, PydanticAI, or Codex SDK.
 
-    [:octicons-arrow-right-24: Understand reports](qr.md)
+    [:octicons-arrow-right-24: Runtime guide](../runtimes.md)
 
--   **Allow Suggestions**
-
-    ---
-
-    Understand the opt-in suggestion workflow where agents can demonstrate fixes.
-
-    [:octicons-arrow-right-24: Learn about suggestions](suggestions.md)
-
--   **Release Validation**
+-   **Tools And Permissions**
 
     ---
 
-    Understand validation workflows and how they relate to the SuperQode harness.
+    Control file, search, edit, shell, network, diagnostics, MCP, todo, and skill tools with explicit policy.
 
-    [:octicons-arrow-right-24: Learn about validation](release-validation.md)
+    [:octicons-arrow-right-24: Tools guide](../advanced/tools-system.md)
+
+-   **Safety**
+
+    ---
+
+    Use approvals, sandbox profiles, command analysis, project trust, and plugin checks to keep agent work bounded.
+
+    [:octicons-arrow-right-24: Safety guide](../advanced/safety-permissions.md)
 
 </div>
 
 ---
 
-## The SuperQode Philosophy
+## What SuperQode Provides
 
-SuperQode is built on several key principles:
+SuperQode separates an agent system into stable pieces:
 
-### 1. Sandbox-First
+| Concept | Meaning |
+| --- | --- |
+| Harness | The run contract: flavor, runtime, model policy, tools, sandbox, workflow, checks, hooks, events, and output |
+| Connection mode | How SuperQode reaches intelligence: ACP agent, BYOK provider, or local model server |
+| Runtime | The execution engine behind a harness, such as `builtin`, `openai-agents`, `adk`, `deepagents`, `pydanticai`, or `codex-sdk` |
+| Model policy | Model, fallback, reasoning, temperature, context, local hardware, and tool-call behavior |
+| Tool policy | The explicit set of capabilities the agent can use |
+| Execution policy | Read, write, shell, network, approval, and command rules |
+| Session | Persisted conversation state that can be resumed, forked, exported, or shared |
+| Event graph | Normalized model, tool, approval, sandbox, memory, and result events from a run |
 
-All testing happens in isolated ephemeral workspaces. Your production code is **never modified** without explicit consent.
+The harness is the product contract. Runtimes and providers are interchangeable execution choices behind that contract.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    SANDBOX GUARANTEE                         │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│   Original Code        →        Snapshot Created            │
-│         ↓                              ↓                     │
-│   validation Sandbox           ←        Agents Test Freely          │
-│         ↓                              ↓                     │
-│   Session Ends         →        Changes Reverted            │
-│         ↓                              ↓                     │
-│   Original Restored    ←        Artifacts Preserved         │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
+## How A Run Fits Together
 
-### 2. Multi-Agent Validation
-
-Multiple agents with different roles and models challenge each other, reducing blind spots:
-
-- Different models have different strengths and weaknesses
-- Cross-model validation increases finding confidence
-- Diverse perspectives catch more issues
-
-### 3. Human-in-the-Loop
-
-SuperQode **suggests**, never **applies**:
-
-- All findings require human review
-- Suggested fixes must be approved
-- Patches are preserved as artifacts
-- Final decisions remain with humans
-
-### 4. Evidence-Based Reporting
-
-reports are research-grade forensic reports:
-
-- Every finding includes reproduction steps
-- Evidence is collected and documented
-- Root cause analysis is provided
-- Fix suggestions include verification results
-
----
-
-## How Concepts Connect
-
-```mermaid
-graph TB
-    subgraph "Execution Layer"
-        BYOK[BYOK Mode]
-        ACP[ACP Mode]
-        LOCAL[Local Mode]
-    end
-
-    subgraph "Workspace Layer"
-        SNAPSHOT[Snapshot]
-        SANDBOX[Sandbox Environment]
-        REVERT[Revert Changes]
-    end
-
-    subgraph "Role Layer"
-        EXEC[Execution Roles]
-        DETECT[Detection Roles]
-        HEUR[Heuristic Role]
-    end
-
-    subgraph "Output Layer"
-        report[Quality Report]
-        PATCHES[Suggested Patches]
-        TESTS[Generated Tests]
-    end
-
-    BYOK --> SANDBOX
-    ACP --> SANDBOX
-    LOCAL --> SANDBOX
-
-    SNAPSHOT --> SANDBOX
-    SANDBOX --> EXEC
-    SANDBOX --> DETECT
-    SANDBOX --> HEUR
-    SANDBOX --> REVERT
-
-    EXEC --> report
-    DETECT --> report
-    HEUR --> report
-
-    report --> PATCHES
-    report --> TESTS
+```text
+1. CONNECT     Choose ACP, BYOK, local model, Codex SDK, Claude SDK, or another runtime path
+2. SPEC        Load or generate a HarnessSpec
+3. POLICY      Resolve model, tools, sandbox, approvals, hooks, checks, and output rules
+4. EXECUTE     Run through the selected backend
+5. OBSERVE     Stream TUI output and persist normalized events when enabled
+6. REVIEW      Inspect files, session history, run events, graph output, and checks
 ```
 
----
+## Connection Modes
 
-## Key Terminology
+| Mode | Best for | Typical command |
+| --- | --- | --- |
+| ACP | External coding agents that own their own model and tool loop | `:connect acp opencode` |
+| BYOK | Hosted providers using your API keys | `:connect byok openai gpt-4o-mini` |
+| Local | Ollama, LM Studio, MLX, vLLM, SGLang, DS4, and other local servers | `:connect local ollama qwen3:8b` |
 
-| Term | Definition |
-|------|------------|
-| **BYOK** | Bring Your Own Key - Direct LLM API calls using your API keys |
-| **ACP** | Agent Client Protocol - Full coding agent integration |
-| **validation** | validation and evaluation - The process of ensuring software quality |
-| **report** | Quality Report - Forensic quality report |
-| **Role** | A specialized testing persona (security_tester, api_tester, etc.) |
-| **Harness** | Validation system for patches and code changes |
-| **Sandbox** | Isolated environment for testing |
-| **Artifact** | Output from validation session (patches, tests, reports) |
+See [Three Connection Modes](modes.md) for setup details.
 
----
+## Harness Flavors
 
-## Concept Deep Dives
+| Flavor | Purpose |
+| --- | --- |
+| `coding` | Repository-aware coding with file, search, edit, shell, todo, MCP, checks, and approval policy |
+| `no_tool` | Model-only reasoning without repository tools, shell access, or hidden filesystem context |
 
-### Execution Modes
+Start with a built-in template:
 
-SuperQode supports three ways to connect to AI:
+```bash
+superqode harness init my-coder --template coding --output harness.yaml
+superqode harness doctor --spec harness.yaml
+superqode harness run --spec harness.yaml --prompt "summarize this repository"
+```
 
-| Mode | Description | Best For |
-|------|-------------|----------|
-| **BYOK** | Direct API calls via LiteLLM | Cloud providers (Anthropic, OpenAI) |
-| **ACP** | Full coding agent capabilities | Advanced automation (OpenCode) |
-| **Local** | Self-hosted models | Privacy, cost control |
+## Runtime Backends
 
-[:octicons-arrow-right-24: Learn more about modes](modes.md)
+| Runtime | Purpose |
+| --- | --- |
+| `builtin` | SuperQode native agent loop |
+| `openai-agents` | OpenAI Agents SDK adapter |
+| `adk` | Google ADK adapter |
+| `deepagents` | Optional DeepAgents adapter for graph and middleware-heavy workflows |
+| `pydanticai` | Optional PydanticAI adapter with SuperQode tool bridging |
+| `codex-sdk` | Codex SDK runtime using local Codex login where available |
 
-### Ephemeral Workspace
+List installed and available runtimes:
 
-The workspace system ensures safety:
+```bash
+superqode runtime list
+superqode harness list-backends
+```
 
-- **Snapshot**: Original state captured before testing
-- **Isolation**: Changes don't affect your repository
-- **Revert**: Automatic cleanup after testing
-- **Artifacts**: Patches and tests are preserved separately
+## Safety Model
 
-[:octicons-arrow-right-24: Learn more about workspaces](workspace.md)
+SuperQode makes capabilities explicit:
 
-### Role-Based Workflows
+- harness specs decide whether read, write, shell, and network access are allowed
+- approval profiles decide which operations require confirmation
+- permission rules can allow, deny, or ask for specific tool calls
+- local sandbox modes can confine shell commands
+- project trust protects local plugins, MCP configs, and hooks
+- no-tool harnesses remove repository and shell tools entirely
 
-Roles represent specialized testing personas:
+For details, see [Safety & Permissions](../advanced/safety-permissions.md).
 
-- **Execution Roles**: Run existing tests deterministically
-- **Detection Roles**: AI-powered issue discovery
-- **Heuristic Role**: Senior validation comprehensive review
+## Sessions, Sharing, And Memory
 
-[:octicons-arrow-right-24: Learn more about roles](roles.md)
+SuperQode keeps coding work inspectable:
 
-### Validation Reports
+- `superqode sessions list` shows saved sessions
+- `superqode sessions tree` shows branches and forks
+- `superqode share create <session-id>` creates a local portable share artifact
+- `superqode memory remember "..."` stores explicit project facts and preferences
+- `superqode harness events <run-id>` and `superqode harness graph <run-id>` inspect harness runs
 
-reports transform QA outputs from tickets to decisions:
+## Design Principles
 
-- Investigation summary with methodology
-- Findings with evidence and reproduction steps
-- Root cause analysis
-- Verified fix suggestions
-
-[:octicons-arrow-right-24: Learn more about reports](qr.md)
-
-### Allow Suggestions
-
-The opt-in workflow for demonstrating fixes:
-
-1. Agent detects issue
-2. Agent fixes in sandbox
-3. Fix is verified with tests
-4. Evidence is collected
-5. Changes are reverted
-6. Patches are preserved for review
-
-[:octicons-arrow-right-24: Learn more about suggestions](suggestions.md)
-
----
+- Harness-first, provider-neutral, runtime-neutral
+- Local models are first-class
+- Tools are policy-controlled capabilities
+- No-tool reasoning is a supported path, not a workaround
+- Sessions, events, and exports should make agent work readable
+- Configuration should help developers start quickly and deepen only when needed
 
 ## Next Steps
 
-- [Release Validation](release-validation.md) - Understanding validation workflows and SuperQode
-- [Three Modes](modes.md) - Understanding BYOK, ACP, and Local
-- [Ephemeral Workspace](workspace.md) - How code isolation works
-- [Role-Based Workflows](roles.md) - The role-based testing model
-- [Validation Reports](qr.md) - Understanding reports
-- [Allow Suggestions](suggestions.md) - The fix demonstration workflow
+- [Installation](../getting-started/installation.md)
+- [Quick Start](../getting-started/quickstart.md)
+- [Three Connection Modes](modes.md)
+- [Harness System](../advanced/harness-system.md)
+- [Runtime Backends](../runtimes.md)
+- [Tools System](../advanced/tools-system.md)

@@ -6,7 +6,7 @@ Tracks file changes in real-time for:
 - Live diff updates in TUI
 - Automatic snapshot triggers
 - Change notifications to agents
-- Optimized for SuperQode's QE workflow
+- Optimized for SuperQode's workspace workflow
 """
 
 from __future__ import annotations

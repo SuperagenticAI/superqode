@@ -1,4 +1,4 @@
-"""Persistent ACP tool-permission store (A4 from the fast-agent gap audit).
+"""Persistent ACP tool-permission store.
 
 What this is for
 ----------------

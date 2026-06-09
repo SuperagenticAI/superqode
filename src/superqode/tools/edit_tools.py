@@ -7,7 +7,7 @@ Provides multiple editing strategies:
 - PatchTool: Apply unified diffs (like git patches)
 - MultiEditTool: Batch multiple edits atomically
 
-When a QE session is active, edits are tracked through the WorkspaceManager
+When a workspace tracking session is active, edits are tracked through the WorkspaceManager
 to ensure the immutable repo guarantee.
 """
 
@@ -19,6 +19,7 @@ from .base import Tool, ToolResult, ToolContext
 from .validation import validate_path_in_working_directory
 from .file_tracking import check_file_unchanged
 from .diff_utils import build_unified_diff, diff_stats
+from .post_edit import verify_edit
 from ..agent.edit_strategies import replace_with_strategies
 
 
@@ -122,7 +123,7 @@ Usage:
                 "deletions": deletions,
             }
 
-            # Check if QE session is active - route through workspace
+            # Check if workspace tracking is active - route through workspace
             workspace = _get_workspace()
             if workspace:
                 try:
@@ -130,11 +131,11 @@ Usage:
                     workspace.write_file(str(rel_path), new_content)
                     return ToolResult(
                         success=True,
-                        output=f"Replaced {replaced_count} occurrence(s) in {path} (tracked for QE revert)",
+                        output=f"Replaced {replaced_count} occurrence(s) in {path} (tracked for revert)",
                         metadata={
                             "path": str(file_path),
                             "replacements": replaced_count,
-                            "qe_tracked": True,
+                            "workspace_tracked": True,
                             **diff_metadata,
                         },
                     )
@@ -142,13 +143,21 @@ Usage:
                     # Path is outside project root, write directly
                     pass
 
-            # Write back (no QE session or outside project)
+            # Write back (no workspace tracking or outside project)
             file_path.write_text(new_content)
 
-            return ToolResult(
-                success=True,
-                output=f"Replaced {replaced_count} occurrence(s) in {path}",
-                metadata={"path": str(file_path), "replacements": replaced_count, **diff_metadata},
+            return await verify_edit(
+                ToolResult(
+                    success=True,
+                    output=f"Replaced {replaced_count} occurrence(s) in {path}",
+                    metadata={
+                        "path": str(file_path),
+                        "replacements": replaced_count,
+                        **diff_metadata,
+                    },
+                ),
+                file_path,
+                ctx,
             )
 
         except Exception as e:
@@ -223,7 +232,7 @@ class InsertTextTool(Tool):
                 "deletions": deletions,
             }
 
-            # Check if QE session is active - route through workspace
+            # Check if workspace tracking is active - route through workspace
             workspace = _get_workspace()
             if workspace:
                 try:
@@ -231,24 +240,28 @@ class InsertTextTool(Tool):
                     workspace.write_file(str(rel_path), new_content)
                     return ToolResult(
                         success=True,
-                        output=f"Inserted text at line {line_num} in {path} (tracked for QE revert)",
+                        output=f"Inserted text at line {line_num} in {path} (tracked for revert)",
                         metadata={
                             "path": str(file_path),
                             "line": line_num,
-                            "qe_tracked": True,
+                            "workspace_tracked": True,
                             **diff_metadata,
                         },
                     )
                 except ValueError:
                     pass
 
-            # Write back (no QE session or outside project)
+            # Write back (no workspace tracking or outside project)
             file_path.write_text(new_content)
 
-            return ToolResult(
-                success=True,
-                output=f"Inserted text at line {line_num} in {path}",
-                metadata={"path": str(file_path), "line": line_num, **diff_metadata},
+            return await verify_edit(
+                ToolResult(
+                    success=True,
+                    output=f"Inserted text at line {line_num} in {path}",
+                    metadata={"path": str(file_path), "line": line_num, **diff_metadata},
+                ),
+                file_path,
+                ctx,
             )
 
         except Exception as e:
@@ -410,9 +423,9 @@ class PatchTool(Tool):
             output += f"\n\nApplied {applied_hunks}/{total_hunks} hunks"
 
             if workspace:
-                output += " (tracked for QE revert)"
+                output += " (tracked for revert)"
 
-            return ToolResult(
+            patch_result = ToolResult(
                 success=success,
                 output=output,
                 error=None if success else f"Failed to apply {total_hunks - applied_hunks} hunks",
@@ -427,6 +440,17 @@ class PatchTool(Tool):
                     ),
                 },
             )
+
+            # Run post-edit verification on directly-written files (skip when a
+            # workspace worktree owns the writes - the project path is stale then).
+            if success and not workspace:
+                primary = patch_result.metadata.get("path")
+                if primary:
+                    try:
+                        patch_result = await verify_edit(patch_result, Path(primary), ctx)
+                    except Exception:
+                        pass
+            return patch_result
 
         except Exception as e:
             return ToolResult(success=False, output="", error=f"Patch error: {str(e)}")
@@ -679,11 +703,11 @@ class MultiEditTool(Tool):
                     workspace.write_file(str(rel_path), content)
                     return ToolResult(
                         success=True,
-                        output=f"Applied {len(edits)} edits to {path} (tracked for QE revert)",
+                        output=f"Applied {len(edits)} edits to {path} (tracked for revert)",
                         metadata={
                             "path": str(file_path),
                             "edit_count": len(edits),
-                            "qe_tracked": True,
+                            "workspace_tracked": True,
                             **diff_metadata,
                         },
                     )
@@ -692,10 +716,18 @@ class MultiEditTool(Tool):
 
             file_path.write_text(content)
 
-            return ToolResult(
-                success=True,
-                output=f"Applied {len(edits)} edits to {path}",
-                metadata={"path": str(file_path), "edit_count": len(edits), **diff_metadata},
+            return await verify_edit(
+                ToolResult(
+                    success=True,
+                    output=f"Applied {len(edits)} edits to {path}",
+                    metadata={
+                        "path": str(file_path),
+                        "edit_count": len(edits),
+                        **diff_metadata,
+                    },
+                ),
+                file_path,
+                ctx,
             )
 
         except Exception as e:

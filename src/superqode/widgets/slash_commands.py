@@ -204,16 +204,6 @@ def create_builtin_commands(handlers: dict) -> list[SlashCommand]:
         )
     )
 
-    # Mode commands
-    commands.append(
-        SlashCommand(
-            name="mode",
-            description="Switch mode (dev/qe/devops)",
-            handler=handlers.get("mode", lambda _: None),
-            category="session",
-        )
-    )
-
     # Sessions commands
     commands.append(
         SlashCommand(

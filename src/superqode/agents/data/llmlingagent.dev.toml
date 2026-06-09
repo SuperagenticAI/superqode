@@ -12,7 +12,7 @@ publisher_name = "SuperQode Team"
 publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
 description = "A framework for creating and managing LLM-powered agents to provide structured interactions."
-tags = ["framework", "llm", "structured"]
+tags = ["framework", "llm", "structured", "official-acp"]
 run_command."*" = "llmling-agent --acp"
 
 help = '''

@@ -22,12 +22,11 @@ def get_configured_search_roots() -> List[Path]:
     working-directory sandbox (writes still stay in the cwd). ``~`` is expanded;
     only existing directories are returned, de-duplicated, order preserved.
     """
-    raw = os.environ.get(SEARCH_ROOTS_ENV, "").strip()
-    if not raw:
-        return []
     roots: List[Path] = []
     seen: set[str] = set()
-    for part in raw.split(os.pathsep):
+
+    raw = os.environ.get(SEARCH_ROOTS_ENV, "").strip()
+    for part in raw.split(os.pathsep) if raw else []:
         part = part.strip()
         if not part:
             continue
@@ -38,6 +37,20 @@ def get_configured_search_roots() -> List[Path]:
         if resolved.is_dir():
             seen.add(key)
             roots.append(resolved)
+
+    # Persisted workspace registry (`:workspace add`). Imported lazily to keep
+    # this low-level helper free of superqode import cycles.
+    try:
+        from superqode.search_registry import list_workspace_roots
+
+        for resolved in list_workspace_roots():
+            key = str(resolved)
+            if key not in seen:
+                seen.add(key)
+                roots.append(resolved)
+    except Exception:
+        pass
+
     return roots
 
 

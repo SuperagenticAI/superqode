@@ -1,4 +1,4 @@
-"""MCP elicitation handling (A2 from the fast-agent gap audit).
+"""MCP elicitation handling.
 
 What MCP elicitation is
 -----------------------

@@ -1,0 +1,31 @@
+identity = "sigit.dev"
+name = "siGit Code"
+short_name = "sigit"
+url = "https://github.com/getsigit/sigit"
+protocol = "acp"
+author_name = "siGit"
+author_url = "https://github.com/getsigit"
+publisher_name = "siGit"
+publisher_url = "https://github.com/getsigit"
+type = "coding"
+description = "AI coding agent by siGit with ACP support."
+tags = ["open-source", "coding", "acp"]
+run_command."*" = "sigit"
+
+help = '''
+# siGit Code
+
+AI coding agent by siGit with ACP support.
+
+## Installation
+
+```bash
+npm install -g sigit
+```
+
+See https://github.com/getsigit/sigit for details.
+'''
+
+[actions."*".install]
+command = "npm install -g sigit"
+description = "Install siGit Code"

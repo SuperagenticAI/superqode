@@ -1,6 +1,6 @@
 # Safety & Permissions
 
-SuperQode implements a comprehensive safety model to ensure secure operation while allowing agents to perform effective validation and evaluation. This document describes the security architecture, permission system, and safety guarantees.
+SuperQode implements a comprehensive safety model to ensure secure operation while allowing agents to perform effective tool-based coding tasks. This document describes the security architecture, permission system, and safety guarantees.
 
 ---
 
@@ -199,7 +199,7 @@ When a dangerous operation is detected, SuperQode prompts for approval:
 | **Y (Yes)** | Allow this specific operation | Once |
 | **A (Always)** | Allow similar operations | Session |
 | **N (No)** | Deny and continue | Once |
-| **! (Abort)** | Stop validation session | Immediate |
+| **! (Abort)** | Stop the current session | Immediate |
 
 ### Approval Memory
 
@@ -381,7 +381,7 @@ All operations are logged for audit:
 ```json
 {
   "timestamp": "2024-01-15T10:30:45Z",
-  "session_id": "qe-abc123",
+  "session_id": "session-abc123",
   "operation": "shell",
   "command": "pytest tests/",
   "permission_level": "moderate",
@@ -399,7 +399,6 @@ All operations are logged for audit:
 ├── audit/
 │   ├── session-abc123.jsonl
 │   └── session-def456.jsonl
-└── qe-artifacts/
 ```
 
 ---

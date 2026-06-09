@@ -8,6 +8,8 @@ Provides multiple search strategies:
 """
 
 import asyncio
+import json
+import os
 import re
 import shutil
 from dataclasses import dataclass
@@ -15,7 +17,103 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .base import Tool, ToolResult, ToolContext
-from .validation import validate_path_in_search_scope
+from .validation import get_configured_search_roots, validate_path_in_search_scope
+
+
+def _external_search_allowed() -> bool:
+    """Opt-in to searching absolute paths outside the workspace (default off)."""
+    return os.environ.get("SUPERQODE_ALLOW_EXTERNAL_SEARCH", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def _is_within(target: Path, bases: List[Path]) -> bool:
+    t = target.resolve()
+    for base in bases:
+        try:
+            t.relative_to(Path(base).resolve())
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def _dedupe_roots(roots: List[Path]) -> List[Path]:
+    out: List[Path] = []
+    seen: set[str] = set()
+    for r in roots:
+        key = str(Path(r).resolve())
+        if key not in seen:
+            seen.add(key)
+            out.append(Path(r).resolve())
+    return out
+
+
+def resolve_search_targets(
+    path_arg: Optional[str], all_repos: bool, ctx: ToolContext
+) -> Tuple[List[Path], Optional[str], bool]:
+    """Resolve a search request into concrete root directories/files.
+
+    Returns ``(targets, error, multi)``:
+      - ``all_repos`` → the cwd plus every registered workspace/search root.
+      - an absolute ``path`` inside scope → honored silently; outside scope it is
+        honored only when ``SUPERQODE_ALLOW_EXTERNAL_SEARCH`` is set, else a
+        helpful error pointing at ``:workspace add``.
+      - a relative ``path`` → validated to stay within cwd/registered roots.
+    ``multi`` is True when results should be labeled by repo.
+    """
+    roots = list(getattr(ctx, "search_roots", None) or get_configured_search_roots())
+    cwd = Path(ctx.working_directory).resolve()
+
+    if all_repos:
+        targets = _dedupe_roots([cwd, *roots])
+        return targets, None, len(targets) > 1
+
+    raw = (path_arg or ".").strip()
+    expanded = Path(os.path.expanduser(raw))
+
+    if expanded.is_absolute():
+        resolved = expanded.resolve()
+        if not resolved.exists():
+            return [], f"Path does not exist: {resolved}", False
+        if _is_within(resolved, [cwd, *roots]) or _external_search_allowed():
+            return [resolved], None, False
+        return (
+            [],
+            (
+                f"Path {resolved} is outside the search workspace. Register it with "
+                f"`:workspace add {resolved}` (or set SUPERQODE_ALLOW_EXTERNAL_SEARCH=1) "
+                "to allow searching it."
+            ),
+            False,
+        )
+
+    try:
+        validated = validate_path_in_search_scope(raw, ctx.working_directory, roots)
+        return [validated], None, False
+    except ValueError as exc:
+        return [], str(exc), False
+
+
+def _label_match_path(file_text: str, targets: List[Path], cwd: Path, multi: bool) -> str:
+    """Render a match's path: ``repo/relpath`` across repos, else cwd-relative."""
+    fp = Path(file_text)
+    if not fp.is_absolute():
+        fp = cwd / fp
+    fp = fp.resolve()
+    for root in targets:
+        try:
+            rel = fp.relative_to(Path(root).resolve())
+            return f"{root.name}/{rel}" if multi else str(rel)
+        except ValueError:
+            continue
+    try:
+        return str(fp.relative_to(cwd))
+    except ValueError:
+        return str(fp)
+
 
 try:
     from superqode.file_explorer import PathFilter
@@ -34,7 +132,18 @@ class GrepTool(Tool):
 
     @property
     def description(self) -> str:
-        return "Search for a pattern in files. Uses ripgrep if available, falls back to grep."
+        return (
+            "Search file CONTENTS by regular expression, powered by ripgrep. "
+            "Full regex syntax is supported (e.g. 'log.*Error', 'def\\s+\\w+'). "
+            "Filter files with `include` (e.g. '*.py', '*.{ts,tsx}') and narrow scope "
+            "with `path`. Returns `file:line: matching content`; respects .gitignore.\n"
+            "- Use this to find WHERE a pattern occurs across the codebase. "
+            "To find files by NAME, use the glob tool instead.\n"
+            "- For open-ended exploration needing several rounds of grep/glob, delegate "
+            "to a subagent/Task tool rather than many manual calls.\n"
+            "- You can call multiple search tools in one turn — batch speculative "
+            "searches that are likely useful."
+        )
 
     @property
     def parameters(self) -> Dict[str, Any]:
@@ -44,7 +153,18 @@ class GrepTool(Tool):
                 "pattern": {"type": "string", "description": "Search pattern (regex supported)"},
                 "path": {
                     "type": "string",
-                    "description": "Directory or file to search (default: current directory)",
+                    "description": (
+                        "Directory or file to search (default: current directory). "
+                        "An absolute path is honored if it is inside the workspace "
+                        "(see :workspace add)."
+                    ),
+                },
+                "all_repos": {
+                    "type": "boolean",
+                    "description": (
+                        "Search across ALL registered workspace repos in one pass "
+                        "(matches are labeled 'repo/path'). Default: false."
+                    ),
                 },
                 "include": {
                     "type": "string",
@@ -63,103 +183,199 @@ class GrepTool(Tool):
         path = args.get("path", ".")
         include = args.get("include")
         case_sensitive = args.get("case_sensitive", False)
+        all_repos = bool(args.get("all_repos", False))
 
         if not pattern:
             return ToolResult(success=False, output="", error="Pattern is required")
 
-        try:
-            # Validate and resolve path - ensures it stays within working directory
-            search_path = validate_path_in_search_scope(
-                path, ctx.working_directory, getattr(ctx, "search_roots", None)
-            )
-        except ValueError as e:
-            return ToolResult(success=False, output="", error=str(e))
+        targets, err, multi = resolve_search_targets(path, all_repos, ctx)
+        if err:
+            return ToolResult(success=False, output="", error=err)
+        if not targets:
+            return ToolResult(success=True, output="No matches found", metadata={"matches": 0})
 
-        # Check for ripgrep first, fall back to grep
+        # Prefer ripgrep with structured --json output; fall back to grep.
+        # Both spawn the binary directly (argv, no shell) so regex patterns with
+        # shell metacharacters are passed verbatim and can't be misinterpreted.
         rg_path = shutil.which("rg")
-
-        if rg_path:
-            cmd = self._build_rg_command(pattern, search_path, include, case_sensitive)
-        else:
-            cmd = self._build_grep_command(pattern, search_path, include, case_sensitive)
-
         try:
-            process = await asyncio.create_subprocess_shell(
-                cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=str(ctx.working_directory),
-            )
-
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
-
-            output = stdout.decode("utf-8", errors="replace")
-
-            # grep/rg exit 1 == "no matches" (not an error); exit >=2 == real
-            # failure (bad flag, unreadable path). Surface the latter instead of
-            # masking it as "No matches found".
-            if process.returncode and process.returncode >= 2:
-                err = stderr.decode("utf-8", errors="replace").strip()
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error=err or f"search command failed (exit {process.returncode})",
+            if rg_path:
+                return await self._run_rg_json(
+                    rg_path, pattern, targets, include, case_sensitive, ctx, multi
                 )
-
-            # Limit results
-            lines = output.strip().split("\n")
-            if len(lines) > self.MAX_RESULTS:
-                output = "\n".join(lines[: self.MAX_RESULTS])
-                output += f"\n\n[Showing first {self.MAX_RESULTS} of {len(lines)} results]"
-
-            if not output.strip():
-                return ToolResult(success=True, output="No matches found", metadata={"matches": 0})
-
-            return ToolResult(success=True, output=output, metadata={"matches": len(lines)})
-
+            return await self._run_grep(pattern, targets, include, case_sensitive, ctx, multi)
         except asyncio.TimeoutError:
             return ToolResult(success=False, output="", error="Search timed out")
         except Exception as e:
             return ToolResult(success=False, output="", error=str(e))
 
-    def _build_rg_command(
-        self, pattern: str, path: Path, include: str, case_sensitive: bool
-    ) -> str:
-        """Build ripgrep command."""
-        # ripgrep respects .gitignore by default; there is no --git-ignore flag
-        # (passing it makes rg exit 2 and return zero matches).
-        cmd_parts = ["rg", "--line-number", "--no-heading"]
+    @staticmethod
+    def _rel_to(path_text: str, root: Path) -> str:
+        try:
+            return str(Path(path_text).resolve().relative_to(Path(root).resolve()))
+        except Exception:
+            return path_text
 
+    def _format_matches(
+        self,
+        matches: List[Tuple[str, int, str]],
+        truncated: bool,
+        partial: bool,
+        multi: bool = False,
+        repo_count: int = 1,
+    ):
+        """Render grep matches into the concise, model-friendly file:line: text form."""
+        scope = f" across {repo_count} repos" if multi else ""
+        if not matches:
+            out = f"No matches found{scope}"
+            if partial:
+                out += "\n(Some paths were inaccessible and skipped)"
+            return ToolResult(success=True, output=out, metadata={"matches": 0})
+        lines = [f"Found {len(matches)} match(es){scope}:", ""]
+        lines.extend(f"{rel}:{lineno}: {text}" for rel, lineno, text in matches)
+        if truncated:
+            lines += [
+                "",
+                f"(Results truncated to the first {self.MAX_RESULTS} matches — "
+                "narrow with a more specific `path` or `include` pattern.)",
+            ]
+        if partial:
+            lines += ["", "(Some paths were inaccessible and skipped)"]
+        return ToolResult(
+            success=True,
+            output="\n".join(lines),
+            metadata={
+                "matches": len(matches),
+                "truncated": truncated,
+                "partial": partial,
+                "repos": repo_count,
+            },
+        )
+
+    @staticmethod
+    def _build_rg_args(
+        rg_path: str, pattern: str, paths: List[Path], include, case_sensitive: bool
+    ) -> List[str]:
+        # --no-config ignores the user's rgrc so behavior is deterministic;
+        # ripgrep already respects .gitignore and skips hidden files / .git.
+        # NB: there is no --git-ignore flag; passing it makes rg exit 2.
+        # ripgrep is multi-threaded and accepts many roots in one invocation, so
+        # fanning out across repos is a single fast pass.
+        args = [rg_path, "--no-config", "--json"]
         if not case_sensitive:
-            cmd_parts.append("-i")
-
+            args.append("-i")
         if include:
-            cmd_parts.extend(["-g", f"'{include}'"])
+            args += ["--glob", include]
+        args.append("--")
+        args.append(pattern)
+        args += [str(p) for p in paths]
+        return args
 
-        # Escape pattern for shell
-        escaped_pattern = pattern.replace("'", "'\\''")
-        cmd_parts.append(f"'{escaped_pattern}'")
-        cmd_parts.append(f"'{path}'")
+    async def _run_rg_json(
+        self,
+        rg_path: str,
+        pattern: str,
+        targets: List[Path],
+        include,
+        case_sensitive: bool,
+        ctx,
+        multi: bool,
+    ) -> ToolResult:
+        args = self._build_rg_args(rg_path, pattern, targets, include, case_sensitive)
+        cwd = Path(ctx.working_directory).resolve()
 
-        return " ".join(cmd_parts)
+        proc = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=str(ctx.working_directory),
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        code = proc.returncode
+        err = stderr.decode("utf-8", errors="replace")
 
-    def _build_grep_command(
-        self, pattern: str, path: Path, include: str, case_sensitive: bool
-    ) -> str:
-        """Build grep command."""
-        cmd_parts = ["grep", "-rn"]
+        # Invalid regex: rg exits 2 with a parse error on stderr.
+        if code == 2 and ("regex parse error" in err or "error parsing regex" in err):
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"Invalid grep pattern {pattern!r}: {err.strip()}",
+            )
+        # Exit codes: 0 = matches, 1 = no matches, 2 = some paths skipped (partial).
+        if code not in (0, 1, 2):
+            return ToolResult(
+                success=False, output="", error=err.strip() or f"ripgrep failed (exit {code})"
+            )
+        partial = code == 2
 
+        matches: List[Tuple[str, int, str]] = []
+        for line in stdout.decode("utf-8", errors="replace").splitlines():
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except Exception:
+                continue
+            if record.get("type") != "match":
+                continue
+            data = record.get("data", {})
+            file_text = (data.get("path") or {}).get("text", "")
+            line_no = data.get("line_number") or 0
+            text = ((data.get("lines") or {}).get("text", "") or "").rstrip("\n")
+            if len(text) > 400:
+                text = text[:400] + "…"
+            matches.append((_label_match_path(file_text, targets, cwd, multi), line_no, text))
+
+        truncated = len(matches) > self.MAX_RESULTS
+        if truncated:
+            matches = matches[: self.MAX_RESULTS]
+        return self._format_matches(matches, truncated, partial, multi, len(targets))
+
+    async def _run_grep(
+        self,
+        pattern: str,
+        targets: List[Path],
+        include,
+        case_sensitive: bool,
+        ctx,
+        multi: bool,
+    ) -> ToolResult:
+        """Fallback when ripgrep is unavailable. Still argv-based (no shell)."""
+        args = ["grep", "-rn"]
         if not case_sensitive:
-            cmd_parts.append("-i")
-
+            args.append("-i")
         if include:
-            cmd_parts.extend(["--include", f"'{include}'"])
+            args += ["--include", include]
+        args.append("--")
+        args.append(pattern)
+        args += [str(p) for p in targets]
+        cwd = Path(ctx.working_directory).resolve()
 
-        escaped_pattern = pattern.replace("'", "'\\''")
-        cmd_parts.append(f"'{escaped_pattern}'")
-        cmd_parts.append(f"'{path}'")
+        proc = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=str(ctx.working_directory),
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        code = proc.returncode
+        if code and code >= 2:
+            err = stderr.decode("utf-8", errors="replace").strip()
+            return ToolResult(success=False, output="", error=err or f"grep failed (exit {code})")
 
-        return " ".join(cmd_parts)
+        rows = [ln for ln in stdout.decode("utf-8", errors="replace").splitlines() if ln]
+        truncated = len(rows) > self.MAX_RESULTS
+        matches: List[Tuple[str, int, str]] = []
+        for ln in rows[: self.MAX_RESULTS]:
+            # grep -rn output: path:line:content
+            parts = ln.split(":", 2)
+            if len(parts) == 3 and parts[1].isdigit():
+                matches.append(
+                    (_label_match_path(parts[0], targets, cwd, multi), int(parts[1]), parts[2])
+                )
+            else:
+                matches.append((ln, 0, ""))
+        return self._format_matches(matches, truncated, False, multi, len(targets))
 
 
 class GlobTool(Tool):
@@ -173,7 +389,14 @@ class GlobTool(Tool):
 
     @property
     def description(self) -> str:
-        return "Find files matching a glob pattern (e.g., '**/*.py')."
+        return (
+            "Find files by NAME using glob patterns (e.g. '**/*.py', 'src/**/*.ts'). "
+            "Returns matching file paths; respects .gitignore.\n"
+            "- Use this to locate files by name/pattern. To search file CONTENTS, "
+            "use the grep tool instead.\n"
+            "- For open-ended exploration needing several rounds of glob/grep, delegate "
+            "to a subagent/Task tool. You can also batch multiple searches in one turn."
+        )
 
     @property
     def parameters(self) -> Dict[str, Any]:
@@ -186,7 +409,17 @@ class GlobTool(Tool):
                 },
                 "path": {
                     "type": "string",
-                    "description": "Base directory to search from (default: current directory)",
+                    "description": (
+                        "Base directory to search from (default: current directory). "
+                        "An absolute path is honored if inside the workspace."
+                    ),
+                },
+                "all_repos": {
+                    "type": "boolean",
+                    "description": (
+                        "Search across ALL registered workspace repos (results labeled "
+                        "'repo/path'). Default: false."
+                    ),
                 },
             },
             "required": ["pattern"],
@@ -195,18 +428,32 @@ class GlobTool(Tool):
     async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
         pattern = args.get("pattern", "")
         path = args.get("path", ".")
+        all_repos = bool(args.get("all_repos", False))
 
         if not pattern:
             return ToolResult(success=False, output="", error="Pattern is required")
 
-        try:
-            # Validate and resolve path - ensures it stays within working directory
-            base_path = validate_path_in_search_scope(
-                path, ctx.working_directory, getattr(ctx, "search_roots", None)
+        targets, err, multi = resolve_search_targets(path, all_repos, ctx)
+        if err:
+            return ToolResult(success=False, output="", error=err)
+        if not targets:
+            return ToolResult(
+                success=True, output="No files found matching pattern", metadata={"matches": 0}
             )
-        except ValueError as e:
-            return ToolResult(success=False, output="", error=str(e))
 
+        # Fast path: ripgrep --files natively honors .gitignore and is far faster
+        # than pathlib on large trees. Fall back to pathlib if rg is missing/fails.
+        rg_path = shutil.which("rg")
+        if rg_path:
+            try:
+                result = await self._run_rg_files(rg_path, pattern, targets, ctx, multi)
+                if result is not None:
+                    return result
+            except Exception:
+                pass  # fall through to the pathlib implementation
+
+        # pathlib fallback handles a single root only; use the first target.
+        base_path = targets[0]
         try:
             # Use pathlib glob
             matches = list(base_path.glob(pattern))
@@ -256,6 +503,58 @@ class GlobTool(Tool):
 
         except Exception as e:
             return ToolResult(success=False, output="", error=str(e))
+
+    async def _run_rg_files(
+        self, rg_path: str, pattern: str, targets: List[Path], ctx, multi: bool
+    ) -> Optional[ToolResult]:
+        """List files matching a glob via `rg --files` across one or more roots."""
+        args = [rg_path, "--no-config", "--files", "--glob", pattern]
+        args += [str(p) for p in targets]
+        proc = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=str(ctx.working_directory),
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        code = proc.returncode
+        # 0 = listed, 1 = nothing matched. Anything else: let pathlib try instead.
+        if code not in (0, 1):
+            return None
+
+        cwd = Path(ctx.working_directory).resolve()
+        rows = sorted(
+            _label_match_path(ln, targets, cwd, multi)
+            for ln in stdout.decode("utf-8", errors="replace").splitlines()
+            if ln
+        )
+        truncated = len(rows) > self.MAX_RESULTS
+        shown = rows[: self.MAX_RESULTS]
+        scope = f" across {len(targets)} repos" if multi else ""
+        if not shown:
+            return ToolResult(
+                success=True,
+                output=f"No files found matching pattern{scope}",
+                metadata={"matches": 0},
+            )
+        header = f"Found {len(shown)} file(s){scope}:\n" if multi else ""
+        output = header + "\n".join(shown)
+        if truncated:
+            output += (
+                f"\n\n(Showing first {self.MAX_RESULTS} files — narrow the pattern to see more.)"
+            )
+        return ToolResult(
+            success=True,
+            output=output,
+            metadata={"matches": len(shown), "truncated": truncated, "repos": len(targets)},
+        )
+
+    @staticmethod
+    def _rel_to(path_text: str, root: Path) -> str:
+        try:
+            return str(Path(path_text).resolve().relative_to(Path(root).resolve()))
+        except Exception:
+            return path_text
 
 
 @dataclass

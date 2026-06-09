@@ -6,9 +6,6 @@ has a chance to reason about it. We pick a byte cap that's a fraction of the
 model's ``max_output_tokens`` so the tool reply fits comfortably inside one
 assistant turn.
 
-Constants follow fast-agent's ``llm/terminal_output_limits.py`` so prompts /
-fixtures tuned against fast-agent give comparable cap sizes here.
-
 Floors and ceilings keep the cap reasonable for both tiny models (still get
 at least 8 KB so simple commands work) and huge-context models (capped at
 100 KB so a single bash call doesn't drown the conversation).

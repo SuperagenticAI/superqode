@@ -1,10 +1,10 @@
 """
 Workspace Manager - Ephemeral-Edit Workspace with Immutable Repo Guarantee.
 
-The core orchestrator for SuperQode's QE sessions:
+The core orchestrator for SuperQode's workspace tracking sessions:
 - Agents can freely modify/generate code
 - All changes are tracked and reverted after session
-- Artifacts (patches, tests, QIRs) are preserved
+- Artifacts (patches, tests, reports) are preserved
 - Git operations are blocked
 
 Usage:
@@ -41,37 +41,37 @@ class WorkspaceState(Enum):
     """State of the workspace."""
 
     IDLE = "idle"  # No active session
-    ACTIVE = "active"  # QE session in progress
+    ACTIVE = "active"  # workspace tracking session in progress
     REVERTING = "reverting"  # Reverting changes
     PRESERVING = "preserving"  # Preserving artifacts
     ERROR = "error"  # Error state
 
 
-class QEMode(Enum):
-    """QE execution mode."""
+class WorkspaceMode(Enum):
+    """workspace execution mode."""
 
     QUICK_SCAN = "quick_scan"  # Fast, shallow, time-boxed
-    DEEP_QE = "deep_qe"  # Full exploration, destructive allowed
+    DEEP = "deep"  # Full exploration, destructive allowed
 
 
 @dataclass
-class QESessionConfig:
-    """Configuration for a QE session."""
+class WorkspaceSessionConfig:
+    """Configuration for a workspace tracking session."""
 
-    mode: QEMode = QEMode.QUICK_SCAN
-    timeout_seconds: int = 60  # Quick scan default
+    mode: WorkspaceMode = WorkspaceMode.QUICK_SCAN
+    timeout_seconds: int = 60  # Quick workspace scan default
     destructive_allowed: bool = False  # Can run stress tests etc.
     generate_tests: bool = True  # Generate new tests
     generate_patches: bool = True  # Generate fix suggestions
-    roles: List[str] = field(default_factory=list)  # QE roles to run
+    roles: List[str] = field(default_factory=list)  # workspace roles to run
 
 
 @dataclass
-class QESessionResult:
-    """Result of a QE session."""
+class WorkspaceSessionResult:
+    """Result of a workspace tracking session."""
 
     session_id: str
-    mode: QEMode
+    mode: WorkspaceMode
     started_at: datetime
     ended_at: datetime
     duration_seconds: float
@@ -121,7 +121,7 @@ class QESessionResult:
 
 @dataclass
 class Finding:
-    """A finding from QE analysis."""
+    """A finding from workspace analysis."""
 
     id: str
     severity: str  # "critical", "warning", "info"
@@ -138,14 +138,14 @@ class Finding:
 
 class WorkspaceManager:
     """
-    Manages the ephemeral-edit workspace for QE sessions.
+    Manages the ephemeral-edit workspace for workspace tracking sessions.
 
     Guarantees:
     - ❌ No commits
     - ❌ No pushes
     - ❌ No git operations (branching, merges, tagging)
     - ✅ All changes reverted after session
-    - ✅ Artifacts preserved in .superqode/qe-artifacts/
+    - ✅ Artifacts preserved in .superqode/artifacts/
     """
 
     SUPERQODE_DIR = ".superqode"
@@ -164,7 +164,7 @@ class WorkspaceManager:
         self._state = WorkspaceState.IDLE
         self._session_id: Optional[str] = None
         self._session_start: Optional[datetime] = None
-        self._session_config: Optional[QESessionConfig] = None
+        self._session_config: Optional[WorkspaceSessionConfig] = None
         self._findings: List[Finding] = []
         self._finding_counter = 0
 
@@ -180,7 +180,7 @@ class WorkspaceManager:
 
     @property
     def is_active(self) -> bool:
-        """Check if a QE session is active."""
+        """Check if a workspace tracking session is active."""
         return self._state == WorkspaceState.ACTIVE
 
     def initialize(self) -> None:
@@ -188,7 +188,7 @@ class WorkspaceManager:
         self.superqode_dir.mkdir(parents=True, exist_ok=True)
 
         # Create subdirectories
-        for subdir in ["qe-artifacts", "config", "history", "temp"]:
+        for subdir in ["artifacts", "config", "history", "temp"]:
             (self.superqode_dir / subdir).mkdir(exist_ok=True)
 
         # Create .gitignore to exclude temp files
@@ -199,10 +199,10 @@ class WorkspaceManager:
     def start_session(
         self,
         session_id: Optional[str] = None,
-        config: Optional[QESessionConfig] = None,
+        config: Optional[WorkspaceSessionConfig] = None,
     ) -> str:
         """
-        Start a new QE session.
+        Start a new workspace tracking session.
 
         Args:
             session_id: Optional session ID (auto-generated if not provided)
@@ -218,9 +218,9 @@ class WorkspaceManager:
         self.initialize()
 
         # Generate session ID
-        self._session_id = session_id or f"qe-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        self._session_id = session_id or f"workspace-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         self._session_start = datetime.now()
-        self._session_config = config or QESessionConfig()
+        self._session_config = config or WorkspaceSessionConfig()
         self._findings.clear()
         self._finding_counter = 0
 
@@ -237,20 +237,20 @@ class WorkspaceManager:
         self._state = WorkspaceState.ACTIVE
         self._save_state()
 
-        logger.info(f"Started QE session: {self._session_id}")
+        logger.info(f"Started workspace tracking session: {self._session_id}")
 
         return self._session_id
 
-    def end_session(self, generate_qir: bool = True) -> QESessionResult:
+    def end_session(self, generate_qir: bool = True) -> WorkspaceSessionResult:
         """
-        End the current QE session.
+        End the current workspace tracking session.
 
-        - Generates QIR if requested
+        - Generates report if requested
         - Reverts all file changes
         - Preserves artifacts
 
         Returns:
-            QESessionResult with session summary
+            WorkspaceSessionResult with session summary
         """
         if self._state != WorkspaceState.ACTIVE:
             raise RuntimeError(f"No active session to end (state: {self._state.value})")
@@ -261,7 +261,7 @@ class WorkspaceManager:
         # Get changes before reverting
         changes = self.snapshot.get_changes_summary()
 
-        # Generate QIR if requested
+        # Generate report if requested
         qir_generated = False
         if generate_qir:
             try:
@@ -269,8 +269,8 @@ class WorkspaceManager:
                 self._generate_qir()
                 qir_generated = True
             except Exception as e:
-                errors.append(f"QIR generation failed: {e}")
-                logger.error(f"QIR generation failed: {e}")
+                errors.append(f"report generation failed: {e}")
+                logger.error(f"report generation failed: {e}")
 
         # Revert all changes
         self._state = WorkspaceState.REVERTING
@@ -286,7 +286,7 @@ class WorkspaceManager:
         artifact_summary = self.artifacts.get_summary()
 
         # Build result
-        result = QESessionResult(
+        result = WorkspaceSessionResult(
             session_id=self._session_id,
             mode=self._session_config.mode,
             started_at=self._session_start,
@@ -316,7 +316,7 @@ class WorkspaceManager:
         self._session_config = None
         self._save_state()
 
-        logger.info(f"Ended QE session: {result.session_id}")
+        logger.info(f"Ended workspace tracking session: {result.session_id}")
 
         return result
 
@@ -324,14 +324,14 @@ class WorkspaceManager:
     async def qe_session(
         self,
         session_id: Optional[str] = None,
-        config: Optional[QESessionConfig] = None,
+        config: Optional[WorkspaceSessionConfig] = None,
     ):
         """
-        Context manager for QE sessions.
+        Context manager for workspace tracking sessions.
 
         Usage:
             async with workspace.qe_session() as session:
-                # Do QE work
+                # Do workspace work
                 pass
             # Automatically reverted, artifacts preserved
         """
@@ -357,7 +357,7 @@ class WorkspaceManager:
         Captures original state before first write.
         """
         if not self.is_active:
-            raise RuntimeError("No active QE session - cannot write files")
+            raise RuntimeError("No active workspace tracking session - cannot write files")
 
         # Capture original state before modification
         self.snapshot.capture_file(Path(file_path))
@@ -377,7 +377,7 @@ class WorkspaceManager:
         Delete a file (tracked for reversion).
         """
         if not self.is_active:
-            raise RuntimeError("No active QE session - cannot delete files")
+            raise RuntimeError("No active workspace tracking session - cannot delete files")
 
         # Capture original state
         self.snapshot.capture_file(Path(file_path))
@@ -412,7 +412,7 @@ class WorkspaceManager:
         work_log: Optional[List[str]] = None,
         tool_calls: Optional[List[str]] = None,
     ) -> Finding:
-        """Add a finding from QE analysis."""
+        """Add a finding from workspace analysis."""
         self._finding_counter += 1
         finding = Finding(
             id=f"finding-{self._finding_counter:03d}",
@@ -553,8 +553,8 @@ class WorkspaceManager:
                 "## Investigation Scope",
                 "",
                 f"- Files analyzed: {changes.get('files_tracked', 0)}",
-                f"- Files modified during QE: {len(changes.get('files_modified', []))}",
-                f"- Files created during QE: {len(changes.get('files_created', []))}",
+                f"- Files modified during workspace: {len(changes.get('files_modified', []))}",
+                f"- Files created during workspace: {len(changes.get('files_created', []))}",
                 "",
             ]
         )
@@ -596,7 +596,7 @@ class WorkspaceManager:
                 if hasattr(finding, "work_log") and finding.work_log:
                     lines.append("**Agent Analysis Process**:")
                     lines.append("```")
-                    for step in finding.work_log[:5]:  # Show first 5 steps to keep QIR concise
+                    for step in finding.work_log[:5]:  # Show first 5 steps to keep report concise
                         lines.append(step)
                     if len(finding.work_log) > 5:
                         lines.append(f"... and {len(finding.work_log) - 5} more analysis steps")
@@ -616,7 +616,7 @@ class WorkspaceManager:
                 [
                     "## Findings",
                     "",
-                    "No issues found during this QE session.",
+                    "No issues found during this workspace tracking session.",
                     "",
                 ]
             )
@@ -667,15 +667,15 @@ class WorkspaceManager:
             [
                 "---",
                 "",
-                "*Generated by SuperQode - Agentic Quality Engineering*",
+                "*Generated by SuperQode workspace tracking*",
                 "",
-                f"All changes have been reverted. Artifacts preserved in `.superqode/qe-artifacts/`",
+                f"All changes have been reverted. Artifacts preserved in `.superqode/artifacts/`",
             ]
         )
 
         content = "\n".join(lines)
 
-        # Save QIR
+        # Save report
         metadata = {
             "session_id": self._session_id,
             "mode": self._session_config.mode.value,
@@ -706,7 +706,7 @@ class WorkspaceManager:
 
         state_file.write_text(json.dumps(state, indent=2))
 
-    def _save_session_result(self, result: QESessionResult) -> None:
+    def _save_session_result(self, result: WorkspaceSessionResult) -> None:
         """Save session result to history."""
         history_file = self.superqode_dir / "history" / "sessions.jsonl"
         history_file.parent.mkdir(parents=True, exist_ok=True)

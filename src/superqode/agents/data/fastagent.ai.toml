@@ -12,7 +12,7 @@ publisher_name = "SuperQode Team"
 publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
 description = "Create and interact with sophisticated Agents and Workflows in minutes. MCP native."
-tags = ["workflows", "mcp", "rapid"]
+tags = ["workflows", "mcp", "rapid", "official-acp"]
 run_command."*" = "uvx --from fast-agent-mcp@latest fast-agent-acp"
 
 help = '''

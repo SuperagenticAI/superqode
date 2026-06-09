@@ -1,0 +1,39 @@
+identity = "fount.dev"
+name = "fount"
+short_name = "fount"
+url = "https://github.com/steve02081504/fount"
+protocol = "acp"
+author_name = "steve02081504"
+author_url = "https://github.com/steve02081504"
+publisher_name = "steve02081504"
+publisher_url = "https://github.com/steve02081504"
+type = "coding"
+description = "AI coding agent with ACP support."
+tags = ["open-source", "coding", "acp"]
+run_command."*" = "fount"
+
+help = '''
+# fount
+
+AI coding agent with ACP support.
+
+## Installation
+
+```bash
+cargo install fount
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/steve02081504/fount
+cd fount
+cargo build --release
+```
+
+See https://github.com/steve02081504/fount for details.
+'''
+
+[actions."*".install]
+command = "cargo install fount"
+description = "Install fount"

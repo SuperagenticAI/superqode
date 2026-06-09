@@ -166,25 +166,28 @@ async def test_agent_loop_uses_structured_compaction_when_over_limit():
         config=AgentConfig(
             provider="anthropic",
             model="claude-opus-4-7",
-            enable_summarization=True,
-            max_context_tokens=50,  # tiny so any history blows past it
+            # Adaptive compaction: a small window forces compaction. keep_recent
+            # is a token budget (not a fixed message count).
+            context_window=2000,
+            compaction_reserve_tokens=200,
+            keep_recent_tokens=400,
         ),
     )
 
-    # Seed long history so token estimator goes over budget.
-    long_text = "x " * 200
+    # Seed long history so token estimator goes over the 1800-token threshold.
+    long_text = "x " * 800
     history = [AgentMessage(role="user", content=f"step {i}: {long_text}") for i in range(6)]
 
     compacted = await loop._maybe_summarize(history)
 
-    # Expect: one summary system message + a 4-turn tail.
+    # Expect: one summary system message + a token-budgeted recent tail.
     summary_msgs = [m for m in compacted if m.role == "system"]
     assert summary_msgs, "expected a summary system message"
     assert "## Goal" in summary_msgs[0].content
     assert "Earlier conversation summary" in summary_msgs[0].content
-    # Tail size matches the keep_tail constant (4).
+    # A non-empty recent tail is kept (sized by tokens, not a fixed 4).
     tail = [m for m in compacted if m.role != "system"]
-    assert len(tail) == 4
+    assert 1 <= len(tail) < len(history)
     # The first compaction call should be the only LLM call so far.
     assert len(gateway.requests) == 1
 
@@ -200,12 +203,13 @@ async def test_agent_loop_falls_back_to_prune_when_compaction_fails():
         config=AgentConfig(
             provider="anthropic",
             model="claude-opus-4-7",
-            enable_summarization=True,
-            max_context_tokens=50,
+            context_window=2000,
+            compaction_reserve_tokens=200,
+            keep_recent_tokens=400,
         ),
     )
 
-    long_text = "y " * 200
+    long_text = "y " * 800
     history = [AgentMessage(role="user", content=f"step {i}: {long_text}") for i in range(6)]
 
     result = await loop._maybe_summarize(history)

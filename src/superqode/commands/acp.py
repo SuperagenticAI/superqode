@@ -58,8 +58,24 @@ def create_agent_card(
     # Type badge
     type_badge = f"[bold white on blue] {agent_type.upper()} [/bold white on blue]"
 
+    # Provenance badges from tags
+    tags = agent.get("tags", [])
+    provenance_map = {
+        "official-acp": "[bold bright_green]Official ACP[/bold bright_green]",
+        "open-source": "[bold cyan]Open Source[/bold cyan]",
+        "community": "[bold magenta]Community[/bold magenta]",
+        "partner": "[bold purple]Partner[/bold purple]",
+        "experimental": "[bold yellow]Experimental[/bold yellow]",
+    }
+    provenance_badges = [badge for tag, badge in provenance_map.items() if tag in tags]
+    if not provenance_badges:
+        provenance_badges = ["[dim]Community[/dim]"]
+    provenance_line = "  ".join(provenance_badges)
+
     content = f"""[bold cyan]{name}[/bold cyan] [dim]({short_name})[/dim]
 {type_badge}
+
+{provenance_line}
 
 [white]{description}[/white]
 

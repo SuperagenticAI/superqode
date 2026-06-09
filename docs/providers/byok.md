@@ -10,7 +10,7 @@ BYOK is the primary mode for production use:
 
 - **Full control**: Use your own API keys and quotas
 - **Cost management**: Pay directly to providers
-- **Model selection**: Choose specific models for roles
+- **Model selection**: Choose specific models for your tasks
 - **Privacy**: Data goes directly to your chosen provider
 
 ---
@@ -84,9 +84,7 @@ superqode connect byok google gemini-3.1-pro-preview
 
 ---
 
-### Tier 2 (Supported)
-
-Tested and working:
+### Tier 1 (First-Class Support) continued
 
 #### Deepseek
 
@@ -202,24 +200,6 @@ providers:
     recommended_models:
       - deepseek-v3
       - deepseek-r1
-```
-
-### Per-Role Configuration
-
-```yaml
-team:
-  modes:
-    qe:
-      roles:
-        security_tester:
-          mode: byok
-          provider: anthropic
-          model: claude-opus-4-6
-
-        performance_tester:
-          mode: byok
-          provider: openai
-          model: gpt-4o-mini
 ```
 
 ---

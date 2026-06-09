@@ -1,4 +1,4 @@
-"""Persistent ACP session store (A3 from the fast-agent gap audit).
+"""Persistent ACP session store.
 
 Why this exists
 ---------------

@@ -12,13 +12,16 @@ are stored, and what output should be returned.
 
 | Capability | What you control |
 | --- | --- |
-| Runtime | Use `builtin`, Google ADK, OpenAI Agents SDK, DeepAgents, PydanticAI, or another supported backend |
+| Runtime | Use `builtin`, Google ADK, OpenAI Agents SDK, Codex SDK, Claude Agent SDK, DeepAgents, PydanticAI, or another supported backend |
 | Model policy | Pick primary models, fallbacks, reasoning, temperature, history, and iteration limits |
-| Tools | Enable repository tools, shell, MCP, validation, or no tools |
+| Tools | Enable repository tools, shell, MCP, checks, or no tools |
 | Sandbox policy | Set read, write, shell, command, and network boundaries |
 | Approvals | Pause risky tool calls for review before they run |
 | Events | Store run timelines and graph views for debugging |
-| Output | Return plain text, typed results, validation state, and run records |
+| Output | Return plain text, typed results, checks state, and run records |
+| Context | Instruction files, skills directories, session storage, compaction, and memory settings |
+| Observability | Events, traces, run store backend, and instrumentation configuration |
+| Hooks | Custom lifecycle callbacks at defined harness execution points |
 
 ### What Users Configure
 
@@ -27,10 +30,10 @@ Users configure a harness by selecting:
 - flavor: `coding` or `no_tool`
 - runtime: `builtin`, `adk`, `openai-agents`, `deepagents`, `pydanticai`, or custom
 - model policy: hosted model, local model, Gemma4 profile, DS4 profile, fallbacks, and reasoning defaults
-- tools: repository tools, shell, MCP, validation, or no tools
+- tools: repository tools, shell, MCP, checks, or no tools
 - sandbox policy: read, write, shell, command, and network boundaries
 - workflow: single step, chain, parallel workers, router, orchestrator, or evaluator-optimizer
-- output: plain text, typed result, events, validation state, and run records
+- output: plain text, typed result, events, checks state, and run records
 
 This lets the same harness contract run through different engines while preserving the user-facing behavior.
 
@@ -46,7 +49,7 @@ It gives the model controlled capabilities:
 - file read/search/edit tools
 - shell and test execution under policy
 - MCP tools when configured
-- validation hooks
+- checks hooks
 - patch/diff reporting
 - session memory and compaction
 - approval gates for risky operations
@@ -66,7 +69,7 @@ It bets on model capability alone:
 - no write access
 - no implicit repo mutation path
 - prompt, context, and model policy only
-- optional structured output validation
+- optional structured output checks
 - optional final-answer scoring/evaluation
 - reasoning disabled where provider APIs support it
 
@@ -78,20 +81,22 @@ measurable without hiding weaknesses behind tool execution.
 
 ### Flavor Contract
 
-Both flavors should compile from the same `HarnessSpec` shape:
+Both flavors compile from the same `HarnessSpec` shape:
 
 ```yaml
-harness:
-  flavor: coding  # coding | no_tool
-  runtime:
-    backend: builtin
-  model_policy:
-    primary: gemma4-local
-    fallback: ds4-local
-  execution_policy:
-    approval_profile: balanced
-  validation:
-    enabled: true
+version: 1
+name: superqode-coder
+flavor: coding
+runtime:
+  backend: builtin
+model_policy:
+  primary: gemma4-local
+  fallbacks:
+    - ds4-local
+execution_policy:
+  approval_profile: balanced
+checks:
+  enabled: true
 ```
 
 The compiler decides what capabilities are legal for each flavor:
@@ -100,13 +105,13 @@ The compiler decides what capabilities are legal for each flavor:
 | --- | --- | --- |
 | Model calls | yes | yes |
 | Sessions/history | yes | yes |
-| Skills/roles | yes | yes |
+| Skills | yes | yes |
 | Typed outputs | yes | yes |
 | File read/search | yes | no |
 | File edit/write | policy-controlled | no |
 | Shell/tests | policy-controlled | no |
 | MCP tools | policy-controlled | no |
-| Validation harness | yes | optional, output-only |
+| Checks harness | yes | optional, output-only |
 | Multi-agent delegation | yes | optional, model-only |
 
 ### Runtime Backends
@@ -119,6 +124,7 @@ Runtime backends are interchangeable execution adapters behind the same harness 
 | `adk` | optional | You want to run through Google ADK while keeping SuperQode harness configuration |
 | `openai-agents` | optional | You want OpenAI Agents SDK behavior, sessions, and tool plumbing |
 | `codex-sdk` | optional | You want official OpenAI Codex SDK behavior through SuperQode runtime and HarnessSpec selection |
+| `claude-agent-sdk` | optional | You want Anthropic Claude Agent SDK runtime with SuperQode harness configuration and policy |
 | `deepagents` | optional | You want DeepAgents graph, middleware, and subagent behavior for tool-capable coding harnesses |
 | `pydanticai` | optional | You want PydanticAI behavior with SuperQode tools and HarnessSpec policy |
 
@@ -158,12 +164,19 @@ superqode harness validate --spec harness.yaml
 superqode harness validate --spec harness.yaml --schema
 superqode harness inspect --spec harness.yaml
 superqode harness compile --spec harness.yaml --json
+superqode harness diff old-harness.yaml new-harness.yaml
 superqode harness doctor --spec harness.yaml
 superqode harness run --spec harness.yaml --prompt "summarize this repository"
+superqode harness runs
+superqode harness events <run-id>
+superqode harness evidence <run-id>
+superqode harness replay <run-id>
+superqode harness fork <run-id> <new-name>
+superqode harness graph <run-id>
 ```
 
 Use `--schema` on `harness validate` to print the HarnessSpec JSON Schema for editor integration and CI
-validation.
+checks.
 
 Use `harness list-backends` to see the backend capability snapshot without loading a spec. It reports coding,
 no-tool, streaming, approval, sandbox, shell, MCP, typed-output support, dependency availability, and install
@@ -199,7 +212,7 @@ readable output.
 ### Event Graph
 
 Every HarnessSpec run writes normalized events and a graph view of the execution. The graph turns runtime
-events into typed nodes such as run, model, tool, approval, sandbox, MCP, subagent, validation, and typed
+events into typed nodes such as run, model, tool, approval, sandbox, MCP, subagent, checks, and typed
 output nodes. Edges preserve execution order and mark pauses, resumes, and tool-style calls.
 
 Use the graph commands after a run:
@@ -295,48 +308,60 @@ superqode harness run --spec harness.yaml --store sqlite --prompt "summarize thi
 Coding harness:
 
 ```yaml
-harness:
-  name: superqode-coder
-  flavor: coding
-  runtime:
-    backend: builtin
-  model_policy:
-    primary: gpt-4o-mini
-    fallbacks: [gemma4-local, ds4-local]
-  execution_policy:
-    sandbox: local
-    allow_read: true
-    allow_write: true
-    allow_shell: true
-    approval_profile: balanced
-  agents:
-    - id: coder
-      tools: [filesystem, search, edit, shell, validation]
-      skills: [repo-navigation, implementation]
+version: 1
+name: superqode-coder
+flavor: coding
+runtime:
+  backend: builtin
+model_policy:
+  primary: gpt-4o-mini
+  fallbacks:
+    - gemma4-local
+    - ds4-local
+execution_policy:
+  sandbox: local
+  allow_read: true
+  allow_write: true
+  allow_shell: true
+  approval_profile: balanced
+agents:
+  - id: coder
+    tools:
+      - read_file
+      - edit_file
+      - grep
+      - glob
+      - bash
+      - todo_write
+      - todo_read
+    skills:
+      - repo-navigation
+      - implementation
 ```
 
 No-tool harness:
 
 ```yaml
-harness:
-  name: superqode-reasoner
-  flavor: no_tool
-  runtime:
-    backend: builtin
-  model_policy:
-    primary: gemma4-local
-    fallbacks: [ds4-local]
-    temperature: 0.2
-  execution_policy:
-    allow_read: false
-    allow_write: false
-    allow_shell: false
-  agents:
-    - id: reasoner
-      tools: []
-      skills: [architecture-review, code-review-from-context]
-  output:
-    typed: true
+version: 1
+name: superqode-reasoner
+flavor: no_tool
+runtime:
+  backend: builtin
+model_policy:
+  primary: gemma4-local
+  fallbacks:
+    - ds4-local
+  temperature: 0.2
+execution_policy:
+  allow_read: false
+  allow_write: false
+  allow_shell: false
+agents:
+  - id: reasoner
+    tools: []
+    skills:
+      - architecture-review
+      - code-review-from-context
 ```
 
 ### Practical Guidance
@@ -350,335 +375,53 @@ harness:
 
 ---
 
-## Validation Harness Overview
+## How Checks Work
 
-Validation is a secondary lifecycle capability inside the broader harness system. A coding harness can call
-validation after it edits files, produces a patch, or returns structured suggestions.
-
-Validation can check:
-
-- **Syntactic correctness**: Code parses correctly
-- **Type safety**: Type checking passes
-- **Style compliance**: Linting rules followed
-- **No regressions**: Changes don't break existing code
-
-Validation does not define the product identity and does not replace runtime policy. It is an optional proof
-step that can be attached to coding, workflow, or typed-output runs.
-
----
-
-## Validation Types
-
-### Structural Validation
-
-Parsing validation for structured formats:
-
-- **JSON**: Valid JSON syntax
-- **YAML**: Valid YAML syntax
-- **TOML**: Valid TOML syntax
-
-**Runs on**: All changes to structured files
-
-### Language Validation
-
-Language-specific validation:
-
-- **Python**: mypy, ruff, pyright
-- **JavaScript**: eslint, tsc
-- **TypeScript**: tsc, eslint
-- **Go**: go vet, golangci-lint
-- **Rust**: cargo check
-- **Shell**: shellcheck
-
-**Runs on**: Code files matching language patterns
-
----
-
-## Configuration
-
-### YAML Configuration
+Harness checks are ordinary commands declared in the HarnessSpec. They run after the workflow completes and
+are recorded as `checks.step.*` events plus a `checks` block in the run metadata.
 
 ```yaml
-superqode:
-  harness:
-    validation:
-      enabled: true
-      timeout_seconds: 30
-      fail_on_error: false
-
-      structural:
-        enabled: true
-        formats: ["json", "yaml", "toml"]
-
-      python:
-        enabled: true
-        tools:
-          - mypy
-          - ruff
-          - pyright
-
-      javascript:
-        enabled: true
-        tools:
-          - eslint
-
-      typescript:
-        enabled: true
-        tools:
-          - tsc
-          - eslint
-
-      go:
-        enabled: true
-        tools:
-          - go vet
-          - golangci-lint
-
-      rust:
-        enabled: true
-        tools:
-          - cargo check
-
-      shell:
-        enabled: true
-        tools:
-          - shellcheck
-
-      custom_steps:
-        - name: "project-harness"
-          command: "python scripts/harness_check.py"
-          timeout: 120
-          enabled: true
+checks:
+  enabled: true
+  fail_on_error: false
+  custom_steps:
+    - name: lint
+      command: uv run ruff check src tests
+      timeout: 300
+    - name: tests
+      command: uv run pytest
+      timeout: 600
 ```
+
+Project checks belong in the HarnessSpec, not in project-level legacy configuration.
+
+Each step:
+
+- runs from the configured working directory
+- uses `shlex` command parsing, not a shell string
+- records stdout/stderr previews
+- reports `passed` or `failed`
+- can fail the whole harness run when `checks.fail_on_error` is true
 
 ---
 
-## How It Works
+### Event Output
 
-### 1. Change Or Suggestion Generation
-
-The harness produces a file change, patch, or structured suggestion during a coding run.
-
-### 2. Validation Hook
-
-The validation hook checks the affected files or patch:
-
-```python
-harness = PatchHarness(project_root)
-result = await harness.validate_changes({
-    "src/api/users.py": "new code content"
-})
-```
-
-### 3. Validation Result
-
-Result includes:
-
-- **Success**: All validations passed
-- **Findings**: Validation errors/warnings
-- **Tools run**: Which validators executed
-- **Duration**: Validation time
-
-### 4. Result Inclusion
-
-The final result can include validation state alongside text, typed data, events, and diffs:
-
-```python
-if result.success:
-    output.add_validation_state(result)
-else:
-    output.add_validation_failures(result.findings)
-```
-
----
-
-## Validation Categories
-
-### Structural
-
-**Parsing validation** - ensures files are valid:
-
-```python
-{
-  "tool": "structural-parse",
-  "category": "structural",
-  "file": "config.json",
-  "message": "Invalid JSON: unexpected token",
-  "severity": "error"
-}
-```
-
-### Syntactic
-
-**Syntax validation** - language syntax:
-
-```python
-{
-  "tool": "mypy",
-  "category": "syntactic",
-  "file": "src/api/users.py",
-  "line": 42,
-  "message": "Missing type annotation",
-  "severity": "error"
-}
-```
-
-### Type
-
-**Type checking** - static type analysis:
-
-```python
-{
-  "tool": "mypy",
-  "category": "type",
-  "file": "src/api/users.py",
-  "line": 45,
-  "message": "Incompatible types: int vs str",
-  "severity": "error"
-}
-```
-
-### Stylistic
-
-**Code style** - formatting and style rules:
-
-```python
-{
-  "tool": "ruff",
-  "category": "stylistic",
-  "file": "src/api/users.py",
-  "line": 50,
-  "message": "Line too long (120 > 100)",
-  "severity": "warning"
-}
-```
-
-### Functional
-
-**Runtime validation** - execution checks:
-
-```python
-{
-  "tool": "harness",
-  "category": "functional",
-  "file": null,
-  "message": "Harness validation timed out",
-  "severity": "warning"
-}
-```
-
----
-
-## Tool Detection
-
-Harness automatically detects available tools:
-
-```python
-# Checks if tool exists
-if shutil.which("mypy"):
-    # Run mypy validation
-    ...
-```
-
-### Tool Availability
-
-- **Not found**: Tool skipped, no error
-- **Found**: Tool runs validation
-- **Timeout**: Validation times out gracefully
-
----
-
-## Validation Workflow
-
-### Temporary Workspace
-
-Validation happens in isolated temp workspace:
-
-1. Create temporary directory
-2. Stage changed files
-3. Run validators
-4. Collect findings
-5. Clean up temp directory
-
-### Parallel Validation
-
-Multiple validators run in parallel when possible:
-
-- Structural validation (instant)
-- Language validators (parallel by file)
-- Tool execution (timeout-protected)
-
----
-
-## Results
-
-### HarnessResult
-
-```python
-@dataclass
-class HarnessResult:
-    success: bool
-    findings: List[HarnessFinding]
-    tools_run: List[str]
-    duration_seconds: float
-    files_validated: int
-```
-
-### HarnessFinding
-
-```python
-@dataclass
-class HarnessFinding:
-    tool: str
-    category: ValidationCategory
-    file: Optional[Path]
-    message: str
-    line: Optional[int]
-    column: Optional[int]
-    severity: str  # "error", "warning", "info"
-```
-
----
-
-## Integration
-
-### With Coding Harness Runs
-
-Validation can run automatically after a coding harness produces a patch:
-
-```python
-patch = agent.generate_suggestion()
-result = await harness.validate_changes(patch)
-
-if result.success:
-    # Include in final output
-else:
-    # Report validation issues
-```
-
-### With Suggestions
-
-All suggestions validated:
-
-```bash
-# Suggestions already validated
-superqode --print "inspect this package and suggest the smallest safe cleanup"
-```
-
-### With Event Output
-
-Harness events can include validation results:
+Harness events can include checks results. The actual checks result block from a harness run:
 
 ```json
 {
-  "changes": [
+  "enabled": true,
+  "status": "passed",
+  "steps": [
     {
-      "patch": "...",
-      "validation": {
-        "success": true,
-        "tools_run": ["mypy", "ruff"],
-        "findings": []
-      }
+      "name": "lint",
+      "command": "uv run ruff check src tests",
+      "timeout": 300,
+      "status": "passed",
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
     }
   ]
 }
@@ -686,59 +429,23 @@ Harness events can include validation results:
 
 ---
 
-## Configuration Examples
+## Custom Check Examples
 
-### Python Project
-
-```yaml
-harness:
-  python:
-    enabled: true
-    tools:
-      - mypy      # Type checking
-      - ruff      # Linting
-      - pyright   # Type checking (alternative)
-```
-
-### TypeScript Project
+Use `custom_steps` to run project-specific checks commands as part of the harness. Each step runs in the
+configured working directory, and a non-zero exit code is reported as a harness error.
 
 ```yaml
-harness:
-  typescript:
-    enabled: true
-    tools:
-      - tsc       # Type checking
-      - eslint    # Linting
-```
-
-### Multi-Language Project
-
-```yaml
-harness:
-  python:
-    enabled: true
-    tools: [mypy, ruff]
-  javascript:
-    enabled: true
-    tools: [eslint]
-  typescript:
-    enabled: true
-    tools: [tsc, eslint]
-```
-
-### Bring Your Own Harness (BYOH)
-
-Use `custom_steps` to run project-specific validation commands as part of the harness. Each step runs in the
-repo root, and a non-zero exit code is reported as a harness error.
-
-```yaml
-harness:
+checks:
+  enabled: true
+  fail_on_error: false
   custom_steps:
-    - name: "contracts"
-      command: "python scripts/check_contracts.py"
+    - name: contracts
+      command: python scripts/check_contracts.py
       timeout: 180
-    - name: "smoke-tests"
-      command: "pytest -q tests/smoke"
+      enabled: true
+    - name: smoke-tests
+      command: pytest -q tests/smoke
+      timeout: 300
       enabled: true
 ```
 
@@ -746,42 +453,30 @@ harness:
 
 - `name`: Display name for reporting
 - `command`: Shell command to run
-- `enabled`: Toggle the step on/off (default: true)
-- `timeout`: Timeout in seconds (default: 300)
+- `enabled`: Toggle the step on or off. The default is true.
+- `timeout`: Timeout in seconds. The default is 300.
 
 ---
 
 ## Best Practices
 
-### 1. Enable Relevant Validators
+### Set Timeouts
 
-Only enable validators for languages in your project:
-
-```yaml
-harness:
-  python:
-    enabled: true  # If you use Python
-  go:
-    enabled: false  # If you don't use Go
-```
-
-### 2. Set Timeouts
-
-Prevent long-running validations:
+Prevent long-running checks:
 
 ```yaml
-harness:
-  timeout_seconds: 30  # Reasonable timeout
+checks:
+  timeout_seconds: 300
 ```
 
-### 3. Handle Failures Gracefully
+### Handle Failures Gracefully
 
 ```yaml
-harness:
-  fail_on_error: false  # Report validation failures without failing the whole run
+checks:
+  fail_on_error: false
 ```
 
-### 4. Tool Installation
+### Keep Tools Installed
 
 Ensure tools are installed:
 
@@ -796,54 +491,38 @@ npm install -g typescript eslint
 go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 ```
 
----
+## Expose Harnesses Over MCP
 
-## Troubleshooting
-
-### Tools Not Found
-
-**Symptom**: Validators skipped
-
-**Solution**: Install required tools:
+A harness isn't only runnable from the TUI — you can expose your HarnessSpec
+workflows as **MCP tools** so any MCP client (Claude Desktop, IDEs, other agents)
+can discover and run them. This complements the A2A and ACP servers.
 
 ```bash
-# Check availability
-which mypy
-which ruff
-
-# Install if missing
-pip install mypy ruff
+superqode mcp                      # stdio (for Claude Desktop, etc.)
+superqode mcp --http --port 8765   # streamable HTTP
+superqode mcp --dir ./harnesses    # point at a specific spec directory
 ```
 
-### Timeout Errors
+It exposes three tools:
 
-**Symptom**: Validation times out
+- `list_harnesses` — the HarnessSpec files it found.
+- `describe_harness(harness)` — a spec's workflow mode, runtime, and agents.
+- `run_harness(harness, task, provider?, model?)` — run the workflow, return the result.
 
-**Solution**: Increase timeout or optimize validators:
-
-```yaml
-harness:
-  timeout_seconds: 60  # Increase timeout
-```
-
-### False Positives
-
-**Symptom**: Validators report issues that don't matter
-
-**Solution**: Configure validator options or disable specific tools:
-
-```yaml
-harness:
-  python:
-    tools: [ruff]  # Skip mypy if too strict
-```
+Specs are discovered under `.superqode/harness/`, `.superqode/harnesses/`,
+`harness/`, or `harnesses/` (or `--dir`). The provider/model resolve from the
+tool arguments → `SUPERQODE_MCP_PROVIDER` / `SUPERQODE_MCP_MODEL` →
+the spec's `model_policy.primary`.
 
 ---
 
 ## Related Features
 
-- [Suggestions](../concepts/suggestions.md) - Suggestion workflow
-- [Configuration](../configuration/yaml-reference.md) - Config reference
+- [Configuration](../configuration/yaml-reference.md) - Project config reference
+- [Examples](../examples.md) - Ready-to-run harness examples
+- [Safety & Permissions](safety-permissions.md) - Sandbox and approval policy
+- [Local Context & Compaction](local-context.md) - Context detection for local models
+- [Multi-Repo Search & Edit Safety](multi-repo-search.md) - Cross-repo search
 
 ---
 

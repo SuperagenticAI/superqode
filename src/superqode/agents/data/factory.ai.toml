@@ -1,0 +1,31 @@
+identity = "factory.ai"
+name = "Factory Droid"
+short_name = "droid"
+url = "https://factory.ai/"
+protocol = "acp"
+author_name = "Factory AI"
+author_url = "https://factory.ai"
+publisher_name = "Factory AI"
+publisher_url = "https://factory.ai"
+type = "coding"
+description = "AI coding agent by Factory with ACP support."
+tags = ["coding", "ai-agent", "acp"]
+run_command."*" = "droid"
+
+help = '''
+# Factory Droid
+
+AI coding agent by Factory with ACP support.
+
+## Installation
+
+```bash
+npm install -g @factoryai/droid
+```
+
+See https://factory.ai/ for details.
+'''
+
+[actions."*".install]
+command = "npm install -g @factoryai/droid"
+description = "Install Factory Droid"

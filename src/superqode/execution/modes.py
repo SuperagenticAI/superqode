@@ -6,10 +6,6 @@ Defines the primary execution modes:
 - ACP: Agent Client Protocol (full coding agent capabilities)
 - LOCAL: Local/self-hosted models (no API keys required)
 
-QE Modes (Perception & Usability):
-- Quick Scan: Time-boxed, shallow exploration, pre-commit/fast CI
-- Deep QE: Full sandbox, destructive testing, pre-release/nightly CI
-
 SECURITY PRINCIPLE:
 - BYOK: Keys read from user's environment, never stored by SuperQode
 - ACP: Agent manages its own auth, SuperQode just connects
@@ -18,7 +14,7 @@ SECURITY PRINCIPLE:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 
 class ExecutionMode(Enum):
@@ -27,13 +23,6 @@ class ExecutionMode(Enum):
     BYOK = "byok"  # Bring Your Own Key - Direct LLM API
     ACP = "acp"  # Agent Client Protocol - Full agent
     LOCAL = "local"  # Local/self-hosted models - No API key required
-
-
-class QEMode(Enum):
-    """QE execution mode."""
-
-    QUICK_SCAN = "quick_scan"  # Fast, shallow, time-boxed
-    DEEP_QE = "deep_qe"  # Full exploration, destructive allowed
 
 
 class GatewayType(Enum):
@@ -182,166 +171,3 @@ class ExecutionConfig:
                 ],
                 "auth_info": "Managed by the agent (not SuperQode)",
             }
-
-
-# =============================================================================
-# QE Mode Configurations
-# =============================================================================
-
-
-@dataclass
-class QuickScanConfig:
-    """
-    Quick Scan Mode Configuration.
-
-    Use cases:
-    - Pre-commit hooks
-    - Developer laptop testing
-    - Fast CI feedback
-
-    Characteristics:
-    - Time-boxed (seconds, not minutes)
-    - Shallow exploration
-    - High-risk paths only
-    - Minimal QIRs
-    """
-
-    timeout_seconds: int = 60
-    depth: str = "shallow"
-
-    # Execution constraints
-    fail_fast: bool = True
-    max_tests: int = 50  # Limit number of tests to run
-
-    # Test selection
-    run_smoke: bool = True
-    run_sanity: bool = True
-    run_regression: bool = False  # Skip full regression
-
-    # Generation constraints
-    generate_tests: bool = False
-    generate_patches: bool = False
-
-    # Destructive testing
-    destructive_allowed: bool = False
-
-    # QIR settings
-    minimal_qir: bool = True  # Short summary only
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "mode": "quick_scan",
-            "timeout_seconds": self.timeout_seconds,
-            "depth": self.depth,
-            "fail_fast": self.fail_fast,
-            "max_tests": self.max_tests,
-            "run_smoke": self.run_smoke,
-            "run_sanity": self.run_sanity,
-            "run_regression": self.run_regression,
-            "generate_tests": self.generate_tests,
-            "generate_patches": self.generate_patches,
-            "destructive_allowed": self.destructive_allowed,
-            "minimal_qir": self.minimal_qir,
-        }
-
-
-@dataclass
-class DeepQEConfig:
-    """
-    Deep QE Mode Configuration.
-
-    Use cases:
-    - Pre-release validation
-    - Nightly CI runs
-    - Compliance evidence gathering
-
-    Characteristics:
-    - Full sandbox environment
-    - Destructive testing allowed
-    - Failure simulation hooks
-    - Full Investigation Reports
-    """
-
-    timeout_seconds: int = 1800  # 30 minutes
-    depth: str = "full"
-
-    # Execution constraints
-    fail_fast: bool = False
-    max_tests: int = 0  # No limit
-
-    # Test selection
-    run_smoke: bool = True
-    run_sanity: bool = True
-    run_regression: bool = True
-
-    # Generation enabled
-    generate_tests: bool = True
-    generate_patches: bool = True
-
-    # Test generation types
-    generate_unit_tests: bool = True
-    generate_integration_tests: bool = True
-    generate_api_tests: bool = True
-    generate_fuzz_tests: bool = True
-    generate_security_tests: bool = True
-
-    # Destructive testing
-    destructive_allowed: bool = True
-    simulate_failures: bool = True
-    stress_testing: bool = True
-    chaos_testing: bool = False  # Advanced - disabled by default
-
-    # QIR settings
-    minimal_qir: bool = False  # Full detailed report
-    include_evidence: bool = True
-    include_metrics: bool = True
-
-    # Flake detection
-    detect_flakes: bool = True
-    retry_count: int = 2
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "mode": "deep_qe",
-            "timeout_seconds": self.timeout_seconds,
-            "depth": self.depth,
-            "fail_fast": self.fail_fast,
-            "max_tests": self.max_tests,
-            "run_smoke": self.run_smoke,
-            "run_sanity": self.run_sanity,
-            "run_regression": self.run_regression,
-            "generate_tests": self.generate_tests,
-            "generate_patches": self.generate_patches,
-            "test_generation": {
-                "unit": self.generate_unit_tests,
-                "integration": self.generate_integration_tests,
-                "api": self.generate_api_tests,
-                "fuzz": self.generate_fuzz_tests,
-                "security": self.generate_security_tests,
-            },
-            "destructive_testing": {
-                "allowed": self.destructive_allowed,
-                "simulate_failures": self.simulate_failures,
-                "stress_testing": self.stress_testing,
-                "chaos_testing": self.chaos_testing,
-            },
-            "qr": {
-                "minimal": self.minimal_qir,
-                "include_evidence": self.include_evidence,
-                "include_metrics": self.include_metrics,
-            },
-            "flake_detection": {
-                "enabled": self.detect_flakes,
-                "retry_count": self.retry_count,
-            },
-        }
-
-
-def get_qe_mode_config(mode: QEMode) -> QuickScanConfig | DeepQEConfig:
-    """Get the configuration for a QE mode."""
-    if mode == QEMode.QUICK_SCAN:
-        return QuickScanConfig()
-    elif mode == QEMode.DEEP_QE:
-        return DeepQEConfig()
-    else:
-        raise ValueError(f"Unknown QE mode: {mode}")

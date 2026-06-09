@@ -1,7 +1,7 @@
 """SuperQode Textual widgets.
 
-Core widgets are imported directly. QE-specific and advanced widgets
-are available via lazy imports for performance.
+Core widgets are imported directly. Advanced widgets are available via lazy
+imports for performance.
 """
 
 from superqode.widgets.status_bar import StatusBar
@@ -23,10 +23,6 @@ __all__ = [
     "Throbber",
     "Toast",
     "ToastContainer",
-    # QE widgets (lazy loaded)
-    "get_qe_dashboard",
-    "get_agent_collab",
-    "get_issue_timeline",
     "get_code_context",
     "get_animation_manager",
     # Advanced widgets (lazy loaded)
@@ -51,34 +47,6 @@ __all__ = [
     # Unified output display (recommended for new code)
     "get_unified_output",
 ]
-
-
-# Lazy loaders for QE widgets (avoid import overhead until needed)
-def get_qe_dashboard():
-    """Lazy load the QE Dashboard widget."""
-    from superqode.widgets.qe_dashboard import QEDashboard, QualityMetric
-
-    return QEDashboard, QualityMetric
-
-
-def get_agent_collab():
-    """Lazy load the Agent Collaboration view widget."""
-    from superqode.widgets.agent_collab import AgentCollabView, AgentNode, AgentState
-
-    return AgentCollabView, AgentNode, AgentState
-
-
-def get_issue_timeline():
-    """Lazy load the Issue Timeline widget."""
-    from superqode.widgets.issue_timeline import (
-        IssueTimeline,
-        CompactIssueTimeline,
-        DiscoveredIssue,
-        IssueSeverity,
-        IssueCategory,
-    )
-
-    return IssueTimeline, CompactIssueTimeline, DiscoveredIssue, IssueSeverity, IssueCategory
 
 
 def get_code_context():

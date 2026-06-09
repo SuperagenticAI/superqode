@@ -1,6 +1,6 @@
 # Agent Memory Layer
 
-SuperQode memory is now an agent-memory layer, not a QE suppression store.
+SuperQode memory is now an agent-memory layer, not a rule suppression store.
 
 The goal is to make memory inspectable, configurable, and provider-neutral:
 
@@ -9,8 +9,6 @@ The goal is to make memory inspectable, configurable, and provider-neutral:
 - optional Mem0, Cognee, and Supermemory providers
 - future MCP memory providers
 - vector databases as storage backends, not the product abstraction
-
-## Commands
 
 ## Quick Start
 

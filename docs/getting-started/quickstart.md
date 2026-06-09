@@ -32,7 +32,23 @@ pip install "superqode[adk]"
 
 ---
 
-## 2. Run The TUI
+## 2. Prerequisites
+
+Before starting the TUI, make sure you have one of these ready:
+
+- **API key** for a cloud provider (set as env var like `ANTHROPIC_API_KEY`)
+- **Local model server** running (e.g., `ollama serve`, `mlx_lm.server`)
+
+See [BYOK providers](../providers/byok.md) or [Local providers](../providers/local.md) for setup guides.
+
+!!! tip "No config file needed"
+    SuperQode runs without a `superqode.yaml`. Just connect a model and start asking.
+    The harness file, project defaults, and MCP servers are all optional extras you
+    add with `superqode init` when you need them.
+
+---
+
+## 3. Run The TUI
 
 For interactive coding work:
 
@@ -41,7 +57,15 @@ cd /path/to/your/project
 superqode
 ```
 
-Useful TUI commands:
+Once the TUI starts, connect a provider or agent:
+
+```text
+:connect
+```
+
+Choose BYOK (cloud API key), Local (self-hosted model), or ACP (coding agent) from the picker. See [Three Connection Modes](../concepts/modes.md) for guidance on which to pick.
+
+Useful TUI commands after connecting:
 
 | Command | Purpose |
 | --- | --- |
@@ -65,7 +89,7 @@ Summarize this repository and suggest the smallest safe improvement.
 
 ---
 
-## 3. Run One Headless Task
+## 4. Run One Headless Task
 
 For a quick terminal task:
 
@@ -81,7 +105,7 @@ superqode --mode json --print "summarize this repository"
 
 ---
 
-## 4. Create A Harness
+## 5. Create A Harness
 
 Create a reusable coding harness:
 
@@ -111,7 +135,7 @@ superqode harness run --spec harness.yaml --prompt "summarize the architecture" 
 
 ---
 
-## 5. Inspect What Happened
+## 6. Inspect What Happened
 
 Every HarnessSpec run writes normalized events and a graph view.
 
@@ -133,7 +157,7 @@ Use this when a run behaves unexpectedly. The graph gives one inspection model a
 
 ---
 
-## 6. Pick The Right Template
+## 7. Pick The Right Template
 
 | Template | Use when |
 | --- | --- |
@@ -152,7 +176,7 @@ superqode harness list-templates
 
 ---
 
-## 7. Choose A Runtime
+## 8. Choose A Runtime
 
 List backends:
 
@@ -176,7 +200,7 @@ superqode harness doctor --spec harness.yaml --runtime pydanticai
 
 ---
 
-## 8. Common Commands
+## 9. Common Commands
 
 | Command | Purpose |
 | --- | --- |
@@ -196,16 +220,29 @@ superqode harness doctor --spec harness.yaml --runtime pydanticai
 
 ---
 
-## 9. Validation Workflows
+## 10. Harness Checks
 
-Validation and evaluation are available as secondary workflows behind the main SuperQode CLI:
+Project checks are part of a harness. Add commands under `checks.custom_steps`, then run the harness or inspect it with `doctor`.
 
-```bash
-superqode qe run . --mode quick
-superqode qe run . --mode deep
+```yaml
+checks:
+  enabled: true
+  fail_on_error: false
+  timeout_seconds: 300
+  custom_steps:
+    - name: tests
+      command: uv run pytest
+      enabled: true
+      timeout: 300
 ```
 
-Use these when you want role-based project checks, reports, generated tests, or release validation. For day-to-day coding, start with the harness commands above.
+```bash
+superqode harness validate --spec harness.yaml
+superqode harness doctor --spec harness.yaml
+superqode harness run --spec harness.yaml --prompt "make the smallest safe fix and run the configured check"
+```
+
+Use this path for repeatable project checks. For day-to-day coding, start with the TUI and focused prompts.
 
 ---
 
@@ -215,8 +252,7 @@ Use these when you want role-based project checks, reports, generated tests, or 
 2. [Harness System](../advanced/harness-system.md)
 3. [Runtime Backends](../runtimes.md)
 4. [Configuration Guide](configuration.md)
-5. [Three Modes](../concepts/modes.md)
-6. [CI/CD Integration](../integration/cicd.md)
+5. [Three Connection Modes](../concepts/modes.md)
 
 ---
 

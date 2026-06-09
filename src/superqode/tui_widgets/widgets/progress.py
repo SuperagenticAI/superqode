@@ -77,7 +77,7 @@ class ProgressPanel:
 
         Args:
             title: Panel title
-            role: Current role (e.g., "qe.security")
+            role: Current role (e.g., "dev.fullstack")
             mode: Current mode (e.g., "Deep Scan")
         """
         self.title = title
@@ -166,10 +166,10 @@ def create_qe_progress(role: str, mode: str) -> ProgressPanel:
     """
     Create a progress panel for a validation session.
 
-    Pre-populates with standard QE steps.
+    Pre-populates with standard workflow steps.
     """
     panel = ProgressPanel(
-        title="validation workflow Session",
+        title="Workflow Session",
         role=role,
         mode=mode,
     )

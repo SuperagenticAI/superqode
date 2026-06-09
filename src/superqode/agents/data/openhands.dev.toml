@@ -1,0 +1,37 @@
+identity = "openhands.dev"
+name = "OpenHands"
+short_name = "openhands"
+url = "https://docs.openhands.dev/openhands/usage/run-openhands/acp"
+protocol = "acp"
+author_name = "OpenHands"
+author_url = "https://github.com/All-Hands-AI/OpenHands"
+publisher_name = "All-Hands-AI"
+publisher_url = "https://github.com/All-Hands-AI/OpenHands"
+type = "coding"
+description = "AI coding agent platform by All-Hands-AI with ACP support."
+tags = ["open-source", "coding", "platform", "acp"]
+run_command."*" = "openhands acp"
+
+help = '''
+# OpenHands
+
+AI coding agent platform by All-Hands-AI with ACP support.
+
+## Installation
+
+```bash
+pip install openhands
+```
+
+For ACP mode:
+
+```bash
+openhands acp
+```
+
+See https://docs.openhands.dev/openhands/usage/run-openhands/acp for details.
+'''
+
+[actions."*".install]
+command = "pip install openhands"
+description = "Install OpenHands"

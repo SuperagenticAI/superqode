@@ -1,4 +1,4 @@
-"""MCP sampling handling (A2 from the fast-agent gap audit).
+"""MCP sampling handling.
 
 What MCP sampling is
 --------------------

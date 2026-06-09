@@ -389,9 +389,16 @@ class AgentConfig:
     # Plan mode - analyze without executing tools
     plan_mode: bool = False
 
-    # Auto summarization settings
-    enable_summarization: bool = False
-    max_context_tokens: int = 8000
+    # Auto summarization / context compaction.
+    # Compaction is now ADAPTIVE and on by default (opt out with
+    # SUPERQODE_AUTO_COMPACT=0). The threshold and kept-recent window are derived
+    # from the model's real context window so small local models don't overflow
+    # and large models aren't compacted prematurely.
+    enable_summarization: bool = False  # legacy explicit opt-in (still honored)
+    max_context_tokens: int = 8000  # fallback only when the model window is unknown
+    context_window: int = 0  # the model's real window; 0 => auto-detect from model info
+    compaction_reserve_tokens: int = 0  # 0 => auto (~15% of window, capped at 16k)
+    keep_recent_tokens: int = 0  # 0 => auto (~40% of window, capped at 24k)
 
     # Session persistence (JSONL)
     enable_session_storage: bool = False
@@ -409,6 +416,68 @@ class AgentMessage:
     tool_calls: Optional[List[Dict]] = None
     tool_call_id: Optional[str] = None
     name: Optional[str] = None  # Tool name for tool messages
+
+
+def repair_dangling_tool_calls(messages: List["AgentMessage"]) -> List["AgentMessage"]:
+    """Ensure every assistant tool_call is followed by a tool result.
+
+    A *dangling* tool_call is one an assistant requested that never got a result
+    — caused by an interrupted/cancelled run, an approval pause, a malformed or
+    truncated tool call (common with small local models), or a resumed session
+    that ended mid-call. Providers reject such a history ("tool_calls must be
+    followed by tool results"), so we synthesize a short result for each
+    unanswered call, keeping the conversation valid and letting the agent
+    recover gracefully.
+
+    Matching prefers ``tool_call_id`` but falls back to positional order, since
+    resumed tool messages may not carry ids. Returns a new list; the input is
+    not mutated. Idempotent — re-running it adds nothing new.
+    """
+    if not messages:
+        return messages
+
+    out: List["AgentMessage"] = []
+    i, n = 0, len(messages)
+    while i < n:
+        msg = messages[i]
+        out.append(msg)
+        tool_calls = msg.tool_calls if msg.role == "assistant" else None
+        if not tool_calls:
+            i += 1
+            continue
+
+        # Collect the consecutive tool-result messages that follow this call.
+        j = i + 1
+        following: List["AgentMessage"] = []
+        while j < n and messages[j].role == "tool":
+            following.append(messages[j])
+            j += 1
+        out.extend(following)
+
+        answered_ids = {m.tool_call_id for m in following if m.tool_call_id}
+        # Calls not satisfied by a matching id.
+        remaining = [tc for tc in tool_calls if not (tc.get("id") and tc.get("id") in answered_ids)]
+        # Tool results without an id answer the remaining calls positionally.
+        idless = sum(1 for m in following if not m.tool_call_id)
+        unanswered = remaining[idless:]
+
+        for tc in unanswered:
+            tc_id = tc.get("id") or str(uuid.uuid4())
+            name = (tc.get("function") or {}).get("name") or tc.get("name") or "unknown"
+            out.append(
+                AgentMessage(
+                    role="tool",
+                    content=(
+                        f"[Tool call '{name}' did not complete - it was interrupted, "
+                        "cancelled, or its arguments were malformed/truncated. "
+                        "Continue without its result.]"
+                    ),
+                    tool_call_id=tc_id,
+                    name=name,
+                )
+            )
+        i = j
+    return out
 
 
 @dataclass
@@ -641,8 +710,12 @@ class AgentLoop:
         return self._message_cache[key]
 
     def _convert_messages(self, messages: List[AgentMessage]) -> List[Message]:
-        """Convert messages to gateway format with caching."""
-        return [self._convert_message(m) for m in messages]
+        """Convert messages to gateway format, repairing any dangling tool calls.
+
+        Every model send goes through here, so this is where we guarantee the
+        history is valid (each assistant tool_call has a tool result).
+        """
+        return [self._convert_message(m) for m in repair_dangling_tool_calls(messages)]
 
     def _load_stored_messages(self) -> List[AgentMessage]:
         """Load stored conversation messages for resumed sessions."""
@@ -659,7 +732,9 @@ class AgentLoop:
                     name=message.tool_name,
                 )
             )
-        return restored
+        # A session may have been saved mid-tool-call; repair so the resumed
+        # history is valid before the first model send.
+        return repair_dangling_tool_calls(restored)
 
     def _create_tool_context(self) -> ToolContext:
         """Create context for tool execution."""
@@ -909,19 +984,152 @@ class AgentLoop:
                 ToolResult(success=False, output="", error=f"Tool execution error: {str(e)}")
             )
 
+    def _compaction_active(self) -> bool:
+        """Auto-compaction is on by default; SUPERQODE_AUTO_COMPACT=0 opts out.
+
+        The legacy ``enable_summarization`` flag, if explicitly set, also turns it
+        on, but it no longer needs to be set for compaction to run.
+        """
+        env = os.environ.get("SUPERQODE_AUTO_COMPACT", "").strip().lower()
+        if env in ("0", "false", "no", "off"):
+            return False
+        if env in ("1", "true", "yes", "on"):
+            return True
+        return True
+
+    # Provider names that denote a self-hosted local server. For these we never
+    # trust the static model catalog's window (that's the model-card maximum,
+    # not the loaded one) - we probe the live server instead.
+    _LOCAL_PROVIDERS = frozenset(
+        {
+            "ollama",
+            "lmstudio",
+            "lm-studio",
+            "lm_studio",
+            "vllm",
+            "sglang",
+            "mlx",
+            "tgi",
+            "llamacpp",
+            "llama.cpp",
+            "ds4",
+            "dwarfstar",
+            "local",
+            "openai_compatible",
+        }
+    )
+
+    def _provider_is_local(self) -> bool:
+        p = (self.config.provider or "").lower()
+        return any(token in p for token in self._LOCAL_PROVIDERS)
+
+    async def _ensure_context_window(self) -> int:
+        """Resolve and cache the real context window once per session.
+
+        For local providers this probes the live server for the *loaded* window
+        (Ollama num_ctx, llama.cpp n_ctx, vLLM max_model_len, etc.). An explicit
+        ``config.context_window`` always wins. Safe + best-effort.
+        """
+        if getattr(self, "_cached_context_window", 0):
+            return self._cached_context_window
+        if self.config.context_window and self.config.context_window > 0:
+            self._cached_context_window = int(self.config.context_window)
+            self._context_window_source = "configured"
+            return self._cached_context_window
+        if self._provider_is_local():
+            try:
+                from superqode.providers.local.context_probe import (
+                    resolve_local_context_window,
+                )
+
+                probed = await resolve_local_context_window(self.config.provider, self.config.model)
+                if probed:
+                    window, endpoint = probed
+                    self._cached_context_window = window
+                    self._context_window_source = f"loaded ({endpoint})"
+                    return window
+            except Exception:
+                pass
+            # Unknown local window: stay conservative rather than risk overflow.
+            self._cached_context_window = max(self.config.max_context_tokens, 8192)
+            self._context_window_source = "local-fallback"
+            return self._cached_context_window
+        # Cloud/BYOK: the static catalog window is reliable.
+        self._cached_context_window = self._effective_context_window()
+        self._context_window_source = "model-info"
+        return self._cached_context_window
+
+    def _effective_context_window(self) -> int:
+        """Best-guess context window (sync). Prefers the cached/probed value."""
+        cached = getattr(self, "_cached_context_window", 0)
+        if cached:
+            return cached
+        if self.config.context_window and self.config.context_window > 0:
+            return int(self.config.context_window)
+        # Local windows can't be trusted from the static catalog (model-card max);
+        # stay conservative until the async probe fills the cache.
+        if self._provider_is_local():
+            return max(self.config.max_context_tokens, 8192)
+        try:
+            from superqode.providers.models import get_model_info
+
+            info = get_model_info(self.config.provider, self.config.model)
+            if info and getattr(info, "context_window", 0):
+                return int(info.context_window)
+        except Exception:
+            pass
+        return max(self.config.max_context_tokens, 8192)
+
+    def _compaction_budgets(self) -> tuple[int, int, int]:
+        """Return (trigger_threshold, keep_recent_tokens, window) for this model.
+
+        Threshold = window - reserve (room for the response). Keep-recent is a
+        token budget so we keep *meaningful* recent context regardless of how
+        many messages that is. Both auto-scale to the model's window. The reserve
+        floor (1024) and 20% fraction protect small local windows, where the
+        system prompt + tool schemas alone can eat a couple thousand tokens.
+        """
+        window = self._effective_context_window()
+        reserve = self.config.compaction_reserve_tokens or max(1024, min(16384, int(window * 0.20)))
+        keep_recent = self.config.keep_recent_tokens or max(1024, min(24576, int(window * 0.40)))
+        # Never let the kept tail + reserve swallow the whole window.
+        if keep_recent + reserve >= window:
+            keep_recent = max(512, int(window * 0.5) - reserve)
+        threshold = max(1024, window - reserve)
+        return threshold, keep_recent, window
+
+    def _token_budgeted_split(
+        self, messages: List["AgentMessage"], msg_dicts: List[Dict], keep_recent: int
+    ) -> int:
+        """Index splitting head (to compact) from the recent tail (to keep).
+
+        Walks backward from the newest message, accumulating token estimates
+        until ``keep_recent`` is reached. Returns the head/tail boundary index.
+        """
+        accumulated = 0
+        boundary = len(messages)
+        for idx in range(len(messages) - 1, -1, -1):
+            try:
+                accumulated += self.context_manager.count_tokens([msg_dicts[idx]])
+            except Exception:
+                accumulated += max(1, len(str(messages[idx].content)) // 4)
+            boundary = idx
+            if accumulated >= keep_recent:
+                break
+        return boundary
+
     async def _maybe_summarize(self, messages: List["AgentMessage"]) -> List["AgentMessage"]:
-        """Compact or prune messages when context exceeds the limit.
+        """Compact or prune messages when context approaches the model's window.
 
         Strategy:
-        1. Estimate tokens; bail if under the limit.
-        2. Try LLM-backed structured compaction (9-section template). Replace
-           the head of history with the summary; keep the system prompt and a
-           short tail of recent turns intact so the next assistant turn has
-           live context to work with.
-        3. If compaction fails or returns nothing, fall back to mechanical
-           prune-from-front so the loop can still make progress.
+        1. Derive an adaptive threshold (window - reserve) and kept-recent token
+           budget from the model's real context window; bail if under threshold.
+        2. Try LLM-backed structured compaction (9-section template). Replace the
+           head of history with the summary; keep the system prompt and a
+           token-budgeted tail of recent turns intact.
+        3. If compaction fails, fall back to mechanical prune-from-front.
         """
-        if not self.config.enable_summarization:
+        if not self._compaction_active():
             return messages
 
         msg_dicts = [
@@ -934,7 +1142,8 @@ class AgentLoop:
             for m in messages
         ]
         token_count = self.context_manager.count_tokens(msg_dicts)
-        if token_count <= self.config.max_context_tokens:
+        threshold, keep_recent, window = self._compaction_budgets()
+        if token_count <= threshold:
             return messages
 
         # before_compact handler hooks may skip this round (DENY) - e.g. to defer
@@ -946,31 +1155,47 @@ class AgentLoop:
             BEFORE_COMPACT,
             lifecycle_ctx,
             token_count,
-            self.config.max_context_tokens,
+            threshold,
         )
         if pre.denied:
             return messages
 
         if self.on_thinking:
             await self.on_thinking(
-                f"Context management active ({token_count} tokens). Compacting earlier turns..."
+                f"Context management active ({token_count}/{window} tokens). "
+                "Compacting earlier turns..."
             )
 
         from .compaction import compact_history
 
-        keep_tail = 4
+        # Keep the system prompt, plus a token-budgeted tail of recent turns, and
+        # compact everything before that. The tail is sized to the model's window
+        # (keep_recent), not a fixed message count, so small local models keep a
+        # sensible amount of live context.
         system_prefix = [m for m in messages if m.role == "system"][:1]
         body = (
             [m for m in messages if m.role != "system" or m is not system_prefix[0]]
             if system_prefix
             else list(messages)
         )
+        body_dicts = [
+            {
+                "role": m.role,
+                "content": m.content,
+                "tool_calls": m.tool_calls,
+                "tool_result": m.content if m.role == "tool" else None,
+            }
+            for m in body
+        ]
+        split = self._token_budgeted_split(body, body_dicts, keep_recent)
+        # Always compact at least something and keep at least one recent message.
+        split = max(1, min(split, len(body) - 1)) if len(body) > 1 else len(body)
 
         strategy = "prune"
         result_messages: List["AgentMessage"]
-        if len(body) > keep_tail:
-            head = body[:-keep_tail]
-            tail = body[-keep_tail:]
+        if len(body) > 1 and split >= 1:
+            head = body[:split]
+            tail = body[split:]
             summary = await compact_history(
                 head,
                 self.gateway,
@@ -1072,6 +1297,10 @@ class AgentLoop:
 
         Performance: Uses cached message conversion and parallel tool execution.
         """
+        # Resolve the real (loaded, for local) context window once so adaptive
+        # compaction is sized correctly from the first turn.
+        await self._ensure_context_window()
+
         from .hooks import SESSION_START, STOP, USER_PROMPT_SUBMIT
 
         lifecycle_ctx = self._lifecycle_context()
@@ -1362,9 +1591,9 @@ class AgentLoop:
                     turn_tool_results,
                 )
 
-                # Auto-summarize if enabled and context is too large
-                if self.config.enable_summarization:
-                    messages = await self._maybe_summarize(messages)
+                # Adaptive context compaction (on by default; the helper checks
+                # the model window and decides whether to act).
+                messages = await self._maybe_summarize(messages)
 
             else:
                 # No tool calls - return the response content
@@ -1441,6 +1670,10 @@ class AgentLoop:
 
         Performance: Uses cached message conversion and parallel tool execution.
         """
+        # Resolve the real (loaded, for local) context window once so adaptive
+        # compaction in this streaming run is sized correctly.
+        await self._ensure_context_window()
+
         messages: List[AgentMessage] = []
 
         if self.system_prompt:
@@ -1708,6 +1941,12 @@ class AgentLoop:
                 # Emit iteration complete log
                 if self.on_thinking:
                     await self.on_thinking(f"Iteration {iterations} complete")
+
+                # Adaptive context compaction. The streaming loop (used by local
+                # and BYOK models) previously NEVER compacted, so long sessions
+                # overflowed the window. Compact here at the turn boundary so the
+                # next iteration starts within budget.
+                messages = await self._maybe_summarize(messages)
 
                 # Continue loop to get final response after tool execution
                 # The next iteration will stream the final response with tool results

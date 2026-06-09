@@ -5,7 +5,7 @@ NO command parsing, NO permission trees, NO complex safety checks.
 Just run the command and return output.
 
 Safety is handled at a higher level (user confirmation if enabled).
-Git operations are blocked during QE sessions to maintain immutable repo guarantee.
+Git operations can be blocked during workspace tracking to maintain immutable repo guarantees.
 
 Performance features:
 - Streaming output as command runs (via ctx.on_output callback)
@@ -24,7 +24,7 @@ class BashTool(Tool):
     """Execute shell commands.
 
     Simple, transparent shell execution with streaming output.
-    Git operations are blocked during QE sessions.
+    Git operations can be blocked during workspace tracking.
 
     Performance:
         When ctx.on_output is set, output is streamed in real-time
@@ -51,7 +51,7 @@ class BashTool(Tool):
         Initialize BashTool.
 
         Args:
-            git_guard_enabled: If True, block git write operations during QE.
+            git_guard_enabled: If True, block git write operations during workspace tracking.
         """
         self._git_guard_enabled = git_guard_enabled
 
@@ -86,7 +86,7 @@ class BashTool(Tool):
         if not command.strip():
             return ToolResult(success=False, output="", error="Empty command")
 
-        # Check Git Guard - block git write operations during QE
+        # Check Git Guard - block git write operations during workspace tracking
         if self._git_guard_enabled:
             try:
                 from superqode.workspace.git_guard import get_git_guard, GitOperationBlocked
@@ -101,8 +101,8 @@ class BashTool(Tool):
                     error=f"🛡️ Git operation blocked: {e.reason}\n\n"
                     f"💡 {e.suggestion}\n\n"
                     "SuperQode runs in ephemeral mode - all changes are "
-                    "automatically tracked and reverted after QE completes. "
-                    "Findings are preserved in .superqode/qe-artifacts/",
+                    "automatically tracked and can be reverted. "
+                    "Artifacts are preserved in .superqode/artifacts/",
                     metadata={"blocked_by": "git_guard", "command": command},
                 )
             except ImportError:

@@ -2,7 +2,7 @@
 Mode Switcher Widget - Beautiful Mode Transitions.
 
 Provides a polished UI for switching between different
-SuperQode modes (home, QE, agent, etc.) with visual feedback.
+SuperQode modes (home, agent, etc.) with visual feedback.
 
 Features:
 - Animated transitions
@@ -33,7 +33,6 @@ class AppMode(Enum):
     """Application modes."""
 
     HOME = "home"
-    QE = "qe"
     AGENT = "agent"
     CHAT = "chat"
     REVIEW = "review"
@@ -61,14 +60,6 @@ MODES = {
         color="#3b82f6",
         description="Main dashboard and navigation",
         shortcut="h",
-    ),
-    AppMode.QE: ModeInfo(
-        id="qe",
-        name="validation and evaluation",
-        icon="🔍",
-        color="#22c55e",
-        description="Run validation sessions with multi-agent analysis",
-        shortcut="q",
     ),
     AppMode.AGENT: ModeInfo(
         id="agent",

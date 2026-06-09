@@ -81,14 +81,6 @@ def get_harness_profiles() -> Dict[str, HarnessProfile]:
         },
     )
 
-    qe_permissions = PermissionConfig(
-        default=Permission.ALLOW,
-        groups={
-            ToolGroup.SHELL: Permission.ASK,
-            ToolGroup.NETWORK: Permission.ASK,
-        },
-    )
-
     return {
         "no-tool": HarnessProfile(
             name="no-tool",
@@ -124,17 +116,6 @@ def get_harness_profiles() -> Dict[str, HarnessProfile]:
             job_description=(
                 "Review the codebase for correctness, security, maintainability, and missing tests. "
                 "Return prioritized findings with file references."
-            ),
-        ),
-        "qe": HarnessProfile(
-            name="qe",
-            description="Quality-engineering profile for adversarial validation.",
-            system_level=SystemPromptLevel.EXPERT,
-            tools=None,
-            permissions=qe_permissions,
-            job_description=(
-                "Act as a quality engineer. Stress assumptions, seek reproducible failures, "
-                "and report evidence. Ask before shell or network actions."
             ),
         ),
     }

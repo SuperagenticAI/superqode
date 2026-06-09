@@ -13,7 +13,7 @@ SuperQode includes a rich Terminal User Interface (TUI) for interactive coding-a
 - **Local DS4 Support**: DS4 appears in the local provider picker when configured
 - **Interactive Prompts**: User input with completion
 - **File Browser**: Navigate project files
-- **Agent Switcher**: Switch between validation roles
+- **Agent Switcher**: Switch between agents
 - **Command Palette**: Quick actions
 - **Status Bar**: Session status at a glance
 
@@ -26,8 +26,6 @@ superqode
 # Start with a harness spec
 superqode --harness harness.yaml
 
-# Start with specific role
-superqode --role qe.security_tester
 ```
 
 ## Common TUI Workflow
@@ -57,7 +55,7 @@ Summarize what changed.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ SuperQode - Validation Session: qe-20260108-143052                  ×│
+│ SuperQode - Session: session-20260108-143052                  ×│
 ├─────────────────────────────────────────────────────────────────┤
 │ Sidebar        │ Main Content Area                              │
 │                │                                                 │
@@ -83,7 +81,7 @@ Summarize what changed.
 |-----|--------|
 | `Ctrl+K` | Open command palette |
 | `Ctrl+F` | Toggle file browser |
-| `Ctrl+A` | Switch agent/role |
+| `Ctrl+A` | Switch agent |
 | `Ctrl+S` | Save session |
 | `Ctrl+Q` | Quit |
 | `Ctrl+T` | Toggle agent thinking/session logs |
@@ -94,7 +92,6 @@ Summarize what changed.
 | `@` | Open the file-mention picker in the prompt |
 | `Tab` | Accept completion / next widget |
 | `Shift+Tab` | Previous widget |
-| `:` | Command mode (for commands like `:connect`, `:qe`, etc.) |
 
 ## Quick Actions
 
@@ -115,7 +112,6 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:log minimal` - Show status-only tool activity
 - `:log normal` - Show compact tool summaries
 - `:log verbose` - Show full tool outputs and changed file names
-- `:qe <role>` - Switch to validation role mode (e.g., `:qe security_tester`)
 - `:view <file>` - View file content
 - `:rewind` - Open the rewind overlay (or `:rewind <n>` to jump directly)
 - `:tree` - Show saved session branches and forks
@@ -397,7 +393,6 @@ The BYOK model view includes capability labels:
 
 Local providers include DS4, Ollama, LM Studio, MLX, vLLM, and SGLang when supported by the current installation.
 
-Note: validation analysis sessions are run via CLI, not TUI commands. Use `superqode qe run .` in your terminal to start validation sessions.
 
 ## Harnesses In The TUI
 
@@ -456,7 +451,7 @@ superqode:
 |--------|---------|
 | `Prompt` | User input with completion |
 | `FileBrowser` | Navigate project files |
-| `AgentSwitcher` | Switch validation roles |
+| `AgentSwitcher` | Switch between agents |
 | `CommandPalette` | Quick actions |
 | `StatusBar` | Session status |
 | `Throbber` | Loading indicator |
@@ -474,32 +469,20 @@ browser = FileBrowser(root=project_root)
 file = await browser.select_file()
 
 # Agent switcher
-roles = [
-    ("qe.security_tester", "Security Testing"),
-    ("qe.performance_tester", "Performance Testing"),
-]
-switcher = AgentSwitcher(roles)
+switcher = AgentSwitcher()
 selected = await switcher.select()
 ```
 
-## Integration with validation
+## Integration with Harness Workflows
 
-The TUI allows you to interact with agents in validation roles, while validation analysis sessions are run separately via CLI:
+The TUI allows you to interact with agents for coding tasks, while harness-based workflows are run separately via CLI:
 
 ```bash
 # Start TUI
 superqode
 
-# In TUI, switch to validation role
-:qe security_tester
-
-# Run validation analysis via CLI (in separate terminal)
-superqode qe run . --mode quick
-superqode qe run . --mode deep
-
-# View validation artifacts (via CLI)
-superqode qe artifacts .
-superqode qe dashboard
+# Run harness task via CLI (in separate terminal)
+superqode harness run --spec harness.yaml --prompt "analyze this codebase"
 ```
 
 ## Requirements

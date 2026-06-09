@@ -15,8 +15,9 @@ ASCII_LOGO = """
 COMPACT_LOGO = """ ____  _   _ ____  _____ ____   ___    ___  ____  _____
 |____/ \\___/|_|   |_____|_| \\_\\\\__\\_\\ \\___/|____/|_____|"""
 
-TAGLINE_PART1 = "Orchestrate Coding Agents"
-TAGLINE_PART2 = "Automate Your SDLC"
+# Welcome subtitle: differentiators (line 1) + local-model emphasis (line 2).
+TAGLINE_PART1 = "ACP MCP A2A  ·  Local BYOK SDKs  ·  Bring Your Own Harness"
+TAGLINE_PART2 = "Optimized for Local Models"
 
 # Normal purple → pink → orange gradient for ASCII logo
 GRADIENT = ["#7c3aed", "#a855f7", "#c084fc", "#ec4899", "#f97316", "#fb923c"]
@@ -85,9 +86,7 @@ ICONS = {
     "team": "👥",
     "robot": "🤖",
     "brain": "🧠",
-    "dev": "💻",
     "qa": "🧪",
-    "devops": "⚙️",
     "user": "👤",
     "agent": "🤖",
     # Communication
@@ -255,7 +254,6 @@ COMMANDS = [
     ":connect byok",
     ":connect local",
     ":connect acp",
-    ":connect advanced",
     ":claude",
     ":claude status",
     ":claude model",
@@ -281,11 +279,6 @@ COMMANDS = [
     ":ls",
     ":grep",
     ":clear",
-    ":dev fullstack",
-    ":dev frontend",
-    ":dev backend",
-    ":devops fullstack",
-    ":devops cicd_engineer",
     ":agents connect",
     ":agents connect opencode",
     ":agents list",
@@ -294,9 +287,6 @@ COMMANDS = [
     ":providers list",
     ":providers use",
     ":providers show",
-    ":roles",
-    ":team",
-    ":handoff",
     ":context",
     ":disconnect",
     # Runtime backend selection (see ':runtime list' for status)

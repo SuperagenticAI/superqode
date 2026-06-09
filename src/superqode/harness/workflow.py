@@ -197,16 +197,14 @@ async def run_workflow(
         "workspace.changes.captured",
         change_summary.to_dict(),
     )
-    validation = await _run_validation_steps(
+    checks = await _run_checks_steps(
         kernel,
         run_id=workflow_run_id,
         session_id=workflow_session_id,
         cwd=evidence_cwd,
     )
-    validation_failed = validation["status"] == "failed"
-    final_status = (
-        "failed" if validation_failed and kernel.spec.validation.fail_on_error else "succeeded"
-    )
+    checks_failed = checks["status"] == "failed"
+    final_status = "failed" if checks_failed and kernel.spec.checks.fail_on_error else "succeeded"
     _append_workflow_event(
         kernel,
         workflow_run_id,
@@ -217,7 +215,7 @@ async def run_workflow(
             "result_count": len(final.results),
             "content_preview": _preview_text(final.content),
             "changed_files": change_summary.to_dict(),
-            "validation": validation,
+            "checks": checks,
         },
     )
     _append_workflow_event(
@@ -231,7 +229,7 @@ async def run_workflow(
             "result_count": len(final.results),
             "result_run_ids": [item.run_id for item in final.results],
             "changed_files": change_summary.to_dict(),
-            "validation": validation,
+            "checks": checks,
         },
     )
     kernel.store.end_run(
@@ -243,7 +241,7 @@ async def run_workflow(
             "result_count": len(final.results),
             "result_run_ids": [item.run_id for item in final.results],
             "changed_files": change_summary.to_dict(),
-            "validation": validation,
+            "checks": checks,
         },
     )
     return final
@@ -596,17 +594,17 @@ def _step_id(step: WorkflowStep, index: int) -> str:
     return step.id or f"step-{index + 1}"
 
 
-async def _run_validation_steps(
+async def _run_checks_steps(
     kernel: HarnessKernel,
     *,
     run_id: str,
     session_id: str,
     cwd: Path,
 ) -> dict[str, Any]:
-    validation = kernel.spec.validation
-    if not validation.enabled:
+    checks = kernel.spec.checks
+    if not checks.enabled:
         return {"enabled": False, "status": "skipped", "steps": []}
-    steps = [step for step in validation.custom_steps if step.enabled]
+    steps = [step for step in checks.custom_steps if step.enabled]
     if not steps:
         return {"enabled": True, "status": "skipped", "steps": []}
 
@@ -616,10 +614,10 @@ async def _run_validation_steps(
             kernel,
             run_id,
             session_id,
-            "validation.step.started",
+            "checks.step.started",
             {"name": step.name, "command": step.command, "timeout": step.timeout},
         )
-        result = await asyncio.to_thread(_run_validation_command, step.command, cwd, step.timeout)
+        result = await asyncio.to_thread(_run_checks_command, step.command, cwd, step.timeout)
         step_result = {
             "name": step.name,
             "command": step.command,
@@ -631,18 +629,14 @@ async def _run_validation_steps(
             kernel,
             run_id,
             session_id,
-            (
-                "validation.step.completed"
-                if result["status"] == "passed"
-                else "validation.step.failed"
-            ),
+            ("checks.step.completed" if result["status"] == "passed" else "checks.step.failed"),
             step_result,
         )
     status = "passed" if all(item["status"] == "passed" for item in results) else "failed"
     return {"enabled": True, "status": status, "steps": results}
 
 
-def _run_validation_command(command: str, cwd: Path, timeout: int) -> dict[str, Any]:
+def _run_checks_command(command: str, cwd: Path, timeout: int) -> dict[str, Any]:
     try:
         args = shlex.split(command)
         if not args:

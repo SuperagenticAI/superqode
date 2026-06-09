@@ -86,10 +86,10 @@ WORKFLOW_PRESETS: dict[str, WorkflowPreset] = {
     "release-check": WorkflowPreset(
         name="release-check",
         mode=WorkflowMode.CHAIN,
-        description="Check release readiness across changes, validation, docs, and operational risk.",
+        description="Check release readiness across changes, test results, docs, and operational risk.",
         agents=(
             AgentSpec(id="change-reviewer", role="Summarize the release changes and risky files."),
-            AgentSpec(id="validator", role="Review validation results and missing test coverage."),
+            AgentSpec(id="validator", role="Review test results and missing coverage."),
             AgentSpec(id="release-notes", role="Draft release notes and rollout caveats."),
         ),
     ),

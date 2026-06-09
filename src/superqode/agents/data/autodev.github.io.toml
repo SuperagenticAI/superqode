@@ -1,0 +1,36 @@
+identity = "autodev.github.io"
+name = "AutoDev Xiuper"
+short_name = "autodev"
+url = "https://github.com/phodal/auto-dev"
+protocol = "acp"
+author_name = "Phodal"
+author_url = "https://github.com/phodal"
+publisher_name = "Phodal"
+publisher_url = "https://github.com/phodal"
+type = "coding"
+description = "AI-native multi-agent development platform (Kotlin Multiplatform) with ACP and A2A support."
+tags = ["open-source", "multi-agent", "acp", "kotlin"]
+run_command."*" = "xiuper"
+
+help = '''
+# AutoDev Xiuper
+
+AI-native multi-agent development platform built on Kotlin Multiplatform with ACP and A2A support.
+
+## Installation
+
+```bash
+# CLI tool
+npm install -g @xiuper/cli
+```
+
+Or use as IDE plugins:
+- IntelliJ IDEA: JetBrains Marketplace
+- VS Code: Visual Studio Marketplace
+
+For ACP integration, see https://github.com/phodal/auto-dev
+'''
+
+[actions."*".install]
+command = "npm install -g @xiuper/cli"
+description = "Install AutoDev Xiuper CLI"

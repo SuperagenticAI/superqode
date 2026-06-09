@@ -2,7 +2,7 @@
 Open Responses Built-in Tools.
 
 Implements the built-in tools from the Open Responses specification:
-- apply_patch: Apply patches to files (critical for QIR fixes)
+- apply_patch: Apply patches to files (critical for patch fixes)
 - code_interpreter: Execute code in a sandboxed environment
 - file_search: Search files in vector stores
 - mcp_adapter: Adapter for MCP tool compatibility

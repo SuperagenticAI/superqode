@@ -1,0 +1,39 @@
+identity = "stdiobus.dev"
+name = "stdio Bus"
+short_name = "stdio-bus"
+url = "https://github.com/stdiobus/stdiobus"
+protocol = "acp"
+author_name = "stdio Bus"
+author_url = "https://github.com/stdiobus"
+publisher_name = "stdio Bus"
+publisher_url = "https://github.com/stdiobus"
+type = "coding"
+description = "ACP-compatible tool bus for connecting AI agents to development tools."
+tags = ["open-source", "tools", "acp", "bus"]
+run_command."*" = "stdio-bus"
+
+help = '''
+# stdio Bus
+
+ACP-compatible tool bus for connecting AI agents to development tools.
+
+## Installation
+
+```bash
+cargo install stdio-bus
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/stdiobus/stdiobus
+cd stdiobus
+cargo build --release
+```
+
+See https://github.com/stdiobus/stdiobus for details.
+'''
+
+[actions."*".install]
+command = "cargo install stdio-bus"
+description = "Install stdio Bus"

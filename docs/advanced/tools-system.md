@@ -437,7 +437,6 @@ tools:
 
 ## Related Features
 
-- [Validation Features](../qe-features/index.md) - validation tool usage
 
 ---
 

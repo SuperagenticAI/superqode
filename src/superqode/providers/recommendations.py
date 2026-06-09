@@ -19,7 +19,6 @@ TASK_ALIASES = {
     "debugging": "debugging",
     "implement": "coding",
     "review": "review",
-    "qe": "testing",
     "test": "testing",
     "testing": "testing",
     "cheap": "budget",

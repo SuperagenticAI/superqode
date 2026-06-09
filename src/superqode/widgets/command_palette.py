@@ -46,24 +46,18 @@ DEFAULT_PALETTE_COMMANDS: list[PaletteCommand] = [
     PaletteCommand(
         "disconnect", "Disconnect", "Disconnect from current agent", "🔌", "Ctrl+D", "agents"
     ),
-    # Role commands
-    PaletteCommand(
-        "dev_mode", "Development Mode", "Switch to dev.fullstack role", "💻", "", "roles"
-    ),
     # File commands
     PaletteCommand("open_file", "Open File", "Open a file from project", "📁", "Ctrl+O", "files"),
     PaletteCommand("find_file", "Find File", "Fuzzy search for files", "🔍", "Ctrl+F", "files"),
     PaletteCommand("recent_files", "Recent Files", "Show recently opened files", "📋", "", "files"),
     PaletteCommand("bookmarks", "Bookmarks", "Manage file bookmarks", "🔖", "", "files"),
     # Workflow commands
-    PaletteCommand(
-        "handoff", "Handoff Work", "Hand off work to another role", "🤝", "Ctrl+H", "workflow"
-    ),
+    PaletteCommand("a2a", "A2A Workflows", "Show agent-to-agent workflows", "🤝", "", "workflow"),
     PaletteCommand(
         "context", "View Context", "Show current work context", "📋", "Ctrl+I", "workflow"
     ),
     PaletteCommand("approve", "Approve Work", "Approve work for deployment", "✅", "", "workflow"),
-    PaletteCommand("sessions", "View Sessions", "Show pending handoffs", "📂", "", "workflow"),
+    PaletteCommand("sessions", "View Sessions", "Show saved sessions", "📂", "", "workflow"),
     # System commands
     PaletteCommand("settings", "Settings", "Open settings", "⚙️", "Ctrl+,", "system"),
     PaletteCommand("help", "Help", "Show help documentation", "❓", "?", "system"),

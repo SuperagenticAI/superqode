@@ -16,9 +16,8 @@ applies to every model from that provider) or a full ``provider:model`` key
 the exact-model entry is layered on top of the provider entry — both
 contribute, and the exact-model fields win on conflicts.
 
-Pattern adapted from langchain-ai/deepagents' two-profile system, collapsed
-into a single struct because SuperQode does not split model-construction
-from runtime behavior the way LangChain does.
+Provider and exact-model profiles are collapsed into a single struct because
+SuperQode does not split model-construction from runtime behavior.
 
 Example:
     >>> from superqode.providers.profiles import ModelProfile, register_model_profile

@@ -1,5 +1,4 @@
-"""Tests for B5 (reasoning_effort + structured_output_mode) and B8
-(per-task token budget) from the fast-agent gap audit.
+"""Tests for reasoning_effort + structured_output_mode and the per-task token budget.
 
 These cover the *mapping* layer (provider-neutral → provider-specific
 kwargs) and the *enforcement* layer (pre-check + credit), all at unit

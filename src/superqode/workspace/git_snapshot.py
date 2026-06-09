@@ -7,7 +7,7 @@ Much more reliable than in-memory/tempfile approach:
 - Efficient storage (Git's delta compression)
 - Full history and diffing capabilities
 - Works with existing Git workflows
-- Adapted for SuperQode's QE needs
+- Adapted for SuperQode's workspace needs
 """
 
 from __future__ import annotations
@@ -91,8 +91,8 @@ class GitSnapshotManager:
     Usage:
         manager = GitSnapshotManager(project_root)
 
-        # Create initial snapshot before QE session
-        snapshot_id = await manager.create_snapshot("Before QE session")
+        # Create initial snapshot before workspace tracking session
+        snapshot_id = await manager.create_snapshot("Before workspace tracking session")
 
         # ... agent modifies files ...
 

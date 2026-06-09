@@ -1,0 +1,49 @@
+identity = "mistral-vibe.mistral.ai"
+name = "Mistral Vibe"
+short_name = "mistral-vibe"
+url = "https://github.com/mistralai/mistral-vibe"
+protocol = "acp"
+author_name = "Mistral AI"
+author_url = "https://mistral.ai"
+publisher_name = "Mistral AI"
+publisher_url = "https://mistral.ai"
+type = "coding"
+description = "Agentic coding tool from Mistral AI with ACP support."
+tags = ["coding", "mistral", "acp"]
+run_command."*" = "vibe-acp"
+
+help = '''
+# Mistral Vibe
+
+Agentic coding tool from Mistral AI.
+
+## Installation
+
+```bash
+pip install mistral-vibe
+```
+
+Or with uv:
+
+```bash
+uv tool install mistral-vibe
+```
+
+Or one-line install:
+
+```bash
+curl -LsSf https://mistral.ai/vibe/install.sh | bash
+```
+
+For ACP mode:
+
+```bash
+vibe-acp
+```
+
+See https://github.com/mistralai/mistral-vibe for details.
+'''
+
+[actions."*".install]
+command = "pip install mistral-vibe"
+description = "Install Mistral Vibe"

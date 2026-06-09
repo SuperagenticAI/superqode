@@ -11,7 +11,7 @@ publisher_name = "Google"
 publisher_url = "https://github.com/google-gemini/gemini-cli"
 type = "coding"
 description = "Google's Gemini CLI ACP implementation. Consumer Google AI Pro/Ultra/free Code Assist users should migrate to Antigravity CLI; enterprise/API-key ACP users can keep this route."
-tags = ["google", "gemini", "multimodal", "acp"]
+tags = ["google", "gemini", "multimodal", "acp", "official-acp"]
 run_command."*" = "gemini --experimental-acp"
 
 # API key environment variables

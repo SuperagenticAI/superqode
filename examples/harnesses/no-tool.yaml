@@ -51,7 +51,7 @@ context:
     strategy: prompt-only
   memory:
     enabled: false
-validation:
+checks:
   enabled: false
   fail_on_error: false
   timeout_seconds: 300

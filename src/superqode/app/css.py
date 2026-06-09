@@ -64,7 +64,14 @@ CollapsibleSidebar CollapsibleTitle:hover {
 #content { width: 1fr; layout: vertical; }
 
 /* Status bar - ALWAYS visible at top, never hidden */
-#status-bar { height: 2; min-height: 2; background: #0a0a0a; padding: 0 1; border-bottom: solid #27272a; }
+#status-bar {
+    height: 5;
+    min-height: 5;
+    background: #0a0a0a;
+    padding: 2 2 1 2;
+    content-align: left middle;
+    border-bottom: solid #27272a;
+}
 
 /* Scanning line - shown at TOP when agent is thinking */
 #thinking-wave { height: 1; width: 100%; margin: 0; padding: 0; display: none; }
@@ -105,16 +112,18 @@ ConversationLog {
 #mode-badge { height: auto; text-align: center; margin-bottom: 0; }
 #input-box {
     height: auto;
-    min-height: 3;
-    max-height: 8;
+    min-height: 5;
+    max-height: 10;
     width: 100%;
-    background: #050505;
-    border: solid #27272a;
+    background: #0a0a0f;
+    border: heavy #52525b;
+    border-title-color: #a855f7;
+    border-subtitle-color: #52525b;
     margin: 1 2 0 2;
     padding: 0 1;
     overflow: hidden;
 }
-#input-box:focus-within { border: solid #a855f7; }
+#input-box:focus-within { border: heavy #a855f7; background: #0d0d14; }
 #prompt-symbol {
     width: 2;
     min-width: 2;
@@ -126,9 +135,9 @@ ConversationLog {
 }
 #prompt-input {
     width: 1fr;
-    height: 1;
-    min-height: 1;
-    max-height: 6;
+    height: 3;
+    min-height: 3;
+    max-height: 8;
     background: transparent;
     border: none;
     padding: 0;
