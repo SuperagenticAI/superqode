@@ -1412,9 +1412,7 @@ class HarnessPanel(Container):
         else:
             run = evidence["run"]
             changes = evidence["changes"] if isinstance(evidence["changes"], dict) else {}
-            checks_result = (
-                evidence["checks"] if isinstance(evidence["checks"], dict) else {}
-            )
+            checks_result = evidence["checks"] if isinstance(evidence["checks"], dict) else {}
             text.append(f"  {run['run_id']}\n", style=SQ_COLORS.info)
             text.append(f"  status      {run['status']}\n", style=SQ_COLORS.text_secondary)
             text.append(

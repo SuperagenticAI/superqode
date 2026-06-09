@@ -99,19 +99,19 @@ See [Session Commands](cli-reference/sessions-commands.md) and [Share Commands](
 
 ## Project Trust
 
-Trust gates plugins and MCP operations. Check status with `:trust status` or `superqode trust status`. Grant trust with `:trust yes` or `superqode trust yes`.
+Trust gates plugins and MCP operations. Check status with `:trust status` or `superqode trust status`. Grant trust with `:trust yes` or `superqode trust yes`. Validate the trust store and risk signals with `:trust doctor` or `superqode trust doctor`.
 
 See [Trust Commands](cli-reference/trust-commands.md) for details.
 
 ## Local Plugin Workflow
 
-Project plugins live under `.superqode/plugins/<id>/plugin.json`. Install with `:plugins add <path>` or `superqode plugins add <path>`. Requires project trust.
+Project plugins live under `.superqode/plugins/<id>/plugin.json`. Install with `:plugins add <path>` or `superqode plugins add <path>`. Requires project trust. Validate manifests and references with `:plugins doctor` or `superqode plugins doctor`.
 
 See [Plugin Commands](cli-reference/plugins-commands.md) for the manifest format, hook points, and full CLI reference.
 
 ## Agent Memory Workflow
 
-Store project facts and preferences with `:memory remember "text"` or `superqode memory remember "text"`. Search with `:memory search query`.
+Store project facts and preferences with `:memory remember "text"` or `superqode memory remember "text"`. Search with `:memory search query` or `superqode memory search query`, and search Agent Experience Packs with `:memory search specmem query`.
 
 See [Memory Commands](cli-reference/memory-commands.md) and [Agent Memory Layer](advanced/memory.md) for provider setup and the full API.
 

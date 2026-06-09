@@ -1,4 +1,4 @@
-"""Tests for ACP tool-call parent linking (B6 from the fast-agent gap audit).
+"""Tests for ACP tool-call parent linking.
 
 Covers two halves:
 

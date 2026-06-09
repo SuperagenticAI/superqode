@@ -313,7 +313,9 @@ def get_sandbox_recommendations(detections: Dict[str, Any]) -> List[str]:
     # Container recommendations
     container = detections.get("container", {})
     if not container.get("is_container"):
-        recommendations.append("🐳 Consider running agent work in a Docker container for better isolation.")
+        recommendations.append(
+            "🐳 Consider running agent work in a Docker container for better isolation."
+        )
 
     # Virtual environment recommendations
     venv = detections.get("virtual_env", {})
@@ -332,7 +334,9 @@ def get_sandbox_recommendations(detections: Dict[str, Any]) -> List[str]:
     # System load recommendations
     sys_load = detections.get("system_load", {})
     if sys_load.get("high_load"):
-        recommendations.append("⚡ System load is high. Agent sessions may impact system performance.")
+        recommendations.append(
+            "⚡ System load is high. Agent sessions may impact system performance."
+        )
 
     # Always include general recommendations
     if not recommendations:

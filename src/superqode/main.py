@@ -3103,7 +3103,9 @@ def agents_list(store, protocol, supported):
     from superqode.commands.acp import show_agents_list, show_agents_store
 
     if protocol == "external":
-        click.echo("No external agents are listed by this command. Use `superqode agents list` for ACP agents.")
+        click.echo(
+            "No external agents are listed by this command. Use `superqode agents list` for ACP agents."
+        )
         return
 
     if store:
@@ -3622,7 +3624,9 @@ def help_command():
 
     click.echo("")
     console.print("[bold white]SuperQode CLI Reference[/bold white]")
-    console.print("[dim]Categorized overview of all commands — use [bold]--help[/bold] on any subcommand for details.[/dim]\n")
+    console.print(
+        "[dim]Categorized overview of all commands — use [bold]--help[/bold] on any subcommand for details.[/dim]\n"
+    )
 
     categories = [
         (
@@ -3651,7 +3655,10 @@ def help_command():
             [
                 ("superqode connect acp <name>", "Connect to an ACP coding agent"),
                 ("superqode connect byok [provider] [model]", "Connect to a BYOK provider/model"),
-                ("superqode connect local [provider] [model]", "Connect to a local/self-hosted provider"),
+                (
+                    "superqode connect local [provider] [model]",
+                    "Connect to a local/self-hosted provider",
+                ),
                 ("superqode connect setup <provider>", "Show provider setup: env vars, URL, docs"),
             ],
         ),
@@ -3747,12 +3754,22 @@ def help_command():
             console.print(f"    [cyan]{cmd:<40}[/cyan] [dim]{desc}[/dim]")
 
     console.print("\n  [bold]📖  Headless Mode[/bold]")
-    console.print("    [cyan]superqode -p \"<prompt>\"[/cyan]         [dim]Run once and print response[/dim]")
-    console.print("    [cyan]superqode -p --json \"<prompt>\"[/cyan]  [dim]Run once with JSON output[/dim]")
-    console.print("    [cyan]superqode --resume <id>[/cyan]         [dim]Resume a stored session[/dim]")
-    console.print("    [cyan]superqode --fork <id>[/cyan]           [dim]Fork a stored session[/dim]")
+    console.print(
+        '    [cyan]superqode -p "<prompt>"[/cyan]         [dim]Run once and print response[/dim]'
+    )
+    console.print(
+        '    [cyan]superqode -p --json "<prompt>"[/cyan]  [dim]Run once with JSON output[/dim]'
+    )
+    console.print(
+        "    [cyan]superqode --resume <id>[/cyan]         [dim]Resume a stored session[/dim]"
+    )
+    console.print(
+        "    [cyan]superqode --fork <id>[/cyan]           [dim]Fork a stored session[/dim]"
+    )
 
-    console.print("\n  [dim]Use [bold]superqode <command> --help[/bold] for detailed options on any command.[/dim]\n")
+    console.print(
+        "\n  [dim]Use [bold]superqode <command> --help[/bold] for detailed options on any command.[/dim]\n"
+    )
 
 
 # Add provider commands (superqode providers list, superqode providers show, etc.)

@@ -114,6 +114,7 @@ def _label_match_path(file_text: str, targets: List[Path], cwd: Path, multi: boo
     except ValueError:
         return str(fp)
 
+
 try:
     from superqode.file_explorer import PathFilter
 except ImportError:
@@ -202,9 +203,7 @@ class GrepTool(Tool):
                 return await self._run_rg_json(
                     rg_path, pattern, targets, include, case_sensitive, ctx, multi
                 )
-            return await self._run_grep(
-                pattern, targets, include, case_sensitive, ctx, multi
-            )
+            return await self._run_grep(pattern, targets, include, case_sensitive, ctx, multi)
         except asyncio.TimeoutError:
             return ToolResult(success=False, output="", error="Search timed out")
         except Exception as e:

@@ -299,7 +299,9 @@ def notify_qe_complete(
             message = f"All checks passed in {duration_str}"
             level = NotificationLevel.SUCCESS
         else:
-            title = f"Agent Run Complete - {findings_count} Finding{'s' if findings_count != 1 else ''}"
+            title = (
+                f"Agent Run Complete - {findings_count} Finding{'s' if findings_count != 1 else ''}"
+            )
             message = f"Completed in {duration_str}. Review findings in SuperQode."
             level = NotificationLevel.WARNING
     else:

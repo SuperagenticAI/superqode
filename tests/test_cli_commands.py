@@ -346,9 +346,7 @@ checks:
 
             assert result.exit_code == 1
             payload = json.loads(result.output)
-            checks_check = next(
-                check for check in payload["checks"] if check["name"] == "checks"
-            )
+            checks_check = next(check for check in payload["checks"] if check["name"] == "checks")
             assert checks_check["status"] == "error"
             assert checks_check["missing"] == ["missing-validator"]
             assert "fix" in checks_check

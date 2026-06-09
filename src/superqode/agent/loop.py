@@ -1042,9 +1042,7 @@ class AgentLoop:
                     resolve_local_context_window,
                 )
 
-                probed = await resolve_local_context_window(
-                    self.config.provider, self.config.model
-                )
+                probed = await resolve_local_context_window(self.config.provider, self.config.model)
                 if probed:
                     window, endpoint = probed
                     self._cached_context_window = window

@@ -162,6 +162,17 @@ superqode harness run --spec harness.yaml --runtime codex-sdk --prompt "summariz
 - **Headless CLI** — Run coding tasks and provider checks from scripts or CI
 - **Developer workflows** — Session tree, share artifacts, project trust, plugins, memory, and transcript export
 
+### Optimized for local models
+
+SuperQode is tuned to get the best out of local models (≈10B–120B), where context is the usual breaking point:
+
+- **Auto context management** — detects each local model's *real loaded* context window (Ollama, llama.cpp, LM Studio, vLLM, DS4) and compacts the conversation before it overflows, automatically. Inspect or pin it with `:context`.
+- **Multi-repo search** — register repos with `:workspace add` and search across all of them in one fast ripgrep pass; grep/glob use structured output and report truncation. Absolute paths are permission-gated.
+- **Post-edit verification** — after the agent edits a file, fast per-file checks (ruff, eslint, gofmt, JSON/YAML) feed findings back so it self-corrects before moving on.
+- **Resilient tool calls** — dangling or malformed tool calls (common on smaller local models, or after an interruption/resume) are repaired so the provider never rejects the history.
+- **Calm by default** — `:thinking` (Ctrl+T) folds noisy per-iteration logs into a live status with a tidy per-tool trace; flip to verbose anytime.
+- **Harness over MCP** — `superqode mcp` exposes your HarnessSpec workflows as MCP tools for any MCP client, alongside the A2A and ACP servers.
+
 ## Developer Workflows
 
 Use SuperQode as a daily coding-agent harness from the TUI or CLI:
@@ -245,6 +256,12 @@ This gives teams one way to debug runs even when they use different agent framew
 For complete guides, configuration options, and API reference:
 
 **[📚 View Full Documentation →](https://superagenticai.github.io/superqode/)**
+
+Highlights:
+
+- [Local Context & Compaction](docs/advanced/local-context.md) — context-window detection, adaptive compaction, `:context`
+- [Multi-Repo Search & Edit Safety](docs/advanced/multi-repo-search.md) — `:workspace`, cross-repo search, post-edit verification
+- [Harness System](docs/advanced/harness-system.md) — HarnessSpec, checks, and exposing harnesses over MCP
 
 ## Contributing
 

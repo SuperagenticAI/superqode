@@ -1,4 +1,5 @@
 """SuperQode harness primitives."""
+
 from .events import HarnessEvent
 from .loader import (
     harness_spec_from_dict,

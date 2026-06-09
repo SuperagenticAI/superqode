@@ -447,9 +447,7 @@ class PatchTool(Tool):
                 primary = patch_result.metadata.get("path")
                 if primary:
                     try:
-                        patch_result = await verify_edit(
-                            patch_result, Path(primary), ctx
-                        )
+                        patch_result = await verify_edit(patch_result, Path(primary), ctx)
                     except Exception:
                         pass
             return patch_result

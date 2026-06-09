@@ -104,7 +104,9 @@ def build_steps_from_spec(spec, prompt: str):
     if mode == WorkflowMode.EVALUATOR_OPTIMIZER:
         return [
             WorkflowStep(f"Create a candidate solution.\n\nTask:\n{prompt}", id="candidate"),
-            WorkflowStep("Evaluate the candidate for correctness and completeness.", id="evaluator"),
+            WorkflowStep(
+                "Evaluate the candidate for correctness and completeness.", id="evaluator"
+            ),
             WorkflowStep("Improve the candidate using the evaluator feedback.", id="optimizer"),
         ]
     if mode == WorkflowMode.ROUTER:
@@ -153,9 +155,7 @@ async def run_harness_workflow(
         )
 
     steps = build_steps_from_spec(spec, task)
-    kernel = await init_harness(
-        spec, store=FileHarnessStore(Path(spec.context.session_storage))
-    )
+    kernel = await init_harness(spec, store=FileHarnessStore(Path(spec.context.session_storage)))
     result = await run_workflow(
         kernel,
         steps,

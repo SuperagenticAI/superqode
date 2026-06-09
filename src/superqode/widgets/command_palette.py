@@ -52,9 +52,7 @@ DEFAULT_PALETTE_COMMANDS: list[PaletteCommand] = [
     PaletteCommand("recent_files", "Recent Files", "Show recently opened files", "📋", "", "files"),
     PaletteCommand("bookmarks", "Bookmarks", "Manage file bookmarks", "🔖", "", "files"),
     # Workflow commands
-    PaletteCommand(
-        "a2a", "A2A Workflows", "Show agent-to-agent workflows", "🤝", "", "workflow"
-    ),
+    PaletteCommand("a2a", "A2A Workflows", "Show agent-to-agent workflows", "🤝", "", "workflow"),
     PaletteCommand(
         "context", "View Context", "Show current work context", "📋", "Ctrl+I", "workflow"
     ),

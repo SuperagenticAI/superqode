@@ -204,9 +204,7 @@ async def run_workflow(
         cwd=evidence_cwd,
     )
     checks_failed = checks["status"] == "failed"
-    final_status = (
-        "failed" if checks_failed and kernel.spec.checks.fail_on_error else "succeeded"
-    )
+    final_status = "failed" if checks_failed and kernel.spec.checks.fail_on_error else "succeeded"
     _append_workflow_event(
         kernel,
         workflow_run_id,
@@ -631,11 +629,7 @@ async def _run_checks_steps(
             kernel,
             run_id,
             session_id,
-            (
-                "checks.step.completed"
-                if result["status"] == "passed"
-                else "checks.step.failed"
-            ),
+            ("checks.step.completed" if result["status"] == "passed" else "checks.step.failed"),
             step_result,
         )
     status = "passed" if all(item["status"] == "passed" for item in results) else "failed"

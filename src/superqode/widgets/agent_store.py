@@ -381,6 +381,7 @@ def get_provenance_from_tags(tags: list[str]) -> list[tuple[str, str]]:
         badges.append(("Community", THEME["magenta"]))
     return badges
 
+
 CATEGORY_ICONS = {
     "general": "",
     "code": "",
@@ -762,6 +763,7 @@ class AgentStoreScreen(Screen):
         if provenance:
             badges_text = "  ".join(f"[{color}]{label}[/{color}]" for label, color in provenance)
             from rich.markup import escape
+
             content.append("Provenance: ", style=THEME["muted"])
             content.append(f"{badges_text}\n", style=THEME["muted"])
             content.append("\n", style="")

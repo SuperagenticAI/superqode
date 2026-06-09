@@ -1,4 +1,4 @@
-"""Tests for the ACP permission store (A4 from the fast-agent gap audit).
+"""Tests for the ACP permission store.
 
 Two layers:
 1. The store itself — load/save/round-trip, parsing tolerance, removal.

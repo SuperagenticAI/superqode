@@ -719,7 +719,9 @@ def render_welcome(
     # DESCRIPTION SECTION - Tagline + tagline parts + one-liner
     # ═══════════════════════════════════════════════════════════════════════
     desc_text = Text(justify=align)
-    desc_text.append("SuperQode = Your Portable Universal Coding Agent Harness\n", style="bold #ffffff")
+    desc_text.append(
+        "SuperQode = Your Portable Universal Coding Agent Harness\n", style="bold #ffffff"
+    )
     desc_text.append("\n", style="")
 
     # Single differentiator line: three accented segments + a muted local-model
@@ -11747,7 +11749,9 @@ class SuperQodeApp(App):
 
             shutil.copy2(template_path, config_path)
             log.add_success(f"Created {config_path} with harness defaults")
-            log.add_info("💡 Use :connect to choose a runtime, or edit harnesses under .superqode/.")
+            log.add_info(
+                "💡 Use :connect to choose a runtime, or edit harnesses under .superqode/."
+            )
         else:
             # Fallback: create basic config if template not found
             default_config = """version: 2
@@ -11917,7 +11921,8 @@ memory:
         auto = os.environ.get("SUPERQODE_AUTO_COMPACT", "").strip().lower()
         on = auto not in ("0", "false", "no", "off")
         t.append(
-            f"    Auto-compact: {'ON' if on else 'OFF'}\n", style=THEME["success" if on else "muted"]
+            f"    Auto-compact: {'ON' if on else 'OFF'}\n",
+            style=THEME["success" if on else "muted"],
         )
         t.append("\n    ", style="")
         t.append(":context <n>", style=f"bold {THEME['cyan']}")
@@ -11975,9 +11980,7 @@ memory:
                 for r in roots:
                     t.append("  📁 ", style=THEME["cyan"])
                     t.append(f"{r}\n", style=THEME["text"])
-                t.append(
-                    f"\n  {len(roots)} repo(s) · search all with ", style=THEME["muted"]
-                )
+                t.append(f"\n  {len(roots)} repo(s) · search all with ", style=THEME["muted"])
                 t.append("--all-repos", style=f"bold {THEME['cyan']}")
                 t.append("\n", style="")
             self._show_command_output(log, t)
@@ -12009,7 +12012,12 @@ memory:
             t = Text()
             t.append("Thinking-log detail\n\n", style=f"bold {THEME['purple']}")
             rows = [
-                ("normal", "◆", THEME["cyan"], "Iterations fold into a live status; reasoning trimmed"),
+                (
+                    "normal",
+                    "◆",
+                    THEME["cyan"],
+                    "Iterations fold into a live status; reasoning trimmed",
+                ),
                 ("verbose", "◈", THEME["purple"], "Every iteration + full streamed reasoning"),
                 ("off", "◇", THEME["muted"], "Hidden; only tool calls and the final answer"),
             ]
@@ -14901,9 +14909,7 @@ memory:
                 if status == "running":
                     self._call_ui(self._calm_tool_running, "terminal", args, log)
                 else:
-                    self._call_ui(
-                        self._calm_tool_done, "terminal", args, log, status != "error"
-                    )
+                    self._call_ui(self._calm_tool_done, "terminal", args, log, status != "error")
                 return
             output_text = output.strip()
             self._call_ui(
@@ -19921,9 +19927,7 @@ memory:
             # Schedule UI update on the next event loop tick
             self.call_later(self._show_pure_tool_result, name, result, log)
 
-        is_local_provider = bool(
-            provider_def and provider_def.category == ProviderCategory.LOCAL
-        )
+        is_local_provider = bool(provider_def and provider_def.category == ProviderCategory.LOCAL)
 
         async def on_thinking_async(text: str):
             """Handle thinking logs from AgentLoop - honors the :thinking toggle.
@@ -24687,7 +24691,9 @@ memory:
                         t.append(f"\n             Install: ", style=THEME["dim"])
                         t.append(f"{install_cmd}\n", style=THEME["cyan"])
                     else:
-                        t.append(f"\n             No install command available\n", style=THEME["dim"])
+                        t.append(
+                            f"\n             No install command available\n", style=THEME["dim"]
+                        )
             t.append("\n", style="")
 
         t.append(f"  💡 Quick Actions:\n", style=THEME["muted"])
@@ -25861,7 +25867,7 @@ memory:
                     (":workspace list", "List registered search repos"),
                     (":workspace remove <path>", "Unregister a repo"),
                     (
-                        "(ask: \"search all repos\")",
+                        '(ask: "search all repos")',
                         "grep/glob fan out across the workspace (all_repos)",
                     ),
                     (":thinking", "Show thinking-log detail (Ctrl+T cycles Normal/Verbose/Off)"),

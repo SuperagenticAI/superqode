@@ -35,9 +35,7 @@ def _load_raw() -> List[str]:
 
 def _save_raw(roots: List[str]) -> None:
     WORKSPACE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    WORKSPACE_FILE.write_text(
-        json.dumps({"roots": roots}, indent=2) + "\n", encoding="utf-8"
-    )
+    WORKSPACE_FILE.write_text(json.dumps({"roots": roots}, indent=2) + "\n", encoding="utf-8")
 
 
 def list_workspace_roots() -> List[Path]:

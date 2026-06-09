@@ -73,8 +73,8 @@ class GitWorktreeManager:
     """
 
     # Global worktree location
-    WORKTREE_ROOT = Path.home() / ".superqode" /  "working"
-    SESSION_REGISTRY = Path.home() / ".superqode" /  "working" / "_sessions"
+    WORKTREE_ROOT = Path.home() / ".superqode" / "working"
+    SESSION_REGISTRY = Path.home() / ".superqode" / "working" / "_sessions"
 
     def __init__(self, project_root: Path):
         self.project_root = project_root.resolve()

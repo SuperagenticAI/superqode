@@ -350,4 +350,3 @@ class TestWorkspaceManager:
         # Verify patch was created
         patches = workspace.artifacts.list_patches()
         assert len(patches) == 1
-
