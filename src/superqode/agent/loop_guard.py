@@ -2,9 +2,8 @@
 
 Local models in particular can get stuck re-issuing the same tool call —
 the same failing grep, the same read of the same file — burning context
-and tokens without progress. Mirroring opencode's processor guard, the
-detector watches *consecutive identical* tool calls (same tool, same
-arguments). At the threshold the call is intercepted and the model gets
+and tokens without progress. The detector watches *consecutive identical*
+tool calls (same tool, same arguments). At the threshold the call is intercepted and the model gets
 corrective feedback instead of another identical result; if the model
 ignores the intervention and immediately repeats the same call again, the
 run should be aborted.

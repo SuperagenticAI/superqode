@@ -1,4 +1,4 @@
-"""Tests for the codex-grammar apply_patch tool."""
+"""Tests for the patch-envelope apply_patch tool."""
 
 import pytest
 
@@ -133,9 +133,7 @@ def test_apply_eof_anchor_appends():
 
 
 def test_apply_context_not_found_errors():
-    ops = parse_patch(
-        "*** Begin Patch\n*** Update File: f.txt\n-nonexistent\n+x\n*** End Patch"
-    )
+    ops = parse_patch("*** Begin Patch\n*** Update File: f.txt\n-nonexistent\n+x\n*** End Patch")
     with pytest.raises(ValueError, match="Could not locate hunk context"):
         apply_hunks("real content", ops[0].hunks, "f.txt")
 

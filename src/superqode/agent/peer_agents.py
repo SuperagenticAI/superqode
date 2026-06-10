@@ -1,4 +1,4 @@
-"""Long-lived peer agents (codex multi_agents pattern).
+"""Long-lived peer agents.
 
 The existing SubAgentTool delegates one task and returns one result. Peer
 agents are different: they stay alive across the parent's turns, hold their
@@ -13,7 +13,7 @@ Built on existing loop machinery rather than new plumbing:
   between that agent's tool calls instead of after its run;
 - ``send_input(interrupt=True)`` cancels the current run and starts a new
   one with the message;
-- peers cannot spawn peers (one level of hierarchy, like codex).
+- peers cannot spawn peers (the hierarchy stays one level deep).
 """
 
 from __future__ import annotations

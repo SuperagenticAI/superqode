@@ -10,7 +10,7 @@ The `sub_agent` tool spawns an isolated child loop for one task and returns its 
 
 ## Peer agents: coworkers you can talk to
 
-Peer agents (codex `multi_agents` parity) stay alive across the parent's turns, keep their own context, and are addressable by name. Five tools, available in the `full` tool profile:
+Peer agents stay alive across the parent's turns, keep their own context, and are addressable by name. Five tools, available in the `full` tool profile:
 
 | Tool | Behavior |
 |---|---|

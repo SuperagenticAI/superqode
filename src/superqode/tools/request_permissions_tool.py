@@ -1,4 +1,4 @@
-"""request_permissions: the model asks the user for an escalation (codex parity).
+"""request_permissions: the model asks the user for an escalation.
 
 Instead of failing repeatedly against ASK/deny prompts, the model can make
 one explicit, justified request for session-scoped permission on specific

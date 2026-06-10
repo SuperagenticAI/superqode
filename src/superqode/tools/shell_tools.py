@@ -96,7 +96,7 @@ class BashTool(Tool):
         if not command.strip():
             return ToolResult(success=False, output="", error="Empty command")
 
-        # Codex-trained models (GPT-5.x, local gpt-oss) often invoke
+        # Models trained on the patch-envelope dialect (GPT-5.x, gpt-oss) often invoke
         # `apply_patch <<EOF` as a shell command. Route that to the real
         # apply_patch tool so the patch applies with validation, workspace
         # tracking, and post-edit verification instead of failing on a

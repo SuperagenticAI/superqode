@@ -1,4 +1,4 @@
-"""Rubric self-grading (deepagents pattern).
+"""Rubric self-grading.
 
 A rubric declares *what done looks like*. When set on
 :class:`~superqode.agent.loop.AgentConfig`, every time the agent would

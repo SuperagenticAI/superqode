@@ -1,8 +1,8 @@
 """Shell environment policy: keep secrets out of spawned commands.
 
-Codex filters the environment passed to model-initiated commands so a
-prompt-injected ``env`` or ``printenv`` can't exfiltrate API keys. This is
-the superqode equivalent, opt-in to preserve existing workflows:
+Filtering the environment passed to model-initiated commands means a
+prompt-injected ``env`` or ``printenv`` can't exfiltrate API keys.
+Opt-in, to preserve existing workflows:
 
 - ``SUPERQODE_SHELL_ENV_POLICY`` unset/``inherit`` — full environment
   (today's behavior).

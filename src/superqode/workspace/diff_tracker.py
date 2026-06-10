@@ -1,8 +1,6 @@
 """
 Diff Tracker - Track file changes during workspace for patch generation.
 
-Inspired by EveryCode's turn_diff_tracker.rs implementation.
-
 Features:
 - Capture baseline snapshots before modifications
 - Generate unified diffs comparing baseline to current

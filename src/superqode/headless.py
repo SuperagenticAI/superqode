@@ -348,7 +348,7 @@ _HTML_ROLE_COLORS = {
 
 
 def _render_session_html(metadata, messages) -> str:
-    """Self-contained HTML transcript (pi export-html parity): one shareable file."""
+    """Self-contained HTML transcript: one shareable file, no external assets."""
     import html as html_mod
 
     rows = []

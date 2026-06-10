@@ -39,7 +39,7 @@ def diff_stats(diff_text: str) -> Tuple[int, int]:
 
 
 def summarize_turn_changes(results) -> Tuple[str, str]:
-    """Aggregate file changes from one turn's tool results (codex turn-diff).
+    """Aggregate file changes from one turn's tool results.
 
     ``results`` is an iterable of objects with a ``metadata`` dict (ToolResult
     or compatible). Returns ``(summary_line, combined_diff)`` — both empty

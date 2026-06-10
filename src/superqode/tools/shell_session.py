@@ -1,12 +1,12 @@
-"""Persistent interactive shell sessions (codex unified_exec, adapted).
+"""Persistent interactive shell sessions.
 
 The plain ``bash`` tool runs one command to completion. That cannot drive
 REPLs (python, node, psql), dev servers, debuggers, or anything that asks a
-question on stdin. Codex solved this with ``unified_exec``/``write_stdin``:
-processes run inside a PTY, stay alive across tool calls, and the model
-polls output or writes input with a bounded wait each call.
+question on stdin. Shell sessions solve this: processes run inside a PTY,
+stay alive across tool calls, and the model polls output or writes input
+with a bounded wait each call.
 
-This module is the superqode adaptation: one ``shell_session`` tool with an
+The surface is one ``shell_session`` tool with an
 ``action`` parameter (open/write/poll/list/kill). Output accumulates in a
 bounded buffer drained per call; oversized output goes through the standard
 spill-to-disk truncation so nothing is lost. Sessions are reaped when their

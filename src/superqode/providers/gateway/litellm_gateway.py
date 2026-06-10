@@ -505,7 +505,7 @@ class LiteLLMGateway(GatewayInterface):
     ) -> List[Dict[str, Any]]:
         """Mark cache-eligible messages with provider-specific cache hints.
 
-        Following opencode's ``applyCaching`` strategy: tag the first two
+        Caching strategy: tag the first two
         system messages and the last two non-system messages so the long
         stable prefix (system + tools) and the immediate prior turn both
         cache cheaply across an agent loop's iterations.

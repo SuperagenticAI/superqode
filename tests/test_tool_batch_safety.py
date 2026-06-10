@@ -97,7 +97,11 @@ async def test_batch_with_mutation_runs_sequentially_in_order():
     loop = _make_loop(registry)
 
     results = await loop._execute_tool_batch(
-        [_call("read", {"a": 1}, "c1"), _call("edit", {"b": 2}, "c2"), _call("read", {"c": 3}, "c3")]
+        [
+            _call("read", {"a": 1}, "c1"),
+            _call("edit", {"b": 2}, "c2"),
+            _call("read", {"c": 3}, "c3"),
+        ]
     )
 
     assert tracker["max_active"] == 1  # never concurrent
@@ -177,9 +181,7 @@ async def test_doom_loop_aborts_when_model_repeats_after_warning():
     loop = _make_loop(registry)
 
     same = {"q": "needle"}
-    await loop._execute_tool_batch(
-        [_call("grep", same), _call("grep", same), _call("grep", same)]
-    )
+    await loop._execute_tool_batch([_call("grep", same), _call("grep", same), _call("grep", same)])
     with pytest.raises(DoomLoopAbort):
         await loop._execute_tool_batch([_call("grep", same)])
 

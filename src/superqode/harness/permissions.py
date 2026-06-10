@@ -4,7 +4,7 @@ When a tool needs approval (the :class:`PermissionManager` returns ASK), the
 agent loop fires the ``permission_request`` decision hook. This module turns a
 harness's declarative :class:`PermissionRuleSpec` list into a handler for that
 seam, so teams can encode *which* tool calls auto-approve, auto-deny, or still
-prompt - the OpenCode ``pattern -> action`` model.
+prompt - a ``pattern -> action`` rule model.
 
 Evaluation is first-match-wins in declared order:
 

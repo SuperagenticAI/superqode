@@ -790,7 +790,7 @@ class AgentLoop:
         self._doom_guard = DoomLoopDetector(self._doom_threshold())
 
     # ------------------------------------------------------------------
-    # In-run steering (pi pattern): messages typed while the agent works
+    # In-run steering: messages typed while the agent works
     # are injected between iterations, not after the run.
     # ------------------------------------------------------------------
 
@@ -1400,9 +1400,8 @@ class AgentLoop:
 
         Walks backwards accumulating token estimates; once the accumulated
         total exceeds ``keep_recent``, older tool outputs become prunable
-        (opencode's prune semantics: the protected window is a token budget,
-        and a single huge stale output that crosses it is exactly what should
-        go). The current turn's tool results - anything after the last
+        (the protected window is a token budget, and a single huge stale
+        output that crosses it is exactly what should go). The current turn's tool results - anything after the last
         assistant message - are always protected regardless of size, since
         the model is about to reason over them.
 
@@ -1512,7 +1511,7 @@ class AgentLoop:
         # recent tail. The conversation skeleton (who did what, in what order)
         # survives; only old tool payloads are dropped. No LLM call needed, and
         # when this alone gets us back under threshold we skip summarization -
-        # the cheaper outcome for local models. Mirrors opencode's prune pass.
+        # the cheaper outcome for local models.
         pruned_messages, pruned_chars = self._prune_stale_tool_outputs(
             messages, msg_dicts, keep_recent
         )
@@ -2133,8 +2132,8 @@ class AgentLoop:
                     if image_msg is not None:
                         messages.append(image_msg)
 
-                # Per-turn aggregate diff (codex turn_diff_tracker pattern):
-                # one summary line per turn, full diff retained for consumers.
+                # Per-turn aggregate diff: one summary line per turn, full
+                # diff retained for consumers.
                 from ..tools.diff_utils import summarize_turn_changes
 
                 turn_summary, turn_diff = summarize_turn_changes(turn_tool_results)
@@ -2587,7 +2586,7 @@ class AgentLoop:
                     if image_msg is not None:
                         messages.append(image_msg)
 
-                # Per-turn aggregate diff (codex turn_diff_tracker pattern).
+                # Per-turn aggregate diff.
                 from ..tools.diff_utils import summarize_turn_changes
 
                 turn_summary, turn_diff = summarize_turn_changes([r[3] for r in results])

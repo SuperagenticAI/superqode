@@ -218,4 +218,3 @@ built-ins lazily.
 
 - The implementation: [`src/superqode/providers/profiles.py`](https://github.com/Shashikant86/superqode/blob/main/src/superqode/providers/profiles.py)
 - Built-in profiles: [`src/superqode/providers/_builtin_profiles.py`](https://github.com/Shashikant86/superqode/blob/main/src/superqode/providers/_builtin_profiles.py)
-- The pattern this is adapted from: [deepagents `profiles/` directory](https://github.com/langchain-ai/deepagents/tree/main/libs/deepagents/deepagents/profiles)

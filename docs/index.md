@@ -72,7 +72,7 @@ superqode --print "inspect this repository and suggest the smallest safe cleanup
 
     ---
 
-    Bounded reads, spill-to-disk shell output, interactive PTY sessions, codex-format patches, vision attachments, and web access. Every tool gated by permissions, exec-policy rules, and sandboxing.
+    Bounded reads, spill-to-disk shell output, interactive PTY sessions, patch-envelope edits, vision attachments, and web access. Every tool gated by permissions, exec-policy rules, and sandboxing.
 
     [:octicons-arrow-right-24: Tools Catalog](advanced/tools-catalog.md)
 

@@ -165,7 +165,7 @@ def _msgs(*roles_contents):
 
 
 def test_caching_marks_system_and_last_two_for_anthropic(monkeypatch):
-    """The opencode-style pattern: system + last 2 non-system get marked.
+    """The sliding-window caching pattern: system + last 2 non-system get marked.
     Intermediate user/assistant turns are left alone so the cache window
     sweeps forward with the conversation."""
     monkeypatch.delenv("SUPERQODE_DISABLE_PROMPT_CACHE", raising=False)

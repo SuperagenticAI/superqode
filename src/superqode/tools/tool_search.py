@@ -1,9 +1,9 @@
-"""Deferred tool loading + tool_search (codex pattern, local-model focused).
+"""Deferred tool loading + tool_search, built for local-model context budgets.
 
 Every tool schema sent to the model costs prompt tokens on *every* call.
 On an 8K-context local model, a 20-tool registry can eat a quarter of the
-window before any conversation happens. Codex's answer is deferred
-loading: heavy/rarely-used tools stay registered but unadvertised, and a
+window before any conversation happens. Deferred loading fixes that:
+heavy/rarely-used tools stay registered but unadvertised, and a
 lightweight ``tool_search`` tool lets the model discover and activate them
 on demand. Activated schemas appear on the very next model call.
 

@@ -1,4 +1,4 @@
-"""Schema-validated structured output for headless runs (codex --output-schema).
+"""Schema-validated structured output for headless runs.
 
 CI and scripts that consume agent output need a contract, not prose.
 ``superqode -p --output-schema schema.json "..."`` instructs the model to

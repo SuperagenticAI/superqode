@@ -373,7 +373,7 @@ class MCPAuthStorage:
 #
 # The dataclass-shaped MCPAuthStorage above is the file-system default.
 # This protocol lets callers (and tests) swap in a different backend
-# without changing call-sites. fast-agent uses the same pattern with
+# without changing call-sites. Other MCP clients use the same pattern with
 # InMemoryTokenStorage + KeyringTokenStorage; we expose the equivalent
 # so MCP servers requiring OAuth get keyring-backed storage on systems
 # that have it, falling back to the file store everywhere else.

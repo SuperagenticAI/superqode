@@ -1,4 +1,4 @@
-"""view_image: attach a local image to the conversation (codex parity).
+"""view_image: attach a local image to the conversation.
 
 Vision-capable models — including local multimodal ones like Gemma 4 —
 can inspect screenshots, UI mockups, diagrams, or rendered output. The tool

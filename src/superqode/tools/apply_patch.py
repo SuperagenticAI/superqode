@@ -1,6 +1,6 @@
-"""Codex-grammar ``apply_patch`` tool.
+"""Patch-envelope ``apply_patch`` tool.
 
-OpenAI's Codex models (GPT-5.x hosted, gpt-oss locally) are trained to emit
+Several model families (GPT-5.x hosted, gpt-oss locally) are trained to emit
 file edits in the ``*** Begin Patch`` envelope grammar rather than unified
 diffs. Supporting it natively means those models — increasingly common as
 *local* models via Ollama/MLX — can edit files in their preferred format
@@ -22,7 +22,7 @@ Grammar (one or more file sections inside the envelope):
     *** End of File                  (optional: hunk anchored at EOF)
     *** End Patch
 
-Context matching mirrors codex's seek semantics: exact first, then
+Context matching is deliberately forgiving: exact first, then
 trailing-whitespace-insensitive, then fully trimmed. The actual file lines
 are preserved for context rows, so a fuzzy match never rewrites untouched
 lines.
@@ -79,7 +79,7 @@ class FileOp:
 def extract_heredoc_patch(command: str) -> Optional[str]:
     """Extract a patch body from a shell ``apply_patch <<EOF`` invocation.
 
-    Codex-trained models often wrap the patch in a bash heredoc instead of
+    Models trained on this dialect often wrap the patch in a bash heredoc instead of
     calling the tool directly. Returns the patch text when the command is
     such an invocation, else None.
     """
@@ -295,7 +295,7 @@ def _get_workspace():
 
 
 class ApplyPatchTool(Tool):
-    """Apply a codex-format patch envelope (add/delete/update/move files)."""
+    """Apply a patch envelope (add/delete/update/move files)."""
 
     @property
     def name(self) -> str:

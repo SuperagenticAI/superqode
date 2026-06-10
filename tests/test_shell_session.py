@@ -1,4 +1,4 @@
-"""Tests for persistent interactive shell sessions (unified-exec parity)."""
+"""Tests for persistent interactive shell sessions."""
 
 import pytest
 
@@ -95,9 +95,7 @@ async def test_list_and_kill(tmp_path):
 @pytest.mark.asyncio
 async def test_unknown_session_and_action_errors(tmp_path):
     tool = ShellSessionTool()
-    missing = await tool.execute(
-        {"action": "poll", "session_id": "nope"}, _ctx(tmp_path)
-    )
+    missing = await tool.execute({"action": "poll", "session_id": "nope"}, _ctx(tmp_path))
     assert missing.success is False
     assert "No such session" in (missing.error or "")
 

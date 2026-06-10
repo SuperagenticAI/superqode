@@ -29,9 +29,7 @@ async def test_buffered_small_output_untouched(tmp_path):
 @pytest.mark.asyncio
 async def test_buffered_oversized_output_spills(tmp_path):
     ctx = _ctx(tmp_path, max_output_bytes=2000)
-    result = await BashTool().execute(
-        {"command": "seq 1 20000"}, ctx
-    )
+    result = await BashTool().execute({"command": "seq 1 20000"}, ctx)
     assert result.success
     assert "Full output saved to:" in result.output
     spilled = result.metadata.get("spilled_to")

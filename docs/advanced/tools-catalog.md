@@ -19,7 +19,7 @@ Profiles select which tools a session gets: `coding` (the lean default), `full` 
 |---|---|
 | `edit_file` | String replacement with a 10-strategy fallback ladder (exact → line-trimmed → block-anchor → whitespace-normalized → indentation-flexible → escape-normalized → trimmed-boundary → context-aware → line-number-stripped → multi-occurrence). Rejects edits to files modified externally since the last read. |
 | `patch` | Standard unified diffs (`git diff` format) with configurable context fuzz. |
-| `apply_patch` | The codex `*** Begin Patch` envelope that GPT-5.x and local gpt-oss models emit natively: Add/Delete/Update File, `*** Move to:` renames, `@@` locators, end-of-file anchors. Multi-file patches validate **fully before any write**, so a failed hunk in file 3 leaves files 1 and 2 untouched. Bash invocations of `apply_patch <<'EOF'` heredocs are intercepted and routed here automatically. |
+| `apply_patch` | The `*** Begin Patch` patch envelope that GPT-5.x and local gpt-oss models emit natively: Add/Delete/Update File, `*** Move to:` renames, `@@` locators, end-of-file anchors. Multi-file patches validate **fully before any write**, so a failed hunk in file 3 leaves files 1 and 2 untouched. Bash invocations of `apply_patch <<'EOF'` heredocs are intercepted and routed here automatically. |
 | `insert_text`, `multi_edit` | Line-targeted insert; several replacements in one call. |
 
 All edit paths share the same post-edit verification: fast per-file diagnostics (ruff/py_compile, eslint, gofmt, JSON/YAML) run after each change and feed findings back so the model self-corrects (`SUPERQODE_VERIFY_EDITS`, `SUPERQODE_FORMAT_ON_EDIT`).

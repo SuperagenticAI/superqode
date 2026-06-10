@@ -1,4 +1,4 @@
-"""Automatic memory extraction (codex memories pattern, opt-in).
+"""Automatic memory extraction (opt-in).
 
 After a completed run, a small extraction call distills durable,
 non-obvious facts from the conversation — user preferences ("use pnpm,

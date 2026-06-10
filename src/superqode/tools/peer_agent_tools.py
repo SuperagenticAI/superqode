@@ -1,6 +1,6 @@
 """Peer-agent tools: spawn_agent / send_input / wait_agent / list_agents / close_agent.
 
-Codex-parity multi-agent surface. Peers are long-lived AgentLoops owned by
+Multi-agent surface. Peers are long-lived AgentLoops owned by
 the top-level loop's :class:`~superqode.agent.peer_agents.PeerAgentManager`;
 ``send_input`` to a busy peer steers its live run, ``interrupt=true``
 cancels and redirects it. Only the top-level agent gets these tools — peers

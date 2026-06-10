@@ -79,9 +79,7 @@ def test_prune_protects_recent_tail():
         # Recent big tool output, inside the protected tail.
         AgentMessage(role="tool", content="Y" * 30_000, tool_call_id="1", name="grep"),
     ]
-    pruned, saved = loop._prune_stale_tool_outputs(
-        messages, _dicts(messages), keep_recent=50_000
-    )
+    pruned, saved = loop._prune_stale_tool_outputs(messages, _dicts(messages), keep_recent=50_000)
     assert saved == 0  # everything fits in the protected tail
 
 

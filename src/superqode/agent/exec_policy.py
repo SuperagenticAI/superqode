@@ -1,7 +1,6 @@
 """User-extensible exec policy: allow/deny/ask rules for shell commands.
 
-Codex ships a Starlark rule engine deciding which commands auto-approve.
-This is the superqode equivalent in plain YAML — declarative, shareable
+Declarative rules decide which commands auto-approve, in plain YAML — shareable
 with a team, and layered *with* (not instead of) the built-in safety
 checks: a user ``allow`` can skip the approval prompt, but it can never
 override a hard manager deny (dangerous-command guards stay supreme), and

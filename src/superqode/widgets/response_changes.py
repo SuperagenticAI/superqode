@@ -244,7 +244,7 @@ def render_diff_text(
     """Render a unified-diff string with addition/deletion coloring.
 
     Truncates long diffs with a "+N more lines" marker, matching the
-    pattern used in fast-agent's apply_patch preview.
+    pattern used by patch-preview UIs.
     """
     out = Text()
     if not diff_text:

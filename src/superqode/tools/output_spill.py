@@ -2,7 +2,7 @@
 
 Hard truncation loses exactly the bytes a model usually needs next (the
 failing assertion at the end of a test run, the one error line in a build
-log). Following the opencode/pi pattern, oversized output is written in
+log). Instead of discarding it, oversized output is written in
 full to a spill file and the model receives a bounded preview plus the
 path, so it can come back with ``read_file`` (start_line/end_line) or
 ``grep`` instead of re-running the command.

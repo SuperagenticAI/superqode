@@ -14,7 +14,7 @@ Without this, half the MCP server ecosystem is invisible to us:
 - A Notion MCP server can't ask "which database id?" before writing.
 - A Hugging Face MCP server can't ask "which model?" before searching.
 
-fast-agent supports this via two layers (``mcp/elicitation_handlers.py``
+Mature MCP clients support this via two layers (handler functions
 + ``mcp/elicitation_factory.py``). We mirror the public surface but
 keep the implementation a single module since SuperQode's TUI/CLI
 delegates form rendering to the host callback rather than to a forms
@@ -194,7 +194,7 @@ def elicitation_client_capabilities() -> Dict[str, Any]:
 
     Empty object signals "capability is present" without committing to
     any sub-fields (the spec leaves room for future expansion). This
-    is the same shape fast-agent ships."""
+    is the conventional shape MCP clients ship."""
     return {"elicitation": {}}
 
 

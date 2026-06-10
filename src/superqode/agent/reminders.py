@@ -1,4 +1,4 @@
-"""Synthetic per-call system reminders (opencode/Claude Code pattern).
+"""Synthetic per-call system reminders.
 
 Reminders are short ``<system-reminder>`` notes attached to the *outgoing
 request only* — they are never persisted into conversation history, so they
