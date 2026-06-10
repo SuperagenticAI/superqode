@@ -37,6 +37,10 @@
          <lastmod>2026-06-10</lastmod>
     </url>
     <url>
+         <loc>https://superagenticai.github.io/superqode/advanced/headless-ci/</loc>
+         <lastmod>2026-06-10</lastmod>
+    </url>
+    <url>
          <loc>https://superagenticai.github.io/superqode/advanced/local-context/</loc>
          <lastmod>2026-06-10</lastmod>
     </url>
@@ -62,6 +66,10 @@
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/advanced/monty-python-repl/</loc>
+         <lastmod>2026-06-10</lastmod>
+    </url>
+    <url>
+         <loc>https://superagenticai.github.io/superqode/advanced/multi-agent/</loc>
          <lastmod>2026-06-10</lastmod>
     </url>
     <url>
@@ -193,11 +201,19 @@
          <lastmod>2026-06-10</lastmod>
     </url>
     <url>
+         <loc>https://superagenticai.github.io/superqode/concepts/configuration-vs-harness/</loc>
+         <lastmod>2026-06-10</lastmod>
+    </url>
+    <url>
          <loc>https://superagenticai.github.io/superqode/concepts/modes/</loc>
          <lastmod>2026-06-10</lastmod>
     </url>
     <url>
          <loc>https://superagenticai.github.io/superqode/configuration/</loc>
+         <lastmod>2026-06-10</lastmod>
+    </url>
+    <url>
+         <loc>https://superagenticai.github.io/superqode/configuration/environment-variables/</loc>
          <lastmod>2026-06-10</lastmod>
     </url>
     <url>
