@@ -42,6 +42,8 @@ class LSPTool(Tool):
     - call_hierarchy: Get incoming/outgoing function calls
     """
 
+    read_only = True
+
     # Supported LSP operations
     OPERATIONS = [
         "goto_definition",

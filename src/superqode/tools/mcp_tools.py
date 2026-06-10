@@ -25,6 +25,8 @@ from ..mcp.search import BM25Search, MCPToolMatch
 class MCPSearchTool(Tool):
     """Search available MCP tools by relevance using BM25 ranking."""
 
+    read_only = True
+
     def __init__(self, mcp_manager_getter=None):
         """
         Initialize MCP search tool.
@@ -301,6 +303,8 @@ Example: Execute web_search on exa server with query argument."""
 class MCPListResourcesTool(Tool):
     """List resources exposed by connected MCP servers."""
 
+    read_only = True
+
     def __init__(self, mcp_manager_getter=None):
         self._mcp_manager_getter = mcp_manager_getter
 
@@ -378,6 +382,8 @@ class MCPListResourcesTool(Tool):
 class MCPReadResourceTool(Tool):
     """Read a resource from an MCP server."""
 
+    read_only = True
+
     def __init__(self, mcp_manager_getter=None):
         self._mcp_manager_getter = mcp_manager_getter
 
@@ -435,6 +441,8 @@ class MCPReadResourceTool(Tool):
 
 class MCPListPromptsTool(Tool):
     """List prompt templates exposed by connected MCP servers."""
+
+    read_only = True
 
     def __init__(self, mcp_manager_getter=None):
         self._mcp_manager_getter = mcp_manager_getter
@@ -510,6 +518,8 @@ class MCPListPromptsTool(Tool):
 
 class MCPGetPromptTool(Tool):
     """Expand a prompt template from an MCP server."""
+
+    read_only = True
 
     def __init__(self, mcp_manager_getter=None):
         self._mcp_manager_getter = mcp_manager_getter

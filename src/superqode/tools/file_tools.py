@@ -37,7 +37,53 @@ def _get_workspace():
 
 
 class ReadFileTool(Tool):
-    """Read file contents. Simple, no magic."""
+    """Read file contents with context-economy guards.
+
+    Local models live or die by context budget, so reads are bounded by
+    default (line and byte caps), every line is prefixed with its number
+    for unambiguous follow-up ranges, overlong lines are clamped, and
+    binary/image files are rejected with a clear message instead of a
+    decode traceback. Truncated reads tell the model exactly how to
+    continue (``start_line`` of the next unread line).
+    """
+
+    DEFAULT_MAX_LINES = 2000
+    DEFAULT_MAX_BYTES = 50_000
+    MAX_LINE_CHARS = 2000
+    # Above this size we skip total-line counting to keep reads fast.
+    LARGE_FILE_BYTES = 5 * 1024 * 1024
+
+    _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".tiff"}
+    _BINARY_SUFFIXES = {
+        ".pdf",
+        ".zip",
+        ".tar",
+        ".gz",
+        ".bz2",
+        ".xz",
+        ".7z",
+        ".so",
+        ".dylib",
+        ".dll",
+        ".exe",
+        ".bin",
+        ".o",
+        ".a",
+        ".class",
+        ".pyc",
+        ".woff",
+        ".woff2",
+        ".ttf",
+        ".otf",
+        ".mp3",
+        ".mp4",
+        ".mov",
+        ".avi",
+        ".sqlite",
+        ".db",
+    }
+
+    read_only = True
 
     @property
     def name(self) -> str:
@@ -45,8 +91,13 @@ class ReadFileTool(Tool):
 
     @property
     def description(self) -> str:
-        # Minimal description - let the model figure out when to use it
-        return "Read the contents of a file."
+        return (
+            "Read the contents of a text file. Returns up to "
+            f"{self.DEFAULT_MAX_LINES} lines, each prefixed with its line number as "
+            "'N: content' (the prefix is not part of the file). For longer files, "
+            "call again with start_line set to the next unread line. Use grep to "
+            "locate content in very large files."
+        )
 
     @property
     def parameters(self) -> Dict[str, Any]:
@@ -66,10 +117,27 @@ class ReadFileTool(Tool):
             "required": ["path"],
         }
 
+    @staticmethod
+    def _looks_binary(sample: bytes) -> bool:
+        if b"\x00" in sample:
+            return True
+        if not sample:
+            return False
+        # High ratio of non-text bytes => binary. Tolerates UTF-8 multibyte.
+        text_bytes = sum(1 for b in sample if 32 <= b < 127 or b in (9, 10, 13) or b >= 128)
+        return (text_bytes / len(sample)) < 0.70
+
     async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
-        path = args.get("path", "")
-        start_line = args.get("start_line")
+        # Accept the aliases other harnesses use (Claude Code: file_path/offset/
+        # limit) — local models trained on those traces emit them routinely.
+        path = args.get("path") or args.get("file_path") or args.get("filename") or ""
+        start_line = args.get("start_line", args.get("offset"))
         end_line = args.get("end_line")
+        if end_line is None and args.get("limit") is not None:
+            try:
+                end_line = (int(start_line) if start_line else 1) + int(args["limit"]) - 1
+            except (TypeError, ValueError):
+                end_line = None
 
         try:
             # Reads may also target configured read-only search roots, so a
@@ -85,7 +153,33 @@ class ReadFileTool(Tool):
                     success=False, output="", error=f"Path is a directory, not a file: {path}"
                 )
 
-            content = file_path.read_text()
+            suffix = file_path.suffix.lower()
+            file_size = file_path.stat().st_size
+            if suffix in self._IMAGE_SUFFIXES:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=(
+                        f"{path} is an image ({suffix}, {file_size:,} bytes). "
+                        "This tool reads text files only."
+                    ),
+                )
+            if suffix in self._BINARY_SUFFIXES:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=(
+                        f"{path} is a binary file ({suffix}, {file_size:,} bytes) "
+                        "and cannot be read as text."
+                    ),
+                )
+            with open(file_path, "rb") as fh:
+                if self._looks_binary(fh.read(4096)):
+                    return ToolResult(
+                        success=False,
+                        output="",
+                        error=f"{path} appears to be a binary file ({file_size:,} bytes) and cannot be read as text.",
+                    )
 
             # Record file read time for edit-conflict detection
             try:
@@ -97,17 +191,95 @@ class ReadFileTool(Tool):
             except OSError:
                 pass
 
-            # Handle line range if specified
-            if start_line is not None or end_line is not None:
-                lines = content.split("\n")
-                start = (start_line - 1) if start_line else 0
-                end = end_line if end_line else len(lines)
-                content = "\n".join(lines[start:end])
+            try:
+                start = max(1, int(start_line)) if start_line else 1
+            except (TypeError, ValueError):
+                start = 1
+            try:
+                end_requested = int(end_line) if end_line else None
+            except (TypeError, ValueError):
+                end_requested = None
+
+            max_lines = self.DEFAULT_MAX_LINES
+            if end_requested is not None:
+                max_lines = min(max_lines, max(1, end_requested - start + 1))
+            byte_cap = getattr(ctx, "max_output_bytes", None) or self.DEFAULT_MAX_BYTES
+            byte_cap = min(byte_cap, self.DEFAULT_MAX_BYTES)
+
+            numbered: list[str] = []
+            used_bytes = 0
+            line_no = 0
+            returned_last = 0
+            hit_line_cap = False
+            hit_byte_cap = False
+            clamped_lines = 0
+            with open(file_path, "r", encoding="utf-8", errors="replace") as fh:
+                for raw_line in fh:
+                    line_no += 1
+                    if line_no < start:
+                        continue
+                    if len(numbered) >= max_lines:
+                        hit_line_cap = True
+                        break
+                    text = raw_line.rstrip("\n")
+                    if len(text) > self.MAX_LINE_CHARS:
+                        text = text[: self.MAX_LINE_CHARS] + "… [line truncated]"
+                        clamped_lines += 1
+                    entry = f"{line_no}: {text}"
+                    entry_bytes = len(entry.encode("utf-8", errors="replace")) + 1
+                    if used_bytes + entry_bytes > byte_cap and numbered:
+                        hit_byte_cap = True
+                        break
+                    numbered.append(entry)
+                    used_bytes += entry_bytes
+                    returned_last = line_no
+                # Count remaining lines for accurate guidance (skip on huge files).
+                total_lines: Optional[int] = line_no
+                if hit_line_cap or hit_byte_cap:
+                    if file_size <= self.LARGE_FILE_BYTES:
+                        for _ in fh:
+                            line_no += 1
+                        total_lines = line_no
+                    else:
+                        total_lines = None
+
+            if not numbered:
+                if line_no == 0:
+                    return ToolResult(
+                        success=True,
+                        output="[File is empty]",
+                        metadata={"path": str(file_path), "total_lines": 0},
+                    )
+                if start > line_no:
+                    return ToolResult(
+                        success=False,
+                        output="",
+                        error=(f"start_line {start} is past the end of {path} ({line_no} lines)."),
+                    )
+
+            output = "\n".join(numbered)
+            truncated = hit_line_cap or hit_byte_cap
+            if truncated:
+                total_text = f"of {total_lines:,} total lines " if total_lines else ""
+                reason = "line limit" if hit_line_cap else "size limit"
+                output += (
+                    f"\n\n[Showing lines {start}-{returned_last} {total_text}({reason} reached). "
+                    f'Continue with read_file(path="{path}", start_line={returned_last + 1}).]'
+                )
+            if clamped_lines:
+                output += f"\n[{clamped_lines} overlong line(s) clamped to {self.MAX_LINE_CHARS} chars; use grep for full content.]"
 
             return ToolResult(
                 success=True,
-                output=content,
-                metadata={"path": str(file_path), "size": len(content)},
+                output=output,
+                metadata={
+                    "path": str(file_path),
+                    "size": file_size,
+                    "start_line": start,
+                    "end_line": returned_last,
+                    "total_lines": total_lines,
+                    "truncated": truncated,
+                },
             )
 
         except Exception as e:
@@ -276,6 +448,8 @@ class CreateFileTool(Tool):
 
 class ListDirectoryTool(Tool):
     """List directory contents."""
+
+    read_only = True
 
     @property
     def name(self) -> str:

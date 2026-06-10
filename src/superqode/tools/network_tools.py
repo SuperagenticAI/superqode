@@ -72,6 +72,8 @@ class FetchTool(Tool):
     - No file:// URLs
     """
 
+    read_only = True
+
     DEFAULT_TIMEOUT = 30
     MAX_SIZE = 1024 * 1024  # 1MB default limit
     USER_AGENT = (

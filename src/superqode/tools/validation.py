@@ -136,6 +136,19 @@ def validate_path_in_search_scope(
         pass
 
     roots = list(search_roots) if search_roots is not None else get_configured_search_roots()
+
+    # Spilled tool output (oversized bash/tool results saved to disk) is always
+    # readable - the truncation notice points the model at these paths. Kept
+    # out of get_configured_search_roots() so it never shows up in prompts or
+    # workspace listings.
+    try:
+        from .output_spill import get_spill_dir
+
+        spill = get_spill_dir()
+        if spill.is_dir():
+            roots.append(spill)
+    except Exception:
+        pass
     if not roots:
         # No extra roots configured — re-raise the original, clearer error.
         return validate_path_in_working_directory(path, working_directory)

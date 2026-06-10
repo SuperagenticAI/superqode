@@ -5,6 +5,36 @@ All notable changes to SuperQode will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`apply_patch` (codex grammar)** — native support for the `*** Begin Patch` envelope format that GPT-5.x and local gpt-oss models are trained to emit: Add/Delete/Update File, `*** Move to:` renames, `@@` locators, EOF anchors, multi-file patches with all-or-nothing validation, fuzzy context matching (exact → trailing-whitespace → trimmed), markdown-fence/prose stripping, and workspace + post-edit-verification integration. Bash invocations of `apply_patch <<EOF` heredocs are intercepted and routed to the real tool. Registered in every tool profile.
+- **`shell_session` (interactive processes)** — codex unified_exec adapted: open persistent PTY-backed processes (REPLs, dev servers, debuggers, prompts), `write` to stdin, `poll` new output, `list`, `kill`. Bounded per-call waits with early return on settled output, 2MB rolling buffers with spill-to-disk on return, session reaping, and atexit cleanup so no orphan processes outlive superqode.
+- **`view_image` (multimodal context)** — attach local png/jpg/gif/webp files to the conversation as OpenAI-style `image_url` parts for vision-capable models (including local multimodal models like Gemma 4). Image attachments are token-counted at a flat charge instead of their base64 length, stripped before LLM summarization, and pruned (pixels only) once they age out of the protected context window.
+- **In-run steering** — `AgentLoop.steer()` injects user messages between iterations of a *live* run (and keeps the run going if a message arrives as the model finishes), instead of waiting for the whole run to complete. Thread-safe; peers and UIs share the same mechanism.
+- **Auto-continue on token-limit cuts** — when a response stops with `finish_reason="length"`, the loop asks the model to continue from exactly where it stopped (default 2 continues, `max_auto_continues`), joining the parts into one answer; streaming continues seamlessly.
+- **System reminders** — synthetic `<system-reminder>` notes attached to outgoing requests only (never persisted): files changed externally since last read (each change announced once), and stale-todo nudges (rate-limited). `SUPERQODE_REMINDERS=0` disables.
+- **Deferred tool loading + `tool_search`** — `SUPERQODE_DEFERRED_TOOLS=auto|all|<names>` hides heavy tool schemas (web, images, sessions, LSP, MCP, agents) from the prompt until the model activates them via a lexical `tool_search`; activated schemas appear on the next call. `auto` applies only to local providers, where schema budget matters most.
+- **Peer agents** — codex-parity multi-agent suite: `spawn_agent`, `send_input` (steers a busy peer's live run; `interrupt=true` cancels and redirects), `wait_agent`, `list_agents`, `close_agent`. Peers are long-lived AgentLoops with their own context; one level deep (peers cannot spawn peers).
+- **Background bash** — `bash` gains `run_in_background`: starts the command as a persistent session and returns its `session_id` immediately for later `shell_session` poll/write/kill.
+- **Turn diff** — per-turn aggregate of file changes ("Turn changed 3 file(s) (+45/-12): …") emitted to the thinking trace; the combined diff is retained on `AgentLoop.last_turn_diff` for UIs and hooks.
+- **Shell env policy** — `SUPERQODE_SHELL_ENV_POLICY=filter-secrets` strips secret-looking variables (`*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, …) from model-spawned commands, with `SUPERQODE_SHELL_ENV_ALLOW` exceptions.
+- **Exec policy rules** — declarative allow/deny/ask rules for shell commands in `.superqode/execpolicy.yaml` (project), `~/.superqode/execpolicy.yaml` (user), or `SUPERQODE_EXEC_POLICY` (explicit): glob or `re:` patterns, first match wins. User `allow` skips the prompt but can never override built-in dangerous-command denies.
+- **Automatic memory (opt-in)** — `SUPERQODE_AUTO_MEMORY=1` extracts durable preferences/facts/decisions from completed runs in a background task and stores them in the local memory provider (deduplicated, tagged `auto`), where `:memory search` already looks.
+
+- **Spill-to-disk tool output** — oversized bash/tool output is saved in full to `~/.superqode/tool-output` (7-day retention, `SUPERQODE_TOOL_OUTPUT_DIR` to relocate); the model gets a head/tail preview plus the file path and can `read_file`/`grep` the rest instead of re-running the command. A loop-level guard applies the same bound to tools that don't self-limit (MCP, web). Spilled paths are always readable by read/search tools.
+- **Bounded, numbered reads** — `read_file` returns up to 2000 lines / 50KB by default with `N: ` line-number prefixes, clamps overlong lines (minified JS), rejects binary/image files with a clear message, and tells the model exactly how to continue (`start_line=<next>`); accepts `file_path`/`offset`/`limit` aliases that local models trained on other harnesses emit. Edit matching gains a fallback that strips pasted line-number prefixes.
+- **Doom-loop guard** — the Nth consecutive identical tool call (default 3; `doom_loop_threshold` / `SUPERQODE_DOOM_LOOP_THRESHOLD`) is intercepted with corrective feedback instead of executing again; if the model immediately repeats the same call, the run stops with `stopped_reason="loop_detected"`.
+- **Tool-argument repair** — malformed tool-call arguments (markdown fences, Python-dict syntax, trailing commas, double-encoded JSON, prose around the object) are repaired; unrecoverable arguments return a corrective error to the model instead of silently executing the tool with `{}`.
+- **Rate-limit retry** — transient overload errors (429/503/529/overloaded) retry with exponential backoff, honoring `Retry-After`/`retry-after-ms` headers (`SUPERQODE_RATE_LIMIT_RETRIES`, default 3); long provider-requested pauses surface instead of hanging the session.
+- **Tool-output pruning** — a free pre-compaction stage stubs stale tool outputs older than the protected recent window before paying for LLM summarization (the current turn's results are always protected); often avoids the summarization call entirely on local models.
+
+### Changed
+
+- **Mutation-safe parallel tools** — tools now carry a `read_only` flag; a turn's tool calls run concurrently only when every call is read-only. Any batch containing an edit/write/bash/MCP call runs sequentially in call order, so concurrent file mutations can no longer race.
+- **Streaming bash drains to EOF** — output beyond the model-sized cap no longer stops the reader (which could deadlock chatty processes on full pipes); streams are drained, the full output (up to 5MB) is spilled, and the preview stays bounded.
+
 ## [0.1.40] - 2026-06-09
 
 ### Added

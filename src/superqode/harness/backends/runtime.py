@@ -257,6 +257,7 @@ def _create_runtime_for_request(
         session_storage_dir=request.spec.context.session_storage,
         session_id=request.session_id,
         session_history_limit=model_policy.session_history_limit,
+        tool_call_format=model_policy.tool_call_format,
     )
     callbacks = {}
     hook_kwargs = {}

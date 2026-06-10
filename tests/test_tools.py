@@ -144,7 +144,8 @@ class TestReadFileTool:
         result = await tool.execute({"path": "test.txt"}, tool_context)
 
         assert result.success
-        assert result.output == "Hello, World!"
+        # Output is line-numbered ('N: content') for unambiguous follow-ups.
+        assert result.output == "1: Hello, World!"
 
     @pytest.mark.asyncio
     async def test_read_nonexistent_file(self, temp_dir, tool_context):
@@ -167,7 +168,9 @@ class TestReadFileTool:
         )
 
         assert result.success
-        assert result.output == "line2\nline3\nline4"
+        # Numbered range, plus a continuation note since the file has more lines.
+        assert result.output.splitlines()[:3] == ["2: line2", "3: line3", "4: line4"]
+        assert "start_line=5" in result.output
 
 
 class TestWriteFileTool:

@@ -227,6 +227,8 @@ class WebSearchTool(Tool):
     - Search type options (fast, deep)
     """
 
+    read_only = True
+
     USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     DEFAULT_TIMEOUT = 15
     MAX_RESULTS = 10
@@ -509,6 +511,8 @@ class WebFetchTool(Tool):
     - Optional summarization
     - Configurable output format
     """
+
+    read_only = True
 
     USER_AGENT = (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "

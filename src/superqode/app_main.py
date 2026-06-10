@@ -4783,7 +4783,37 @@ class SuperQodeApp(App):
     # ========================================================================
 
     def _enqueue_message(self, text: str) -> None:
-        """Queue a message to send once the agent is free, with a live preview."""
+        """Deliver a message typed while the agent works.
+
+        Builtin (local/BYOK) runs accept live steering: the message is
+        injected between the agent's tool calls and shapes the *current* run.
+        Anything else (ACP/codex connections, selection flows) falls back to
+        the type-ahead queue that sends when the agent is free.
+        """
+        pure = getattr(self, "_pure_mode", None)
+        if (
+            pure is not None
+            and not self._in_selection_mode()
+            and not getattr(self, "_awaiting_agent_question", False)
+        ):
+            try:
+                if pure.steer(text):
+                    try:
+                        self.query_one("#prompt-input", SelectionAwareInput).value = ""
+                    except Exception:
+                        pass
+                    try:
+                        log = self.query_one("#log", ConversationLog)
+                        preview = " ".join(str(text).split())
+                        if len(preview) > 70:
+                            preview = preview[:67].rstrip() + "..."
+                        log.add_info(f"↪ steering the current run: {preview}")
+                    except Exception:
+                        pass
+                    return
+            except Exception:
+                pass
+
         if not hasattr(self, "_typeahead_queue"):
             self._typeahead_queue = []
         self._typeahead_queue.append(text)

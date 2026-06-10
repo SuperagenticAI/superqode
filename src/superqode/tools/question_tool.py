@@ -85,6 +85,8 @@ class QuestionTool(Tool):
     pauses until the user responds.
     """
 
+    read_only = True
+
     @property
     def name(self) -> str:
         return "ask_user"
@@ -243,6 +245,8 @@ class ConfirmTool(Tool):
     Simplified version of ask_user for yes/no confirmations.
     Use for confirming risky or irreversible operations.
     """
+
+    read_only = True
 
     @property
     def name(self) -> str:

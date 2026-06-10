@@ -53,7 +53,7 @@ class EditFileTool(Tool):
 
 Usage:
 - Use read_file at least once before editing. The tool will error if the file was modified externally since last read.
-- When editing text from read_file output, preserve exact indentation. If the output uses a line-number prefix (e.g. spaces + line number + tab), everything after the tab is the actual file content to match. Never include the line-number prefix in old_text or new_text.
+- When editing text from read_file output, preserve exact indentation. read_file prefixes each line with 'N: ' (line number, colon, space) — that prefix is NOT part of the file. Never include it in old_text or new_text.
 - Prefer editing existing files. Only create new files when explicitly required.
 - The edit will FAIL if old_text is not found (error: 'old_string not found in content').
 - The edit will FAIL if old_text matches multiple times. Provide more surrounding lines to make it unique, or use replace_all=true to change every instance.

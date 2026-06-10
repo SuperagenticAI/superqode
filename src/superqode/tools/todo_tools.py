@@ -127,6 +127,8 @@ class TodoWriteTool(Tool):
 class TodoReadTool(Tool):
     """Read the current TODO list for the session."""
 
+    read_only = True
+
     @property
     def name(self) -> str:
         return "todo_read"

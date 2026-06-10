@@ -26,6 +26,15 @@ def get_file_read_mtime(session_id: str, path: str) -> Optional[float]:
     return _file_read_times.get((session_id, resolved))
 
 
+def list_session_reads(session_id: str) -> Dict[str, float]:
+    """All (path -> mtime-at-read) records for a session.
+
+    Used by the reminder system to detect files changed externally since the
+    agent last read them.
+    """
+    return {path: mtime for (sid, path), mtime in _file_read_times.items() if sid == session_id}
+
+
 def check_file_unchanged(
     session_id: str, path: str, current_mtime: float
 ) -> Tuple[bool, Optional[str]]:

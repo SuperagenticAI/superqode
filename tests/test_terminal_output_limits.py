@@ -102,8 +102,11 @@ def test_bash_effective_cap_honors_ctx_value(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_bash_truncates_to_ctx_cap(tmp_path):
+async def test_bash_truncates_to_ctx_cap(tmp_path, monkeypatch):
     """End-to-end: a small ctx cap should truncate real bash output."""
+    from superqode.tools import output_spill
+
+    monkeypatch.setenv(output_spill.SPILL_DIR_ENV, str(tmp_path / "spill"))
     tool = BashTool(git_guard_enabled=False)
     ctx = _make_ctx(tmp_path, max_output_bytes=512)
     # Generate ~3 KB of output - well over our 512 B cap.
@@ -112,12 +115,14 @@ async def test_bash_truncates_to_ctx_cap(tmp_path):
         ctx,
     )
     assert result.success
-    # Truncation notice should appear; total length stays within cap + notice.
-    assert "Output truncated at 512 bytes" in result.output
-    # The actual content cap is enforced; only the truncation suffix is added on top.
-    truncation_marker = "\n\n[Output truncated at 512 bytes]"
-    content_before_marker = result.output.split(truncation_marker)[0]
-    assert len(content_before_marker) <= 512
+    # Truncation notice appears, and the full output is spilled to disk so
+    # nothing is lost (head/tail preview + path for follow-up reads).
+    assert "Command output truncated" in result.output
+    assert result.metadata.get("spilled_to")
+    spilled = open(result.metadata["spilled_to"]).read()
+    assert "x" * 3000 in spilled
+    # Preview stays near the cap (cap + head/tail floors + notice), far below the raw 3KB.
+    assert len(result.output.encode()) < 1600
 
 
 @pytest.mark.asyncio

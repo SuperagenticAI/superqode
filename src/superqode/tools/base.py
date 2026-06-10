@@ -60,6 +60,12 @@ class ToolContext:
     # use their built-in defaults. Populated by AgentLoop via
     # agent.terminal_output_limits.calculate_terminal_output_limit_for_model.
     max_output_bytes: Optional[int] = None
+    # Peer-agent manager (spawn_agent/send_input/wait_agent/...). Set only for
+    # the top-level loop; None inside sub-agents so peers cannot spawn peers.
+    peer_manager: Optional[Any] = None
+    # Permission manager, for tools that interact with the approval flow
+    # (request_permissions). Set by the agent loop.
+    permission_manager: Optional[Any] = None
 
     async def emit_output(self, text: str) -> None:
         """Emit output to the callback if set."""
@@ -117,6 +123,12 @@ class Tool(ABC):
     - Opinionated formatting
     """
 
+    # True for tools that cannot mutate files, project state, or the
+    # environment. The agent loop only parallelizes batches in which every
+    # call is read-only; anything else runs sequentially in call order so
+    # concurrent mutations can never race. Unknown tools default to False.
+    read_only: bool = False
+
     @property
     @abstractmethod
     def name(self) -> str:
@@ -163,22 +175,60 @@ class ToolRegistry:
     """Registry of available tools.
 
     Simple dict-based registry. No magic, no auto-discovery.
+
+    Deferred tools: ``defer()`` keeps a tool registered and executable but
+    excludes its schema from what is advertised to the model until
+    ``activate()`` is called (normally by the tool_search tool). ``version``
+    increments on every visibility change so callers can cache derived
+    schema lists cheaply.
     """
 
     def __init__(self):
         self._tools: Dict[str, Tool] = {}
+        self._deferred: set[str] = set()
+        self.version: int = 0
 
     def register(self, tool: Tool) -> None:
         """Register a tool."""
         self._tools[tool.name] = tool
+        self.version += 1
 
     def get(self, name: str) -> Optional[Tool]:
         """Get a tool by name."""
         return self._tools.get(name)
 
     def list(self) -> List[Tool]:
-        """List all registered tools."""
+        """List all registered tools (active and deferred)."""
         return list(self._tools.values())
+
+    def defer(self, *names: str) -> int:
+        """Hide the named tools' schemas until activated. Returns count hidden."""
+        count = 0
+        for name in names:
+            if name in self._tools and name not in self._deferred:
+                self._deferred.add(name)
+                count += 1
+        if count:
+            self.version += 1
+        return count
+
+    def activate(self, name: str) -> bool:
+        """Expose a deferred tool's schema to the model again."""
+        if name in self._deferred:
+            self._deferred.discard(name)
+            self.version += 1
+            return True
+        return False
+
+    def deferred_names(self) -> List[str]:
+        return sorted(self._deferred)
+
+    def deferred_tools(self) -> List[Tool]:
+        return [self._tools[n] for n in sorted(self._deferred) if n in self._tools]
+
+    def active_tools(self) -> List[Tool]:
+        """Tools whose schemas are advertised to the model."""
+        return [t for n, t in self._tools.items() if n not in self._deferred]
 
     def filtered(self, allowed_tools: List[str]) -> "ToolRegistry":
         """Create a registry containing only the named tools that exist."""
@@ -187,11 +237,13 @@ class ToolRegistry:
         for name, tool in self._tools.items():
             if name in allowed:
                 registry.register(tool)
+                if name in self._deferred:
+                    registry.defer(name)
         return registry
 
     def to_openai_format(self) -> List[Dict[str, Any]]:
-        """Get all tools in OpenAI format."""
-        return [tool.to_openai_format() for tool in self._tools.values()]
+        """Get active (non-deferred) tools in OpenAI format."""
+        return [tool.to_openai_format() for tool in self.active_tools()]
 
     @classmethod
     def empty(cls) -> "ToolRegistry":
@@ -237,7 +289,10 @@ class ToolRegistry:
         """
         from .file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
         from .edit_tools import EditFileTool, InsertTextTool, PatchTool, MultiEditTool
+        from .apply_patch import ApplyPatchTool
         from .shell_tools import BashTool
+        from .shell_session import ShellSessionTool
+        from .image_tools import ViewImageTool
         from .search_tools import GrepTool, GlobTool, CodeSearchTool, RepoSearchTool
         from .question_tool import QuestionTool, ConfirmTool
         from .todo_tools import TodoWriteTool, TodoReadTool
@@ -257,12 +312,14 @@ class ToolRegistry:
         registry.register(InsertTextTool())
         registry.register(PatchTool())
         registry.register(MultiEditTool())
+        registry.register(ApplyPatchTool())
 
         registry.register(TodoWriteTool())
         registry.register(TodoReadTool())
         registry.register(BatchTool())
 
         registry.register(BashTool())
+        registry.register(ShellSessionTool())
         registry.register(GrepTool())
         registry.register(GlobTool())
         registry.register(RepoSearchTool())
@@ -273,6 +330,7 @@ class ToolRegistry:
 
         registry.register(WebSearchTool())
         registry.register(WebFetchTool())
+        registry.register(ViewImageTool())
 
         registry.register(QuestionTool())
         registry.register(ConfirmTool())
@@ -290,6 +348,7 @@ class ToolRegistry:
         """
         from .file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
         from .edit_tools import EditFileTool, PatchTool
+        from .apply_patch import ApplyPatchTool
         from .shell_tools import BashTool
         from .search_tools import GrepTool, GlobTool, RepoSearchTool, CodeSearchTool
         from .question_tool import QuestionTool, ConfirmTool
@@ -304,6 +363,7 @@ class ToolRegistry:
 
         registry.register(EditFileTool())
         registry.register(PatchTool())
+        registry.register(ApplyPatchTool())
 
         registry.register(TodoWriteTool())
         registry.register(TodoReadTool())
@@ -342,7 +402,10 @@ class ToolRegistry:
         """Create registry with all available tools."""
         from .file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
         from .edit_tools import EditFileTool, InsertTextTool, PatchTool, MultiEditTool
+        from .apply_patch import ApplyPatchTool
         from .shell_tools import BashTool
+        from .shell_session import ShellSessionTool
+        from .image_tools import ViewImageTool
         from .search_tools import GrepTool, GlobTool, CodeSearchTool, RepoSearchTool
         from .diagnostics import DiagnosticsTool
         from .network_tools import FetchTool, DownloadTool
@@ -367,6 +430,7 @@ class ToolRegistry:
         registry.register(InsertTextTool())
         registry.register(PatchTool())
         registry.register(MultiEditTool())
+        registry.register(ApplyPatchTool())
 
         # TODO management
         registry.register(TodoWriteTool())
@@ -377,6 +441,7 @@ class ToolRegistry:
 
         # Shell
         registry.register(BashTool())
+        registry.register(ShellSessionTool())
 
         # Search (basic + semantic)
         registry.register(GrepTool())
@@ -399,9 +464,32 @@ class ToolRegistry:
         registry.register(WebSearchTool())
         registry.register(WebFetchTool())
 
+        # Visual inspection for vision-capable models
+        registry.register(ViewImageTool())
+
         # Agent tools
         registry.register(SubAgentTool())
         registry.register(TaskCoordinatorTool())
+
+        # Peer agents (long-lived, addressable child agents)
+        from .peer_agent_tools import (
+            CloseAgentTool,
+            ListAgentsTool,
+            SendInputTool,
+            SpawnAgentTool,
+            WaitAgentTool,
+        )
+
+        registry.register(SpawnAgentTool())
+        registry.register(SendInputTool())
+        registry.register(WaitAgentTool())
+        registry.register(ListAgentsTool())
+        registry.register(CloseAgentTool())
+
+        # Permission escalation (model asks, user decides)
+        from .request_permissions_tool import RequestPermissionsTool
+
+        registry.register(RequestPermissionsTool())
 
         # LSP tools
         registry.register(LSPTool())
@@ -447,7 +535,10 @@ class ToolRegistry:
         """Create registry with standard tools (no network/agent)."""
         from .file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
         from .edit_tools import EditFileTool, InsertTextTool, PatchTool, MultiEditTool
+        from .apply_patch import ApplyPatchTool
         from .shell_tools import BashTool
+        from .shell_session import ShellSessionTool
+        from .image_tools import ViewImageTool
         from .search_tools import GrepTool, GlobTool, CodeSearchTool, RepoSearchTool
         from .diagnostics import DiagnosticsTool
         from .lsp_tools import LSPTool
@@ -469,6 +560,7 @@ class ToolRegistry:
         registry.register(InsertTextTool())
         registry.register(PatchTool())
         registry.register(MultiEditTool())
+        registry.register(ApplyPatchTool())
 
         # TODO management
         registry.register(TodoWriteTool())

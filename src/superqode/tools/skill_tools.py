@@ -17,6 +17,8 @@ from ..skills import SkillsLoader, Skill, get_skills_loader
 class SkillTool(Tool):
     """Tool to list and invoke available skills."""
 
+    read_only = True
+
     def __init__(self, skills_loader: Optional[SkillsLoader] = None):
         self._loader = skills_loader
         self._workspace = Path.cwd()
@@ -185,6 +187,8 @@ Example:
 
 class ReadSkillTool(Tool):
     """Tool to read a skill file directly."""
+
+    read_only = True
 
     def __init__(self, skills_loader: Optional[SkillsLoader] = None):
         self._loader = skills_loader

@@ -140,12 +140,30 @@ async def run_headless(
     fork_from: Optional[str] = None,
     sandbox_backend: str = "local",
     runtime: Optional[str] = None,
+    output_schema: Optional[Path] = None,
+    rubric: Optional[str] = None,
 ) -> AgentResponse:
-    """Run a single non-interactive SuperQode request."""
+    """Run a single non-interactive SuperQode request.
+
+    ``output_schema`` pins the final answer to a JSON Schema: the schema is
+    embedded in the prompt, the final message is parsed and validated, and
+    one corrective retry runs on failure. The outcome lands on
+    ``response.structured_output`` / ``response.schema_errors``.
+
+    ``rubric`` enables self-grading: a grader call judges the answer against
+    the rubric and "needs_revision" feedback re-enters the loop.
+    """
     profiles = get_harness_profiles()
     if profile_name not in profiles:
         valid = ", ".join(sorted(profiles))
         raise ValueError(f"Unknown profile '{profile_name}'. Valid profiles: {valid}")
+
+    schema: Optional[Dict[str, Any]] = None
+    if output_schema is not None:
+        from .agent.structured_output import load_schema, schema_instruction
+
+        schema = load_schema(Path(output_schema))
+        prompt = prompt + schema_instruction(schema)
 
     profile = profiles[profile_name]
     storage_dir = ".superqode/sessions"
@@ -183,6 +201,7 @@ async def run_headless(
         enable_session_storage=True,
         session_storage_dir=storage_dir,
         session_id=session_id,
+        rubric=rubric,
     )
 
     runtime_obj = create_runtime(
@@ -197,7 +216,18 @@ async def run_headless(
         ),
     )
     try:
-        return await runtime_obj.run(prompt)
+        response = await runtime_obj.run(prompt)
+        if schema is not None:
+            from .agent.structured_output import check_output, correction_prompt
+
+            payload, errors = check_output(response.content, schema)
+            if errors:
+                # One corrective retry; session storage keeps the context.
+                response = await runtime_obj.run(correction_prompt(errors, schema))
+                payload, errors = check_output(response.content, schema)
+            response.structured_output = payload
+            response.schema_errors = errors
+        return response
     finally:
         if worktree_info:
             from .workspace.worktree import GitWorktreeManager
@@ -286,8 +316,10 @@ def export_session(
             ensure_ascii=False,
             indent=2,
         )
+    if fmt == "html":
+        return _render_session_html(metadata, messages)
     if fmt != "markdown":
-        raise ValueError("format must be markdown or json")
+        raise ValueError("format must be markdown, json, or html")
 
     lines = [
         f"# SuperQode Session {metadata.session_id}",
@@ -305,6 +337,60 @@ def export_session(
             title += f" ({message.tool_name})"
         lines.extend([f"## {title}", "", message.content, ""])
     return "\n".join(lines).rstrip() + "\n"
+
+
+_HTML_ROLE_COLORS = {
+    "user": "#2563eb",
+    "assistant": "#16a34a",
+    "tool": "#9333ea",
+    "system": "#6b7280",
+}
+
+
+def _render_session_html(metadata, messages) -> str:
+    """Self-contained HTML transcript (pi export-html parity): one shareable file."""
+    import html as html_mod
+
+    rows = []
+    for message in messages:
+        role = (message.role or "?").lower()
+        color = _HTML_ROLE_COLORS.get(role, "#6b7280")
+        title = role.title()
+        if getattr(message, "tool_name", None):
+            title += f" · {html_mod.escape(message.tool_name)}"
+        body = html_mod.escape(message.content or "")
+        rows.append(
+            f'<section class="msg" style="border-left-color:{color}">'
+            f'<header style="color:{color}">{title}</header>'
+            f"<pre>{body}</pre></section>"
+        )
+    title = html_mod.escape(metadata.title or metadata.session_id)
+    meta_line = html_mod.escape(
+        f"{metadata.provider or 'unknown'}/{metadata.model or 'unknown'} · "
+        f"created {metadata.created_at} · updated {metadata.updated_at}"
+    )
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SuperQode Session {html_mod.escape(metadata.session_id)}</title>
+<style>
+  body {{ background:#0b0e14; color:#d6dde6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+         max-width: 60rem; margin: 2rem auto; padding: 0 1rem; }}
+  h1 {{ font-size: 1.2rem; }} .meta {{ color:#8b949e; font-size:.85rem; margin-bottom:1.5rem; }}
+  .msg {{ border-left: 3px solid; margin: .8rem 0; padding: .4rem .8rem; background:#11151d; border-radius: 0 6px 6px 0; }}
+  .msg header {{ font-weight: 600; font-size:.8rem; text-transform: uppercase; letter-spacing:.06em; }}
+  .msg pre {{ white-space: pre-wrap; word-break: break-word; margin:.4rem 0 0; font-size:.85rem; line-height:1.45; }}
+</style>
+</head>
+<body>
+<h1>SuperQode Session {title}</h1>
+<div class="meta">{meta_line}</div>
+{"".join(rows)}
+</body>
+</html>
+"""
 
 
 def response_to_json(
@@ -330,4 +416,10 @@ def response_to_json(
         payload["error"] = response.error
     if change_summary is not None:
         payload["changes"] = change_summary
+    if getattr(response, "schema_errors", None) is not None:
+        payload["structured_output"] = response.structured_output
+        payload["schema_errors"] = response.schema_errors
+        payload["schema_valid"] = not response.schema_errors
+        if response.schema_errors:
+            payload["success"] = False
     return json.dumps(payload, ensure_ascii=False)

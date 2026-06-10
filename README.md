@@ -167,9 +167,12 @@ superqode harness run --spec harness.yaml --runtime codex-sdk --prompt "summariz
 SuperQode is tuned to get the best out of local models (≈10B–120B), where context is the usual breaking point:
 
 - **Auto context management** — detects each local model's *real loaded* context window (Ollama, llama.cpp, LM Studio, vLLM, DS4) and compacts the conversation before it overflows, automatically. Inspect or pin it with `:context`.
+- **Context-economy tools** — reads are bounded and line-numbered with explicit continue-from hints; oversized command output is spilled to disk in full and the model gets a head/tail preview plus the path (nothing is ever lost to truncation); stale tool outputs are pruned for free before any LLM summarization.
 - **Multi-repo search** — register repos with `:workspace add` and search across all of them in one fast ripgrep pass; grep/glob use structured output and report truncation. Absolute paths are permission-gated.
 - **Post-edit verification** — after the agent edits a file, fast per-file checks (ruff, eslint, gofmt, JSON/YAML) feed findings back so it self-corrects before moving on.
-- **Resilient tool calls** — dangling or malformed tool calls (common on smaller local models, or after an interruption/resume) are repaired so the provider never rejects the history.
+- **Resilient tool calls** — dangling, malformed, or badly-encoded tool calls (common on smaller local models) are repaired; unparseable arguments return corrective feedback instead of executing with empty args; a doom-loop guard blocks repeated identical calls and stops runs that refuse to move on.
+- **Native model dialects** — models edit in the format they were trained on: string-replacement edits with 10 fallback strategies, unified diffs, or codex-style `apply_patch` envelopes (GPT-5.x / local gpt-oss) — including `apply_patch` heredocs typed into bash. `shell_session` drives REPLs, dev servers, and interactive prompts across turns; `view_image` feeds screenshots to vision-capable local models like Gemma 4.
+- **Safe parallelism** — read-only tool batches run concurrently; anything that mutates (edit, write, shell) runs strictly in call order, so parallel tool calls can never race your files.
 - **Calm by default** — `:thinking` (Ctrl+T) folds noisy per-iteration logs into a live status with a tidy per-tool trace; flip to verbose anytime.
 - **Harness over MCP** — `superqode mcp` exposes your HarnessSpec workflows as MCP tools for any MCP client, alongside the A2A and ACP servers.
 

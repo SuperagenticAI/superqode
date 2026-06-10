@@ -124,6 +124,8 @@ except ImportError:
 class GrepTool(Tool):
     """Search for text patterns in files using ripgrep or grep."""
 
+    read_only = True
+
     MAX_RESULTS = 100
 
     @property
@@ -381,6 +383,8 @@ class GrepTool(Tool):
 class GlobTool(Tool):
     """Find files matching a pattern."""
 
+    read_only = True
+
     MAX_RESULTS = 200
 
     @property
@@ -581,6 +585,8 @@ class CodeSearchTool(Tool):
     Uses regex-based heuristics for broad language support.
     Can integrate with LSP for more accurate results when available.
     """
+
+    read_only = True
 
     MAX_RESULTS = 50
 
@@ -935,6 +941,8 @@ class CodeSearchTool(Tool):
 
 class RepoSearchTool(Tool):
     """High-level repository search for files, content, and symbols."""
+
+    read_only = True
 
     MAX_FILES = 20
     MAX_CONTENT_MATCHES = 40

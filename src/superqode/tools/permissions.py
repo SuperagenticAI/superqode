@@ -213,6 +213,11 @@ class PermissionManager:
         # Cache of approved commands (for session)
         self._session_approvals: Set[str] = set()
 
+        # Tools granted blanket session permission via the
+        # request_permissions escalation flow. Never overrides deny
+        # patterns or dangerous-command guards.
+        self._session_tool_grants: Set[str] = set()
+
         # Dangerous command patterns
         self._dangerous_patterns = [
             r"rm\s+(-rf?|--recursive)",
@@ -266,10 +271,23 @@ class PermissionManager:
                     return Permission.ALLOW
             except Exception:
                 pass
+            if tool_name in self._session_tool_grants and configured != Permission.DENY:
+                return Permission.ALLOW
             return configured
 
-        # Get configured permission
-        return self.config.get_permission(tool_name)
+        # Session grants (request_permissions flow) upgrade ASK to ALLOW but
+        # never override an explicit DENY.
+        configured = self.config.get_permission(tool_name)
+        if tool_name in self._session_tool_grants and configured != Permission.DENY:
+            return Permission.ALLOW
+        return configured
+
+    def grant_session_permission(self, tool_name: str) -> None:
+        """Allow a tool for the rest of the session (user-approved escalation)."""
+        self._session_tool_grants.add(tool_name)
+
+    def session_grants(self) -> Set[str]:
+        return set(self._session_tool_grants)
 
     def _matches_deny_pattern(self, tool_name: str, arguments: Dict[str, Any]) -> bool:
         """Check if the call matches a deny pattern."""
@@ -392,8 +410,9 @@ class PermissionManager:
         return approved
 
     def clear_session_approvals(self) -> None:
-        """Clear session approval cache."""
+        """Clear session approval cache (including blanket tool grants)."""
         self._session_approvals.clear()
+        self._session_tool_grants.clear()
 
 
 # Singleton instance

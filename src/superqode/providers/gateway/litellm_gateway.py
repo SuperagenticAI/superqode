@@ -244,6 +244,113 @@ class LiteLLMGateway(GatewayInterface):
         # "APIConnectionError ... argument of type 'NoneType' is not iterable"
         return "noneType".lower() in msg and "not iterable" in msg
 
+    # Transient-overload retry tuning. Hosted providers rate-limit (429/529),
+    # and local servers (Ollama, vLLM, LM Studio) briefly 503 under load;
+    # honoring Retry-After and backing off beats failing the whole agent turn.
+    RATE_LIMIT_RETRIES_ENV = "SUPERQODE_RATE_LIMIT_RETRIES"
+    _RATE_LIMIT_DEFAULT_RETRIES = 3
+    _RATE_LIMIT_BASE_DELAY = 1.5
+    _RATE_LIMIT_MAX_DELAY = 30.0
+    # If the provider explicitly asks for a longer pause than this, surface
+    # the error instead of silently hanging an interactive session.
+    _RATE_LIMIT_MAX_HONORED_RETRY_AFTER = 60.0
+
+    @staticmethod
+    def _is_transient_overload_error(error: Exception) -> bool:
+        """Rate limits / momentary overload: the same request can succeed shortly."""
+        if "ratelimit" in type(error).__name__.lower():
+            return True
+        msg = str(error).lower()
+        patterns = (
+            "rate limit",
+            "rate_limit",
+            "too many requests",
+            "429",
+            "overloaded",
+            "service unavailable",
+            "503",
+            "529",
+            "server is busy",
+            "at capacity",
+        )
+        return any(p in msg for p in patterns)
+
+    @staticmethod
+    def _retry_after_seconds(error: Exception) -> Optional[float]:
+        """Extract Retry-After (seconds or ms) from a provider exception."""
+        headers = None
+        for attr in ("response", "http_response"):
+            response = getattr(error, attr, None)
+            if response is not None and getattr(response, "headers", None) is not None:
+                headers = response.headers
+                break
+        if headers is None:
+            headers = getattr(error, "headers", None)
+        if headers is None:
+            return None
+        try:
+            raw_ms = headers.get("retry-after-ms")
+            if raw_ms:
+                return max(0.0, float(raw_ms) / 1000.0)
+            raw = headers.get("retry-after")
+            if raw:
+                return max(0.0, float(raw))
+        except (TypeError, ValueError, AttributeError):
+            return None
+        return None
+
+    @classmethod
+    def _rate_limit_retries(cls) -> int:
+        raw = os.environ.get(cls.RATE_LIMIT_RETRIES_ENV, "").strip()
+        if raw:
+            try:
+                return max(0, int(raw))
+            except ValueError:
+                pass
+        return cls._RATE_LIMIT_DEFAULT_RETRIES
+
+    @classmethod
+    def _rate_limit_delay(cls, attempt: int, error: Exception) -> Optional[float]:
+        """Delay before retry ``attempt`` (0-based), or None to give up."""
+        import random
+
+        retry_after = cls._retry_after_seconds(error)
+        if retry_after is not None:
+            if retry_after > cls._RATE_LIMIT_MAX_HONORED_RETRY_AFTER:
+                return None
+            return retry_after
+        return min(
+            cls._RATE_LIMIT_MAX_DELAY, cls._RATE_LIMIT_BASE_DELAY * (2**attempt)
+        ) + random.uniform(0, 0.5)
+
+    async def _acompletion_with_retry(self, request_kwargs: Dict[str, Any]):
+        """``litellm.acompletion`` with bounded backoff on transient overload.
+
+        Non-transient errors propagate immediately so the caller's
+        model-candidate failover logic can handle them.
+        """
+        litellm = self._get_litellm()
+        retries = self._rate_limit_retries()
+        attempt = 0
+        while True:
+            try:
+                return await litellm.acompletion(**request_kwargs)
+            except Exception as e:
+                if attempt >= retries or not self._is_transient_overload_error(e):
+                    raise
+                delay = self._rate_limit_delay(attempt, e)
+                if delay is None:
+                    raise
+                logger.warning(
+                    "Provider overloaded/rate-limited (%s); retrying in %.1fs (attempt %d/%d)",
+                    type(e).__name__,
+                    delay,
+                    attempt + 1,
+                    retries,
+                )
+                attempt += 1
+                await asyncio.sleep(delay)
+
     def _setup_provider_env(self, provider: str) -> None:
         """Set up environment for a provider if needed."""
         provider_def = _resolve_provider_def(provider)
@@ -2107,7 +2214,7 @@ class LiteLLMGateway(GatewayInterface):
             for i, candidate in enumerate(model_candidates):
                 request_kwargs["model"] = candidate
                 try:
-                    response = await litellm.acompletion(**request_kwargs)
+                    response = await self._acompletion_with_retry(request_kwargs)
                     break
                 except Exception as e:
                     last_error = e
@@ -2362,7 +2469,7 @@ class LiteLLMGateway(GatewayInterface):
             for i, candidate in enumerate(model_candidates):
                 request_kwargs["model"] = candidate
                 try:
-                    response = await litellm.acompletion(**request_kwargs)
+                    response = await self._acompletion_with_retry(request_kwargs)
                     break
                 except Exception as e:
                     last_error = e

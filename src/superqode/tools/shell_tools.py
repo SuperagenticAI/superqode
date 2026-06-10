@@ -14,9 +14,10 @@ Performance features:
 
 import asyncio
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Tuple
 
 from .base import Tool, ToolResult, ToolContext
+from .output_spill import SPILL_HARD_CAP_BYTES, truncate_with_spill
 from .validation import validate_working_dir_parameter
 
 
@@ -74,6 +75,15 @@ class BashTool(Tool):
                     "description": "Working directory for the command (optional)",
                 },
                 "timeout": {"type": "integer", "description": "Timeout in seconds (default: 300)"},
+                "run_in_background": {
+                    "type": "boolean",
+                    "description": (
+                        "Start the command as a background session and return its "
+                        "session_id immediately; check on it later with the "
+                        "shell_session tool (poll/write/kill). Use for servers and "
+                        "long builds."
+                    ),
+                },
             },
             "required": ["command"],
         }
@@ -85,6 +95,39 @@ class BashTool(Tool):
 
         if not command.strip():
             return ToolResult(success=False, output="", error="Empty command")
+
+        # Codex-trained models (GPT-5.x, local gpt-oss) often invoke
+        # `apply_patch <<EOF` as a shell command. Route that to the real
+        # apply_patch tool so the patch applies with validation, workspace
+        # tracking, and post-edit verification instead of failing on a
+        # missing binary.
+        from .apply_patch import ApplyPatchTool, extract_heredoc_patch
+
+        heredoc_patch = extract_heredoc_patch(command)
+        if heredoc_patch is not None:
+            return await ApplyPatchTool().execute({"input": heredoc_patch}, ctx)
+
+        # Background runs are persistent sessions: start one and hand the
+        # model a session_id it can poll/write/kill via shell_session.
+        if args.get("run_in_background"):
+            from .shell_session import ShellSessionTool
+
+            result = await ShellSessionTool().execute(
+                {
+                    "action": "open",
+                    "command": command,
+                    "working_dir": working_dir,
+                    "yield_ms": 800,
+                },
+                ctx,
+            )
+            if result.success:
+                sid = result.metadata.get("session_id", "?")
+                result.output += (
+                    f"\n[Running in background. Check it with shell_session "
+                    f'(action="poll", session_id="{sid}").]'
+                )
+            return result
 
         # Check Git Guard - block git write operations during workspace tracking
         if self._git_guard_enabled:
@@ -142,18 +185,23 @@ class BashTool(Tool):
         except Exception:
             plan = None
 
+        from .env_policy import build_shell_env
+
+        env = build_shell_env()
         if plan is not None and plan.applied:
             return await asyncio.create_subprocess_exec(
                 *plan.argv,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(cwd),
+                env=env,
             )
         return await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(cwd),
+            env=env,
         )
 
     async def _execute_buffered(
@@ -191,20 +239,38 @@ class BashTool(Tool):
         if stderr_str:
             output += f"\n[stderr]\n{stderr_str}" if output else stderr_str
 
-        # Truncate if too long. Per-call cap so we can size to the active
-        # model's context window via ctx.max_output_bytes.
+        # Bound the output for the model. The full text is spilled to disk so
+        # nothing is lost — the model gets a head/tail preview plus the path.
+        # Per-call cap so we can size to the active model's context window.
         cap = self._effective_max_output(ctx, self.MAX_OUTPUT)
-        if len(output) > cap:
-            output = output[:cap] + f"\n\n[Output truncated at {cap} bytes]"
+        output, _truncated, spill_path = self._bound_output(output, cap)
 
         success = process.returncode == 0
         await ctx.emit_progress(1.0, "Complete" if success else "Failed")
 
+        metadata: Dict[str, Any] = {
+            "exit_code": process.returncode,
+            "command": command,
+            "cwd": str(cwd),
+        }
+        if spill_path is not None:
+            metadata["spilled_to"] = str(spill_path)
         return ToolResult(
             success=success,
             output=output,
             error=None if success else f"Exit code: {process.returncode}",
-            metadata={"exit_code": process.returncode, "command": command, "cwd": str(cwd)},
+            metadata=metadata,
+        )
+
+    @staticmethod
+    def _bound_output(output: str, cap: int) -> Tuple[str, bool, Optional[Path]]:
+        """Bound output to ``cap`` bytes, spilling the full text to disk."""
+        return truncate_with_spill(
+            output,
+            max_bytes=cap,
+            label="Command output",
+            prefix="bash",
+            direction="head_tail",
         )
 
     async def _execute_streaming(
@@ -214,17 +280,24 @@ class BashTool(Tool):
         timeout: int,
         ctx: ToolContext,
     ) -> ToolResult:
-        """Execute command with streaming output to callback."""
+        """Execute command with streaming output to callback.
+
+        The full output (up to a 5MB hard cap) is retained for the spill
+        file even after the live-stream byte cap is reached; the streams are
+        always drained to EOF so a chatty process never deadlocks on a full
+        pipe. Only the bounded preview is sent to the model.
+        """
         process = await self._spawn(command, cwd)
 
-        output_chunks = []
+        output_chunks = []  # full output for the spill file (bounded by hard cap)
+        emitted_bytes = 0
         total_bytes = 0
-        truncated = False
+        dropped = False
         cap = self._effective_max_output(ctx, self.MAX_OUTPUT)
 
         async def read_stream(stream, is_stderr: bool = False):
-            """Read from a stream and emit chunks."""
-            nonlocal total_bytes, truncated
+            """Read a stream to EOF, emitting up to ``cap`` bytes live."""
+            nonlocal emitted_bytes, total_bytes, dropped
 
             while True:
                 try:
@@ -240,26 +313,27 @@ class BashTool(Tool):
 
                 text = chunk.decode("utf-8", errors="replace")
 
-                # Check size limit (sized to model's context window via cap)
-                if total_bytes + len(text) > cap:
-                    remaining = cap - total_bytes
-                    if remaining > 0:
-                        text = text[:remaining]
-                        output_chunks.append(text)
-                        await ctx.emit_output(text)
-                    truncated = True
-                    break
-
-                total_bytes += len(text)
-
                 # Prefix stderr
                 if is_stderr and text.strip():
                     text = f"[stderr] {text}"
 
-                output_chunks.append(text)
-                await ctx.emit_output(text)
+                # Retain for the spill file up to the hard cap; past that the
+                # stream is still drained (so the process can exit) but the
+                # bytes are dropped.
+                if total_bytes < SPILL_HARD_CAP_BYTES:
+                    output_chunks.append(text)
+                else:
+                    dropped = True
+                total_bytes += len(text)
+
+                # Live UI stream is bounded by the model-sized cap.
+                if emitted_bytes < cap:
+                    emit_text = text[: cap - emitted_bytes]
+                    emitted_bytes += len(emit_text)
+                    await ctx.emit_output(emit_text)
 
         # Create timeout task
+        timed_out = False
         try:
             # Read both streams concurrently
             await asyncio.wait_for(
@@ -272,34 +346,44 @@ class BashTool(Tool):
             await process.wait()
         except asyncio.TimeoutError:
             process.kill()
-            return ToolResult(
-                success=False,
-                output="".join(output_chunks),
-                error=f"Command timed out after {timeout} seconds",
-                metadata={
-                    "command": command,
-                    "cwd": str(cwd),
-                    "timed_out": True,
-                    "timeout": timeout,
-                    "streamed": True,
-                },
-            )
+            timed_out = True
 
         output = "".join(output_chunks)
-        if truncated:
-            output += f"\n\n[Output truncated at {cap} bytes]"
+        if dropped:
+            output += f"\n\n[Process produced more than {SPILL_HARD_CAP_BYTES:,} bytes; the rest was discarded.]"
+        output, _truncated, spill_path = self._bound_output(output, cap)
+
+        if timed_out:
+            metadata = {
+                "command": command,
+                "cwd": str(cwd),
+                "timed_out": True,
+                "timeout": timeout,
+                "streamed": True,
+            }
+            if spill_path is not None:
+                metadata["spilled_to"] = str(spill_path)
+            return ToolResult(
+                success=False,
+                output=output,
+                error=f"Command timed out after {timeout} seconds",
+                metadata=metadata,
+            )
 
         success = process.returncode == 0
         await ctx.emit_progress(1.0, "Complete" if success else "Failed")
 
+        metadata = {
+            "exit_code": process.returncode,
+            "command": command,
+            "cwd": str(cwd),
+            "streamed": True,
+        }
+        if spill_path is not None:
+            metadata["spilled_to"] = str(spill_path)
         return ToolResult(
             success=success,
             output=output,
             error=None if success else f"Exit code: {process.returncode}",
-            metadata={
-                "exit_code": process.returncode,
-                "command": command,
-                "cwd": str(cwd),
-                "streamed": True,
-            },
+            metadata=metadata,
         )

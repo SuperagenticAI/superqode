@@ -283,6 +283,32 @@ def _multi_occurrence_replacer(content: str, find: str) -> Generator[str, None, 
         start = idx + len(find)
 
 
+_LINE_NUMBER_PREFIX = re.compile(r"^\s*\d+[:|]\s?")
+
+
+def _line_number_stripped_replacer(content: str, find: str) -> Generator[str, None, None]:
+    """Strip pasted 'N: ' / 'N|' line-number prefixes from old_string.
+
+    read_file numbers its output, and smaller models sometimes copy those
+    prefixes straight into old_string. If most lines carry a prefix, retry
+    the simpler strategies with the prefixes removed.
+    """
+    lines = find.split("\n")
+    prefixed = sum(1 for ln in lines if ln and _LINE_NUMBER_PREFIX.match(ln))
+    if not lines or prefixed < max(1, (len([ln for ln in lines if ln]) + 1) // 2):
+        return
+    stripped = "\n".join(_LINE_NUMBER_PREFIX.sub("", ln) for ln in lines)
+    if stripped == find:
+        return
+    for replacer in (
+        _simple_replacer,
+        _line_trimmed_replacer,
+        _whitespace_normalized_replacer,
+        _indentation_flexible_replacer,
+    ):
+        yield from replacer(content, stripped)
+
+
 REPLACERS = [
     _simple_replacer,
     _line_trimmed_replacer,
@@ -292,6 +318,7 @@ REPLACERS = [
     _escape_normalized_replacer,
     _trimmed_boundary_replacer,
     _context_aware_replacer,
+    _line_number_stripped_replacer,
     _multi_occurrence_replacer,
 ]
 

@@ -43,6 +43,8 @@ class DiagnosticsTool(Tool):
     - Rust: cargo check
     """
 
+    read_only = True
+
     # Linter commands by language
     LINTERS = {
         "python": [

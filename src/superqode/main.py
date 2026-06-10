@@ -571,6 +571,19 @@ class SuperQodeGroup(click.Group):
 )
 @click.option("--profile", default="build", help="Harness profile: build, plan, review, qe")
 @click.option("--plan", "plan_only", is_flag=True, help="Run headless prompt in plan-only mode")
+@click.option(
+    "--output-schema",
+    "output_schema",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="JSON Schema file the headless answer must validate against",
+)
+@click.option(
+    "--rubric",
+    "rubric",
+    default=None,
+    help="Rubric text (or @file) the answer is self-graded against before finishing",
+)
 @click.option("--provider", envvar="SUPERQODE_PROVIDER", default="openai", help="Model provider")
 @click.option(
     "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-5.4", help="Model name"
@@ -660,6 +673,8 @@ def cli_main(
     output_mode,
     profile,
     plan_only,
+    output_schema,
+    rubric,
     provider,
     model_name,
     harness_path,
@@ -752,6 +767,11 @@ def cli_main(
             if not prompt:
                 raise click.UsageError("Headless mode requires a prompt or piped stdin.")
 
+            # --rubric accepts inline text or @path-to-file.
+            rubric_text = rubric
+            if rubric_text and rubric_text.startswith("@"):
+                rubric_text = Path(rubric_text[1:]).expanduser().read_text(encoding="utf-8")
+
             change_baseline = capture_workspace_changes(Path.cwd())
             try:
                 response = asyncio.run(
@@ -764,6 +784,8 @@ def cli_main(
                         fork_from=fork_from,
                         sandbox_backend=sandbox_backend,
                         runtime=effective_runtime,
+                        output_schema=output_schema,
+                        rubric=rubric_text,
                     )
                 )
             except Exception as e:
@@ -800,11 +822,22 @@ def cli_main(
                     )
                 )
             else:
-                click.echo(response.content)
+                if output_schema and response.schema_errors is not None:
+                    if response.schema_errors:
+                        click.echo(response.content)
+                        click.echo("Output schema validation failed:", err=True)
+                        for schema_error in response.schema_errors:
+                            click.echo(f"  - {schema_error}", err=True)
+                    else:
+                        click.echo(json.dumps(response.structured_output, indent=2))
+                else:
+                    click.echo(response.content)
                 rendered_changes = render_change_summary(change_summary, changes)
                 if rendered_changes:
                     click.echo()
                     click.echo(rendered_changes)
+            if output_schema and response.schema_errors:
+                ctx.exit(2)
             ctx.exit(0 if response.stopped_reason == "complete" and not response.error else 1)
 
         import time
@@ -1050,10 +1083,12 @@ def sessions_show(session_id, fmt):
 
 @sessions.command("export")
 @click.argument("session_id")
-@click.option("--format", "fmt", type=click.Choice(["markdown", "json"]), default="markdown")
+@click.option(
+    "--format", "fmt", type=click.Choice(["markdown", "json", "html"]), default="markdown"
+)
 @click.option("--output", "-o", type=click.Path(), help="Write export to file")
 def sessions_export(session_id, fmt, output):
-    """Export a stored session."""
+    """Export a stored session (markdown, json, or a shareable html page)."""
     from pathlib import Path
     from superqode.headless import export_session
 

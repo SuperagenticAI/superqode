@@ -89,6 +89,27 @@ def _cached_system_prompt(
     return prompt
 
 
+def _content_for_counting(content: Any) -> str:
+    """Token-estimation text for message content.
+
+    Multimodal list content (text + image parts) must not be str()'d for
+    counting - a 4MB image data URL would register as ~1M tokens and stampede
+    compaction. Text parts count normally; each image part is charged a flat
+    ~1000-token equivalent.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        pieces: List[str] = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                pieces.append(str(part.get("text", "")))
+            else:
+                pieces.append("x" * 4000)  # ~1000-token flat charge per image part
+        return "\n".join(pieces)
+    return str(content)
+
+
 def _make_hashable(value: Any) -> Any:
     """Convert a value to a hashable type for use in tuples/dict keys.
 
@@ -145,7 +166,9 @@ def _message_to_tuple(m: "AgentMessage") -> Tuple:
         tool_calls_tuple = tuple(tool_calls_list)
     else:
         tool_calls_tuple = None
-    return (m.role, m.content, tool_calls_tuple, m.tool_call_id, m.name)
+    # content may be a multimodal list (text + image parts) - make it hashable.
+    content = m.content if isinstance(m.content, str) else _make_hashable(m.content)
+    return (m.role, content, tool_calls_tuple, m.tool_call_id, m.name)
 
 
 def _is_simple_conversational_query(message: str) -> bool:
@@ -389,6 +412,30 @@ class AgentConfig:
     # Plan mode - analyze without executing tools
     plan_mode: bool = False
 
+    # Doom-loop guard: block the Nth consecutive identical tool call and feed
+    # corrective guidance back to the model; abort the run if it immediately
+    # repeats the same call anyway. 0 disables. Local models are the main
+    # beneficiaries - they get stuck re-issuing the same failing call.
+    doom_loop_threshold: int = 3
+
+    # When the model's output is cut at the max-token limit
+    # (finish_reason == "length"), automatically ask it to continue from where
+    # it stopped, up to this many times per run. 0 disables.
+    max_auto_continues: int = 2
+
+    # Rubric self-grading: when set, a separate grader call judges the final
+    # answer against this rubric; "needs_revision" feedback re-enters the loop
+    # (at most max_rubric_rounds times). None disables.
+    rubric: Optional[str] = None
+    max_rubric_rounds: int = 2
+
+    # How tool calls reach the model. None/"native" uses the provider's tool
+    # channel (today's behavior; "compact-json"/"strict-json" are argument
+    # style hints for native calls). "prompt" renders tool schemas into the
+    # system prompt and parses <tool_call>{...}</tool_call> blocks from the
+    # response text - for local models with no native tool-calling head.
+    tool_call_format: Optional[str] = None
+
     # Auto summarization / context compaction.
     # Compaction is now ADAPTIVE and on by default (opt out with
     # SUPERQODE_AUTO_COMPACT=0). The threshold and kept-recent window are derived
@@ -490,6 +537,10 @@ class AgentResponse:
     iterations: int
     stopped_reason: str  # "complete", "max_iterations", "error"
     error: Optional[str] = None
+    # Populated by headless --output-schema runs: the extracted JSON payload
+    # and any schema-validation errors (empty list means valid).
+    structured_output: Optional[Any] = None
+    schema_errors: Optional[List[str]] = None
 
 
 class ToolApprovalRequired(RuntimeError):
@@ -535,6 +586,7 @@ class AgentLoop:
         include_mcp: bool = False,  # Automatically inject MCP search/execute tools
         permission_manager: Optional[PermissionManager] = None,
         hooks: Optional["HookRegistry"] = None,  # Lifecycle hooks (before/after llm/tool/turn)
+        allow_peer_agents: bool = True,  # False inside sub/peer agents (no nesting)
     ):
         self.gateway = gateway
         self.tools = tools
@@ -587,8 +639,19 @@ class AgentLoop:
                 model=config.model,
             )
 
-        # PERFORMANCE: Cache tool definitions at init (compute once)
+        # Apply the deferred-tool policy (env-gated) before the first compute
+        # so heavy schemas stay out of the prompt until tool_search loads them.
+        try:
+            from ..tools.tool_search import apply_deferred_tool_policy
+
+            apply_deferred_tool_policy(self.tools, provider=config.provider, model=config.model)
+        except ImportError:
+            pass
+
+        # PERFORMANCE: Cache tool definitions, recomputed when the registry
+        # version changes (deferred-tool activation).
         self._cached_tool_defs: List[ToolDefinition] = self._compute_tool_definitions()
+        self._cached_tool_defs_version: int = getattr(self.tools, "version", 0)
 
         # PERFORMANCE: Cache for converted messages (avoid repeated conversions)
         self._message_cache: Dict[Tuple, Message] = {}
@@ -617,6 +680,166 @@ class AgentLoop:
         # session_start fires once per AgentLoop instance, on the first run().
         self._session_started: bool = False
 
+        # Doom-loop guard; re-armed at the start of each run.
+        from .loop_guard import DoomLoopDetector
+
+        self._doom_guard: Optional[DoomLoopDetector] = None
+
+        # In-run steering: user messages queued while the agent works are
+        # injected at the next iteration boundary instead of waiting for the
+        # whole run to finish. Thread-safe - the TUI enqueues from its own
+        # thread.
+        import collections
+        import threading
+
+        self._steering_queue: "collections.deque[str]" = collections.deque()
+        self._steering_lock = threading.Lock()
+        self.run_active: bool = False
+
+        # Per-call system reminders (changed files, stale todos).
+        self._reminder_state: Dict[str, Any] = {}
+
+        # Aggregate diff of the most recent turn's file changes.
+        self.last_turn_diff: str = ""
+
+        # Peer agents (spawn_agent/...). Lazily created; None inside
+        # sub/peer agents so the hierarchy stays one level deep.
+        self._allow_peer_agents = allow_peer_agents
+        self._peer_manager: Optional[Any] = None
+
+    def _exec_policy(self):
+        """User exec-policy rules, loaded once per loop instance."""
+        if not hasattr(self, "_exec_policy_cache"):
+            from .exec_policy import ExecPolicy
+
+            self._exec_policy_cache = ExecPolicy.load(self.config.working_directory)
+        return self._exec_policy_cache
+
+    def _prompt_tool_mode(self) -> bool:
+        """True when tools go through the prompt instead of the native channel."""
+        from .text_tool_calls import is_prompt_format
+
+        return self.config.tools_enabled and is_prompt_format(self.config.tool_call_format)
+
+    def _system_prompt_for_run(self) -> str:
+        """System prompt, plus the rendered tool catalog in prompt-tool mode."""
+        if not self._prompt_tool_mode():
+            return self.system_prompt
+        from .text_tool_calls import render_tool_catalog
+
+        catalog = render_tool_catalog(self._get_tool_definitions())
+        return f"{self.system_prompt}\n{catalog}" if catalog else self.system_prompt
+
+    def _extract_prompt_tool_calls(
+        self, content: str, native_tool_calls: Optional[List[Dict]]
+    ) -> Tuple[str, Optional[List[Dict]]]:
+        """In prompt-tool mode, lift <tool_call> blocks out of response text."""
+        if not self._prompt_tool_mode() or native_tool_calls:
+            return content, native_tool_calls
+        from .text_tool_calls import extract_text_tool_calls
+
+        cleaned, extracted = extract_text_tool_calls(content or "")
+        if extracted:
+            return cleaned, extracted
+        return content, native_tool_calls
+
+    def _get_peer_manager(self):
+        if not self._allow_peer_agents:
+            return None
+        if self._peer_manager is None:
+            from .peer_agents import PeerAgentManager
+
+            self._peer_manager = PeerAgentManager(self._create_peer_loop)
+        return self._peer_manager
+
+    def _create_peer_loop(self, task_name: str) -> "AgentLoop":
+        """Build an isolated loop for one peer agent (no nesting, no storage)."""
+        peer_config = replace(
+            self.config,
+            session_id=f"{self.session_id}:peer:{task_name}",
+            enable_session_storage=False,
+        )
+        return AgentLoop(
+            gateway=self.gateway,
+            tools=self.tools,
+            config=peer_config,
+            on_tool_call=self.on_tool_call,
+            on_tool_result=self.on_tool_result,
+            on_thinking=self.on_thinking,
+            parallel_tools=self.parallel_tools,
+            mcp_executor=self.mcp_executor,
+            mcp_tools=self._mcp_tools,
+            include_mcp=self.include_mcp,
+            permission_manager=self.permission_manager,
+            allow_peer_agents=False,
+        )
+
+    def _doom_threshold(self) -> int:
+        """Doom-loop threshold; SUPERQODE_DOOM_LOOP_THRESHOLD overrides config."""
+        raw = os.environ.get("SUPERQODE_DOOM_LOOP_THRESHOLD", "").strip()
+        if raw:
+            try:
+                return max(0, int(raw))
+            except ValueError:
+                pass
+        return self.config.doom_loop_threshold
+
+    def _arm_doom_guard(self) -> None:
+        from .loop_guard import DoomLoopDetector
+
+        self._doom_guard = DoomLoopDetector(self._doom_threshold())
+
+    # ------------------------------------------------------------------
+    # In-run steering (pi pattern): messages typed while the agent works
+    # are injected between iterations, not after the run.
+    # ------------------------------------------------------------------
+
+    def steer(self, message: str) -> bool:
+        """Queue a user message for injection at the next iteration boundary.
+
+        Safe to call from any thread. Returns True when a run is active (the
+        message will be picked up mid-run); False when idle (the caller
+        should submit it as a normal prompt instead).
+        """
+        text = (message or "").strip()
+        if not text:
+            return self.run_active
+        with self._steering_lock:
+            self._steering_queue.append(text)
+        return self.run_active
+
+    def steering_pending(self) -> bool:
+        with self._steering_lock:
+            return bool(self._steering_queue)
+
+    def _drain_steering(self, messages: List["AgentMessage"]) -> List[str]:
+        """Move queued steering messages into the conversation. Returns them."""
+        with self._steering_lock:
+            drained = list(self._steering_queue)
+            self._steering_queue.clear()
+        for text in drained:
+            messages.append(AgentMessage(role="user", content=text))
+            if self._session_manager:
+                self._session_manager.add_user_message(text)
+        return drained
+
+    def _collect_reminder_messages(self, iteration: int) -> List["AgentMessage"]:
+        """Per-call synthetic reminders; attached to the request, never to history."""
+        try:
+            from .reminders import collect_reminders, format_reminder_message
+
+            texts = collect_reminders(
+                session_id=self.session_id,
+                working_directory=self.config.working_directory,
+                iteration=iteration,
+                state=self._reminder_state,
+            )
+        except Exception:
+            return []
+        if not texts:
+            return []
+        return [AgentMessage(role="user", content=format_reminder_message(texts))]
+
     def _build_system_prompt(self) -> str:
         """Build the system prompt based on config (uses cached function)."""
         return _cached_system_prompt(
@@ -641,19 +864,26 @@ class AgentLoop:
         return profile.resolve_kwargs()
 
     def _compute_tool_definitions(self) -> List[ToolDefinition]:
-        """Compute tool definitions once at init.
+        """Compute tool definitions for the current registry state.
 
         Definitions are sorted by name so that the rendered request prefix is
         byte-stable across processes. This matters for providers that key a
         cached KV checkpoint on the rendered prefix (DS4, Anthropic prompt
         caching, OpenAI prompt caching); even a reordering of tool schemas
         forces a cold prefill.
+
+        Deferred tools (see ``ToolRegistry.defer`` / the tool_search tool) are
+        excluded until activated; recomputation happens whenever the registry
+        version changes.
         """
         if not self.config.tools_enabled:
             return []
 
         definitions = []
-        for tool in self.tools.list():
+        active = (
+            self.tools.active_tools() if hasattr(self.tools, "active_tools") else self.tools.list()
+        )
+        for tool in active:
             definitions.append(
                 ToolDefinition(
                     name=tool.name,
@@ -693,7 +923,16 @@ class AgentLoop:
         return definitions
 
     def _get_tool_definitions(self) -> List[ToolDefinition]:
-        """Get cached tool definitions."""
+        """Get tool definitions, recomputing when the registry changed.
+
+        The cache is keyed by the registry version so activating a deferred
+        tool (tool_search) is visible on the very next model call, while the
+        common case stays a single attribute read.
+        """
+        version = getattr(self.tools, "version", 0)
+        if version != self._cached_tool_defs_version:
+            self._cached_tool_defs = self._compute_tool_definitions()
+            self._cached_tool_defs_version = version
         return self._cached_tool_defs
 
     def _convert_message(self, m: AgentMessage) -> Message:
@@ -745,6 +984,8 @@ class AgentLoop:
             tool_registry=self.tools,
             sub_agent_runner=self._run_sub_agent,
             max_output_bytes=self._tool_output_byte_cap,
+            peer_manager=self._get_peer_manager(),
+            permission_manager=self.permission_manager,
         )
 
     def _lifecycle_context(self) -> "LifecycleContext":
@@ -790,6 +1031,7 @@ class AgentLoop:
             mcp_tools=self._mcp_tools,
             include_mcp=self.include_mcp,
             permission_manager=self.permission_manager,
+            allow_peer_agents=False,
         )
         child_loop.session_id = child_config.session_id or child_loop.session_id
 
@@ -820,10 +1062,14 @@ class AgentLoop:
            even one the manager would auto-allow - so a harness permission policy
            (or custom hook) can veto allowed tools. A hook **allow** pre-approves
            an otherwise-ASK call.
-        2. The manager's own **deny** (e.g. dangerous-command guards) still wins
-           over a permissive hook - hard safety rules are not overridable.
-        3. Manager **allow** passes through; otherwise (ASK) we honour a hook
-           allow or fall back to the pause/prompt flow.
+        2. User exec-policy rules (.superqode/execpolicy.yaml) apply to shell
+           commands: ``deny`` blocks outright, ``ask`` forces the approval
+           prompt even for auto-allowed commands, ``allow`` pre-approves an
+           otherwise-ASK command.
+        3. The manager's own **deny** (e.g. dangerous-command guards) still wins
+           over a permissive hook or rule - hard safety rules are not overridable.
+        4. Manager **allow** passes through; otherwise (ASK) we honour a hook or
+           rule allow, or fall back to the pause/prompt flow.
         """
         from .hooks import PERMISSION_REQUEST
 
@@ -842,6 +1088,26 @@ class AgentLoop:
                 },
             )
 
+        # User exec-policy rules for shell commands.
+        rule_allow = False
+        rule_ask = False
+        if name in ("bash", "shell_session"):
+            command = str(arguments.get("command") or "")
+            rule = self._exec_policy().evaluate(command) if command else None
+            if rule is not None:
+                if rule.action == "deny":
+                    return ToolResult(
+                        success=False,
+                        output="",
+                        error=(
+                            "Command blocked by exec policy"
+                            + (f": {rule.reason}" if rule.reason else f" (rule: {rule.pattern})")
+                        ),
+                        metadata={"permission": "exec_policy_deny", "tool": name},
+                    )
+                rule_allow = rule.action == "allow"
+                rule_ask = rule.action == "ask"
+
         permission = self.permission_manager.check_permission(name, arguments)
         if permission == Permission.DENY:
             return ToolResult(
@@ -850,11 +1116,11 @@ class AgentLoop:
                 error=f"Permission denied for tool: {name}",
                 metadata={"permission": "deny", "tool": name},
             )
-        if permission == Permission.ALLOW:
+        if permission == Permission.ALLOW and not rule_ask:
             return None
         if tool_call_id and tool_call_id in self._approved_tool_call_ids:
             return None
-        if verdict.allowed:
+        if (verdict.allowed or rule_allow) and not rule_ask:
             return None
 
         if self.pause_on_approval:
@@ -905,6 +1171,7 @@ class AgentLoop:
         lifecycle_ctx = self._lifecycle_context()
 
         async def _finalize(result: ToolResult) -> ToolResult:
+            result = self._bound_tool_result(name, result)
             await self.hooks.fire(AFTER_TOOL_CALL, lifecycle_ctx, name, arguments, result)
             return result
 
@@ -1112,11 +1379,89 @@ class AgentLoop:
             try:
                 accumulated += self.context_manager.count_tokens([msg_dicts[idx]])
             except Exception:
-                accumulated += max(1, len(str(messages[idx].content)) // 4)
+                accumulated += max(1, len(_content_for_counting(messages[idx].content)) // 4)
             boundary = idx
             if accumulated >= keep_recent:
                 break
         return boundary
+
+    # Tool outputs smaller than this aren't worth stubbing.
+    _PRUNE_MIN_CHARS = 240
+    # Skip the prune pass entirely when it would save less than this.
+    _PRUNE_MIN_TOTAL_SAVINGS = 2000
+
+    def _prune_stale_tool_outputs(
+        self, messages: List["AgentMessage"], msg_dicts: List[Dict], keep_recent: int
+    ) -> Tuple[List["AgentMessage"], int]:
+        """Replace old tool outputs with short stubs, keeping the recent tail.
+
+        Walks backwards accumulating token estimates; once the accumulated
+        total exceeds ``keep_recent``, older tool outputs become prunable
+        (opencode's prune semantics: the protected window is a token budget,
+        and a single huge stale output that crosses it is exactly what should
+        go). The current turn's tool results - anything after the last
+        assistant message - are always protected regardless of size, since
+        the model is about to reason over them.
+
+        Returns ``(new_messages, saved_chars)``; ``saved_chars`` is 0 when
+        nothing was pruned (savings below the floor). Original message objects
+        are never mutated - pruned entries are fresh copies - so persisted
+        session history is unaffected.
+        """
+        last_assistant = max(
+            (i for i, m in enumerate(messages) if m.role == "assistant"),
+            default=len(messages),
+        )
+        replacements: List[Tuple[int, str]] = []
+        saved = 0
+        accumulated = 0
+        for idx in range(len(messages) - 1, -1, -1):
+            msg = messages[idx]
+            try:
+                accumulated += self.context_manager.count_tokens([msg_dicts[idx]])
+            except Exception:
+                accumulated += max(1, len(_content_for_counting(msg.content)) // 4)
+            if accumulated <= keep_recent:
+                continue  # inside the protected recent budget
+            if idx >= last_assistant:
+                continue  # current turn's results: always protected
+            if msg.role == "user" and isinstance(msg.content, list):
+                # Stale image attachment: the data URL dominates a local
+                # model's window. Keep the textual note, drop the pixels.
+                saved += 4000  # matches the flat per-image counting charge
+                replacements.append(
+                    (
+                        idx,
+                        "[Old image attachment removed to save context. Re-run view_image if needed.]",
+                    )
+                )
+                continue
+            if msg.role != "tool":
+                continue
+            content = msg.content or ""
+            if len(content) <= self._PRUNE_MIN_CHARS:
+                continue
+            stub = (
+                f"[Old output of '{msg.name or 'tool'}' removed to save context "
+                f"({len(content):,} chars). Re-run the tool if you need it again.]"
+            )
+            if len(stub) >= len(content):
+                continue
+            saved += len(content) - len(stub)
+            replacements.append((idx, stub))
+        if saved < self._PRUNE_MIN_TOTAL_SAVINGS:
+            return messages, 0
+        new_messages = list(messages)
+        for idx, stub in replacements:
+            old = messages[idx]
+            new_messages[idx] = AgentMessage(
+                role=old.role,
+                content=stub,
+                tool_calls=old.tool_calls,
+                tool_call_id=old.tool_call_id,
+                name=old.name,
+            )
+        return new_messages, saved
 
     async def _maybe_summarize(self, messages: List["AgentMessage"]) -> List["AgentMessage"]:
         """Compact or prune messages when context approaches the model's window.
@@ -1135,7 +1480,7 @@ class AgentLoop:
         msg_dicts = [
             {
                 "role": m.role,
-                "content": m.content,
+                "content": _content_for_counting(m.content),
                 "tool_calls": m.tool_calls,
                 "tool_result": m.content if m.role == "tool" else None,
             }
@@ -1160,6 +1505,41 @@ class AgentLoop:
         if pre.denied:
             return messages
 
+        # Stage 1 (free): stub out stale tool outputs older than the protected
+        # recent tail. The conversation skeleton (who did what, in what order)
+        # survives; only old tool payloads are dropped. No LLM call needed, and
+        # when this alone gets us back under threshold we skip summarization -
+        # the cheaper outcome for local models. Mirrors opencode's prune pass.
+        pruned_messages, pruned_chars = self._prune_stale_tool_outputs(
+            messages, msg_dicts, keep_recent
+        )
+        if pruned_chars > 0:
+            messages = pruned_messages
+            msg_dicts = [
+                {
+                    "role": m.role,
+                    "content": _content_for_counting(m.content),
+                    "tool_calls": m.tool_calls,
+                    "tool_result": m.content if m.role == "tool" else None,
+                }
+                for m in messages
+            ]
+            token_count = self.context_manager.count_tokens(msg_dicts)
+            if token_count <= threshold:
+                if self.on_thinking:
+                    await self.on_thinking(
+                        f"Context pruned: removed {pruned_chars:,} chars of stale tool "
+                        f"output ({token_count}/{window} tokens now). No summary needed."
+                    )
+                await self.hooks.fire(
+                    AFTER_COMPACT,
+                    lifecycle_ctx,
+                    token_count,
+                    messages,
+                    "tool_prune",
+                )
+                return messages
+
         if self.on_thinking:
             await self.on_thinking(
                 f"Context management active ({token_count}/{window} tokens). "
@@ -1181,7 +1561,7 @@ class AgentLoop:
         body_dicts = [
             {
                 "role": m.role,
-                "content": m.content,
+                "content": _content_for_counting(m.content),
                 "tool_calls": m.tool_calls,
                 "tool_result": m.content if m.role == "tool" else None,
             }
@@ -1194,7 +1574,8 @@ class AgentLoop:
         strategy = "prune"
         result_messages: List["AgentMessage"]
         if len(body) > 1 and split >= 1:
-            head = body[:split]
+            # Image parts must not reach the summarizer as raw data URLs.
+            head = [self._strip_image_parts(m) for m in body[:split]]
             tail = body[split:]
             summary = await compact_history(
                 head,
@@ -1227,64 +1608,211 @@ class AgentLoop:
         )
         return result_messages
 
+    def _bound_tool_result(self, name: str, result: ToolResult) -> ToolResult:
+        """Last-resort output bound for tools that don't self-limit.
+
+        Bash and read_file already size themselves to the model; this guard
+        catches everything else (MCP tools, web fetchers, plugins) so a single
+        oversized result can never blow out a local model's context. The full
+        output is spilled to disk and the model gets a preview plus the path.
+        The cap carries some slack so self-limited tools that add a short
+        notice after their own truncation aren't truncated twice.
+        """
+        output = result.output or ""
+        cap = self._tool_output_byte_cap or 100_000
+        limit = int(cap * 1.25) + 512
+        if len(output) <= limit:  # cheap pre-check; chars <= bytes
+            return result
+        from ..tools.output_spill import truncate_with_spill
+
+        bounded, truncated, spill_path = truncate_with_spill(
+            output,
+            max_bytes=limit,
+            label=f"{name} output",
+            prefix=(name or "tool")[:24],
+            direction="head_tail",
+        )
+        if not truncated:
+            return result
+        metadata = dict(result.metadata or {})
+        metadata["loop_truncated"] = True
+        if spill_path is not None:
+            metadata["spilled_to"] = str(spill_path)
+        return ToolResult(
+            success=result.success,
+            output=bounded,
+            error=result.error,
+            metadata=metadata,
+        )
+
+    def _prepare_tool_call(self, tc: Dict) -> Tuple[str, str, Dict[str, Any], Optional[str]]:
+        """Extract (name, call_id, args, parse_error) from a raw tool call.
+
+        Arguments go through lenient repair (code fences, Python-dict syntax,
+        trailing commas, double-encoded JSON - the usual local-model shapes).
+        When they are still unparseable, ``parse_error`` is set and the call
+        must NOT be executed - the error is returned to the model instead of
+        silently running the tool with empty arguments.
+        """
+        from .tool_args import parse_tool_arguments
+
+        function = tc.get("function", {}) or {}
+        tool_name = function.get("name", "") or tc.get("name", "")
+        raw_args = function.get("arguments", "{}")
+        tool_call_id = tc.get("id", str(uuid.uuid4()))
+        tool_args, parse_error = parse_tool_arguments(raw_args)
+        return tool_name, tool_call_id, tool_args, parse_error
+
+    def _tool_is_read_only(self, name: str) -> bool:
+        tool = self.tools.get(name)
+        return bool(tool is not None and getattr(tool, "read_only", False))
+
+    @staticmethod
+    def _strip_image_parts(msg: "AgentMessage") -> "AgentMessage":
+        """Return a text-only copy of a multimodal message (for summarization)."""
+        if not isinstance(msg.content, list):
+            return msg
+        texts = [
+            str(part.get("text", ""))
+            for part in msg.content
+            if isinstance(part, dict) and part.get("type") == "text"
+        ]
+        texts.append("[image attachment omitted]")
+        return AgentMessage(
+            role=msg.role,
+            content="\n".join(t for t in texts if t),
+            tool_calls=msg.tool_calls,
+            tool_call_id=msg.tool_call_id,
+            name=msg.name,
+        )
+
+    @staticmethod
+    def _image_followup_message(result: ToolResult) -> Optional["AgentMessage"]:
+        """Build the multimodal user message carrying a view_image attachment.
+
+        Tool-role messages cannot carry image parts on most providers, so the
+        image is delivered as a user message immediately after the tool
+        result (codex does the same). Not persisted to session storage -
+        data URLs are large and reproducible from the file path.
+        """
+        data_url = (result.metadata or {}).get("image_data_url")
+        if not data_url or not result.success:
+            return None
+        path = (result.metadata or {}).get("image_path", "image")
+        return AgentMessage(
+            role="user",
+            content=[
+                {"type": "text", "text": f"[Attached image: {path}]"},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ],
+        )
+
+    async def _execute_tool_batch(
+        self,
+        tool_calls: List[Dict],
+    ) -> List[Tuple[str, str, Dict, ToolResult]]:
+        """Parse, guard, and execute one assistant turn's tool calls.
+
+        Returns (tool_name, tool_call_id, tool_args, result) tuples in call
+        order. Three guards run before any execution:
+
+        - unparseable arguments are answered with corrective feedback instead
+          of executing the tool with ``{}``;
+        - the doom-loop detector blocks the Nth consecutive identical call and
+          raises :class:`DoomLoopAbort` if the model repeats it anyway;
+        - the batch only runs concurrently when *every* runnable call is
+          read-only - any batch containing a mutating call (edit, write,
+          bash, MCP, unknown) runs sequentially in call order so concurrent
+          mutations can never race.
+        """
+        from .loop_guard import DoomLoopAbort
+        from .tool_args import invalid_arguments_message
+
+        n = len(tool_calls)
+        prepared: List[Tuple[str, str, Dict[str, Any]]] = []
+        results: Dict[int, Tuple[str, str, Dict, ToolResult]] = {}
+
+        for i, tc in enumerate(tool_calls):
+            tool_name, tool_call_id, tool_args, parse_error = self._prepare_tool_call(tc)
+            prepared.append((tool_name, tool_call_id, tool_args))
+            if parse_error is not None:
+                result = ToolResult(
+                    success=False,
+                    output="",
+                    error=invalid_arguments_message(tool_name or "unknown", parse_error),
+                    metadata={"invalid_arguments": True, "tool": tool_name},
+                )
+                if self.on_tool_call:
+                    self.on_tool_call(tool_name, {})
+                if self.on_tool_result:
+                    self.on_tool_result(tool_name, result)
+                results[i] = (tool_name, tool_call_id, {}, result)
+                continue
+
+            guard = self._doom_guard
+            if guard is not None and guard.threshold > 0:
+                if guard.should_abort(tool_name, tool_args):
+                    raise DoomLoopAbort(guard.abort_message(tool_name))
+                if guard.observe(tool_name, tool_args):
+                    result = ToolResult(
+                        success=False,
+                        output="",
+                        error=guard.guidance(tool_name),
+                        metadata={"doom_loop": True, "tool": tool_name},
+                    )
+                    if self.on_thinking:
+                        await self.on_thinking(
+                            f"Loop guard: blocked repeated identical call to '{tool_name}'."
+                        )
+                    if self.on_tool_call:
+                        self.on_tool_call(tool_name, tool_args)
+                    if self.on_tool_result:
+                        self.on_tool_result(tool_name, result)
+                    results[i] = (tool_name, tool_call_id, tool_args, result)
+
+        runnable = [i for i in range(n) if i not in results]
+
+        async def dispatch(i: int) -> None:
+            tool_name, tool_call_id, tool_args = prepared[i]
+            if self.on_tool_call:
+                self.on_tool_call(tool_name, tool_args)
+            result = await self._execute_tool(tool_name, tool_args, tool_call_id=tool_call_id)
+            if self.on_tool_result:
+                self.on_tool_result(tool_name, result)
+            results[i] = (tool_name, tool_call_id, tool_args, result)
+
+        run_parallel = (
+            self.parallel_tools
+            and len(runnable) > 1
+            and all(self._tool_is_read_only(prepared[i][0]) for i in runnable)
+        )
+        if run_parallel:
+            outcomes = await asyncio.gather(
+                *(dispatch(i) for i in runnable), return_exceptions=True
+            )
+            for i, outcome in zip(runnable, outcomes):
+                if isinstance(outcome, ToolApprovalRequired) or isinstance(outcome, DoomLoopAbort):
+                    raise outcome
+                if isinstance(outcome, BaseException):
+                    tool_name, tool_call_id, tool_args = prepared[i]
+                    results[i] = (
+                        tool_name,
+                        tool_call_id,
+                        tool_args,
+                        ToolResult(success=False, output="", error=str(outcome)),
+                    )
+        else:
+            for i in runnable:
+                await dispatch(i)
+
+        return [results[i] for i in range(n)]
+
     async def _execute_tools_parallel(
         self,
         tool_calls: List[Dict],
     ) -> List[Tuple[str, str, Dict, ToolResult]]:
-        """Execute multiple tool calls in parallel.
-
-        Returns list of (tool_name, tool_call_id, tool_args, result) tuples.
-        """
-
-        async def execute_one(tc: Dict) -> Tuple[str, str, Dict, ToolResult]:
-            tool_name = tc.get("function", {}).get("name", "")
-            tool_args_str = tc.get("function", {}).get("arguments", "{}")
-            tool_call_id = tc.get("id", str(uuid.uuid4()))
-
-            try:
-                tool_args = (
-                    json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
-                )
-            except json.JSONDecodeError:
-                tool_args = {}
-
-            # Callback for tool call
-            if self.on_tool_call:
-                self.on_tool_call(tool_name, tool_args)
-
-            result = await self._execute_tool(tool_name, tool_args, tool_call_id=tool_call_id)
-
-            # Callback for result
-            if self.on_tool_result:
-                self.on_tool_result(tool_name, result)
-
-            return (tool_name, tool_call_id, tool_args, result)
-
-        # Execute all tools in parallel
-        tasks = [execute_one(tc) for tc in tool_calls]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Handle any exceptions
-        processed = []
-        for i, r in enumerate(results):
-            if isinstance(r, ToolApprovalRequired):
-                raise r
-            if isinstance(r, Exception):
-                tc = tool_calls[i]
-                tool_name = tc.get("function", {}).get("name", "unknown")
-                tool_call_id = tc.get("id", str(uuid.uuid4()))
-                processed.append(
-                    (
-                        tool_name,
-                        tool_call_id,
-                        {},
-                        ToolResult(success=False, output="", error=str(r)),
-                    )
-                )
-            else:
-                processed.append(r)
-
-        return processed
+        """Back-compat alias for :meth:`_execute_tool_batch`."""
+        return await self._execute_tool_batch(tool_calls)
 
     async def run(self, user_message: str) -> AgentResponse:
         """Run the agent loop until completion.
@@ -1300,13 +1828,31 @@ class AgentLoop:
         # Resolve the real (loaded, for local) context window once so adaptive
         # compaction is sized correctly from the first turn.
         await self._ensure_context_window()
+        self._arm_doom_guard()
 
         from .hooks import SESSION_START, STOP, USER_PROMPT_SUBMIT
 
         lifecycle_ctx = self._lifecycle_context()
 
         async def _finish(response: AgentResponse) -> AgentResponse:
+            self.run_active = False
             await self.hooks.fire(STOP, self._lifecycle_context(), response)
+            # Opt-in automatic memory extraction, off the hot path.
+            try:
+                from .auto_memory import auto_memory_enabled, extract_session_memories
+
+                if auto_memory_enabled() and response.stopped_reason == "complete":
+                    self._auto_memory_task = asyncio.create_task(
+                        extract_session_memories(
+                            list(response.messages),
+                            self.gateway,
+                            self.config.provider,
+                            self.config.model,
+                            self.config.working_directory,
+                        )
+                    )
+            except Exception:
+                pass
             return response
 
         if not self._session_started:
@@ -1331,7 +1877,7 @@ class AgentLoop:
 
         # Add system message if we have one
         if self.system_prompt:
-            messages.append(AgentMessage(role="system", content=self.system_prompt))
+            messages.append(AgentMessage(role="system", content=self._system_prompt_for_run()))
 
         messages.extend(self._load_stored_messages())
 
@@ -1346,22 +1892,46 @@ class AgentLoop:
         iterations = 0
         unexecuted_tool_intent_retries = 0
         max_unexecuted_tool_intent_retries = 1
+        auto_continues = 0
+        length_parts: List[str] = []
+        rubric_rounds = 0
 
         # Emit initial processing log
         if self.on_thinking:
             await self.on_thinking("Processing request...")
 
-        # Get cached tool definitions (computed once at init)
-        tool_defs = self._get_tool_definitions()
+        self.run_active = True
 
         # Always send tools if available - let malformed tool call handling deal with issues
         # This ensures models always get the full context and we handle malformed responses gracefully
         # max_iterations <= 0 means unlimited (loop until the model stops)
         _cap = self.config.max_iterations
         while _cap <= 0 or iterations < _cap:
+            if self._cancelled:
+                return await _finish(
+                    AgentResponse(
+                        content="",
+                        messages=messages,
+                        tool_calls_made=tool_calls_made,
+                        iterations=iterations,
+                        stopped_reason="cancelled",
+                    )
+                )
+
             iterations += 1
             self._current_iteration = iterations
             turn_tool_results: List[ToolResult] = []
+
+            # Inject any steering messages queued while the agent was working.
+            drained = self._drain_steering(messages)
+            if drained and self.on_thinking:
+                await self.on_thinking(
+                    f"Steering: picked up {len(drained)} queued user message(s)."
+                )
+
+            # Tool definitions are per-iteration: tool_search may have
+            # activated deferred tools since the last call.
+            tool_defs = self._get_tool_definitions()
 
             # Emit iteration log
             if self.on_thinking:
@@ -1369,12 +1939,15 @@ class AgentLoop:
                     f"Calling model {self.config.provider}/{self.config.model}... (iteration {iterations})"
                 )
 
-            # PERFORMANCE: Use cached message conversion
-            gateway_messages = self._convert_messages(messages)
+            # PERFORMANCE: Use cached message conversion. Reminders ride along
+            # on the request only - they are not part of stored history.
+            gateway_messages = self._convert_messages(
+                messages + self._collect_reminder_messages(iterations)
+            )
 
             # Plan mode: disable tools so model only analyzes/plans without executing
             tools_to_send = None
-            if not self.config.plan_mode:
+            if not self.config.plan_mode and not self._prompt_tool_mode():
                 tools_to_send = (
                     tool_defs
                     if _should_send_tools(
@@ -1431,6 +2004,12 @@ class AgentLoop:
 
             # Extract content - handle None/empty cases
             response_content = response.content if response.content is not None else ""
+
+            # Prompt-tool mode: lift <tool_call> blocks out of the text into
+            # standard tool calls (no-op when native calls are present).
+            response_content, response.tool_calls = self._extract_prompt_tool_calls(
+                response_content, response.tool_calls
+            )
 
             # Check for empty responses from models that should respond
             if not response_content.strip() and not response.tool_calls:
@@ -1502,81 +2081,63 @@ class AgentLoop:
                         f"Executing {tool_count} tool call{'s' if tool_count != 1 else ''}..."
                     )
 
-                # PERFORMANCE: Execute tools in parallel or sequential
-                if self.parallel_tools and len(response.tool_calls) > 1:
-                    # Parallel execution for multiple tools
-                    try:
-                        results = await self._execute_tools_parallel(response.tool_calls)
-                    except ToolApprovalRequired:
-                        return await _finish(
-                            AgentResponse(
-                                content="",
-                                messages=messages,
-                                tool_calls_made=tool_calls_made,
-                                iterations=iterations,
-                                stopped_reason="needs_approval",
-                            )
+                # Execute the turn's tool calls. The batch executor handles
+                # argument repair, doom-loop guarding, and only parallelizes
+                # when every call is read-only (mutations run in call order).
+                from .loop_guard import DoomLoopAbort
+
+                try:
+                    results = await self._execute_tool_batch(response.tool_calls)
+                except ToolApprovalRequired:
+                    return await _finish(
+                        AgentResponse(
+                            content="",
+                            messages=messages,
+                            tool_calls_made=tool_calls_made,
+                            iterations=iterations,
+                            stopped_reason="needs_approval",
                         )
-                    for tool_name, tool_call_id, tool_args, result in results:
-                        tool_calls_made += 1
-                        turn_tool_results.append(result)
-                        messages.append(
-                            AgentMessage(
-                                role="tool",
-                                content=result.to_message(),
-                                tool_call_id=tool_call_id,
-                                name=tool_name,
-                            )
+                    )
+                except DoomLoopAbort as abort:
+                    if self.on_thinking:
+                        await self.on_thinking(
+                            "Loop guard: aborting run (model kept repeating the same call)."
                         )
-                        if self._session_manager:
-                            self._session_manager.add_tool_result(tool_name, result.to_message())
-                else:
-                    # Sequential execution (single tool or parallel disabled)
-                    for tool_call in response.tool_calls:
-                        tool_name = tool_call.get("function", {}).get("name", "")
-                        tool_args_str = tool_call.get("function", {}).get("arguments", "{}")
-                        tool_call_id = tool_call.get("id", str(uuid.uuid4()))
-
-                        try:
-                            tool_args = (
-                                json.loads(tool_args_str)
-                                if isinstance(tool_args_str, str)
-                                else tool_args_str
-                            )
-                        except json.JSONDecodeError:
-                            tool_args = {}
-
-                        if self.on_tool_call:
-                            self.on_tool_call(tool_name, tool_args)
-
-                        try:
-                            result = await self._execute_tool(
-                                tool_name, tool_args, tool_call_id=tool_call_id
-                            )
-                        except ToolApprovalRequired:
-                            return await _finish(
-                                AgentResponse(
-                                    content="",
-                                    messages=messages,
-                                    tool_calls_made=tool_calls_made,
-                                    iterations=iterations,
-                                    stopped_reason="needs_approval",
-                                )
-                            )
-                        tool_calls_made += 1
-                        turn_tool_results.append(result)
-
-                        if self.on_tool_result:
-                            self.on_tool_result(tool_name, result)
-
-                        messages.append(
-                            AgentMessage(
-                                role="tool",
-                                content=result.to_message(),
-                                tool_call_id=tool_call_id,
-                                name=tool_name,
-                            )
+                    return await _finish(
+                        AgentResponse(
+                            content=str(abort),
+                            messages=messages,
+                            tool_calls_made=tool_calls_made,
+                            iterations=iterations,
+                            stopped_reason="loop_detected",
+                            error=str(abort),
                         )
+                    )
+                for tool_name, tool_call_id, tool_args, result in results:
+                    tool_calls_made += 1
+                    turn_tool_results.append(result)
+                    messages.append(
+                        AgentMessage(
+                            role="tool",
+                            content=result.to_message(),
+                            tool_call_id=tool_call_id,
+                            name=tool_name,
+                        )
+                    )
+                    if self._session_manager:
+                        self._session_manager.add_tool_result(tool_name, result.to_message())
+                    image_msg = self._image_followup_message(result)
+                    if image_msg is not None:
+                        messages.append(image_msg)
+
+                # Per-turn aggregate diff (codex turn_diff_tracker pattern):
+                # one summary line per turn, full diff retained for consumers.
+                from ..tools.diff_utils import summarize_turn_changes
+
+                turn_summary, turn_diff = summarize_turn_changes(turn_tool_results)
+                self.last_turn_diff = turn_diff
+                if turn_summary and self.on_thinking:
+                    await self.on_thinking(turn_summary)
 
                 # Emit iteration complete log
                 if self.on_thinking:
@@ -1596,6 +2157,30 @@ class AgentLoop:
                 messages = await self._maybe_summarize(messages)
 
             else:
+                # No tool calls. If the output was cut at the max-token limit,
+                # ask the model to continue from where it stopped (bounded).
+                if response.finish_reason == "length" and auto_continues < max(
+                    0, self.config.max_auto_continues
+                ):
+                    auto_continues += 1
+                    length_parts.append(response_content)
+                    messages.append(AgentMessage(role="assistant", content=response_content))
+                    messages.append(
+                        AgentMessage(
+                            role="user",
+                            content=(
+                                "Your previous message was cut off at the output-token "
+                                "limit. Continue from exactly where it stopped. Do not "
+                                "repeat any text you already produced."
+                            ),
+                        )
+                    )
+                    if self.on_thinking:
+                        await self.on_thinking(
+                            f"Output hit the token limit; auto-continuing ({auto_continues}/{self.config.max_auto_continues})..."
+                        )
+                    continue
+
                 # No tool calls - return the response content
                 if (
                     tools_to_send
@@ -1626,6 +2211,50 @@ class AgentLoop:
                     await self.on_thinking(
                         "Model still described tool use without calling a tool; returning response."
                     )
+                # User steered while the model was finishing: keep the turn
+                # going with the queued message(s) instead of returning.
+                if self.steering_pending():
+                    messages.append(AgentMessage(role="assistant", content=response_content))
+                    if self._session_manager and response_content.strip():
+                        self._session_manager.add_assistant_message(response_content)
+                    continue
+
+                # Rubric self-grading: a separate grader judges the final
+                # answer; needs_revision feedback re-enters the loop.
+                if self.config.rubric and rubric_rounds < max(0, self.config.max_rubric_rounds):
+                    from .rubric import grade_against_rubric
+
+                    verdict, feedback = await grade_against_rubric(
+                        messages,
+                        response_content,
+                        self.config.rubric,
+                        self.gateway,
+                        self.config.provider,
+                        self.config.model,
+                    )
+                    if verdict == "needs_revision" and feedback:
+                        rubric_rounds += 1
+                        if self.on_thinking:
+                            await self.on_thinking(
+                                f"Rubric review: needs revision (round {rubric_rounds}/{self.config.max_rubric_rounds}) - {feedback[:120]}"
+                            )
+                        messages.append(
+                            AgentMessage(role="assistant", content=response_content)
+                        )
+                        messages.append(
+                            AgentMessage(
+                                role="user",
+                                content=(
+                                    "[rubric review] Your work does not yet satisfy the "
+                                    f"rubric. Reviewer feedback:\n{feedback}\n"
+                                    "Revise your work to address this, then give your final answer."
+                                ),
+                            )
+                        )
+                        continue
+                    if verdict == "failed" and self.on_thinking:
+                        await self.on_thinking(f"Rubric review: failed - {feedback[:120]}")
+
                 if self.on_thinking:
                     await self.on_thinking("Response complete")
                 from .hooks import AFTER_TURN_COMPLETE
@@ -1637,7 +2266,11 @@ class AgentLoop:
                     turn_tool_results,
                 )
                 final = AgentResponse(
-                    content=response_content,
+                    content=(
+                        "".join(length_parts + [response_content])
+                        if length_parts
+                        else response_content
+                    ),
                     messages=messages,
                     tool_calls_made=tool_calls_made,
                     iterations=iterations,
@@ -1673,11 +2306,12 @@ class AgentLoop:
         # Resolve the real (loaded, for local) context window once so adaptive
         # compaction in this streaming run is sized correctly.
         await self._ensure_context_window()
+        self._arm_doom_guard()
 
         messages: List[AgentMessage] = []
 
         if self.system_prompt:
-            messages.append(AgentMessage(role="system", content=self.system_prompt))
+            messages.append(AgentMessage(role="system", content=self._system_prompt_for_run()))
 
         messages.extend(self._load_stored_messages())
 
@@ -1687,15 +2321,30 @@ class AgentLoop:
 
         iterations = 0
         tool_calls_made = 0
+        auto_continues = 0
 
         # Emit initial processing log
         if self.on_thinking:
             await self.on_thinking("Processing request...")
 
-        # Get cached tool definitions
-        tool_defs = self._get_tool_definitions()
+        self.run_active = True
 
-        # max_iterations <= 0 means unlimited (loop until the model stops)
+        try:
+            async for chunk in self._run_streaming_loop(
+                messages, user_message, iterations, tool_calls_made, auto_continues
+            ):
+                yield chunk
+        finally:
+            self.run_active = False
+
+    async def _run_streaming_loop(
+        self,
+        messages: List["AgentMessage"],
+        user_message: str,
+        iterations: int,
+        tool_calls_made: int,
+        auto_continues: int,
+    ) -> AsyncIterator[str]:
         _cap = self.config.max_iterations
         while _cap <= 0 or iterations < _cap:
             # Check for cancellation
@@ -1706,17 +2355,31 @@ class AgentLoop:
 
             iterations += 1
 
+            # Inject any steering messages queued while the agent was working.
+            drained = self._drain_steering(messages)
+            if drained and self.on_thinking:
+                await self.on_thinking(
+                    f"Steering: picked up {len(drained)} queued user message(s)."
+                )
+
+            # Tool definitions are per-iteration: tool_search may have
+            # activated deferred tools since the last call.
+            tool_defs = self._get_tool_definitions()
+
             # Emit iteration log
             if self.on_thinking:
                 await self.on_thinking(
                     f"Calling model {self.config.provider}/{self.config.model}... (iteration {iterations})"
                 )
 
-            # PERFORMANCE: Use cached message conversion
-            gateway_messages = self._convert_messages(messages)
+            # PERFORMANCE: Use cached message conversion. Reminders ride along
+            # on the request only - they are not part of stored history.
+            gateway_messages = self._convert_messages(
+                messages + self._collect_reminder_messages(iterations)
+            )
 
             tools_to_send = None
-            if not self.config.plan_mode:
+            if not self.config.plan_mode and not self._prompt_tool_mode():
                 tools_to_send = (
                     tool_defs
                     if _should_send_tools(
@@ -1734,6 +2397,7 @@ class AgentLoop:
             full_content = ""
             tool_calls = []
             had_content = False
+            stream_finish_reason: Optional[str] = None
 
             # Buffer for accumulating thinking content chunks
             # Local models stream thinking in tiny pieces - accumulate for readable display
@@ -1789,6 +2453,9 @@ class AgentLoop:
 
                     if chunk.tool_calls:
                         tool_calls.extend(chunk.tool_calls)
+
+                    if chunk.finish_reason:
+                        stream_finish_reason = chunk.finish_reason
 
                 # Flush any remaining thinking content after streaming completes
                 if thinking_buffer.strip() and self.on_thinking:
@@ -1861,6 +2528,13 @@ class AgentLoop:
                     yield f"\n\n[Error: {error_type}] {error_msg}"
                     return
 
+            # Prompt-tool mode: lift <tool_call> blocks out of the streamed
+            # text into standard tool calls (no-op when native calls arrived).
+            full_content, extracted_calls = self._extract_prompt_tool_calls(
+                full_content, tool_calls or None
+            )
+            tool_calls = extracted_calls or []
+
             # Handle tool calls
             if tool_calls:
                 messages.append(
@@ -1880,63 +2554,45 @@ class AgentLoop:
                         f"Executing {tool_count} tool call{'s' if tool_count != 1 else ''}..."
                     )
 
-                # PERFORMANCE: Execute tools in parallel or sequential
-                if self.parallel_tools and len(tool_calls) > 1:
-                    try:
-                        results = await self._execute_tools_parallel(tool_calls)
-                    except ToolApprovalRequired:
-                        return
-                    for tool_name, tool_call_id, tool_args, result in results:
-                        tool_calls_made += 1
-                        messages.append(
-                            AgentMessage(
-                                role="tool",
-                                content=result.to_message(),
-                                tool_call_id=tool_call_id,
-                                name=tool_name,
-                            )
+                # Execute the turn's tool calls. The batch executor handles
+                # argument repair, doom-loop guarding, and only parallelizes
+                # when every call is read-only (mutations run in call order).
+                from .loop_guard import DoomLoopAbort
+
+                try:
+                    results = await self._execute_tool_batch(tool_calls)
+                except ToolApprovalRequired:
+                    return
+                except DoomLoopAbort as abort:
+                    if self.on_thinking:
+                        await self.on_thinking(
+                            "Loop guard: aborting run (model kept repeating the same call)."
                         )
-                        if self._session_manager:
-                            self._session_manager.add_tool_result(tool_name, result.to_message())
-                else:
-                    for tool_call in tool_calls:
-                        tool_name = tool_call.get("function", {}).get("name", "")
-                        tool_args_str = tool_call.get("function", {}).get("arguments", "{}")
-                        tool_call_id = tool_call.get("id", str(uuid.uuid4()))
-
-                        try:
-                            tool_args = (
-                                json.loads(tool_args_str)
-                                if isinstance(tool_args_str, str)
-                                else tool_args_str
-                            )
-                        except json.JSONDecodeError:
-                            tool_args = {}
-
-                        if self.on_tool_call:
-                            self.on_tool_call(tool_name, tool_args)
-
-                        try:
-                            result = await self._execute_tool(
-                                tool_name, tool_args, tool_call_id=tool_call_id
-                            )
-                        except ToolApprovalRequired:
-                            return
-                        tool_calls_made += 1
-
-                        if self.on_tool_result:
-                            self.on_tool_result(tool_name, result)
-
-                        messages.append(
-                            AgentMessage(
-                                role="tool",
-                                content=result.to_message(),
-                                tool_call_id=tool_call_id,
-                                name=tool_name,
-                            )
+                    yield f"\n\n[{abort}]"
+                    return
+                for tool_name, tool_call_id, tool_args, result in results:
+                    tool_calls_made += 1
+                    messages.append(
+                        AgentMessage(
+                            role="tool",
+                            content=result.to_message(),
+                            tool_call_id=tool_call_id,
+                            name=tool_name,
                         )
-                        if self._session_manager:
-                            self._session_manager.add_tool_result(tool_name, result.to_message())
+                    )
+                    if self._session_manager:
+                        self._session_manager.add_tool_result(tool_name, result.to_message())
+                    image_msg = self._image_followup_message(result)
+                    if image_msg is not None:
+                        messages.append(image_msg)
+
+                # Per-turn aggregate diff (codex turn_diff_tracker pattern).
+                from ..tools.diff_utils import summarize_turn_changes
+
+                turn_summary, turn_diff = summarize_turn_changes([r[3] for r in results])
+                self.last_turn_diff = turn_diff
+                if turn_summary and self.on_thinking:
+                    await self.on_thinking(turn_summary)
 
                 # Emit iteration complete log
                 if self.on_thinking:
@@ -1952,6 +2608,38 @@ class AgentLoop:
                 # The next iteration will stream the final response with tool results
                 # Important: The model should provide a summary after seeing tool results
             else:
+                # No tool calls. If the output was cut at the max-token limit,
+                # ask the model to continue from where it stopped; the
+                # continuation streams seamlessly after the partial text.
+                if stream_finish_reason == "length" and auto_continues < max(
+                    0, self.config.max_auto_continues
+                ):
+                    auto_continues += 1
+                    messages.append(AgentMessage(role="assistant", content=full_content))
+                    messages.append(
+                        AgentMessage(
+                            role="user",
+                            content=(
+                                "Your previous message was cut off at the output-token "
+                                "limit. Continue from exactly where it stopped. Do not "
+                                "repeat any text you already produced."
+                            ),
+                        )
+                    )
+                    if self.on_thinking:
+                        await self.on_thinking(
+                            f"Output hit the token limit; auto-continuing ({auto_continues}/{self.config.max_auto_continues})..."
+                        )
+                    continue
+
+                # User steered while the model was finishing: keep going with
+                # the queued message(s) instead of ending the run.
+                if self.steering_pending():
+                    messages.append(AgentMessage(role="assistant", content=full_content))
+                    if self._session_manager and full_content.strip():
+                        self._session_manager.add_assistant_message(full_content)
+                    continue
+
                 # No tool calls - we have the final response
                 # If we had tool calls in previous iterations but no content now,
                 # the model should still provide a summary

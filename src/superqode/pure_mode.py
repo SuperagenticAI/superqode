@@ -318,6 +318,18 @@ class PureMode:
 
         return response
 
+    def steer(self, message: str) -> bool:
+        """Inject a message into the live builtin run (between tool calls).
+
+        Returns True when delivered into an active run; False when there is
+        no builtin loop or it is idle - the caller should queue or submit
+        the message normally instead.
+        """
+        agent = self._agent
+        if agent is None or not getattr(agent, "run_active", False):
+            return False
+        return bool(agent.steer(message))
+
     async def run_streaming(self, prompt: str, plan_mode: Optional[bool] = None):
         """Run a task with streaming output."""
         if self._harness_spec is not None:
