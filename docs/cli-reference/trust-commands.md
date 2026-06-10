@@ -20,7 +20,7 @@ superqode trust status [OPTIONS]
 
 ### Output
 
-```
+```text
 Trust Status: trusted
 
 Project: /Users/you/code/my-project

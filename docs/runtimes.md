@@ -80,11 +80,11 @@ the engine that executes it. The picker is profile-driven and shows live status:
 :connect
   [1] ACP agent            Any external ACP agent (incl. your local Claude Code)
   [2] BYOK provider        Your API key, such as OpenAI, Anthropic, or Gemini
-  [3] Local model          Ollama / MLX / vLLM / LM Studio …
+  [3] Local model          Ollama / MLX / vLLM / LM Studio ...
   [4] Codex subscription   Drive OpenAI Codex with your ChatGPT/Codex login (~/.codex)
   [5] Claude Agent SDK     Use your Anthropic API key via claude-agent-sdk
   [6] Antigravity CLI      Use Google's local agy CLI; Gemini CLI migration path
-  [7] Advanced runtime     Pick the execution engine (builtin / openai-agents / …)
+  [7] Advanced runtime     Pick the execution engine (builtin / openai-agents / ...)
 ```
 
 **Claude** has one headline entry: **Claude Agent SDK** (API key via

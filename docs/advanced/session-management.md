@@ -21,7 +21,7 @@ Session management in SuperQode includes:
 
 Sessions are stored in JSONL format in `.superqode/sessions/`:
 
-```
+```text
 .superqode/sessions/
 ├── abc12345.jsonl      # Conversation messages
 ├── abc12345.meta.json # Session metadata
@@ -58,13 +58,13 @@ config = AgentConfig(
 
 ### List Sessions
 
-```
+```text
 /sessions
 ```
 
 Shows recent sessions with metadata:
 
-```
+```text
 Recent Sessions:
 --------------------------------------------------
 1. abc12345 | gpt-4o | 2026-05-11 10:00 | 5 msgs
@@ -75,7 +75,7 @@ Use /resume <id> to continue a session
 
 ### Resume Session
 
-```
+```text
 /resume <session_id>
 ```
 
@@ -83,7 +83,7 @@ Resumes a previous session and reconnects to the same provider and model.
 
 ### Compact Context
 
-```
+```text
 /compact
 ```
 
@@ -129,7 +129,7 @@ When agent responses exceed a size threshold, they are saved to a file rather th
 
 Large outputs are saved to `.superqode/outputs/`:
 
-```
+```text
 .superqode/outputs/
 ├── output_20260511_100000_a1b2c3d4.txt
 └── output_20260511_100500_e5f6g7h8.txt

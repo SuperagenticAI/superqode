@@ -12,6 +12,13 @@ cost context exactly once and can't accumulate. Two built-ins:
   while; a gentle nudge keeps long multi-step runs from silently dropping
   the plan. Rate-limited so it never nags every turn.
 
+A third built-in is opt-in: **memory recall** (``SUPERQODE_AUTO_RECALL=1``)
+searches the local memory store with the run's prompt and surfaces the top
+hits once per prompt. Only the local provider is read - it lives under the
+user's home directory and contains only what the user (or opt-in
+auto-capture) stored, so an untrusted repository can never plant content
+into the agent's context through it.
+
 Disable everything with ``SUPERQODE_REMINDERS=0``.
 """
 
@@ -26,6 +33,11 @@ from typing import Any, Dict, List
 TODO_NUDGE_INTERVAL = 8
 # Cap how many changed files one reminder lists.
 MAX_CHANGED_FILES = 5
+# Memory recall: opt-in env, relevance floor, and result cap.
+AUTO_RECALL_ENV = "SUPERQODE_AUTO_RECALL"
+RECALL_MIN_SCORE = 0.34
+RECALL_MAX_RESULTS = 4
+_RECALL_SNIPPET_CHARS = 240
 
 
 def reminders_enabled() -> bool:
@@ -100,17 +112,70 @@ def _stale_todo_reminder(
     )
 
 
+def auto_recall_enabled() -> bool:
+    return os.environ.get(AUTO_RECALL_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _memory_recall_reminder(
+    working_directory: Path, user_message: str, state: Dict[str, Any]
+) -> str:
+    """Surface relevant local memories for this prompt, once per prompt.
+
+    Reads only the local provider: it lives under the user's home directory
+    and holds only user-stored (or opt-in auto-captured) notes, so untrusted
+    repository content can never reach the agent through this path.
+    """
+    if not auto_recall_enabled():
+        return ""
+    prompt = (user_message or "").strip()
+    if len(prompt) < 8:
+        return ""
+    import hashlib
+
+    prompt_key = hashlib.sha256(prompt.encode("utf-8", errors="replace")).hexdigest()[:16]
+    if state.get("recalled_for") == prompt_key:
+        return ""
+    state["recalled_for"] = prompt_key
+    try:
+        from ..memory.providers import LocalAgentMemoryProvider
+
+        results = LocalAgentMemoryProvider(project_root=working_directory).search(
+            prompt, limit=RECALL_MAX_RESULTS * 2
+        )
+    except Exception:
+        return ""
+    hits = [r for r in results if r.score >= RECALL_MIN_SCORE][:RECALL_MAX_RESULTS]
+    if not hits:
+        return ""
+    lines = []
+    for hit in hits:
+        content = " ".join(str(hit.record.content).split())
+        if len(content) > _RECALL_SNIPPET_CHARS:
+            content = content[: _RECALL_SNIPPET_CHARS - 3] + "..."
+        lines.append(f"  - [{hit.record.kind}] {content}")
+    listing = "\n".join(lines)
+    return (
+        "Saved project memory relevant to this task (from `superqode memory`; "
+        "background context, verify before relying on it):\n"
+        f"{listing}"
+    )
+
+
 def collect_reminders(
     *,
     session_id: str,
     working_directory: Path,
     iteration: int,
     state: Dict[str, Any],
+    user_message: str = "",
 ) -> List[str]:
     """Gather reminder texts for the next model call. Cheap (stat calls only)."""
     if not reminders_enabled():
         return []
     out: List[str] = []
+    text = _memory_recall_reminder(working_directory, user_message, state)
+    if text:
+        out.append(text)
     text = _changed_files_reminder(session_id, state)
     if text:
         out.append(text)
@@ -127,8 +192,12 @@ def format_reminder_message(texts: List[str]) -> str:
 
 
 __all__ = [
+    "AUTO_RECALL_ENV",
     "MAX_CHANGED_FILES",
+    "RECALL_MAX_RESULTS",
+    "RECALL_MIN_SCORE",
     "TODO_NUDGE_INTERVAL",
+    "auto_recall_enabled",
     "collect_reminders",
     "format_reminder_message",
     "reminders_enabled",

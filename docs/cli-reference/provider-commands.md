@@ -51,7 +51,7 @@ superqode providers list --category local
 
 ### Output
 
-```
+```text
 BYOK Providers
 ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ Provider    ┃ Name          ┃ Tier   ┃ Category    ┃ Status           ┃ Env Var               ┃
@@ -89,7 +89,7 @@ superqode providers show anthropic
 
 ### Output
 
-```
+```text
 ╭──────────────────────────────────────────────────────────────╮
 │                    Provider: Anthropic                        │
 ├──────────────────────────────────────────────────────────────┤
@@ -146,7 +146,7 @@ superqode providers test anthropic -m claude-sonnet-4
 
 ### Output
 
-```
+```text
 Testing Anthropic with model claude-sonnet-4...
 
 [CORRECT] Success!
@@ -555,7 +555,7 @@ superqode connect local mlx mlx-community/Qwen2.5-Coder-3B-4bit
 
 ### Provider Not Configured
 
-```
+```json
 [INCORRECT] Provider 'anthropic' is not configured
 
 Set: ANTHROPIC_API_KEY=your-api-key
@@ -566,7 +566,7 @@ Get your API key at: https://docs.anthropic.com/
 
 ### Connection Failed
 
-```
+```json
 [INCORRECT] Connection failed: Connection refused
 ```
 
@@ -582,7 +582,7 @@ mlx_lm.server --model <model-id>
 
 ### Model Not Found
 
-```
+```json
 [INCORRECT] Error: Model 'unknown-model' not found
 ```
 

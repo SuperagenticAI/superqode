@@ -6,6 +6,9 @@ SuperQode separates the harness you configure from the runtime that executes it.
 run is allowed to do, which model policy to use, which tools are available, how approvals work, where events
 are stored, and what output should be returned.
 
+!!! tip "New to harnesses?"
+    [Configuration vs Harness](../concepts/configuration-vs-harness.md) explains how `harness.yaml` differs from `superqode.yaml`, walks the full lifecycle from `harness init` to `harness events`, and lists every surface a harness runs on (CLI, TUI, workflows, MCP, A2A, Python). This page is the detailed spec reference.
+
 ---
 
 ## What A Harness Gives You
@@ -493,7 +496,7 @@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
 ## Expose Harnesses Over MCP
 
-A harness isn't only runnable from the TUI — you can expose your HarnessSpec
+A harness isn't only runnable from the TUI: you can expose your HarnessSpec
 workflows as **MCP tools** so any MCP client (Claude Desktop, IDEs, other agents)
 can discover and run them. This complements the A2A and ACP servers.
 
@@ -505,9 +508,9 @@ superqode mcp --dir ./harnesses    # point at a specific spec directory
 
 It exposes three tools:
 
-- `list_harnesses` — the HarnessSpec files it found.
-- `describe_harness(harness)` — a spec's workflow mode, runtime, and agents.
-- `run_harness(harness, task, provider?, model?)` — run the workflow, return the result.
+- `list_harnesses`: the HarnessSpec files it found.
+- `describe_harness(harness)`: a spec's workflow mode, runtime, and agents.
+- `run_harness(harness, task, provider?, model?)`: run the workflow, return the result.
 
 Specs are discovered under `.superqode/harness/`, `.superqode/harnesses/`,
 `harness/`, or `harnesses/` (or `--dir`). The provider/model resolve from the

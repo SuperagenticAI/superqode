@@ -4,8 +4,8 @@ Four layers decide what the agent may do, evaluated in a fixed order for every t
 
 ## Order of authority
 
-```
-1. permission_request hooks      (harness policies / plugins — can veto anything)
+```text
+1. permission_request hooks      (harness policies / plugins: can veto anything)
 2. exec-policy rules             (your YAML: allow / deny / ask for shell commands)
 3. permission manager            (built-in: dangerous-command guards, tool config)
 4. ask flow                      (TUI prompt, or pause in harness runs)
@@ -13,7 +13,7 @@ Four layers decide what the agent may do, evaluated in a fixed order for every t
 
 Two invariants no layer can break:
 
-- A **hard deny** (dangerous-command guard like `rm -rf`, deny pattern, explicit DENY config) always wins — a permissive hook, rule, or session grant cannot override it.
+- A **hard deny** (dangerous-command guard like `rm -rf`, deny pattern, explicit DENY config) always wins: a permissive hook, rule, or session grant cannot override it.
 - A user **`ask`** rule always forces a prompt, even for commands that would auto-allow.
 
 ## Exec policy: your allow/deny/ask rules
@@ -85,11 +85,11 @@ permissions:
   deny_patterns: ["bash:sudo *"]
 ```
 
-The manager also auto-allows known read-only commands (`ls`, `git status`, …) and trusted-registry network commands when the policy would otherwise prompt — cutting prompt fatigue without weakening safety — and hard-denies dangerous commands regardless of any other setting.
+The manager also auto-allows known read-only commands (`ls`, `git status`, and similar) and trusted-registry network commands when the policy would otherwise prompt, cutting prompt fatigue without weakening safety. Dangerous commands are hard-denied regardless of any other setting.
 
 ## OS sandbox
 
-With `SUPERQODE_SANDBOX` set, even auto-approved commands are confined by the OS — macOS Seatbelt (`sandbox-exec`) or Linux Bubblewrap (`bwrap`) — so they cannot write outside the project. Harness specs select sandbox modes per run (`execution_policy.sandbox`); `superqode harness doctor` verifies the backend is available.
+With `SUPERQODE_SANDBOX` set, even auto-approved commands are confined by the OS through macOS Seatbelt (`sandbox-exec`) or Linux Bubblewrap (`bwrap`), so they cannot write outside the project. Harness specs select sandbox modes per run (`execution_policy.sandbox`); `superqode harness doctor` verifies the backend is available.
 
 ## Loop-level guards
 

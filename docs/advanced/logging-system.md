@@ -6,7 +6,7 @@ The logging module provides consistent logging across all provider modes (ACP, B
 
 The unified logging system routes agent events through adapters into a central UnifiedLogger that fans out to multiple sinks. Each sink formats and displays entries according to the active verbosity level.
 
-```
+```text
 Agent Event -> Adapter -> UnifiedLogger -> LogEntry -> Sink (formatted output)
 ```
 

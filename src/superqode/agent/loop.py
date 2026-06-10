@@ -823,7 +823,9 @@ class AgentLoop:
                 self._session_manager.add_user_message(text)
         return drained
 
-    def _collect_reminder_messages(self, iteration: int) -> List["AgentMessage"]:
+    def _collect_reminder_messages(
+        self, iteration: int, user_message: str = ""
+    ) -> List["AgentMessage"]:
         """Per-call synthetic reminders; attached to the request, never to history."""
         try:
             from .reminders import collect_reminders, format_reminder_message
@@ -833,6 +835,7 @@ class AgentLoop:
                 working_directory=self.config.working_directory,
                 iteration=iteration,
                 state=self._reminder_state,
+                user_message=user_message,
             )
         except Exception:
             return []
@@ -1942,7 +1945,7 @@ class AgentLoop:
             # PERFORMANCE: Use cached message conversion. Reminders ride along
             # on the request only - they are not part of stored history.
             gateway_messages = self._convert_messages(
-                messages + self._collect_reminder_messages(iterations)
+                messages + self._collect_reminder_messages(iterations, user_message)
             )
 
             # Plan mode: disable tools so model only analyzes/plans without executing
@@ -2238,9 +2241,7 @@ class AgentLoop:
                             await self.on_thinking(
                                 f"Rubric review: needs revision (round {rubric_rounds}/{self.config.max_rubric_rounds}) - {feedback[:120]}"
                             )
-                        messages.append(
-                            AgentMessage(role="assistant", content=response_content)
-                        )
+                        messages.append(AgentMessage(role="assistant", content=response_content))
                         messages.append(
                             AgentMessage(
                                 role="user",
@@ -2375,7 +2376,7 @@ class AgentLoop:
             # PERFORMANCE: Use cached message conversion. Reminders ride along
             # on the request only - they are not part of stored history.
             gateway_messages = self._convert_messages(
-                messages + self._collect_reminder_messages(iterations)
+                messages + self._collect_reminder_messages(iterations, user_message)
             )
 
             tools_to_send = None

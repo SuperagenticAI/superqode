@@ -462,7 +462,7 @@ Because permission rules are registered as a standard `permission_request` handl
 
 The `tool` and `pattern` fields support standard Unix glob patterns (`*`, `?`, `[abc]`). For example:
 
-```
+```yaml
 tool: "bash"          -- matches only the bash tool
 tool: "web_*"         -- matches web_search, web_fetch, etc.
 tool: "*"             -- matches any tool
@@ -509,7 +509,7 @@ The `path` is relative to the plugin directory. The file content is appended to 
 
 A complete plugin project follows a conventional directory structure. Here is the recommended layout:
 
-```
+```text
 my-plugin/
   plugin.json            # Manifest (required)
   tools/
@@ -526,7 +526,7 @@ All paths in the manifest are relative to the plugin directory. The `tools/`, `c
 
 Skills conventionally follow the `.agents/skills/<slug>/SKILL.md` convention within the plugin directory:
 
-```
+```text
 my-plugin/
   skills/
     code-review/
@@ -560,7 +560,7 @@ The plugin is copied into `.superqode/plugins/<plugin-id>/`. The directory name 
 
 Installed plugins are stored at:
 
-```
+```text
 .superqode/plugins/<plugin-id>/
   plugin.json
   tools/

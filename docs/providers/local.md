@@ -152,8 +152,8 @@ request and shows a live elapsed-time indicator, then reports when DS4 is warm.
 
 ```text
 ✓ DS4 server ready at http://127.0.0.1:8000/v1
-⏳ Loading model into memory (first start can be slow on a cold cache)…
-   …still loading the model (10s)
+⏳ Loading model into memory (first start can be slow on a cold cache)...
+   ...still loading the model (10s)
 ✓ DS4 ready (warm) - 24s
 ```
 
@@ -624,7 +624,7 @@ ollama run qwen3:8b --num-ctx 4096
 
 ### Connection Refused
 
-```
+```json
 [INCORRECT] Connection failed: Connection refused
 ```
 
@@ -643,7 +643,7 @@ mlx_lm.server --model <model>
 
 ### Model Not Found
 
-```
+```json
 [INCORRECT] Model 'qwen3:8b' not found
 ```
 
@@ -659,7 +659,7 @@ mlx_lm.download mlx-community/Qwen2.5-Coder-3B-4bit
 
 ### Out of Memory
 
-```
+```json
 [INCORRECT] CUDA out of memory / MPS out of memory
 ```
 

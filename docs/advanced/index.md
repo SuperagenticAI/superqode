@@ -4,6 +4,54 @@ Advanced SuperQode features for users who want more control over tools, safety, 
 
 ---
 
+## The Engine
+
+<div class="grid cards" markdown>
+
+-   **Inside the Agent Loop**
+
+    ---
+
+    The run lifecycle and every guard: steering, auto-continue, reminders, doom-loop detection, deferred tools, compaction, rubric self-grading.
+
+    [:octicons-arrow-right-24: Inside the Agent Loop](agent-loop.md)
+
+-   **Tools Catalog**
+
+    ---
+
+    Every builtin tool: three edit dialects, interactive shell sessions, vision, peer agents, and the guarantees behind all of them.
+
+    [:octicons-arrow-right-24: Tools Catalog](tools-catalog.md)
+
+-   **Policies & Safety**
+
+    ---
+
+    The order of authority: hooks, exec-policy rules, env filtering, permission escalation, sandboxing.
+
+    [:octicons-arrow-right-24: Policies & Safety](policies.md)
+
+-   **Multi-Agent Workflows**
+
+    ---
+
+    Sub-agents, long-lived peer agents with live steering, A2A, and rubric quality gates.
+
+    [:octicons-arrow-right-24: Multi-Agent Workflows](multi-agent.md)
+
+-   **Headless & CI**
+
+    ---
+
+    One-shot runs, JSON events, schema-validated output, rubric gates, session exports, worktree isolation.
+
+    [:octicons-arrow-right-24: Headless & CI](headless-ci.md)
+
+</div>
+
+---
+
 ## User Controls
 
 <div class="grid cards" markdown>

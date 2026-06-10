@@ -1,6 +1,9 @@
 # Tools System
 
-Comprehensive tool system providing 20+ tools for AI coding agents in SuperQode.
+The architecture behind SuperQode's tools: registries, profiles, contexts, results, and how to extend them.
+
+!!! tip "Looking for what each tool does?"
+    The [Tools Catalog](tools-catalog.md) is the complete user-facing reference for every builtin tool, including the edit dialects, interactive shell sessions, vision, peer agents, and the guarantees that hold across all of them. This page covers the system underneath.
 
 ---
 
@@ -8,11 +11,12 @@ Comprehensive tool system providing 20+ tools for AI coding agents in SuperQode.
 
 SuperQode provides a complete tool system for AI agents:
 
-- **20+ tools**: File operations, editing, search, shell, network, diagnostics
+- **35+ tools**: Files, three edit dialects, search, shell (one-shot and interactive sessions), network, vision, diagnostics, agents
 - **Transparent**: No hidden prompts or context injection
 - **Standard format**: OpenAI-compatible tool definitions
 - **Extensible**: Easy to add custom tools
-- **Permission system**: Fine-grained access control
+- **Policy controlled**: Permissions, exec-policy rules, and env filtering before anything runs
+- **Deferred loading**: Heavy schemas stay out of the prompt until the model activates them via `tool_search`
 
 ---
 
@@ -22,17 +26,19 @@ SuperQode provides a complete tool system for AI agents:
 
 | Tool | Description |
 |------|-------------|
-| `read_file` | Read file contents |
+| `read_file` | Bounded, line-numbered reads with continue-from hints |
 | `write_file` | Write/create file |
 | `list_directory` | List directory contents |
+| `view_image` | Attach a local image for vision-capable models |
 
 ### Editing
 
 | Tool | Description |
 |------|-------------|
-| `edit_file` | Edit file with diff-style changes |
+| `edit_file` | String replacement with a 10-strategy fallback ladder |
 | `insert_text` | Insert text at position |
 | `patch` | Apply unified diff patch |
+| `apply_patch` | Apply codex-format `*** Begin Patch` envelopes (GPT-5.x and gpt-oss native dialect) |
 | `multi_edit` | Apply multiple edits atomically |
 
 ### Search
@@ -47,7 +53,8 @@ SuperQode provides a complete tool system for AI agents:
 
 | Tool | Description |
 |------|-------------|
-| `bash` | Execute shell commands (with streaming) |
+| `bash` | Execute shell commands (streaming, spill-to-disk truncation, `run_in_background`) |
+| `shell_session` | Persistent interactive processes: open, write to stdin, poll, list, kill |
 
 ### Network
 
@@ -85,7 +92,7 @@ limits.
 
 `create_skill` makes the agent **self-extensible**: when it discovers a workflow
 worth reusing, it can write a new `SKILL.md` (name, description, instructions)
-that is hot-loaded and immediately invocable via `skill(action="invoke", …)` -
+that is hot-loaded and immediately invocable via `skill(action="invoke", ...)` -
 without restarting the session. Skills are Markdown instructions, not executable
 code, so authoring one is safe. Skills are stored under `.agents/skills/`.
 
@@ -99,8 +106,17 @@ code, so authoring one is safe. Skills are stored under `.agents/skills/`.
 
 | Tool | Description |
 |------|-------------|
-| `sub_agent` | Spawn sub-agent for parallel work |
-| `task_coordinator` | Coordinate multiple agents |
+| `sub_agent` | Spawn sub-agent for one task, one result |
+| `task_coordinator` | Coordinate multiple one-shot subtasks |
+| `spawn_agent`, `send_input`, `wait_agent`, `list_agents`, `close_agent` | Long-lived peer agents (see [Multi-Agent Workflows](multi-agent.md)) |
+
+### Meta
+
+| Tool | Description |
+|------|-------------|
+| `tool_search` | Discover and activate deferred tools |
+| `request_permissions` | Ask the user for a session-scoped permission escalation |
+| `compact` | Manual context compression |
 
 ### Interactive
 

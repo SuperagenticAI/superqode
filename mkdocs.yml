@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
-site_description: "Your Portable Universal Coding Agent Harness."
+site_description: "Turn open models into serious coding agents. Your harness, your models, your memory. Built for open and local models, connected to everything else through BYOK, ACP, agent SDKs, MCP, and A2A."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode
@@ -21,12 +21,16 @@ theme:
   logo: assets/superqode-logo.png
   favicon: assets/superqode-logo.png
 
+  font:
+    text: Inter
+    code: JetBrains Mono
+
   palette:
     # Light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: deep purple
-      accent: purple
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
@@ -34,19 +38,19 @@ theme:
     # Dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: deep purple
-      accent: purple
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
 
   features:
     - navigation.instant
+    - navigation.instant.progress
     - navigation.tracking
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.sections
-    - navigation.expand
     - navigation.path
     - navigation.indexes
     - navigation.top
@@ -57,6 +61,7 @@ theme:
     - content.tabs.link
     - content.code.copy
     - content.code.annotate
+    - content.tooltips
     - content.action.view
     - toc.follow
 
@@ -121,26 +126,15 @@ markdown_extensions:
   - pymdownx.tilde
 
 extra:
-  version:
-    provider: mike
-    default: latest
-
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/SuperagenticAI/superqode
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/superqode/
+    - icon: fontawesome/solid/globe
+      link: https://super-agentic.ai
 
   generator: false
-
-  analytics:
-    provider: google
-    property: G-XXXXXXXXXX
-
-  consent:
-    title: Cookie consent
-    description: >-
-      We use cookies to recognize your repeated visits and preferences, as well
-      as to measure the effectiveness of our documentation and whether users
-      find what they're searching for.
 
 extra_css:
   - stylesheets/extra.css
@@ -161,7 +155,8 @@ nav:
 
   - 📚 Concepts:
     - concepts/index.md
-    - 🔌 Three Modes: concepts/modes.md
+    - 🔌 Connection Modes: concepts/modes.md
+    - 🧬 Configuration vs Harness: concepts/configuration-vs-harness.md
     - 🔐 Authentication: concepts/authentication.md
 
 
@@ -169,6 +164,7 @@ nav:
     - configuration/index.md
     - 📄 superqode.yaml Reference: configuration/yaml-reference.md
     - 🔧 MCP Configuration: configuration/mcp-config.md
+    - 🌱 Environment Variables: configuration/environment-variables.md
 
   - 🔌 Providers:
     - providers/index.md
@@ -181,6 +177,11 @@ nav:
 
   - 🔬 Advanced:
     - advanced/index.md
+    - 🔁 Inside the Agent Loop: advanced/agent-loop.md
+    - 🧰 Tools Catalog: advanced/tools-catalog.md
+    - 🛡️ Policies & Safety: advanced/policies.md
+    - 🤝 Multi-Agent Workflows: advanced/multi-agent.md
+    - 🤖 Headless & CI: advanced/headless-ci.md
     - 🪟 Local Context & Compaction: advanced/local-context.md
     - 🔍 Multi-Repo Search & Edit Safety: advanced/multi-repo-search.md
     - 🔒 Safety & Permissions: advanced/safety-permissions.md

@@ -14,7 +14,7 @@ superqode memory providers
 
 ### Output
 
-```
+```text
 Provider       Status    Type
 local          ready     file-based
 specmem        ready     project .specmem/

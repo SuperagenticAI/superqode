@@ -269,7 +269,7 @@ superqode connect setup deepseek --json
 
 ### Output
 
-```
+```yaml
 Provider: Anthropic
 Category: US Labs
 Tier: Tier 1

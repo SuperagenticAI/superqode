@@ -14,7 +14,7 @@ superqode runtime list
 
 ### Output
 
-```
+```text
 Backend           Status     Description
 builtin           ready      Default harness runtime
 adk               missing    Google ADK (google-adk)

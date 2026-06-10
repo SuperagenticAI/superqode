@@ -20,7 +20,7 @@ superqode sessions list [OPTIONS]
 
 ### Output
 
-```
+```text
 ID         Provider    Model               Turns  Created
 abc123     anthropic   claude-sonnet-4      12    2026-06-01T10:00:00
 def456     openai      gpt-4o               8    2026-06-02T14:30:00
@@ -110,7 +110,7 @@ Removes the session JSONL file from `.superqode/sessions/`.
 
 Sessions are persisted as newline-delimited JSON (JSONL) files:
 
-```
+```text
 .superqode/sessions/
   abc123.jsonl
   def456.jsonl

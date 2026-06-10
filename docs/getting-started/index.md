@@ -149,6 +149,9 @@ Summarize this repository and suggest the smallest safe improvement.
 | ACP | You want an external coding agent with its own tool loop | `superqode agents list` and `superqode agents doctor <agent>` |
 | BYOK | You want hosted providers with your own API keys | Set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, or another provider key |
 | Local | You want private or offline inference | Start Ollama, LM Studio, MLX, vLLM, SGLang, DS4, or another local server |
+| SDK | You want to use your ChatGPT or Claude subscription, or vendor-native agent behavior | `:connect codex`, `:connect claude`, or `:connect antigravity` in the TUI |
+
+See [Connection Modes](../concepts/modes.md) for how the four paths differ.
 
 Provider diagnostics:
 
@@ -288,6 +291,7 @@ Use headless CLI when:
 1. [Quick Start](quickstart.md)
 2. [Your First Session](first-session.md)
 3. [Configuration](configuration.md)
-4. [Harness System](../advanced/harness-system.md)
-5. [Three Connection Modes](../concepts/modes.md)
-6. [CLI Reference](../cli-reference/index.md)
+4. [Inside the Agent Loop](../advanced/agent-loop.md), to understand what the engine is doing for you
+5. [Harness System](../advanced/harness-system.md)
+6. [Connection Modes](../concepts/modes.md)
+7. [CLI Reference](../cli-reference/index.md)

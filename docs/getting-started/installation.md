@@ -306,7 +306,7 @@ superqode agents list
 
 ### Expected Output
 
-```
+```bash
 $ superqode --version
 SuperQode v0.1.4
 

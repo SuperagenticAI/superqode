@@ -23,7 +23,7 @@ model-construction from runtime behaviour the way LangChain does.
 
 ## When to reach for a profile
 
-| You want to… | Use a profile |
+| You want to... | Use a profile |
 |---|---|
 | Add Anthropic's "investigate before answering" guidance only for Claude models | ✓ |
 | Inject OpenRouter app-attribution headers when an env var is unset | ✓ |

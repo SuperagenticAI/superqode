@@ -278,7 +278,7 @@ Custom agents must:
 
 ### Agent Not Found
 
-```
+```json
 [INCORRECT] Agent 'opencode' not found
 ```
 
@@ -290,7 +290,7 @@ npm i -g opencode-ai
 
 ### Connection Failed
 
-```
+```json
 [INCORRECT] Failed to connect to agent
 ```
 
@@ -301,7 +301,7 @@ npm i -g opencode-ai
 
 ### Permission Denied
 
-```
+```json
 [INCORRECT] Permission denied: auth_file
 ```
 
@@ -313,7 +313,7 @@ ls -la ~/.local/share/opencode/auth.json
 
 ### Agent Timeout
 
-```
+```json
 [INCORRECT] Agent response timeout
 ```
 

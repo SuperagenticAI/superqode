@@ -8,7 +8,7 @@ How SuperQode handles API keys and credentials with full transparency.
 
 SuperQode is designed as a **pass-through orchestrator**. It connects you to LLM providers and coding agents without intercepting or storing your credentials unnecessarily.
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    YOUR CONTROL                             │
 ├─────────────────────────────────────────────────────────────┤
@@ -111,7 +111,7 @@ SuperQode doesn't see or store agent credentials.
 
 When SuperQode needs an API key:
 
-```
+```text
 1. Check environment variable
    └─ Found? → Use it
    └─ Not found? → Continue
@@ -259,7 +259,7 @@ ANTHROPIC_API_KEY="${{ secrets.PROD_ANTHROPIC_KEY }}"
 
 ### BYOK Mode
 
-```
+```text
 You → superqode → LiteLLM (local) → Provider API
          │
          └── API key read from env, passed to LiteLLM
@@ -267,7 +267,7 @@ You → superqode → LiteLLM (local) → Provider API
 
 ### ACP Mode
 
-```
+```text
 You → superqode → Agent subprocess → Provider API
          │              │
          │              └── Agent uses its own credentials
@@ -276,7 +276,7 @@ You → superqode → Agent subprocess → Provider API
 
 ### Local Providers (Ollama, LM Studio)
 
-```
+```text
 You → superqode → Local model server
          │
          └── No API key needed, just local HTTP

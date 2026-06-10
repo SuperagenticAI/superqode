@@ -55,7 +55,7 @@ SuperQode includes two A2A tools that you can use within agent sessions:
 
 Call an external A2A-compliant agent directly from SuperQode:
 
-```
+```yaml
 Tool: a2a_call
 Arguments:
   - agent_url: URL of the A2A agent server
@@ -65,7 +65,7 @@ Arguments:
 
 Example usage in a prompt:
 
-```
+```text
 Use a2a_call to call http://security-agent:8000 with message "Run a security scan on the codebase"
 ```
 
@@ -73,7 +73,7 @@ Use a2a_call to call http://security-agent:8000 with message "Run a security sca
 
 Discover and list A2A agents from a registry or direct URL:
 
-```
+```yaml
 Tool: a2a_discover
 Arguments:
   - registry_url: URL of agent registry or single agent

@@ -8,8 +8,8 @@
 <h1 align="center">SuperQode</h1>
 
 <p align="center">
-  <strong>Your Portable Universal Coding Agent Harness.</strong><br>
-  <em>Define your harness, connect any agent - local, BYOK, ACP, A2A. The only harness supporting ACP + MCP + A2A with local model optimization.</em>
+  <strong>Portable Coding Agent Harness Framework</strong><br>
+  <em>Turn open models into serious coding agents. Your harness, your models, your memory. Built for open and local models, connected to everything else through BYOK, ACP, agent SDKs, MCP, and A2A.</em>
 </p>
 
 <p align="center">

@@ -10,7 +10,7 @@ Use this section to understand the pieces that make a SuperQode run predictable 
 
 <div class="grid cards" markdown>
 
--   **Three Connection Modes**
+-   **Connection Modes**
 
     ---
 
@@ -98,7 +98,7 @@ The harness is the product contract. Runtimes and providers are interchangeable 
 | BYOK | Hosted providers using your API keys | `:connect byok openai gpt-4o-mini` |
 | Local | Ollama, LM Studio, MLX, vLLM, SGLang, DS4, and other local servers | `:connect local ollama qwen3:8b` |
 
-See [Three Connection Modes](modes.md) for setup details.
+See [Connection Modes](modes.md) for setup details.
 
 ## Harness Flavors
 
@@ -169,7 +169,7 @@ SuperQode keeps coding work inspectable:
 
 - [Installation](../getting-started/installation.md)
 - [Quick Start](../getting-started/quickstart.md)
-- [Three Connection Modes](modes.md)
+- [Connection Modes](modes.md)
 - [Harness System](../advanced/harness-system.md)
 - [Runtime Backends](../runtimes.md)
 - [Tools System](../advanced/tools-system.md)

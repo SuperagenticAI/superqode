@@ -64,7 +64,7 @@ superqode auth login openai
 
 ### Example Session
 
-```
+```bash
 $ superqode auth login anthropic
 
 Configure Anthropic
@@ -93,7 +93,7 @@ superqode auth logout anthropic
 
 ### Output
 
-```
+```text
 ✅ Removed anthropic from local storage
 ```
 
@@ -109,7 +109,7 @@ superqode auth list
 
 ### Output
 
-```
+```text
 ┌───────────┬──────┬─────────────┐
 │ Provider  │ Type │ Key Preview │
 ├───────────┼──────┼─────────────┤
@@ -134,7 +134,7 @@ superqode auth info
 
 Displays authentication status showing both environment variables AND local storage:
 
-```
+```text
 ╭──────────────────────────────────────────────────────────╮
 │ 🔒 Auth Modes:                                           │
 │ 1. BYOK - Environment variables (primary)               │
@@ -302,7 +302,7 @@ superqode auth check anthropic
 
 ### Key Not Found
 
-```
+```text
 ❌ anthropic not set
 ```
 

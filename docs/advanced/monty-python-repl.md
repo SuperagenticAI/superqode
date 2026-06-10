@@ -87,7 +87,7 @@ If a task needs to read or write real project files, use the `read_file`,
 `bash` for shell access.
 
 > **Note:** Monty is experimental and implements a subset of Python. Snippets
-> that need third-party packages (NumPy, requests, …), the full standard
+> that need third-party packages (NumPy, requests, ...), the full standard
 > library, or the project's own modules should use `bash` with the project's
 > Python interpreter instead.
 

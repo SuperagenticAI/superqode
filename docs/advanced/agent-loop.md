@@ -1,12 +1,12 @@
 # Inside the Agent Loop
 
-This page walks through what actually happens when SuperQode's builtin runtime works on your prompt — and every guard that keeps a run healthy, especially on local models. Read it top to bottom once and you'll know where every behavior comes from and which knob controls it.
+This page walks through what actually happens when SuperQode's builtin runtime works on your prompt, and every guard that keeps a run healthy, especially on local models. Read it top to bottom once and you'll know where every behavior comes from and which knob controls it.
 
 The builtin loop lives in `superqode/agent/loop.py` (`AgentLoop`). Other runtimes (ADK, OpenAI Agents, Codex SDK, DeepAgents, PydanticAI) replace this engine but keep the same harness contract.
 
 ## The lifecycle of one run
 
-```
+```text
 your prompt
   │
   ├─ 1. context window resolved (live probe for local servers)
@@ -32,7 +32,7 @@ The rest of this page goes feature by feature, in that order.
 
 ## 1. Context windows that match reality
 
-Static model cards lie about local models: a 128K-card model loaded with `num_ctx 8192` *is* an 8K model right now. Before the first call, the loop probes the live server (Ollama `/api/ps`, llama.cpp `/props`, LM Studio and vLLM/DS4 `/v1/models`) for the **loaded** window and sizes everything else — compaction thresholds, kept-recent budgets, tool-output caps — from that number.
+Static model cards lie about local models: a 128K-card model loaded with `num_ctx 8192` *is* an 8K model right now. Before the first call, the loop probes the live server (Ollama `/api/ps`, llama.cpp `/props`, LM Studio and vLLM/DS4 `/v1/models`) for the **loaded** window and sizes everything else (compaction thresholds, kept-recent budgets, tool-output caps) from that number.
 
 Try it in the TUI:
 
@@ -42,9 +42,9 @@ Try it in the TUI:
 :context detect    # re-probe
 ```
 
-## 2–3. Steering: talk to a run in progress
+## 2-3. Steering: talk to a run in progress
 
-Type while the agent works. On builtin (local/BYOK) connections the message is injected **between the agent's tool calls** and shapes the current run — you'll see `↪ steering the current run: …` in the log. If the model is just finishing its answer when your message lands, the run keeps going instead of stopping.
+Type while the agent works. On builtin (local/BYOK) connections the message is injected **between the agent's tool calls** and shapes the current run. You'll see `steering the current run` in the log. If the model is just finishing its answer when your message lands, the run keeps going instead of stopping.
 
 On connections that can't be steered (ACP agents, codex-sdk), messages fall back to the type-ahead queue and send when the agent is free (`:queue clear` empties it).
 
@@ -67,10 +67,12 @@ With anything deferred, the model gets a tiny `tool_search` tool instead. When i
 
 ## 5. System reminders
 
-Two situations get a `<system-reminder>` note attached to the outgoing request — attached to the *request only*, never stored in history, so they cost context exactly once:
+Two situations get a `<system-reminder>` note attached to the outgoing request. Reminders ride on the request only and are never stored in history, so they cost context exactly once:
 
-- **A file changed on disk after the agent read it** (your editor, a formatter, another agent). The note lists the files and tells the model to re-read before editing — pre-empting the edit-conflict rejection it would otherwise hit. Each change is announced once.
+- **A file changed on disk after the agent read it** (your editor, a formatter, another agent). The note lists the files and tells the model to re-read before editing, pre-empting the edit-conflict rejection it would otherwise hit. Each change is announced once.
 - **Open todos have gone quiet.** If pending/in-progress todo items exist, a rate-limited nudge (at most every 8 iterations) reminds the model to update or complete them.
+
+A third reminder is opt-in: **memory recall** (`SUPERQODE_AUTO_RECALL=1`) searches your local memory store with the run's prompt and surfaces the top hits once per prompt, clearly labeled as background to verify. See [Memory & Learning](memory.md) for the full capture-and-recall loop.
 
 Disable with `SUPERQODE_REMINDERS=0`.
 
@@ -82,25 +84,25 @@ Disable with `SUPERQODE_REMINDERS=0`.
 
 ## 7. Tool-call parsing that forgives local models
 
-Hosted frontier models emit clean JSON arguments. Local models emit… variations. The argument parser repairs, in order: markdown code fences, double-encoded JSON strings, Python-dict syntax (`'single quotes'`, `True/None`), trailing commas, and prose wrapped around an otherwise-valid object. If the arguments are still unrecoverable, the tool is **not** executed with `{}` — the model gets a precise error and a format example, and almost always self-corrects on the next step.
+Hosted frontier models emit clean JSON arguments. Local models emit variations. The argument parser repairs, in order: markdown code fences, double-encoded JSON strings, Python-dict syntax (`'single quotes'`, `True/None`), trailing commas, and prose wrapped around an otherwise-valid object. If the arguments are still unrecoverable, the tool is **not** executed with `{}`. Instead, the model gets a precise error and a format example, and almost always self-corrects on the next step.
 
-**Doom-loop guard:** the third consecutive *identical* tool call (same tool, same arguments) is intercepted — the model gets corrective feedback instead of the same result again. If it immediately repeats the exact call anyway, the run stops with `stopped_reason="loop_detected"` rather than burning tokens forever. Identical calls separated by a different call never trip it (read → edit → read-again is fine). Tune with `doom_loop_threshold` in `AgentConfig` or `SUPERQODE_DOOM_LOOP_THRESHOLD` (0 disables).
+**Doom-loop guard:** the third consecutive *identical* tool call (same tool, same arguments) is intercepted, and the model gets corrective feedback instead of the same result again. If it immediately repeats the exact call anyway, the run stops with `stopped_reason="loop_detected"` rather than burning tokens forever. Identical calls separated by a different call never trip it (read → edit → read-again is fine). Tune with `doom_loop_threshold` in `AgentConfig` or `SUPERQODE_DOOM_LOOP_THRESHOLD` (0 disables).
 
 ## 8. Mutation-safe parallelism
 
-Tools declare `read_only`. A turn's tool calls run **concurrently only when every call is read-only** ("read these 5 files" stays fast). Any batch containing an edit, write, shell command, or unknown/MCP tool runs sequentially in call order — two edits can never race the same file.
+Tools declare `read_only`. A turn's tool calls run **concurrently only when every call is read-only** ("read these 5 files" stays fast). Any batch containing an edit, write, shell command, or unknown/MCP tool runs sequentially in call order, so two edits can never race the same file.
 
 ## 9. Context economy: three lines of defense
 
-1. **Bounded tool output.** `read_file` caps at 2000 lines / 50KB with `N:` line numbers and "continue with `start_line=…`" hints. Bash output beyond the model-sized cap is **spilled to disk in full** (`~/.superqode/tool-output`, 7-day retention, `SUPERQODE_TOOL_OUTPUT_DIR` to relocate) and the model gets a head+tail preview plus the path — it can `grep` or `read_file` the spill instead of re-running the command. A loop-level guard applies the same bound to tools that don't self-limit (MCP, web).
-2. **Free pruning.** When the conversation nears the window, stale tool outputs older than the protected recent tail are stubbed out first — no LLM call, the conversation skeleton survives. The current turn's results are always protected.
+1. **Bounded tool output.** `read_file` caps at 2000 lines / 50KB with `N:` line numbers and explicit continue-from hints. Bash output beyond the model-sized cap is **spilled to disk in full** (`~/.superqode/tool-output`, 7-day retention, `SUPERQODE_TOOL_OUTPUT_DIR` to relocate) and the model gets a head+tail preview plus the path, so it can `grep` or `read_file` the spill instead of re-running the command. A loop-level guard applies the same bound to tools that don't self-limit (MCP, web).
+2. **Free pruning.** When the conversation nears the window, stale tool outputs older than the protected recent tail are stubbed out first. No LLM call is needed and the conversation skeleton survives. The current turn's results are always protected.
 3. **LLM compaction.** Only if pruning wasn't enough, earlier turns are summarized into a structured 9-section report. Thresholds auto-scale to the detected window; `SUPERQODE_AUTO_COMPACT=0` opts out.
 
-**Turn diff:** after every turn that changed files you'll see `Turn changed 2 file(s) (+45/-12): …` in the thinking trace; the combined unified diff is on `loop.last_turn_diff` for UIs and hooks.
+**Turn diff:** after every turn that changed files you'll see `Turn changed 2 file(s) (+45/-12): ...` in the thinking trace; the combined unified diff is on `loop.last_turn_diff` for UIs and hooks.
 
 ## 10. Auto-continue on token-limit cuts
 
-When a response stops with `finish_reason="length"` (output token limit) and no tool calls, the loop asks the model to continue from exactly where it stopped and joins the parts — up to `max_auto_continues` times (default 2, `0` disables). Streaming continues seamlessly mid-sentence.
+When a response stops with `finish_reason="length"` (output token limit) and no tool calls, the loop asks the model to continue from exactly where it stopped and joins the parts, up to `max_auto_continues` times (default 2, `0` disables). Streaming continues seamlessly mid-sentence.
 
 ## 12. Rubric self-grading
 
@@ -112,7 +114,7 @@ superqode -p --rubric "All tests pass. The fix includes a regression test. No TO
 # or --rubric @rubric.txt
 ```
 
-Each time the agent would finish, a separate grader call judges the transcript against the rubric. `needs_revision` feedback re-enters the loop (at most `max_rubric_rounds`, default 2); `satisfied` or `failed` lets the run end. The grader fails *open* — a flaky grader can never trap a run.
+Each time the agent would finish, a separate grader call judges the transcript against the rubric. `needs_revision` feedback re-enters the loop (at most `max_rubric_rounds`, default 2); `satisfied` or `failed` lets the run end. The grader fails *open*: a flaky grader can never trap a run.
 
 From Python: `AgentConfig(rubric="...", max_rubric_rounds=2)`.
 
@@ -122,7 +124,7 @@ Some local models have no native tool-calling head at all. Set `tool_call_format
 
 1. renders the tool catalog and call format into the system prompt,
 2. sends **no** native tool schemas,
-3. extracts `<tool_call>{"name": …, "arguments": {…}}</tool_call>` blocks from the response text and executes them exactly like native calls (with the same JSON repair).
+3. extracts `<tool_call>{"name": ..., "arguments": {...}}</tool_call>` blocks from the response text and executes them exactly like native calls (with the same JSON repair).
 
 `compact-json` / `strict-json` remain argument-style hints for native calling; `native`/unset is the default.
 
@@ -137,5 +139,6 @@ Some local models have no native tool-calling head at all. Set `tool_call_format
 | `SUPERQODE_DEFERRED_TOOLS` | deferred tool loading (`auto`/`all`/names) | off |
 | `SUPERQODE_TOOL_OUTPUT_DIR` | spill directory | `~/.superqode/tool-output` |
 | `SUPERQODE_AUTO_MEMORY` | session-end memory extraction | off |
+| `SUPERQODE_AUTO_RECALL` | saved-memory recall at run start | off |
 
 See also: [Tools Catalog](tools-catalog.md) · [Policies & Safety](policies.md) · [Multi-Agent](multi-agent.md) · [Local Context & Compaction](local-context.md)

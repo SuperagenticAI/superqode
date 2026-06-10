@@ -70,6 +70,48 @@ superqode memory forget <id>
 superqode memory export --provider local -o memory.json
 ```
 
+## Automatic Capture (Opt-In)
+
+By default, nothing is written to memory unless you ask. Opt in and SuperQode extracts durable knowledge from completed runs automatically:
+
+```bash
+export SUPERQODE_AUTO_MEMORY=1
+```
+
+After a run completes, a background extraction call distills up to five memories per run, limited to three kinds:
+
+- **preference**: explicit instructions about how to work ("use pnpm, never npm")
+- **fact**: non-obvious project knowledge discovered during the work ("tests need the DS4 server running")
+- **decision**: choices made and why
+
+Extractions are deduplicated against existing memories, tagged `auto` so you can find or purge them (`superqode memory search auto`), stored in the local provider, and never block the run (extraction happens in the background and fails silently by design). Trivial exchanges are skipped.
+
+## Automatic Recall (Opt-In)
+
+Capture is the write side; recall is the read side. Opt in and SuperQode surfaces relevant saved memories to the agent at the start of each run:
+
+```bash
+export SUPERQODE_AUTO_RECALL=1
+```
+
+When a run starts, the local memory store is searched with your prompt. The top hits (at most four, above a relevance floor) ride along on the request as a `<system-reminder>` block, clearly labeled as background context the agent should verify before relying on. The reminder is attached to the outgoing request only and is never written into conversation history, so it costs context once per prompt, not per turn.
+
+Two safety properties are deliberate:
+
+- **Only the local provider is read.** It lives under `~/.superqode/memory/` and contains only what you stored (or opt-in capture stored on your behalf), so an untrusted repository can never plant content into your agent's context through recall.
+- **The agent is told what it is.** Recalled items are framed as saved notes to verify, not as instructions.
+
+Enable both sides for the full loop: `SUPERQODE_AUTO_MEMORY=1` learns durable facts from completed runs, and `SUPERQODE_AUTO_RECALL=1` brings them back when they matter.
+
+```bash
+export SUPERQODE_AUTO_MEMORY=1
+export SUPERQODE_AUTO_RECALL=1
+superqode memory remember "Tests require the DS4 server on port 8000" --kind fact
+superqode -p "run the integration tests"   # the DS4 note rides along automatically
+```
+
+Without recall enabled, stored memories surface only through explicit `search`, `export`, and the TUI `:memory` commands, so you always know what the agent is working from.
+
 ## Providers
 
 Keep `local` as the default provider unless a project has a clear reason to use
@@ -294,8 +336,8 @@ These should be optional extras or MCP connections, not hard dependencies.
 
 Memory should be visible and controllable:
 
-- no automatic long-term writes by default
-- no automatic prompt injection yet
+- no automatic long-term writes by default (automatic capture is strictly opt-in via `SUPERQODE_AUTO_MEMORY=1`, and everything it stores is tagged `auto`)
+- no automatic prompt injection
 - explicit `remember` for local memory
 - source/provider shown in search results
 - project/team-shared writes should respect project trust

@@ -217,7 +217,7 @@ superqode:
 
 After each task, you'll see:
 
-```
+```text
 Cost Summary:
   Provider: anthropic
   Model: claude-sonnet-4
@@ -259,7 +259,7 @@ Where available, use project-specific API keys with limited scope.
 
 ### "Not Configured" Error
 
-```
+```json
 [INCORRECT] Provider 'anthropic' is not configured
 ```
 
@@ -267,7 +267,7 @@ Where available, use project-specific API keys with limited scope.
 
 ### "Invalid API Key"
 
-```
+```json
 [INCORRECT] Connection failed: Invalid API key
 ```
 
@@ -275,7 +275,7 @@ Where available, use project-specific API keys with limited scope.
 
 ### Rate Limiting
 
-```
+```json
 [INCORRECT] Rate limit exceeded
 ```
 
@@ -286,7 +286,7 @@ Where available, use project-specific API keys with limited scope.
 
 ### Model Not Found
 
-```
+```json
 [INCORRECT] Model 'claude-5' not found
 ```
 

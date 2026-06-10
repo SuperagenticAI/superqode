@@ -246,7 +246,9 @@ def test_is_prompt_format():
 
 
 def test_render_tool_catalog_includes_schema():
-    defs = [ToolDefinition(name="read_file", description="Read a file.", parameters={"type": "object"})]
+    defs = [
+        ToolDefinition(name="read_file", description="Read a file.", parameters={"type": "object"})
+    ]
     catalog = render_tool_catalog(defs)
     assert "<tool_call>" in catalog
     assert "read_file" in catalog
@@ -255,7 +257,9 @@ def test_render_tool_catalog_includes_schema():
 
 
 def test_extract_text_tool_calls_variants():
-    content = 'Let me check.\n<tool_call>{"name": "read_file", "arguments": {"path": "a.py"}}</tool_call>'
+    content = (
+        'Let me check.\n<tool_call>{"name": "read_file", "arguments": {"path": "a.py"}}</tool_call>'
+    )
     cleaned, calls = extract_text_tool_calls(content)
     assert cleaned == "Let me check."
     assert calls[0]["function"]["name"] == "read_file"

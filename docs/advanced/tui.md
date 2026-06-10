@@ -53,7 +53,7 @@ Summarize what changed.
 
 ## TUI Layout
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ SuperQode - Session: session-20260108-143052                  ×│
 ├─────────────────────────────────────────────────────────────────┤
@@ -128,6 +128,11 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:plan edit [task]` - Edit the pending planned request before execution
 - `:plan reject` - Clear the pending planned request
 - `:compare <models>` - Re-run your last message across several models side by side
+- `:context` - Show, pin, or re-detect the model's loaded context window
+- `:thinking` - Cycle thinking-log verbosity (also `Ctrl+T`)
+- `:queue clear` - Clear queued type-ahead messages
+- `:workspace add|remove|list` - Register extra repositories for cross-repo search
+- `:memory` - Search, remember, and inspect project memory providers
 - `:sandbox` - Show or set the local command sandbox mode
 - `:help` - Show all available commands
 
@@ -154,6 +159,14 @@ Native `todo_write` updates and runtime-native plan events feed the same pinned 
 Antigravity CLI is currently an external interactive `agy` handoff in SuperQode, not a structured runtime. It will use the same `plan_update` path when Google exposes a documented ACP/headless event stream.
 
 When an agent needs clarification it can use the `ask_user` tool. The TUI renders an inline question card above the prompt, and your next submitted message answers that question instead of starting a new task. Choice questions accept the option number or option text; empty input uses the default when one is provided.
+
+## Typing While The Agent Works
+
+You do not have to wait for a run to finish before typing.
+
+On builtin connections (local models and BYOK providers), a message submitted mid-run is **steered into the current run**: it lands between the agent's tool calls and shapes the work in progress. The log confirms delivery with `steering the current run`. This is the fastest way to correct course ("skip the docs, focus on the failing test") without cancelling anything.
+
+On connections that cannot be steered (ACP agents, vendor SDK runtimes) and during selection or question flows, messages go to the **type-ahead queue** instead. The queue renders under the prompt with a live preview and sends automatically when the agent is free. `:queue clear` empties it.
 
 ## Prompt Input
 

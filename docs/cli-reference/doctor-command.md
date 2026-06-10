@@ -24,7 +24,7 @@ Runs a comprehensive diagnostic across five areas:
 
 ### Output
 
-```
+```text
 SuperQode Doctor
 Python: 3.12.3 [CORRECT]
 Dependencies: All core dependencies satisfied [CORRECT]

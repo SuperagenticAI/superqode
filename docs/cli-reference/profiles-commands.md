@@ -14,7 +14,7 @@ superqode profiles list
 
 ### Output
 
-```
+```text
 Profile    Description
 build      Full-access implementation work
 plan       Read-only planning; shell requires approval

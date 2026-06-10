@@ -73,7 +73,7 @@ Operations that are never allowed:
 
 The permission rules engine (`permissions/rules.py`) evaluates each tool call:
 
-```
+```text
 Tool Call Request
        │
        ▼
@@ -175,7 +175,7 @@ DANGEROUS_PATTERNS = [
 
 When a dangerous operation is detected, SuperQode prompts for approval:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │  ⚠️  Dangerous Operation Detected                           │
 ├─────────────────────────────────────────────────────────────┤
@@ -311,7 +311,7 @@ safe commands (no prompt) while still gating risky ones:
 | **Safe** (read-only) | `ls`, `cat`, `grep`, `git status`, `git diff`, `pip show` | Auto-allow |
 | **Write** | `mv`, `mkdir`, `git commit`, `sed -i`, unknown commands | Ask |
 | **Network** | `curl`, `git push`, `pip install`, `npm install` | Ask (see allowlist) |
-| **Destructive** | `rm -rf`, `sudo`, `dd of=…`, `mkfs`, `curl … \| sh` | Block |
+| **Destructive** | `rm -rf`, `sudo`, `dd of=...`, `mkfs`, `curl ... \| sh` | Block |
 
 The classifier is **obfuscation-aware**: commands are canonicalised before
 analysis, so `\rm`, `'/bin/rm'`, and `r""m` are still recognised as `rm`, and
@@ -394,7 +394,7 @@ All operations are logged for audit:
 
 ### Audit Log Location
 
-```
+```text
 .superqode/
 ├── audit/
 │   ├── session-abc123.jsonl

@@ -30,8 +30,7 @@ def schema_instruction(schema: dict) -> str:
     """The prompt suffix that pins the model to schema-shaped output."""
     return (
         "\n\nYour final message must be ONLY a JSON document that validates "
-        "against this JSON Schema (no prose, no markdown fences):\n"
-        + json.dumps(schema, indent=2)
+        "against this JSON Schema (no prose, no markdown fences):\n" + json.dumps(schema, indent=2)
     )
 
 

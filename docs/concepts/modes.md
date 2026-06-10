@@ -1,6 +1,6 @@
-# Three Connection Modes
+# Connection Modes
 
-SuperQode can connect to intelligence in three main ways: ACP agents, BYOK providers, and local model servers. The connection mode decides where model work happens. A harness decides what capabilities are allowed during a run.
+SuperQode connects to intelligence in four ways: ACP agents, BYOK providers, local model servers, and vendor SDK runtimes. The connection mode decides where model work happens and who owns the agent loop. A harness decides what capabilities are allowed during a run.
 
 ---
 
@@ -11,6 +11,7 @@ SuperQode can connect to intelligence in three main ways: ACP agents, BYOK provi
 | ACP | External coding agents that speak Agent Client Protocol | Full coding-agent workflows where the agent owns its model and tools |
 | BYOK | Hosted model providers using your API keys | Cloud models, automation, model comparison, and direct provider usage |
 | Local | Local or self-hosted model servers | Privacy, offline work, cost control, and local model experiments |
+| SDK | Vendor agent SDKs running inside SuperQode | Using your existing ChatGPT or Claude subscription, or vendor-native agent behavior, with SuperQode's TUI and sessions around it |
 
 Start from the TUI:
 
@@ -24,6 +25,8 @@ Direct examples:
 :connect acp opencode
 :connect byok openai gpt-4o-mini
 :connect local ollama qwen3:8b
+:connect codex
+:connect claude
 ```
 
 CLI equivalents:
@@ -32,6 +35,7 @@ CLI equivalents:
 superqode connect acp opencode
 superqode connect byok openai gpt-4o-mini
 superqode connect local ollama qwen3:8b
+superqode --runtime codex-sdk --print "review this repo"
 ```
 
 ---
@@ -191,6 +195,30 @@ Examples:
 See [Runtime Backends](../runtimes.md) for backend details.
 
 ---
+
+## SDK runtimes
+
+SDK mode runs a vendor's own agent engine inside SuperQode. You keep SuperQode's TUI, sessions, approvals, plan surface, and exports, while the vendor SDK owns the model calls and its native behaviors.
+
+| Runtime | Sign in with | Notes |
+| --- | --- | --- |
+| Codex SDK (`:connect codex`) | Your ChatGPT subscription (local Codex login) or an OpenAI API key | Codex-native patches, plans, and command events are normalized into SuperQode's event surface |
+| Claude Agent SDK (`:connect claude`) | Your Claude subscription or an Anthropic API key | Claude Code behavior with SuperQode session management; `TodoWrite` feeds the shared plan panel |
+| Antigravity (`:connect antigravity`) | Your Google account via the Antigravity CLI | Currently an interactive handoff; it will adopt the structured event path when a documented stream is available |
+
+Use SDK mode when:
+
+- you already pay for a ChatGPT or Claude subscription and want to use it instead of per-token API billing
+- you want a vendor's native agent behavior, but with SuperQode's readable sessions, exports, and approval policies around it
+- you are comparing vendor agents against local models in one interface
+
+```bash
+superqode --runtime codex-sdk --print "summarize this repository"
+superqode --connect claude --print "summarize the last change"
+```
+
+See [Runtime Backends](../runtimes.md) for the full runtime matrix.
+
 
 ## Choosing A Mode
 

@@ -1,165 +1,221 @@
+---
+title: SuperQode
+hide:
+  - navigation
+  - toc
+---
+
+<div class="sq-hero" markdown>
+
+<img src="assets/superqode-logo.png" alt="SuperQode" class="sq-hero-logo" />
+
 # SuperQode
 
-<div class="hero-section" markdown>
+<p class="sq-kicker">Portable Coding Agent Harness Framework</p>
 
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode Banner" style="margin-bottom: 1.5rem;" />
+<p class="sq-tagline">Turn open models into serious coding agents. Your harness, your models, your memory. Built for open and local models, connected to everything else through BYOK, ACP, agent SDKs, MCP, and A2A.</p>
 
-<img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode-logo.png" alt="SuperQode Logo" style="max-height: 150px; margin-bottom: 1.5rem;" />
+<p class="sq-badges">
+  <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/v/superqode?style=flat-square&color=7c3aed" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/pyversions/superqode?style=flat-square" alt="Python versions"></a>
+  <a href="https://github.com/SuperagenticAI/superqode/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square" alt="License"></a>
+  <a href="https://github.com/SuperagenticAI/superqode"><img src="https://img.shields.io/github/stars/SuperagenticAI/superqode?style=flat-square&color=64748b" alt="GitHub stars"></a>
+</p>
 
-# **SuperQode**
-
-### Your Portable Universal Coding Agent Harness.
-
-<p class="tagline">Run coding agents with portable specs, controlled tools, and readable sessions.</p>
-
-[:octicons-rocket-24: Get Started](getting-started/installation.md){ .md-button .md-button--primary }
-[:octicons-book-24: Learn Concepts](concepts/index.md){ .md-button }
-[:octicons-code-24: CLI Reference](cli-reference/index.md){ .md-button }
-[:octicons-git-branch-24: Developer Workflows](developer-workflows.md){ .md-button }
-
-[Demo video](https://www.youtube.com/watch?v=x2V323HgXRk)
+[Get Started](getting-started/installation.md){ .md-button .md-button--primary }
+[Inside the Agent Loop](advanced/agent-loop.md){ .md-button }
+[View on GitHub](https://github.com/SuperagenticAI/superqode){ .md-button }
 
 </div>
 
+<img src="assets/super-qode-header.png" alt="SuperQode: any provider, any model, any runtime, any protocol" class="sq-banner" />
+
 ---
 
-## What Is SuperQode?
-
-SuperQode is your portable coding agent harness. It gives developers one contract for model calls,
-tool execution, sessions, sandbox policy, model routing, runtime adapters, workflow execution,
-typed outputs, validation, and readable interactive output.
-
-Use one harness spec to choose the runtime, model policy, tools, sandbox rules, approvals, event storage, and output shape for a coding-agent run.
-
-## Core Concepts
-
-SuperQode separates the major pieces of an agent system:
-
-| Concept | Meaning |
-| --- | --- |
-| Harness | The full contract for a run: flavor, model policy, tools, sandbox, workflow, output, events, and validation |
-| Runtime | The engine that executes the harness |
-| Runtime adapter | The bridge from the SuperQode harness contract into a native loop, SDK, or agent framework |
-| Harness flavor | The operating style, such as tool-rich coding or model-only no-tool |
-| Model policy | Prompt, temperature, reasoning, tool surface, history, and iteration defaults for a model family |
-| Tool policy | The explicit set of capabilities the model may use |
-
-The harness is the stable product surface. Runtime adapters let teams use their preferred execution engine
-without changing that surface.
-
-## Why It Exists
-
-AI coding work is fragmented across local models, cloud APIs, coding agents, provider-specific tools,
-runtime SDKs, and project-specific validation scripts. SuperQode gives those pieces one coherent
-developer surface.
-
-Use SuperQode when you want to:
-
-- run coding agents interactively in a TUI
-- execute headless coding tasks from scripts
-- exercise local and hosted models through the same harness contract
-- route through different runtimes without rewriting workflows
-- keep tool calls, diffs, summaries, and session history readable
-- define project-specific harness behavior instead of hardcoding one agent loop
-
-## Harness Flavors
-
-### Coding Harness
-
-The default flavor gives the model controlled access to repository tools:
-
-- file read/write/edit
-- grep, glob, and code search
-- shell commands under policy
-- MCP tools when configured
-- session memory and compaction
-- validation hooks after changes
-- approval gates for risky actions
-
-Use this for implementation, debugging, refactoring, migration work, test repair, and repository triage.
-
-### No-Tool Harness
-
-The no-tool flavor gives the model no tools at all. It uses only the prompt, selected model, and optional
-structured output validation.
-
-Use this for pure reasoning, architecture review from supplied context, design critique, planning, and
-local-model capability evaluation.
-
-## Runtime Backends
-
-SuperQode keeps the harness contract stable while allowing different runtimes underneath:
-
-| Runtime | Purpose |
-| --- | --- |
-| `builtin` | SuperQode's native coding loop |
-| `openai-agents` | OpenAI Agents SDK adapter |
-| `adk` | Google ADK adapter |
-| `deepagents` | Optional DeepAgents runtime adapter for graph and middleware-heavy coding harnesses |
-| `pydanticai` | Optional PydanticAI runtime with SuperQode tool bridging |
-| custom | Bring your own backend behind the same harness contract |
-
-## Harness Lifecycle
-
-```text
-1. SPEC       Choose coding, no-tool, or custom harness behavior
-2. MODEL      Apply model policy, local hints, fallback rules, and prompt profile
-3. RUNTIME    Select builtin, OpenAI Agents, Google ADK, DeepAgents, PydanticAI, or a custom backend
-4. TOOLS      Attach repository tools, MCP tools, validation hooks, or no tools
-5. SESSION    Persist history, stream events, compact context, store runs, and resume work
-6. WORKFLOW   Run single, chain, parallel, router, orchestrator, or evaluator-optimizer flows
-7. RESULT     Return text, diffs, typed data, events, and validation state
-```
-
-## Quick Start
+## Up and running in 60 seconds
 
 ```bash
-uv tool install superqode
-```
-
-Or with pip:
-
-```bash
-pip install superqode
-```
-
-```bash
+uv tool install superqode    # or: pip install superqode
 cd your-project
 superqode
 ```
 
-Run a headless task:
+That is the full interactive TUI. For scripts and CI, run one task and print the answer:
 
 ```bash
 superqode --print "inspect this repository and suggest the smallest safe cleanup"
 ```
 
-Inspect available profiles:
+---
 
-```bash
-superqode profiles list
-superqode tools list --profile build
-superqode tools list --profile no-tool
+## Why teams pick SuperQode
+
+<div class="grid cards" markdown>
+
+-   :octicons-package-16:{ .lg .middle } **Built-in harness, or define your own**
+
+    ---
+
+    Start coding immediately with the built-in harness, or write a `harness.yaml` that pins runtime, model policy, tools, sandbox, approvals, and workflow. Validate it with `harness doctor`, commit it, and run the same contract anywhere.
+
+    [:octicons-arrow-right-24: Configuration vs Harness](concepts/configuration-vs-harness.md)
+
+-   :octicons-cpu-16:{ .lg .middle } **Open models, first-class**
+
+    ---
+
+    Download from Hugging Face, serve with Ollama, LM Studio, MLX, vLLM, or DS4, and get an engine built for the realities: live context-window detection, adaptive compaction, tool-call repair, doom-loop guards, and prompt-based tool calling for models without a tool head.
+
+    [:octicons-arrow-right-24: Inside the Agent Loop](advanced/agent-loop.md)
+
+-   :octicons-tools-16:{ .lg .middle } **35+ policy-controlled tools**
+
+    ---
+
+    Bounded reads, spill-to-disk shell output, interactive PTY sessions, codex-format patches, vision attachments, and web access. Every tool gated by permissions, exec-policy rules, and sandboxing.
+
+    [:octicons-arrow-right-24: Tools Catalog](advanced/tools-catalog.md)
+
+-   :octicons-plug-16:{ .lg .middle } **All three protocols**
+
+    ---
+
+    MCP client and server, ACP agent connections, and A2A serving and calling, in one product. Expose your harnesses as MCP tools with a single command.
+
+    [:octicons-arrow-right-24: Serve Commands](cli-reference/serve-commands.md)
+
+-   :octicons-stack-16:{ .lg .middle } **Pluggable runtimes**
+
+    ---
+
+    Run the same harness on the builtin engine, OpenAI Agents SDK, Google ADK, Codex SDK, Claude Agent SDK, DeepAgents, or PydanticAI. Swap engines without rewriting workflows.
+
+    [:octicons-arrow-right-24: Runtime Backends](runtimes.md)
+
+-   :octicons-people-16:{ .lg .middle } **Multi-agent, supervised**
+
+    ---
+
+    One-shot sub-agents, long-lived peer agents you can steer mid-run, external A2A agents, and rubric self-grading to hold unattended work to a standard.
+
+    [:octicons-arrow-right-24: Multi-Agent Workflows](advanced/multi-agent.md)
+
+-   :octicons-shield-check-16:{ .lg .middle } **Safety as policy, not hope**
+
+    ---
+
+    Declarative allow/deny/ask rules for shell commands, secret filtering for spawned processes, OS sandboxing, permission escalation with consent, and hard denies nothing can override.
+
+    [:octicons-arrow-right-24: Policies & Safety](advanced/policies.md)
+
+-   :octicons-terminal-16:{ .lg .middle } **Headless and CI-ready**
+
+    ---
+
+    JSON event output, schema-validated answers with automatic correction, rubric quality gates, session exports to Markdown, JSON, or shareable HTML, and disposable worktree isolation.
+
+    [:octicons-arrow-right-24: Headless & CI](advanced/headless-ci.md)
+
+-   :octicons-database-16:{ .lg .middle } **Memory that stays yours**
+
+    ---
+
+    Local-first agent memory with explicit control: remember, search, forget, export. Plug in mem0, Cognee, Supermemory, or SpecMem when you want more, and opt in to the full loop: automatic capture of durable facts from completed runs, and automatic recall when they matter again.
+
+    [:octicons-arrow-right-24: Memory & Learning](advanced/memory.md)
+
+</div>
+
+---
+
+## See it work
+
+=== "Interactive TUI"
+
+    ```text
+    :connect local          # pick a local model server
+    :plan fix the tests     # review the plan before tools run
+    :plan approve           # execute it
+    :context                # check the detected context window
+    :compare gpt-5.4 gemma4 # same prompt, two models, side by side
+    ```
+
+    Type while the agent works and your message steers the current run between tool calls.
+
+=== "Headless"
+
+    ```bash
+    superqode -p --mode json "summarize the architecture" | jq .success
+    superqode -p --resume 4f2a "continue where we left off"
+    superqode sessions export 4f2a --format html -o run.html
+    ```
+
+=== "Harness contract"
+
+    ```yaml
+    # harness.yaml: the portable run contract
+    name: my-coder
+    flavor: coding
+    runtime:
+      backend: builtin
+    model_policy:
+      primary: ollama/gemma4
+      tool_call_format: prompt    # for models without a native tool head
+    execution_policy:
+      sandbox: local
+      approval_profile: ask
+    ```
+
+    ```bash
+    superqode harness run --spec harness.yaml --prompt "make the smallest safe fix"
+    superqode harness events <run-id>
+    ```
+
+=== "CI quality gate"
+
+    ```bash
+    superqode -p \
+      --sandbox git-worktree \
+      --rubric "the full test suite passes; the diff is minimal" \
+      --output-schema fix-report.schema.json \
+      "find one failing test and fix it properly" > report.json
+
+    jq -e '.schema_valid and .success' report.json
+    ```
+
+---
+
+## How a run works
+
+```text
+1. SPEC       Choose coding, no-tool, or custom harness behavior
+2. MODEL      Apply model policy, local hints, fallback rules, and prompt profile
+3. RUNTIME    Select builtin, OpenAI Agents, ADK, Codex SDK, Claude Agent SDK, DeepAgents, or PydanticAI
+4. TOOLS      Attach repository tools, MCP tools, validation hooks, or no tools
+5. SESSION    Persist history, stream events, compact context, store runs, resume work
+6. WORKFLOW   Run single, chain, parallel, router, orchestrator, or evaluator-optimizer flows
+7. RESULT     Return text, diffs, typed data, events, and validation state
 ```
 
-## Design Principles
+Every stage is observable: `superqode harness events <run-id>` shows the normalized event graph regardless of which runtime executed the work.
 
-- Harness-first, workflow-neutral
-- Local models are first-class
-- Bring your own runtime and tools
-- Tools are policy-controlled capabilities, not assumptions
-- No-tool reasoning is a first-class benchmark path
-- Runtime adapters are peers, not product centers
-- Model policy is explicit for Gemma4, DS4, and hosted models
-- Structured results are validated by the harness, not parsed ad hoc by callers
-- Validation is reusable infrastructure
-- A2A composes higher-level applications outside the core harness
+---
 
-## Next Steps
+## Learn it in order
 
-- [Installation](getting-started/installation.md)
-- [First Session](getting-started/first-session.md)
-- [Agent Runtimes](runtimes.md)
-- [Harness System](advanced/harness-system.md)
-- [Tools System](advanced/tools-system.md)
-- [Provider Configuration](providers/index.md)
+Each step builds on the previous one.
+
+1. **Install and run**: [Installation](getting-started/installation.md), then [Your First Session](getting-started/first-session.md)
+2. **Connect your models**: [Providers](providers/index.md) for hosted APIs, [Local Models](providers/local.md) for Ollama, LM Studio, MLX, vLLM, and DS4
+3. **Understand the engine**: [Inside the Agent Loop](advanced/agent-loop.md) and the [Tools Catalog](advanced/tools-catalog.md)
+4. **Make it yours**: [Harness System](advanced/harness-system.md) for portable run contracts, [Policies & Safety](advanced/policies.md) for guardrails
+5. **Automate**: [Headless & CI](advanced/headless-ci.md) for scripts, pipelines, and schema-validated output
+6. **Go further**: [Developer Workflows](developer-workflows.md), [Multi-Agent Workflows](advanced/multi-agent.md), [Runtime Backends](runtimes.md), [Plugin Authoring](advanced/plugin-authoring.md)
+
+---
+
+<div class="sq-footer-cta" markdown>
+
+**Ready?** [Install SuperQode](getting-started/installation.md){ .md-button .md-button--primary } or watch the [demo video](https://www.youtube.com/watch?v=x2V323HgXRk).
+
+</div>
