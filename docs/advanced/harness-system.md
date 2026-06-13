@@ -212,6 +212,12 @@ Use `--runtime`, `--provider`, `--model`, `--session`, `--working-dir`, and `--s
 override the spec for one run. Use `--stream` to print normalized stream events and `--json` for machine
 readable output.
 
+`harness run` honors the workflow topology in the spec. A `single` workflow runs
+one prompt through the harness kernel. `chain`, `parallel`, `router`,
+`orchestrator`, and `evaluator_optimizer` run through the workflow engine,
+persisting a parent workflow run plus child result run IDs. Use `--single-step`
+to force the old one-prompt path, and use `--stream` only with single-step runs.
+
 ### Event Graph
 
 Every HarnessSpec run writes normalized events and a graph view of the execution. The graph turns runtime
@@ -291,6 +297,32 @@ The workflow engine lets a harness describe more than one prompt call without re
 | `router` | Choose a route by config or by router output |
 | `orchestrator` | Run worker steps then synthesize |
 | `evaluator_optimizer` | Generate, evaluate, and optionally optimize |
+
+Workflow steps inherit the top-level `--provider`, `--model`, and `--runtime`
+unless the matching `agents:` entry overrides them. Agent-level `model` may be a
+plain model id (`gpt-5.5`) or a provider-qualified id (`ollama/qwen3:4b`).
+Agent `config.provider`, `config.runtime`, `tools`, and `max_iterations` are
+honored for that step by the runtime-backed harness path, so one workflow can
+route planning to a small local model, implementation to a coding model, and
+review to a different runtime without changing the harness contract.
+
+Workflow failure policy is configured under `workflow.config`:
+
+```yaml
+workflow:
+  mode: chain
+  config:
+    max_retries: 1
+    continue_on_error: true
+    fallback_prompt: "Recover with a simpler answer and preserve useful context."
+    fallback_step_id: recover
+```
+
+Defaults are fail-fast with no retries. `max_retries` retries the same step
+before it is considered failed. `fallback_prompt` runs one fallback step after
+retry exhaustion. `continue_on_error` lets chain/parallel-style workflows keep
+going while the parent run records `failures` and ends with failed status, so CI
+and automation can detect partial success.
 
 ### Run Storage
 

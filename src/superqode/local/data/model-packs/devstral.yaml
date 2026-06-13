@@ -1,0 +1,11 @@
+# Mistral Devstral family pack.
+name: devstral
+description: "Devstral 2: agent-tuned coder, native tools, low temperature"
+match: [devstral]
+policy:
+  temperature: 0.15
+  system_level: minimal
+  parallel_tools: false
+  session_history_limit: 14
+notes:
+  - "Devstral is post-trained on agentic software-engineering trajectories; trust its native tool calls."

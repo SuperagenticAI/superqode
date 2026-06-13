@@ -321,305 +321,6 @@ def test_provider(provider_id: str, model: Optional[str]):
         console.print(f"\n[red]❌ Error: {e}[/red]")
 
 
-@providers.command("mlx")
-@click.argument("action", type=click.Choice(["list", "server", "models", "check", "setup"]))
-@click.option("--model", "-m", help="Model for server command")
-@click.option("--host", default="localhost", help="Server host")
-@click.option("--port", default=8080, type=int, help="Server port")
-def mlx_command(action: str, model: Optional[str], host: str, port: int):
-    """Manage MLX (Apple Silicon) models and servers.
-
-    Actions:
-    - list: List available MLX models (cached and server)
-    - server: Show command to start MLX server
-    - models: Show suggested MLX models
-    - check: Check if mlx_lm is installed
-    - setup: Complete setup guide for MLX
-    """
-    from ..providers.local.mlx import MLXClient
-
-    if action == "list":
-        console.print("[bold]🔍 Discovering MLX models...[/bold]")
-
-        server_running = False
-        server_models = []
-
-        # Show server models if available
-        async def check_server():
-            nonlocal server_running, server_models
-            try:
-                client = await get_mlx_client()
-                if client:
-                    console.print("\n[green]🟢 MLX server running:[/green]")
-                    models = await client.list_models()
-                    server_running = True
-                    server_models = models
-                    if models:
-                        for model in models:
-                            console.print(f"  • {model.id} ({model.name})")
-                    else:
-                        console.print("  No models loaded")
-                else:
-                    console.print("\n[yellow]🟡 MLX server not running[/yellow]")
-            except Exception as e:
-                console.print(f"\n[red]❌ Error checking server: {e}[/red]")
-
-        asyncio.run(check_server())
-
-        # Show cached models (only supported ones)
-        console.print("\n[blue]📦 Supported models in HuggingFace cache:[/blue]")
-        cache_models = MLXClient.discover_huggingface_models()
-        supported_cache_models = [m for m in cache_models if MLXClient.is_model_supported(m["id"])]
-
-        if supported_cache_models:
-            for model in supported_cache_models:
-                size_mb = model["size_bytes"] / (1024 * 1024)
-                format_note = ""
-                if "mlx" in model["id"].lower():
-                    format_note = " (MLX format)"
-                elif "4bit" in model["id"].lower() or "8bit" in model["id"].lower():
-                    format_note = " (quantized)"
-                console.print(f"  • {model['id']} ({size_mb:.1f} MB){format_note}")
-        else:
-            console.print("  No supported MLX models found in cache")
-
-        # Show guidance if no server running
-        if not server_running:
-            console.print(
-                "\n[green]✅ Supported formats:[/green] MLX (.npz), safetensors (auto-converted)"
-            )
-            console.print(
-                "  [green]✅ Working architectures:[/green] Standard transformers, QWen, Llama, Mistral, Phi"
-            )
-            console.print(
-                "  [red]❌ Known issues:[/red] MoE models (Mixtral, some gpt-oss) not supported"
-            )
-
-            if supported_cache_models:
-                console.print("\n  [green]📦 You have supported models available![/green]")
-                console.print("  To start MLX server:")
-                console.print(
-                    "  1. [cyan]superqode providers mlx models[/cyan] - See your cached models"
-                )
-                console.print(
-                    "  2. [cyan]superqode providers mlx server --model <model-id>[/cyan] - Start server"
-                )
-                console.print("  3. [cyan]superqode connect byok mlx <model-id>[/cyan] - Connect")
-            else:
-                console.print("\n  [yellow]📥 No supported models found in cache[/yellow]")
-                console.print("  To get started with MLX:")
-                console.print(
-                    "  1. [cyan]superqode providers mlx setup[/cyan] - Complete setup guide"
-                )
-                console.print(
-                    "  2. [cyan]mlx_lm.download mlx-community/Llama-3.2-1B-Instruct-4bit[/cyan] - Download model"
-                )
-                console.print(
-                    "  3. [cyan]mlx_lm.server --model mlx-community/Llama-3.2-1B-Instruct-4bit[/cyan] - Start server"
-                )
-                console.print(
-                    "  4. [cyan]superqode connect byok mlx mlx-community/Llama-3.2-1B-Instruct-4bit[/cyan] - Connect"
-                )
-
-    elif action == "server":
-        if not model:
-            console.print("[red]❌ Model required for server command[/red]")
-            console.print("Usage: superqode providers mlx server --model <model-id>")
-            console.print()
-            console.print("[yellow]💡 Get model IDs with:[/yellow]")
-            console.print("  [cyan]superqode providers mlx models[/cyan]")
-            console.print("  [cyan]superqode providers mlx list[/cyan]")
-            return
-
-        console.print(f"[bold]🚀 MLX Server Setup for {model}:[/bold]")
-        console.print()
-
-        from ..providers.local.mlx import MLXClient
-
-        cmd_parts = MLXClient.get_server_command(model, host, port)
-        cmd_str = " ".join(cmd_parts)
-
-        console.print("[bold]1. Start the MLX server:[/bold]")
-        console.print(f"   [cyan]{cmd_str}[/cyan]")
-        console.print()
-        console.print("[bold]2. In another terminal, verify server is running:[/bold]")
-        console.print(f"   [cyan]curl http://localhost:{port}/v1/models[/cyan]")
-        console.print()
-        console.print("[bold]3. Connect in SuperQode:[/bold]")
-        console.print(f"   [cyan]superqode connect byok mlx {model}[/cyan]")
-        console.print()
-        console.print("[yellow]💡 Pro tips:[/yellow]")
-        console.print("   • Large models (20B+) may take 1-2 minutes to load")
-        console.print("   • Keep the server terminal open while using MLX models")
-        console.print("   • Use Ctrl+C to stop the server when done")
-
-    elif action == "models":
-        console.print("[bold]💡 Suggested MLX Models:[/bold]")
-        console.print("   (Optimized for Apple Silicon - fast inference, low memory usage)")
-        console.print()
-
-        models = MLXClient.suggest_models()
-        for i, model_id in enumerate(models, 1):
-            console.print(f"  {i}. [cyan]{model_id}[/cyan]")
-
-        console.print()
-        console.print("[bold]Quick Start Commands:[/bold]")
-        console.print(f"  [cyan]mlx_lm.download {models[0]}[/cyan]  # Download first model")
-        console.print(f"  [cyan]mlx_lm.server --model {models[0]}[/cyan]  # Start server")
-        console.print(f"  [cyan]superqode connect byok mlx {models[0]}[/cyan]  # Connect")
-        console.print()
-        console.print("[yellow]💡 Model Recommendations:[/yellow]")
-        console.print("   • Start with smaller models for testing (1B-3B parameters)")
-        console.print("   • Use 4bit/8bit quantized models for best performance")
-        console.print("   • Larger models need more RAM but provide better quality")
-        console.print(
-            "   • [red]⚠️  MLX Limitation:[/red] Only one active request per server instance"
-        )
-
-    elif action == "check":
-
-        async def check_install():
-            installed = await MLXClient.check_mlx_lm_installed()
-            if installed:
-                console.print("[green]✅ mlx_lm is installed[/green]")
-                console.print("Version info:")
-                # Try to get version
-                import subprocess
-
-                try:
-                    result = subprocess.run(
-                        ["mlx_lm.server", "--version"], capture_output=True, text=True, timeout=5
-                    )
-                    if result.returncode == 0:
-                        console.print(f"  {result.stdout.strip()}")
-                    else:
-                        console.print("  Version check failed")
-                except Exception:
-                    console.print("  Version check failed")
-            else:
-                console.print("[red]❌ mlx_lm is not installed[/red]")
-                console.print()
-                console.print("Install with:")
-                console.print("  pip install mlx-lm")
-                console.print()
-                console.print("Or for optional dependency:")
-                console.print("  pip install superqode[mlx]")
-
-        asyncio.run(check_install())
-
-    elif action == "setup":
-        console.print("[bold]🚀 Complete MLX Setup Guide[/bold]")
-        console.print()
-
-        # Supported formats info
-        console.print("[green]✅ Supported Formats & Architectures:[/green]")
-        console.print("  • [cyan]Formats:[/cyan] MLX (.npz), safetensors (auto-converted)")
-        console.print(
-            "  • [cyan]Architectures:[/cyan] Standard transformers, QWen, Llama, Mistral, Phi"
-        )
-        console.print("  • [red]Not supported:[/red] MoE models (Mixtral, some gpt-oss variants)")
-        console.print()
-
-        # LM Studio section
-        console.print("[bold]🖥️  Alternative: LM Studio (GUI Interface)[/bold]")
-        console.print("LM Studio provides a user-friendly GUI for running models locally.")
-        console.print()
-        console.print("[bold]LM Studio Setup:[/bold]")
-        console.print("  1. [cyan]Download LM Studio:[/cyan] https://lmstudio.ai/")
-        console.print("  2. [cyan]Install and open LM Studio[/cyan]")
-        console.print(
-            "  3. [cyan]Download a model:[/cyan] Search for models like 'qwen3-30b' or 'llama3.2-3b'"
-        )
-        console.print("  4. [cyan]Load the model:[/cyan] Click 'Load Model' in LM Studio")
-        console.print(
-            "  5. [cyan]Start local server:[/cyan] Go to 'Local Server' tab and click 'Start Server'"
-        )
-        console.print("     • Default port: 1234")
-        console.print("     • Keep LM Studio running in background")
-        console.print("  6. [cyan]Connect in SuperQode:[/cyan] superqode connect byok lmstudio")
-        console.print()
-        console.print("[yellow]💡 LM Studio Tips:[/yellow]")
-        console.print("  • No command-line installation needed")
-        console.print("  • GUI shows model loading progress")
-        console.print("  • Can test models directly in LM Studio first")
-        console.print("  • Server runs on http://localhost:1234/v1/chat/completions")
-        console.print()
-
-        # Check installation
-        console.print("[bold]1. Install MLX:[/bold]")
-
-        async def check_and_guide():
-            installed = await MLXClient.check_mlx_lm_installed()
-            if installed:
-                console.print("  [green]✅ mlx_lm is already installed[/green]")
-            else:
-                console.print("  [yellow]Install MLX framework:[/yellow]")
-                console.print("  [cyan]pip install mlx-lm[/cyan]")
-                console.print("  [cyan]# or: pip install superqode[mlx][/cyan]")
-            console.print()
-
-        asyncio.run(check_and_guide())
-
-        # Show models
-        console.print("[bold]2. Choose and Download a Model:[/bold]")
-        models = MLXClient.suggest_models()
-        console.print("  [yellow]✅ Recommended working models (smallest to largest):[/yellow]")
-        for i, model_id in enumerate(models[:6], 1):  # Show first 6
-            size_indicator = ""
-            if "0.6b" in model_id or "1B" in model_id:
-                size_indicator = " [green](fast)[/green]"
-            elif "3B" in model_id or "7B" in model_id:
-                size_indicator = " [yellow](medium)[/yellow]"
-            elif "30B" in model_id:
-                size_indicator = " [red](large)[/red]"
-            console.print(f"    {i}. [cyan]{model_id}[/cyan]{size_indicator}")
-        console.print()
-        console.print("  [yellow]Download a model:[/yellow]")
-        console.print(f"  [cyan]mlx_lm.download {models[0]}[/cyan]  # ~1-2 minutes (small model)")
-        console.print(f"  [cyan]mlx_lm.download {models[3]}[/cyan]  # ~3-5 minutes (medium model)")
-        console.print()
-        console.print("  [yellow]💡 MLX Limitations:[/yellow]")
-        console.print("    • Each model needs its own server instance")
-        console.print("    • One server per model for concurrent use")
-        console.print("    • Different ports if running multiple servers")
-        console.print("    • Only one active request per server instance")
-        console.print()
-
-        # Start server
-        console.print("[bold]3. Start the MLX Server:[/bold]")
-        console.print("  [yellow]In a separate terminal, run:[/yellow]")
-        console.print(f"  [cyan]mlx_lm.server --model {models[0]}[/cyan]")
-        console.print()
-        console.print("  [yellow]Verify server is running:[/yellow]")
-        console.print("  [cyan]curl http://localhost:8080/v1/models[/cyan]")
-        console.print()
-        console.print(
-            "  [yellow]⚠️  Important:[/yellow] MLX servers handle only ONE request at a time"
-        )
-        console.print("    • Keep this terminal open while using the model")
-        console.print("    • Start separate servers on different ports for concurrent use")
-        console.print()
-
-        # Connect
-        console.print("[bold]4. Connect in SuperQode:[/bold]")
-        console.print("  [yellow]Open SuperQode and connect:[/yellow]")
-        console.print(f"  [cyan]superqode connect byok mlx {models[0]}[/cyan]")
-        console.print()
-
-        # Troubleshooting
-        console.print("[bold]5. Troubleshooting:[/bold]")
-        console.print("  [yellow]If connection fails:[/yellow]")
-        console.print("  • Check server is still running in the terminal")
-        console.print("  • Large models may take 1-2 minutes to load")
-        console.print("  • Try a smaller model first for testing")
-        console.print("  • Check RAM usage - MLX needs available memory")
-        console.print()
-        console.print("  [yellow]Useful commands:[/yellow]")
-        console.print("  • [cyan]superqode providers mlx list[/cyan] - See available models")
-        console.print("  • [cyan]superqode providers mlx check[/cyan] - Verify installation")
-        console.print("  • [cyan]superqode providers mlx models[/cyan] - See all suggestions")
-
-
 @providers.command("monty")
 @click.argument("action", type=click.Choice(["check", "smoke", "setup"]))
 def monty_command(action: str):
@@ -818,6 +519,157 @@ def ds4_command(action: str, host: Optional[str]):
         return 0
 
     raise SystemExit(asyncio.run(_doctor()) or 0)
+
+
+@providers.command("mlx")
+@click.argument("action", type=click.Choice(["server", "doctor", "check", "list", "models", "setup"]))
+@click.option(
+    "--model", "model_id", default=None, help="HF model id (for example mlx-community/...)"
+)
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8080, show_default=True, type=int)
+@click.option(
+    "--extra-arg",
+    "extra_args",
+    multiple=True,
+    help="Extra flag passed through to mlx_lm.server (repeatable)",
+)
+def mlx_command(action: str, model_id: Optional[str], host: str, port: int, extra_args):
+    """Manage a local mlx_lm.server (the WWDC-blessed MLX stack on Apple Silicon).
+
+    Actions:
+    - server: Start mlx_lm.server in the foreground (Ctrl+C stops it)
+    - doctor: Check the install and whether a server is already answering
+    - list: Show running and cached MLX-compatible models
+    - models: Show suggested MLX model ids
+    - setup: Print the quickest setup path
+    """
+    import subprocess
+    import sys
+    from importlib.util import find_spec
+
+    from ..providers.local.mlx import MLXClient
+
+    installed = find_spec("mlx_lm") is not None
+
+    if action in {"doctor", "check"}:
+        from ..local.engines import detect_mlx_lm
+
+        status = detect_mlx_lm()
+        if status.installed:
+            version = f" {status.version}" if status.version else ""
+            console.print(f"[green]✓ mlx-lm installed[/green]{version}")
+        else:
+            console.print("[red]❌ mlx-lm not installed[/red]")
+            console.print("Install with: [cyan]uv pip install mlx-lm[/cyan]")
+        if status.running:
+            console.print(f"[green]✓ Server answering at {status.endpoint}[/green]")
+        else:
+            console.print(
+                f"[yellow]No server at {status.endpoint}.[/yellow] Start one with: "
+                "[cyan]superqode providers mlx server --model <hf-id>[/cyan]"
+            )
+        raise SystemExit(0 if status.installed else 1)
+
+    if action == "list":
+        console.print("[bold]MLX models[/bold]")
+
+        async def list_running_models():
+            try:
+                client = await get_mlx_client()
+                if client is None:
+                    return []
+                return await client.list_models()
+            except Exception:
+                return []
+
+        running = asyncio.run(list_running_models())
+        if running:
+            console.print("\n[green]Running server models[/green]")
+            for item in running:
+                console.print(f"  • {item.id}  (ctx {item.context_window:,})")
+        else:
+            console.print("\n[yellow]No mlx_lm.server is answering.[/yellow]")
+
+        cached = [
+            item
+            for item in MLXClient.discover_huggingface_models()
+            if MLXClient.is_model_supported(str(item.get("id", "")))
+        ]
+        console.print("\n[bold]Supported Hugging Face cache models[/bold]")
+        if not cached:
+            console.print("  No supported MLX models found in the Hugging Face cache.")
+            console.print("  Try: superqode providers mlx models")
+            return
+        for item in cached:
+            size_gb = float(item.get("size_bytes") or 0) / (1024**3)
+            console.print(f"  • {item['id']}  ({size_gb:.1f}GB)")
+        return
+
+    if action == "models":
+        console.print("[bold]Suggested MLX models[/bold]")
+        for model in MLXClient.suggest_models():
+            console.print(f"  • {model}")
+        console.print()
+        console.print(
+            "Start one with: [cyan]superqode providers mlx server --model <hf-id>[/cyan]"
+        )
+        return
+
+    if action == "setup":
+        console.print("[bold]MLX setup[/bold]")
+        console.print("1. Install the optional MLX stack:")
+        console.print("   [cyan]uv pip install mlx-lm[/cyan]")
+        console.print("2. Pick a model:")
+        console.print("   [cyan]superqode providers mlx models[/cyan]")
+        console.print("3. Start the OpenAI-compatible server:")
+        console.print(
+            "   [cyan]superqode providers mlx server --model "
+            "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit[/cyan]"
+        )
+        console.print("4. Generate a tuned local harness:")
+        console.print("   [cyan]superqode local doctor --generate harness.yaml[/cyan]")
+        return
+
+    # server
+    if not installed:
+        console.print("[red]❌ mlx-lm is not installed in this environment.[/red]")
+        console.print("Install with: [cyan]uv pip install mlx-lm[/cyan]")
+        raise SystemExit(1)
+    if not model_id:
+        console.print("[red]Pass --model with an HF id, for example:[/red]")
+        console.print(
+            "  [cyan]superqode providers mlx server"
+            " --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit[/cyan]"
+        )
+        console.print(
+            "[dim]Tip: superqode local doctor lists MLX models already in your HF cache.[/dim]"
+        )
+        raise SystemExit(1)
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "mlx_lm.server",
+        "--model",
+        model_id,
+        "--host",
+        host,
+        "--port",
+        str(port),
+    ]
+    cmd.extend(extra_args)
+    console.print(f"[bold]Starting mlx_lm.server[/bold] on http://{host}:{port}/v1")
+    console.print(f"[dim]{' '.join(cmd)}[/dim]")
+    console.print(
+        f"[dim]Point SuperQode at it with provider [cyan]mlx[/cyan]"
+        f" or any OpenAI-compatible route to http://{host}:{port}/v1.[/dim]"
+    )
+    try:
+        raise SystemExit(subprocess.run(cmd).returncode)
+    except KeyboardInterrupt:
+        console.print("\n[dim]mlx_lm.server stopped.[/dim]")
+        raise SystemExit(0) from None
 
 
 def connect_provider(provider: Optional[str] = None, model: Optional[str] = None) -> int:

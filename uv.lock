@@ -4713,7 +4713,7 @@ wheels = [
 
 [[package]]
 name = "superqode"
-version = "0.1.40"
+version = "0.1.41"
 source = { editable = "." }
 dependencies = [
     { name = "agent-client-protocol" },
@@ -4739,6 +4739,9 @@ a2a = [
 ]
 adk = [
     { name = "google-adk" },
+]
+channels = [
+    { name = "websocket-client" },
 ]
 claude-agent-sdk = [
     { name = "claude-agent-sdk" },
@@ -4881,8 +4884,9 @@ requires-dist = [
     { name = "superopt", specifier = ">=0.1.1" },
     { name = "textual", specifier = ">=0.47.0" },
     { name = "uvicorn", marker = "extra == 'a2a'", specifier = ">=0.32.0" },
+    { name = "websocket-client", marker = "extra == 'channels'", specifier = ">=1.6.0" },
 ]
-provides-extras = ["hf", "mlx", "monty", "extras", "a2a", "adk", "openai-agents", "codex-sdk", "claude-agent-sdk", "deepagents", "pydanticai", "pydanticai-logfire", "mem0", "supermemory", "memory-providers", "dev", "testing", "linters", "ui-testing", "performance", "docs"]
+provides-extras = ["hf", "mlx", "monty", "channels", "extras", "a2a", "adk", "openai-agents", "codex-sdk", "claude-agent-sdk", "deepagents", "pydanticai", "pydanticai-logfire", "mem0", "supermemory", "memory-providers", "dev", "testing", "linters", "ui-testing", "performance", "docs"]
 
 [[package]]
 name = "temporalio"

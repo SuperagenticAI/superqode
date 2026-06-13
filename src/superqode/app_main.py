@@ -1033,6 +1033,11 @@ class SuperQodeApp(App):
     def _load_agents(self) -> List[AgentInfo]:
         """Load agents list (called lazily)."""
         try:
+            try:
+                asyncio.get_running_loop()
+                return self._fallback_agents()
+            except RuntimeError:
+                pass
             from superqode.agents.discovery import read_agents
 
             agents_data = asyncio.run(read_agents())
@@ -1049,32 +1054,36 @@ class SuperQodeApp(App):
             ]
         except Exception as e:
             # Fallback to basic agents if discovery fails
-            return [
-                AgentInfo(
-                    identity="opencode",
-                    name="OpenCode",
-                    short_name="opencode",
-                    description="AI coding assistant",
-                    author="OpenCode",
-                    status=AgentStatus.AVAILABLE,
-                ),
-                AgentInfo(
-                    identity="gemini",
-                    name="Gemini",
-                    short_name="gemini",
-                    description="Google AI assistant",
-                    author="Google",
-                    status=AgentStatus.AVAILABLE,
-                ),
-                AgentInfo(
-                    identity="claude",
-                    name="Claude",
-                    short_name="claude",
-                    description="Anthropic AI assistant",
-                    author="Anthropic",
-                    status=AgentStatus.AVAILABLE,
-                ),
-            ]
+            return self._fallback_agents()
+
+    def _fallback_agents(self) -> List[AgentInfo]:
+        """Basic agents used when async discovery cannot run synchronously."""
+        return [
+            AgentInfo(
+                identity="opencode",
+                name="OpenCode",
+                short_name="opencode",
+                description="AI coding assistant",
+                author="OpenCode",
+                status=AgentStatus.AVAILABLE,
+            ),
+            AgentInfo(
+                identity="gemini",
+                name="Gemini",
+                short_name="gemini",
+                description="Google AI assistant",
+                author="Google",
+                status=AgentStatus.AVAILABLE,
+            ),
+            AgentInfo(
+                identity="claude",
+                name="Claude",
+                short_name="claude",
+                description="Anthropic AI assistant",
+                author="Anthropic",
+                status=AgentStatus.AVAILABLE,
+            ),
+        ]
 
     def _get_opencode_models(self) -> List[Dict]:
         """Get OpenCode models from the live CLI catalog."""
@@ -5736,6 +5745,8 @@ class SuperQodeApp(App):
             self._plugins_cmd(args, log)
         elif c == "memory":
             self._memory_cmd(args, log)
+        elif c == "local":
+            self._local_cmd(args, log)
         elif c in ("benchmark", "benchmarks"):
             self._benchmark_cmd(args, log)
         elif c == "usage":
@@ -10958,65 +10969,9 @@ class SuperQodeApp(App):
 
     def _workflow_steps_from_spec(self, spec, prompt: str):
         """Build runnable workflow steps from HarnessSpec agents and a user prompt."""
-        from superqode.harness import WorkflowMode, WorkflowStep, apply_workflow_preset
+        from superqode.harness import workflow_steps_from_spec
 
-        spec = apply_workflow_preset(spec)
-        mode = spec.workflow.mode
-        prompt = prompt.strip()
-        agents = list(getattr(spec, "agents", ()) or ())
-
-        def agent_step(agent):
-            parts = []
-            if getattr(agent, "role", ""):
-                parts.append(f"Role: {agent.role}")
-            if getattr(agent, "system_prompt", ""):
-                parts.append(f"Instructions:\n{agent.system_prompt}")
-            parts.append(f"Task:\n{prompt}")
-            return WorkflowStep(
-                "\n\n".join(parts),
-                id=agent.id,
-                metadata={"role": getattr(agent, "role", "")},
-            )
-
-        if agents:
-            steps = [agent_step(agent) for agent in agents]
-            if mode == WorkflowMode.ROUTER and not (
-                steps and str(steps[0].id or "").lower() == "router"
-            ):
-                router_prompt = f"Route this request to the best harness agent.\n\nTask:\n{prompt}"
-                steps.insert(0, WorkflowStep(router_prompt, id="router"))
-            if mode == WorkflowMode.EVALUATOR_OPTIMIZER:
-                defaults = [
-                    WorkflowStep(
-                        f"Create a candidate solution.\n\nTask:\n{prompt}", id="candidate"
-                    ),
-                    WorkflowStep(
-                        "Evaluate the candidate for correctness and completeness.", id="evaluator"
-                    ),
-                    WorkflowStep(
-                        "Improve the candidate using the evaluator feedback.", id="optimizer"
-                    ),
-                ]
-                steps = (steps + defaults[len(steps) :])[:3]
-            return steps
-
-        if mode == WorkflowMode.EVALUATOR_OPTIMIZER:
-            return [
-                WorkflowStep(f"Create a candidate solution.\n\nTask:\n{prompt}", id="candidate"),
-                WorkflowStep(
-                    "Evaluate the candidate for correctness and completeness.", id="evaluator"
-                ),
-                WorkflowStep("Improve the candidate using the evaluator feedback.", id="optimizer"),
-            ]
-        if mode == WorkflowMode.ROUTER:
-            return [
-                WorkflowStep(
-                    f"Route this request to the best execution path.\n\nTask:\n{prompt}",
-                    id="router",
-                ),
-                WorkflowStep(prompt, id="default"),
-            ]
-        return [WorkflowStep(prompt, id="step-1")]
+        return workflow_steps_from_spec(spec, prompt)
 
     def _show_workflow_center(self, log) -> None:
         """Render the active HarnessSpec workflow center."""
@@ -23025,6 +22980,52 @@ memory:
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
 
+    def _local_cmd(self, args: str, log: ConversationLog):
+        """Local Agentic Coding stack commands: doctor and packs."""
+        sub = (args or "").strip().lower()
+        if sub in ("", "doctor"):
+            log.add_info("Running the Local Stack Doctor (hardware, engines, models)...")
+            self.run_worker(self._run_local_doctor(log))
+        elif sub == "packs":
+            from superqode.local.packs import USER_PACKS_DIR, list_packs
+
+            t = Text()
+            t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+            t.append("Model Policy Packs\n\n", style=f"bold {THEME['text']}")
+            for pack in list_packs():
+                t.append(f"  {pack.name:<12}", style=THEME["cyan"])
+                t.append(f"{pack.description}\n", style=THEME["text"])
+                if pack.match:
+                    t.append(f"  {'':<12}matches: {', '.join(pack.match)}\n", style=THEME["dim"])
+            t.append(f"\n  Override or add packs in {USER_PACKS_DIR}\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+        else:
+            log.add_info("Usage: :local [doctor|packs]")
+
+    async def _run_local_doctor(self, log: ConversationLog):
+        """Run the Local Stack Doctor off the event loop and render its report."""
+        import asyncio as _asyncio
+
+        from superqode.local.doctor import render_report, run_doctor
+
+        try:
+            report = await _asyncio.to_thread(run_doctor)
+        except Exception as exc:
+            log.add_error(f"Local Stack Doctor failed: {exc}")
+            return
+        t = Text()
+        t.append("\n")
+        for line in render_report(report).splitlines():
+            if line.startswith(("SuperQode", "Verdict", "Engines", "Recommended models")):
+                t.append(f"  {line}\n", style=f"bold {THEME['text']}")
+            elif line.startswith("="):
+                t.append(f"  {line}\n", style=THEME["dim"])
+            else:
+                t.append(f"  {line}\n", style=THEME["text"])
+        t.append("\n  Generate a tuned harness: ", style=THEME["muted"])
+        t.append("superqode local doctor --generate harness.yaml\n", style=THEME["cyan"])
+        self._show_command_output(log, t)
+
     def _memory_cmd(self, args: str, log: ConversationLog):
         """Manage SuperQode agent memory from the TUI."""
         from superqode.memory import available_memory_providers, create_memory_provider
@@ -26014,6 +26015,8 @@ memory:
                     (":memory search specmem <q>", "Search .specmem Agent Experience Pack files"),
                     (":memory forget <id>", "Delete a local memory"),
                     (":memory export [provider]", "Export local or SpecMem memory JSON"),
+                    (":local", "Local Agentic Coding doctor: engine + model for this machine"),
+                    (":local packs", "List model policy packs (tuned open-model defaults)"),
                     (":benchmark", "Show benchmark target readiness and CLI usage"),
                 ],
             ),

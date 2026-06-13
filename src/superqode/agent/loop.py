@@ -989,7 +989,29 @@ class AgentLoop:
             max_output_bytes=self._tool_output_byte_cap,
             peer_manager=self._get_peer_manager(),
             permission_manager=self.permission_manager,
+            context_status=self._context_status,
         )
+
+    def _context_status(self) -> Dict[str, Any]:
+        """Live context-budget snapshot for the get_context_remaining tool."""
+        window = self._effective_context_window()
+        threshold, _keep_recent, _window = self._compaction_budgets()
+        messages = getattr(self, "_current_messages", None)
+        used = None
+        if messages:
+            try:
+                msg_dicts = [
+                    {
+                        "role": m.role,
+                        "content": _content_for_counting(m.content),
+                        "tool_calls": m.tool_calls,
+                    }
+                    for m in messages
+                ]
+                used = self.context_manager.count_tokens(msg_dicts)
+            except Exception:
+                used = None
+        return {"window": window, "used": used, "compaction_threshold": threshold}
 
     def _lifecycle_context(self) -> "LifecycleContext":
         """Build the lifecycle context passed to hooks."""
@@ -1925,6 +1947,7 @@ class AgentLoop:
             turn_tool_results: List[ToolResult] = []
 
             # Inject any steering messages queued while the agent was working.
+            self._current_messages = messages  # live view for get_context_remaining
             drained = self._drain_steering(messages)
             if drained and self.on_thinking:
                 await self.on_thinking(
@@ -2356,6 +2379,7 @@ class AgentLoop:
             iterations += 1
 
             # Inject any steering messages queued while the agent was working.
+            self._current_messages = messages  # live view for get_context_remaining
             drained = self._drain_steering(messages)
             if drained and self.on_thinking:
                 await self.on_thinking(

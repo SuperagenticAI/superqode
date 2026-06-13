@@ -233,6 +233,39 @@ async def test_runtime_harness_backend_clamps_no_tool_registry(monkeypatch, tmp_
 
 
 @pytest.mark.asyncio
+async def test_runtime_harness_backend_applies_agent_step_policy(monkeypatch, tmp_path):
+    created = {}
+
+    def fake_create_runtime(name, **kwargs):
+        created["name"] = name
+        created["kwargs"] = kwargs
+        return FakeRuntime(**kwargs)
+
+    monkeypatch.setattr("superqode.harness.backends.runtime.create_runtime", fake_create_runtime)
+    backend = RuntimeHarnessBackend("builtin")
+    request = HarnessBackendRequest(
+        spec=get_harness_template("coding"),
+        prompt="read only",
+        provider="ollama",
+        model="qwen3:4b",
+        working_directory=tmp_path,
+        session_id="s",
+        metadata={
+            "agent_tools": ["read_file"],
+            "agent_max_iterations": 2,
+        },
+    )
+
+    result = await backend.run(request)
+
+    assert result.runtime == "builtin"
+    assert created["kwargs"]["config"].provider == "ollama"
+    assert created["kwargs"]["config"].model == "qwen3:4b"
+    assert created["kwargs"]["config"].max_iterations == 2
+    assert [tool.name for tool in created["kwargs"]["tools"].list()] == ["read_file"]
+
+
+@pytest.mark.asyncio
 async def test_runtime_harness_backend_surfaces_pending_approvals(monkeypatch, tmp_path):
     def fake_create_runtime(name, **kwargs):
         return FakeApprovalRuntime(**kwargs)

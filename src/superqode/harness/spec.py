@@ -51,6 +51,7 @@ class ModelPolicySpec:
     reasoning: str | None = None
     local_hardware: str | None = None
     tool_call_format: str | None = None
+    pack: str | None = None
     config: dict[str, Any] = field(default_factory=dict)
 
 

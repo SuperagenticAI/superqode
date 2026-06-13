@@ -1,0 +1,12 @@
+# Qwen Coder family pack (Qwen2.5-Coder, Qwen3-Coder, Qwen3-Coder-Next).
+name: qwen-coder
+description: "Qwen Coder line: low temperature, native tools, long agentic sessions"
+match: [qwen3-coder, qwen2.5-coder, qwen-coder, coder-next]
+policy:
+  temperature: 0.1
+  system_level: minimal
+  parallel_tools: false
+  session_history_limit: 16
+notes:
+  - "Trained specifically for agentic coding loops; keep temperature low for edits."
+  - "Qwen3-Coder-Next targets 24GB-class GPUs; the 30B-A3B suits 96GB+ unified memory."

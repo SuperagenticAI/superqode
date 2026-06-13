@@ -105,19 +105,19 @@ async def extract_session_memories(
         if len(transcript) < 200:
             return 0
 
-        from ..providers.gateway.base import Message
+        # Extraction is a utility call: SUPERQODE_UTILITY_PROVIDER can route
+        # it to a cheaper model (including the on-device apple-fm).
+        from .utility_model import utility_completion
 
-        response = await gateway.chat_completion(
-            messages=[
-                Message(role="system", content=_EXTRACTION_PROMPT),
-                Message(role="user", content=f"<transcript>\n{transcript}\n</transcript>"),
-            ],
-            model=model,
-            provider=provider,
-            temperature=0.0,
+        raw = await utility_completion(
+            gateway,
+            provider,
+            model,
+            system=_EXTRACTION_PROMPT,
+            user=f"<transcript>\n{transcript}\n</transcript>",
             max_tokens=600,
         )
-        memories = _parse_memory_array(getattr(response, "content", "") or "")
+        memories = _parse_memory_array(raw)
         if not memories:
             return 0
 

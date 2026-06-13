@@ -35,10 +35,15 @@ class WorkflowResult:
     results: tuple[HarnessRunResult, ...]
     run_id: str = ""
     session_id: str = ""
+    failures: tuple[dict[str, Any], ...] = ()
 
     @property
     def content(self) -> str:
-        return self.results[-1].content if self.results else ""
+        if self.results:
+            return self.results[-1].content
+        if self.failures:
+            return str(self.failures[-1].get("error", ""))
+        return ""
 
     @property
     def data(self) -> Any | None:
@@ -61,6 +66,90 @@ class WorkflowProgress:
 WorkflowProgressCallback = Callable[[WorkflowProgress], None]
 
 
+@dataclass(frozen=True)
+class WorkflowFailurePolicy:
+    """Failure behavior for a workflow run."""
+
+    continue_on_error: bool = False
+    max_retries: int = 0
+    fallback_prompt: str = ""
+    fallback_step_id: str = "fallback"
+
+
+class WorkflowStepFailed(RuntimeError):
+    """A workflow step failed after retries/fallback."""
+
+    def __init__(self, failure: dict[str, Any]) -> None:
+        super().__init__(str(failure.get("error", "workflow step failed")))
+        self.failure = failure
+
+
+def workflow_steps_from_spec(
+    spec,
+    prompt: str,
+) -> list[WorkflowStep]:
+    """Build runnable workflow steps from a HarnessSpec and user task.
+
+    This is intentionally deterministic so CLI, TUI, MCP, and Python callers
+    turn the same portable spec into the same workflow prompts.
+    """
+    from .workflow_presets import apply_workflow_preset
+
+    spec = apply_workflow_preset(spec)
+    mode = spec.workflow.mode
+    task = prompt.strip()
+    agents = list(getattr(spec, "agents", ()) or ())
+
+    def agent_step(agent) -> WorkflowStep:
+        parts = []
+        if getattr(agent, "role", ""):
+            parts.append(f"Role: {agent.role}")
+        if getattr(agent, "system_prompt", ""):
+            parts.append(f"Instructions:\n{agent.system_prompt}")
+        parts.append(f"Task:\n{task}")
+        return WorkflowStep(
+            "\n\n".join(parts),
+            id=agent.id,
+            metadata={
+                "agent_id": agent.id,
+                "role": getattr(agent, "role", ""),
+                **({"agent_model": agent.model} if agent.model else {}),
+                **({"agent_tools": list(agent.tools)} if agent.tools else {}),
+                **({"agent_max_iterations": agent.max_iterations} if agent.max_iterations else {}),
+                **({"agent_runtime": agent.config["runtime"]} if agent.config.get("runtime") else {}),
+                **(
+                    {"agent_provider": agent.config["provider"]}
+                    if agent.config.get("provider")
+                    else {}
+                ),
+            },
+        )
+
+    if agents:
+        steps = [agent_step(agent) for agent in agents]
+        if mode == WorkflowMode.ROUTER and not (
+            steps and str(steps[0].id or "").lower() == "router"
+        ):
+            router_prompt = f"Route this request to the best harness agent.\n\nTask:\n{task}"
+            steps.insert(0, WorkflowStep(router_prompt, id="router"))
+        if mode == WorkflowMode.EVALUATOR_OPTIMIZER:
+            defaults = _default_evaluator_optimizer_steps(task)
+            steps = (steps + defaults[len(steps) :])[:3]
+        return steps
+
+    if mode == WorkflowMode.EVALUATOR_OPTIMIZER:
+        return _default_evaluator_optimizer_steps(task)
+    if mode == WorkflowMode.ROUTER:
+        return [
+            WorkflowStep(
+                f"Route this request to the best execution path.\n\nTask:\n{task}",
+                id="router",
+            ),
+            WorkflowStep(task, id="default"),
+        ]
+    return [WorkflowStep(task, id="step-1")]
+
+
 async def run_workflow(
     kernel: HarnessKernel,
     steps: list[WorkflowStep] | tuple[WorkflowStep, ...],
@@ -77,6 +166,7 @@ async def run_workflow(
     """Run steps according to the kernel spec's workflow mode."""
     workflow_session_id = session_id or f"workflow-{uuid.uuid4().hex[:8]}"
     runtime_name = runtime or kernel.spec.runtime.backend
+    failure_policy = _failure_policy_from_config(kernel.spec.workflow.config)
     evidence_cwd = working_directory or Path.cwd()
     change_baseline = capture_workspace_changes(evidence_cwd)
     kernel.store.open_session(
@@ -95,6 +185,7 @@ async def run_workflow(
             "workflow": True,
             "workflow_mode": kernel.spec.workflow.mode.value,
             "step_count": len(steps),
+            "failure_policy": _failure_policy_to_dict(failure_policy),
         },
     )
     workflow_run_id = workflow_run.run_id
@@ -110,6 +201,7 @@ async def run_workflow(
             "provider": provider,
             "model": model,
             "runtime": runtime_name,
+            "failure_policy": _failure_policy_to_dict(failure_policy),
         },
     )
 
@@ -151,6 +243,7 @@ async def run_workflow(
         "system_level": system_level,
         "session_id": workflow_session_id,
         "progress_callback": persist_progress,
+        "failure_policy": failure_policy,
     }
     mode = kernel.spec.workflow.mode
     try:
@@ -186,6 +279,7 @@ async def run_workflow(
     final = WorkflowResult(
         mode=result.mode,
         results=result.results,
+        failures=result.failures,
         run_id=workflow_run_id,
         session_id=workflow_session_id,
     )
@@ -204,7 +298,12 @@ async def run_workflow(
         cwd=evidence_cwd,
     )
     checks_failed = checks["status"] == "failed"
-    final_status = "failed" if checks_failed and kernel.spec.checks.fail_on_error else "succeeded"
+    workflow_failed = bool(final.failures)
+    final_status = (
+        "failed"
+        if workflow_failed or (checks_failed and kernel.spec.checks.fail_on_error)
+        else "succeeded"
+    )
     _append_workflow_event(
         kernel,
         workflow_run_id,
@@ -214,6 +313,7 @@ async def run_workflow(
             "status": final_status,
             "result_count": len(final.results),
             "content_preview": _preview_text(final.content),
+            "failures": list(final.failures),
             "changed_files": change_summary.to_dict(),
             "checks": checks,
         },
@@ -228,6 +328,7 @@ async def run_workflow(
             "status": final_status,
             "result_count": len(final.results),
             "result_run_ids": [item.run_id for item in final.results],
+            "failures": list(final.failures),
             "changed_files": change_summary.to_dict(),
             "checks": checks,
         },
@@ -240,6 +341,7 @@ async def run_workflow(
             "workflow_mode": mode.value,
             "result_count": len(final.results),
             "result_run_ids": [item.run_id for item in final.results],
+            "failures": list(final.failures),
             "changed_files": change_summary.to_dict(),
             "checks": checks,
         },
@@ -255,15 +357,20 @@ async def _run_single(
     if not steps:
         return WorkflowResult(mode=WorkflowMode.SINGLE, results=())
     session = await kernel.session(kwargs.get("session_id"))
-    result = await _prompt_workflow_step(
-        session,
-        steps[0],
-        kwargs,
-        mode=WorkflowMode.SINGLE,
-        index=0,
-        total=1,
-        fallback_id="single",
-    )
+    try:
+        result = await _prompt_workflow_step(
+            session,
+            steps[0],
+            kwargs,
+            mode=WorkflowMode.SINGLE,
+            index=0,
+            total=1,
+            fallback_id="single",
+        )
+    except WorkflowStepFailed as exc:
+        if not _continue_on_error(kwargs):
+            raise
+        return WorkflowResult(mode=WorkflowMode.SINGLE, results=(), failures=(exc.failure,))
     return WorkflowResult(mode=WorkflowMode.SINGLE, results=(result,))
 
 
@@ -274,24 +381,32 @@ async def _run_chain(
 ) -> WorkflowResult:
     session = await kernel.session(kwargs.get("session_id"))
     results: list[HarnessRunResult] = []
+    failures: list[dict[str, Any]] = []
     previous = ""
     for index, step in enumerate(steps):
         prompt = step.prompt
         if previous:
             prompt = f"{prompt}\n\nPrevious step result:\n{previous}"
         run_step = WorkflowStep(prompt, id=step.id, result=step.result, metadata=step.metadata)
-        result = await _prompt_workflow_step(
-            session,
-            run_step,
-            kwargs,
-            mode=WorkflowMode.CHAIN,
-            index=index,
-            total=len(steps),
-            fallback_id=f"chain-{index + 1}",
-        )
+        try:
+            result = await _prompt_workflow_step(
+                session,
+                run_step,
+                kwargs,
+                mode=WorkflowMode.CHAIN,
+                index=index,
+                total=len(steps),
+                fallback_id=f"chain-{index + 1}",
+            )
+        except WorkflowStepFailed as exc:
+            failures.append(exc.failure)
+            if not _continue_on_error(kwargs):
+                raise
+            previous = f"Previous step failed: {exc.failure.get('error', '')}"
+            continue
         results.append(result)
         previous = result.content
-    return WorkflowResult(mode=WorkflowMode.CHAIN, results=tuple(results))
+    return WorkflowResult(mode=WorkflowMode.CHAIN, results=tuple(results), failures=tuple(failures))
 
 
 async def _run_parallel(
@@ -318,8 +433,20 @@ async def _run_parallel(
                 fallback_id=f"parallel-{index + 1}",
             )
 
-    results = await asyncio.gather(*(run_one(index, step) for index, step in enumerate(steps)))
-    return WorkflowResult(mode=WorkflowMode.PARALLEL, results=tuple(results))
+    raw_results = await asyncio.gather(
+        *(run_one(index, step) for index, step in enumerate(steps)),
+        return_exceptions=_continue_on_error(kwargs),
+    )
+    results: list[HarnessRunResult] = []
+    failures: list[dict[str, Any]] = []
+    for item in raw_results:
+        if isinstance(item, WorkflowStepFailed):
+            failures.append(item.failure)
+        elif isinstance(item, Exception):
+            raise item
+        else:
+            results.append(item)
+    return WorkflowResult(mode=WorkflowMode.PARALLEL, results=tuple(results), failures=tuple(failures))
 
 
 async def _run_router(
@@ -390,6 +517,12 @@ async def _run_orchestrator(
     if not steps:
         return WorkflowResult(mode=WorkflowMode.ORCHESTRATOR, results=())
     parallel = await _run_parallel(kernel, steps, **kwargs)
+    if parallel.failures and not parallel.results:
+        return WorkflowResult(
+            mode=WorkflowMode.ORCHESTRATOR,
+            results=(),
+            failures=parallel.failures,
+        )
     synthesis_prompt = str(
         kernel.spec.workflow.config.get(
             "synthesis_prompt",
@@ -407,7 +540,11 @@ async def _run_orchestrator(
         total=len(steps) + 1,
         fallback_id="synthesis",
     )
-    return WorkflowResult(mode=WorkflowMode.ORCHESTRATOR, results=(*parallel.results, synthesis))
+    return WorkflowResult(
+        mode=WorkflowMode.ORCHESTRATOR,
+        results=(*parallel.results, synthesis),
+        failures=parallel.failures,
+    )
 
 
 async def _run_evaluator_optimizer(
@@ -516,6 +653,7 @@ async def _prompt_workflow_step(
     fallback_id: str,
 ) -> HarnessRunResult:
     step_id = step.id or fallback_id
+    policy = _failure_policy(kwargs)
     _emit_progress(
         kwargs,
         WorkflowProgress(
@@ -526,31 +664,81 @@ async def _prompt_workflow_step(
             total=total,
         ),
     )
-    try:
-        result = await session.prompt(
-            step.prompt,
-            provider=kwargs["provider"],
-            model=kwargs["model"],
-            working_directory=kwargs.get("working_directory"),
-            runtime=kwargs.get("runtime"),
-            sandbox_backend=kwargs.get("sandbox_backend", "local"),
-            system_level=kwargs.get("system_level"),
-            result=step.result,
-            metadata={"workflow_step": step_id, **step.metadata},
-        )
-    except Exception as exc:
-        _emit_progress(
-            kwargs,
-            WorkflowProgress(
-                mode=mode,
-                step_id=step_id,
-                status="failed",
-                index=index,
-                total=total,
-                detail=str(exc),
-            ),
-        )
-        raise
+    attempts = policy.max_retries + 1
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            result = await _run_step_prompt(session, step, kwargs, step_id=step_id)
+            break
+        except Exception as exc:
+            last_exc = exc
+            if attempt <= policy.max_retries:
+                _emit_progress(
+                    kwargs,
+                    WorkflowProgress(
+                        mode=mode,
+                        step_id=step_id,
+                        status="retrying",
+                        index=index,
+                        total=total,
+                        detail=f"attempt {attempt} failed: {exc}",
+                    ),
+                )
+                continue
+    else:
+        if policy.fallback_prompt:
+            fallback = WorkflowStep(
+                _format_fallback_prompt(policy.fallback_prompt, step, last_exc),
+                id=policy.fallback_step_id,
+                result=step.result,
+                metadata={
+                    **step.metadata,
+                    "fallback_for": step_id,
+                    "fallback_error": str(last_exc or ""),
+                },
+            )
+            try:
+                result = await _run_step_prompt(session, fallback, kwargs, step_id=fallback.id or "fallback")
+                _emit_progress(
+                    kwargs,
+                    WorkflowProgress(
+                        mode=mode,
+                        step_id=step_id,
+                        status="fallback",
+                        index=index,
+                        total=total,
+                        detail=f"used fallback step {fallback.id}",
+                        result=result,
+                    ),
+                )
+            except Exception as fallback_exc:
+                failure = _step_failure(step_id, fallback_exc, retries=policy.max_retries)
+                _emit_progress(
+                    kwargs,
+                    WorkflowProgress(
+                        mode=mode,
+                        step_id=step_id,
+                        status="failed",
+                        index=index,
+                        total=total,
+                        detail=str(fallback_exc),
+                    ),
+                )
+                raise WorkflowStepFailed(failure) from fallback_exc
+        else:
+            failure = _step_failure(step_id, last_exc, retries=policy.max_retries)
+            _emit_progress(
+                kwargs,
+                WorkflowProgress(
+                    mode=mode,
+                    step_id=step_id,
+                    status="failed",
+                    index=index,
+                    total=total,
+                    detail=str(last_exc or "workflow step failed"),
+                ),
+            )
+            raise WorkflowStepFailed(failure) from last_exc
     _emit_progress(
         kwargs,
         WorkflowProgress(
@@ -564,6 +752,96 @@ async def _prompt_workflow_step(
         ),
     )
     return result
+
+
+async def _run_step_prompt(session, step: WorkflowStep, kwargs: dict[str, Any], *, step_id: str):
+    step_kwargs = _kwargs_for_step(kwargs, step)
+    return await session.prompt(
+        step.prompt,
+        provider=step_kwargs["provider"],
+        model=step_kwargs["model"],
+        working_directory=kwargs.get("working_directory"),
+        runtime=step_kwargs.get("runtime"),
+        sandbox_backend=kwargs.get("sandbox_backend", "local"),
+        system_level=kwargs.get("system_level"),
+        result=step.result,
+        metadata={"workflow_step": step_id, **step.metadata},
+    )
+
+
+def _kwargs_for_step(kwargs: dict[str, Any], step: WorkflowStep) -> dict[str, Any]:
+    """Resolve provider/model/runtime overrides for one workflow step."""
+    out = dict(kwargs)
+    if step.metadata.get("agent_provider"):
+        out["provider"] = step.metadata["agent_provider"]
+    if step.metadata.get("agent_model"):
+        model_ref = str(step.metadata["agent_model"])
+        if "/" in model_ref and not step.metadata.get("agent_provider"):
+            provider, model = model_ref.split("/", 1)
+            out["provider"] = provider
+            out["model"] = model
+        else:
+            out["model"] = model_ref
+    if step.metadata.get("agent_runtime"):
+        out["runtime"] = step.metadata["agent_runtime"]
+    return out
+
+
+def _failure_policy(kwargs: dict[str, Any]) -> WorkflowFailurePolicy:
+    policy = kwargs.get("failure_policy")
+    if isinstance(policy, WorkflowFailurePolicy):
+        return policy
+    return WorkflowFailurePolicy()
+
+
+def _continue_on_error(kwargs: dict[str, Any]) -> bool:
+    return _failure_policy(kwargs).continue_on_error
+
+
+def _failure_policy_from_config(config: dict[str, Any]) -> WorkflowFailurePolicy:
+    raw = config.get("failure_policy")
+    data = raw if isinstance(raw, dict) else config
+    return WorkflowFailurePolicy(
+        continue_on_error=_as_bool(data.get("continue_on_error", False)),
+        max_retries=max(int(data.get("max_retries", data.get("retries", 0)) or 0), 0),
+        fallback_prompt=str(data.get("fallback_prompt", "") or ""),
+        fallback_step_id=str(data.get("fallback_step_id", "fallback") or "fallback"),
+    )
+
+
+def _failure_policy_to_dict(policy: WorkflowFailurePolicy) -> dict[str, Any]:
+    return {
+        "continue_on_error": policy.continue_on_error,
+        "max_retries": policy.max_retries,
+        "fallback_prompt": bool(policy.fallback_prompt),
+        "fallback_step_id": policy.fallback_step_id,
+    }
+
+
+def _step_failure(step_id: str, exc: Exception | None, *, retries: int) -> dict[str, Any]:
+    return {
+        "step_id": step_id,
+        "error": str(exc or "workflow step failed"),
+        "error_type": type(exc).__name__ if exc is not None else "WorkflowStepFailed",
+        "retries": retries,
+    }
+
+
+def _format_fallback_prompt(prompt: str, step: WorkflowStep, exc: Exception | None) -> str:
+    return (
+        f"{prompt}\n\n"
+        f"Failed step: {step.id or 'step'}\n"
+        f"Error: {exc}\n\n"
+        f"Original prompt:\n{step.prompt}"
+    )
+
+
+def _as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
 
 
 def _emit_progress(kwargs: dict[str, Any], progress: WorkflowProgress) -> None:
@@ -725,3 +1003,11 @@ def _format_results(results: tuple[HarnessRunResult, ...]) -> str:
 def _evaluation_passed(content: str) -> bool:
     normalized = content.strip().lower()
     return normalized.startswith("pass") or "approved" in normalized or "acceptable" in normalized
+
+
+def _default_evaluator_optimizer_steps(prompt: str) -> list[WorkflowStep]:
+    return [
+        WorkflowStep(f"Create a candidate solution.\n\nTask:\n{prompt}", id="candidate"),
+        WorkflowStep("Evaluate the candidate for correctness and completeness.", id="evaluator"),
+        WorkflowStep("Improve the candidate using the evaluator feedback.", id="optimizer"),
+    ]

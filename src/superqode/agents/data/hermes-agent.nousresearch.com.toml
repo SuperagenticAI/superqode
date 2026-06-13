@@ -15,29 +15,41 @@ run_command."*" = "hermes acp"
 help = '''
 # Hermes Agent
 
-Open-source coding agent by Nous Research with ACP support.
+Self-improving open-source agent by Nous Research (skills, persistent memory,
+cross-session learning) with full ACP support.
 
 ## Installation
 
 ```bash
-pip install 'hermes-agent[acp]'
+uv tool install 'hermes-agent[acp]'
 ```
 
-For ACP mode:
+## Configuration
+
+Hermes needs a model provider before ACP sessions start. For local models,
+point it at any OpenAI-compatible server in `~/.hermes/config.yaml`:
+
+```yaml
+model:
+  default: "qwen3-coder:30b-a3b"
+  provider: "ollama"
+  base_url: "http://127.0.0.1:11434/v1"
+```
+
+Hosted providers (Nous Portal, OpenRouter, Anthropic, and others) work via
+their usual API key environment variables; see the Hermes docs.
+
+## Verify
 
 ```bash
-hermes acp
+superqode agents doctor hermes --live
 ```
 
-Or use the alternative entry point:
-
-```bash
-hermes-acp
-```
+Then connect from the TUI with `:connect acp hermes`.
 
 See https://hermes-agent.nousresearch.com/docs/user-guide/features/acp for details.
 '''
 
 [actions."*".install]
-command = "pip install 'hermes-agent[acp]'"
-description = "Install Hermes Agent with ACP support"
+command = "uv tool install 'hermes-agent[acp]'"
+description = "Install Hermes Agent with ACP support (isolated tool env)"

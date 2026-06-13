@@ -107,6 +107,7 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
                 "reasoning": spec.model_policy.reasoning,
                 "local_hardware": spec.model_policy.local_hardware,
                 "tool_call_format": spec.model_policy.tool_call_format,
+                "pack": spec.model_policy.pack,
                 "config": spec.model_policy.config or None,
             }.items()
             if value not in (None, [], {})
@@ -257,6 +258,7 @@ def harness_spec_json_schema() -> dict[str, Any]:
                     "reasoning": {"type": "string"},
                     "local_hardware": {"type": "string"},
                     "tool_call_format": {"type": "string"},
+                    "pack": {"type": "string"},
                     "config": {"type": "object"},
                 },
             },
@@ -413,6 +415,7 @@ def _model_policy(value: Any) -> ModelPolicySpec:
         reasoning=str(data["reasoning"]) if data.get("reasoning") else None,
         local_hardware=str(data["local_hardware"]) if data.get("local_hardware") else None,
         tool_call_format=str(data["tool_call_format"]) if data.get("tool_call_format") else None,
+        pack=str(data["pack"]) if data.get("pack") else None,
         config=dict(data.get("config") or {}) if isinstance(data.get("config"), dict) else {},
     )
 

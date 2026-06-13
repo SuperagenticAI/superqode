@@ -64,6 +64,7 @@ Each call waits up to `yield_ms` (default 1500) and returns early once output se
 
 | Tool | Use |
 |---|---|
+| `get_context_remaining` | Report the context window, current usage, and remaining budget so the model can plan its remaining work deliberately. |
 | `tool_search` | Discover and activate deferred tools ("fetch a web page" → activates `web_fetch`). Present whenever anything is deferred. |
 | `request_permissions` | The model asks *you* for a session-scoped escalation with a justification; approval upgrades the named tools from ask-each-time to allowed. Hard denies are never overridable. See [Policies & Safety](policies.md). |
 | `skill`, `read_skill`, `create_skill` | Project skills from `.agents/skills/*.md`. |

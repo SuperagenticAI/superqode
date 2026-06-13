@@ -250,7 +250,7 @@ def _create_runtime_for_request(
         job_description=profile.job_description,
         plan_mode=profile.name == "plan",
         tools_enabled=request.spec.flavor != HarnessFlavor.NO_TOOL,
-        max_iterations=model_policy.max_iterations,
+        max_iterations=_max_iterations_for_request(request, model_policy),
         temperature=model_policy.temperature,
         reasoning_effort=model_policy.reasoning,
         enable_session_storage=True,
@@ -279,7 +279,7 @@ def _create_runtime_for_request(
     return runtime_name, create_runtime(
         runtime_name,
         gateway=LiteLLMGateway(),
-        tools=_tool_registry_for_spec(request.spec, profile, model_policy),
+        tools=_tool_registry_for_request(request, profile, model_policy),
         config=config,
         harness_spec=request.spec,
         parallel_tools=(
@@ -351,3 +351,25 @@ def _tool_registry_for_spec(
     if profile.tools is not None:
         return registry.filtered(profile.tools)
     return registry
+
+
+def _tool_registry_for_request(
+    request: HarnessBackendRequest,
+    profile,
+    model_policy: EffectiveModelPolicy,
+) -> ToolRegistry:
+    agent_tools = request.metadata.get("agent_tools")
+    if agent_tools:
+        return ToolRegistry.for_profile(model_policy.tool_profile or "coding").filtered(
+            [str(tool) for tool in agent_tools]
+        )
+    return _tool_registry_for_spec(request.spec, profile, model_policy)
+
+
+def _max_iterations_for_request(
+    request: HarnessBackendRequest,
+    model_policy: EffectiveModelPolicy,
+) -> int:
+    if request.metadata.get("agent_max_iterations") is not None:
+        return int(request.metadata["agent_max_iterations"])
+    return model_policy.max_iterations

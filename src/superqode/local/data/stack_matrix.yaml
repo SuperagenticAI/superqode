@@ -1,0 +1,184 @@
+# SuperQode local stack recommendation matrix.
+#
+# This file is DATA, deliberately: the model landscape moves monthly and this
+# matrix must be updatable without a code change. Users can override it with
+# ~/.superqode/stack_matrix.yaml (same schema; their tiers win by id).
+#
+# Schema per tier:
+#   id:            tier id matching HardwareProfile.tier
+#   description:   one line shown by the doctor
+#   engines:       ranked engine ids (first installed one wins)
+#   models:        ranked candidates; `match` substrings locate already-downloaded
+#                  copies in the inventory; `pull` is the suggested artifact
+#   pack:          model policy pack the generated harness should reference
+#   notes:         shown verbatim by the doctor
+
+version: 2026-06-11
+
+tiers:
+  - id: apple_16
+    description: "Apple Silicon, up to ~24GB unified memory"
+    engines: [mlx-lm, ollama, lmstudio, llama.cpp]
+    models:
+      - name: "Gemma 4 E4B"
+        match: ["gemma-4-e4b", "gemma4:e4b"]
+        pull: "ollama pull gemma4:e4b"
+        role: main
+        pack: gemma4
+      - name: "Qwen3.5 9B (4bit)"
+        match: ["qwen3.5-9b", "qwen3.5:9b"]
+        pull: "ollama pull qwen3.5:9b"
+        role: main
+        pack: qwen3
+      - name: "Qwen2.5-Coder 7B (FIM/utility)"
+        match: ["qwen2.5-coder-7b"]
+        pull: "ollama pull qwen2.5-coder:7b"
+        role: utility
+        pack: qwen-coder
+    notes:
+      - "Ollama's MLX runtime needs more than 32GB; use mlx_lm.server or the standard Ollama runtime here."
+      - "Prefer 4bit quantizations and the prompt tool-calling mode for the smallest models."
+
+  - id: apple_32
+    description: "Apple Silicon, ~32-48GB unified memory"
+    engines: [ollama, mlx-lm, lmstudio, llama.cpp]
+    models:
+      - name: "Qwen3.6 35B-A3B (4bit MoE)"
+        match: ["qwen3.6-35b", "qwen3.6:35b"]
+        pull: "ollama pull qwen3.6:35b-a3b"
+        role: main
+        pack: qwen3
+      - name: "Gemma 4 12B (multimodal)"
+        match: ["gemma-4-12b", "gemma4:12b"]
+        pull: "ollama pull gemma4:12b"
+        role: main
+        pack: gemma4
+      - name: "Devstral 2 Small"
+        match: ["devstral-2", "devstral2"]
+        pull: "ollama pull devstral2:small"
+        role: main
+        pack: devstral
+    notes:
+      - "MoE A3B models are the unified-memory sweet spot: large-model quality at ~3B active decode cost."
+
+  - id: apple_64
+    description: "Apple Silicon, ~64GB unified memory"
+    engines: [ollama, mlx-lm, lmstudio]
+    models:
+      - name: "Gemma 4 26B MoE"
+        match: ["gemma-4-26b", "gemma4:26b"]
+        pull: "ollama pull gemma4:26b"
+        role: main
+        pack: gemma4
+      - name: "Qwen3.6 27B dense"
+        match: ["qwen3.6-27b", "qwen3.6:27b"]
+        pull: "ollama pull qwen3.6:27b"
+        role: main
+        pack: qwen3
+      - name: "Qwen3.6 35B-A3B (8bit)"
+        match: ["qwen3.6-35b"]
+        pull: "ollama pull qwen3.6:35b-a3b-q8"
+        role: main
+        pack: qwen3
+    notes:
+      - "DeepSeek V4 Flash heavily quantized (~33GB) becomes possible via the DS4 engine."
+
+  - id: apple_128
+    description: "Apple Silicon, 96GB+ unified memory"
+    engines: [mlx-lm, ollama, ds4, lmstudio]
+    models:
+      - name: "Gemma 4 31B (bf16 or 8bit)"
+        match: ["gemma-4-31b", "gemma4-31b", "gemma4:31b"]
+        pull: "ollama pull gemma4:31b"
+        role: main
+        pack: gemma4
+      - name: "Qwen3-Coder 30B-A3B"
+        match: ["qwen3-coder-30b", "qwen3-coder:30b"]
+        pull: "ollama pull qwen3-coder:30b-a3b"
+        role: main
+        pack: qwen-coder
+      - name: "DeepSeek V4 Flash (quantized, via DS4)"
+        match: ["deepseek-v4-flash"]
+        pull: "superqode providers ds4 server"
+        role: main
+        pack: ds4
+      - name: "Gemma 4 12B (vision/utility companion)"
+        match: ["gemma-4-12b", "gemma4:12b"]
+        pull: "ollama pull gemma4:12b"
+        role: utility
+        pack: gemma4
+    notes:
+      - "Enough headroom to run a main coder plus a small utility/vision model concurrently."
+      - "On M5 with macOS 26.2+, always prefer the MLX path: Neural Accelerators give ~4x prefill, and agentic loops are prefill-dominated."
+
+  - id: nvidia_16
+    description: "NVIDIA GPU, up to ~16GB VRAM"
+    engines: [ollama, llama.cpp, vllm]
+    models:
+      - name: "Qwen3-Coder-Next (Q4)"
+        match: ["qwen3-coder-next"]
+        pull: "ollama pull qwen3-coder-next"
+        role: main
+        pack: qwen-coder
+      - name: "Devstral 2 Small"
+        match: ["devstral-2", "devstral2"]
+        pull: "ollama pull devstral2:small"
+        role: main
+        pack: devstral
+      - name: "Gemma 4 12B (Q4)"
+        match: ["gemma-4-12b", "gemma4:12b"]
+        pull: "ollama pull gemma4:12b"
+        role: main
+        pack: gemma4
+    notes: []
+
+  - id: nvidia_24
+    description: "NVIDIA GPU, ~24-40GB VRAM"
+    engines: [sglang, vllm, ollama]
+    models:
+      - name: "Qwen3-Coder-Next (its design target)"
+        match: ["qwen3-coder-next"]
+        pull: "huggingface-cli download Qwen/Qwen3-Coder-Next"
+        role: main
+        pack: qwen-coder
+      - name: "Qwen3.6 27B (AWQ)"
+        match: ["qwen3.6-27b"]
+        pull: "huggingface-cli download Qwen/Qwen3.6-27B-AWQ"
+        role: main
+        pack: qwen3
+    notes:
+      - "SGLang is preferred for agentic pipelines on CUDA: prefix caching plus structured output enforcement."
+
+  - id: nvidia_48
+    description: "NVIDIA, 48GB+ VRAM or multi-GPU"
+    engines: [sglang, vllm]
+    models:
+      - name: "Qwen3-Coder 30B-A3B (FP8)"
+        match: ["qwen3-coder-30b"]
+        pull: "huggingface-cli download Qwen/Qwen3-Coder-30B-A3B-FP8"
+        role: main
+        pack: qwen-coder
+      - name: "DeepSeek V4 Flash (FP8, via DS4 or SGLang)"
+        match: ["deepseek-v4-flash"]
+        pull: "huggingface-cli download deepseek-ai/DeepSeek-V4-Flash"
+        role: main
+        pack: ds4
+    notes:
+      - "Multi-GPU servers can host GLM-5.1 or full DeepSeek V4; SuperQode connects over the OpenAI-compatible endpoint."
+
+  - id: cpu
+    description: "CPU only"
+    engines: [llama.cpp, ollama]
+    models:
+      - name: "Gemma 4 E2B"
+        match: ["gemma-4-e2b", "gemma4:e2b"]
+        pull: "ollama pull gemma4:e2b"
+        role: main
+        pack: gemma4
+      - name: "Qwen3.5 2B"
+        match: ["qwen3.5-2b", "qwen3.5:2b"]
+        pull: "ollama pull qwen3.5:2b"
+        role: main
+        pack: qwen3
+    notes:
+      - "Pair small models with tool_call_format: prompt; they rarely have a reliable native tool head."

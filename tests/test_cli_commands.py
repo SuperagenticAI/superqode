@@ -822,6 +822,208 @@ checks:
             assert payload["content"] == "ran:hello"
             assert payload["harness"] == "demo"
 
+    def test_harness_run_json_executes_non_single_workflow(self, runner, monkeypatch):
+        class FakeRuntime:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+                self.prompts = []
+
+            async def run(self, prompt):
+                self.prompts.append(prompt)
+                return AgentResponse(
+                    content=f"ran:{len(self.prompts)}",
+                    messages=[],
+                    tool_calls_made=0,
+                    iterations=1,
+                    stopped_reason="complete",
+                )
+
+            def cancel(self):
+                pass
+
+            def reset_cancellation(self):
+                pass
+
+        runtime = FakeRuntime()
+        monkeypatch.setattr(
+            "superqode.harness.backends.runtime.create_runtime",
+            lambda name, **kwargs: runtime,
+        )
+        with runner.isolated_filesystem():
+            Path("harness.yaml").write_text(
+                """
+name: workflow-demo
+flavor: no_tool
+workflow:
+  mode: chain
+agents:
+  - id: planner
+    role: Plan the work.
+  - id: reviewer
+    role: Review the plan.
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "run",
+                    "--spec",
+                    "harness.yaml",
+                    "--prompt",
+                    "ship it",
+                    "--provider",
+                    "test",
+                    "--model",
+                    "model",
+                    "--json",
+                ],
+            )
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["content"] == "ran:2"
+            assert payload["workflow"]["mode"] == "chain"
+            assert payload["workflow"]["result_count"] == 2
+            assert len(payload["workflow"]["result_run_ids"]) == 2
+            assert len(runtime.prompts) == 2
+            assert "Role: Plan the work." in runtime.prompts[0]
+            assert "Previous step result:" in runtime.prompts[1]
+
+    def test_harness_run_single_step_bypasses_workflow(self, runner, monkeypatch):
+        class FakeRuntime:
+            async def run(self, prompt):
+                return AgentResponse(
+                    content=f"single:{prompt}",
+                    messages=[],
+                    tool_calls_made=0,
+                    iterations=1,
+                    stopped_reason="complete",
+                )
+
+            def cancel(self):
+                pass
+
+            def reset_cancellation(self):
+                pass
+
+        monkeypatch.setattr(
+            "superqode.harness.backends.runtime.create_runtime",
+            lambda name, **kwargs: FakeRuntime(),
+        )
+        with runner.isolated_filesystem():
+            Path("harness.yaml").write_text(
+                """
+name: workflow-demo
+flavor: no_tool
+workflow:
+  mode: chain
+agents:
+  - id: planner
+    role: Plan the work.
+  - id: reviewer
+    role: Review the plan.
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "run",
+                    "--spec",
+                    "harness.yaml",
+                    "--prompt",
+                    "ship it",
+                    "--provider",
+                    "test",
+                    "--model",
+                    "model",
+                    "--single-step",
+                    "--json",
+                ],
+            )
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["content"] == "single:ship it"
+            assert "workflow" not in payload
+
+    def test_harness_run_workflow_json_reports_failures(self, runner, monkeypatch):
+        class FakeRuntime:
+            def __init__(self):
+                self.calls = 0
+
+            async def run(self, prompt):
+                self.calls += 1
+                if self.calls == 1:
+                    raise RuntimeError("first failed")
+                return AgentResponse(
+                    content="continued",
+                    messages=[],
+                    tool_calls_made=0,
+                    iterations=1,
+                    stopped_reason="complete",
+                )
+
+            def cancel(self):
+                pass
+
+            def reset_cancellation(self):
+                pass
+
+        runtime = FakeRuntime()
+        monkeypatch.setattr(
+            "superqode.harness.backends.runtime.create_runtime",
+            lambda name, **kwargs: runtime,
+        )
+        with runner.isolated_filesystem():
+            Path("harness.yaml").write_text(
+                """
+name: workflow-demo
+flavor: no_tool
+workflow:
+  mode: chain
+  config:
+    continue_on_error: true
+agents:
+  - id: first
+    role: First.
+  - id: second
+    role: Second.
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "run",
+                    "--spec",
+                    "harness.yaml",
+                    "--prompt",
+                    "ship it",
+                    "--provider",
+                    "test",
+                    "--model",
+                    "model",
+                    "--json",
+                ],
+            )
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["content"] == "continued"
+            assert payload["workflow"]["failures"][0]["step_id"] == "first"
+            assert payload["workflow"]["failures"][0]["error"] == "first failed"
+
     def test_harness_run_store_sqlite_override(self, runner, monkeypatch):
         class FakeRuntime:
             def __init__(self, **kwargs):

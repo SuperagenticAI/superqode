@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
-site_description: "Turn open models into serious coding agents. Your harness, your models, your memory. Built for open and local models, connected to everything else through BYOK, ACP, agent SDKs, MCP, and A2A."
+site_description: "Turn open models into serious coding agents. Your harness, your models, your memory. Built for Local Agentic Coding, connected to everything else through BYOK, ACP, agent SDKs, MCP, and A2A."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode
@@ -153,6 +153,8 @@ nav:
     - ⚙️ Configuration: getting-started/configuration.md
     - 🧭 Troubleshooting: getting-started/troubleshooting.md
 
+  - 🖥️ Local Agentic Coding: local-agentic-coding.md
+
   - 📚 Concepts:
     - concepts/index.md
     - 🔌 Connection Modes: concepts/modes.md
@@ -182,6 +184,8 @@ nav:
     - 🛡️ Policies & Safety: advanced/policies.md
     - 🤝 Multi-Agent Workflows: advanced/multi-agent.md
     - 🤖 Headless & CI: advanced/headless-ci.md
+    - 🩺 Local Stack Doctor: advanced/local-stack.md
+    - 📱 Chat Channels Remote Control: advanced/channels.md
     - 🪟 Local Context & Compaction: advanced/local-context.md
     - 🔍 Multi-Repo Search & Edit Safety: advanced/multi-repo-search.md
     - 🔒 Safety & Permissions: advanced/safety-permissions.md

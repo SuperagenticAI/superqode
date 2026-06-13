@@ -1,0 +1,15 @@
+# DeepSeek V4 family via the DS4 engine.
+name: ds4
+description: "DeepSeek V4 Flash via DS4: compact-JSON tools, low reasoning, tight history"
+match: [ds4, deepseek-v4, dwarfstar]
+policy:
+  temperature: 0.2
+  system_level: minimal
+  tool_profile: ds4
+  tool_call_format: compact-json
+  reasoning: low
+  parallel_tools: false
+  session_history_limit: 12
+notes:
+  - "Start the server with: superqode providers ds4 server"
+  - "Compact JSON tool calls and a tight history keep the 13B-active MoE fast on long sessions."

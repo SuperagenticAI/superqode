@@ -57,6 +57,18 @@ Provider API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, ...)
 | `SUPERQODE_DISABLE_PROMPT_CACHE` | `0`/`1` | off | Disable prompt-cache annotations on outgoing requests. |
 | `SUPERQODE_DS4_THINKING` | mode | unset | Force the DS4 thinking mode instead of the per-model default. |
 | `SUPERQODE_MLX_INPROCESS` | `0`/`1` | on | Serve MLX models in-process; set `0` to require an external server. |
+| `SUPERQODE_UTILITY_PROVIDER` | `apple-fm` or `provider/model` | unset | Route utility calls (rubric grading, memory extraction) to a cheaper model; `apple-fm` uses the on-device Apple Foundation Model. Falls back to the session model. See [Local Stack Doctor](../advanced/local-stack.md). |
+
+## Channel daemon
+
+| Variable | Values | Default | Effect |
+|---|---|---|---|
+| `SUPERQODE_TELEGRAM_BOT_TOKEN` | token | unset | Telegram bot token for `superqode daemon` (from @BotFather). |
+| `SUPERQODE_SLACK_APP_TOKEN` | `xapp-...` | unset | Slack app-level token for Socket Mode. |
+| `SUPERQODE_SLACK_BOT_TOKEN` | `xoxb-...` | unset | Slack bot token for posting messages. |
+| `SUPERQODE_DISCORD_BOT_TOKEN` | token | unset | Discord bot token for the Gateway connection. |
+
+Chat allowlists and defaults live in `~/.superqode/channels.yaml`. See [Chat Channels](../advanced/channels.md).
 
 ## ACP connections
 

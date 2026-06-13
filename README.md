@@ -9,7 +9,7 @@
 
 <p align="center">
   <strong>Portable Coding Agent Harness Framework</strong><br>
-  <em>Turn open models into serious coding agents. Your harness, your models, your memory. Built for open and local models, connected to everything else through BYOK, ACP, agent SDKs, MCP, and A2A.</em>
+  <em>Turn open models into serious coding agents. Your harness, your models, your memory. Built for Local Agentic Coding, connected to everything else through BYOK, ACP, agent SDKs, MCP, and A2A.</em>
 </p>
 
 <p align="center">
@@ -35,7 +35,9 @@
 
 ## What is SuperQode?
 
-SuperQode is the **Portable Universal Coding Agent Harness** - define your own harness, connect any agent: local models, BYOK providers, ACP agents, or A2A workflows. It is the only harness that supports all major protocols (ACP + MCP + A2A) with deep local model optimization.
+SuperQode is the **Portable Coding Agent Harness Framework** built to be the first choice for **Local Agentic Coding**: agentic software engineering on open models running on your own hardware. Define your own harness, connect any agent: local models, BYOK providers, ACP agents, or A2A workflows. It is the only harness that supports all major protocols (ACP + MCP + A2A) with deep local model optimization.
+
+Run `superqode local doctor` and SuperQode detects your hardware, picks the right engine and model, and generates a tuned harness for your machine. Run `superqode local optimize` to benchmark local/open candidates and generate per-role routing for planner, implementer, reviewer, and utility agents.
 
 One TUI and CLI, consistent tool policies, event logging, and session management across every agent type. Define your harness once as a portable spec. Swap runtimes, models, or tools without changing your workflow. Run the same contract locally, on a team machine, or in CI.
 

@@ -1785,6 +1785,11 @@ def harness_doctor(spec_path, runtime_name, sandbox_backend, store_path, json_ou
 )
 @click.option("--sandbox", "sandbox_backend", default="local", show_default=True)
 @click.option("--stream", is_flag=True, help="Print normalized stream events")
+@click.option(
+    "--single-step",
+    is_flag=True,
+    help="Force one prompt through the harness kernel, ignoring non-single workflow topology",
+)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def harness_run(
     spec_path,
@@ -1797,12 +1802,20 @@ def harness_run(
     working_dir,
     sandbox_backend,
     stream,
+    single_step,
     json_output,
 ):
-    """Run one prompt through a HarnessSpec."""
+    """Run a task through a HarnessSpec."""
     import asyncio
 
-    from superqode.harness import create_harness_store, init_harness, load_harness_spec
+    from superqode.harness import (
+        WorkflowMode,
+        create_harness_store,
+        init_harness,
+        load_harness_spec,
+        run_workflow,
+        workflow_steps_from_spec,
+    )
 
     async def _run():
         spec = load_harness_spec(spec_path)
@@ -1815,6 +1828,62 @@ def harness_run(
             ),
         )
         kernel = await init_harness(spec, store=store)
+        run_as_workflow = (not single_step) and spec.workflow.mode != WorkflowMode.SINGLE
+        if run_as_workflow and stream:
+            raise click.ClickException(
+                "--stream is only available for single-step harness runs; "
+                "omit --stream or pass --single-step."
+            )
+        if run_as_workflow:
+            steps = workflow_steps_from_spec(spec, prompt)
+            workflow_result = await run_workflow(
+                kernel,
+                steps,
+                provider=provider,
+                model=model_name,
+                runtime=runtime_name,
+                working_directory=working_dir,
+                sandbox_backend=sandbox_backend,
+                session_id=session_id,
+            )
+            if json_output:
+                click.echo(
+                    json.dumps(
+                        {
+                            "content": workflow_result.content,
+                            "session_id": workflow_result.session_id,
+                            "run_id": workflow_result.run_id,
+                            "harness": spec.name,
+                            "workflow": {
+                                "mode": workflow_result.mode.value,
+                                "result_count": len(workflow_result.results),
+                                "result_run_ids": [
+                                    item.run_id for item in workflow_result.results
+                                ],
+                                "failures": list(workflow_result.failures),
+                            },
+                            "results": [
+                                {
+                                    "content": item.content,
+                                    "session_id": item.session_id,
+                                    "run_id": item.run_id,
+                                    "tool_calls_made": item.tool_calls_made,
+                                    "iterations": item.iterations,
+                                    "stopped_reason": item.response.stopped_reason,
+                                }
+                                for item in workflow_result.results
+                            ],
+                        },
+                        indent=2,
+                    )
+                )
+            else:
+                click.echo(workflow_result.content)
+                click.echo(
+                    f"\nWorkflow run: {workflow_result.run_id} "
+                    f"({workflow_result.mode.value}, {len(workflow_result.results)} result(s))"
+                )
+            return workflow_result
         session_obj = await kernel.session(session_id)
         if stream:
             events = []
@@ -3820,6 +3889,16 @@ cli_main.add_command(serve_cmd, name="serve")
 from superqode.commands.runtime import runtime_cmd  # noqa: E402
 
 cli_main.add_command(runtime_cmd, name="runtime")
+
+# Add local stack commands (superqode local doctor, superqode local bench)
+from superqode.commands.local import local as local_cmd  # noqa: E402
+
+cli_main.add_command(local_cmd, name="local")
+
+# Add the channel daemon (superqode daemon: Telegram/Slack/Discord remote control)
+from superqode.commands.daemon import daemon as daemon_cmd  # noqa: E402
+
+cli_main.add_command(daemon_cmd, name="daemon")
 
 # Note: agents command already exists, so we add the new one with a different approach
 # The existing agents command handles ACP agents, we'll enhance it

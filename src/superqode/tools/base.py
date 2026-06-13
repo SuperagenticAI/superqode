@@ -66,6 +66,9 @@ class ToolContext:
     # Permission manager, for tools that interact with the approval flow
     # (request_permissions). Set by the agent loop.
     permission_manager: Optional[Any] = None
+    # Live context-budget reporter for get_context_remaining. Returns a dict
+    # with window/used/compaction_threshold. Set by the agent loop.
+    context_status: Optional[Callable[[], Dict[str, Any]]] = None
 
     async def emit_output(self, text: str) -> None:
         """Emit output to the callback if set."""
@@ -336,6 +339,11 @@ class ToolRegistry:
         registry.register(ConfirmTool())
         registry.register(CompactTool())
 
+        # Context-budget visibility for the model
+        from .context_tools import GetContextRemainingTool
+
+        registry.register(GetContextRemainingTool())
+
         return registry
 
     @classmethod
@@ -378,6 +386,11 @@ class ToolRegistry:
 
         registry.register(QuestionTool())
         registry.register(ConfirmTool())
+
+        # Context-budget visibility for the model
+        from .context_tools import GetContextRemainingTool
+
+        registry.register(GetContextRemainingTool())
 
         return registry
 
@@ -518,6 +531,11 @@ class ToolRegistry:
         from .compact_tool import CompactTool
 
         registry.register(CompactTool())
+
+        # Context-budget visibility for the model
+        from .context_tools import GetContextRemainingTool
+
+        registry.register(GetContextRemainingTool())
 
         # A2A tools (call external A2A agents)
         try:

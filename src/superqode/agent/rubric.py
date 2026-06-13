@@ -78,27 +78,26 @@ async def grade_against_rubric(
     provider: str,
     model: str,
 ) -> Tuple[str, str]:
-    """Run one grader call. Returns (verdict, feedback); fails open to satisfied."""
-    try:
-        from ..providers.gateway.base import Message
+    """Run one grader call. Returns (verdict, feedback); fails open to satisfied.
 
-        response = await gateway.chat_completion(
-            messages=[
-                Message(role="system", content=GRADER_SYSTEM_PROMPT),
-                Message(
-                    role="user",
-                    content=(
-                        f"<rubric>\n{rubric}\n</rubric>\n\n"
-                        f"<work>\n{_transcript_tail(messages, final_content)}\n</work>"
-                    ),
-                ),
-            ],
-            model=model,
-            provider=provider,
-            temperature=0.0,
+    Grading is a utility call: SUPERQODE_UTILITY_PROVIDER can route it to a
+    cheaper model (including the on-device apple-fm) instead of the session model.
+    """
+    try:
+        from .utility_model import utility_completion
+
+        raw = await utility_completion(
+            gateway,
+            provider,
+            model,
+            system=GRADER_SYSTEM_PROMPT,
+            user=(
+                f"<rubric>\n{rubric}\n</rubric>\n\n"
+                f"<work>\n{_transcript_tail(messages, final_content)}\n</work>"
+            ),
             max_tokens=400,
         )
-        return parse_grader_response(getattr(response, "content", "") or "")
+        return parse_grader_response(raw)
     except Exception:
         return "satisfied", ""
 

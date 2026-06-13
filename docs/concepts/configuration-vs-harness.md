@@ -94,7 +94,7 @@ A harness executes anywhere SuperQode runs:
 
 | Surface | Command | Use for |
 | --- | --- | --- |
-| CLI, one prompt | `superqode harness run --spec harness.yaml --prompt "..."` | Scripts, CI, repeatable tasks (`--stream`, `--json`, provider and model overrides) |
+| CLI, task or workflow | `superqode harness run --spec harness.yaml --prompt "..."` | Scripts, CI, repeatable tasks. Non-single workflow specs execute their topology; use `--single-step` to force one prompt. |
 | TUI, interactive | `:harness harness.yaml`, then chat normally | Daily coding under the contract; `:harness status` shows what is active |
 | TUI, at launch | `superqode --harness harness.yaml` or `SUPERQODE_HARNESS=...` | Make the contract the session default |
 | TUI, workflows | `:workflow run <task>` (after `:harness ...`) | Execute the spec's chain, parallel, router, orchestrator, or evaluator-optimizer topology; `:workflow presets` and `:workflow preview <task>` first |
@@ -102,7 +102,7 @@ A harness executes anywhere SuperQode runs:
 | A2A | `create_a2a_server()` Python API | Other agents call your harness over the Agent-to-Agent protocol |
 | Python | `init_harness()`, `kernel.session()`, `run_workflow()` | Embed harness execution in your own application |
 
-The single-prompt paths (`harness run`, TUI chat) execute through the harness kernel. The multi-step workflow topologies execute through `:workflow run`, the MCP server, and the Python `run_workflow` API.
+The single-prompt paths (`harness run --single-step`, TUI chat) execute through the harness kernel. Non-single CLI runs, `:workflow run`, the MCP server, and the Python `run_workflow()` API execute the spec's chain, parallel, router, orchestrator, or evaluator-optimizer topology.
 
 ### 5. Observe
 

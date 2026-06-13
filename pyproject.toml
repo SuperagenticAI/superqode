@@ -1,7 +1,7 @@
 [project]
 name = "superqode"
 version = "0.1.41"
-description = "SuperQode: Your Portable Universal Coding Agent Harness"
+description = "SuperQode: Portable Coding Agent Harness Framework, built for Local Agentic Coding"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12,<3.14"
@@ -56,6 +56,11 @@ mlx = [
 ]
 monty = [
     "pydantic-monty>=0.0.4",
+]
+channels = [
+    # Slack Socket Mode and the Discord Gateway are websocket transports;
+    # Telegram long polling is stdlib-only and needs no extra.
+    "websocket-client>=1.6.0",
 ]
 extras = [
     "exa-py>=1.0.0",
@@ -154,7 +159,13 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-superqode = ["agents/data/*.toml", "data/*.yaml", "py.typed"]
+superqode = [
+    "agents/data/*.toml",
+    "data/*.yaml",
+    "local/data/*.yaml",
+    "local/data/model-packs/*.yaml",
+    "py.typed",
+]
 
 [tool.ruff]
 line-length = 100

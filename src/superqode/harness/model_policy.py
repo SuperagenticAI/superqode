@@ -42,11 +42,13 @@ def resolve_harness_model_policy(
 
     Explicit ``spec.model_policy.profile`` wins. If it is absent, provider,
     model, and route labels are used to select local-optimized defaults.
-    ``model_policy.config`` can override operational values without requiring
-    a new built-in profile.
+    Model policy packs (``model_policy.pack``, or auto-detected from the
+    model id) layer family-tuned defaults on top of the base profile, and
+    ``model_policy.config`` overrides everything else.
     """
     profile = _select_profile(spec, provider=provider, model=model)
     policy = _base_policy(spec, profile)
+    policy = _apply_pack(policy, spec, provider=provider, model=model)
     return _apply_config_overrides(policy, spec.model_policy.config)
 
 
@@ -138,6 +140,60 @@ def _base_policy(spec: HarnessSpec, profile: str) -> EffectiveModelPolicy:
         max_iterations=0,
         session_history_limit=20,
     )
+
+
+def _apply_pack(
+    policy: EffectiveModelPolicy,
+    spec: HarnessSpec,
+    *,
+    provider: str | None,
+    model: str | None,
+) -> EffectiveModelPolicy:
+    """Layer a model policy pack's tuned defaults onto the base policy.
+
+    An explicit ``model_policy.pack`` always applies; otherwise the pack is
+    auto-detected from the model id. Scalar fields the spec sets explicitly
+    (temperature, tool_call_format, reasoning) are not overridden by a pack.
+    """
+    from ..local.packs import detect_pack, get_pack
+
+    pack = None
+    explicit = (spec.model_policy.pack or "").strip().lower()
+    if explicit:
+        pack = get_pack(explicit)
+    else:
+        haystack = " ".join(
+            item
+            for item in (provider, model, spec.model_policy.primary, *spec.model_policy.fallbacks)
+            if item
+        )
+        if haystack:
+            pack = detect_pack(haystack)
+    if pack is None or not pack.policy:
+        return policy
+
+    overrides = dict(pack.policy)
+    if spec.model_policy.temperature is not None:
+        overrides.pop("temperature", None)
+    if spec.model_policy.tool_call_format:
+        overrides.pop("tool_call_format", None)
+    if spec.model_policy.reasoning:
+        overrides.pop("reasoning", None)
+    if spec.flavor == HarnessFlavor.NO_TOOL:
+        # The no-tool contract (NO_TOOL prompt, no tool surface, reasoning
+        # off) is part of the flavor, not something a model-family pack may
+        # re-enable.
+        for key in (
+            "system_level",
+            "system_prompt_level",
+            "tool_profile",
+            "tool_call_format",
+            "parallel_tools",
+            "reasoning",
+            "reasoning_effort",
+        ):
+            overrides.pop(key, None)
+    return _apply_config_overrides(policy, overrides)
 
 
 def _apply_config_overrides(

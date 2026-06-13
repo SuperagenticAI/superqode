@@ -13,7 +13,7 @@ hide:
 
 <p class="sq-kicker">Portable Coding Agent Harness Framework</p>
 
-<p class="sq-tagline">Turn open models into serious coding agents. Your harness, your models, your memory. Built for open and local models, connected to everything else through BYOK, ACP, agent SDKs, MCP, and A2A.</p>
+<p class="sq-tagline">Turn open models into serious coding agents. Your harness, your models, your memory. Built for Local Agentic Coding, connected to everything else through BYOK, ACP, agent SDKs, MCP, and A2A.</p>
 
 <p class="sq-badges">
   <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/v/superqode?style=flat-square&color=7c3aed" alt="PyPI version"></a>
@@ -60,13 +60,13 @@ superqode --print "inspect this repository and suggest the smallest safe cleanup
 
     [:octicons-arrow-right-24: Configuration vs Harness](concepts/configuration-vs-harness.md)
 
--   :octicons-cpu-16:{ .lg .middle } **Open models, first-class**
+-   :octicons-cpu-16:{ .lg .middle } **Local Agentic Coding, first-class**
 
     ---
 
-    Download from Hugging Face, serve with Ollama, LM Studio, MLX, vLLM, or DS4, and get an engine built for the realities: live context-window detection, adaptive compaction, tool-call repair, doom-loop guards, and prompt-based tool calling for models without a tool head.
+    `superqode local doctor` recommends the right engine and model for your machine and generates a tuned harness. `superqode local optimize` benchmarks local/open candidates and generates per-role routing for planner, implementer, reviewer, and utility agents. Underneath: live context-window detection, adaptive compaction, model policy packs, tool-call repair, doom-loop guards, and prompt-based tool calling for models without a tool head.
 
-    [:octicons-arrow-right-24: Inside the Agent Loop](advanced/agent-loop.md)
+    [:octicons-arrow-right-24: Local Agentic Coding](local-agentic-coding.md)
 
 -   :octicons-tools-16:{ .lg .middle } **35+ policy-controlled tools**
 
