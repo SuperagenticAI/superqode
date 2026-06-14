@@ -224,6 +224,15 @@ superqode memory search "package manager"
 superqode memory providers  # local default; optional mem0/cognee/supermemory disabled until configured
 ```
 
+Find free/local inference paths and current zero-price model routes:
+
+```bash
+superqode providers scan-free
+superqode providers scan-free --live --source openrouter --limit 20
+```
+
+Inside the TUI, use `:providers free` for setup hints or `:providers free --live openrouter` for live zero-price model routes.
+
 See [Developer Workflows](docs/developer-workflows.md) for the full command set.
 
 ## How It Works

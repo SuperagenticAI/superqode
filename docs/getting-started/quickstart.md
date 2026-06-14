@@ -74,6 +74,8 @@ Useful TUI commands after connecting:
 | `:runtime list` | Show runtime backends |
 | `:runtime pydanticai` | Switch runtime where available |
 | `:providers` | Inspect provider setup |
+| `:providers free` | Find free/local inference setup paths |
+| `:providers free --live openrouter` | Scan current zero-price model routes |
 | `:sandbox` | Show or set the local command sandbox mode |
 | `:theme` | Pick an accent theme |
 | `:compare <models>` | Re-run your last message across several models |

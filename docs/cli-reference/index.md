@@ -130,12 +130,13 @@ superqode providers guide ds4
 superqode providers recommend coding
 superqode providers recommend local
 superqode providers recommend large-context --json
+superqode providers scan-free --live --source openrouter
 superqode -p --provider ds4 --model deepseek-v4-flash "summarize this repo"
 ```
 
 For DS4, start `ds4-server` separately and point SuperQode at its OpenAI-compatible endpoint with `DS4_HOST` if it is not running on `http://127.0.0.1:8000/v1`.
 
-In the TUI, use `Ctrl+K` for the command palette or type `:status`, `:harness`, `:providers`, `:recommend coding`, `:sandbox`, `:tree`, `:share`, `:trust`, `:plugins`, and `:benchmark`. Use `Ctrl+1` to open the persistent Harness sidebar tab.
+In the TUI, use `Ctrl+K` for the command palette or type `:status`, `:harness`, `:providers`, `:providers free --live openrouter`, `:recommend coding`, `:sandbox`, `:tree`, `:share`, `:trust`, `:plugins`, and `:benchmark`. Use `Ctrl+1` to open the persistent Harness sidebar tab.
 
 Benchmark harness:
 

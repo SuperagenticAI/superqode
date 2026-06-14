@@ -1562,6 +1562,77 @@ class TestProvidersCommand:
         # Should show provider list or handle gracefully
         assert result.exit_code == 0 or "Error" not in result.output
 
+    def test_providers_scan_free_json(self, runner, monkeypatch):
+        """Free inference scan should expose a machine-readable catalog."""
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+        result = runner.invoke(cli_main, ["providers", "scan-free", "--provider", "google", "--json"])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload
+        assert payload[0]["provider"] == "google"
+        assert payload[0]["offer_kind"] == "free-tier"
+        assert payload[0]["access_mode"] == "api-key"
+        assert "GOOGLE_API_KEY" in payload[0]["env_vars"]
+        assert payload[0]["source_url"].startswith("https://")
+        assert payload[0]["status"].startswith("set one of:")
+
+    def test_providers_scan_free_configured_local(self, runner):
+        """Local no-key offers should be considered ready."""
+        result = runner.invoke(
+            cli_main,
+            ["providers", "scan-free", "--access", "local", "--configured", "--json"],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        providers = {item["provider"] for item in payload}
+        assert {"ollama", "mlx"} <= providers
+        assert {item["status"] for item in payload} == {"ready"}
+
+    def test_providers_scan_free_live_openrouter_json(self, runner, monkeypatch):
+        """Live scan should use source adapters instead of static provider rows."""
+        from superqode.providers import free_inference
+
+        def fake_http_json(url, *, timeout):
+            assert url == free_inference.OPENROUTER_MODELS_URL
+            return {
+                "data": [
+                    {
+                        "id": "demo/free-coder:free",
+                        "name": "Demo Free Coder",
+                        "context_length": 131072,
+                        "pricing": {"prompt": "0", "completion": "0"},
+                        "supported_parameters": ["tools"],
+                    },
+                    {
+                        "id": "demo/paid-coder",
+                        "pricing": {"prompt": "0.1", "completion": "0.2"},
+                    },
+                ]
+            }
+
+        monkeypatch.setattr(free_inference, "_http_json", fake_http_json)
+
+        result = runner.invoke(
+            cli_main,
+            ["providers", "scan-free", "--live", "--source", "openrouter", "--json"],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["mode"] == "live"
+        assert payload["sources"] == ["openrouter"]
+        assert payload["errors"] == []
+        assert len(payload["candidates"]) == 1
+        candidate = payload["candidates"][0]
+        assert candidate["source"] == "openrouter"
+        assert candidate["model"] == "demo/free-coder:free"
+        assert candidate["context_window"] == 131072
+        assert candidate["supports_tools"] is True
+
     def test_providers_ds4_server_prints_start_command(self, runner):
         """`providers ds4 server` must surface the kv-disk-dir flag — that's
         the single biggest perf knob and it's easy to forget."""

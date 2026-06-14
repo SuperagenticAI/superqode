@@ -184,6 +184,56 @@ superqode providers doctor ds4 --live
 
 ---
 
+## providers scan-free
+
+Scan free-tier, starter-credit, ACP, local, and live zero-price model routes.
+
+```bash
+superqode providers scan-free [OPTIONS]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--live` | Query live model/pricing catalogs instead of only curated fallback hints |
+| `--source` | Live source to query: `openrouter`, `models-dev`, or `litellm`; repeatable |
+| `--provider` | Filter by provider id, model id, or provider name |
+| `--access` | Filter by access path: `api-key`, `account`, `acp`, `local`, or `routed` |
+| `--kind` | Filter curated fallback offers by type |
+| `--configured` | Only show no-key or already configured fallback offers |
+| `--limit` | Maximum live rows |
+| `--json` | Emit JSON output for TUI/store integrations |
+
+### Examples
+
+```bash
+# Curated setup hints for free/local inference paths
+superqode providers scan-free
+
+# Real-time zero-price model routes from OpenRouter
+superqode providers scan-free --live --source openrouter --limit 20
+
+# Merge live signals from all supported sources
+superqode providers scan-free --live --json
+
+# TUI equivalent
+:providers free
+:providers free --live openrouter
+```
+
+### Live Sources
+
+| Source | What it contributes |
+|--------|---------------------|
+| `openrouter` | Live model ids, zero-price routes, context, tool parameter support |
+| `models-dev` | Cached broad provider/model/pricing catalog from `models.dev` |
+| `litellm` | LiteLLM public pricing/context registry |
+
+Signup credits and remaining account balance are provider-account state. SuperQode treats them as curated metadata unless a provider exposes a stable authenticated billing or entitlement API.
+
+---
+
 ## providers guide
 
 Show setup guidance and model quality labels for one provider or all providers.

@@ -38,6 +38,157 @@ def providers():
     pass
 
 
+@providers.command("scan-free")
+@click.option("--provider", help="Filter by provider id or name")
+@click.option(
+    "--access",
+    "access_mode",
+    type=click.Choice(["api-key", "account", "acp", "local", "routed"]),
+    help="Filter by access path",
+)
+@click.option(
+    "--kind",
+    "offer_kind",
+    type=click.Choice(["free-tier", "monthly-credits", "free-models", "trial-credits", "local"]),
+    help="Filter by offer type",
+)
+@click.option(
+    "--live",
+    is_flag=True,
+    help="Query live model/pricing catalogs instead of only the curated fallback",
+)
+@click.option(
+    "--source",
+    "live_sources",
+    multiple=True,
+    type=click.Choice(["openrouter", "models-dev", "litellm"]),
+    help="Live source to query; repeatable. Defaults to all live sources.",
+)
+@click.option("--limit", default=100, show_default=True, type=int, help="Maximum live rows")
+@click.option("--configured", is_flag=True, help="Only show offers ready on this machine")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def scan_free(provider, access_mode, offer_kind, live, live_sources, limit, configured, json_output):
+    """Scan known free-tier, starter-credit, ACP, and local inference paths."""
+    import json
+
+    from ..providers.free_inference import (
+        list_free_inference_offers,
+        offer_status,
+        scan_live_free_candidates,
+    )
+
+    if live:
+        candidates, errors = scan_live_free_candidates(sources=live_sources or None, limit=limit)
+        if provider:
+            needle = provider.strip().lower()
+            candidates = [
+                item
+                for item in candidates
+                if item.provider.lower() == needle
+                or needle in item.model.lower()
+                or needle in item.name.lower()
+            ]
+        if access_mode:
+            candidates = [item for item in candidates if item.access_mode == access_mode]
+        if json_output:
+            click.echo(
+                json.dumps(
+                    {
+                        "mode": "live",
+                        "sources": list(live_sources) or ["openrouter", "models-dev", "litellm"],
+                        "candidates": [item.to_dict() for item in candidates],
+                        "errors": errors,
+                    },
+                    indent=2,
+                )
+            )
+            return
+
+        table = Table(
+            title="Live Free Model Route Scan",
+            show_header=True,
+            header_style="bold cyan",
+        )
+        table.add_column("Source", style="cyan")
+        table.add_column("Provider", style="white")
+        table.add_column("Model", style="green")
+        table.add_column("Ctx", justify="right")
+        table.add_column("Tools", justify="center")
+        table.add_column("Source URL", style="dim")
+        for item in candidates:
+            table.add_row(
+                item.source,
+                item.provider,
+                item.model,
+                f"{item.context_window:,}" if item.context_window else "-",
+                "yes" if item.supports_tools else "no",
+                item.source_url,
+            )
+        console.print(table)
+        if errors:
+            console.print()
+            for error in errors:
+                console.print(f"[yellow]{error['source']} failed:[/yellow] {error['error']}")
+        if not candidates:
+            console.print("[yellow]No live free model routes found.[/yellow]")
+        return
+
+    offers = list_free_inference_offers(
+        provider=provider,
+        access_mode=access_mode,
+        offer_kind=offer_kind,
+        configured_only=configured,
+    )
+
+    if json_output:
+        payload = []
+        for offer in offers:
+            item = offer.to_dict()
+            item["status"] = offer_status(offer)
+            payload.append(item)
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    table = Table(
+        title="Free / Starter Inference Scan",
+        show_header=True,
+        header_style="bold cyan",
+    )
+    table.add_column("Provider", style="white")
+    table.add_column("Offer", style="green")
+    table.add_column("Access", style="cyan")
+    table.add_column("Status", style="yellow")
+    table.add_column("Models / Path", style="white")
+    table.add_column("Verified", style="dim")
+
+    for offer in offers:
+        table.add_row(
+            offer.provider,
+            offer.offer_kind,
+            offer.access_mode,
+            offer_status(offer),
+            ", ".join(offer.models_hint[:2]) or offer.superqode_command,
+            offer.last_verified,
+        )
+
+    console.print(table)
+    if not offers:
+        console.print("[yellow]No matching free inference offers found.[/yellow]")
+        return
+
+    console.print()
+    for offer in offers:
+        console.print(f"[bold]{offer.name}[/bold] ({offer.provider})")
+        console.print(f"  {offer.summary}")
+        console.print(f"  setup: [cyan]{offer.setup}[/cyan]")
+        if offer.superqode_command:
+            console.print(f"  use: [cyan]{offer.superqode_command}[/cyan]")
+        if offer.source_url:
+            console.print(f"  source: {offer.source_url}")
+        if offer.notes:
+            console.print(f"  note: [dim]{offer.notes}[/dim]")
+
+
 @providers.command("list")
 @click.option(
     "--category",

@@ -22543,6 +22543,10 @@ memory:
             self.run_worker(self._providers_smoke_cmd(subargs, log))
             return
 
+        if sub in ("free", "scan-free", "store"):
+            self.run_worker(self._providers_free_cmd(subargs, log))
+            return
+
         provider_id = args or None
         if provider_id and provider_id not in PROVIDERS:
             log.add_error(f"Provider not found: {provider_id}")
@@ -22577,12 +22581,136 @@ memory:
         t.append("  Commands: ", style=THEME["muted"])
         t.append(":providers <provider>", style=THEME["cyan"])
         t.append(", ", style=THEME["muted"])
+        t.append(":providers free --live openrouter", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
         t.append(
             ":recommend coding|review|testing|budget|speed|large-context|reasoning",
             style=THEME["cyan"],
         )
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
+    async def _providers_free_cmd(self, args: str, log: ConversationLog):
+        """Show free/local inference options from the TUI."""
+        from superqode.providers.free_inference import (
+            list_free_inference_offers,
+            offer_status,
+            scan_live_free_candidates,
+        )
+
+        tokens = (args or "").split()
+        live = "--live" in tokens or "live" in tokens
+        configured = "--configured" in tokens
+        source_tokens = [
+            token
+            for token in tokens
+            if token in {"openrouter", "models-dev", "litellm"}
+        ]
+        provider_tokens = [
+            token
+            for token in tokens
+            if token
+            not in {
+                "--live",
+                "live",
+                "--configured",
+                "openrouter",
+                "models-dev",
+                "litellm",
+            }
+        ]
+        provider_filter = provider_tokens[0] if provider_tokens else None
+
+        if live:
+            log.add_info("Scanning live model/pricing catalogs...")
+            candidates, errors = await asyncio.to_thread(
+                scan_live_free_candidates,
+                sources=source_tokens or None,
+                limit=50,
+            )
+            if provider_filter:
+                needle = provider_filter.lower()
+                candidates = [
+                    item
+                    for item in candidates
+                    if item.provider.lower() == needle
+                    or needle in item.model.lower()
+                    or needle in item.name.lower()
+                ]
+            self._show_command_output(
+                log,
+                self._format_live_free_inference(candidates, errors, source_tokens),
+            )
+            return
+
+        offers = list_free_inference_offers(
+            provider=provider_filter,
+            configured_only=configured,
+        )
+        self._show_command_output(
+            log,
+            self._format_free_inference_offers(offers, offer_status),
+        )
+
+    def _format_free_inference_offers(self, offers, offer_status) -> Text:
+        """Render curated fallback/free setup offers."""
+        t = Text()
+        t.append("\n  ◈ ", style=f"bold {THEME['green']}")
+        t.append("Free / Local Inference\n\n", style=f"bold {THEME['text']}")
+        t.append(
+            "  Curated setup hints. Use :providers free --live for current model routes.\n\n",
+            style=THEME["muted"],
+        )
+        if not offers:
+            t.append("  No matching free inference options found.\n", style=THEME["warning"])
+            return t
+        for offer in offers[:14]:
+            status = offer_status(offer)
+            status_style = THEME["success"] if status == "ready" else THEME["warning"]
+            t.append(f"  {offer.provider:<14}", style=f"bold {THEME['cyan']}")
+            t.append(f"{offer.offer_kind:<16}", style=THEME["green"])
+            t.append(f"{offer.access_mode:<9}", style=THEME["muted"])
+            t.append(f"{status}\n", style=status_style)
+            t.append(f"    {offer.summary}\n", style=THEME["text"])
+            if offer.superqode_command:
+                t.append("    use: ", style=THEME["muted"])
+                t.append(f"{offer.superqode_command}\n", style=THEME["cyan"])
+            t.append("\n")
+        t.append("  Live scan: ", style=THEME["muted"])
+        t.append(":providers free --live openrouter", style=THEME["cyan"])
+        t.append(" or ", style=THEME["muted"])
+        t.append(":providers free --live models-dev\n", style=THEME["cyan"])
+        return t
+
+    def _format_live_free_inference(self, candidates, errors, sources) -> Text:
+        """Render live zero-price model routes."""
+        t = Text()
+        source_label = ", ".join(sources or ["openrouter", "models-dev", "litellm"])
+        t.append("\n  ◈ ", style=f"bold {THEME['green']}")
+        t.append("Live Free Model Routes\n\n", style=f"bold {THEME['text']}")
+        t.append(f"  Sources: {source_label}\n", style=THEME["muted"])
+        t.append(
+            "  These are zero-price model routes from live catalogs; rate limits can change.\n\n",
+            style=THEME["muted"],
+        )
+        if not candidates:
+            t.append("  No live free model routes found.\n", style=THEME["warning"])
+        for item in candidates[:20]:
+            ctx = f"{item.context_window:,}" if item.context_window else "-"
+            tools = "tools" if item.supports_tools else "no-tools"
+            t.append(f"  {item.source:<11}", style=THEME["cyan"])
+            t.append(f"{item.provider:<18}", style=f"bold {THEME['text']}")
+            t.append(f"{item.model}\n", style=THEME["green"])
+            t.append(f"    ctx={ctx}  {tools}  source={item.source_url}\n", style=THEME["muted"])
+        if len(candidates) > 20:
+            t.append(f"\n  ... and {len(candidates) - 20} more. Use CLI --json for all rows.\n", style=THEME["dim"])
+        if errors:
+            t.append("\n  Source errors:\n", style=THEME["warning"])
+            for error in errors:
+                t.append(f"    {error['source']}: {error['error']}\n", style=THEME["warning"])
+        t.append("\n  CLI JSON: ", style=THEME["muted"])
+        t.append("superqode providers scan-free --live --json\n", style=THEME["cyan"])
+        return t
 
     async def _providers_smoke_cmd(self, args: str, log: ConversationLog):
         """Run a local provider smoke check from the TUI."""
