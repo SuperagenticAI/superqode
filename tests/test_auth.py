@@ -1,6 +1,7 @@
 """Tests for local auth storage."""
 
 import json
+import os
 import tempfile
 from pathlib import Path
 
@@ -13,6 +14,9 @@ from superqode.auth import (
     WellKnownAuth,
     parse_auth_info,
 )
+from superqode.providers.credentials import provider_api_key, sync_provider_env
+from superqode.providers.gateway.litellm_gateway import _request_api_key
+from superqode.providers.registry import PROVIDERS
 
 
 @pytest.fixture
@@ -21,6 +25,15 @@ def temp_auth_file():
     with tempfile.TemporaryDirectory() as tmpdir:
         filepath = Path(tmpdir) / "auth.json"
         yield filepath
+
+
+@pytest.fixture
+def isolated_auth_storage(monkeypatch, temp_auth_file):
+    """Point the module-level auth singleton at a temp file."""
+    import superqode.auth as auth_module
+
+    monkeypatch.setattr(auth_module, "_storage", LocalAuthStorage(temp_auth_file))
+    return auth_module._storage
 
 
 class TestLocalAuthStorage:
@@ -181,3 +194,53 @@ class TestParseAuthInfo:
         """Unknown type returns None."""
         result = parse_auth_info({"type": "unknown"})
         assert result is None
+
+
+class TestProviderCredentialResolution:
+    """Tests for provider credential lookup used by request execution."""
+
+    def test_provider_api_key_prefers_env_over_local(self, isolated_auth_storage, monkeypatch):
+        storage = isolated_auth_storage
+        storage.set("openai", ApiAuth(key="local-key"))
+        monkeypatch.setenv("OPENAI_API_KEY", "env-key")
+
+        assert provider_api_key(PROVIDERS["openai"]) == "env-key"
+
+    def test_provider_api_key_uses_local_fallback(self, isolated_auth_storage, monkeypatch):
+        storage = isolated_auth_storage
+        storage.set("anthropic", ApiAuth(key="local-anthropic"))
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+        assert provider_api_key(PROVIDERS["anthropic"]) == "local-anthropic"
+
+    def test_expired_oauth_is_not_used(self, isolated_auth_storage, monkeypatch):
+        storage = isolated_auth_storage
+        storage.set("openai", OAuthAuth(access="expired-access", refresh="refresh", expires=1))
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+        assert provider_api_key(PROVIDERS["openai"]) is None
+
+    def test_sync_provider_env_does_not_override_existing_env(
+        self, isolated_auth_storage, monkeypatch
+    ):
+        storage = isolated_auth_storage
+        storage.set("openai", ApiAuth(key="local-key"))
+        monkeypatch.setenv("OPENAI_API_KEY", "env-key")
+
+        assert sync_provider_env(PROVIDERS["openai"]) == "env-key"
+        assert os.environ["OPENAI_API_KEY"] == "env-key"
+
+    def test_sync_google_aliases_from_local_auth(self, isolated_auth_storage, monkeypatch):
+        storage = isolated_auth_storage
+        storage.set("google", ApiAuth(key="local-google"))
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+        assert sync_provider_env(PROVIDERS["google"]) == "local-google"
+        assert os.environ["GOOGLE_API_KEY"] == "local-google"
+        assert os.environ["GEMINI_API_KEY"] == "local-google"
+
+    def test_local_openai_compatible_provider_does_not_reuse_openai_key(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "real-openai-key")
+
+        assert _request_api_key("lmstudio", PROVIDERS["lmstudio"]) == "sk-local-lmstudio-dummy"

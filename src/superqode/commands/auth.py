@@ -284,10 +284,16 @@ def _check_provider_auth(provider_id: str, provider_def):
         else:
             console.print(f"[red]❌ {env_var}[/red] = (not set)")
 
+    local_auth = get(provider_id)
+    if local_auth:
+        configured = True
+        console.print("[green]✅ Local auth[/green] = ~/.superqode/auth.json")
+
     if not configured:
         console.print()
         console.print("[yellow]To configure:[/yellow]")
         console.print(f'  export {provider_def.env_vars[0]}="your-api-key"')
+        console.print(f"  superqode auth login {provider_id}")
         console.print(f"\n  Get your key at: {provider_def.docs_url}")
 
 

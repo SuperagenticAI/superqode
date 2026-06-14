@@ -34,9 +34,32 @@ from .base import (
     ToolDefinition,
     Usage,
 )
+from ..credentials import provider_api_key, sync_provider_env
 from ..registry import PROVIDERS, ProviderCategory, ProviderDef
 
 logger = logging.getLogger(__name__)
+
+
+_LOCAL_DUMMY_API_KEYS = {
+    "lmstudio": "sk-local-lmstudio-dummy",
+    "vllm": "sk-local-vllm-dummy",
+    "ds4": "sk-local-ds4-dummy",
+    "sglang": "sk-local-sglang-dummy",
+}
+
+
+def _local_dummy_api_key(provider: str) -> str:
+    return _LOCAL_DUMMY_API_KEYS.get(provider, "sk-local-dummy")
+
+
+def _request_api_key(provider: str, provider_def: ProviderDef) -> Optional[str]:
+    if (
+        provider_def.category == ProviderCategory.LOCAL
+        and provider_def.litellm_prefix == "openai/"
+        and not provider_def.env_vars
+    ):
+        return _local_dummy_api_key(provider)
+    return provider_api_key(provider_def)
 
 
 def _resolve_provider_def(provider: Optional[str]) -> Optional[ProviderDef]:
@@ -389,9 +412,7 @@ class LiteLLMGateway(GatewayInterface):
                 os.environ["LMSTUDIO_HOST"] = clean_url
                 # For local LM Studio, set a dummy API key to avoid LiteLLM auth errors
                 # Local servers typically don't require authentication
-                os.environ["OPENAI_API_KEY"] = os.environ.get(
-                    "OPENAI_API_KEY", "sk-local-lmstudio-dummy"
-                )
+                os.environ.setdefault("OPENAI_API_KEY", _local_dummy_api_key(provider))
 
             # For vLLM - configure for OpenAI-compatible API
             if provider == "vllm" and base_url:
@@ -403,16 +424,14 @@ class LiteLLMGateway(GatewayInterface):
                 os.environ["VLLM_HOST"] = clean_url
                 # For local vLLM, set a dummy API key to avoid LiteLLM auth errors
                 # Local servers typically don't require authentication
-                os.environ["OPENAI_API_KEY"] = os.environ.get(
-                    "OPENAI_API_KEY", "sk-local-vllm-dummy"
-                )
+                os.environ.setdefault("OPENAI_API_KEY", _local_dummy_api_key(provider))
 
             # DS4 server exposes an OpenAI-compatible API at /v1
             if provider == "ds4" and base_url:
                 clean_url = base_url.rstrip("/")
                 os.environ["OPENAI_API_BASE"] = clean_url
                 os.environ["DS4_HOST"] = clean_url
-                os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "dsv4-local")
+                os.environ.setdefault("OPENAI_API_KEY", _local_dummy_api_key(provider))
 
             # For SGLang - configure for OpenAI-compatible API
             if provider == "sglang" and base_url:
@@ -424,9 +443,7 @@ class LiteLLMGateway(GatewayInterface):
                 os.environ["SGLANG_HOST"] = clean_url
                 # For local SGLang, set a dummy API key to avoid LiteLLM auth errors
                 # Local servers typically don't require authentication
-                os.environ["OPENAI_API_KEY"] = os.environ.get(
-                    "OPENAI_API_KEY", "sk-local-sglang-dummy"
-                )
+                os.environ.setdefault("OPENAI_API_KEY", _local_dummy_api_key(provider))
 
             # MLX is handled directly, not through LiteLLM, so no env setup needed
 
@@ -444,12 +461,14 @@ class LiteLLMGateway(GatewayInterface):
             ):
                 clean_url = base_url.rstrip("/")
                 os.environ["OPENAI_API_BASE"] = clean_url
-                os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "sk-local-dummy")
+                os.environ.setdefault("OPENAI_API_KEY", _local_dummy_api_key(provider))
 
         # Ensure API keys are set for cloud providers (LiteLLM reads from environment)
+        sync_provider_env(provider_def)
+
         # Google - supports both GOOGLE_API_KEY and GEMINI_API_KEY
         if provider == "google":
-            google_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+            google_key = provider_api_key(provider_def)
             if google_key:
                 # Ensure both are set for maximum compatibility
                 os.environ["GOOGLE_API_KEY"] = google_key
@@ -465,7 +484,7 @@ class LiteLLMGateway(GatewayInterface):
         provider_def = _resolve_provider_def(provider)
         if provider_def is None or not provider_def.dynamic:
             return
-        from ..dynamic import provider_api_key, resolve_base_url
+        from ..dynamic import resolve_base_url
 
         base_url = resolve_base_url(provider_def)
         api_key = provider_api_key(provider_def)
@@ -1320,7 +1339,7 @@ class LiteLLMGateway(GatewayInterface):
 
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY', 'sk-local-lmstudio-dummy')}",
+            "Authorization": f"Bearer {_local_dummy_api_key('lmstudio')}",
         }
 
         try:
@@ -1584,7 +1603,7 @@ class LiteLLMGateway(GatewayInterface):
 
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY', 'sk-local-ds4-dummy')}",
+            "Authorization": f"Bearer {_local_dummy_api_key('ds4')}",
         }
 
         try:
@@ -1704,7 +1723,7 @@ class LiteLLMGateway(GatewayInterface):
         headers = {
             "Content-Type": "application/json",
             "anthropic-version": "2023-06-01",
-            "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY', 'sk-local-ds4-dummy')}",
+            "Authorization": f"Bearer {_local_dummy_api_key('ds4')}",
         }
 
         try:
@@ -1822,7 +1841,7 @@ class LiteLLMGateway(GatewayInterface):
         headers = {
             "Content-Type": "application/json",
             "anthropic-version": "2023-06-01",
-            "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY', 'sk-local-ds4-dummy')}",
+            "Authorization": f"Bearer {_local_dummy_api_key('ds4')}",
         }
 
         try:
@@ -2161,11 +2180,12 @@ class LiteLLMGateway(GatewayInterface):
         }
 
         # Explicitly pass API keys for providers that need them
-        # Some LiteLLM versions require explicit api_key parameter
-        if provider == "google":
-            google_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
-            if google_key:
-                request_kwargs["api_key"] = google_key
+        # Some LiteLLM versions require explicit api_key parameter.
+        provider_def = _resolve_provider_def(provider)
+        if provider_def:
+            api_key = _request_api_key(provider, provider_def)
+            if api_key and "api_key" not in request_kwargs:
+                request_kwargs["api_key"] = api_key
 
         # models.dev-synthesized providers: inject api_base/api_key explicitly.
         self._apply_dynamic_provider(provider, request_kwargs)
@@ -2431,11 +2451,12 @@ class LiteLLMGateway(GatewayInterface):
             request_kwargs["tool_choice"] = tool_choice
 
         # Explicitly pass API keys for providers that need them
-        # Some LiteLLM versions require explicit api_key parameter
-        if provider == "google":
-            google_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
-            if google_key:
-                request_kwargs["api_key"] = google_key
+        # Some LiteLLM versions require explicit api_key parameter.
+        provider_def = _resolve_provider_def(provider)
+        if provider_def:
+            api_key = _request_api_key(provider, provider_def)
+            if api_key and "api_key" not in request_kwargs:
+                request_kwargs["api_key"] = api_key
 
         # models.dev-synthesized providers: inject api_base/api_key explicitly.
         self._apply_dynamic_provider(provider, request_kwargs)

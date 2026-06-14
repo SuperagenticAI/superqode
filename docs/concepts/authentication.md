@@ -8,6 +8,8 @@ How SuperQode handles API keys and credentials with full transparency.
 
 SuperQode is designed as a **pass-through orchestrator**. It connects you to LLM providers and coding agents without intercepting or storing your credentials unnecessarily.
 
+SuperQode does **not** require a SuperQode account for local agentic coding. The local app should keep working with provider keys, local model runtimes, and delegated agent auth even if the user never signs in to SuperQode.
+
 ```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    YOUR CONTROL                             │
@@ -32,6 +34,33 @@ SuperQode is designed as a **pass-through orchestrator**. It connects you to LLM
 ```
 
 ---
+
+## Product Identity
+
+SuperQode identity is separate from provider authentication.
+
+| Auth Type | Purpose | Required for Local Coding? |
+|-----------|---------|----------------------------|
+| Provider API key | Call Anthropic, OpenAI, Google, etc. | Only for cloud models |
+| Local runtime | Use Ollama, LM Studio, DS4, vLLM, etc. | No account needed |
+| Agent auth | Let tools like opencode or Claude Code manage their own login | Managed by the agent |
+| SuperQode account | Optional cloud sync, team/collaboration, hosted features, billing | No |
+
+If SuperQode later adds GitHub or email sign-in, it should be optional and should gate only features that truly need a hosted identity, such as:
+
+- team workspaces and shared sessions
+- hosted memory or cross-device sync
+- marketplace publishing
+- billing or paid cloud quotas
+- audit logs for organizations
+
+It should not gate:
+
+- opening the local TUI
+- editing files in a local project
+- using local models
+- using BYOK provider keys
+- using an external coding agent that handles its own auth
 
 ## Three Authentication Modes
 
@@ -282,17 +311,41 @@ You → superqode → Local model server
          └── No API key needed, just local HTTP
 ```
 
+### Web TUI
+
+`superqode serve web` is local-only by default and prints a one-time tokened URL. The web server checks the token on HTTP and websocket requests. Opening the tokened URL sets an HttpOnly browser cookie so the websocket and downloads stay authenticated without putting the token on every request URL.
+
+Remote binding is opt-in:
+
+```bash
+superqode serve web -h 0.0.0.0 --allow-remote
+```
+
+Install the optional web server dependency with:
+
+```bash
+pip install "superqode[web]"
+```
+
 ---
 
 ## Comparison with Other Tools
 
-| Feature | SuperQode | OpenCode | Toad |
-|---------|-----------|----------|------|
-| BYOK (env vars) | ✅ | ✅ | ❌ |
-| Local storage | ✅ | ✅ | ❌ |
-| ACP delegation | ✅ | ❌ | ✅ |
-| OAuth support | ✅ (MCP) | ✅ | ✅ |
-| File permissions | 0600 | 0600 | N/A |
+| Feature | SuperQode | OpenCode | Pi | FastAgent |
+|---------|-----------|----------|----|-----------|
+| BYOK env vars | Yes | Yes | Yes | Yes |
+| Local credential file | Yes | Yes | Yes | Partial |
+| Secure local file permissions | 0600 | 0600 | 0600-style local storage | Keyring for OAuth |
+| Delegated agent auth | Yes | No | No | MCP/request scoped auth |
+| Optional web/server protection | Tokened local URL and remote opt-in | Server password option | Local provider auth focus | Request bearer token focus |
+| Product account required for local coding | No | No | No | No |
+
+The best pattern for SuperQode is a hybrid:
+
+- keep OpenCode/Pi-style local provider auth for individual users
+- keep FastAgent-style request-scoped bearer tokens for MCP and server integrations
+- add SuperQode GitHub/email identity only for hosted features
+- make remote web serving an explicit opt-in, not a side effect of changing `--host`
 
 ---
 
@@ -320,6 +373,10 @@ superqode auth info
 ### Is the auth.json file encrypted?
 
 No. It's plain JSON with restricted file permissions. If you need encryption, use your OS keychain or a secrets manager.
+
+### Should SuperQode add GitHub or email login?
+
+Yes, but only as optional product identity. GitHub/email login is useful for hosted features, teams, subscriptions, and cross-device sync. It should not be required for local coding because SuperQode's core identity is privacy-first and local-first.
 
 ---
 

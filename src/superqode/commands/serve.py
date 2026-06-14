@@ -30,7 +30,20 @@ def serve():
 @click.option("--host", "-h", default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)")
 @click.option("--project", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--no-open", is_flag=True, help="Don't open browser automatically")
-def serve_web(port: int, host: str, project: str, no_open: bool):
+@click.option(
+    "--allow-remote",
+    is_flag=True,
+    help="Allow binding to non-loopback hosts such as 0.0.0.0",
+)
+@click.option("--token", default=None, help="Use a specific web access token")
+def serve_web(
+    port: int,
+    host: str,
+    project: str,
+    no_open: bool,
+    allow_remote: bool,
+    token: Optional[str],
+):
     """Start the web server for browser-based TUI.
 
     Run SuperQode's TUI interface in your web browser.
@@ -41,21 +54,28 @@ def serve_web(port: int, host: str, project: str, no_open: bool):
 
         superqode serve web -p 3000          # Use custom port
 
-        superqode serve web -h 0.0.0.0       # Allow external connections
+        superqode serve web -h 0.0.0.0 --allow-remote
     """
-    from superqode.server import start_server, WebServerConfig
+    from superqode.server import start_server
 
     project_root = Path(project).resolve()
 
     console.print(f"[cyan]Starting SuperQode web server on http://{host}:{port}[/cyan]")
+    if allow_remote:
+        console.print("[yellow]Remote web serving enabled. Use only on trusted networks.[/yellow]")
 
-    config = WebServerConfig(
-        host=host,
-        port=port,
-        project_root=project_root,
-    )
-
-    start_server(config, open_browser=not no_open)
+    try:
+        start_server(
+            host=host,
+            port=port,
+            project_path=project_root,
+            require_auth=True,
+            auth_token=token,
+            allow_remote=allow_remote,
+            open_browser=not no_open,
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @serve.command("status")

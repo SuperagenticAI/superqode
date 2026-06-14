@@ -104,12 +104,10 @@ def resolve_provider_def(provider_id: Optional[str]) -> Optional[ProviderDef]:
 
 
 def provider_api_key(provider_def: ProviderDef) -> Optional[str]:
-    """First non-empty value among the provider's API-key env vars."""
-    for env_name in provider_def.env_vars or []:
-        value = os.environ.get(env_name)
-        if value:
-            return value
-    return None
+    """First configured provider API key, including explicit local auth."""
+    from .credentials import provider_api_key as resolve_provider_api_key
+
+    return resolve_provider_api_key(provider_def)
 
 
 def resolve_base_url(provider_def: ProviderDef) -> Optional[str]:
