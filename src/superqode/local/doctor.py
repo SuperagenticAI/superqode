@@ -112,12 +112,17 @@ def render_report(report: DoctorReport) -> str:
     # Models
     lines.append("Recommended models")
     for candidate in rec.models:
+        source = f"  source: {candidate.source}" if candidate.source else ""
         if candidate.downloaded:
             where = candidate.downloaded.model_id
             size = f", {candidate.downloaded.size_gb}GB" if candidate.downloaded.size_gb else ""
-            lines.append(f"  + {candidate.name} [{candidate.role}]  downloaded ({where}{size})")
+            lines.append(
+                f"  + {candidate.name} [{candidate.role}]  downloaded ({where}{size}){source}"
+            )
         else:
-            lines.append(f"  - {candidate.name} [{candidate.role}]  get it: {candidate.pull}")
+            lines.append(
+                f"  - {candidate.name} [{candidate.role}]  get it: {candidate.pull}{source}"
+            )
     lines.append(f"  ({len(report.inventory)} local models found in total)")
     lines.append("")
 

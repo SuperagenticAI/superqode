@@ -31,6 +31,8 @@ from superqode.providers.connection_profiles import connection_profile_ids
 HARNESS_TEMPLATE_CHOICES = (
     "coding",
     "no-tool",
+    "qwen-coding",
+    "glm-coding",
     "gemma4-coding",
     "gemma4-no-tool",
     "ds4-coding",
@@ -1501,6 +1503,103 @@ def harness_list_backends(json_output):
         )
 
 
+@harness.command("wizard")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=Path("harness.yaml"),
+    show_default=True,
+    help="Harness spec file to write",
+)
+@click.option("--force", is_flag=True, help="Overwrite an existing spec file")
+def harness_wizard(output, force):
+    """Build a harness.yaml interactively (no hand-editing YAML required)."""
+    from superqode.harness import (
+        APPROVAL_PROFILES,
+        TOOL_CALL_FORMATS,
+        WIZARD_STARTERS,
+        WizardAnswers,
+        build_wizard_spec,
+        explain_harness,
+        render_explanation,
+        save_harness_spec,
+    )
+
+    if output.exists() and not force:
+        raise click.ClickException(f"{output} already exists. Use --force to overwrite.")
+
+    def _choose(title, options, default_key):
+        click.echo(f"\n{title}")
+        keys = [key for key, _ in options]
+        for index, (key, label) in enumerate(options, start=1):
+            marker = " (default)" if key == default_key else ""
+            click.echo(f"  {index}. {label}{marker}")
+        raw = click.prompt("Choose", default=str(keys.index(default_key) + 1))
+        try:
+            return keys[int(raw) - 1]
+        except (ValueError, IndexError):
+            return raw if raw in keys else default_key
+
+    click.echo("SuperQode harness wizard")
+    click.echo("Answer a few questions; press Enter to accept the default.")
+
+    name = click.prompt("\nHarness name", default="my-harness")
+    starter = _choose("Starting point (model family)", WIZARD_STARTERS, "qwen-coding")
+    no_tool = starter == "no-tool"
+
+    provider = click.prompt(
+        "Provider (e.g. ollama, lmstudio, mlx, ds4; blank to keep template)", default="", show_default=False
+    )
+    model = click.prompt(
+        "Model id (blank to keep the template's model)", default="", show_default=False
+    )
+
+    if no_tool:
+        answers = WizardAnswers(name=name, starter=starter, provider=provider, model=model)
+    else:
+        allow_write = click.confirm("Allow the agent to write/edit files?", default=True)
+        allow_shell = click.confirm("Allow the agent to run shell commands?", default=True)
+        allow_network = click.confirm("Allow network access?", default=False)
+        approval_profile = _choose("Approval profile", APPROVAL_PROFILES, "balanced")
+        tool_call_format = _choose("Tool-call format", TOOL_CALL_FORMATS, "auto")
+        workflow_preset = _choose(
+            "Workflow",
+            (
+                ("single", "One agent handles the whole task"),
+                ("plan-implement-review", "Planner, implementer, reviewer chain"),
+                ("fix-and-verify", "Fix then verify with checks"),
+                ("parallel-review", "Multiple reviewers in parallel"),
+                ("security-review", "Security-focused review chain"),
+            ),
+            "single",
+        )
+        answers = WizardAnswers(
+            name=name,
+            starter=starter,
+            provider=provider,
+            model=model,
+            allow_write=allow_write,
+            allow_shell=allow_shell,
+            allow_network=allow_network,
+            approval_profile=approval_profile,
+            tool_call_format=tool_call_format,
+            workflow_preset=workflow_preset,
+        )
+
+    spec = build_wizard_spec(answers)
+    save_harness_spec(spec, output)
+    (Path(".agents") / "skills").mkdir(parents=True, exist_ok=True)
+    (Path(".agents") / "roles").mkdir(parents=True, exist_ok=True)
+
+    click.echo(f"\nWrote {output}\n")
+    click.echo(render_explanation(explain_harness(spec, provider=provider, model=model)))
+    click.echo("Next steps:")
+    click.echo(f"  Edit if needed:   {output}")
+    click.echo(f"  Run it:           superqode --harness {output}")
+    click.echo(f"  Re-explain:       superqode harness explain --spec {output}")
+
+
 @harness.command("init")
 @click.argument("name", required=False, default="superqode-coding")
 @click.option(
@@ -1723,6 +1822,23 @@ def harness_compile(spec_path, provider, model_name, json_output):
         click.echo(json.dumps(payload, indent=2))
         return
     click.echo(json.dumps(payload, indent=2))
+
+
+@harness.command("explain")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--provider", default=None, help="Provider used to resolve model policy")
+@click.option("--model", "model_name", default=None, help="Model used to resolve model policy")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_explain(spec_path, provider, model_name, json_output):
+    """Explain in plain English what a harness lets the model do, and why."""
+    from superqode.harness import explain_harness, load_harness_spec, render_explanation
+
+    spec = load_harness_spec(spec_path)
+    explanation = explain_harness(spec, provider=provider or "", model=model_name or "")
+    if json_output:
+        click.echo(json.dumps(explanation.to_dict(), indent=2))
+        return
+    click.echo(render_explanation(explanation))
 
 
 @harness.command("diff")

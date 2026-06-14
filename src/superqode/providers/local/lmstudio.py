@@ -21,6 +21,7 @@ from superqode.providers.local.base import (
     ToolTestResult,
     detect_model_family,
     detect_quantization,
+    is_embedding_model,
     likely_supports_tools,
 )
 
@@ -133,6 +134,12 @@ class LMStudioClient(LocalProviderClient):
 
                 # Parse model info from ID (LM Studio often uses paths)
                 name = model_id.split("/")[-1]
+
+                # Skip embedding / reranker models: they are not chat models and
+                # only clutter the picker (LM Studio lists any loaded embedder).
+                if is_embedding_model(model_id, name):
+                    continue
+
                 family = detect_model_family(model_id)
                 quant = detect_quantization(model_id)
 

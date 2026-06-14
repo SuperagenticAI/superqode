@@ -91,13 +91,14 @@ def _byok_ready() -> bool:
 
 # --- registry -----------------------------------------------------------------
 
-# Display order (per product decision): ACP, BYOK, Local, Codex, Claude, Antigravity, Advanced.
+# Display order (local-first product positioning): Local, BYOK, ACP, Codex, Claude, Antigravity.
 _PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
-        id="acp",
-        label="ACP agent",
-        description="Connect any external ACP-compatible coding agent (incl. local Claude Code)",
-        connector="acp-picker",
+        id="local",
+        label="Local model",
+        description="Local/self-hosted — Ollama / MLX / vLLM / LM Studio …",
+        connector="local",
+        runtime="builtin",
         detect=lambda: True,
     ),
     ConnectionProfile(
@@ -110,11 +111,10 @@ _PROFILES: List[ConnectionProfile] = [
         unavailable_hint="set a provider API key (e.g. OPENAI_API_KEY) — or pick one to see setup",
     ),
     ConnectionProfile(
-        id="local",
-        label="Local model",
-        description="Local/self-hosted — Ollama / MLX / vLLM / LM Studio …",
-        connector="local",
-        runtime="builtin",
+        id="acp",
+        label="ACP agent",
+        description="Connect any external ACP-compatible coding agent (incl. local Claude Code)",
+        connector="acp-picker",
         detect=lambda: True,
     ),
     ConnectionProfile(
@@ -152,7 +152,7 @@ _BY_ID = {p.id: p for p in _PROFILES}
 
 
 def list_connection_profiles() -> List[ConnectionProfile]:
-    """All connection profiles, in display order (ACP, BYOK, Local, Codex, …)."""
+    """All connection profiles, in local-first display order (Local, BYOK, ACP, Codex, …)."""
     return list(_PROFILES)
 
 

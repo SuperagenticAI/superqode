@@ -135,6 +135,20 @@ class StreamResult:
             self.tool_calls = []
 
 
+def endpoint_reachable(endpoint: str, timeout: float = CONNECT_TIMEOUT) -> bool:
+    """True if the endpoint's /models route answers at all (any HTTP reply)."""
+    url = endpoint.rstrip("/") + "/models"
+    try:
+        request = Request(url, headers={"User-Agent": "SuperQode"}, method="GET")
+        with urlopen(request, timeout=timeout):  # noqa: S310
+            return True
+    except HTTPError:
+        # A 4xx/5xx still means the server is up and listening.
+        return True
+    except (URLError, OSError):
+        return False
+
+
 def list_endpoint_models(endpoint: str, timeout: float = CONNECT_TIMEOUT) -> List[str]:
     """Model ids served by an OpenAI-compatible endpoint."""
     url = endpoint.rstrip("/") + "/models"

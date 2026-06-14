@@ -219,6 +219,60 @@ async def test_ds4_keeps_tools_on_simple_query_for_kv_cache_stability():
 
 
 @pytest.mark.asyncio
+async def test_local_simple_chat_skips_coding_scaffolding(monkeypatch, tmp_path):
+    gateway = ScriptedGateway([GatewayResponse(content="hi")])
+    loop = AgentLoop(
+        gateway=gateway,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(
+            provider="ollama",
+            model="qwen3:8b",
+            enable_session_storage=True,
+            session_storage_dir=str(tmp_path / "sessions"),
+            session_id="local-fast-chat",
+        ),
+    )
+    assert loop._session_manager is not None
+    loop._session_manager.add_user_message("previous coding turn with lots of context")
+
+    async def fail_context_probe():
+        raise AssertionError("simple local chat must not probe context window")
+
+    monkeypatch.setattr(loop, "_ensure_context_window", fail_context_probe)
+
+    result = await loop.run("hello")
+
+    assert result.content == "hi"
+    assert gateway.tools_seen == [None]
+    assert [m.role for m in gateway.calls[0]] == ["system", "user"]
+    assert gateway.calls[0][0].content == (
+        "You are a concise assistant. Answer directly without using tools."
+    )
+    assert gateway.calls[0][-1].content == "hello"
+
+
+@pytest.mark.asyncio
+async def test_local_simple_chat_streaming_fast_path(monkeypatch):
+    gateway = ScriptedGateway([])
+    loop = AgentLoop(
+        gateway=gateway,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(provider="lmstudio", model="qwen3-coder"),
+    )
+
+    async def fail_context_probe():
+        raise AssertionError("simple local chat must not probe context window")
+
+    monkeypatch.setattr(loop, "_ensure_context_window", fail_context_probe)
+
+    chunks = [chunk async for chunk in loop.run_streaming("hi")]
+
+    assert chunks == ["streamed"]
+    assert gateway.tools_seen == [None]
+    assert [m.role for m in gateway.calls[0]] == ["system", "user"]
+
+
+@pytest.mark.asyncio
 async def test_streaming_run_persists_session_history(tmp_path):
     gateway = ScriptedGateway([])
     loop = AgentLoop(

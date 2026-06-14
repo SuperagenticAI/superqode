@@ -66,6 +66,16 @@ _LAZY_IMPORTS = {
     # Compiler
     "compile_to_headless_profile": (".compiler", "compile_to_headless_profile"),
     "spec_from_headless_profile": (".compiler", "spec_from_headless_profile"),
+    # Plain-English explanation
+    "HarnessExplanation": (".explain", "HarnessExplanation"),
+    "explain_harness": (".explain", "explain_harness"),
+    "render_explanation": (".explain", "render_explanation"),
+    # Interactive wizard
+    "WizardAnswers": (".wizard", "WizardAnswers"),
+    "build_wizard_spec": (".wizard", "build_wizard_spec"),
+    "WIZARD_STARTERS": (".wizard", "WIZARD_STARTERS"),
+    "APPROVAL_PROFILES": (".wizard", "APPROVAL_PROFILES"),
+    "TOOL_CALL_FORMATS": (".wizard", "TOOL_CALL_FORMATS"),
     # Omnigent compatibility
     "import_omnigent_agent": (".omnigent_importer", "import_omnigent_agent"),
     "load_omnigent_agent": (".omnigent_importer", "load_omnigent_agent"),
@@ -247,6 +257,14 @@ __all__ = [
     "build_harness_evidence",
     "build_harness_replay_plan",
     "compile_to_headless_profile",
+    "HarnessExplanation",
+    "explain_harness",
+    "render_explanation",
+    "WizardAnswers",
+    "build_wizard_spec",
+    "WIZARD_STARTERS",
+    "APPROVAL_PROFILES",
+    "TOOL_CALL_FORMATS",
     "create_harness_store",
     "generate_input_id",
     "fork_harness_run",

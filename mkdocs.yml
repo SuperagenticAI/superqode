@@ -150,6 +150,7 @@ nav:
     - 🧰 Developer Workflows: developer-workflows.md
     - 🧪 Harness Examples: examples.md
     - 🎯 Your First Session: getting-started/first-session.md
+    - ⚓ Bring Your Own Harness: getting-started/bring-your-own-harness.md
     - ⚙️ Configuration: getting-started/configuration.md
     - 🧭 Troubleshooting: getting-started/troubleshooting.md
 
@@ -221,6 +222,7 @@ nav:
       - 📤 Share: cli-reference/share-commands.md
       - 🧠 Memory: cli-reference/memory-commands.md
       - 🔌 Plugins: cli-reference/plugins-commands.md
+      - ⚓ Harness: cli-reference/harness-commands.md
       - ⚡ Runtime: cli-reference/runtime-commands.md
       - 🏖️ Sandbox: cli-reference/sandbox-commands.md
       - 📊 Benchmark: cli-reference/benchmark-commands.md

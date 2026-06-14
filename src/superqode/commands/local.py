@@ -298,4 +298,442 @@ def local_optimize(
         click.echo(f"Run it with: superqode harness run --spec {target} --prompt 'your task'")
 
 
+def _local_client_for(engine: str):
+    from superqode.providers.local import (
+        DS4Client,
+        LMStudioClient,
+        MLXClient,
+        OllamaClient,
+        SGLangClient,
+        TGIClient,
+        VLLMClient,
+    )
+
+    return {
+        "ds4": DS4Client,
+        "ollama": OllamaClient,
+        "lmstudio": LMStudioClient,
+        "mlx": MLXClient,
+        "vllm": VLLMClient,
+        "sglang": SGLangClient,
+        "tgi": TGIClient,
+    }.get(engine)
+
+
+@local.command("serve")
+@click.argument("engine", type=click.Choice(["ollama", "lmstudio", "mlx", "ds4", "llama.cpp"]))
+@click.option("--model", "-m", default=None, help="Model id / weight path (required for mlx and llama.cpp)")
+@click.option("--port", "-p", default=None, type=int, help="Port (default: engine default)")
+@click.option("--host", default=None, help="Bind host (default: 127.0.0.1)")
+@click.option("--ctx", default=None, type=int, help="Context window (where the engine supports it)")
+@click.option("--no-wait", is_flag=True, help="Return immediately, do not wait for readiness")
+@click.option("--build", is_flag=True, help="(ds4) Build the ds4-server binary first if missing")
+@click.option("--allow-download", is_flag=True, help="(mlx) Permit downloading the model from Hugging Face if not cached")
+@click.option("--extra", "extra_args", multiple=True, help="Extra flag passed to the server (repeatable)")
+def local_serve(engine, model, port, host, ctx, no_wait, build, allow_download, extra_args):
+    """Start a local model server as a managed background daemon.
+
+    The server keeps running after SuperQode exits; manage it later with
+    `superqode local servers` and `superqode local stop <engine>`. An
+    already-running server on the target port is adopted, not restarted.
+    """
+    from superqode.local.servers import ServerError, ds4_build, ds4_build_plan, get_manager
+
+    manager = get_manager()
+
+    if engine == "ds4" and build and not manager.is_installed("ds4"):
+        plan = ds4_build_plan()
+        click.echo(f"Building ds4-server in {plan['checkout']} ...", err=True)
+        try:
+            ds4_build()
+        except Exception as exc:  # noqa: BLE001
+            raise click.ClickException(f"ds4 build failed: {exc}") from exc
+        click.echo(
+            "Built ds4-server. The model weights are a separate (large) download:\n"
+            f"  cd {plan['checkout']} && ./download_model.sh"
+        )
+
+    try:
+        handle = manager.start(
+            engine,
+            host=host,
+            port=port,
+            model=model,
+            ctx=ctx,
+            extra_args=list(extra_args),
+            wait=not no_wait,
+            allow_download=allow_download,
+        )
+    except ServerError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    verb = "Adopted running" if handle.adopted else "Started"
+    click.echo(f"{verb} {engine} at {handle.base_url}")
+    if handle.pid:
+        click.echo(f"  pid {handle.pid} · log {handle.log_path}")
+    for note in handle.notes:
+        click.echo(f"  • {note}")
+    if no_wait and not handle.adopted:
+        click.echo("  (not waiting for readiness; check with: superqode local servers)")
+    click.echo(f"  point SuperQode at it with provider [{engine}] or that base URL")
+
+
+@local.command("servers")
+@click.option("--json", "json_output", is_flag=True, help="Emit status as JSON")
+def local_servers(json_output):
+    """Show the status of every known local server (running, managed, pid)."""
+    from superqode.local.servers import get_manager
+
+    manager = get_manager()
+    rows = manager.list_all()
+    if json_output:
+        click.echo(json.dumps(rows, indent=2))
+        return
+
+    click.echo("Local servers")
+    for row in rows:
+        if row["running"]:
+            mark = "●"
+            state = "managed" if row["managed"] else "running"
+            extra = f" pid {row['pid']}" if row["pid"] else " (adopted)"
+        else:
+            mark = "○"
+            readiness = manager.precheck(row["engine"])
+            state = "stopped" if readiness.installed else "missing"
+            extra = ""
+        click.echo(f"{mark} {row['engine']:<10} {state:<8} {row['base_url']}{extra}")
+        if not row["running"]:
+            readiness = manager.precheck(row["engine"])
+            if readiness.installed:
+                click.echo(f"  start: {readiness.start_hint}")
+            else:
+                guide = readiness.install_guide[0] if readiness.install_guide else "install first"
+                click.echo(f"  setup: {guide}")
+
+
+@local.command("models")
+@click.argument("engine", required=False)
+@click.option("--json", "json_output", is_flag=True, help="Emit models as JSON")
+def local_models(engine, json_output):
+    """List chat-capable models for local providers.
+
+    If ENGINE is omitted, every running local server known to SuperQode is
+    scanned. Embedding and reranker models are hidden because they cannot drive
+    the coding harness.
+    """
+    import asyncio
+    from dataclasses import asdict
+
+    from superqode.local.servers import get_manager
+    from superqode.providers.local.base import is_embedding_model
+
+    manager = get_manager()
+    engines = [engine] if engine else [row["engine"] for row in manager.list_all() if row["running"]]
+    if not engines:
+        raise click.ClickException(
+            "No running local servers found. Start one with: superqode local serve <engine>"
+        )
+
+    async def collect() -> list[dict]:
+        rows: list[dict] = []
+        for engine_id in engines:
+            client_class = _local_client_for(engine_id)
+            if client_class is None and engine_id == "llama.cpp":
+                from superqode.local.bench import list_endpoint_models
+
+                status = manager.status(engine_id)
+                for model_id in list_endpoint_models(status["base_url"]):
+                    rows.append(
+                        {
+                            "engine": engine_id,
+                            "id": model_id,
+                            "name": model_id,
+                            "running": status["running"],
+                            "context_window": 0,
+                            "size_bytes": 0,
+                            "quantization": "unknown",
+                            "supports_tools": False,
+                        }
+                    )
+                continue
+            if client_class is None:
+                rows.append({"engine": engine_id, "error": "model listing is not supported"})
+                continue
+            client = client_class()
+            try:
+                models = await client.list_models()
+            except Exception as exc:  # noqa: BLE001
+                rows.append({"engine": engine_id, "error": str(exc)})
+                continue
+            for model in models:
+                if is_embedding_model(model.id, model.name):
+                    continue
+                item = asdict(model)
+                item["engine"] = engine_id
+                rows.append(item)
+        return rows
+
+    rows = asyncio.run(collect())
+    if json_output:
+        click.echo(json.dumps(rows, indent=2, default=str))
+        return
+
+    if not rows:
+        click.echo("No chat models found.")
+        click.echo("Use `superqode local servers` to check which server is running.")
+        return
+    for row in rows:
+        if row.get("error"):
+            click.echo(f"{row['engine']:<10} error: {row['error']}")
+            continue
+        running = "●" if row.get("running") else "○"
+        ctx = row.get("context_window") or 0
+        details = []
+        if row.get("size_bytes"):
+            details.append(f"{row['size_bytes'] / (1024**3):.1f}GB")
+        if row.get("quantization") and row["quantization"] != "unknown":
+            details.append(str(row["quantization"]))
+        if ctx:
+            details.append(f"{ctx:,} ctx")
+        if row.get("supports_tools"):
+            details.append("tools")
+        suffix = f"  {' • '.join(details)}" if details else ""
+        click.echo(f"{running} {row['engine']:<10} {row['id']}{suffix}")
+
+
+@local.command("labs")
+@click.argument("lab", required=False)
+@click.option("--limit", default=12, show_default=True, type=int, help="Maximum models to show")
+@click.option("--refresh", is_flag=True, help="Refresh the models.dev cache")
+@click.option("--json", "json_output", is_flag=True, help="Emit labs or models as JSON")
+def local_labs(lab, limit, refresh, json_output):
+    """Discover local-friendly model labs from models.dev.
+
+    Use this before downloading weights from Hugging Face or pointing
+    SuperQode at a free/provider-hosted route. The curated list favors model
+    families that are useful for local agentic coding.
+    """
+    from dataclasses import asdict
+
+    from superqode.local.labs import list_curated_labs, list_lab_models
+
+    if not lab:
+        labs = list_curated_labs()
+        if json_output:
+            click.echo(json.dumps([asdict(item) for item in labs], indent=2))
+            return
+        click.echo("Local model labs")
+        for item in labs:
+            mark = "*" if item.recommended else " "
+            click.echo(f"{mark} {item.id:<10} {item.name}")
+            click.echo(f"  {item.description}")
+        click.echo("\nOpen one with: superqode local labs zhipuai")
+        return
+
+    try:
+        rows = list_lab_models(lab, refresh=refresh)
+    except Exception as exc:  # noqa: BLE001
+        raise click.ClickException(f"Could not load models.dev Labs data: {exc}") from exc
+
+    rows = rows[: max(limit, 0)]
+    if json_output:
+        click.echo(json.dumps([row.to_dict() for row in rows], indent=2))
+        return
+    if not rows:
+        raise click.ClickException(f"No models found for lab '{lab}' in models.dev")
+
+    click.echo(f"models.dev lab: {lab}")
+    for row in rows:
+        mark = "*" if row.recommended_for_local else " "
+        traits = []
+        if row.open_weights:
+            traits.append("open")
+        if row.free_route:
+            traits.append("free-route")
+        if row.supports_tools:
+            traits.append("tools")
+        if row.supports_reasoning:
+            traits.append("reasoning")
+        if row.supports_structured:
+            traits.append("structured")
+        if row.supports_vision:
+            traits.append("vision")
+        if row.context_window:
+            traits.append(f"{row.context_window:,} ctx")
+        suffix = f"  {' • '.join(traits)}" if traits else ""
+        click.echo(f"{mark} {row.id}{suffix}")
+        if row.recommended_for_local and row.install_hint:
+            click.echo(f"  install: {row.install_hint}")
+
+
+@local.command("warm")
+@click.argument("engine", type=click.Choice(["ollama", "lmstudio", "mlx", "ds4", "llama.cpp"]))
+@click.option("--model", "-m", default=None, help="Model id to preload (default: first served model)")
+@click.option("--max-tokens", default=8, show_default=True, type=int)
+def local_warm(engine, model, max_tokens):
+    """Preload a local model and report first-token latency.
+
+    This sends one tiny streamed request. It is useful before a coding session:
+    the first real prompt should not pay model-load cost, and a high TTFT here
+    usually means the selected context window is too large for the hardware.
+    """
+    from superqode.local.bench import list_endpoint_models, run_bench
+    from superqode.local.servers import get_manager
+
+    manager = get_manager()
+    status = manager.status(engine)
+    if not status["running"]:
+        raise click.ClickException(f"{engine} is not running. Start it with: superqode local serve {engine}")
+
+    endpoint = status["base_url"]
+    chosen = model
+    if not chosen:
+        models = list_endpoint_models(endpoint)
+        if not models:
+            raise click.ClickException(f"No models found at {endpoint}; pass --model explicitly")
+        chosen = models[0]
+
+    click.echo(f"Warming {chosen} at {endpoint} ...", err=True)
+    result = run_bench(
+        endpoint,
+        chosen,
+        prompt="Reply with exactly: ok",
+        max_tokens=max_tokens,
+    )
+    if not result.ok:
+        raise click.ClickException(result.error or "warmup request failed")
+
+    tps = f"{result.decode_tps} tok/s" if result.decode_tps is not None else "n/a"
+    click.echo(f"ready: {chosen}")
+    click.echo(f"  TTFT {result.ttft_s}s · decode {tps} · total {result.total_s}s")
+    if result.ttft_s is not None and result.ttft_s > 5:
+        click.echo(
+            "  note: high TTFT is usually prefill/context pressure; restart with a smaller --ctx "
+            "or use a smaller quantized model for interactive coding."
+        )
+
+
+@local.command("smoke")
+@click.option("--engine", default="", help="Local engine id (default: first running server)")
+@click.option("--endpoint", default="", help="OpenAI-compatible base URL")
+@click.option("--model", default="", help="Model id (default: first served chat model)")
+@click.option(
+    "--repo",
+    "repo_path",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Repository to label in the report",
+)
+@click.option("--api-key", default="", help="Bearer token if the endpoint needs one")
+@click.option("--max-tokens", default=384, show_default=True, type=int)
+@click.option("--json", "json_output", is_flag=True, help="Emit report as JSON")
+def local_smoke(engine, endpoint, model, repo_path, api_key, max_tokens, json_output):
+    """Run a non-destructive local coding readiness smoke test."""
+    from superqode.local.smoke import render_smoke, run_smoke
+
+    report = run_smoke(
+        engine=engine,
+        endpoint=endpoint,
+        model=model,
+        repo_path=repo_path,
+        api_key=api_key,
+        max_tokens=max_tokens,
+    )
+    if json_output:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo(render_smoke(report))
+    if report.status == "failed":
+        raise click.exceptions.Exit(1)
+
+
+@local.command("init")
+@click.option(
+    "--repo",
+    "repo_path",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("."),
+    show_default=True,
+    help="Repository to tune the harness for",
+)
+@click.option(
+    "--output",
+    "output_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=Path("superqode.local.yaml"),
+    show_default=True,
+    help="Harness file to write",
+)
+@click.option("--engine", default="", help="Local engine to smoke test")
+@click.option("--model", default="", help="Model id to smoke test")
+@click.option("--skip-smoke", is_flag=True, help="Generate the harness without running smoke")
+@click.option("--yes", "-y", is_flag=True, help="Overwrite existing harness file")
+@click.option("--json", "json_output", is_flag=True, help="Emit summary as JSON")
+def local_init(repo_path, output_path, engine, model, skip_smoke, yes, json_output):
+    """Initialize a local coding harness for this repository."""
+    from dataclasses import asdict
+
+    from superqode.local.doctor import generate_harness_yaml, render_report, run_doctor
+    from superqode.local.smoke import render_smoke, run_smoke
+
+    if output_path.exists() and not yes:
+        raise click.ClickException(f"{output_path} already exists; pass --yes to overwrite")
+
+    report = run_doctor(str(repo_path), include_guardrails=True)
+    smoke = None
+    if not skip_smoke:
+        best = report.recommendation.best_model
+        chosen_engine = engine or report.recommendation.engine or ""
+        chosen_model = model
+        if not chosen_model and best is not None:
+            chosen_model = best.downloaded.bare_id if best.downloaded else best.pull.split()[-1]
+        smoke = run_smoke(engine=chosen_engine, model=chosen_model, repo_path=repo_path)
+
+    output_path.write_text(generate_harness_yaml(report, name="local-coder"), encoding="utf-8")
+
+    payload = {
+        "harness": str(output_path),
+        "doctor": {
+            "tier": report.hardware.tier,
+            "engine": report.recommendation.engine,
+            "best_model": asdict(report.recommendation.best_model)
+            if report.recommendation.best_model
+            else None,
+        },
+        "smoke": smoke.to_dict() if smoke else None,
+    }
+    if json_output:
+        click.echo(json.dumps(payload, indent=2, default=str))
+        return
+
+    click.echo(render_report(report))
+    if smoke:
+        click.echo("")
+        click.echo(render_smoke(smoke))
+    click.echo("")
+    click.echo(f"Wrote local harness: {output_path}")
+    if smoke and smoke.status == "failed":
+        click.echo("Not ready yet. Follow the smoke test next steps, then rerun:")
+        click.echo(f"  superqode local smoke --repo {repo_path}")
+    else:
+        click.echo("Start coding with:")
+        click.echo(f"  superqode --harness {output_path}")
+    click.echo("")
+    click.echo("Own your harness (no hand-written YAML needed):")
+    click.echo(f"  See what it does:   superqode harness explain --spec {output_path}")
+    click.echo("  Build a custom one: superqode harness wizard")
+
+
+@local.command("stop")
+@click.argument("engine", type=click.Choice(["ollama", "lmstudio", "mlx", "ds4", "llama.cpp"]))
+def local_stop(engine):
+    """Stop a server SuperQode started (adopted servers are left untouched)."""
+    from superqode.local.servers import get_manager
+
+    if get_manager().stop(engine):
+        click.echo(f"Stopped {engine}")
+    else:
+        click.echo(f"Nothing to stop for {engine} (not managed by SuperQode)")
+
+
 __all__ = ["local"]

@@ -178,6 +178,24 @@ def test_matrix_ships_all_tiers():
     }
 
 
+def test_matrix_recommendations_have_trusted_sources():
+    trusted = {
+        "models.dev/labs/alibaba",
+        "models.dev/labs/deepseek",
+        "models.dev/labs/google",
+        "models.dev/labs/mistral",
+        "models.dev/labs/zhipuai",
+        "mlx-community",
+        "lmstudio-community",
+    }
+    matrix = load_matrix()
+
+    for tier in matrix["tiers"]:
+        for model in tier.get("models", []):
+            source = model.get("source", "")
+            assert source in trusted, f"{tier['id']}::{model.get('name')} has untrusted source"
+
+
 def test_recommend_prefers_installed_engine_and_downloaded_model():
     engines = {
         "mlx-lm": EngineStatus(engine="mlx-lm", installed=False),
@@ -273,7 +291,8 @@ def test_doctor_harness_pull_fallback(monkeypatch):
     report = _fake_report(monkeypatch, inventory=[])
     text = generate_harness_yaml(report)
     # Nothing downloaded: derive the model from the pull command.
-    assert "primary: ollama/gemma4:31b" in text
+    assert "primary: mlx/THUDM/GLM-4.5-Air" in text
+    assert "pack: glm" in text
 
 
 def test_repository_profile_recommends_context_and_workflow(tmp_path):
@@ -602,6 +621,7 @@ def test_shipped_packs_load():
 def test_detect_pack_longest_match_wins():
     assert detect_pack("ollama qwen3-coder-next").name == "qwen-coder"
     assert detect_pack("ollama qwen3.6:35b-a3b").name == "qwen3"
+    assert detect_pack("zhipuai glm-4.5-air").name == "glm"
     assert detect_pack("gpt-4o-mini") is None
 
 

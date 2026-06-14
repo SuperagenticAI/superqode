@@ -22,7 +22,7 @@ to it.
 
 ## Automatic: detection + adaptive compaction
 
-On the first message of a session, SuperQode:
+On the first coding-agent message of a session, SuperQode:
 
 1. **Detects the loaded window** from the live server (per backend):
 
@@ -46,6 +46,24 @@ On the first message of a session, SuperQode:
 
 This runs for **local and BYOK** models, on both streaming and non-streaming
 paths.
+
+---
+
+## Simple local chat skips context work
+
+For local providers other than DS4, obvious chat prompts such as `hello`, `hi`,
+or basic non-code questions use a fast-chat path. SuperQode sends a tiny direct
+request and skips the expensive coding-agent scaffolding for that turn:
+
+- no live context-window probe
+- no restored session history
+- no reminder messages
+- no tool schemas
+
+This is intentionally narrow. Any prompt that mentions files, code, the repo,
+or a concrete development task uses the normal coding harness and context
+management. DS4 is excluded because it benefits from a stable rendered prefix
+for KV-cache reuse.
 
 ---
 

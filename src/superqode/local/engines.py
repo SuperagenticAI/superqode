@@ -119,10 +119,12 @@ def detect_mlx_lm() -> EngineStatus:
             status.version = md.version("mlx-lm")
         except Exception:
             pass
-    if _http_json("http://localhost:8080/v1/models") is not None:
+    if _http_json("http://localhost:8080/v1/models") is not None or _http_ok(
+        "http://localhost:8080/health"
+    ):
         status.running = True
     if status.installed:
-        status.notes.append("Start with: superqode providers mlx server --model <hf-id>")
+        status.notes.append("Start with: superqode local serve mlx --model <hf-id>")
     return status
 
 
@@ -154,9 +156,12 @@ def detect_python_engine(module: str, engine: str, default_port: int) -> EngineS
 
 def detect_ds4() -> EngineStatus:
     status = EngineStatus(engine="ds4", endpoint="http://localhost:8000/v1")
-    if shutil.which("ds4"):
+    if shutil.which("ds4-server"):
         status.installed = True
-    for candidate in (Path.home() / "oss" / "ds4" / "ds4",):
+    for candidate in (
+        Path.home() / "oss" / "ds4" / "ds4-server",
+        Path.home() / "oss" / "ds4" / "ds4",
+    ):
         if candidate.exists():
             status.installed = True
             status.notes.append(f"local build at {candidate}")
@@ -164,7 +169,7 @@ def detect_ds4() -> EngineStatus:
     if _http_json("http://localhost:8000/v1/models") is not None:
         status.running = True
     if status.installed:
-        status.notes.append("Start with: superqode providers ds4 server")
+        status.notes.append("Start with: superqode local serve ds4 --ctx 100000")
     return status
 
 

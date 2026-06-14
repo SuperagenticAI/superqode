@@ -164,6 +164,44 @@ def ds4_fast_local_template() -> HarnessSpec:
     )
 
 
+def qwen_coding_template() -> HarnessSpec:
+    """Qwen-Coder optimized local coding harness starting point."""
+    base = coding_template(name="qwen-coding")
+    return HarnessSpec(
+        **{
+            **base.__dict__,
+            "description": "Qwen-Coder local coding harness: low temperature, native tools.",
+            "model_policy": ModelPolicySpec(
+                primary="ollama/qwen3-coder",
+                fallbacks=("ollama/qwen3.5", "glm-4.6"),
+                profile="qwen-coding",
+                pack="qwen-coder",
+                temperature=0.1,
+            ),
+            "metadata": {"template": "qwen-coding"},
+        }
+    )
+
+
+def glm_coding_template() -> HarnessSpec:
+    """GLM optimized coding harness starting point."""
+    base = coding_template(name="glm-coding")
+    return HarnessSpec(
+        **{
+            **base.__dict__,
+            "description": "GLM local/endpoint coding harness: strong agentic coder, native tools.",
+            "model_policy": ModelPolicySpec(
+                primary="glm-4.6",
+                fallbacks=("ollama/qwen3-coder",),
+                profile="glm-coding",
+                pack="glm",
+                temperature=0.2,
+            ),
+            "metadata": {"template": "glm-coding"},
+        }
+    )
+
+
 BUILTIN_TEMPLATES = {
     "coding": coding_template,
     "no-tool": no_tool_template,
@@ -174,6 +212,8 @@ BUILTIN_TEMPLATES = {
     "ds4-coding": ds4_coding_template,
     "ds4-fast-local": ds4_fast_local_template,
     "ds4-fast_local": ds4_fast_local_template,
+    "qwen-coding": qwen_coding_template,
+    "glm-coding": glm_coding_template,
 }
 
 

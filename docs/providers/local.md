@@ -15,6 +15,62 @@ Local providers offer:
 
 ---
 
+## Quick Start: Zero To Local Coding
+
+SuperQode bundles a guided path from "I want local coding" to a harness you can trust on your repo. You pay once in hardware, not forever in token bills. Local is slower than frontier labs and quality depends on your model and machine, so SuperQode focuses on measurement, control, and ownership of the harness.
+
+Run one command from inside your repository:
+
+```bash
+superqode local init --repo .
+```
+
+`local init` will:
+
+1. Detect your hardware tier and installed local engines.
+2. Recommend trusted models (sourced from models.dev Labs and vetted communities only).
+3. Run a non-destructive smoke test against the running server.
+4. Write a transparent harness to `superqode.local.yaml`.
+5. Print the next command to run.
+
+If no server is running yet, start one first, then rerun `init`:
+
+```bash
+superqode local serve ollama
+superqode local init --repo .
+```
+
+Once `init` reports the harness is ready, start coding:
+
+```bash
+superqode --harness superqode.local.yaml
+```
+
+### Verify Readiness Anytime
+
+`local smoke` runs the same non-destructive readiness probe on demand. It never reads or edits your repo:
+
+```bash
+superqode local smoke --repo .
+```
+
+It checks that the server is reachable, a chat model (not an embedding model) is loaded, the context window is detected, and that a tiny prompt returns clean tool-call and patch output. It also measures TTFT and decode speed. The verdict is `ready`, `usable with warnings`, or `not ready yet`, and every failure prints the exact next command to run.
+
+### Common Failure Messages
+
+`local init` and `local smoke` diagnose problems instead of just erroring. Typical messages and their fix:
+
+| Message | What to do |
+|---------|-----------|
+| `no response from <endpoint>` | Start the server with `superqode local serve <engine>` or check the `--endpoint` URL. |
+| `server returned no models` | Load or install a chat model, then run `superqode local models`. |
+| `only embedding/reranker models found` | Load a chat/coding model, not an embedding model. |
+| `High TTFT; model is cold` | Warm it: `superqode local warm <engine> --model <model>`. |
+| `Native tool calls look unreliable` | The generated harness will fall back to prompt tool-call format. |
+| `Long-context recall probe failed` | Use a smaller context window or let SuperQode compact sooner. |
+
+---
+
 ## Supported Providers
 
 | Provider | Best For | Setup Complexity |
@@ -227,12 +283,16 @@ superqode connect local ollama qwen3:8b
 
 ### Recommended Models
 
+These are recommendations, not a model store. Keep them constrained to
+models.dev Labs, LM Studio Community, or MLX Community provenance so users do
+not get a biased or confusing grab bag of arbitrary model names.
+
 | Model | Size | Best For |
 |-------|------|----------|
-| `qwen3:8b` | ~5GB | General use, coding |
-| `llama3.2:latest` | ~4GB | General use |
-| `codellama:13b` | ~7GB | Code analysis |
-| `deepseek-coder:6.7b` | ~4GB | Code tasks |
+| `qwen3.6:35b-a3b` | varies | Alibaba Labs Qwen agentic coding |
+| `glm-4.5-air` | varies | Zhipu AI Labs GLM long-context coding |
+| `gemma4:e4b` | ~3GB | Google Labs small local utility work |
+| `deepseek-v4-flash` | server-class | DeepSeek Labs via DS4/server routes |
 
 ### Configuration
 
@@ -242,9 +302,9 @@ providers:
     base_url: http://localhost:11434
     type: openai-compatible
     recommended_models:
-      - qwen3:8b
-      - llama3.2:latest
-      - codellama:13b
+      - qwen3.6:35b-a3b
+      - glm-4.5-air
+      - gemma4:e4b
 ```
 
 ---
@@ -257,7 +317,7 @@ GUI-based local model runner.
 
 1. Download from [lmstudio.ai](https://lmstudio.ai)
 2. Install and open LM Studio
-3. Download a model (search for "qwen" or "llama")
+3. Download a model (search for "qwen", "glm", or "gemma")
 4. Load the model
 5. Start Local Server (port 1234)
 
@@ -308,6 +368,9 @@ superqode connect local mlx mlx-community/Qwen2.5-Coder-3B-4bit
 ```
 
 ### Recommended Models
+
+MLX recommendations use the vetted `mlx-community` namespace or a model family
+also present in models.dev Labs.
 
 | Model | RAM | Quality |
 |-------|-----|---------|
@@ -435,8 +498,8 @@ providers:
 
 | Model | Size | Best For |
 |-------|------|----------|
-| `Qwen/Qwen2.5-Coder-7B-Instruct` | ~14GB | Code tasks |
-| `meta-llama/Llama-3.3-70B-Instruct` | ~140GB | Large codebases |
+| `Qwen/Qwen3-Coder-30B-A3B-FP8` | varies | Alibaba Labs coder route |
+| `THUDM/GLM-4.5-Air` | varies | Zhipu AI Labs long-context coding |
 
 ---
 

@@ -14,8 +14,8 @@ from superqode.providers.connection_profiles import (
 
 def test_registry_has_expected_profiles():
     ids = connection_profile_ids()
-    # Display order: ACP, BYOK, Local, Codex, Claude, Antigravity, Advanced.
-    assert ids == ["acp", "byok", "local", "codex", "claude", "antigravity"]
+    # Local-first display order: Local, BYOK, ACP, Codex, Claude, Antigravity.
+    assert ids == ["local", "byok", "acp", "codex", "claude", "antigravity"]
 
 
 def test_codex_profile_is_runtime_connector():

@@ -333,6 +333,11 @@ def _should_send_tools(provider: str, model: str, user_message: str, tool_defs: 
     return True
 
 
+def _is_ds4_provider(provider: str) -> bool:
+    text = (provider or "").lower()
+    return "ds4" in text or "dwarfstar" in text
+
+
 def _looks_like_unexecuted_tool_intent(content: str) -> bool:
     """Detect narration where a model says it will inspect files but emits no tool call."""
     if not content:
@@ -1315,6 +1320,26 @@ class AgentLoop:
         p = (self.config.provider or "").lower()
         return any(token in p for token in self._LOCAL_PROVIDERS)
 
+    def _use_fast_chat_path(self, user_message: str) -> bool:
+        """Skip coding-agent scaffolding for obvious local chat prompts.
+
+        This keeps "hello" and basic non-code questions from paying for live
+        context probing, restored coding history, reminders, and tool schemas.
+        DS4 is intentionally excluded because it relies on a stable rendered
+        prefix for KV-cache reuse.
+        """
+        if not self._provider_is_local() or _is_ds4_provider(self.config.provider):
+            return False
+        if self.config.plan_mode or self._prompt_tool_mode():
+            return False
+        return _is_simple_conversational_query(user_message)
+
+    def _fast_chat_system_message(self) -> "AgentMessage":
+        return AgentMessage(
+            role="system",
+            content="You are a concise assistant. Answer directly without using tools.",
+        )
+
     async def _ensure_context_window(self) -> int:
         """Resolve and cache the real context window once per session.
 
@@ -1849,9 +1874,13 @@ class AgentLoop:
 
         Performance: Uses cached message conversion and parallel tool execution.
         """
+        fast_chat = self._use_fast_chat_path(user_message)
         # Resolve the real (loaded, for local) context window once so adaptive
-        # compaction is sized correctly from the first turn.
-        await self._ensure_context_window()
+        # compaction is sized correctly from the first turn. Obvious local chat
+        # prompts skip this probe so a simple "hello" doesn't block on setup
+        # work meant for coding-agent turns.
+        if not fast_chat:
+            await self._ensure_context_window()
         self._arm_doom_guard()
 
         from .hooks import SESSION_START, STOP, USER_PROMPT_SUBMIT
@@ -1899,11 +1928,14 @@ class AgentLoop:
 
         messages: List[AgentMessage] = []
 
+        if fast_chat:
+            messages.append(self._fast_chat_system_message())
         # Add system message if we have one
-        if self.system_prompt:
+        elif self.system_prompt:
             messages.append(AgentMessage(role="system", content=self._system_prompt_for_run()))
 
-        messages.extend(self._load_stored_messages())
+        if not fast_chat:
+            messages.extend(self._load_stored_messages())
 
         # Add user message
         messages.append(AgentMessage(role="user", content=user_message))
@@ -1956,7 +1988,7 @@ class AgentLoop:
 
             # Tool definitions are per-iteration: tool_search may have
             # activated deferred tools since the last call.
-            tool_defs = self._get_tool_definitions()
+            tool_defs = [] if fast_chat else self._get_tool_definitions()
 
             # Emit iteration log
             if self.on_thinking:
@@ -1966,9 +1998,12 @@ class AgentLoop:
 
             # PERFORMANCE: Use cached message conversion. Reminders ride along
             # on the request only - they are not part of stored history.
-            gateway_messages = self._convert_messages(
-                messages + self._collect_reminder_messages(iterations, user_message)
-            )
+            request_messages = messages
+            if not fast_chat:
+                request_messages = messages + self._collect_reminder_messages(
+                    iterations, user_message
+                )
+            gateway_messages = self._convert_messages(request_messages)
 
             # Plan mode: disable tools so model only analyzes/plans without executing
             tools_to_send = None
@@ -2326,17 +2361,23 @@ class AgentLoop:
 
         Performance: Uses cached message conversion and parallel tool execution.
         """
+        fast_chat = self._use_fast_chat_path(user_message)
         # Resolve the real (loaded, for local) context window once so adaptive
-        # compaction in this streaming run is sized correctly.
-        await self._ensure_context_window()
+        # compaction in this streaming run is sized correctly. Obvious local
+        # chat prompts skip this probe for first-token latency.
+        if not fast_chat:
+            await self._ensure_context_window()
         self._arm_doom_guard()
 
         messages: List[AgentMessage] = []
 
-        if self.system_prompt:
+        if fast_chat:
+            messages.append(self._fast_chat_system_message())
+        elif self.system_prompt:
             messages.append(AgentMessage(role="system", content=self._system_prompt_for_run()))
 
-        messages.extend(self._load_stored_messages())
+        if not fast_chat:
+            messages.extend(self._load_stored_messages())
 
         messages.append(AgentMessage(role="user", content=user_message))
         if self._session_manager:
@@ -2354,7 +2395,7 @@ class AgentLoop:
 
         try:
             async for chunk in self._run_streaming_loop(
-                messages, user_message, iterations, tool_calls_made, auto_continues
+                messages, user_message, iterations, tool_calls_made, auto_continues, fast_chat
             ):
                 yield chunk
         finally:
@@ -2367,6 +2408,7 @@ class AgentLoop:
         iterations: int,
         tool_calls_made: int,
         auto_continues: int,
+        fast_chat: bool = False,
     ) -> AsyncIterator[str]:
         _cap = self.config.max_iterations
         while _cap <= 0 or iterations < _cap:
@@ -2388,7 +2430,7 @@ class AgentLoop:
 
             # Tool definitions are per-iteration: tool_search may have
             # activated deferred tools since the last call.
-            tool_defs = self._get_tool_definitions()
+            tool_defs = [] if fast_chat else self._get_tool_definitions()
 
             # Emit iteration log
             if self.on_thinking:
@@ -2398,9 +2440,12 @@ class AgentLoop:
 
             # PERFORMANCE: Use cached message conversion. Reminders ride along
             # on the request only - they are not part of stored history.
-            gateway_messages = self._convert_messages(
-                messages + self._collect_reminder_messages(iterations, user_message)
-            )
+            request_messages = messages
+            if not fast_chat:
+                request_messages = messages + self._collect_reminder_messages(
+                    iterations, user_message
+                )
+            gateway_messages = self._convert_messages(request_messages)
 
             tools_to_send = None
             if not self.config.plan_mode and not self._prompt_tool_mode():

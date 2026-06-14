@@ -5,9 +5,11 @@
 # checks, hooks, workflow, and observability policy.
 #
 # SETUP REQUIREMENTS:
-# - Ollama: Run 'ollama serve' and pull models (e.g., ollama pull llama3.2:3b)
+# - Ollama: Run 'ollama serve' and pull models (e.g., ollama pull qwen3:8b)
 # - MLX: Start server with 'mlx_lm.server --model <model-id>'
 # - LM Studio: Open GUI, load model, start Local Server
+# - Recommendations should come from models.dev Labs, LM Studio Community, or
+#   MLX Community; use general model search for discovery, not defaults.
 
 superqode:
   version: "1.0"
@@ -25,13 +27,14 @@ providers:
   ollama:
     base_url: http://localhost:11434
     recommended_models:
-      - qwen2.5-coder:7b
-      - llama3.2:3b
+      - qwen3.6:35b-a3b
+      - gemma4:e4b
 
   mlx:
     base_url: http://localhost:8080
     recommended_models:
       - mlx-community/Qwen2.5-Coder-32B-Instruct-4bit
+      - THUDM/GLM-4.5-Air
 
   lmstudio:
     base_url: http://localhost:1234
@@ -47,7 +50,7 @@ mcp_servers: {}
 # Ollama Setup:
 #   1. Install: https://ollama.ai/
 #   2. Start: ollama serve
-#   3. Pull model: ollama pull llama3.2:3b
+#   3. Pull model: ollama pull qwen3:8b
 #   4. Verify: ollama list
 #
 # MLX Setup:
@@ -59,7 +62,7 @@ mcp_servers: {}
 # LM Studio Setup:
 #   1. Download: https://lmstudio.ai/
 #   2. Open LM Studio application
-#   3. Download model (search for 'qwen2.5-coder:7b' or 'llama3.2:3b')
+#   3. Download model (search for 'qwen2.5-coder', 'glm', or 'gemma')
 #   4. Load model in LM Studio
 #   5. Start Local Server (Local Server tab → Start Server)
 #   6. Server runs on: http://localhost:1234

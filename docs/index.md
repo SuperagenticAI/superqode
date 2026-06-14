@@ -11,7 +11,7 @@ hide:
 
 # SuperQode
 
-<p class="sq-kicker">Portable Coding Agent Harness Framework</p>
+<p class="sq-kicker">Your Portable Local Agentic Coding Harness</p>
 
 <p class="sq-tagline">Turn open models into serious coding agents. Your harness, your models, your memory. Built for Local Agentic Coding, connected to everything else through BYOK, ACP, agent SDKs, MCP, and A2A.</p>
 

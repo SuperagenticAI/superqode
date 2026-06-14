@@ -43,7 +43,10 @@ superqode models hub deepseek --mlx --limit 10
 
 # Download models
 superqode models download deepseek-ai/DeepSeek-V4-GGUF
-superqode models download meta-llama/Llama-3.2-8B --to ollama --name llama3.2
+superqode models download THUDM/GLM-4.5-Air --to transformers
+
+# Check local readiness
+superqode local smoke --repo .
 
 # Convert to MLX
 superqode models convert-mlx mlx-community/Qwen3-8B-4bit

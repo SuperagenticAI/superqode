@@ -13,7 +13,7 @@
 #   pack:          model policy pack the generated harness should reference
 #   notes:         shown verbatim by the doctor
 
-version: 2026-06-11
+version: 2026-06-14
 
 tiers:
   - id: apple_16
@@ -25,16 +25,19 @@ tiers:
         pull: "ollama pull gemma4:e4b"
         role: main
         pack: gemma4
+        source: models.dev/labs/google
       - name: "Qwen3.5 9B (4bit)"
         match: ["qwen3.5-9b", "qwen3.5:9b"]
         pull: "ollama pull qwen3.5:9b"
         role: main
         pack: qwen3
+        source: models.dev/labs/alibaba
       - name: "Qwen2.5-Coder 7B (FIM/utility)"
         match: ["qwen2.5-coder-7b"]
         pull: "ollama pull qwen2.5-coder:7b"
         role: utility
         pack: qwen-coder
+        source: models.dev/labs/alibaba
     notes:
       - "Ollama's MLX runtime needs more than 32GB; use mlx_lm.server or the standard Ollama runtime here."
       - "Prefer 4bit quantizations and the prompt tool-calling mode for the smallest models."
@@ -43,21 +46,30 @@ tiers:
     description: "Apple Silicon, ~32-48GB unified memory"
     engines: [ollama, mlx-lm, lmstudio, llama.cpp]
     models:
+      - name: "GLM-4.5-Air (4bit)"
+        match: ["glm-4.5-air", "glm4.5-air", "glm-4-5-air"]
+        pull: "huggingface-cli download THUDM/GLM-4.5-Air"
+        role: main
+        pack: glm
+        source: models.dev/labs/zhipuai
       - name: "Qwen3.6 35B-A3B (4bit MoE)"
         match: ["qwen3.6-35b", "qwen3.6:35b"]
         pull: "ollama pull qwen3.6:35b-a3b"
         role: main
         pack: qwen3
+        source: models.dev/labs/alibaba
       - name: "Gemma 4 12B (multimodal)"
         match: ["gemma-4-12b", "gemma4:12b"]
         pull: "ollama pull gemma4:12b"
         role: main
         pack: gemma4
+        source: models.dev/labs/google
       - name: "Devstral 2 Small"
         match: ["devstral-2", "devstral2"]
         pull: "ollama pull devstral2:small"
         role: main
         pack: devstral
+        source: models.dev/labs/mistral
     notes:
       - "MoE A3B models are the unified-memory sweet spot: large-model quality at ~3B active decode cost."
 
@@ -65,21 +77,30 @@ tiers:
     description: "Apple Silicon, ~64GB unified memory"
     engines: [ollama, mlx-lm, lmstudio]
     models:
+      - name: "GLM-4.5-Air (8bit or MLX)"
+        match: ["glm-4.5-air", "glm4.5-air", "glm-4-5-air"]
+        pull: "huggingface-cli download THUDM/GLM-4.5-Air"
+        role: main
+        pack: glm
+        source: models.dev/labs/zhipuai
       - name: "Gemma 4 26B MoE"
         match: ["gemma-4-26b", "gemma4:26b"]
         pull: "ollama pull gemma4:26b"
         role: main
         pack: gemma4
+        source: models.dev/labs/google
       - name: "Qwen3.6 27B dense"
         match: ["qwen3.6-27b", "qwen3.6:27b"]
         pull: "ollama pull qwen3.6:27b"
         role: main
         pack: qwen3
+        source: models.dev/labs/alibaba
       - name: "Qwen3.6 35B-A3B (8bit)"
         match: ["qwen3.6-35b"]
         pull: "ollama pull qwen3.6:35b-a3b-q8"
         role: main
         pack: qwen3
+        source: models.dev/labs/alibaba
     notes:
       - "DeepSeek V4 Flash heavily quantized (~33GB) becomes possible via the DS4 engine."
 
@@ -87,26 +108,36 @@ tiers:
     description: "Apple Silicon, 96GB+ unified memory"
     engines: [mlx-lm, ollama, ds4, lmstudio]
     models:
+      - name: "GLM-4.5-Air (bf16 or 8bit)"
+        match: ["glm-4.5-air", "glm4.5-air", "glm-4-5-air"]
+        pull: "huggingface-cli download THUDM/GLM-4.5-Air"
+        role: main
+        pack: glm
+        source: models.dev/labs/zhipuai
       - name: "Gemma 4 31B (bf16 or 8bit)"
         match: ["gemma-4-31b", "gemma4-31b", "gemma4:31b"]
         pull: "ollama pull gemma4:31b"
         role: main
         pack: gemma4
+        source: models.dev/labs/google
       - name: "Qwen3-Coder 30B-A3B"
         match: ["qwen3-coder-30b", "qwen3-coder:30b"]
         pull: "ollama pull qwen3-coder:30b-a3b"
         role: main
         pack: qwen-coder
+        source: models.dev/labs/alibaba
       - name: "DeepSeek V4 Flash (quantized, via DS4)"
         match: ["deepseek-v4-flash"]
         pull: "superqode providers ds4 server"
         role: main
         pack: ds4
+        source: models.dev/labs/deepseek
       - name: "Gemma 4 12B (vision/utility companion)"
         match: ["gemma-4-12b", "gemma4:12b"]
         pull: "ollama pull gemma4:12b"
         role: utility
         pack: gemma4
+        source: models.dev/labs/google
     notes:
       - "Enough headroom to run a main coder plus a small utility/vision model concurrently."
       - "On M5 with macOS 26.2+, always prefer the MLX path: Neural Accelerators give ~4x prefill, and agentic loops are prefill-dominated."
@@ -120,32 +151,43 @@ tiers:
         pull: "ollama pull qwen3-coder-next"
         role: main
         pack: qwen-coder
+        source: models.dev/labs/alibaba
       - name: "Devstral 2 Small"
         match: ["devstral-2", "devstral2"]
         pull: "ollama pull devstral2:small"
         role: main
         pack: devstral
+        source: models.dev/labs/mistral
       - name: "Gemma 4 12B (Q4)"
         match: ["gemma-4-12b", "gemma4:12b"]
         pull: "ollama pull gemma4:12b"
         role: main
         pack: gemma4
+        source: models.dev/labs/google
     notes: []
 
   - id: nvidia_24
     description: "NVIDIA GPU, ~24-40GB VRAM"
     engines: [sglang, vllm, ollama]
     models:
+      - name: "GLM-4.5-Air (AWQ/FP8)"
+        match: ["glm-4.5-air", "glm4.5-air", "glm-4-5-air"]
+        pull: "huggingface-cli download THUDM/GLM-4.5-Air"
+        role: main
+        pack: glm
+        source: models.dev/labs/zhipuai
       - name: "Qwen3-Coder-Next (its design target)"
         match: ["qwen3-coder-next"]
         pull: "huggingface-cli download Qwen/Qwen3-Coder-Next"
         role: main
         pack: qwen-coder
+        source: models.dev/labs/alibaba
       - name: "Qwen3.6 27B (AWQ)"
         match: ["qwen3.6-27b"]
         pull: "huggingface-cli download Qwen/Qwen3.6-27B-AWQ"
         role: main
         pack: qwen3
+        source: models.dev/labs/alibaba
     notes:
       - "SGLang is preferred for agentic pipelines on CUDA: prefix caching plus structured output enforcement."
 
@@ -153,16 +195,24 @@ tiers:
     description: "NVIDIA, 48GB+ VRAM or multi-GPU"
     engines: [sglang, vllm]
     models:
+      - name: "GLM-4.6 / GLM-4.5-Air (server route)"
+        match: ["glm-4.6", "glm4.6", "glm-4.5-air"]
+        pull: "huggingface-cli download THUDM/GLM-4.6"
+        role: main
+        pack: glm
+        source: models.dev/labs/zhipuai
       - name: "Qwen3-Coder 30B-A3B (FP8)"
         match: ["qwen3-coder-30b"]
         pull: "huggingface-cli download Qwen/Qwen3-Coder-30B-A3B-FP8"
         role: main
         pack: qwen-coder
+        source: models.dev/labs/alibaba
       - name: "DeepSeek V4 Flash (FP8, via DS4 or SGLang)"
         match: ["deepseek-v4-flash"]
         pull: "huggingface-cli download deepseek-ai/DeepSeek-V4-Flash"
         role: main
         pack: ds4
+        source: models.dev/labs/deepseek
     notes:
       - "Multi-GPU servers can host GLM-5.1 or full DeepSeek V4; SuperQode connects over the OpenAI-compatible endpoint."
 
@@ -175,10 +225,12 @@ tiers:
         pull: "ollama pull gemma4:e2b"
         role: main
         pack: gemma4
+        source: models.dev/labs/google
       - name: "Qwen3.5 2B"
         match: ["qwen3.5-2b", "qwen3.5:2b"]
         pull: "ollama pull qwen3.5:2b"
         role: main
         pack: qwen3
+        source: models.dev/labs/alibaba
     notes:
       - "Pair small models with tool_call_format: prompt; they rarely have a reliable native tool head."

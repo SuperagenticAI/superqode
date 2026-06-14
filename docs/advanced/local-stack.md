@@ -8,6 +8,7 @@ and recommends a tuned stack. One more flag turns the recommendation into a
 ready-to-run harness.
 
 ```bash
+superqode local init --repo .
 superqode local doctor
 superqode local doctor --repo .
 superqode local doctor --repo . --guardrails
@@ -29,6 +30,14 @@ superqode local doctor --repo . --guardrails
    ranked engines and models. The doctor prefers what you already have: an
    installed engine beats a better-but-missing one, and a downloaded model
    beats a 20GB pull.
+5. **Labs discovery**: `superqode local labs` reads models.dev Labs metadata
+   and surfaces open-weight, tool-capable families such as GLM, Qwen, Gemma,
+   DeepSeek, and Devstral with Hugging Face download hints.
+
+The shipped matrix only recommends models with explicit provenance: a
+models.dev Lab entry or a vetted community namespace such as `mlx-community`.
+General Hugging Face search remains available, but search results are not
+promoted into SuperQode defaults without that source label.
 
 Example output:
 
@@ -46,11 +55,12 @@ Engines
     lmstudio   installed
 
 Recommended models
-  + Gemma 4 31B (bf16 or 8bit) [main]  downloaded (hf:org/gemma-4-31b-it-4bit-mlx, 32.2GB)
-  - Qwen3-Coder 30B-A3B [main]  get it: ollama pull qwen3-coder:30b-a3b
+  + GLM-4.5-Air (bf16 or 8bit) [main]  downloaded (hf:THUDM/GLM-4.5-Air, 32.2GB)  source: models.dev/labs/zhipuai
+  - Gemma 4 31B (bf16 or 8bit) [main]  get it: ollama pull gemma4:31b  source: models.dev/labs/google
+  - Qwen3-Coder 30B-A3B [main]  get it: ollama pull qwen3-coder:30b-a3b  source: models.dev/labs/alibaba
 
 Verdict
-  Engine ollama + Gemma 4 31B (ready now)
+  Engine mlx-lm + GLM-4.5-Air (ready now)
   Generate a tuned harness: superqode local doctor --generate harness.yaml
 ```
 
@@ -64,6 +74,18 @@ concurrency.
 ---
 
 ## Generate a tuned harness
+
+```bash
+superqode local init --repo .
+superqode --harness superqode.local.yaml
+```
+
+`local init` is the MVP one-command path. It runs the doctor, writes a tuned
+`superqode.local.yaml`, and runs `local smoke` when a local server is available.
+If smoke fails, the harness is still written but the output gives exact next
+steps before you trust it for a real coding task.
+
+For manual control:
 
 ```bash
 superqode local doctor --repo . --generate harness.yaml
@@ -170,11 +192,32 @@ policy:
 ## Benchmark your endpoints
 
 ```bash
+superqode local smoke --repo .
+superqode local warm ollama --model qwen3:8b
 superqode local bench
 superqode local bench --agentic
 superqode local optimize --endpoint http://localhost:8080/v1 --model qwen3-coder --model tiny-coder
 superqode local bench --endpoint http://localhost:8080/v1 --model my-model
 ```
+
+Use `local smoke` before trusting a model on a repository. It is non-destructive:
+it probes the endpoint, filters embedding-only models, detects the loaded
+context window when the server exposes it, measures TTFT, and checks read-file
+tool calls, patch-format output, shell tool calls, and long-context recall.
+
+Use `local warm` before an interactive coding session when you want the first
+real prompt to avoid model-load cost. It sends a tiny streamed request to one
+running engine, chooses the first served model when `--model` is omitted, and
+reports TTFT, decode speed, and total time:
+
+```text
+ready: qwen3:8b
+  TTFT 0.8s · decode 38.2 tok/s · total 1.2s
+```
+
+If warm TTFT is still high, the bottleneck is usually prefill/context pressure:
+restart the server with a smaller context window (`--ctx`, `num_ctx`, or the
+engine equivalent) or choose a smaller quantized model.
 
 The bench streams one coding-shaped completion and reports **time to first
 token** (prefill speed) and **decode tokens per second**. TTFT is the number

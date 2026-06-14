@@ -144,6 +144,14 @@ Benchmark harness:
 superqode benchmark run tasks.json --target superqode --target opencode --target pi --target deepagents
 ```
 
+Build and understand a harness (no hand-written YAML):
+
+```bash
+superqode harness wizard                              # interactive builder
+superqode harness explain --spec harness.yaml         # plain-English summary
+superqode harness list-templates                      # model-family starters
+```
+
 Harness event graph:
 
 ```bash
@@ -321,8 +329,12 @@ superqode sandbox run e2b -- "pytest -q"
 |---------|-------------|
 | `superqode config init` | Create `superqode.yaml` in the current directory (recommended) |
 | `superqode config init --force` | Initialize config (overwrite if present) |
-| `superqode harness init coding` | Create a reusable coding harness spec |
+| `superqode harness wizard` | Build a harness spec interactively (no hand-written YAML) |
+| `superqode harness init qwen-coding` | Create a harness spec from a model-family template |
+| `superqode harness explain --spec <file>` | Explain in plain English what a harness lets the model do |
 | `superqode harness validate --spec <file>` | Validate a harness spec |
+
+The full `harness` command group (wizard, init, explain, compile, diff, run, runs, events, replay, inbox, worker, and more) is documented in [Harness Commands](harness-commands.md).
 
 ### Provider Commands
 

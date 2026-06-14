@@ -23,15 +23,24 @@ Everything below is a real, runnable path. Try it in any repository.
 
 ### 1. Create
 
-Start from a built-in template and edit, or write the YAML from scratch:
+Answer a few questions and let the wizard write it (recommended, no YAML editing), start from a built-in template, or write the YAML from scratch:
 
 ```bash
+superqode harness wizard                                              # interactive builder
 superqode harness list-templates
-superqode harness init my-coder --template coding --output harness.yaml
+superqode harness init my-coder --template qwen-coding --output harness.yaml
 superqode harness init local --template gemma4-coding --output harness.yaml
 ```
 
-Templates include `coding`, `no-tool`, `gemma4-coding`, `gemma4-no-tool`, `ds4-coding`, and `ds4-fast-local`. The local templates ship model policies already tuned for those model families.
+Templates include `coding`, `no-tool`, `qwen-coding`, `glm-coding`, `gemma4-coding`, `gemma4-no-tool`, `ds4-coding`, and `ds4-fast-local`. The model-family templates ship model policies already tuned for those families.
+
+See exactly what any harness will do, in plain English:
+
+```bash
+superqode harness explain --spec harness.yaml
+```
+
+For the full step-by-step walkthrough, see [Bring Your Own Harness](../getting-started/bring-your-own-harness.md).
 
 ### 2. Define
 

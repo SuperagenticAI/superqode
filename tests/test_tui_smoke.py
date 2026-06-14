@@ -139,7 +139,7 @@ def test_welcome_positions_superqode_as_coding_harness():
 
     text = render_plain(welcome)
 
-    assert "SuperQode = Your Portable Universal Coding Agent Harness" in text
+    assert "Your Portable Local Agentic Coding Harness" in text
     assert ":connect local" in text
     assert "Agentic Code Needs Super Quality Engineering" not in text
 
@@ -3124,6 +3124,107 @@ def test_local_model_scroll_calculation_uses_multiline_rows():
     assert calls
     assert calls[-1]["y"] >= 40
     assert calls[-1]["animate"] is False
+
+
+def test_tui_local_smoke_command_renders_mvp_readiness(monkeypatch):
+    from superqode.local.smoke import SmokeCheck, SmokeReport
+
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app.run_worker = lambda coro: asyncio.run(coro)
+
+    def fake_run_smoke(**kwargs):
+        assert kwargs["repo_path"] == "."
+        return SmokeReport(
+            status="ready",
+            engine="ollama",
+            endpoint="http://localhost:11434/v1",
+            model="qwen3-coder",
+            ttft_s=0.4,
+            decode_tps=50.0,
+            checks=[SmokeCheck("server", True, "reachable")],
+        )
+
+    monkeypatch.setattr("superqode.local.smoke.run_smoke", fake_run_smoke)
+
+    app._local_cmd("smoke", log)
+
+    text = render_plain(log.items[-1])
+    assert "SuperQode local smoke" in text
+    assert "qwen3-coder" in text
+    assert "Local coding harness ready" in text
+
+
+def test_tui_local_init_writes_harness(monkeypatch, tmp_path):
+    from superqode.local.doctor import DoctorReport
+    from superqode.local.engines import EngineStatus
+    from superqode.local.hardware import HardwareProfile
+    from superqode.local.matrix import ModelCandidate, StackRecommendation
+    from superqode.local.smoke import SmokeCheck, SmokeReport
+
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+    app.run_worker = lambda coro: asyncio.run(coro)
+
+    candidate = ModelCandidate(
+        name="GLM-4.5-Air",
+        match=["glm-4.5-air"],
+        pull="huggingface-cli download THUDM/GLM-4.5-Air",
+        pack="glm",
+        source="models.dev/labs/zhipuai",
+    )
+    report = DoctorReport(
+        hardware=HardwareProfile(platform="darwin", is_apple_silicon=True, unified_memory_gb=64),
+        engines={"mlx-lm": EngineStatus(engine="mlx-lm", installed=True, running=True)},
+        inventory=[],
+        recommendation=StackRecommendation(
+            tier_id="apple_64",
+            description="test",
+            engine="mlx-lm",
+            engine_ranked=["mlx-lm"],
+            models=[candidate],
+        ),
+    )
+    smoke = SmokeReport(
+        status="ready",
+        engine="mlx-lm",
+        endpoint="http://localhost:8080/v1",
+        model="THUDM/GLM-4.5-Air",
+        checks=[SmokeCheck("server", True, "reachable")],
+    )
+    monkeypatch.setattr("superqode.local.doctor.run_doctor", lambda *a, **k: report)
+    monkeypatch.setattr("superqode.local.smoke.run_smoke", lambda **kwargs: smoke)
+    target = tmp_path / "superqode.local.yaml"
+
+    app._local_cmd(f"init --repo {tmp_path} --output {target}", log)
+
+    assert target.exists()
+    text = target.read_text(encoding="utf-8")
+    assert "primary: mlx/THUDM/GLM-4.5-Air" in text
+    rendered = render_plain(log.items[-1])
+    assert "Local Coding Init" in rendered
+    assert "Wrote local harness" in rendered
+
+
+def test_tui_local_no_model_hints_avoid_llama(monkeypatch):
+    app = make_app()
+    log = FakeLog()
+    app.run_worker = lambda coro: asyncio.run(coro)
+
+    class Discovery:
+        async def scan_all(self):
+            return {}
+
+    monkeypatch.setattr("superqode.providers.local.get_discovery_service", lambda: Discovery())
+
+    app._local_cmd("models", log)
+
+    text = render_plain(log.items[-1])
+    assert "qwen3.6:35b-a3b" in text
+    assert "llama3" not in text.lower()
+    assert "codellama" not in text.lower()
 
 
 def test_providers_smoke_command_renders_local_health(monkeypatch):

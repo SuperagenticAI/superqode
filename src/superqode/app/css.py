@@ -112,7 +112,7 @@ ConversationLog {
 #mode-badge { height: auto; text-align: center; margin-bottom: 0; }
 #input-box {
     height: auto;
-    min-height: 5;
+    min-height: 4;
     max-height: 10;
     width: 100%;
     background: #0a0a0f;
@@ -135,8 +135,8 @@ ConversationLog {
 }
 #prompt-input {
     width: 1fr;
-    height: 3;
-    min-height: 3;
+    height: 2;
+    min-height: 2;
     max-height: 8;
     background: transparent;
     border: none;

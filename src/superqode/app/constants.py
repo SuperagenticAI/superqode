@@ -15,9 +15,9 @@ ASCII_LOGO = """
 COMPACT_LOGO = """ ____  _   _ ____  _____ ____   ___    ___  ____  _____
 |____/ \\___/|_|   |_____|_| \\_\\\\__\\_\\ \\___/|____/|_____|"""
 
-# Welcome subtitle: differentiators (line 1) + local-model emphasis (line 2).
-TAGLINE_PART1 = "ACP MCP A2A  ·  Local BYOK SDKs  ·  Bring Your Own Harness"
-TAGLINE_PART2 = "Optimized for Local Models"
+# Welcome subtitle: local-first differentiators (line 1) + connectivity tail (line 2).
+TAGLINE_PART1 = "Local and Open Models  ·  Bring Your Own Harness  ·  Connect Anything"
+TAGLINE_PART2 = "ACP · MCP · A2A · BYOK · SDKs"
 
 # Normal purple → pink → orange gradient for ASCII logo
 GRADIENT = ["#7c3aed", "#a855f7", "#c084fc", "#ec4899", "#f97316", "#fb923c"]
@@ -293,6 +293,9 @@ COMMANDS = [
     ":providers use",
     ":providers show",
     ":context",
+    ":chat",
+    ":chat off",
+    ":chat clear",
     ":disconnect",
     # Runtime backend selection (see ':runtime list' for status)
     ":runtime",

@@ -720,7 +720,7 @@ def render_welcome(
     # ═══════════════════════════════════════════════════════════════════════
     desc_text = Text(justify=align)
     desc_text.append(
-        "SuperQode = Your Portable Universal Coding Agent Harness\n", style="bold #ffffff"
+        "Your Portable Local Agentic Coding Harness\n", style="bold #ffffff"
     )
     desc_text.append("\n", style="")
 
@@ -748,36 +748,15 @@ def render_welcome(
     items.append(Text("\n", style=""))
 
     # ═══════════════════════════════════════════════════════════════════════
-    # FEATURE LINES - sell each pillar subtly (icon + label + dim one-liner).
-    # Rendered as a single left-aligned block, then centered as a whole so the
-    # label/description columns stay aligned.
-    # ═══════════════════════════════════════════════════════════════════════
-    features = [
-        ("Harness as Code", "declarative HarnessSpec, portable runtimes", THEME["purple"]),
-        ("Any Connection", "ACP · MCP · A2A · BYOK · local · SDKs", THEME["cyan"]),
-        ("Local-First", "tuned + optimized for local models", THEME["gold"]),
-    ]
-    label_width = max(len(label) for label, _, _ in features) + 2
-    features_text = Text()
-    for label, desc, color in features:
-        features_text.append("⬡  ", style=color)
-        features_text.append(label.ljust(label_width), style=f"bold {color}")
-        features_text.append(f"{desc}\n", style=THEME["muted"])
-    items.append(place(features_text))
-
-    # Spacing
-    items.append(Text("\n", style=""))
-
-    # ═══════════════════════════════════════════════════════════════════════
     # QUICK START + KEYS - centered, one entry per line (no column padding so
-    # justify=center keeps every row visually centered).
+    # justify=center keeps every row visually centered). Local connection leads.
     # ═══════════════════════════════════════════════════════════════════════
     commands_text = Text(justify=align)
     commands_text.append("Quick Start\n", style=f"bold {THEME['text']}")
     starts = [
-        ("1", ":connect", "choose ACP, BYOK, or local", THEME["purple"]),
-        ("2", ":connect local", "local models · DS4 · Ollama · MLX", THEME["cyan"]),
-        ("3", ":connect byok", "direct provider / model connection", THEME["success"]),
+        ("1", ":connect local", "Ollama · LM Studio · MLX · DwarfStar (DS4)", THEME["cyan"]),
+        ("2", ":connect acp", "all ACP coding agents", THEME["purple"]),
+        ("3", ":connect byok", "all model labs and hosts", THEME["success"]),
         ("4", "/sessions", "resume previous work", THEME["orange"]),
     ]
     for num, cmd, desc, color in starts:
@@ -971,6 +950,8 @@ class SuperQodeApp(App):
     _acp_loop_runner = None  # Dedicated loop for persistent ACP clients
     _acp_slash_registry = None  # Lazily-built superqode.acp.slash.SlashRegistry
     _plan_mode_enabled: bool = False  # Keep native BYOK/local prompts in plan-only mode
+    _chat_mode: bool = False  # Raw direct-to-model chat: no repo context, no tools, speed metrics
+    _chat_history: list = None  # Conversation buffer used only while chat mode is on
     _force_plan_once: bool = False  # Run the next native prompt as plan-only
     _force_execute_once: bool = False  # Run the next prompt even if plan mode is enabled
     _pending_plan_request: str = ""  # Last planned request available for approval/execution
@@ -1362,7 +1343,6 @@ class SuperQodeApp(App):
         try:
             input_box = self.query_one("#input-box")
             input_box.border_title = "✎ Build"
-            input_box.border_subtitle = "Enter to send · : for commands · @ for files"
         except Exception:
             pass
         self._load_welcome()
@@ -4893,6 +4873,8 @@ class SuperQodeApp(App):
                 "_awaiting_connect_type",
                 "_awaiting_local_provider",
                 "_awaiting_local_model",
+                "_awaiting_local_server_start",
+                "_awaiting_local_dep_install",
                 "_awaiting_model_selection",
                 "_awaiting_recommendation_selection",
             )
@@ -4931,6 +4913,16 @@ class SuperQodeApp(App):
 
         # Handle Enter key (empty input) for selections
         if not text:
+            # Inline local prompts win first: Enter = install / start with defaults.
+            if getattr(self, "_awaiting_local_dep_install", None):
+                self._handle_local_dep_install_input("", log)
+                event.input.value = ""
+                return
+            if getattr(self, "_awaiting_local_server_start", None):
+                self._handle_local_server_start_input("", log)
+                event.input.value = ""
+                return
+
             if getattr(self, "_awaiting_agent_question", False):
                 self._handle_agent_question_input(text, log)
                 event.input.value = ""
@@ -5027,6 +5019,8 @@ class SuperQodeApp(App):
                 or getattr(self, "_awaiting_byok_provider", False)
                 or getattr(self, "_awaiting_byok_model", False)
                 or getattr(self, "_awaiting_local_provider", False)
+                or getattr(self, "_awaiting_local_server_start", None)
+                or getattr(self, "_awaiting_local_dep_install", None)
             ):
                 # Cancel selection mode
                 self._awaiting_connect_type = False
@@ -5035,6 +5029,8 @@ class SuperQodeApp(App):
                 self._awaiting_byok_provider = False
                 self._awaiting_byok_model = False
                 self._awaiting_local_provider = False
+                self._awaiting_local_server_start = None
+                self._awaiting_local_dep_install = None
                 # Clear selection state
                 if hasattr(self, "_byok_connect_list"):
                     delattr(self, "_byok_connect_list")
@@ -5068,6 +5064,15 @@ class SuperQodeApp(App):
             if cmd:
                 self._run_shell(cmd, log)
             return
+
+        # Inline local prompts take priority over every other selection handler
+        # so a typed 'n'/options can never be swallowed by a stale picker flag.
+        if getattr(self, "_awaiting_local_dep_install", None):
+            if self._handle_local_dep_install_input(text, log):
+                return
+        if getattr(self, "_awaiting_local_server_start", None):
+            if self._handle_local_server_start_input(text, log):
+                return
 
         # Check if awaiting connect type selection (profile-driven)
         if getattr(self, "_awaiting_connect_type", False):
@@ -5575,6 +5580,8 @@ class SuperQodeApp(App):
             self.run_worker(self._approval_cmd("reject", args, log))
         elif c == "mcp":
             self.run_worker(self._mcp_cmd(args, log))
+        elif c == "chat":
+            self._chat_cmd(args, log)
         elif c == "context":
             self._show_context(log)
         elif c == "status":
@@ -12265,6 +12272,23 @@ memory:
             self._enqueue_message(text)
             return
 
+        # Chat mode: a raw, direct-to-model conversation. No repo context, no
+        # tools, no system scaffolding, no @file/MCP/plan expansion. This is the
+        # fastest way to feel the model's latency and decode speed.
+        if getattr(self, "_chat_mode", False):
+            if not (
+                hasattr(self, "_pure_mode") and self._pure_mode.session.connected
+            ):
+                log.add_error("Chat mode needs a connected model. Use :connect local first.")
+                return
+            log.add_user(text)
+            self._last_user_message = text
+            self._update_terminal_title(text)
+            self.is_busy = True
+            self._cancel_requested = False
+            self._chat_worker(text, log)
+            return
+
         text, inline_mcp_refs = self._extract_mcp_refs_from_text(text)
         staged_mcp_refs = [
             ref for ref in getattr(self, "_attached_refs", []) if ref.startswith("mcp://")
@@ -12466,6 +12490,154 @@ memory:
         log.add_info("Answered agent question. Continuing...")
         return True
 
+    def _chat_cmd(self, args: str, log: ConversationLog):
+        """Toggle raw direct-to-model chat mode (no repo context, no tools)."""
+        arg = (args or "").strip().lower()
+        if arg in ("clear", "reset"):
+            self._chat_history = []
+            log.add_info("Chat history cleared.")
+            return
+        if arg in ("off", "stop", "exit", "0", "false"):
+            enable = False
+        elif arg in ("on", "start", "1", "true"):
+            enable = True
+        else:
+            enable = not getattr(self, "_chat_mode", False)
+
+        self._chat_mode = enable
+        if enable:
+            self._chat_history = []
+            connected = hasattr(self, "_pure_mode") and self._pure_mode.session.connected
+            t = Text()
+            t.append("\n  💬 Chat mode ON\n", style=f"bold {THEME['cyan']}")
+            t.append(
+                "  Talking straight to the model: no repo context, no tools, no harness.\n",
+                style=THEME["muted"],
+            )
+            t.append("  Every reply reports TTFT and decode tok/s.\n", style=THEME["muted"])
+            if connected:
+                who = f"{self._pure_mode.session.provider}/{self._pure_mode.session.model}"
+                t.append(f"  Model: {who}\n", style=THEME["dim"])
+            else:
+                t.append(
+                    "  No model connected yet. Use :connect local, then just type.\n",
+                    style=THEME["warning"],
+                )
+            t.append("  Turn off with ", style=THEME["muted"])
+            t.append(":chat off", style=f"bold {THEME['cyan']}")
+            t.append("\n", style="")
+            log.write(t)
+        else:
+            log.add_info("Chat mode OFF. Back to the full coding harness.")
+
+    @work(exclusive=True)
+    async def _chat_worker(self, text: str, log: ConversationLog):
+        """Worker wrapper so chat streaming runs off the input handler."""
+        await self._send_chat_message(text, log)
+
+    async def _send_chat_message(self, text: str, log: ConversationLog):
+        """Stream a raw model reply and report speed (TTFT + decode tok/s)."""
+        from time import monotonic
+        from superqode.providers.gateway.base import Message
+        from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
+
+        try:
+            provider = self._pure_mode.session.provider
+            model = self._pure_mode.session.model
+            if not provider or not model:
+                self._call_ui(
+                    log.add_error,
+                    "No model is selected. Reconnect with :connect local before chatting.",
+                )
+                return
+            history = self._chat_history
+            if not isinstance(history, list):
+                history = self._chat_history = []
+            history.append(Message(role="user", content=text))
+
+            # Use the same animated thinking indicator + scanning waves as the
+            # agent path so chat mode looks alive during a slow first token
+            # (a 30B local model can take many seconds to prefill).
+            self._call_ui(self._start_thinking, f"💬 {provider}/{model}")
+
+            gateway = LiteLLMGateway()
+            t0 = monotonic()
+            first_token_t = None
+            pieces: list[str] = []
+            thinking_chars = 0
+            usage_completion = None
+
+            async for chunk in gateway.stream_completion(
+                messages=list(history),
+                model=model,
+                provider=provider,
+                tools=None,
+                temperature=0.7,
+                max_tokens=2048,
+            ):
+                if getattr(self, "_cancel_requested", False):
+                    break
+                if chunk.thinking_content:
+                    if first_token_t is None:
+                        first_token_t = monotonic()
+                    thinking_chars += len(chunk.thinking_content)
+                if chunk.content:
+                    if first_token_t is None:
+                        first_token_t = monotonic()
+                    pieces.append(chunk.content)
+                    self._call_ui(log.add_response_chunk, chunk.content)
+                if chunk.usage and chunk.usage.completion_tokens:
+                    usage_completion = chunk.usage.completion_tokens
+
+            end_t = monotonic()
+            full = "".join(pieces)
+            history.append(Message(role="assistant", content=full))
+
+            if not full.strip():
+                if thinking_chars > 0:
+                    note = (
+                        f"Model produced {thinking_chars} chars of hidden reasoning but no "
+                        "final answer (it likely ran out of the 2048-token budget). "
+                        "Try a shorter prompt or a non-reasoning model."
+                    )
+                else:
+                    note = (
+                        "Model returned no text. Check the model is loaded in the server "
+                        "and not an embedding-only model."
+                    )
+                self._call_ui(log.add_info, note)
+                return
+            who = f"{provider}/{model}"
+            self._call_ui(lambda: log.write_final_response(full, agent=who))
+
+            ttft = (first_token_t - t0) if first_token_t is not None else None
+            decode_dur = (end_t - first_token_t) if first_token_t is not None else None
+            tokens = usage_completion or max(1, len(full) // 4)
+            tps = (tokens / decode_dur) if decode_dur and decode_dur > 0 else None
+            self._call_ui(self._write_chat_stats, log, ttft, tps, tokens, end_t - t0)
+        except Exception as exc:  # noqa: BLE001 - surface any model/transport error
+            self._call_ui(log.add_error, f"Chat error: {exc}")
+        finally:
+            # Stops the indicator + scanning waves and restores the prompt.
+            self._call_ui(self._stop_thinking)
+
+    def _write_chat_stats(
+        self, log: ConversationLog, ttft, tps, tokens: int, total: float
+    ) -> None:
+        """One muted metrics line under a chat reply."""
+        line = Text()
+        line.append("  ⚡ ", style=f"bold {THEME['gold']}")
+        parts = []
+        if ttft is not None:
+            parts.append(f"TTFT {ttft:.2f}s")
+        if tps is not None:
+            parts.append(f"{tps:.1f} tok/s")
+        parts.append(f"{tokens} tok")
+        parts.append(f"{total:.1f}s total")
+        line.append("  ·  ".join(parts), style=THEME["muted"])
+        line.append("\n", style="")
+        log.write(line)
+
     @work(exclusive=True)
     async def _send_to_pure_mode(self, text: str, log: ConversationLog):
         """Send message to provider session with streaming output."""
@@ -12519,13 +12691,13 @@ memory:
         # Check if connected
         if not hasattr(self, "_pure_mode"):
             log.add_error("Not connected to a model. Use :connect byok to select a provider/model.")
-            log.add_system("Example: :connect byok ollama/llama3.2")
+            log.add_system("Example: :connect local ollama/qwen3.6:35b-a3b")
             self.is_busy = False
             return
 
         if not self._pure_mode.session.connected:
             log.add_error("Connection not established. Please reconnect using :connect byok")
-            log.add_system("Example: :connect byok ollama/llama3.2")
+            log.add_system("Example: :connect local ollama/qwen3.6:35b-a3b")
             self.is_busy = False
             return
 
@@ -12537,7 +12709,7 @@ memory:
             and getattr(self._pure_mode, "_runtime", None) is None
         ):
             log.add_error("Agent not initialized. Please reconnect using :connect byok")
-            log.add_system("Example: :connect byok ollama/llama3.2")
+            log.add_system("Example: :connect local ollama/qwen3.6:35b-a3b")
             self.is_busy = False
             return
 
@@ -19106,6 +19278,31 @@ memory:
                 return f"{icon} {tool_name} {val_str}"
         return f"{icon} {tool_name}"
 
+    def _write_collapsed_changes_line(
+        self, log: ConversationLog, files_modified: list, file_diffs: dict
+    ) -> None:
+        """One muted line for file changes, hidden details, expandable on demand.
+
+        The full file panel and inline diffs are intentionally not printed; the
+        user opens them with ``:diff`` (working tree) or ``:work verbose``
+        (inline in the transcript).
+        """
+        count = len(files_modified)
+        total_add = sum(d.get("additions", 0) for d in file_diffs.values())
+        total_del = sum(d.get("deletions", 0) for d in file_diffs.values())
+        line = Text()
+        line.append("  ▸ ", style=f"bold {SQ_COLORS.info}")
+        label = f"{count} file{'s' if count != 1 else ''} changed"
+        if total_add or total_del:
+            label += f" (+{total_add}/-{total_del})"
+        line.append(label, style=SQ_COLORS.text_secondary)
+        line.append("  ·  ", style=SQ_COLORS.text_muted)
+        line.append(":diff", style=f"bold {SQ_COLORS.info}")
+        line.append(" to view  ·  ", style=SQ_COLORS.text_muted)
+        line.append(":work verbose", style=f"bold {SQ_COLORS.info}")
+        line.append(" for inline diffs\n", style=SQ_COLORS.text_muted)
+        log.write(line)
+
     def _show_final_outcome(
         self, response_text: str, name: str, summary: dict, log: ConversationLog
     ):
@@ -19120,20 +19317,11 @@ memory:
         files_read = summary.get("files_read", [])
         file_diffs = summary.get("file_diffs", {})  # NEW: Get diff data
 
-        # FALLBACK: Always check git for file changes if files_modified is empty
-        # This ensures file changes are detected even if agent tracking missed them
-        if not files_modified and not summary.get("skip_git_fallback"):
-            try:
-                root_path = Path(os.getcwd())
-                git_changes = get_git_changes(root_path)
-                files_modified = [
-                    change.path for change in git_changes if change.status in ("M", "A")
-                ]
-                if files_modified:
-                    # Compute file diffs for git-detected changes
-                    file_diffs = self._compute_file_diffs(files_modified)
-            except Exception:
-                pass  # If git check fails, continue with empty lists
+        # Only report files this turn actually changed (tracked by the agent).
+        # We intentionally do NOT fall back to the ambient git working tree:
+        # a simple question that edits nothing should show no change block,
+        # even when the repo already has unrelated uncommitted edits. Use
+        # ``:diff`` or the Changes sidebar to inspect the full working tree.
 
         # Keep prior turns in the log so users can scroll back through the
         # whole conversation (PgUp/PgDn). Instead of wiping the view each turn,
@@ -19171,11 +19359,12 @@ memory:
         if response_text.strip():
             log.write_final_response(response_text, agent=name, success=True)
 
-        # File changes are summarized in normal mode and expanded in verbose mode.
-        # This keeps the transcript compact while preserving the inline
-        # preview when the user opts into detailed work output.
+        # File changes are HIDDEN by default: a turn shows only a one-line
+        # summary the user can expand. The full file panel and inline diffs
+        # appear only in verbose mode (``:work verbose``); ``:diff`` opens the
+        # changes on demand. This keeps simple turns from dumping a diff block.
         change_mode = getattr(log, "tool_output_mode", "normal")
-        if files_modified and change_mode != "minimal":
+        if files_modified and change_mode == "verbose":
             from superqode.widgets.response_changes import (
                 render_file_changes_section,
                 render_inline_file_diffs,
@@ -19184,30 +19373,14 @@ memory:
             from io import StringIO
 
             changes_section = render_file_changes_section(files_modified, file_diffs, max_files=10)
-
             console = Console(file=StringIO(), width=120, legacy_windows=False)
             console.print(changes_section)
-            if change_mode == "verbose":
-                inline_diffs = render_inline_file_diffs(files_modified, file_diffs, max_files=10)
-                console.print(inline_diffs)
+            inline_diffs = render_inline_file_diffs(files_modified, file_diffs, max_files=10)
+            console.print(inline_diffs)
             log.write(console.file.getvalue())
-
-            if change_mode != "verbose":
-                compact = Text()
-                compact.append("  Diffs collapsed. Use ", style=SQ_COLORS.text_muted)
-                compact.append(":work verbose", style=f"bold {SQ_COLORS.info}")
-                compact.append(" or ", style=SQ_COLORS.text_muted)
-                compact.append(":diff", style=f"bold {SQ_COLORS.info}")
-                compact.append(" to inspect changes.\n\n", style=SQ_COLORS.text_muted)
-                log.write(compact)
-        elif files_modified and change_mode == "minimal":
-            compact = Text()
-            compact.append("  File details hidden (minimal mode). Use ", style=SQ_COLORS.text_muted)
-            compact.append(":work normal", style=f"bold {SQ_COLORS.info}")
-            compact.append(" or ", style=SQ_COLORS.text_muted)
-            compact.append(":diff", style=f"bold {SQ_COLORS.info}")
-            compact.append(" to inspect changes.\n\n", style=SQ_COLORS.text_muted)
-            log.write(compact)
+        elif files_modified:
+            # Collapsed one-liner (normal and minimal modes).
+            self._write_collapsed_changes_line(log, files_modified, file_diffs)
 
         footer = Text()
         footer.append("  Actions: ", style=SQ_COLORS.text_muted)
@@ -19247,20 +19420,8 @@ memory:
         files_read = summary.get("files_read", [])
         file_diffs = summary.get("file_diffs", {})  # NEW: Get diff data
 
-        # FALLBACK: Always check git for file changes if files_modified is empty
-        # This ensures file changes are detected even if agent tracking missed them
-        if not files_modified and not summary.get("skip_git_fallback"):
-            try:
-                root_path = Path(os.getcwd())
-                git_changes = get_git_changes(root_path)
-                files_modified = [
-                    change.path for change in git_changes if change.status in ("M", "A")
-                ]
-                if files_modified:
-                    # Compute file diffs for git-detected changes
-                    file_diffs = self._compute_file_diffs(files_modified)
-            except Exception:
-                pass  # If git check fails, continue with empty lists
+        # Only report files this turn actually changed (no ambient git-tree
+        # fallback); see _show_final_outcome for the rationale.
 
         # Disable auto-scroll
         log.auto_scroll = False
@@ -19300,37 +19461,23 @@ memory:
         t.append("\n", style="")
         log.write(t)
 
+        # Hidden by default: full file panel + inline diffs only in verbose
+        # mode; otherwise a single collapsed line (the compact summary above
+        # in ``t`` already names the count).
         change_mode = getattr(log, "tool_output_mode", "normal")
-        if files_modified and change_mode != "minimal":
+        if files_modified and change_mode == "verbose":
             from rich.console import Console
             from io import StringIO
             from superqode.widgets.response_changes import render_inline_file_diffs
 
             changes_section = render_file_changes_section(files_modified, file_diffs, max_files=10)
-
             console = Console(file=StringIO(), width=120, legacy_windows=False)
             console.print(changes_section)
-            if change_mode == "verbose":
-                inline_diffs = render_inline_file_diffs(files_modified, file_diffs, max_files=10)
-                console.print(inline_diffs)
+            inline_diffs = render_inline_file_diffs(files_modified, file_diffs, max_files=10)
+            console.print(inline_diffs)
             log.write(console.file.getvalue())
-
-            if change_mode != "verbose":
-                compact = Text()
-                compact.append("  Diffs collapsed. Use ", style=SQ_COLORS.text_muted)
-                compact.append(":work verbose", style=f"bold {SQ_COLORS.info}")
-                compact.append(" or ", style=SQ_COLORS.text_muted)
-                compact.append(":diff", style=f"bold {SQ_COLORS.info}")
-                compact.append(" to inspect changes.\n", style=SQ_COLORS.text_muted)
-                log.write(compact)
-        elif files_modified and change_mode == "minimal":
-            compact = Text()
-            compact.append("  File details hidden (minimal mode). Use ", style=SQ_COLORS.text_muted)
-            compact.append(":work normal", style=f"bold {SQ_COLORS.info}")
-            compact.append(" or ", style=SQ_COLORS.text_muted)
-            compact.append(":diff", style=f"bold {SQ_COLORS.info}")
-            compact.append(" to inspect changes.\n", style=SQ_COLORS.text_muted)
-            log.write(compact)
+        elif files_modified:
+            self._write_collapsed_changes_line(log, files_modified, file_diffs)
 
         # NEW: Trigger sidebar auto-navigation if files were modified
         if files_modified:
@@ -19807,7 +19954,7 @@ memory:
 
         Args:
             provider: Provider ID (e.g., "ollama", "anthropic")
-            model: Model name (e.g., "llama3.2:3b", "claude-opus-4-8")
+            model: Model name (e.g., "qwen3.6:35b-a3b", "claude-opus-4-8")
             log: Conversation log for output
             resolved_role: Optional ResolvedRole object for role-based connections
                           (used to inject job description into system prompt)
@@ -20482,9 +20629,68 @@ memory:
                 log.add_info("Use: :connect local <provider> <model>")
                 return
 
+        # MLX and llama.cpp serve exactly one model per process and are NOT
+        # always-on background apps like Ollama or LM Studio. Connecting alone
+        # would point at a dead endpoint, so if their server is not already up
+        # we launch it with the chosen model first, then connect.
+        if provider in ("mlx", "llama.cpp") and model:
+            try:
+                from superqode.local.servers import get_manager
+
+                running = bool(get_manager().status(provider).get("running"))
+            except Exception:
+                running = False
+            if not running:
+                self.run_worker(self._start_local_then_connect(provider, model, log))
+                return
+
         # Local providers use the same connection mechanism as BYOK
         # but are identified by ProviderCategory.LOCAL
         self._connect_byok_mode(provider, model, log)
+
+    async def _start_local_then_connect(self, provider: str, model: str, log: ConversationLog):
+        """Launch a one-model local server (MLX/llama.cpp), then connect to it."""
+        import asyncio
+
+        from superqode.local.servers import ServerError, get_manager
+
+        t0 = Text()
+        t0.append("\n  ⏳ ", style=THEME["warning"])
+        t0.append(f"Starting {provider} server", style=f"bold {THEME['text']}")
+        t0.append(f" with {model}", style=THEME["cyan"])
+        t0.append(" — loading the model into memory, this can take a minute...\n", style=THEME["muted"])
+        self._call_ui(log.write, t0)
+
+        self.is_busy = True
+        try:
+            # Large MLX models load slowly; give the server room before the
+            # readiness probe gives up. The picker only lists cached models, so
+            # we do not need allow_download here.
+            handle = await asyncio.to_thread(
+                get_manager().start, provider, model=model, timeout=300.0
+            )
+        except ServerError as exc:
+            self._call_ui(log.add_error, str(exc))
+            self._call_ui(
+                log.add_system,
+                f"Start it manually with: superqode local serve {provider} --model {model}",
+            )
+            return
+        except Exception as exc:  # noqa: BLE001
+            self._call_ui(log.add_error, f"Failed to start {provider}: {exc}")
+            return
+        finally:
+            self.is_busy = False
+
+        t = Text()
+        verb = "Adopted running" if getattr(handle, "adopted", False) else "Started"
+        t.append("  ● ", style=f"bold {THEME['success']}")
+        t.append(f"{verb} {provider}", style=f"bold {THEME['text']}")
+        t.append(f"  {handle.base_url}\n", style=THEME["cyan"])
+        self._call_ui(log.write, t)
+
+        # Server is up and holding the model; now wire SuperQode to it.
+        self._call_ui(self._connect_byok_mode, provider, model, log)
 
     def _show_local_provider_picker(self, log: ConversationLog, clear_log: bool = True):
         """Show interactive local provider picker with discovery.
@@ -21877,6 +22083,9 @@ memory:
         self._awaiting_local_model = True
         self._awaiting_byok_provider = False
         self._awaiting_byok_model = False
+        # Reset any stale inline prompts from a previous provider.
+        self._awaiting_local_server_start = None
+        self._awaiting_local_dep_install = None
 
         # Show experimental warning for vLLM and SGLang
         if provider_id in ("vllm", "sglang"):
@@ -21948,6 +22157,14 @@ memory:
             log.write(t)
             return
 
+        # llama.cpp (provider id "llamacpp") has no dedicated client class. Its
+        # server (llama-server) is OpenAI-compatible and serves one GGUF model
+        # the user launches themselves, so we list straight from its endpoint
+        # and connect. This avoids the old "not supported" dead-end.
+        if provider_id in ("llamacpp", "openai-compatible"):
+            await self._show_openai_compatible_models(provider_id, log)
+            return
+
         # Map provider ID to client class
         client_map = {
             "ds4": DS4Client,
@@ -21961,7 +22178,9 @@ memory:
 
         client_class = client_map.get(provider_id)
         if not client_class:
-            log.add_error(f"Local provider '{provider_id}' not yet supported")
+            log.add_error(f"Local provider '{provider_id}' is not yet supported")
+            # Don't dead-end: hand control back to the provider picker.
+            self._show_local_provider_picker(log)
             return
 
         # Create client and check availability
@@ -21974,70 +22193,13 @@ memory:
             # Try anyway - the list_models() call will handle errors gracefully
             pass
 
-        # Always show guidance for providers that need manual setup
-        if provider_id == "ds4":
-            t = Text()
-            if server_running:
-                t.append(f"\n  🟢 ", style=THEME["success"])
-                t.append(f"DS4 server is running\n", style=THEME["text"])
-            else:
-                t.append(f"\n  ⚠️  ", style=THEME["warning"])
-                t.append(f"DS4 server was not reachable\n", style=THEME["text"])
-                t.append(f"  Start ds4-server, then select a model again:\n", style=THEME["muted"])
-                t.append(
-                    f"    ./ds4-server --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192\n",
-                    style=THEME["cyan"],
-                )
-                t.append(f"  Override URL with DS4_HOST if needed.\n", style=THEME["dim"])
-
-            t.append(f"\n  DS4 models are local, free, and tool-capable.\n", style=THEME["muted"])
-            log.write(t)
-        elif provider_id == "mlx":
-            t = Text()
-            if server_running:
-                t.append(f"\n  🟢 ", style=THEME["success"])
-                t.append(f"MLX server is running\n", style=THEME["text"])
-            else:
-                t.append(f"\n  ⚠️  ", style=THEME["warning"])
-                t.append(f"MLX server is not running\n", style=THEME["text"])
-
-            t.append(f"\n  MLX requires starting a server for each model:\n", style=THEME["muted"])
-            t.append(
-                f"    mlx_lm.server --model mlx-community/Llama-3.2-1B-Instruct-4bit\n",
-                style=THEME["cyan"],
-            )
-            t.append(
-                f"    # Or get command: superqode providers mlx server --model <model>\n",
-                style=THEME["dim"],
-            )
-            t.append(f"    # Setup guide: superqode providers mlx setup\n", style=THEME["dim"])
-            log.write(t)
-        elif provider_id == "lmstudio":
-            t = Text()
-            if server_running:
-                t.append(f"\n  🟢 ", style=THEME["success"])
-                t.append(f"LM Studio server is running\n", style=THEME["text"])
-            else:
-                t.append(f"\n  ⚠️  ", style=THEME["warning"])
-                t.append(f"LM Studio server is not running\n", style=THEME["text"])
-
-            t.append(f"\n  LM Studio Setup (GUI Application):\n", style=THEME["muted"])
-            t.append(f"    1. Download: https://lmstudio.ai/\n", style=THEME["cyan"])
-            t.append(f"    2. Open LM Studio application\n", style=THEME["cyan"])
-            t.append(
-                f"    3. Download a model (search for 'qwen3-30b' or 'llama3.2-3b')\n",
-                style=THEME["cyan"],
-            )
-            t.append(f"    4. Load the model in LM Studio\n", style=THEME["cyan"])
-            t.append(
-                f"    5. Go to 'Local Server' tab → Click 'Start Server'\n", style=THEME["cyan"]
-            )
-            t.append(f"    6. Return here and select your model\n", style=THEME["dim"])
-            t.append(
-                "\n    💡 Server runs on http://localhost:1234/v1/chat/completions\n",
-                style=THEME["muted"],
-            )
-            log.write(t)
+        # State-aware setup guidance (running / installed-but-stopped / missing).
+        # Driven by ServerManager so the TUI matches `superqode local serve`.
+        # When it offers an inline start prompt, stop here and wait for the
+        # user's decision; models are listed after the server comes up.
+        if provider_id in ("ollama", "lmstudio", "mlx", "ds4"):
+            if await self._render_local_server_state(provider_id, log):
+                return
 
         # Get models - try discovery even if server check failed
         try:
@@ -22054,6 +22216,36 @@ memory:
             elif provider_id == "lmstudio":
                 log.add_info(f"LM Studio model discovery failed: {error_msg}")
                 log.add_info("Make sure LM Studio server is running with a model loaded")
+
+        # Filter out embedding / reranker models everywhere: they are not chat
+        # models and only confuse the picker (esp. LM Studio, which lists any
+        # loaded embedder on /v1/models).
+        from superqode.providers.local.base import is_embedding_model
+
+        filtered_embeddings = [m for m in models if is_embedding_model(m.id, m.name)]
+        models = [m for m in models if not is_embedding_model(m.id, m.name)]
+
+        # MLX serves one model per process, so when its server is not running
+        # `list_models()` (which queries the live endpoint) is empty. Fall back
+        # to the Hugging Face cache so the user can still pick a downloaded
+        # model; selecting it will launch the server with that model.
+        if provider_id == "mlx" and not models:
+            try:
+                seen: set[str] = set()
+                for info in MLXClient.discover_huggingface_models():
+                    mid = info.get("id", "")
+                    if not mid or mid in seen:
+                        continue
+                    seen.add(mid)
+                    models.append(MLXClient._model_from_cache(info, running=False))
+            except Exception:
+                pass
+
+        if filtered_embeddings and not models and provider_id == "lmstudio":
+            log.add_info(
+                "Only embedding models are loaded in LM Studio. Load a chat model: "
+                "lms load <model-key> -c <ctx>   (or pick one in the LM Studio app)"
+            )
 
         t = Text()
         t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
@@ -22144,13 +22336,14 @@ memory:
             t.append(f"  ○ No models found\n\n", style=THEME["muted"])
             if provider_id == "ollama":
                 t.append(f"  💡 Pull a model with:\n", style=THEME["muted"])
-                t.append(f"    ollama pull llama3.2\n", style=THEME["cyan"])
+                t.append(f"    ollama pull qwen3.6:35b-a3b\n", style=THEME["cyan"])
+                t.append(f"    # or browse trusted labs with :local labs\n", style=THEME["dim"])
             elif provider_id == "mlx":
                 t.append(
                     f"  💡 MLX requires starting a server for each model:\n", style=THEME["muted"]
                 )
                 t.append(
-                    f"    mlx_lm.server --model mlx-community/Llama-3.2-1B-Instruct-4bit\n",
+                    f"    mlx_lm.server --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit\n",
                     style=THEME["cyan"],
                 )
                 t.append(
@@ -22194,6 +22387,78 @@ memory:
             self._local_highlighted_model_index = 0
 
         # Ensure input stays focused for keyboard navigation
+        self.set_timer(0.05, self._ensure_input_focus)
+
+    async def _show_openai_compatible_models(self, provider_id: str, log: ConversationLog):
+        """List models from an OpenAI-compatible local server (llama.cpp, custom).
+
+        These servers (llama-server, vLLM-style, custom endpoints) expose
+        ``/v1/models`` and load their model at launch, so we read whatever is
+        currently served and let the user connect to it.
+        """
+        import asyncio
+        import os
+
+        from superqode.local.bench import list_endpoint_models
+        from superqode.providers.dynamic import resolve_provider_def
+        from superqode.providers.local.base import is_embedding_model
+
+        provider_def = resolve_provider_def(provider_id)
+        name = provider_def.name if provider_def else provider_id
+        base_url = ""
+        if provider_def:
+            if provider_def.base_url_env:
+                base_url = os.environ.get(provider_def.base_url_env, "") or ""
+            base_url = base_url or provider_def.default_base_url or ""
+        base_url = base_url or "http://localhost:8080/v1"
+
+        log.add_info(f"Checking {name} at {base_url}...")
+        try:
+            ids = await asyncio.to_thread(list_endpoint_models, base_url)
+        except Exception:
+            ids = []
+        models = [m for m in ids if not is_embedding_model(m)]
+
+        if not models:
+            t = Text()
+            t.append("\n  🟡 ", style=THEME["warning"])
+            t.append(f"No {name} server answering at {base_url}\n", style=f"bold {THEME['text']}")
+            t.append("  llama.cpp serves one GGUF model that you launch yourself:\n", style=THEME["muted"])
+            t.append("      llama-server -m /path/to/model.gguf --port 8080\n", style=THEME["cyan"])
+            t.append("  or let SuperQode manage it:\n", style=THEME["muted"])
+            t.append("      :local serve llama.cpp --model /path/to/model.gguf\n", style=THEME["cyan"])
+            t.append("  Then pick llama.cpp again to connect.\n", style=THEME["muted"])
+            log.write(t)
+            # Hand control back to the picker so this is never a hang.
+            self._show_local_provider_picker(log)
+            return
+
+        self._local_selected_provider = provider_id
+        self._local_model_list = models
+        self._local_cached_models = models
+        self._awaiting_local_model = True
+        self._awaiting_local_provider = False
+        if not hasattr(self, "_local_highlighted_model_index"):
+            self._local_highlighted_model_index = 0
+        highlighted_idx = getattr(self, "_local_highlighted_model_index", 0)
+
+        t = Text()
+        t.append(f"\n  🟢 {name}", style=f"bold {THEME['success']}")
+        t.append(f"  {base_url}\n", style=THEME["dim"])
+        t.append(f"  {len(models)} model(s) served\n\n", style=THEME["dim"])
+        for idx, model_id in enumerate(models, 1):
+            is_hl = (idx - 1) == highlighted_idx
+            marker = "  ▶ " if is_hl else "    "
+            style = f"bold {THEME['success']}" if is_hl else f"bold {THEME['text']}"
+            t.append(marker, style=f"bold {THEME['success']}")
+            t.append(f"[{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
+            t.append(model_id, style=style)
+            if is_hl:
+                t.append("  ← SELECTED", style=f"bold {THEME['success']}")
+            t.append("\n", style="")
+        t.append("\n  💡 ", style=THEME["muted"])
+        t.append("Select a model number or name to connect\n", style=THEME["text"])
+        log.write(t)
         self.set_timer(0.05, self._ensure_input_focus)
 
     def _redraw_local_provider_models(self, log: ConversationLog):
@@ -23720,6 +23985,14 @@ memory:
         elif sub == "models":
             # :local models - List all local models
             self.run_worker(self._local_models(log))
+        elif sub == "init":
+            self.run_worker(self._local_init(subargs, log))
+        elif sub == "smoke":
+            self.run_worker(self._local_smoke(subargs, log))
+        elif sub == "labs":
+            self.run_worker(self._local_labs(subargs, log))
+        elif sub == "warm":
+            self.run_worker(self._local_warm(subargs, log))
         elif sub == "test":
             # :local test <model> - Test tool calling
             if subargs:
@@ -23735,9 +24008,649 @@ memory:
         elif sub == "recommend":
             # :local recommend - Show recommended coding models
             self._local_recommend(log)
+        elif sub == "serve":
+            # :local serve <engine> [--model X] [--port N] [--ctx N]
+            if subargs:
+                self.run_worker(self._local_serve(subargs, log))
+            else:
+                log.add_info("Usage: :local serve <ollama|lmstudio|mlx|ds4|llama.cpp> [--model X] [--port N] [--ctx N] [--host H]")
+                log.add_system("e.g. :local serve mlx --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit --port 8090")
+                log.add_system("e.g. :local serve ds4 --ctx 200000   ·   :local serve ollama --ctx 16384")
+        elif sub == "servers":
+            # :local servers - Show managed/running server status
+            self.run_worker(self._local_servers(log))
+        elif sub == "stop":
+            # :local stop <engine> - Stop a server SuperQode started
+            if subargs:
+                self.run_worker(self._local_stop(subargs.strip(), log))
+            else:
+                log.add_info("Usage: :local stop <ollama|lmstudio|mlx|ds4|llama.cpp>")
         else:
             log.add_info(f"Unknown subcommand: {sub}")
-            log.add_system("Available: status, scan, models, test, info, recommend")
+            log.add_system(
+                "Available: init, smoke, labs, warm, status, scan, models, test, info, "
+                "recommend, serve, servers, stop"
+            )
+
+    @staticmethod
+    def _parse_local_kv_args(subargs: str) -> dict:
+        import shlex
+
+        opts: dict = {"_pos": []}
+        for tok in shlex.split(subargs or ""):
+            if tok.startswith("--repo="):
+                opts["repo"] = tok.split("=", 1)[1]
+            elif tok == "--repo":
+                opts["_expect"] = "repo"
+            elif tok.startswith("--output="):
+                opts["output"] = tok.split("=", 1)[1]
+            elif tok == "--output":
+                opts["_expect"] = "output"
+            elif tok.startswith("--engine="):
+                opts["engine"] = tok.split("=", 1)[1]
+            elif tok == "--engine":
+                opts["_expect"] = "engine"
+            elif tok.startswith("--model="):
+                opts["model"] = tok.split("=", 1)[1]
+            elif tok == "--model":
+                opts["_expect"] = "model"
+            elif tok.startswith("--endpoint="):
+                opts["endpoint"] = tok.split("=", 1)[1]
+            elif tok == "--endpoint":
+                opts["_expect"] = "endpoint"
+            elif tok in ("--skip-smoke", "--no-smoke"):
+                opts["skip_smoke"] = True
+            elif tok in ("--yes", "-y"):
+                opts["yes"] = True
+            elif opts.get("_expect"):
+                opts[opts.pop("_expect")] = tok
+            else:
+                opts["_pos"].append(tok)
+        opts.pop("_expect", None)
+        return opts
+
+    async def _local_init(self, subargs: str, log: ConversationLog):
+        """Run the MVP local setup path from the TUI."""
+        import asyncio
+
+        from superqode.local.doctor import generate_harness_yaml, render_report, run_doctor
+        from superqode.local.smoke import render_smoke, run_smoke
+
+        try:
+            opts = self._parse_local_kv_args(subargs)
+        except ValueError as exc:
+            log.add_error(f"Could not parse :local init arguments: {exc}")
+            return
+
+        repo = Path(opts.get("repo") or ".")
+        output = Path(opts.get("output") or "superqode.local.yaml")
+        if output.exists() and not opts.get("yes"):
+            log.add_error(f"{output} already exists. Use :local init --yes to overwrite.")
+            return
+
+        t0 = Text()
+        t0.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        t0.append("Local Coding Init\n\n", style=f"bold {THEME['text']}")
+        t0.append("  Detecting hardware, engines, trusted model routes, and repo shape...\n", style=THEME["muted"])
+        log.write(t0)
+
+        self.is_busy = True
+        try:
+            report = await asyncio.to_thread(run_doctor, str(repo), include_guardrails=True)
+            smoke = None
+            if not opts.get("skip_smoke"):
+                best = report.recommendation.best_model
+                chosen_engine = opts.get("engine") or report.recommendation.engine or ""
+                chosen_model = opts.get("model") or ""
+                if not chosen_model and best is not None:
+                    chosen_model = best.downloaded.bare_id if best.downloaded else best.pull.split()[-1]
+                smoke = await asyncio.to_thread(
+                    run_smoke,
+                    engine=chosen_engine,
+                    model=chosen_model,
+                    repo_path=repo,
+                )
+            harness = generate_harness_yaml(report, name="local-coder")
+            await asyncio.to_thread(output.write_text, harness, encoding="utf-8")
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Local init failed: {exc}")
+            return
+        finally:
+            self.is_busy = False
+
+        t = Text()
+        t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        t.append("Local Coding Init\n\n", style=f"bold {THEME['text']}")
+        for line in render_report(report).splitlines():
+            t.append(f"  {line}\n", style=f"bold {THEME['text']}" if line in {"Verdict", "Engines", "Recommended models"} or line.startswith("SuperQode") else THEME["text"])
+        if smoke is not None:
+            t.append("\n")
+            for line in render_smoke(smoke).splitlines():
+                t.append(f"  {line}\n", style=THEME["text"])
+        t.append("\n  Wrote local harness: ", style=THEME["muted"])
+        t.append(f"{output}\n", style=f"bold {THEME['success']}")
+        t.append("  Start coding with: ", style=THEME["muted"])
+        t.append(f"superqode --harness {output}\n", style=THEME["cyan"])
+        self._show_command_output(log, t)
+
+    async def _local_smoke(self, subargs: str, log: ConversationLog):
+        """Run the non-destructive local coding readiness test from the TUI."""
+        import asyncio
+
+        from superqode.local.smoke import render_smoke, run_smoke
+
+        try:
+            opts = self._parse_local_kv_args(subargs)
+        except ValueError as exc:
+            log.add_error(f"Could not parse :local smoke arguments: {exc}")
+            return
+        repo = opts.get("repo") or "."
+        log.add_info("Running local coding smoke test...")
+        self.is_busy = True
+        try:
+            report = await asyncio.to_thread(
+                run_smoke,
+                engine=opts.get("engine", ""),
+                endpoint=opts.get("endpoint", ""),
+                model=opts.get("model", ""),
+                repo_path=repo,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Local smoke failed: {exc}")
+            return
+        finally:
+            self.is_busy = False
+
+        t = Text()
+        t.append("\n")
+        for line in render_smoke(report).splitlines():
+            t.append(f"  {line}\n", style=THEME["text"])
+        self._show_command_output(log, t)
+
+    async def _local_labs(self, subargs: str, log: ConversationLog):
+        """Show trusted models.dev local labs in the TUI."""
+        import asyncio
+
+        from superqode.local.labs import list_curated_labs, list_lab_models
+
+        lab = (subargs or "").strip().split()[0] if (subargs or "").strip() else ""
+        t = Text()
+        t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        if not lab:
+            t.append("Trusted Local Model Labs\n\n", style=f"bold {THEME['text']}")
+            for item in list_curated_labs():
+                t.append(f"  {item.id:<10}", style=f"bold {THEME['cyan']}")
+                t.append(f"{item.name}\n", style=THEME["text"])
+                t.append(f"    {item.description}\n", style=THEME["dim"])
+            t.append("\n  Open one with: ", style=THEME["muted"])
+            t.append(":local labs zhipuai\n", style=THEME["cyan"])
+            self._show_command_output(log, t)
+            return
+
+        t.append(f"models.dev Lab: {lab}\n\n", style=f"bold {THEME['text']}")
+        try:
+            rows = await asyncio.to_thread(list_lab_models, lab)
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not load models.dev Labs data: {exc}")
+            return
+        for row in rows[:10]:
+            mark = "*" if row.recommended_for_local else "-"
+            t.append(f"  {mark} ", style=THEME["success"] if row.recommended_for_local else THEME["dim"])
+            t.append(f"{row.id}", style=f"bold {THEME['text']}")
+            traits = []
+            if row.open_weights:
+                traits.append("open")
+            if row.supports_tools:
+                traits.append("tools")
+            if row.supports_reasoning:
+                traits.append("reasoning")
+            if row.context_window:
+                traits.append(f"{row.context_window:,} ctx")
+            if traits:
+                t.append(f"  {' • '.join(traits)}", style=THEME["dim"])
+            t.append("\n", style="")
+            if row.recommended_for_local and row.install_hint:
+                t.append(f"      install: {row.install_hint}\n", style=THEME["cyan"])
+        self._show_command_output(log, t)
+
+    async def _local_warm(self, subargs: str, log: ConversationLog):
+        """Warm a local model and show first-token latency in the TUI."""
+        import asyncio
+
+        from superqode.local.bench import list_endpoint_models, run_bench
+        from superqode.local.servers import get_manager
+
+        try:
+            tokens = shlex.split(subargs or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :local warm arguments: {exc}")
+            return
+        if not tokens:
+            log.add_info("Usage: :local warm <engine> [--model MODEL]")
+            return
+        engine = tokens[0]
+        model = ""
+        if "--model" in tokens:
+            idx = tokens.index("--model")
+            if idx + 1 < len(tokens):
+                model = tokens[idx + 1]
+        status = get_manager().status(engine)
+        if not status.get("running"):
+            log.add_error(f"{engine} is not running. Start it with :local serve {engine}")
+            return
+        endpoint = status["base_url"]
+        if not model:
+            models = await asyncio.to_thread(list_endpoint_models, endpoint)
+            if not models:
+                log.add_error(f"No models found at {endpoint}; pass --model explicitly")
+                return
+            model = models[0]
+        log.add_info(f"Warming {model} at {endpoint} ...")
+        self.is_busy = True
+        try:
+            result = await asyncio.to_thread(
+                run_bench,
+                endpoint,
+                model,
+                prompt="Reply with exactly: ok",
+                max_tokens=8,
+            )
+        finally:
+            self.is_busy = False
+        if not result.ok:
+            log.add_error(result.error or "warmup request failed")
+            return
+        t = Text()
+        t.append("\n  ● ", style=f"bold {THEME['success']}")
+        t.append(f"ready: {model}\n", style=f"bold {THEME['text']}")
+        tps = f"{result.decode_tps} tok/s" if result.decode_tps is not None else "n/a"
+        t.append(f"  TTFT {result.ttft_s}s · decode {tps} · total {result.total_s}s\n", style=THEME["text"])
+        self._show_command_output(log, t)
+
+    @staticmethod
+    def _parse_serve_args(subargs: str) -> tuple[str, dict]:
+        """Parse ``<engine> [--model X] [--port N] [--ctx N] [--host H]``."""
+        import shlex
+
+        tokens = shlex.split(subargs)
+        engine = tokens[0] if tokens else ""
+        opts: dict = {}
+        i = 1
+        while i < len(tokens):
+            tok = tokens[i]
+            if tok in ("--model", "-m") and i + 1 < len(tokens):
+                opts["model"] = tokens[i + 1]
+                i += 2
+            elif tok in ("--port", "-p") and i + 1 < len(tokens):
+                opts["port"] = int(tokens[i + 1])
+                i += 2
+            elif tok == "--ctx" and i + 1 < len(tokens):
+                opts["ctx"] = int(tokens[i + 1])
+                i += 2
+            elif tok == "--host" and i + 1 < len(tokens):
+                opts["host"] = tokens[i + 1]
+                i += 2
+            elif tok in ("--allow-download", "-y"):
+                opts["allow_download"] = True
+                i += 1
+            else:
+                i += 1
+        return engine, opts
+
+    async def _local_serve(self, subargs: str, log: ConversationLog):
+        """Start a local model server from the TUI as a managed daemon."""
+        import asyncio
+
+        from superqode.local.servers import SPECS, ServerError, get_manager
+
+        try:
+            engine, opts = self._parse_serve_args(subargs)
+        except ValueError:
+            log.add_error("Bad value for --port/--ctx (must be a number)")
+            return
+        if engine not in SPECS:
+            log.add_error(f"Unknown engine: {engine}")
+            log.add_system(f"Available: {', '.join(SPECS)}")
+            return
+
+        manager = get_manager()
+        if not manager.is_running(engine, opts.get("host"), opts.get("port")) and not manager.is_installed(engine):
+            log.add_error(f"{engine} is not installed on this machine")
+            return
+
+        log.add_info(f"Starting {engine} server (this may take a moment while it binds)...")
+        try:
+            handle = await asyncio.to_thread(manager.start, engine, **opts)
+        except ServerError as exc:
+            log.add_error(str(exc))
+            return
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Failed to start {engine}: {exc}")
+            return
+
+        verb = "Adopted running" if handle.adopted else "Started"
+        t = Text()
+        t.append("  ● ", style=f"bold {THEME['success']}")
+        t.append(f"{verb} {engine}", style=f"bold {THEME['text']}")
+        t.append(f"  {handle.base_url}\n", style=THEME["cyan"])
+        if handle.pid:
+            t.append(f"      pid {handle.pid} · log {handle.log_path}\n", style=THEME["dim"])
+        for note in handle.notes:
+            t.append(f"      • {note}\n", style=THEME["muted"])
+        t.append("      Connect with: ", style=THEME["muted"])
+        t.append(f":connect {engine}\n", style=THEME["success"])
+        log.write(t)
+
+    async def _local_servers(self, log: ConversationLog):
+        """Show status of every known local server."""
+        import asyncio
+
+        from superqode.local.servers import get_manager
+
+        rows = await asyncio.to_thread(get_manager().list_all)
+        t = Text()
+        t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
+        t.append("Local Servers\n\n", style=f"bold {THEME['text']}")
+        for row in rows:
+            if row["running"]:
+                t.append("  ● ", style=f"bold {THEME['success']}")
+                state = "managed" if row["managed"] else "running"
+            else:
+                t.append("  ○ ", style=THEME["muted"])
+                state = "stopped"
+            t.append(f"{row['engine']:<10}", style=f"bold {THEME['text']}")
+            t.append(f" {state:<8}", style=THEME["muted"])
+            t.append(f" {row['base_url']}", style=THEME["dim"])
+            if row["pid"]:
+                t.append(f"  pid {row['pid']}", style=THEME["dim"])
+            t.append("\n", style="")
+        t.append(f"\n  💡 ", style=THEME["muted"])
+        t.append(":local serve <engine>", style=THEME["success"])
+        t.append(" to start one\n", style=THEME["muted"])
+        log.write(t)
+
+    async def _local_stop(self, engine: str, log: ConversationLog):
+        """Stop a server SuperQode started (adopted servers are left running)."""
+        import asyncio
+
+        from superqode.local.servers import SPECS, get_manager
+
+        if engine not in SPECS:
+            log.add_error(f"Unknown engine: {engine}")
+            return
+        stopped = await asyncio.to_thread(get_manager().stop, engine)
+        if stopped:
+            log.add_info(f"Stopped {engine}")
+        else:
+            log.add_info(f"Nothing to stop for {engine} (not managed by SuperQode)")
+
+    _LOCAL_ENGINE_NAMES = {
+        "ollama": "Ollama",
+        "lmstudio": "LM Studio",
+        "mlx": "MLX",
+        "ds4": "DS4",
+        "llama.cpp": "llama.cpp",
+    }
+
+    async def _render_local_server_state(self, engine: str, log: ConversationLog) -> bool:
+        """Tell the developer whether the server is up, stopped, or not installed.
+
+        Three outcomes:
+          running   -> green confirmation; returns False so models load below.
+          stopped   -> installed; for engines that start without a model arg,
+                       set up an inline "press Enter to start" prompt and return
+                       True (caller stops and waits for the decision). Otherwise
+                       show the typed start command and return False.
+          missing   -> not installed; show the install guide, return False.
+
+        Returns True when an inline start prompt is now awaiting user input.
+        """
+        import asyncio
+
+        from superqode.local.servers import SPECS, get_manager
+
+        manager = get_manager()
+        readiness = await asyncio.to_thread(manager.precheck, engine)
+        name = self._LOCAL_ENGINE_NAMES.get(engine, engine)
+
+        t = Text()
+        if readiness.state == "running":
+            t.append("\n  🟢 ", style=THEME["success"])
+            t.append(f"{name} server is running", style=f"bold {THEME['text']}")
+            t.append(f"  {readiness.base_url}\n", style=THEME["dim"])
+            if engine == "ds4":
+                t.append("  DS4 models are local, free, and tool-capable.\n", style=THEME["muted"])
+            log.write(t)
+            return False
+
+        # Per-engine note on what --ctx does, reused below.
+        ctx_note = {
+            "ollama": "--ctx sets OLLAMA_CONTEXT_LENGTH",
+            "lmstudio": "--ctx applies when the model loads (lms load -c)",
+            "ds4": "--ctx sets the KV window",
+            "mlx": "context is fixed by the model (no --ctx)",
+            "llama.cpp": "--ctx maps to -c",
+        }.get(engine, "")
+
+        if readiness.state == "stopped":
+            # Engines that bind a server without needing a model id up front can
+            # be started right here with one key.
+            startable = not readiness.needs_model
+            default_port = SPECS[engine].default_port
+
+            t.append("\n  🟡 ", style=THEME["warning"])
+            t.append(f"{name} is installed but the server isn't running\n", style=f"bold {THEME['text']}")
+
+            if startable:
+                self._awaiting_local_server_start = engine
+                # The inline start prompt owns the next input, not model select.
+                self._awaiting_local_model = False
+                t.append("  ▶ Press ", style=THEME["muted"])
+                t.append("Enter", style=f"bold {THEME['success']}")
+                t.append(f" to start it now on port {default_port}", style=THEME["muted"])
+                t.append("   ·   ", style=THEME["dim"])
+                t.append("'n'", style=THEME["warning"])
+                t.append(" to skip\n", style=THEME["muted"])
+                t.append("    Custom: type ", style=THEME["muted"])
+                t.append("port=8090 ctx=8192", style=THEME["cyan"])
+                if ctx_note:
+                    t.append(f"   ({ctx_note})", style=THEME["dim"])
+                t.append("\n", style="")
+                if engine == "lmstudio":
+                    t.append(
+                        "    Tip: add model=<key> to load a model at that context.\n",
+                        style=THEME["dim"],
+                    )
+                log.write(t)
+                return True
+
+            # Needs a model id (mlx / llama.cpp): show the typed command instead.
+            t.append("  Start it with: ", style=THEME["muted"])
+            t.append(f"{readiness.start_hint}", style=f"bold {THEME['success']}")
+            t.append(" --port <N>\n", style=THEME["cyan"])
+            if ctx_note:
+                t.append(f"    ({ctx_note})\n", style=THEME["dim"])
+            t.append(
+                "    (mlx/llama.cpp load one model per server; pass its id/path)\n",
+                style=THEME["dim"],
+            )
+            log.write(t)
+            return False
+
+        # missing
+        # MLX is a single pip dependency we can install for the user (with
+        # consent) right here, into the same env that runs SuperQode.
+        import platform as _platform
+        import sys
+
+        apple_silicon = sys.platform == "darwin" and _platform.machine() == "arm64"
+        if engine == "mlx" and apple_silicon:
+            from superqode.local.servers import MLX_REQUIREMENT
+
+            self._awaiting_local_dep_install = "mlx"
+            self._awaiting_local_model = False
+            t.append("\n  🔴 ", style=THEME["error"])
+            t.append("MLX (mlx-lm) is not installed in this environment\n", style=f"bold {THEME['text']}")
+            t.append("  ▶ Press ", style=THEME["muted"])
+            t.append("Enter", style=f"bold {THEME['success']}")
+            t.append(" to install it now", style=THEME["muted"])
+            t.append("   ·   ", style=THEME["dim"])
+            t.append("'n'", style=THEME["warning"])
+            t.append(" to skip\n", style=THEME["muted"])
+            t.append("    Runs: ", style=THEME["muted"])
+            t.append(f"uv pip install '{MLX_REQUIREMENT}'", style=THEME["cyan"])
+            t.append(f"  into {sys.executable}\n", style=THEME["dim"])
+            log.write(t)
+            return True
+
+        t.append("\n  🔴 ", style=THEME["error"])
+        t.append(f"{name} is not installed\n\n", style=f"bold {THEME['text']}")
+        for line in readiness.install_guide:
+            t.append(f"  {line}\n", style=THEME["cyan"] if line.strip().startswith(("brew", "uv", "curl", "npx", "superqode", "cd", "ollama")) else THEME["muted"])
+        t.append("\n  Once installed, start it with: ", style=THEME["muted"])
+        t.append(f"{readiness.start_hint}\n", style=f"bold {THEME['success']}")
+        log.write(t)
+        return False
+
+    def _handle_local_server_start_input(self, text: str, log: ConversationLog) -> bool:
+        """Handle the inline start prompt for a stopped local server.
+
+        Enter           -> start with engine defaults
+        n / no / skip    -> cancel, leave the server stopped
+        port=N ctx=N ... -> start with those overrides (also accepts a bare port)
+        """
+        engine = getattr(self, "_awaiting_local_server_start", None)
+        if not engine:
+            return False
+
+        from superqode.local.servers import parse_inline_start
+
+        action, opts, error = parse_inline_start(text)
+        if action == "cancel":
+            self._awaiting_local_server_start = None
+            t = Text()
+            t.append("\n  ⏭  ", style=THEME["warning"])
+            t.append(f"Left {engine} stopped.", style=f"bold {THEME['text']}")
+            t.append(f" Start it anytime with :local serve {engine}\n", style=THEME["muted"])
+            log.write(t)
+            # Re-open the provider picker so this is not a dead end.
+            self._show_local_provider_picker(log)
+            return True
+        if action == "error":
+            log.add_error(
+                f"{error}. Press Enter for defaults, type 'port=8090 ctx=8192', or 'n' to skip."
+            )
+            return True  # keep the prompt active
+
+        self._awaiting_local_server_start = None
+        self.run_worker(self._start_local_server_then_list(engine, opts, log))
+        return True
+
+    def _handle_local_dep_install_input(self, text: str, log: ConversationLog) -> bool:
+        """Handle the inline 'install mlx-lm?' prompt. Enter=install, n=skip."""
+        engine = getattr(self, "_awaiting_local_dep_install", None)
+        if not engine:
+            return False
+
+        low = text.strip().lower()
+        if low in ("n", "no", "skip", "cancel", "q"):
+            self._awaiting_local_dep_install = None
+            t = Text()
+            t.append("\n  ⏭  ", style=THEME["warning"])
+            t.append(f"Skipped installing {engine}.", style=f"bold {THEME['text']}")
+            t.append(" Pick another provider below, or install later with:\n", style=THEME["muted"])
+            t.append("      uv tool install superqode --reinstall --with mlx-lm\n", style=THEME["cyan"])
+            log.write(t)
+            # Re-open the provider picker so this is not a dead end.
+            self._show_local_provider_picker(log)
+            return True
+        if low not in ("", "y", "yes", "install", "ok"):
+            log.add_error("Press Enter to install, or 'n' to skip.")
+            return True  # keep the prompt active
+
+        self._awaiting_local_dep_install = None
+        self.run_worker(self._install_local_dep_then_continue(engine, log))
+        return True
+
+    async def _install_local_dep_then_continue(self, engine: str, log: ConversationLog):
+        """Install a missing engine dependency (mlx-lm), then re-list models."""
+        import asyncio
+
+        from superqode.local.servers import install_mlx
+
+        t0 = Text()
+        t0.append("\n  ⏳ ", style=THEME["warning"])
+        t0.append("Installing mlx-lm", style=f"bold {THEME['text']}")
+        t0.append(" — this downloads a few packages, please wait...\n", style=THEME["muted"])
+        log.write(t0)
+
+        self.is_busy = True
+        try:
+            ok, message = await asyncio.to_thread(install_mlx)
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Install failed: {exc}")
+            return
+        finally:
+            self.is_busy = False
+
+        if not ok:
+            log.add_error(f"Could not install mlx-lm: {message}")
+            log.add_system("Install manually: uv tool install superqode --reinstall --with mlx-lm")
+            return
+
+        t = Text()
+        t.append("  ✓ ", style=f"bold {THEME['success']}")
+        t.append("mlx-lm installed", style=f"bold {THEME['text']}")
+        t.append(" — now pick a cached MLX model below.\n", style=THEME["muted"])
+        log.write(t)
+
+        # Re-enter the picker: MLX is now installed, so it lists models.
+        await self._show_local_provider_models(engine, log)
+
+    async def _start_local_server_then_list(self, engine: str, opts: dict, log: ConversationLog):
+        """Start a local server from the inline prompt, then list its models."""
+        import asyncio
+
+        from superqode.local.servers import ServerError, get_manager
+
+        detail = ""
+        if opts:
+            detail = " (" + ", ".join(f"{k}={v}" for k, v in opts.items()) + ")"
+
+        # Immediate, visible acknowledgement so the user knows we are working.
+        t0 = Text()
+        t0.append("\n  ⏳ ", style=THEME["warning"])
+        t0.append(f"Starting {engine}{detail}", style=f"bold {THEME['text']}")
+        t0.append(" — launching the server and waiting for it to bind...\n", style=THEME["muted"])
+        log.write(t0)
+
+        # Drive the footer throbber while the (blocking) start runs in a thread.
+        self.is_busy = True
+        try:
+            handle = await asyncio.to_thread(get_manager().start, engine, **opts)
+        except ServerError as exc:
+            log.add_error(str(exc))
+            log.add_system(f"Tip: start it manually with :local serve {engine}")
+            return
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Failed to start {engine}: {exc}")
+            return
+        finally:
+            self.is_busy = False
+
+        verb = "Adopted running" if handle.adopted else "Started"
+        t = Text()
+        t.append("  ● ", style=f"bold {THEME['success']}")
+        t.append(f"{verb} {engine}", style=f"bold {THEME['text']}")
+        t.append(f"  {handle.base_url}\n", style=THEME["cyan"])
+        if handle.pid:
+            t.append(f"      pid {handle.pid} · log {handle.log_path}\n", style=THEME["dim"])
+        for note in handle.notes:
+            t.append(f"      • {note}\n", style=THEME["muted"])
+        log.write(t)
+
+        # Now that the server is up, list its models in the same picker.
+        await self._show_local_provider_models(engine, log)
 
     async def _local_status(self, log: ConversationLog):
         """Show status of all local providers."""
@@ -23875,7 +24788,9 @@ memory:
         if total == 0:
             t.append(f"  ○ No models found\n", style=THEME["muted"])
             t.append(f"  💡 Pull a model with: ", style=THEME["muted"])
-            t.append("ollama pull llama3.2\n", style=THEME["cyan"])
+            t.append("ollama pull qwen3.6:35b-a3b\n", style=THEME["cyan"])
+            t.append("  Trusted recommendations: ", style=THEME["muted"])
+            t.append(":local labs\n", style=THEME["cyan"])
 
         t.append(f"\n  💡 ", style=THEME["muted"])
         t.append(":local test <model>", style=THEME["success"])
@@ -26008,6 +26923,10 @@ memory:
                 THEME["orange"],
                 [
                     (":local", "Show local provider status"),
+                    (":local init", "Generate a local harness and run readiness smoke"),
+                    (":local smoke", "Run non-destructive local coding readiness checks"),
+                    (":local labs", "Browse trusted models.dev local model labs"),
+                    (":local warm <engine>", "Warm a model and measure first-token latency"),
                     (":local scan", "Scan for running local providers"),
                     (":local models", "List all available local models"),
                     (":local test <model>", "Test tool calling with a local model"),
@@ -26019,6 +26938,9 @@ memory:
                 "🔍 Search & Context (local-optimized)",
                 THEME["cyan"],
                 [
+                    (":chat", "Raw direct-to-model chat: no repo context, no tools, shows TTFT + tok/s"),
+                    (":chat off", "Leave chat mode and return to the full coding harness"),
+                    (":chat clear", "Clear the chat-mode conversation buffer"),
                     (":context", "Show the detected context window + compaction budgets"),
                     (":context <tokens>", "Pin the context window (e.g. :context 8192 / 16k)"),
                     (":context auto", "Re-detect the loaded window from the local server"),
@@ -26143,7 +27065,7 @@ memory:
                     (":memory search specmem <q>", "Search .specmem Agent Experience Pack files"),
                     (":memory forget <id>", "Delete a local memory"),
                     (":memory export [provider]", "Export local or SpecMem memory JSON"),
-                    (":local", "Local Agentic Coding doctor: engine + model for this machine"),
+                    (":local init", "Local Agentic Coding setup: harness + smoke test"),
                     (":local packs", "List model policy packs (tuned open-model defaults)"),
                     (":benchmark", "Show benchmark target readiness and CLI usage"),
                 ],

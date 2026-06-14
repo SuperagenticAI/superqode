@@ -323,6 +323,7 @@ class LocalProviderClient(ABC):
 # Model family detection patterns
 MODEL_FAMILIES = {
     "llama": ["llama", "codellama", "tinyllama"],
+    "glm": ["glm"],
     "qwen": ["qwen"],
     "mistral": ["mistral", "mixtral"],
     "phi": ["phi"],
@@ -347,6 +348,7 @@ MODEL_FAMILIES = {
 # Models known to support tool calling
 TOOL_CAPABLE_FAMILIES = {
     "llama",  # Llama 3.1+ / Llama 4
+    "glm",  # GLM 4.x / 5.x
     "qwen",  # Qwen 2.5 / 3 / 3.5
     "mistral",  # Mistral/Mixtral
     "deepseek",  # DeepSeek
@@ -371,6 +373,32 @@ def detect_model_family(model_id: str) -> str:
             if pattern in model_lower:
                 return family
     return "unknown"
+
+
+_EMBEDDING_MARKERS = (
+    "embed",  # text-embedding-*, nomic-embed-text, *-embedding-*
+    "bge-",
+    "bge_",
+    "gte-",
+    "e5-",
+    "e5_",
+    "all-minilm",
+    "all_minilm",
+    "minilm-",
+    "sentence-transformers",
+    "rerank",  # rerankers are also not chat models
+)
+
+
+def is_embedding_model(model_id: str, name: str = "") -> bool:
+    """Heuristically decide if a model is an embedding/reranker, not a chat model.
+
+    LM Studio (and others) report loaded embedding models on /v1/models. They
+    are useless as a coding model and only clutter the picker, so we filter
+    them out of the model lists shown to the user.
+    """
+    text = f"{model_id} {name}".lower()
+    return any(marker in text for marker in _EMBEDDING_MARKERS)
 
 
 def detect_quantization(model_id: str) -> str:
@@ -439,6 +467,11 @@ def likely_supports_tools(model_id: str) -> bool:
     if family == "qwen":
         # Qwen 2.5 / 3 / 3.5 support tools well.
         return any(v in norm for v in ("qwen2.5", "qwen-2.5", "qwen3", "qwen-3"))
+
+    if family == "glm":
+        # GLM 4.x/5.x instruction models expose tool/structured-call paths on
+        # modern OpenAI-compatible runtimes.
+        return any(v in norm for v in ("glm4", "glm-4", "glm5", "glm-5"))
 
     if family == "gemma":
         # Gemma 4 has native function calling (6 special tokens, all IT models);

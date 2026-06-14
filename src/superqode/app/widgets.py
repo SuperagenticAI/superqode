@@ -172,7 +172,7 @@ class ColorfulStatusBar(Static):
             result.append(char, style=f"bold {color}")
         result.append(" ✨", style="bold #fbbf24")
         result.append(" ", style="")
-        result.append("Your Portable Universal Coding Agent Harness", style="")
+        result.append("Your Portable Local Agentic Coding Harness", style="")
 
         # BYOK status (if connected)
         if self.byok_provider:
@@ -574,17 +574,6 @@ class StreamingThinkingIndicator(Static):
         result = Text()
 
         spinner_idx = int(t * 10) % len(self.SPINNER_FRAMES)
-
-        # Steady status (normal mode) - calm spinner + fixed label, no confetti.
-        if self.status:
-            color = "#a855f7"
-            result.append(f"  {self.SPINNER_FRAMES[spinner_idx]} ", style=f"bold {color}")
-            result.append(self.status, style=f"bold {color}")
-            dots = "." * (int(t * 2) % 4)
-            result.append(dots, style=color)
-            result.append("   ", style="")
-            return result
-
         phrase_idx = int(t / 1.5) % len(self.THINKING_PHRASES)
 
         colors = [
@@ -609,6 +598,16 @@ class StreamingThinkingIndicator(Static):
         sparkle = sparkles[int(t * 2) % len(sparkles)]
 
         result.append(f"  {spinner} ", style=f"bold {color}")
+
+        # Steady status (e.g. "Working… (step 2)") leads when set, but the
+        # rotating whimsical phrase + sparkle still ride alongside it so the
+        # agent path animates like chat mode does.
+        if self.status:
+            status_color = "#a855f7"
+            result.append(self.status, style=f"bold {status_color}")
+            result.append("." * (int(t * 2) % 4), style=status_color)
+            result.append("  ·  ", style="#52525b")
+
         result.append(phrase, style=f"bold {color}")
         result.append(dots, style=color)
         result.append(f" {sparkle}", style=color)
@@ -714,10 +713,8 @@ class ModeBadge(Static):
             t.append("  ", style="")
             t.append(f"{approval_icon}", style=approval_color)
         else:
-            t.append(f" 🏠 ", style=f"bold {THEME['purple']}")
-            t.append("HOME", style=f"bold {THEME['purple']} reverse")
-            t.append("    ", style="")
-            t.append("ready to code", style=f"dim {THEME['muted']}")
+            t.append("🏠 ", style=f"bold {THEME['purple']}")
+            t.append("SUPERQODE", style=f"bold {THEME['purple']}")
 
         return t
 
@@ -738,7 +735,6 @@ class HintsBar(Static):
             ("🧩 :harness", THEME["purple"]),
             ("🧠 :memory", THEME["cyan"]),
             ("🏠 :home", THEME["cyan"]),
-            ("🔎 Ctrl+T detail", THEME["gold"]),
             ("❓ :help", THEME["purple"]),
             ("👋 :exit", THEME["orange"]),
         ]

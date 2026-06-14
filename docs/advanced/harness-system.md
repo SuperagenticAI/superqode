@@ -7,7 +7,10 @@ run is allowed to do, which model policy to use, which tools are available, how 
 are stored, and what output should be returned.
 
 !!! tip "New to harnesses?"
-    [Configuration vs Harness](../concepts/configuration-vs-harness.md) explains how `harness.yaml` differs from `superqode.yaml`, walks the full lifecycle from `harness init` to `harness events`, and lists every surface a harness runs on (CLI, TUI, workflows, MCP, A2A, Python). This page is the detailed spec reference.
+    [Bring Your Own Harness](../getting-started/bring-your-own-harness.md) is the friendly, step-by-step guide: create a harness, read it in plain English with `harness explain`, edit it, verify it, and run it against a local model. [Configuration vs Harness](../concepts/configuration-vs-harness.md) explains how `harness.yaml` differs from `superqode.yaml`, walks the full lifecycle from `harness init` to `harness events`, and lists every surface a harness runs on (CLI, TUI, workflows, MCP, A2A, Python). This page is the detailed spec reference.
+
+!!! tip "Explain any harness in plain English"
+    `superqode harness explain --spec harness.yaml` reads the resolved policy (the same one the runtime enforces) and describes, in words, which tools the model gets, what it may read/write/run, how approvals work, and why a given tool-call format was chosen.
 
 ---
 
@@ -303,10 +306,14 @@ runtimes.
 
 | Profile | Defaults |
 | --- | --- |
+| `qwen-coding` | Qwen Coder pack: low temperature, native tools, long agentic sessions, sequential tools |
+| `glm-coding` | GLM pack: native tools, longer history budget, sequential tools |
 | `gemma4-coding` | minimal prompt, compact local tool surface, strict JSON tool-call hints, low temperature, sequential tools |
 | `gemma4-no-tool` | model-only prompt, no tools, low temperature, short history, reasoning disabled where supported |
 | `ds4-coding` | DS4 prompt path, compact tool surface, low temperature, low reasoning, sequential tools |
 | `ds4-fast-local` | DS4 coding with tighter iteration and history budgets for fast local loops |
+
+The `qwen-coding` and `glm-coding` templates set `model_policy.pack`, so the matching model-policy pack (temperature, parallel-tools, history budget) is layered on automatically. List every built-in template with `superqode harness list-templates`.
 
 No-tool policy also sets `reasoning=off`. For Anthropic-shape providers such as DS4, this maps to the provider
 thinking-disable field. Providers without that capability ignore the setting safely.

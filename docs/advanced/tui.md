@@ -33,17 +33,19 @@ superqode --harness harness.yaml
 Use this flow for a normal coding session:
 
 1. Launch from the project root.
-2. Connect a provider, ACP agent, or local model with `:connect`.
-3. Load a harness with `:harness harness.yaml` when you want portable policy.
-4. Type a focused prompt and press `Enter`.
-5. Approve or reject pending tool calls.
-6. Ask for a summary of changed files and tests.
+2. For local coding, run `:local init` to generate `superqode.local.yaml` and a readiness report.
+3. Connect a provider, ACP agent, or local model with `:connect`.
+4. Load a harness with `:harness superqode.local.yaml` when you want portable policy.
+5. Type a focused prompt and press `Enter`.
+6. Approve or reject pending tool calls.
+7. Ask for a summary of changed files and tests.
 
 Example:
 
 ```text
 :connect
-:harness harness.yaml
+:local init
+:harness superqode.local.yaml
 :status
 Summarize this repository and suggest the smallest safe improvement.
 Find one low-risk cleanup, make the smallest fix, and run the narrowest useful test.
@@ -100,6 +102,10 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:connect` - Connect to provider/agent
 - `:connect local` - Open the local provider picker
 - `:connect byok` - Open the BYOK provider picker
+- `:local init` - Generate `superqode.local.yaml` and run local readiness checks
+- `:local smoke` - Run non-destructive local coding readiness checks
+- `:local labs` - Browse trusted models.dev Labs recommendations
+- `:local warm <engine>` - Warm a local model and show first-token latency
 - `:harness <path>` - Load a HarnessSpec
 - `:harness status` - Show the active harness
 - `:harness templates` - List built-in harness templates

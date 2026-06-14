@@ -8,7 +8,7 @@
 <h1 align="center">SuperQode</h1>
 
 <p align="center">
-  <strong>Portable Coding Agent Harness Framework</strong><br>
+  <strong>Your Portable Local Agentic Coding Harness</strong><br>
   <em>Turn open models into serious coding agents. Your harness, your models, your memory. Built for Local Agentic Coding, connected to everything else through BYOK, ACP, agent SDKs, MCP, and A2A.</em>
 </p>
 
@@ -35,9 +35,9 @@
 
 ## What is SuperQode?
 
-SuperQode is the **Portable Coding Agent Harness Framework** built to be the first choice for **Local Agentic Coding**: agentic software engineering on open models running on your own hardware. Define your own harness, connect any agent: local models, BYOK providers, ACP agents, or A2A workflows. It is the only harness that supports all major protocols (ACP + MCP + A2A) with deep local model optimization.
+SuperQode is **Your Portable Local Agentic Coding Harness**, built to be the first choice for **Local Agentic Coding**: agentic software engineering on open models running on your own hardware. Define your own harness, connect any agent: local models, BYOK providers, ACP agents, or A2A workflows. It is the only harness that supports all major protocols (ACP + MCP + A2A) with deep local model optimization.
 
-Run `superqode local doctor` and SuperQode detects your hardware, picks the right engine and model, and generates a tuned harness for your machine. Run `superqode local optimize` to benchmark local/open candidates and generate per-role routing for planner, implementer, reviewer, and utility agents.
+Run `superqode` for the terminal workbench, then `:local init` to detect your hardware, pick trusted model routes, generate a tuned harness, and run a readiness smoke test. The CLI mirrors the same path with `superqode local init --repo .`. Run `superqode local optimize` when you want to benchmark local/open candidates and generate per-role routing for planner, implementer, reviewer, and utility agents.
 
 One TUI and CLI, consistent tool policies, event logging, and session management across every agent type. Define your harness once as a portable spec. Swap runtimes, models, or tools without changing your workflow. Run the same contract locally, on a team machine, or in CI.
 
@@ -85,6 +85,15 @@ curl -fsSL https://super-agentic.ai/install.sh | bash
 ```bash
 cd your-project
 superqode
+```
+
+Inside the TUI, the local-first MVP path is:
+
+```text
+:local init          # detect hardware, generate superqode.local.yaml, run smoke when possible
+:local labs          # browse trusted models.dev Labs recommendations
+:connect local       # pick Ollama, LM Studio, MLX, DS4, vLLM, or SGLang
+:harness superqode.local.yaml
 ```
 
 **Headless coding harness**

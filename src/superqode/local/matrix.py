@@ -27,6 +27,7 @@ class ModelCandidate:
     pull: str
     role: str = "main"
     pack: str = ""
+    source: str = ""
     downloaded: Optional[LocalModel] = None
 
 
@@ -123,6 +124,7 @@ def recommend(
             pull=str(raw.get("pull", "")),
             role=str(raw.get("role", "main")),
             pack=str(raw.get("pack", "")),
+            source=str(raw.get("source", "")),
         )
         candidate.downloaded = _find_downloaded(candidate.match, inventory)
         candidates.append(candidate)
