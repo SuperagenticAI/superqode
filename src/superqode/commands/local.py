@@ -16,6 +16,18 @@ def local():
 @local.command("doctor")
 @click.option("--json", "json_output", is_flag=True, help="Emit the full report as JSON")
 @click.option(
+    "--repo",
+    "repo_path",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Repository to size for local model and harness recommendations",
+)
+@click.option(
+    "--guardrails",
+    is_flag=True,
+    help="Include conservative local runtime guardrails in the report and generated harness",
+)
+@click.option(
     "--generate",
     "generate_path",
     default=None,
@@ -25,7 +37,7 @@ def local():
 @click.option(
     "--name", default="local-coder", show_default=True, help="Name for the generated harness"
 )
-def local_doctor(json_output, generate_path, name):
+def local_doctor(json_output, repo_path, guardrails, generate_path, name):
     """Detect hardware, engines, and downloaded models; recommend a local stack.
 
     Reads the shipped recommendation matrix (override it with
@@ -36,7 +48,7 @@ def local_doctor(json_output, generate_path, name):
 
     from superqode.local.doctor import generate_harness_yaml, render_report, run_doctor
 
-    report = run_doctor()
+    report = run_doctor(str(repo_path) if repo_path else None, include_guardrails=guardrails)
 
     if json_output:
         payload = {
@@ -47,6 +59,8 @@ def local_doctor(json_output, generate_path, name):
             "recommendation": asdict(report.recommendation),
             "matrix_version": report.matrix_version,
             "apple_fm_available": report.apple_fm_available,
+            "repo": report.repo.to_dict() if report.repo is not None else None,
+            "guardrails": report.guardrails.to_dict() if report.guardrails is not None else None,
         }
         click.echo(json.dumps(payload, indent=2))
     else:
@@ -59,6 +73,31 @@ def local_doctor(json_output, generate_path, name):
         target.write_text(generate_harness_yaml(report, name=name), encoding="utf-8")
         click.echo(f"\nWrote tuned harness to {target}")
         click.echo(f"Run it with: superqode --harness {target} -p 'your task'")
+
+
+@local.command("guardrails")
+@click.option("--json", "json_output", is_flag=True, help="Emit guardrails as JSON")
+@click.option(
+    "--repo",
+    "repo_path",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Repository to include when capping context and concurrency",
+)
+def local_guardrails(json_output, repo_path):
+    """Recommend conservative local runtime limits for this machine."""
+    from superqode.local.guardrails import build_guardrails, render_guardrails
+    from superqode.local.hardware import detect_hardware
+    from superqode.local.repo import analyze_repository
+
+    repo_profile = analyze_repository(repo_path) if repo_path else None
+    guardrails = build_guardrails(detect_hardware(), repo_profile=repo_profile)
+    if json_output:
+        payload = guardrails.to_dict()
+        payload["repo"] = repo_profile.to_dict() if repo_profile is not None else None
+        click.echo(json.dumps(payload, indent=2))
+        return
+    click.echo(render_guardrails(guardrails))
 
 
 @local.command("packs")
@@ -172,6 +211,13 @@ def local_bench(endpoint, models, max_tokens, api_key, agentic, json_output):
     multiple=True,
     help="Workflow role to optimize (default: planner, implementer, reviewer, utility)",
 )
+@click.option(
+    "--repo",
+    "repo_path",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Repository to size when scoring local model routes",
+)
 @click.option("--max-tokens", default=384, show_default=True, type=int)
 @click.option("--api-key", default="", help="Bearer token if the endpoint needs one")
 @click.option(
@@ -188,7 +234,17 @@ def local_bench(endpoint, models, max_tokens, api_key, agentic, json_output):
     help="Name for the generated harness",
 )
 @click.option("--json", "json_output", is_flag=True, help="Emit report as JSON")
-def local_optimize(endpoint, models, roles, max_tokens, api_key, generate_path, name, json_output):
+def local_optimize(
+    endpoint,
+    models,
+    roles,
+    repo_path,
+    max_tokens,
+    api_key,
+    generate_path,
+    name,
+    json_output,
+):
     """Benchmark candidates and recommend role-specific local model routing."""
     from dataclasses import asdict
 
@@ -199,6 +255,7 @@ def local_optimize(endpoint, models, roles, max_tokens, api_key, generate_path, 
         render_optimization,
         run_optimization,
     )
+    from superqode.local.repo import analyze_repository
 
     targets = discover_targets(endpoint, models)
     if not targets:
@@ -208,11 +265,13 @@ def local_optimize(endpoint, models, roles, max_tokens, api_key, generate_path, 
 
     for target_endpoint, model in targets:
         click.echo(f"Optimizing {model} at {target_endpoint} ...", err=True)
+    repo_profile = analyze_repository(repo_path) if repo_path else None
     report = run_optimization(
         targets,
         roles=roles or DEFAULT_ROLES,
         max_tokens=max_tokens,
         api_key=api_key,
+        repo_profile=repo_profile,
     )
 
     if json_output:
@@ -222,6 +281,7 @@ def local_optimize(endpoint, models, roles, max_tokens, api_key, generate_path, 
                     "results": [asdict(r) for r in report.results],
                     "recommendations": [asdict(r) for r in report.recommendations],
                     "notes": list(report.notes),
+                    "repo": repo_profile.to_dict() if repo_profile is not None else None,
                 },
                 indent=2,
             )

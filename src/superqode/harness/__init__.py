@@ -21,11 +21,13 @@ from .store import (
     HarnessEventGraph,
     HarnessGraphEdge,
     HarnessGraphNode,
+    HarnessInputRecord,
     HarnessRunRecord,
     HarnessSessionRecord,
     MemoryHarnessStore,
     SQLiteHarnessStore,
     create_harness_store,
+    generate_input_id,
     generate_run_id,
 )
 from .spec import (
@@ -64,6 +66,13 @@ _LAZY_IMPORTS = {
     # Compiler
     "compile_to_headless_profile": (".compiler", "compile_to_headless_profile"),
     "spec_from_headless_profile": (".compiler", "spec_from_headless_profile"),
+    # Omnigent compatibility
+    "import_omnigent_agent": (".omnigent_importer", "import_omnigent_agent"),
+    "load_omnigent_agent": (".omnigent_importer", "load_omnigent_agent"),
+    "omnigent_agent_to_harness_spec": (
+        ".omnigent_importer",
+        "omnigent_agent_to_harness_spec",
+    ),
     # Runtime backends
     "ADKHarnessBackend": (".backends", "ADKHarnessBackend"),
     "ClaudeAgentSDKHarnessBackend": (".backends", "ClaudeAgentSDKHarnessBackend"),
@@ -195,6 +204,7 @@ __all__ = [
     "HarnessEventGraph",
     "HarnessGraphEdge",
     "HarnessGraphNode",
+    "HarnessInputRecord",
     "HarnessRunRequest",
     "HarnessRunResult",
     "HarnessSession",
@@ -238,6 +248,7 @@ __all__ = [
     "build_harness_replay_plan",
     "compile_to_headless_profile",
     "create_harness_store",
+    "generate_input_id",
     "fork_harness_run",
     "create_harness_backend",
     "doctor_harness",
@@ -248,12 +259,14 @@ __all__ = [
     "harness_spec_from_dict",
     "harness_spec_json_schema",
     "harness_spec_to_dict",
+    "import_omnigent_agent",
     "inspect_harness",
     "init_harness",
     "inspect_harness_backend",
     "is_openai_sandbox_backend_available",
     "known_harness_backend_names",
     "list_workflow_presets",
+    "load_omnigent_agent",
     "parse_typed_output",
     "plan_harness_graph",
     "require_shell",
@@ -270,6 +283,7 @@ __all__ = [
     "render_harness_graph",
     "render_harness_inspect",
     "render_harness_replay_plan",
+    "omnigent_agent_to_harness_spec",
     "spec_from_headless_profile",
     # Performance
     "Accelerator",

@@ -1494,7 +1494,9 @@ def harness_list_backends(json_output):
             f"coding={'yes' if row['supports_coding'] else 'no'}  "
             f"no_tool={'yes' if row['supports_no_tool'] else 'no'}  "
             f"streaming={'yes' if row['supports_streaming'] else 'no'}  "
-            f"approvals={'yes' if row['supports_approvals'] else 'no'}"
+            f"approvals={'yes' if row['supports_approvals'] else 'no'}  "
+            f"workflow={'yes' if row['supports_workflow_children'] else 'no'}  "
+            f"events={row['event_detail']}"
             f"{install}"
         )
 
@@ -1567,6 +1569,34 @@ def harness_init(name, template, output, workflow_preset, force):
     if workflow_preset:
         click.echo(f"Applied workflow preset: {workflow_preset}")
     click.echo("Created .agents/skills and .agents/roles")
+
+
+@harness.command("import-omnigent")
+@click.argument("agent_yaml", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=Path("harness.yaml"),
+    show_default=True,
+    help="Harness spec file to write",
+)
+@click.option("--name", default=None, help="Override the generated HarnessSpec name")
+@click.option("--force", is_flag=True, help="Overwrite an existing spec file")
+def harness_import_omnigent(agent_yaml, output, name, force):
+    """Convert an Omnigent agent.yaml into a SuperQode HarnessSpec."""
+    from superqode.harness import import_omnigent_agent, load_harness_spec
+
+    if output.exists() and not force:
+        raise click.ClickException(f"{output} already exists. Use --force to overwrite.")
+    written = import_omnigent_agent(agent_yaml, output=output, name=name)
+    spec = load_harness_spec(written)
+    click.echo(f"Imported Omnigent agent: {agent_yaml}")
+    click.echo(f"Created {written}")
+    click.echo(
+        f"Harness: {spec.name} "
+        f"(runtime={spec.runtime.backend}, workflow={spec.workflow.mode.value})"
+    )
 
 
 @harness.command("validate")
@@ -2026,6 +2056,467 @@ def harness_runs(store_path, session_id, json_output):
             f"{run.run_id}  {run.status:<14}  {run.harness:<22}  "
             f"{run.runtime:<14}  {run.prompt_preview}{workflow}"
         )
+
+
+@harness.group("inbox")
+def harness_inbox():
+    """Manage durable harness session inputs."""
+
+
+@harness_inbox.command("add")
+@click.option(
+    "--store",
+    "store_path",
+    type=click.Path(path_type=Path),
+    default=Path(".superqode/sessions"),
+    show_default=True,
+    help="Harness store directory",
+)
+@click.option("--session", "session_id", required=True, help="Harness session id")
+@click.option("--prompt", required=True, help="Prompt to admit")
+@click.option(
+    "--delivery",
+    type=click.Choice(["queue", "steer", "admit-only"]),
+    default="queue",
+    show_default=True,
+    help="How the input should be delivered by a future drain",
+)
+@click.option("--id", "input_id", default=None, help="Stable input id for exact retry")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_inbox_add(store_path, session_id, prompt, delivery, input_id, json_output):
+    """Admit a prompt to a durable harness session inbox."""
+    from superqode.harness import FileHarnessStore
+
+    store = FileHarnessStore(store_path)
+    try:
+        record = store.admit_input(
+            session_id=session_id,
+            input_id=input_id,
+            prompt=prompt,
+            delivery=delivery,
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    payload = record.to_dict()
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    click.echo(f"Admitted {record.input_id} to {record.session_id} ({record.delivery})")
+
+
+@harness_inbox.command("list")
+@click.option(
+    "--store",
+    "store_path",
+    type=click.Path(path_type=Path),
+    default=Path(".superqode/sessions"),
+    show_default=True,
+    help="Harness store directory",
+)
+@click.option("--session", "session_id", default=None, help="Filter by harness session id")
+@click.option(
+    "--status",
+    "status_filter",
+    type=click.Choice(["pending", "running", "done", "failed"]),
+    default=None,
+    help="Filter by input status",
+)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_inbox_list(store_path, session_id, status_filter, json_output):
+    """List durable harness session inputs."""
+    from superqode.harness import FileHarnessStore
+
+    store = FileHarnessStore(store_path)
+    inputs = store.list_inputs(session_id=session_id, status=status_filter)
+    payload = [item.to_dict() for item in inputs]
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    if not inputs:
+        click.echo("No harness inbox inputs found.")
+        return
+    for item in inputs[:50]:
+        preview = " ".join(item.prompt.split())
+        if len(preview) > 80:
+            preview = preview[:77] + "..."
+        run = f" run={item.run_id}" if item.run_id else ""
+        click.echo(
+            f"{item.input_id}  {item.status:<8}  {item.delivery:<10}  "
+            f"{item.session_id}  {preview}{run}"
+        )
+
+
+@harness_inbox.command("recover")
+@click.option(
+    "--store",
+    "store_path",
+    type=click.Path(path_type=Path),
+    default=Path(".superqode/sessions"),
+    show_default=True,
+    help="Harness store directory",
+)
+@click.option("--session", "session_id", default=None, help="Filter by harness session id")
+@click.option(
+    "--stale-after",
+    "stale_after_seconds",
+    default=300,
+    show_default=True,
+    type=int,
+    help="Recover running inputs older than this many seconds",
+)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_inbox_recover(store_path, session_id, stale_after_seconds, json_output):
+    """Recover stale running inbox inputs back to pending."""
+    from superqode.harness import FileHarnessStore
+
+    store = FileHarnessStore(store_path)
+    recovered = store.recover_stale_inputs(
+        session_id=session_id,
+        stale_after_seconds=stale_after_seconds,
+    )
+    payload = [item.to_dict() for item in recovered]
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    if not recovered:
+        click.echo("No stale running harness inbox inputs found.")
+        return
+    for item in recovered:
+        click.echo(f"recovered {item.input_id} for {item.session_id}")
+
+
+async def _execute_claimed_harness_input(
+    *,
+    item,
+    spec,
+    kernel,
+    store,
+    owner,
+    provider,
+    model_name,
+    runtime_name,
+    working_dir,
+    sandbox_backend,
+    session_id,
+    lease_seconds,
+):
+    import asyncio
+    import contextlib
+
+    from superqode.harness import WorkflowMode, run_workflow, workflow_steps_from_spec
+
+    async def _heartbeat(stop_event):
+        interval = max(1.0, lease_seconds / 2)
+        while not stop_event.is_set():
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=interval)
+            except TimeoutError:
+                with contextlib.suppress(Exception):
+                    store.renew_input_lease(
+                        item.input_id,
+                        owner_id=owner,
+                        lease_seconds=lease_seconds,
+                    )
+
+    stop = asyncio.Event()
+    heartbeat = asyncio.create_task(_heartbeat(stop))
+    try:
+        try:
+            if spec.workflow.mode != WorkflowMode.SINGLE:
+                workflow_result = await run_workflow(
+                    kernel,
+                    workflow_steps_from_spec(spec, item.prompt),
+                    provider=provider,
+                    model=model_name,
+                    runtime=runtime_name,
+                    working_directory=working_dir,
+                    sandbox_backend=sandbox_backend,
+                    session_id=session_id,
+                )
+                store.mark_input_done(
+                    item.input_id,
+                    run_id=workflow_result.run_id,
+                    owner_id=owner,
+                )
+                return {
+                    "input_id": item.input_id,
+                    "status": "done",
+                    "run_id": workflow_result.run_id,
+                    "owner_id": owner,
+                    "content": workflow_result.content,
+                }
+            session_obj = await kernel.session(session_id)
+            result = await session_obj.prompt(
+                item.prompt,
+                provider=provider,
+                model=model_name,
+                runtime=runtime_name,
+                working_directory=working_dir,
+                sandbox_backend=sandbox_backend,
+                metadata={"admitted_input_id": item.input_id},
+            )
+            store.mark_input_done(item.input_id, run_id=result.run_id, owner_id=owner)
+            return {
+                "input_id": item.input_id,
+                "status": "done",
+                "run_id": result.run_id,
+                "owner_id": owner,
+                "content": result.content,
+            }
+        except Exception as exc:  # noqa: BLE001
+            store.mark_input_failed(item.input_id, error=str(exc), owner_id=owner)
+            return {
+                "input_id": item.input_id,
+                "status": "failed",
+                "owner_id": owner,
+                "error": str(exc),
+            }
+    finally:
+        stop.set()
+        with contextlib.suppress(Exception):
+            await heartbeat
+
+
+@harness.command("drain")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--session", "session_id", required=True, help="Harness session id to drain")
+@click.option("--provider", envvar="SUPERQODE_PROVIDER", default="openai", show_default=True)
+@click.option(
+    "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-4o-mini", show_default=True
+)
+@click.option("--runtime", "runtime_name", default=None, help="Override runtime or backend")
+@click.option(
+    "--working-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("."),
+    show_default=False,
+)
+@click.option("--sandbox", "sandbox_backend", default="local", show_default=True)
+@click.option(
+    "--store",
+    "store_path",
+    type=click.Path(path_type=Path),
+    default=Path(".superqode/sessions"),
+    show_default=True,
+    help="Harness store directory",
+)
+@click.option("--limit", default=1, show_default=True, type=int, help="Maximum inputs to drain")
+@click.option("--owner-id", default=None, help="Drain worker owner id")
+@click.option("--lease-seconds", default=300, show_default=True, type=int, help="Claim lease duration")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_drain(
+    spec_path,
+    session_id,
+    provider,
+    model_name,
+    runtime_name,
+    working_dir,
+    sandbox_backend,
+    store_path,
+    limit,
+    owner_id,
+    lease_seconds,
+    json_output,
+):
+    """Execute pending durable inputs for one harness session."""
+    import asyncio
+
+    from superqode.harness import (
+        FileHarnessStore,
+        init_harness,
+        load_harness_spec,
+    )
+
+    async def _drain():
+        spec = load_harness_spec(spec_path)
+        store = FileHarnessStore(store_path)
+        kernel = await init_harness(spec, store=store)
+        owner = owner_id or f"drain-{os.getpid()}-{int(time.time() * 1000)}"
+        drained = []
+        for _ in range(max(0, limit)):
+            item = store.claim_next_input(
+                session_id=session_id,
+                owner_id=owner,
+                lease_seconds=lease_seconds,
+            )
+            if item is None:
+                break
+            drained.append(
+                await _execute_claimed_harness_input(
+                    item=item,
+                    spec=spec,
+                    kernel=kernel,
+                    store=store,
+                    owner=owner,
+                    provider=provider,
+                    model_name=model_name,
+                    runtime_name=runtime_name,
+                    working_dir=working_dir,
+                    sandbox_backend=sandbox_backend,
+                    session_id=session_id,
+                    lease_seconds=lease_seconds,
+                )
+            )
+        return drained
+
+    payload = asyncio.run(_drain())
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    if not payload:
+        click.echo("No pending harness inbox inputs to drain.")
+        return
+    for item in payload:
+        if item["status"] == "done":
+            click.echo(f"drained {item['input_id']} -> {item['run_id']}")
+        else:
+            click.echo(f"failed {item['input_id']}: {item['error']}")
+
+
+@harness.command("worker")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--session", "session_id", required=True, help="Harness session id to drain")
+@click.option("--provider", envvar="SUPERQODE_PROVIDER", default="openai", show_default=True)
+@click.option(
+    "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-4o-mini", show_default=True
+)
+@click.option("--runtime", "runtime_name", default=None, help="Override runtime or backend")
+@click.option(
+    "--working-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("."),
+    show_default=False,
+)
+@click.option("--sandbox", "sandbox_backend", default="local", show_default=True)
+@click.option(
+    "--store",
+    "store_path",
+    type=click.Path(path_type=Path),
+    default=Path(".superqode/sessions"),
+    show_default=True,
+    help="Harness store directory",
+)
+@click.option("--owner-id", default=None, help="Worker owner id")
+@click.option("--lease-seconds", default=300, show_default=True, type=int, help="Claim lease duration")
+@click.option("--concurrency", default=1, show_default=True, type=int, help="Concurrent worker loops")
+@click.option("--poll-seconds", default=2.0, show_default=True, type=float, help="Idle poll delay")
+@click.option("--max-runs", default=None, type=int, help="Stop after this many claimed inputs")
+@click.option("--once", is_flag=True, help="Exit when no pending input is available")
+@click.option("--recover-stale/--no-recover-stale", default=True, show_default=True)
+@click.option(
+    "--stale-after",
+    "stale_after_seconds",
+    default=300,
+    show_default=True,
+    type=int,
+    help="Recover running inputs older than this many seconds on startup",
+)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON when the worker exits")
+def harness_worker(
+    spec_path,
+    session_id,
+    provider,
+    model_name,
+    runtime_name,
+    working_dir,
+    sandbox_backend,
+    store_path,
+    owner_id,
+    lease_seconds,
+    concurrency,
+    poll_seconds,
+    max_runs,
+    once,
+    recover_stale,
+    stale_after_seconds,
+    json_output,
+):
+    """Run a durable harness inbox worker."""
+    import asyncio
+
+    from superqode.harness import FileHarnessStore, init_harness, load_harness_spec
+
+    async def _worker():
+        spec = load_harness_spec(spec_path)
+        store = FileHarnessStore(store_path)
+        recovered = (
+            store.recover_stale_inputs(
+                session_id=session_id,
+                stale_after_seconds=stale_after_seconds,
+            )
+            if recover_stale
+            else []
+        )
+        kernel = await init_harness(spec, store=store)
+        owner = owner_id or f"worker-{os.getpid()}-{int(time.time() * 1000)}"
+        processed = []
+        claim_lock = asyncio.Lock()
+        processed_lock = asyncio.Lock()
+        claimed_count = 0
+
+        async def _claim_one():
+            nonlocal claimed_count
+            async with claim_lock:
+                if max_runs is not None and claimed_count >= max(0, max_runs):
+                    return None, True
+                item = store.claim_next_input(
+                    session_id=session_id,
+                    owner_id=owner,
+                    lease_seconds=lease_seconds,
+                )
+                if item is None:
+                    return None, once
+                claimed_count += 1
+                return item, False
+
+        async def _loop(worker_index):
+            while True:
+                item, should_stop = await _claim_one()
+                if item is None:
+                    if should_stop:
+                        return
+                    await asyncio.sleep(max(0.0, poll_seconds))
+                    continue
+                result = await _execute_claimed_harness_input(
+                    item=item,
+                    spec=spec,
+                    kernel=kernel,
+                    store=store,
+                    owner=owner,
+                    provider=provider,
+                    model_name=model_name,
+                    runtime_name=runtime_name,
+                    working_dir=working_dir,
+                    sandbox_backend=sandbox_backend,
+                    session_id=session_id,
+                    lease_seconds=lease_seconds,
+                )
+                result["worker_index"] = worker_index
+                async with processed_lock:
+                    processed.append(result)
+
+        await asyncio.gather(*(_loop(index) for index in range(max(1, concurrency))))
+        return {
+            "owner_id": owner,
+            "session_id": session_id,
+            "recovered": [item.to_dict() for item in recovered],
+            "processed": processed,
+        }
+
+    payload = asyncio.run(_worker())
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    if payload["recovered"]:
+        click.echo(f"Recovered {len(payload['recovered'])} stale inbox input(s).")
+    if not payload["processed"]:
+        click.echo("No harness inbox inputs processed.")
+        return
+    for item in payload["processed"]:
+        if item["status"] == "done":
+            click.echo(f"worker drained {item['input_id']} -> {item['run_id']}")
+        else:
+            click.echo(f"worker failed {item['input_id']}: {item['error']}")
 
 
 @harness.command("evidence")

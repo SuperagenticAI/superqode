@@ -7,6 +7,7 @@ from superqode.harness import (
     FileHarnessStore,
     HarnessEvent,
     HarnessEventGraph,
+    MemoryHarnessStore,
     SQLiteHarnessStore,
     get_harness_template,
 )
@@ -59,6 +60,111 @@ def test_file_harness_store_sanitizes_file_names(tmp_path):
 
     assert store.get_session("bad/session:id") is not None
     assert (tmp_path / "harness" / "sessions" / "bad_session:id.json").exists()
+
+
+@pytest.mark.parametrize("store_factory", [MemoryHarnessStore, FileHarnessStore, SQLiteHarnessStore])
+def test_harness_store_inbox_contract(tmp_path, store_factory):
+    if store_factory is MemoryHarnessStore:
+        store = store_factory()
+    else:
+        path = tmp_path / "store.sqlite3" if store_factory is SQLiteHarnessStore else tmp_path / "files"
+        store = store_factory(path)
+
+    first = store.admit_input(
+        session_id="session-1",
+        input_id="input-a",
+        prompt="first",
+        delivery="queue",
+        metadata={"source": "test"},
+    )
+    second = store.admit_input(session_id="session-1", input_id="input-b", prompt="second")
+    other = store.admit_input(session_id="session-2", input_id="input-c", prompt="other")
+
+    assert first.status == "pending"
+    assert first.metadata["source"] == "test"
+    assert [item.input_id for item in store.list_inputs(session_id="session-1")] == [
+        "input-a",
+        "input-b",
+    ]
+    assert [item.input_id for item in store.list_inputs(status="pending")] == [
+        "input-a",
+        "input-b",
+        "input-c",
+    ]
+
+    duplicate = store.admit_input(session_id="session-1", input_id="input-a", prompt="first")
+    assert duplicate.input_id == first.input_id
+    with pytest.raises(ValueError):
+        store.admit_input(session_id="session-1", input_id="input-a", prompt="changed")
+
+    claimed = store.claim_next_input(session_id="session-1", owner_id="worker-1")
+    assert claimed is not None
+    assert claimed.input_id == first.input_id
+    assert claimed.status == "running"
+    assert claimed.owner_id == "worker-1"
+    assert claimed.lease_expires_at is not None
+    renewed = store.renew_input_lease(
+        claimed.input_id,
+        owner_id="worker-1",
+        lease_seconds=600,
+    )
+    assert renewed.lease_expires_at is not None
+    assert renewed.lease_expires_at >= claimed.lease_expires_at
+    with pytest.raises(PermissionError):
+        store.renew_input_lease(claimed.input_id, owner_id="worker-2")
+    with pytest.raises(PermissionError):
+        store.mark_input_done(claimed.input_id, run_id="run-bad", owner_id="worker-2")
+    done = store.mark_input_done(claimed.input_id, run_id="run-1", owner_id="worker-1")
+    assert done.status == "done"
+    assert done.run_id == "run-1"
+    assert done.owner_id == ""
+    assert done.lease_expires_at is None
+
+    failed_claim = store.claim_next_input(session_id="session-1")
+    assert failed_claim is not None
+    assert failed_claim.input_id == second.input_id
+    failed = store.mark_input_failed(failed_claim.input_id, error="boom")
+    assert failed.status == "failed"
+    assert failed.error == "boom"
+
+    assert store.claim_next_input(session_id="session-1") is None
+    assert store.claim_next_input(session_id="session-2").input_id == other.input_id
+
+
+@pytest.mark.parametrize("store_factory", [MemoryHarnessStore, FileHarnessStore, SQLiteHarnessStore])
+def test_harness_store_recovers_stale_running_inputs(tmp_path, store_factory):
+    if store_factory is MemoryHarnessStore:
+        store = store_factory()
+    else:
+        path = tmp_path / "store.sqlite3" if store_factory is SQLiteHarnessStore else tmp_path / "files"
+        store = store_factory(path)
+
+    admitted = store.admit_input(
+        session_id="session-1",
+        input_id="input-recover",
+        prompt="retry me",
+    )
+    claimed = store.claim_next_input(
+        session_id=admitted.session_id,
+        owner_id="worker-1",
+        lease_seconds=0,
+    )
+
+    assert claimed is not None
+    assert claimed.status == "running"
+    assert claimed.owner_id == "worker-1"
+
+    recovered = store.recover_stale_inputs(session_id="session-1", stale_after_seconds=300)
+
+    assert [item.input_id for item in recovered] == ["input-recover"]
+    assert recovered[0].status == "pending"
+    assert recovered[0].owner_id == ""
+    assert recovered[0].lease_expires_at is None
+    assert recovered[0].metadata["recovered_from_owner"] == "worker-1"
+    reclaimed = store.claim_next_input(session_id="session-1", owner_id="worker-2")
+    assert reclaimed is not None
+    assert reclaimed.input_id == "input-recover"
+    assert reclaimed.owner_id == "worker-2"
 
 
 @pytest.mark.parametrize("store_factory", [FileHarnessStore, SQLiteHarnessStore])

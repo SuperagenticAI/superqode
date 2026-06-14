@@ -150,6 +150,8 @@ def test_backend_capabilities_are_advertised():
     assert create_harness_backend("codex-sdk").capabilities.supports_streaming is True
     assert create_harness_backend("codex-sdk").capabilities.supports_approvals is False
     assert create_harness_backend("codex-sdk").capabilities.supports_mcp is True
+    assert create_harness_backend("codex-sdk").capabilities.event_detail == "rich"
+    assert create_harness_backend("builtin").capabilities.supports_workflow_children is True
     assert create_harness_backend("deepagents").capabilities.supports_no_tool is False
     assert create_harness_backend("pydanticai").capabilities.supports_coding is True
 
@@ -182,6 +184,27 @@ def test_inspect_harness_backend_accepts_builtin_no_tool():
     assert inspection.ok is True
     assert inspection.capabilities.supports_no_tool is True
     assert inspection.to_dict()["capabilities"]["supports_streaming"] is True
+    assert inspection.to_dict()["capabilities"]["event_detail"] == "rich"
+
+
+def test_inspect_harness_backend_warns_for_unsupported_typed_output():
+    from superqode.harness import AgentSpec
+
+    spec = replace(
+        get_harness_template("coding"),
+        agents=(
+            AgentSpec(
+                id="typed",
+                role="Return structured data.",
+                output_schema={"type": "object", "properties": {"ok": {"type": "boolean"}}},
+            ),
+        ),
+    )
+
+    inspection = inspect_harness_backend("codex-sdk", spec)
+    codes = {issue.code for issue in inspection.issues}
+
+    assert "typed_output_unsupported" in codes
 
 
 def test_inspect_harness_backend_warns_for_unverified_model_policy():

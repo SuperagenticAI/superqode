@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from .bench import BenchResult, list_endpoint_models, run_agentic_bench
+from .repo import RepoProfile
 
 DEFAULT_ROLES = ("planner", "implementer", "reviewer", "utility")
 
@@ -24,6 +25,7 @@ class OptimizationReport:
     results: tuple[BenchResult, ...]
     recommendations: tuple[RoleRecommendation, ...]
     notes: tuple[str, ...] = ()
+    repo_profile: RepoProfile | None = None
 
 
 def discover_targets(
@@ -53,19 +55,21 @@ def run_optimization(
     roles: Iterable[str] = DEFAULT_ROLES,
     max_tokens: int = 384,
     api_key: str = "",
+    repo_profile: RepoProfile | None = None,
 ) -> OptimizationReport:
     """Run agentic probes and recommend the best model for each workflow role."""
     results = tuple(
         run_agentic_bench(endpoint, model, max_tokens=max_tokens, api_key=api_key)
         for endpoint, model in targets
     )
-    return recommend_roles(results, roles=roles)
+    return recommend_roles(results, roles=roles, repo_profile=repo_profile)
 
 
 def recommend_roles(
     results: Iterable[BenchResult],
     *,
     roles: Iterable[str] = DEFAULT_ROLES,
+    repo_profile: RepoProfile | None = None,
 ) -> OptimizationReport:
     """Score completed bench results for workflow roles."""
     bench_results = tuple(results)
@@ -76,6 +80,7 @@ def recommend_roles(
             results=bench_results,
             recommendations=(),
             notes=("No usable local model results; start an engine or pass --endpoint/--model.",),
+            repo_profile=repo_profile,
         )
 
     recommendations: list[RoleRecommendation] = []
@@ -85,18 +90,18 @@ def recommend_roles(
             continue
         ranked = sorted(
             usable,
-            key=lambda result: _role_score(result, normalized),
+            key=lambda result: _role_score(result, normalized, repo_profile),
             reverse=True,
         )
         best = ranked[0]
-        score = round(_role_score(best, normalized), 1)
+        score = round(_role_score(best, normalized, repo_profile), 1)
         recommendations.append(
             RoleRecommendation(
                 role=normalized,
                 model=best.model,
                 endpoint=best.endpoint,
                 score=score,
-                reason=_role_reason(best, normalized),
+                reason=_role_reason(best, normalized, repo_profile),
             )
         )
         if best.agentic_score is not None and best.agentic_score < 75:
@@ -104,11 +109,19 @@ def recommend_roles(
                 f"{normalized}: best model scored {best.agentic_score:.0f}% on agentic probes; "
                 "keep strict tool-call repair enabled."
             )
+    if repo_profile is not None:
+        notes.append(
+            "Repo-aware scoring used "
+            f"{repo_profile.recommended_model_size} model guidance, "
+            f"{repo_profile.recommended_context_tokens} token context, "
+            f"and {repo_profile.workflow_shape} workflow shape."
+        )
 
     return OptimizationReport(
         results=bench_results,
         recommendations=tuple(recommendations),
         notes=tuple(dict.fromkeys(notes)),
+        repo_profile=repo_profile,
     )
 
 
@@ -126,6 +139,8 @@ def render_optimization(report: OptimizationReport) -> str:
             lines.append(f"- {note}")
     lines.append("")
     lines.append("Scores combine agentic control probes, TTFT, decode speed, and role fit.")
+    if report.repo_profile is not None:
+        lines.append("Repo-aware scoring biases context-heavy roles toward stronger candidates.")
     return "\n".join(lines)
 
 
@@ -142,8 +157,19 @@ def optimization_harness_yaml(report: OptimizationReport, *, name: str = "local-
         "  config:",
         "    max_retries: 1",
         "    continue_on_error: false",
-        "agents:",
     ]
+    if report.repo_profile is not None:
+        lines.extend(
+            [
+                "model_policy:",
+                f"  context_window: {report.repo_profile.recommended_context_tokens}",
+                "metadata:",
+                f"  repo_model_size: {report.repo_profile.recommended_model_size}",
+                f"  repo_context_tokens: {report.repo_profile.recommended_context_tokens}",
+                f"  repo_workflow_shape: {report.repo_profile.workflow_shape}",
+            ]
+        )
+    lines.append("agents:")
     role_text = {
         "planner": "Plan the implementation with the cheapest fast model that preserves context.",
         "implementer": "Implement the requested code change and use tools precisely.",
@@ -164,7 +190,7 @@ def optimization_harness_yaml(report: OptimizationReport, *, name: str = "local-
     return "\n".join(lines) + "\n"
 
 
-def _role_score(result: BenchResult, role: str) -> float:
+def _role_score(result: BenchResult, role: str, repo_profile: RepoProfile | None = None) -> float:
     agentic = float(result.agentic_score or 0.0)
     speed = _speed_score(result)
     tool = _bool_score(result.tool_call_success)
@@ -173,12 +199,41 @@ def _role_score(result: BenchResult, role: str) -> float:
     context = _bool_score(result.context_recall_success)
 
     if role in {"utility", "summarizer", "grader"}:
-        return (speed * 0.85) + (agentic * 0.05) + (context * 0.10)
+        score = (speed * 0.85) + (agentic * 0.05) + (context * 0.10)
+        return _apply_repo_bias(score, result, role, repo_profile)
     if role in {"planner", "architect"}:
-        return (agentic * 0.45) + (context * 0.25) + (tool * 0.15) + (speed * 0.15)
+        score = (agentic * 0.45) + (context * 0.25) + (tool * 0.15) + (speed * 0.15)
+        return _apply_repo_bias(score, result, role, repo_profile)
     if role in {"reviewer", "critic", "tester"}:
-        return (agentic * 0.40) + (context * 0.25) + (edit * 0.15) + (shell * 0.10) + (speed * 0.10)
-    return (agentic * 0.50) + (tool * 0.15) + (edit * 0.15) + (shell * 0.10) + (speed * 0.10)
+        score = (
+            (agentic * 0.40) + (context * 0.25) + (edit * 0.15) + (shell * 0.10) + (speed * 0.10)
+        )
+        return _apply_repo_bias(score, result, role, repo_profile)
+    score = (agentic * 0.50) + (tool * 0.15) + (edit * 0.15) + (shell * 0.10) + (speed * 0.10)
+    return _apply_repo_bias(score, result, role, repo_profile)
+
+
+def _apply_repo_bias(
+    score: float,
+    result: BenchResult,
+    role: str,
+    repo_profile: RepoProfile | None,
+) -> float:
+    if repo_profile is None:
+        return score
+    adjusted = score
+    context_heavy = repo_profile.recommended_context_tokens >= 32768
+    large_repo = repo_profile.recommended_model_size in {"medium-large", "large"}
+    coder_named = _model_looks_coder(result.model)
+    if context_heavy and role not in {"utility", "summarizer", "grader"}:
+        adjusted += 8.0 if result.context_recall_success else -12.0
+    if large_repo and role in {"planner", "architect", "reviewer", "critic", "tester"}:
+        adjusted += 5.0 if coder_named else -4.0
+    if role in {"implementer", "coder"} and coder_named:
+        adjusted += 4.0
+    if repo_profile.workflow_shape != "single" and role == "utility":
+        adjusted -= 3.0
+    return max(0.0, min(100.0, adjusted))
 
 
 def _speed_score(result: BenchResult) -> float:
@@ -193,12 +248,30 @@ def _bool_score(value: bool | None) -> float:
     return 100.0 if value is True else 0.0
 
 
-def _role_reason(result: BenchResult, role: str) -> str:
+def _model_looks_coder(model: str) -> bool:
+    lowered = model.lower()
+    return any(token in lowered for token in ("coder", "code", "devstral", "ds4", "deepseek"))
+
+
+def _role_reason(
+    result: BenchResult,
+    role: str,
+    repo_profile: RepoProfile | None = None,
+) -> str:
     speed = _speed_score(result)
     agentic = result.agentic_score
+    repo = ""
+    if repo_profile is not None:
+        repo = f", repo {repo_profile.recommended_model_size}/{repo_profile.workflow_shape}"
     if role == "utility":
-        return f"fastest useful route: speed {speed:.0f}, agentic {agentic if agentic is not None else 'n/a'}"
-    return f"best role fit: agentic {agentic if agentic is not None else 'n/a'}, speed {speed:.0f}"
+        return (
+            "fastest useful route: "
+            f"speed {speed:.0f}, agentic {agentic if agentic is not None else 'n/a'}{repo}"
+        )
+    return (
+        "best role fit: "
+        f"agentic {agentic if agentic is not None else 'n/a'}, speed {speed:.0f}{repo}"
+    )
 
 
 __all__ = [

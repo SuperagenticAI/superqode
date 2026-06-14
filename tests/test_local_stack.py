@@ -16,6 +16,7 @@ import pytest
 
 from superqode.local.bench import BenchResult, render_bench, run_agentic_bench, run_bench
 from superqode.local.engines import EngineStatus, _parse_semver, detect_ollama
+from superqode.local.guardrails import PowerState, build_guardrails, render_guardrails
 from superqode.local.hardware import HardwareProfile, NvidiaGpu
 from superqode.local.inventory import LocalModel, list_ollama_models
 from superqode.local.matrix import load_matrix, recommend
@@ -25,6 +26,7 @@ from superqode.local.optimize import (
     render_optimization,
 )
 from superqode.local.packs import detect_pack, get_pack, load_packs
+from superqode.local.repo import analyze_repository, render_repo_profile
 from superqode.harness.loader import load_harness_spec, save_harness_spec
 from superqode.harness.model_policy import resolve_harness_model_policy
 from superqode.harness.spec import ModelPolicySpec
@@ -63,6 +65,43 @@ def test_nvidia_tiers(vram, expected):
 
 def test_cpu_tier():
     assert HardwareProfile(platform="linux", cpu_only=True).tier == "cpu"
+
+
+def test_local_guardrails_reduce_limits_on_battery(monkeypatch):
+    monkeypatch.setattr(
+        "superqode.local.guardrails.detect_power_state",
+        lambda: PowerState(on_battery=True, source="test", detail="battery power"),
+    )
+    monkeypatch.setattr(
+        "superqode.local.guardrails.detect_load_state",
+        lambda: type("Load", (), {"load_1m": 0.1, "cpu_count": 8, "normalized_1m": 0.01})(),
+    )
+
+    guardrails = build_guardrails(_apple(128))
+
+    assert guardrails.max_worker_concurrency == 1
+    assert guardrails.recommended_context_cap == 32768
+    assert guardrails.battery_mode == "conservative"
+    assert guardrails.warnings
+    assert "Local Runtime Guardrails" in render_guardrails(guardrails)
+
+
+def test_local_guardrails_use_repo_context_cap(monkeypatch, tmp_path):
+    (tmp_path / "app.py").write_text("print('x')\n" * 1000, encoding="utf-8")
+    repo = analyze_repository(tmp_path)
+    monkeypatch.setattr(
+        "superqode.local.guardrails.detect_power_state",
+        lambda: PowerState(on_battery=False, source="test", detail="AC power"),
+    )
+    monkeypatch.setattr(
+        "superqode.local.guardrails.detect_load_state",
+        lambda: type("Load", (), {"load_1m": 0.1, "cpu_count": 8, "normalized_1m": 0.01})(),
+    )
+
+    guardrails = build_guardrails(_apple(128), repo_profile=repo)
+
+    assert guardrails.recommended_context_cap == repo.recommended_context_tokens
+    assert guardrails.max_worker_concurrency >= 1
 
 
 # ----------------------------------------------------------------- engines
@@ -237,6 +276,53 @@ def test_doctor_harness_pull_fallback(monkeypatch):
     assert "primary: ollama/gemma4:31b" in text
 
 
+def test_repository_profile_recommends_context_and_workflow(tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+    for index in range(220):
+        (src / f"mod_{index}.py").write_text("def f():\n    return 1\n" * 80, encoding="utf-8")
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "node_modules" / "ignored.js").write_text("x" * 500_000, encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+
+    profile = analyze_repository(tmp_path)
+
+    assert profile.code_file_count == 220
+    assert profile.config_file_count == 1
+    assert profile.languages["Python"] == 220
+    assert profile.recommended_context_tokens >= 32768
+    assert profile.workflow_shape in {"fix-and-verify", "plan-implement-review"}
+    assert profile.recommended_model_size in {"medium", "medium-large", "large"}
+    text = render_repo_profile(profile)
+    assert "Repository profile" in text
+    assert "Python 220" in text
+
+
+def test_doctor_generates_repo_aware_harness(monkeypatch, tmp_path):
+    from superqode.local.doctor import generate_harness_yaml
+
+    (tmp_path / "app.py").write_text("print('hello')\n" * 5000, encoding="utf-8")
+    report = _fake_report(
+        monkeypatch,
+        inventory=[LocalModel(model_id="hf:org/gemma-4-31b-it-4bit-mlx", source="hf")],
+    )
+    report.repo = analyze_repository(tmp_path)
+    report.guardrails = build_guardrails(report.hardware, repo_profile=report.repo)
+
+    text = generate_harness_yaml(report)
+    path = tmp_path / "repo-aware.yaml"
+    path.write_text(text, encoding="utf-8")
+    loaded = load_harness_spec(path)
+
+    assert "workflow:" in text
+    assert "context_window:" in text
+    assert "repo_model_size:" in text
+    assert "repo_context_tokens:" in text
+    assert "local_guardrails:" in text
+    assert "guardrail_context_cap:" in text
+    assert loaded.model_policy.context_window == report.repo.recommended_context_tokens
+
+
 # ------------------------------------------------------------------- bench
 
 
@@ -409,6 +495,53 @@ def test_recommend_roles_picks_agentic_and_fast_models_by_role():
     assert "implementer" in text
 
 
+def test_recommend_roles_uses_repo_profile_for_context_heavy_roles(tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+    for index in range(650):
+        (src / f"m{index}.py").write_text("x = 1\n", encoding="utf-8")
+    repo_profile = analyze_repository(tmp_path)
+    fast_weak_context = BenchResult(
+        endpoint="http://e/v1",
+        model="tiny",
+        ok=True,
+        ttft_s=0.1,
+        decode_tps=90.0,
+        mode="agentic",
+        tool_call_success=True,
+        edit_format_success=True,
+        shell_call_success=True,
+        context_recall_success=False,
+        agentic_score=75.0,
+    )
+    slower_coder = BenchResult(
+        endpoint="http://e/v1",
+        model="qwen-coder",
+        ok=True,
+        ttft_s=1.0,
+        decode_tps=30.0,
+        mode="agentic",
+        tool_call_success=True,
+        edit_format_success=True,
+        shell_call_success=True,
+        context_recall_success=True,
+        agentic_score=100.0,
+    )
+
+    report = recommend_roles(
+        [fast_weak_context, slower_coder],
+        roles=("planner", "utility"),
+        repo_profile=repo_profile,
+    )
+
+    by_role = {item.role: item for item in report.recommendations}
+    assert by_role["planner"].model == "qwen-coder"
+    assert by_role["utility"].model == "tiny"
+    assert report.repo_profile is repo_profile
+    assert any("Repo-aware scoring" in note for note in report.notes)
+    assert "repo" in by_role["planner"].reason
+
+
 def test_optimization_harness_yaml_contains_role_routing():
     result = BenchResult(
         endpoint="http://localhost:11434/v1",
@@ -432,6 +565,30 @@ def test_optimization_harness_yaml_contains_role_routing():
     assert "id: planner" in text
     assert "model: qwen3-coder:30b" in text
     assert "endpoint: http://localhost:11434/v1" in text
+
+
+def test_optimization_harness_yaml_contains_repo_context(tmp_path):
+    (tmp_path / "app.py").write_text("print('x')\n" * 2000, encoding="utf-8")
+    result = BenchResult(
+        endpoint="http://localhost:11434/v1",
+        model="qwen-coder",
+        ok=True,
+        ttft_s=0.4,
+        decode_tps=40.0,
+        mode="agentic",
+        agentic_score=100.0,
+        tool_call_success=True,
+        edit_format_success=True,
+        shell_call_success=True,
+        context_recall_success=True,
+    )
+    report = recommend_roles([result], roles=("planner",), repo_profile=analyze_repository(tmp_path))
+
+    text = optimization_harness_yaml(report, name="repo-routed")
+
+    assert "context_window:" in text
+    assert "repo_model_size:" in text
+    assert "repo_context_tokens:" in text
 
 
 # ------------------------------------------------------------------- packs
@@ -584,11 +741,49 @@ def test_local_doctor_cli_json(monkeypatch):
     monkeypatch.setattr(doctor_mod, "inventory_models", lambda: [])
     monkeypatch.setattr(doctor_mod, "_detect_apple_fm", lambda profile: None)
 
-    result = CliRunner().invoke(local, ["doctor", "--json"])
+    monkeypatch.setattr(
+        "superqode.local.guardrails.detect_power_state",
+        lambda: PowerState(on_battery=False, source="test", detail="AC power"),
+    )
+
+    result = CliRunner().invoke(local, ["doctor", "--json", "--repo", ".", "--guardrails"])
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert payload["tier"] == "apple_128"
     assert payload["recommendation"]["engine"] == "ollama"
+    assert payload["repo"] is not None
+    assert "recommended_context_tokens" in payload["repo"]
+    assert payload["guardrails"] is not None
+    assert "max_worker_concurrency" in payload["guardrails"]
+
+
+def test_local_guardrails_cli_json(monkeypatch, tmp_path):
+    from click.testing import CliRunner
+
+    from superqode.commands.local import local
+    from superqode.local import guardrails as guardrails_mod
+
+    monkeypatch.setattr("superqode.local.hardware.detect_hardware", lambda: _apple(32))
+    monkeypatch.setattr(
+        guardrails_mod,
+        "detect_power_state",
+        lambda: PowerState(on_battery=True, source="test", detail="battery power"),
+    )
+    monkeypatch.setattr(
+        guardrails_mod,
+        "detect_load_state",
+        lambda: type("Load", (), {"load_1m": 0.1, "cpu_count": 8, "normalized_1m": 0.01})(),
+    )
+    (tmp_path / "app.py").write_text("print('x')\n", encoding="utf-8")
+
+    result = CliRunner().invoke(local, ["guardrails", "--repo", str(tmp_path), "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["hardware_tier"] == "apple_32"
+    assert payload["battery_mode"] == "conservative"
+    assert payload["max_worker_concurrency"] == 1
+    assert payload["repo"] is not None
 
 
 def test_local_optimize_cli_json_and_generate(monkeypatch, tmp_path):
@@ -625,6 +820,8 @@ def test_local_optimize_cli_json_and_generate(monkeypatch, tmp_path):
             "coder",
             "--model",
             "tiny",
+            "--repo",
+            str(tmp_path),
             "--generate",
             str(target),
             "--json",
@@ -637,6 +834,9 @@ def test_local_optimize_cli_json_and_generate(monkeypatch, tmp_path):
     by_role = {item["role"]: item for item in payload["recommendations"]}
     assert by_role["implementer"]["model"] == "coder"
     assert by_role["utility"]["model"] == "tiny"
+    assert payload["repo"] is not None
+    assert payload["repo"]["recommended_context_tokens"] >= 16384
     generated = target.read_text(encoding="utf-8")
     assert "agents:" in generated
     assert "model: coder" in generated
+    assert "repo_context_tokens:" in generated

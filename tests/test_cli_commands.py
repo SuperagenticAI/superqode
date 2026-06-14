@@ -110,6 +110,8 @@ class TestHarnessCommand:
         payload = json.loads(result.output)
         by_backend = {item["backend"]: item for item in payload}
         assert by_backend["builtin"]["availability"] == "available"
+        assert by_backend["builtin"]["supports_workflow_children"] is True
+        assert by_backend["builtin"]["event_detail"] == "rich"
         assert by_backend["openai-agents"]["supports_approvals"] is True
         assert "install_hint" in by_backend["deepagents"]
 
@@ -222,6 +224,9 @@ class TestHarnessCommand:
             assert payload["ready"] is True
             assert payload["summary"]["checks"] == len(payload["checks"])
             assert by_check["spec"]["severity"] == "info"
+            assert by_check["workflow"]["status"] in {"ok", "warning"}
+            assert by_check["agents"]["status"] in {"ok", "warning"}
+            assert by_check["local_routing"]["status"] == "ok"
 
     def test_harness_doctor_json_blocks_unknown_provider(self, runner):
         with runner.isolated_filesystem():
@@ -253,6 +258,103 @@ model_policy:
             assert model_check["severity"] == "blocker"
             assert "missing-provider" in model_check["errors"][0]
             assert "fix" in model_check
+
+    def test_harness_doctor_json_blocks_invalid_agent_policy(self, runner):
+        with runner.isolated_filesystem():
+            Path("harness.yaml").write_text(
+                """
+name: bad-agents
+workflow:
+  mode: chain
+agents:
+  - id: coder
+    role: Implement.
+    tools: [read_file]
+  - id: coder
+    role: Review.
+    tools: [not_a_real_tool]
+    max_iterations: 0
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(
+                cli_main,
+                ["harness", "doctor", "--spec", "harness.yaml", "--json"],
+            )
+
+            assert result.exit_code == 1
+            payload = json.loads(result.output)
+            by_check = {check["name"]: check for check in payload["checks"]}
+            assert by_check["agents"]["status"] == "error"
+            assert "coder" in by_check["agents"]["duplicates"]
+            assert any("not_a_real_tool" in item for item in by_check["agents"]["errors"])
+            assert by_check["tools"]["status"] == "error"
+
+    def test_harness_doctor_json_reports_workflow_config_blockers(self, runner):
+        with runner.isolated_filesystem():
+            Path("harness.yaml").write_text(
+                """
+name: bad-workflow
+workflow:
+  mode: chain
+  parallelism: 0
+  config:
+    max_retries: nope
+    continue_on_error: sometimes
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(
+                cli_main,
+                ["harness", "doctor", "--spec", "harness.yaml", "--json"],
+            )
+
+            assert result.exit_code == 1
+            payload = json.loads(result.output)
+            workflow = next(check for check in payload["checks"] if check["name"] == "workflow")
+            assert workflow["status"] == "error"
+            assert any("max_retries" in item for item in workflow["errors"])
+            assert any("continue_on_error" in item for item in workflow["errors"])
+
+    def test_harness_doctor_json_reports_local_endpoint_model_readiness(
+        self, runner, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "superqode.local.bench.list_endpoint_models",
+            lambda endpoint, timeout=0.5: ["qwen3-coder:30b"],
+        )
+        with runner.isolated_filesystem():
+            Path("harness.yaml").write_text(
+                """
+name: local-routed
+model_policy:
+  primary: qwen3-coder:30b
+  config:
+    endpoint: http://localhost:11434/v1
+agents:
+  - id: implementer
+    role: Implement.
+    model: qwen3-coder:30b
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(
+                cli_main,
+                ["harness", "doctor", "--spec", "harness.yaml", "--json"],
+            )
+
+            assert result.exit_code == 0, result.output
+            payload = json.loads(result.output)
+            local = next(check for check in payload["checks"] if check["name"] == "local_routing")
+            assert local["status"] == "ok"
+            assert local["reachable"] == ["http://localhost:11434/v1"]
+            assert local["missing_models"] == []
 
     def test_harness_doctor_json_accepts_local_provider_alias(self, runner):
         with runner.isolated_filesystem():
@@ -396,6 +498,292 @@ checks:
             payload = json.loads(result.output)
             assert payload[0]["run_id"] == run.run_id
             assert payload[0]["metadata"]["workflow"] is True
+
+    def test_harness_inbox_add_and_list_json(self, runner):
+        with runner.isolated_filesystem():
+            added = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "inbox",
+                    "add",
+                    "--session",
+                    "s1",
+                    "--id",
+                    "input-1",
+                    "--prompt",
+                    "fix the tests",
+                    "--delivery",
+                    "queue",
+                    "--json",
+                ],
+            )
+
+            assert added.exit_code == 0
+            payload = json.loads(added.output)
+            assert payload["input_id"] == "input-1"
+            assert payload["session_id"] == "s1"
+            assert payload["status"] == "pending"
+
+            listed = runner.invoke(
+                cli_main,
+                ["harness", "inbox", "list", "--session", "s1", "--json"],
+            )
+
+            assert listed.exit_code == 0
+            rows = json.loads(listed.output)
+            assert [row["input_id"] for row in rows] == ["input-1"]
+            assert rows[0]["prompt"] == "fix the tests"
+
+    def test_harness_inbox_add_rejects_conflicting_id(self, runner):
+        with runner.isolated_filesystem():
+            first = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "inbox",
+                    "add",
+                    "--session",
+                    "s1",
+                    "--id",
+                    "input-1",
+                    "--prompt",
+                    "first",
+                ],
+            )
+            assert first.exit_code == 0
+
+            second = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "inbox",
+                    "add",
+                    "--session",
+                    "s1",
+                    "--id",
+                    "input-1",
+                    "--prompt",
+                    "second",
+                ],
+            )
+
+            assert second.exit_code == 1
+            assert "already exists" in second.output
+
+    def test_harness_inbox_recover_json(self, runner):
+        from superqode.harness import FileHarnessStore
+
+        with runner.isolated_filesystem():
+            store = FileHarnessStore(".superqode/sessions")
+            store.admit_input(session_id="s1", input_id="input-1", prompt="retry me")
+            claimed = store.claim_next_input(
+                session_id="s1",
+                owner_id="worker-1",
+                lease_seconds=0,
+            )
+            assert claimed is not None
+
+            recovered = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "inbox",
+                    "recover",
+                    "--session",
+                    "s1",
+                    "--stale-after",
+                    "300",
+                    "--json",
+                ],
+            )
+
+            assert recovered.exit_code == 0
+            payload = json.loads(recovered.output)
+            assert [item["input_id"] for item in payload] == ["input-1"]
+            assert payload[0]["status"] == "pending"
+            assert payload[0]["owner_id"] == ""
+            assert payload[0]["metadata"]["recovered_from_owner"] == "worker-1"
+
+    def test_harness_drain_executes_pending_inbox_inputs(self, runner, monkeypatch):
+        class FakeRuntime:
+            async def run(self, prompt):
+                return AgentResponse(
+                    content=f"done:{prompt}",
+                    messages=[],
+                    tool_calls_made=0,
+                    iterations=1,
+                    stopped_reason="complete",
+                )
+
+            def cancel(self):
+                pass
+
+            def reset_cancellation(self):
+                pass
+
+        monkeypatch.setattr(
+            "superqode.harness.backends.runtime.create_runtime",
+            lambda name, **kwargs: FakeRuntime(),
+        )
+        with runner.isolated_filesystem():
+            init = runner.invoke(
+                cli_main,
+                ["harness", "init", "demo", "--template", "no-tool", "--output", "harness.yaml"],
+            )
+            assert init.exit_code == 0
+            add_queue = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "inbox",
+                    "add",
+                    "--session",
+                    "s1",
+                    "--id",
+                    "input-queue",
+                    "--prompt",
+                    "ship it",
+                ],
+            )
+            add_staged = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "inbox",
+                    "add",
+                    "--session",
+                    "s1",
+                    "--id",
+                    "input-staged",
+                    "--prompt",
+                    "hold",
+                    "--delivery",
+                    "admit-only",
+                ],
+            )
+            assert add_queue.exit_code == 0
+            assert add_staged.exit_code == 0
+
+            drained = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "drain",
+                    "--spec",
+                    "harness.yaml",
+                    "--session",
+                    "s1",
+                    "--provider",
+                    "test",
+                    "--model",
+                    "model",
+                    "--owner-id",
+                    "worker-1",
+                    "--json",
+                ],
+            )
+
+            assert drained.exit_code == 0, drained.output
+            payload = json.loads(drained.output)
+            assert payload[0]["input_id"] == "input-queue"
+            assert payload[0]["status"] == "done"
+            assert payload[0]["owner_id"] == "worker-1"
+            assert payload[0]["content"] == "done:ship it"
+
+            listed = runner.invoke(
+                cli_main,
+                ["harness", "inbox", "list", "--session", "s1", "--json"],
+            )
+            rows = {row["input_id"]: row for row in json.loads(listed.output)}
+            assert rows["input-queue"]["status"] == "done"
+            assert rows["input-queue"]["run_id"]
+            assert rows["input-queue"]["owner_id"] == ""
+            assert rows["input-queue"]["lease_expires_at"] is None
+            assert rows["input-staged"]["status"] == "pending"
+
+    def test_harness_worker_processes_inbox_with_max_runs(self, runner, monkeypatch):
+        class FakeRuntime:
+            async def run(self, prompt):
+                return AgentResponse(
+                    content=f"worker:{prompt}",
+                    messages=[],
+                    tool_calls_made=0,
+                    iterations=1,
+                    stopped_reason="complete",
+                )
+
+            def cancel(self):
+                pass
+
+            def reset_cancellation(self):
+                pass
+
+        monkeypatch.setattr(
+            "superqode.harness.backends.runtime.create_runtime",
+            lambda name, **kwargs: FakeRuntime(),
+        )
+        with runner.isolated_filesystem():
+            init = runner.invoke(
+                cli_main,
+                ["harness", "init", "demo", "--template", "no-tool", "--output", "harness.yaml"],
+            )
+            assert init.exit_code == 0
+            add = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "inbox",
+                    "add",
+                    "--session",
+                    "s1",
+                    "--id",
+                    "input-worker",
+                    "--prompt",
+                    "build worker",
+                ],
+            )
+            assert add.exit_code == 0
+
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "worker",
+                    "--spec",
+                    "harness.yaml",
+                    "--session",
+                    "s1",
+                    "--provider",
+                    "test",
+                    "--model",
+                    "model",
+                    "--owner-id",
+                    "worker-1",
+                    "--max-runs",
+                    "1",
+                    "--poll-seconds",
+                    "0",
+                    "--json",
+                ],
+            )
+
+            assert result.exit_code == 0, result.output
+            payload = json.loads(result.output)
+            assert payload["owner_id"] == "worker-1"
+            assert payload["recovered"] == []
+            assert payload["processed"][0]["input_id"] == "input-worker"
+            assert payload["processed"][0]["status"] == "done"
+            assert payload["processed"][0]["content"] == "worker:build worker"
+
+            listed = runner.invoke(
+                cli_main,
+                ["harness", "inbox", "list", "--session", "s1", "--json"],
+            )
+            rows = json.loads(listed.output)
+            assert rows[0]["status"] == "done"
+            assert rows[0]["owner_id"] == ""
+            assert rows[0]["lease_expires_at"] is None
 
     def test_harness_evidence_json_reports_run_receipt(self, runner):
         from superqode.harness import FileHarnessStore, HarnessEvent, get_harness_template

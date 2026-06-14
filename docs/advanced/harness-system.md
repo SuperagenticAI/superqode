@@ -163,6 +163,7 @@ Harness specs are usable from the command line:
 superqode harness list-templates
 superqode harness list-backends
 superqode harness init my-coder --template coding --output harness.yaml
+superqode harness import-omnigent path/to/agent.yaml --output harness.yaml
 superqode harness validate --spec harness.yaml
 superqode harness validate --spec harness.yaml --schema
 superqode harness inspect --spec harness.yaml
@@ -170,6 +171,11 @@ superqode harness compile --spec harness.yaml --json
 superqode harness diff old-harness.yaml new-harness.yaml
 superqode harness doctor --spec harness.yaml
 superqode harness run --spec harness.yaml --prompt "summarize this repository"
+superqode harness inbox add --session my-session --prompt "fix auth bug"
+superqode harness inbox list --session my-session
+superqode harness inbox recover --session my-session
+superqode harness drain --spec harness.yaml --session my-session
+superqode harness worker --spec harness.yaml --session my-session --concurrency 2
 superqode harness runs
 superqode harness events <run-id>
 superqode harness evidence <run-id>
@@ -181,9 +187,28 @@ superqode harness graph <run-id>
 Use `--schema` on `harness validate` to print the HarnessSpec JSON Schema for editor integration and CI
 checks.
 
+Use `harness import-omnigent` to convert an Omnigent `agent.yaml` into a SuperQode
+`HarnessSpec` without making Omnigent the controlling runtime. The importer maps
+executor, model, prompt, instruction file, OS access, tools, and sub-agent fields
+into SuperQode's spec, then preserves Omnigent-only fields under `metadata.omnigent`.
+See [Omnigent Compatibility](omnigent-compat.md).
+
+Use `harness inbox` when you want durable prompt admission before execution. Inputs are written to the
+harness store first, then `harness drain` claims pending `queue` inputs for one session and marks each input
+`done` or `failed` with the resulting run id. `--delivery admit-only` stages an input without letting a drain
+claim it yet, which is useful for exact retry, review, or external schedulers.
+
+Drains claim inputs with an owner id and lease. Use `harness drain --owner-id worker-a --lease-seconds 300`
+when you run multiple workers, and use `harness inbox recover --stale-after 300` to move stale `running`
+inputs back to `pending` after an interrupted worker.
+
+Use `harness worker` for long-running local execution. It recovers stale inputs on startup, claims pending
+inputs with an owner lease, renews the lease while a run is active, and can process more than one input with
+`--concurrency`. For CI or scripts, use `--max-runs N` or `--once` so the worker exits after bounded work.
+
 Use `harness list-backends` to see the backend capability snapshot without loading a spec. It reports coding,
-no-tool, streaming, approval, sandbox, shell, MCP, typed-output support, dependency availability, and install
-hints for optional backends.
+no-tool, streaming, approval, sandbox, shell, MCP, typed-output, workflow-child support, event detail,
+dependency availability, and install hints for optional backends.
 
 Use `harness inspect` to view the resolved backend, model policy, tools, sandbox policy, workflow, and backend
 capability warnings before running a spec. Use `--runtime` and `--sandbox` on `inspect` to check overrides.
@@ -200,9 +225,10 @@ superqode harness diff old-harness.yaml new-harness.yaml
 superqode harness diff old-harness.yaml new-harness.yaml --json
 ```
 
-Use `harness doctor` before sharing or committing a spec. It checks spec loading, backend installation,
-backend/spec compatibility, sandbox policy, event-store writability, rich-event graph support, approval
-support, and MCP config paths.
+Use `harness doctor` before sharing or committing a spec. It checks spec loading, workflow topology,
+agent IDs and per-agent policy, requested tools, backend installation, backend/spec compatibility, local
+endpoint/model routing, sandbox policy, event-store writability, rich-event graph support, approval
+support, checks commands, hooks, skills, and MCP config paths.
 
 The default `builtin` backend supports approval pauses for ASK-permission tool calls. `pydanticai` and
 `openai-agents` also support approval pauses through their runtime adapters. Backends that cannot pause for

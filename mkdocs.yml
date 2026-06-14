@@ -193,6 +193,7 @@ nav:
     - 🔧 Tools System: advanced/tools-system.md
     - 🐍 Monty Python REPL: advanced/monty-python-repl.md
     - ⚓ Harness System: advanced/harness-system.md
+    - 🔁 Omnigent Compatibility: advanced/omnigent-compat.md
     - 🔌 Runtime Backends: runtimes.md
     - 📋 Session Management: advanced/session-management.md
     - 🧭 TUI Reference: advanced/tui.md
@@ -226,4 +227,3 @@ nav:
       - 🎛️ Profiles/Tools: cli-reference/profiles-commands.md
       - 🚀 Serve: cli-reference/serve-commands.md
       - 🩺 Doctor: cli-reference/doctor-command.md
-

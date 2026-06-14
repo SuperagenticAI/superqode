@@ -24,6 +24,14 @@ def generate_run_id() -> str:
     return f"run_{time_part}{rand_part}"
 
 
+def generate_input_id() -> str:
+    """Return a time-sortable harness inbox id."""
+    ms = int(time.time() * 1000)
+    time_part = _encode_base32(ms, 10)
+    rand_part = "".join(_ULID_ALPHABET[b % 32] for b in secrets.token_bytes(12))
+    return f"input_{time_part}{rand_part}"
+
+
 @dataclass(frozen=True)
 class HarnessSessionRecord:
     """Durable metadata for a harness session."""
@@ -53,6 +61,61 @@ class HarnessSessionRecord:
             flavor=str(data["flavor"]),
             created_at=float(data["created_at"]),
             updated_at=float(data["updated_at"]),
+            metadata=dict(data.get("metadata") or {}),
+        )
+
+
+@dataclass(frozen=True)
+class HarnessInputRecord:
+    """One durable prompt admitted to a harness session inbox."""
+
+    input_id: str
+    session_id: str
+    prompt: str
+    delivery: str
+    status: str
+    created_at: float
+    updated_at: float
+    run_id: str = ""
+    error: str = ""
+    owner_id: str = ""
+    lease_expires_at: float | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "input_id": self.input_id,
+            "session_id": self.session_id,
+            "prompt": self.prompt,
+            "delivery": self.delivery,
+            "status": self.status,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "run_id": self.run_id,
+            "error": self.error,
+            "owner_id": self.owner_id,
+            "lease_expires_at": self.lease_expires_at,
+            "metadata": dict(self.metadata),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "HarnessInputRecord":
+        return cls(
+            input_id=str(data["input_id"]),
+            session_id=str(data["session_id"]),
+            prompt=str(data["prompt"]),
+            delivery=str(data.get("delivery") or "queue"),
+            status=str(data.get("status") or "pending"),
+            created_at=float(data["created_at"]),
+            updated_at=float(data["updated_at"]),
+            run_id=str(data.get("run_id") or ""),
+            error=str(data.get("error") or ""),
+            owner_id=str(data.get("owner_id") or ""),
+            lease_expires_at=(
+                float(data["lease_expires_at"])
+                if data.get("lease_expires_at") is not None
+                else None
+            ),
             metadata=dict(data.get("metadata") or {}),
         )
 
@@ -197,6 +260,7 @@ class MemoryHarnessStore:
         self._sessions: dict[str, HarnessSessionRecord] = {}
         self._runs: dict[str, HarnessRunRecord] = {}
         self._graphs: dict[str, HarnessEventGraph] = {}
+        self._inputs: dict[str, HarnessInputRecord] = {}
 
     def open_session(
         self,
@@ -228,6 +292,182 @@ class MemoryHarnessStore:
         records = list(self._sessions.values())
         records.sort(key=lambda item: item.updated_at, reverse=True)
         return records
+
+    def admit_input(
+        self,
+        *,
+        session_id: str,
+        prompt: str,
+        delivery: str = "queue",
+        input_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> HarnessInputRecord:
+        input_id = input_id or generate_input_id()
+        if input_id in self._inputs:
+            existing = self._inputs[input_id]
+            if existing.session_id == session_id and existing.prompt == prompt:
+                return existing
+            raise ValueError(f"Harness input id already exists with different content: {input_id}")
+        now = time.time()
+        record = HarnessInputRecord(
+            input_id=input_id,
+            session_id=session_id,
+            prompt=prompt,
+            delivery=delivery,
+            status="pending",
+            created_at=now,
+            updated_at=now,
+            metadata=dict(metadata or {}),
+        )
+        self._inputs[input_id] = record
+        return record
+
+    def list_inputs(
+        self,
+        *,
+        session_id: str | None = None,
+        status: str | None = None,
+    ) -> list[HarnessInputRecord]:
+        records = [
+            record
+            for record in self._inputs.values()
+            if (session_id is None or record.session_id == session_id)
+            and (status is None or record.status == status)
+        ]
+        records.sort(key=lambda item: item.created_at)
+        return records
+
+    def claim_next_input(
+        self,
+        *,
+        session_id: str,
+        owner_id: str = "",
+        lease_seconds: int = 300,
+    ) -> HarnessInputRecord | None:
+        pending = [
+            item
+            for item in self.list_inputs(session_id=session_id, status="pending")
+            if item.delivery != "admit-only"
+        ]
+        if not pending:
+            return None
+        record = pending[0]
+        updated = HarnessInputRecord(
+            **{
+                **record.__dict__,
+                "status": "running",
+                "owner_id": owner_id,
+                "lease_expires_at": _lease_expires_at(lease_seconds),
+                "updated_at": time.time(),
+            }
+        )
+        self._inputs[record.input_id] = updated
+        return updated
+
+    def mark_input_done(
+        self,
+        input_id: str,
+        *,
+        run_id: str = "",
+        owner_id: str = "",
+    ) -> HarnessInputRecord:
+        return self._update_input(
+            input_id, status="done", run_id=run_id, error="", owner_id=owner_id
+        )
+
+    def mark_input_failed(
+        self,
+        input_id: str,
+        *,
+        error: str,
+        run_id: str = "",
+        owner_id: str = "",
+    ) -> HarnessInputRecord:
+        return self._update_input(
+            input_id, status="failed", run_id=run_id, error=error, owner_id=owner_id
+        )
+
+    def renew_input_lease(
+        self,
+        input_id: str,
+        *,
+        owner_id: str,
+        lease_seconds: int = 300,
+    ) -> HarnessInputRecord:
+        record = self._inputs.get(input_id)
+        if record is None:
+            raise KeyError(f"Unknown harness input: {input_id}")
+        _assert_input_owner(record, owner_id)
+        if record.status != "running":
+            raise ValueError(f"Harness input {input_id} is not running")
+        updated = HarnessInputRecord(
+            **{
+                **record.__dict__,
+                "lease_expires_at": _lease_expires_at(lease_seconds),
+                "updated_at": time.time(),
+            }
+        )
+        self._inputs[input_id] = updated
+        return updated
+
+    def recover_stale_inputs(
+        self,
+        *,
+        session_id: str | None = None,
+        stale_after_seconds: int = 300,
+    ) -> list[HarnessInputRecord]:
+        cutoff = time.time() - max(0, stale_after_seconds)
+        recovered: list[HarnessInputRecord] = []
+        for record in self.list_inputs(session_id=session_id, status="running"):
+            stale_by_update = record.updated_at <= cutoff
+            stale_by_lease = (
+                record.lease_expires_at is not None and record.lease_expires_at <= time.time()
+            )
+            if not stale_by_update and not stale_by_lease:
+                continue
+            updated = HarnessInputRecord(
+                **{
+                    **record.__dict__,
+                    "status": "pending",
+                    "owner_id": "",
+                    "lease_expires_at": None,
+                    "updated_at": time.time(),
+                    "metadata": {
+                        **record.metadata,
+                        "recovered_from_owner": record.owner_id,
+                    },
+                }
+            )
+            self._inputs[record.input_id] = updated
+            recovered.append(updated)
+        return recovered
+
+    def _update_input(
+        self,
+        input_id: str,
+        *,
+        status: str,
+        run_id: str,
+        error: str,
+        owner_id: str = "",
+    ) -> HarnessInputRecord:
+        record = self._inputs.get(input_id)
+        if record is None:
+            raise KeyError(f"Unknown harness input: {input_id}")
+        _assert_input_owner(record, owner_id)
+        updated = HarnessInputRecord(
+            **{
+                **record.__dict__,
+                "status": status,
+                "run_id": run_id,
+                "error": error,
+                "owner_id": "",
+                "lease_expires_at": None,
+                "updated_at": time.time(),
+            }
+        )
+        self._inputs[input_id] = updated
+        return updated
 
     def start_run(
         self,
@@ -389,8 +629,10 @@ class FileHarnessStore:
         self.root = Path(root)
         self.sessions_dir = self.root / "sessions"
         self.runs_dir = self.root / "runs"
+        self.inputs_dir = self.root / "inputs"
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self.runs_dir.mkdir(parents=True, exist_ok=True)
+        self.inputs_dir.mkdir(parents=True, exist_ok=True)
 
     def open_session(
         self,
@@ -434,6 +676,193 @@ class FileHarnessStore:
                 continue
         records.sort(key=lambda item: item.updated_at, reverse=True)
         return records
+
+    def admit_input(
+        self,
+        *,
+        session_id: str,
+        prompt: str,
+        delivery: str = "queue",
+        input_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> HarnessInputRecord:
+        input_id = input_id or generate_input_id()
+        path = self._input_path(input_id)
+        if path.exists():
+            existing = HarnessInputRecord.from_dict(json.loads(path.read_text(encoding="utf-8")))
+            if existing.session_id == session_id and existing.prompt == prompt:
+                return existing
+            raise ValueError(f"Harness input id already exists with different content: {input_id}")
+        now = time.time()
+        record = HarnessInputRecord(
+            input_id=input_id,
+            session_id=session_id,
+            prompt=prompt,
+            delivery=delivery,
+            status="pending",
+            created_at=now,
+            updated_at=now,
+            metadata=dict(metadata or {}),
+        )
+        self._write_json(path, record.to_dict())
+        return record
+
+    def list_inputs(
+        self,
+        *,
+        session_id: str | None = None,
+        status: str | None = None,
+    ) -> list[HarnessInputRecord]:
+        records: list[HarnessInputRecord] = []
+        for path in self.inputs_dir.glob("*.json"):
+            try:
+                record = HarnessInputRecord.from_dict(json.loads(path.read_text(encoding="utf-8")))
+            except (json.JSONDecodeError, KeyError, ValueError):
+                continue
+            if session_id is not None and record.session_id != session_id:
+                continue
+            if status is not None and record.status != status:
+                continue
+            records.append(record)
+        records.sort(key=lambda item: item.created_at)
+        return records
+
+    def claim_next_input(
+        self,
+        *,
+        session_id: str,
+        owner_id: str = "",
+        lease_seconds: int = 300,
+    ) -> HarnessInputRecord | None:
+        pending = [
+            item
+            for item in self.list_inputs(session_id=session_id, status="pending")
+            if item.delivery != "admit-only"
+        ]
+        if not pending:
+            return None
+        return self._update_input(
+            pending[0].input_id,
+            status="running",
+            run_id="",
+            error="",
+            claim_owner_id=owner_id,
+            lease_seconds=lease_seconds,
+        )
+
+    def mark_input_done(
+        self,
+        input_id: str,
+        *,
+        run_id: str = "",
+        owner_id: str = "",
+    ) -> HarnessInputRecord:
+        return self._update_input(
+            input_id, status="done", run_id=run_id, error="", owner_id=owner_id
+        )
+
+    def mark_input_failed(
+        self,
+        input_id: str,
+        *,
+        error: str,
+        run_id: str = "",
+        owner_id: str = "",
+    ) -> HarnessInputRecord:
+        return self._update_input(
+            input_id, status="failed", run_id=run_id, error=error, owner_id=owner_id
+        )
+
+    def renew_input_lease(
+        self,
+        input_id: str,
+        *,
+        owner_id: str,
+        lease_seconds: int = 300,
+    ) -> HarnessInputRecord:
+        path = self._input_path(input_id)
+        if not path.exists():
+            raise KeyError(f"Unknown harness input: {input_id}")
+        record = HarnessInputRecord.from_dict(json.loads(path.read_text(encoding="utf-8")))
+        _assert_input_owner(record, owner_id)
+        if record.status != "running":
+            raise ValueError(f"Harness input {input_id} is not running")
+        updated = HarnessInputRecord(
+            **{
+                **record.__dict__,
+                "lease_expires_at": _lease_expires_at(lease_seconds),
+                "updated_at": time.time(),
+            }
+        )
+        self._write_json(path, updated.to_dict())
+        return updated
+
+    def recover_stale_inputs(
+        self,
+        *,
+        session_id: str | None = None,
+        stale_after_seconds: int = 300,
+    ) -> list[HarnessInputRecord]:
+        cutoff = time.time() - max(0, stale_after_seconds)
+        recovered: list[HarnessInputRecord] = []
+        for record in self.list_inputs(session_id=session_id, status="running"):
+            stale_by_update = record.updated_at <= cutoff
+            stale_by_lease = (
+                record.lease_expires_at is not None and record.lease_expires_at <= time.time()
+            )
+            if not stale_by_update and not stale_by_lease:
+                continue
+            recovered.append(
+                self._update_input(
+                    record.input_id,
+                    status="pending",
+                    run_id=record.run_id,
+                    error="",
+                    recover=True,
+                )
+            )
+        return recovered
+
+    def _update_input(
+        self,
+        input_id: str,
+        *,
+        status: str,
+        run_id: str,
+        error: str,
+        owner_id: str = "",
+        claim_owner_id: str = "",
+        lease_seconds: int = 300,
+        recover: bool = False,
+    ) -> HarnessInputRecord:
+        path = self._input_path(input_id)
+        if not path.exists():
+            raise KeyError(f"Unknown harness input: {input_id}")
+        record = HarnessInputRecord.from_dict(json.loads(path.read_text(encoding="utf-8")))
+        if not claim_owner_id and not recover:
+            _assert_input_owner(record, owner_id)
+        updated = HarnessInputRecord(
+            **{
+                **record.__dict__,
+                "status": status,
+                "run_id": run_id or record.run_id,
+                "error": error,
+                "owner_id": "" if status in {"done", "failed"} or recover else claim_owner_id,
+                "lease_expires_at": (
+                    None
+                    if status in {"done", "failed"} or recover
+                    else _lease_expires_at(lease_seconds)
+                ),
+                "updated_at": time.time(),
+                "metadata": (
+                    {**record.metadata, "recovered_from_owner": record.owner_id}
+                    if recover
+                    else record.metadata
+                ),
+            }
+        )
+        self._write_json(path, updated.to_dict())
+        return updated
 
     def start_run(
         self,
@@ -607,6 +1036,9 @@ class FileHarnessStore:
     def _run_path(self, run_id: str) -> Path:
         return self.runs_dir / f"{_safe_id(run_id)}.json"
 
+    def _input_path(self, input_id: str) -> Path:
+        return self.inputs_dir / f"{_safe_id(input_id)}.json"
+
     def _write_json(self, path: Path, data: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(path.suffix + ".tmp")
@@ -676,6 +1108,259 @@ class SQLiteHarnessStore:
         with self._connect() as conn:
             rows = conn.execute("select * from sessions order by updated_at desc").fetchall()
         return [_session_from_row(row) for row in rows]
+
+    def admit_input(
+        self,
+        *,
+        session_id: str,
+        prompt: str,
+        delivery: str = "queue",
+        input_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> HarnessInputRecord:
+        input_id = input_id or generate_input_id()
+        existing = self.get_input(input_id)
+        if existing is not None:
+            if existing.session_id == session_id and existing.prompt == prompt:
+                return existing
+            raise ValueError(f"Harness input id already exists with different content: {input_id}")
+        now = time.time()
+        record = HarnessInputRecord(
+            input_id=input_id,
+            session_id=session_id,
+            prompt=prompt,
+            delivery=delivery,
+            status="pending",
+            created_at=now,
+            updated_at=now,
+            metadata=dict(metadata or {}),
+        )
+        with self._connect() as conn:
+            conn.execute(
+                """
+                insert into inputs(
+                    input_id, session_id, prompt, delivery, status, created_at,
+                    updated_at, run_id, error, owner_id, lease_expires_at, metadata
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.input_id,
+                    record.session_id,
+                    record.prompt,
+                    record.delivery,
+                    record.status,
+                    record.created_at,
+                    record.updated_at,
+                    record.run_id,
+                    record.error,
+                    record.owner_id,
+                    record.lease_expires_at,
+                    json.dumps(record.metadata, sort_keys=True),
+                ),
+            )
+        return record
+
+    def get_input(self, input_id: str) -> HarnessInputRecord | None:
+        with self._connect() as conn:
+            row = conn.execute("select * from inputs where input_id = ?", (input_id,)).fetchone()
+        return _input_from_row(row) if row else None
+
+    def list_inputs(
+        self,
+        *,
+        session_id: str | None = None,
+        status: str | None = None,
+    ) -> list[HarnessInputRecord]:
+        where = []
+        params: list[str] = []
+        if session_id is not None:
+            where.append("session_id = ?")
+            params.append(session_id)
+        if status is not None:
+            where.append("status = ?")
+            params.append(status)
+        clause = f"where {' and '.join(where)}" if where else ""
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"select * from inputs {clause} order by created_at asc",  # noqa: S608
+                params,
+            ).fetchall()
+        return [_input_from_row(row) for row in rows]
+
+    def claim_next_input(
+        self,
+        *,
+        session_id: str,
+        owner_id: str = "",
+        lease_seconds: int = 300,
+    ) -> HarnessInputRecord | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                select * from inputs
+                where session_id = ? and status = 'pending' and delivery != 'admit-only'
+                order by created_at asc
+                limit 1
+                """,
+                (session_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            conn.execute(
+                """
+                update inputs
+                set status = ?, owner_id = ?, lease_expires_at = ?, updated_at = ?
+                where input_id = ?
+                """,
+                (
+                    "running",
+                    owner_id,
+                    _lease_expires_at(lease_seconds),
+                    time.time(),
+                    row["input_id"],
+                ),
+            )
+        return self.get_input(row["input_id"])
+
+    def mark_input_done(
+        self,
+        input_id: str,
+        *,
+        run_id: str = "",
+        owner_id: str = "",
+    ) -> HarnessInputRecord:
+        return self._update_input(
+            input_id, status="done", run_id=run_id, error="", owner_id=owner_id
+        )
+
+    def mark_input_failed(
+        self,
+        input_id: str,
+        *,
+        error: str,
+        run_id: str = "",
+        owner_id: str = "",
+    ) -> HarnessInputRecord:
+        return self._update_input(
+            input_id, status="failed", run_id=run_id, error=error, owner_id=owner_id
+        )
+
+    def renew_input_lease(
+        self,
+        input_id: str,
+        *,
+        owner_id: str,
+        lease_seconds: int = 300,
+    ) -> HarnessInputRecord:
+        existing = self.get_input(input_id)
+        if existing is None:
+            raise KeyError(f"Unknown harness input: {input_id}")
+        _assert_input_owner(existing, owner_id)
+        if existing.status != "running":
+            raise ValueError(f"Harness input {input_id} is not running")
+        with self._connect() as conn:
+            conn.execute(
+                """
+                update inputs
+                set lease_expires_at = ?, updated_at = ?
+                where input_id = ?
+                """,
+                (_lease_expires_at(lease_seconds), time.time(), input_id),
+            )
+        updated = self.get_input(input_id)
+        if updated is None:
+            raise KeyError(f"Unknown harness input: {input_id}")
+        return updated
+
+    def recover_stale_inputs(
+        self,
+        *,
+        session_id: str | None = None,
+        stale_after_seconds: int = 300,
+    ) -> list[HarnessInputRecord]:
+        cutoff = time.time() - max(0, stale_after_seconds)
+        now = time.time()
+        where = ["status = 'running'"]
+        params: list[str] = []
+        if session_id is not None:
+            where.append("session_id = ?")
+            params.append(session_id)
+        clause = " and ".join(where)
+        recovered: list[HarnessInputRecord] = []
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"select * from inputs where {clause} order by created_at asc",  # noqa: S608
+                params,
+            ).fetchall()
+            for row in rows:
+                record = _input_from_row(row)
+                stale_by_update = record.updated_at <= cutoff
+                stale_by_lease = (
+                    record.lease_expires_at is not None and record.lease_expires_at <= now
+                )
+                if not stale_by_update and not stale_by_lease:
+                    continue
+                metadata = {**record.metadata, "recovered_from_owner": record.owner_id}
+                conn.execute(
+                    """
+                    update inputs
+                    set status = ?, error = ?, owner_id = ?, lease_expires_at = ?,
+                        updated_at = ?, metadata = ?
+                    where input_id = ?
+                    """,
+                    (
+                        "pending",
+                        "",
+                        "",
+                        None,
+                        time.time(),
+                        json.dumps(metadata, sort_keys=True),
+                        record.input_id,
+                    ),
+                )
+                recovered.append(
+                    HarnessInputRecord(
+                        **{
+                            **record.__dict__,
+                            "status": "pending",
+                            "error": "",
+                            "owner_id": "",
+                            "lease_expires_at": None,
+                            "updated_at": time.time(),
+                            "metadata": metadata,
+                        }
+                    )
+                )
+        return recovered
+
+    def _update_input(
+        self,
+        input_id: str,
+        *,
+        status: str,
+        run_id: str,
+        error: str,
+        owner_id: str = "",
+    ) -> HarnessInputRecord:
+        existing = self.get_input(input_id)
+        if existing is None:
+            raise KeyError(f"Unknown harness input: {input_id}")
+        _assert_input_owner(existing, owner_id)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                update inputs
+                set status = ?, run_id = ?, error = ?, owner_id = ?, lease_expires_at = ?,
+                    updated_at = ?
+                where input_id = ?
+                """,
+                (status, run_id or existing.run_id, error, "", None, time.time(), input_id),
+            )
+        updated = self.get_input(input_id)
+        if updated is None:
+            raise KeyError(f"Unknown harness input: {input_id}")
+        return updated
 
     def start_run(
         self,
@@ -957,6 +1642,22 @@ class SQLiteHarnessStore:
                 );
                 create index if not exists idx_runs_session_started
                     on runs(session_id, started_at desc);
+                create table if not exists inputs (
+                    input_id text primary key,
+                    session_id text not null,
+                    prompt text not null,
+                    delivery text not null,
+                    status text not null,
+                    created_at real not null,
+                    updated_at real not null,
+                    run_id text not null,
+                    error text not null,
+                    owner_id text not null default '',
+                    lease_expires_at real,
+                    metadata text not null
+                );
+                create index if not exists idx_inputs_session_status_created
+                    on inputs(session_id, status, created_at);
                 create table if not exists events (
                     run_id text not null,
                     position integer not null,
@@ -988,6 +1689,8 @@ class SQLiteHarnessStore:
                 );
                 """
             )
+            _ensure_sqlite_column(conn, "inputs", "owner_id", "text not null default ''")
+            _ensure_sqlite_column(conn, "inputs", "lease_expires_at", "real")
 
 
 def create_harness_store(
@@ -1064,6 +1767,48 @@ def _session_from_row(row: sqlite3.Row) -> HarnessSessionRecord:
         updated_at=float(row["updated_at"]),
         metadata=json.loads(row["metadata"] or "{}"),
     )
+
+
+def _input_from_row(row: sqlite3.Row) -> HarnessInputRecord:
+    return HarnessInputRecord(
+        input_id=row["input_id"],
+        session_id=row["session_id"],
+        prompt=row["prompt"],
+        delivery=row["delivery"],
+        status=row["status"],
+        created_at=float(row["created_at"]),
+        updated_at=float(row["updated_at"]),
+        run_id=row["run_id"] or "",
+        error=row["error"] or "",
+        owner_id=row["owner_id"] or "",
+        lease_expires_at=(
+            float(row["lease_expires_at"]) if row["lease_expires_at"] is not None else None
+        ),
+        metadata=json.loads(row["metadata"] or "{}"),
+    )
+
+
+def _lease_expires_at(lease_seconds: int) -> float:
+    return time.time() + max(0, lease_seconds)
+
+
+def _assert_input_owner(record: HarnessInputRecord, owner_id: str) -> None:
+    if owner_id and record.owner_id and record.owner_id != owner_id:
+        raise PermissionError(
+            f"Harness input {record.input_id} is owned by {record.owner_id!r}, not {owner_id!r}"
+        )
+
+
+def _ensure_sqlite_column(
+    conn: sqlite3.Connection,
+    table: str,
+    column: str,
+    definition: str,
+) -> None:
+    rows = conn.execute(f"pragma table_info({table})").fetchall()  # noqa: S608
+    if any(row["name"] == column for row in rows):
+        return
+    conn.execute(f"alter table {table} add column {column} {definition}")  # noqa: S608
 
 
 def _event_from_row(row: sqlite3.Row) -> HarnessEvent:

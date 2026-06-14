@@ -338,6 +338,7 @@ superqode sandbox run e2b -- "pytest -q"
 |---------|-------------|
 | `superqode harness list-templates` | List built-in harness templates |
 | `superqode harness list-backends` | List harness runtime backends |
+| `superqode harness import-omnigent <agent.yaml>` | Convert an Omnigent agent spec to a SuperQode harness |
 | `superqode harness inspect --spec <file>` | Show resolved harness policy |
 | `superqode harness compile --spec <file>` | Compile effective harness settings |
 | `superqode harness diff old.yaml new.yaml` | Compare two harness specs |

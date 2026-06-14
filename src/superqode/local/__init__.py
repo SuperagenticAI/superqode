@@ -13,21 +13,29 @@ from .engines import EngineStatus, detect_engines
 from .inventory import LocalModel, inventory_models
 from .matrix import StackRecommendation, load_matrix, recommend
 from .doctor import DoctorReport, run_doctor
+from .guardrails import LocalGuardrails, build_guardrails, render_guardrails
 from .optimize import OptimizationReport, RoleRecommendation, recommend_roles
+from .repo import RepoProfile, analyze_repository, render_repo_profile
 
 __all__ = [
     "DoctorReport",
     "EngineStatus",
     "HardwareProfile",
     "LocalModel",
+    "LocalGuardrails",
     "OptimizationReport",
     "RoleRecommendation",
+    "RepoProfile",
     "StackRecommendation",
+    "analyze_repository",
+    "build_guardrails",
     "detect_engines",
     "detect_hardware",
     "inventory_models",
     "load_matrix",
     "recommend",
     "recommend_roles",
+    "render_guardrails",
+    "render_repo_profile",
     "run_doctor",
 ]

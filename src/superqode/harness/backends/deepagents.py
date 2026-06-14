@@ -34,6 +34,8 @@ class DeepAgentsHarnessBackend:
         supports_shell=True,
         supports_mcp=False,
         supports_typed_output=True,
+        supports_workflow_children=True,
+        event_detail="rich",
         notes=(
             "DeepAgents requires a tool-capable harness.",
             "DeepAgents currently requires allow_shell=True with its filesystem backend.",

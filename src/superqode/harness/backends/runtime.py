@@ -139,6 +139,8 @@ def _runtime_capabilities(runtime_name: str) -> HarnessBackendCapabilities:
             supports_shell=True,
             supports_mcp=True,
             supports_typed_output=False,
+            supports_workflow_children=True,
+            event_detail="rich",
             notes=(
                 "Anthropic Claude Agent SDK runtime (API key via ANTHROPIC_API_KEY). "
                 "TUI approval callbacks are bridged via can_use_tool; MCP and slash "
@@ -156,6 +158,8 @@ def _runtime_capabilities(runtime_name: str) -> HarnessBackendCapabilities:
             supports_shell=True,
             supports_mcp=True,
             supports_typed_output=False,
+            supports_workflow_children=True,
+            event_detail="rich",
             notes=(
                 "Official Codex SDK runtime. TUI approval callbacks are bridged "
                 "through SuperQode's inline prompt; harness pause/resume approvals "
@@ -174,6 +178,8 @@ def _runtime_capabilities(runtime_name: str) -> HarnessBackendCapabilities:
             supports_shell=True,
             supports_mcp=True,
             supports_typed_output=True,
+            supports_workflow_children=True,
+            event_detail="rich",
             notes=("OpenAI Agents approval pauses surface through HarnessKernel.",),
         )
     if runtime_name == "adk":
@@ -187,6 +193,8 @@ def _runtime_capabilities(runtime_name: str) -> HarnessBackendCapabilities:
             supports_shell=True,
             supports_mcp=False,
             supports_typed_output=True,
+            supports_workflow_children=True,
+            event_detail="rich",
             notes=("Google ADK uses SuperQode tool and permission bridging.",),
         )
     if runtime_name == "pydanticai":
@@ -200,6 +208,8 @@ def _runtime_capabilities(runtime_name: str) -> HarnessBackendCapabilities:
             supports_shell=True,
             supports_mcp=True,
             supports_typed_output=True,
+            supports_workflow_children=True,
+            event_detail="rich",
             notes=("PydanticAI uses SuperQode JSON-schema tool bridging.",),
         )
     if runtime_name == "builtin":
@@ -213,6 +223,8 @@ def _runtime_capabilities(runtime_name: str) -> HarnessBackendCapabilities:
             supports_shell=True,
             supports_mcp=True,
             supports_typed_output=True,
+            supports_workflow_children=True,
+            event_detail="rich",
             notes=("Builtin runtime pauses ASK-permission tool calls through HarnessKernel.",),
         )
     return HarnessBackendCapabilities(
@@ -225,6 +237,8 @@ def _runtime_capabilities(runtime_name: str) -> HarnessBackendCapabilities:
         supports_shell=True,
         supports_mcp=True,
         supports_typed_output=True,
+        supports_workflow_children=True,
+        event_detail="rich",
         notes=("Native runtime is the canonical SuperQode harness path.",),
     )
 

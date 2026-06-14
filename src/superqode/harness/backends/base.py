@@ -26,6 +26,8 @@ class HarnessBackendCapabilities:
     supports_shell: bool = False
     supports_mcp: bool = False
     supports_typed_output: bool = True
+    supports_workflow_children: bool = True
+    event_detail: str = "coarse"
     availability: str = "unknown"
     install_hint: str | None = None
     notes: tuple[str, ...] = ()
@@ -41,6 +43,8 @@ class HarnessBackendCapabilities:
             "supports_shell": self.supports_shell,
             "supports_mcp": self.supports_mcp,
             "supports_typed_output": self.supports_typed_output,
+            "supports_workflow_children": self.supports_workflow_children,
+            "event_detail": self.event_detail,
             "availability": self.availability,
             "install_hint": self.install_hint,
             "notes": list(self.notes),

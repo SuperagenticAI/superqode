@@ -222,6 +222,12 @@ def doctor_harness(
         fix="No action needed.",
     )
 
+    workflow_check = _workflow_readiness_check(spec)
+    add("workflow", workflow_check["status"], workflow_check["message"], **workflow_check["data"])
+
+    agent_check = _agent_readiness_check(spec)
+    add("agents", agent_check["status"], agent_check["message"], **agent_check["data"])
+
     if backend_name not in known_harness_backend_names():
         add(
             "backend",
@@ -274,6 +280,9 @@ def doctor_harness(
 
     tool_check = _tool_check(spec)
     add("tools", tool_check["status"], tool_check["message"], **tool_check["data"])
+
+    local_check = _local_routing_check(spec)
+    add("local_routing", local_check["status"], local_check["message"], **local_check["data"])
 
     skill_check = _skill_check(spec, root)
     add("skills", skill_check["status"], skill_check["message"], **skill_check["data"])
@@ -329,20 +338,22 @@ def doctor_harness(
             fix="No action needed.",
         )
 
+    graph_capabilities = backend_capabilities(backend_name)
+    rich_events = graph_capabilities.event_detail == "rich"
     add(
         "event_graph",
-        "ok"
-        if backend_name in {"builtin", "pydanticai", "openai-agents", "deepagents"}
-        else "warning",
+        "ok" if rich_events else "warning",
         (
             f"Backend '{backend_name}' emits rich graph events."
-            if backend_name in {"builtin", "pydanticai", "openai-agents", "deepagents"}
+            if rich_events
             else f"Backend '{backend_name}' emits coarse graph events."
         ),
-        rich_events=backend_name in {"builtin", "pydanticai", "openai-agents", "deepagents"},
+        rich_events=rich_events,
+        event_detail=graph_capabilities.event_detail,
+        workflow_children=graph_capabilities.supports_workflow_children,
         fix=(
             "No action needed."
-            if backend_name in {"builtin", "pydanticai", "openai-agents", "deepagents"}
+            if rich_events
             else "Use a richer runtime backend when you need detailed evidence graphs."
         ),
     )
@@ -912,6 +923,136 @@ def _checks_line(checks: dict[str, Any]) -> str:
     return f"Checks: {status} ({len(steps)} step(s))"
 
 
+def _workflow_readiness_check(spec: HarnessSpec) -> dict[str, Any]:
+    warnings: list[str] = []
+    errors: list[str] = []
+    config = spec.workflow.config
+    mode = spec.workflow.mode
+
+    if spec.workflow.parallelism < 1:
+        errors.append("workflow.parallelism must be at least 1")
+    if spec.workflow.max_task_depth < 1:
+        errors.append("workflow.max_task_depth must be at least 1")
+
+    if mode != WorkflowMode.SINGLE and not spec.agents:
+        warnings.append("non-single workflow has no agents; doctor can only validate generated steps")
+    if mode == WorkflowMode.EVALUATOR_OPTIMIZER and len(spec.agents) not in {0, 3}:
+        warnings.append("evaluator_optimizer works best with exactly candidate/evaluator/optimizer agents")
+
+    retry_value = config.get("max_retries")
+    if retry_value is not None and _int_or_none(retry_value) is None:
+        errors.append("workflow.config.max_retries must be an integer")
+    elif _int_or_none(retry_value) is not None and int(retry_value) < 0:
+        errors.append("workflow.config.max_retries must be >= 0")
+
+    continue_value = config.get("continue_on_error")
+    if continue_value is not None and not isinstance(continue_value, bool):
+        errors.append("workflow.config.continue_on_error must be true or false")
+
+    fallback_prompt = str(config.get("fallback_prompt") or "")
+    fallback_step_id = str(config.get("fallback_step_id") or "")
+    if fallback_step_id and not fallback_prompt:
+        warnings.append("fallback_step_id is set but fallback_prompt is empty")
+
+    status = "error" if errors else "warning" if warnings else "ok"
+    return {
+        "status": status,
+        "message": (
+            "Workflow topology has blockers."
+            if errors
+            else "Workflow topology has warnings."
+            if warnings
+            else "Workflow topology is ready."
+        ),
+        "data": {
+            "mode": mode.value,
+            "agents": len(spec.agents),
+            "parallelism": spec.workflow.parallelism,
+            "max_task_depth": spec.workflow.max_task_depth,
+            "failure_policy": {
+                "max_retries": _int_or_none(retry_value) or 0,
+                "continue_on_error": bool(config.get("continue_on_error", False)),
+                "fallback_prompt": bool(fallback_prompt),
+                "fallback_step_id": fallback_step_id or "fallback",
+            },
+            "warnings": warnings,
+            "errors": errors,
+            "fix": (
+                "Fix invalid workflow numeric/boolean values."
+                if errors
+                else "Add explicit agents for stronger workflow validation."
+                if warnings
+                else "No action needed."
+            ),
+        },
+    }
+
+
+def _agent_readiness_check(spec: HarnessSpec) -> dict[str, Any]:
+    warnings: list[str] = []
+    errors: list[str] = []
+    ids = [agent.id for agent in spec.agents]
+    duplicates = sorted({agent_id for agent_id in ids if ids.count(agent_id) > 1})
+    if duplicates:
+        errors.append(f"duplicate agent ids: {_join(duplicates)}")
+
+    agents: list[dict[str, Any]] = []
+    known_tools = {tool.name for tool in ToolRegistry.full().list()}
+    for agent in spec.agents:
+        missing_tools = [
+            tool for tool in agent.tools if tool not in known_tools and not tool.startswith("mcp_")
+        ]
+        if missing_tools:
+            errors.append(f"{agent.id}: unknown tools {_join(missing_tools)}")
+        if agent.max_iterations is not None and agent.max_iterations < 1:
+            errors.append(f"{agent.id}: max_iterations must be >= 1")
+        if not agent.role and spec.workflow.mode != WorkflowMode.SINGLE:
+            warnings.append(f"{agent.id}: role is empty")
+        provider = str(agent.config.get("provider") or "")
+        if provider and provider not in PROVIDERS and provider not in LOCAL_PROVIDER_ALIASES:
+            errors.append(f"{agent.id}: unknown provider '{provider}'")
+        agents.append(
+            {
+                "id": agent.id,
+                "role": agent.role,
+                "model": agent.model,
+                "provider": provider,
+                "runtime": agent.config.get("runtime") or "",
+                "tools": list(agent.tools),
+                "missing_tools": missing_tools,
+                "max_iterations": agent.max_iterations,
+            }
+        )
+
+    if not spec.agents:
+        warnings.append("no agents declared; workflow prompts will be generated from the user task")
+
+    status = "error" if errors else "warning" if warnings else "ok"
+    return {
+        "status": status,
+        "message": (
+            "Agent policy has blockers."
+            if errors
+            else "Agent policy has warnings."
+            if warnings
+            else "Agent policy is ready."
+        ),
+        "data": {
+            "agents": agents,
+            "duplicates": duplicates,
+            "warnings": warnings,
+            "errors": errors,
+            "fix": (
+                "Give each agent a unique id and only reference registered tools/providers."
+                if errors
+                else "Declare explicit agent roles for portable workflow specs."
+                if warnings
+                else "No action needed."
+            ),
+        },
+    }
+
+
 def _model_policy_check(spec: HarnessSpec) -> dict[str, Any]:
     models = [item for item in (spec.model_policy.primary, *spec.model_policy.fallbacks) if item]
     agent_models = sorted({agent.model for agent in spec.agents if agent.model})
@@ -1018,6 +1159,78 @@ def _tool_check(spec: HarnessSpec) -> dict[str, Any]:
                 if missing
                 else "Declare runtime.config.mcp_config_path when using mcp_* tools."
                 if warnings
+                else "No action needed."
+            ),
+        },
+    }
+
+
+def _local_routing_check(spec: HarnessSpec) -> dict[str, Any]:
+    endpoints = _configured_endpoints(spec)
+    local_models = _local_model_refs(spec)
+    if not endpoints and not local_models:
+        return {
+            "status": "ok",
+            "message": "No explicit local endpoint routing is configured.",
+            "data": {
+                "endpoints": [],
+                "models": [],
+                "reachable": [],
+                "missing_models": [],
+                "warnings": [],
+                "errors": [],
+                "fix": "No action needed.",
+            },
+        }
+
+    warnings: list[str] = []
+    errors: list[str] = []
+    reachable: list[str] = []
+    missing_models: list[dict[str, str]] = []
+    endpoint_models: dict[str, list[str]] = {}
+    for endpoint in endpoints:
+        try:
+            from superqode.local.bench import list_endpoint_models
+
+            models = list_endpoint_models(endpoint, timeout=0.5)
+        except Exception as exc:  # noqa: BLE001
+            models = []
+            warnings.append(f"{endpoint}: model list failed ({exc})")
+        endpoint_models[endpoint] = models
+        if models:
+            reachable.append(endpoint)
+        else:
+            warnings.append(f"{endpoint}: not reachable or returned no models")
+
+    if endpoints and local_models and endpoint_models:
+        for model in local_models:
+            bare = _model_without_provider(model)
+            for endpoint, models in endpoint_models.items():
+                if models and bare not in models and model not in models:
+                    missing_models.append({"endpoint": endpoint, "model": model})
+                    warnings.append(f"{endpoint}: model '{model}' was not listed")
+
+    status = "error" if errors else "warning" if warnings else "ok"
+    return {
+        "status": status,
+        "message": (
+            "Local routing has blockers."
+            if errors
+            else "Local routing has warnings."
+            if warnings
+            else "Local routing is ready."
+        ),
+        "data": {
+            "endpoints": endpoints,
+            "models": local_models,
+            "reachable": reachable,
+            "endpoint_models": endpoint_models,
+            "missing_models": missing_models,
+            "warnings": warnings,
+            "errors": errors,
+            "fix": (
+                "Start the local model server or update endpoint/model routing."
+                if warnings or errors
                 else "No action needed."
             ),
         },
@@ -1446,6 +1659,56 @@ def _provider_from_model(model: str) -> str:
 
 def _model_without_provider(model: str) -> str:
     return model.split("/", 1)[1] if "/" in model else model
+
+
+def _configured_endpoints(spec: HarnessSpec) -> list[str]:
+    endpoints: list[str] = []
+    keys = ("endpoint", "base_url", "api_base", "api_url")
+
+    def collect(config: dict[str, Any]) -> None:
+        for key in keys:
+            value = config.get(key)
+            if isinstance(value, str) and value.strip():
+                endpoints.append(value.strip())
+
+    collect(spec.runtime.config)
+    collect(spec.model_policy.config)
+    for agent in spec.agents:
+        collect(agent.config)
+    return list(dict.fromkeys(endpoints))
+
+
+def _local_model_refs(spec: HarnessSpec) -> list[str]:
+    models = [
+        item
+        for item in (spec.model_policy.primary, *spec.model_policy.fallbacks)
+        if item and _looks_local_model_ref(item)
+    ]
+    models.extend(
+        agent.model
+        for agent in spec.agents
+        if agent.model and _looks_local_model_ref(agent.model)
+    )
+    return list(dict.fromkeys(models))
+
+
+def _looks_local_model_ref(model: str) -> bool:
+    provider = _provider_from_model(model)
+    if provider and provider in PROVIDERS:
+        return PROVIDERS[provider].category == ProviderCategory.LOCAL
+    local_prefixes = ("ollama/", "mlx/", "lmstudio/", "vllm/", "sglang/", "ds4/")
+    return model.startswith(local_prefixes) or "/" not in model
+
+
+def _int_or_none(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _model_policy_fix(provider: str, errors: list[str], warnings: list[str]) -> str:

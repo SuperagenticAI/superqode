@@ -11,9 +11,11 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from .engines import EngineStatus, detect_engines
+from .guardrails import LocalGuardrails, build_guardrails, render_guardrails
 from .hardware import HardwareProfile, detect_hardware
 from .inventory import LocalModel, inventory_models
 from .matrix import StackRecommendation, load_matrix, recommend
+from .repo import RepoProfile, analyze_repository, render_repo_profile
 
 
 @dataclass
@@ -24,6 +26,8 @@ class DoctorReport:
     recommendation: StackRecommendation
     matrix_version: str = ""
     apple_fm_available: Optional[bool] = None
+    repo: Optional[RepoProfile] = None
+    guardrails: Optional[LocalGuardrails] = None
 
 
 def _detect_apple_fm(profile: HardwareProfile) -> Optional[bool]:
@@ -38,7 +42,7 @@ def _detect_apple_fm(profile: HardwareProfile) -> Optional[bool]:
         return None
 
 
-def run_doctor() -> DoctorReport:
+def run_doctor(repo_path: str | None = None, *, include_guardrails: bool = False) -> DoctorReport:
     hardware = detect_hardware()
     engines = detect_engines(
         unified_memory_gb=hardware.unified_memory_gb,
@@ -47,6 +51,7 @@ def run_doctor() -> DoctorReport:
     inventory = inventory_models()
     matrix = load_matrix()
     recommendation = recommend(hardware, engines, inventory, matrix)
+    repo = analyze_repository(repo_path) if repo_path else None
     return DoctorReport(
         hardware=hardware,
         engines=engines,
@@ -54,6 +59,8 @@ def run_doctor() -> DoctorReport:
         recommendation=recommendation,
         matrix_version=str(matrix.get("version", "")),
         apple_fm_available=_detect_apple_fm(hardware),
+        repo=repo,
+        guardrails=build_guardrails(hardware, repo_profile=repo) if include_guardrails else None,
     )
 
 
@@ -121,6 +128,14 @@ def render_report(report: DoctorReport) -> str:
         )
         lines.append("")
 
+    if report.repo is not None:
+        lines.append(render_repo_profile(report.repo))
+        lines.append("")
+
+    if report.guardrails is not None:
+        lines.append(render_guardrails(report.guardrails))
+        lines.append("")
+
     # Verdict
     lines.append("Verdict")
     best = rec.best_model
@@ -182,26 +197,60 @@ def generate_harness_yaml(report: DoctorReport, name: str = "local-coder") -> st
     pack_line = f"  pack: {best.pack}\n" if best is not None and best.pack else ""
     small = report.hardware.tier in ("apple_16", "cpu")
     tool_format = "  tool_call_format: prompt\n" if small else ""
+    repo = report.repo
+    workflow_mode = "chain" if repo is not None and repo.workflow_shape != "single" else "single"
+    workflow_preset = repo.workflow_shape if repo is not None and repo.workflow_shape != "single" else ""
+    context_limit = repo.recommended_context_tokens if repo is not None else None
+    context_line = f"  context_window: {context_limit}\n" if context_limit else ""
+    repo_metadata = ""
+    if repo is not None:
+        repo_metadata = (
+            f"  repo_model_size: {repo.recommended_model_size}\n"
+            f"  repo_context_tokens: {repo.recommended_context_tokens}\n"
+            f"  repo_workflow_shape: {repo.workflow_shape}\n"
+        )
+    guardrail_config = ""
+    guardrail_metadata = ""
+    if report.guardrails is not None:
+        guardrails = report.guardrails
+        guardrail_config = (
+            "  config:\n"
+            "    local_guardrails:\n"
+            f"      max_worker_concurrency: {guardrails.max_worker_concurrency}\n"
+            f"      recommended_context_cap: {guardrails.recommended_context_cap}\n"
+            f"      memory_headroom_gb: {guardrails.memory_headroom_gb}\n"
+            f"      battery_mode: {guardrails.battery_mode}\n"
+        )
+        guardrail_metadata = (
+            f"  guardrail_context_cap: {guardrails.recommended_context_cap}\n"
+            f"  guardrail_max_worker_concurrency: {guardrails.max_worker_concurrency}\n"
+        )
 
     return (
         "version: 1\n"
         f"name: {name}\n"
         "flavor: coding\n"
+        "workflow:\n"
+        f"  mode: {workflow_mode}\n"
+        f"{f'  preset: {workflow_preset}\n' if workflow_preset else ''}"
         "runtime:\n"
         "  backend: builtin\n"
         "model_policy:\n"
         f"  primary: {primary}\n"
-        f"{pack_line}{tool_format}"
+        f"{pack_line}{tool_format}{context_line}"
         "execution_policy:\n"
         "  sandbox: local\n"
         "  approval_profile: balanced\n"
         "  allow_write: true\n"
         "  allow_shell: true\n"
+        f"{guardrail_config}"
         "context:\n"
         "  session_storage: .superqode/sessions\n"
         f"metadata:\n"
         f"  generated_by: superqode local doctor\n"
         f"  hardware_tier: {rec.tier_id}\n"
+        f"{repo_metadata}"
+        f"{guardrail_metadata}"
     )
 
 

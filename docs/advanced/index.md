@@ -96,6 +96,14 @@ Advanced SuperQode features for users who want more control over tools, safety, 
 
     [:octicons-arrow-right-24: Harness System](harness-system.md)
 
+-   **Omnigent Compatibility**
+
+    ---
+
+    Import Omnigent `agent.yaml` files into SuperQode harness specs while keeping SuperQode as the controlling harness.
+
+    [:octicons-arrow-right-24: Omnigent Compatibility](omnigent-compat.md)
+
 -   **Session Management**
 
     ---

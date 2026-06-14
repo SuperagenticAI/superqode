@@ -27,6 +27,8 @@ class PydanticAIHarnessBackend(RuntimeHarnessBackend):
             supports_shell=True,
             supports_mcp=True,
             supports_typed_output=True,
+            supports_workflow_children=True,
+            event_detail="rich",
             notes=(
                 "PydanticAI uses SuperQode JSON-schema tool bridging.",
                 "Native MCP loads from runtime.config.pydanticai.mcp_config_path.",

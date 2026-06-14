@@ -101,6 +101,22 @@ def inspect_harness_backend(
                 message=f"Backend '{backend.name}' does not currently expose MCP support.",
             )
         )
+    if spec.workflow.mode.value != "single" and not capabilities.supports_workflow_children:
+        issues.append(
+            HarnessBackendIssue(
+                severity="error",
+                code="workflow_children_unsupported",
+                message=f"Backend '{backend.name}' cannot run multi-step workflow children.",
+            )
+        )
+    if _uses_typed_output(spec) and not capabilities.supports_typed_output:
+        issues.append(
+            HarnessBackendIssue(
+                severity="warning",
+                code="typed_output_unsupported",
+                message=f"Backend '{backend.name}' may not honor structured output schemas.",
+            )
+        )
     selected_sandbox = sandbox_backend or spec.execution_policy.sandbox
     if selected_sandbox and selected_sandbox != "local" and not capabilities.supports_sandbox:
         issues.append(
@@ -151,6 +167,10 @@ def _uses_mcp(spec) -> bool:
         if "mcp" in agent.tools or agent.config.get("mcp") or agent.config.get("mcp_servers"):
             return True
     return False
+
+
+def _uses_typed_output(spec) -> bool:
+    return any(bool(agent.output_schema) for agent in spec.agents)
 
 
 def _model_policy_issues(backend_name: str, spec) -> list[HarnessBackendIssue]:

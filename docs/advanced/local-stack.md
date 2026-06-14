@@ -9,6 +9,8 @@ ready-to-run harness.
 
 ```bash
 superqode local doctor
+superqode local doctor --repo .
+superqode local doctor --repo . --guardrails
 ```
 
 ---
@@ -52,21 +54,47 @@ Verdict
   Generate a tuned harness: superqode local doctor --generate harness.yaml
 ```
 
-Use `--json` for the full machine-readable report.
+Use `--json` for the full machine-readable report. Add `--repo PATH` to size a
+repository at the same time; the doctor will report code-file count, estimated
+code tokens, primary languages, largest files, recommended context window,
+model-size class, and workflow shape. Add `--guardrails` to include conservative
+local runtime limits for battery, memory headroom, context cap, and worker
+concurrency.
 
 ---
 
 ## Generate a tuned harness
 
 ```bash
-superqode local doctor --generate harness.yaml
+superqode local doctor --repo . --generate harness.yaml
 superqode --harness harness.yaml -p "your task"
 ```
 
 The generated spec routes to the right provider for where the model actually
 lives (an HF cache model is served by `mlx_lm.server`, not Ollama), references
 the matching model policy pack, and switches small-hardware tiers to
-prompt-based tool calling.
+prompt-based tool calling. When `--repo` is supplied, the generated harness also
+sets a repository-sized `model_policy.context_window`, records the model-size
+and workflow recommendation in metadata, and uses a workflow preset for larger
+repositories. When `--guardrails` is supplied, it also writes
+`execution_policy.config.local_guardrails` so workers and launchers can apply
+safe local defaults.
+
+---
+
+## Runtime guardrails
+
+```bash
+superqode local guardrails
+superqode local guardrails --repo . --json
+```
+
+Guardrails are conservative operating limits for local models. They do not
+replace operating-system thermal controls; they prevent bad harness defaults:
+too much worker concurrency, too much context on battery, and too little
+memory/VRAM headroom. The report includes recommended worker concurrency,
+context cap, memory headroom, power-source state when detectable, current load,
+warnings, and notes.
 
 ---
 
@@ -175,13 +203,15 @@ role routing plan instead of a flat benchmark table. It runs the agentic probes
 for each candidate, then scores models separately for planner, implementer,
 reviewer, and utility work. The utility role is biased toward low TTFT and high
 decode speed; implementation and review are biased toward tool calls, edit
-format, shell calls, and context recall.
+format, shell calls, and context recall. Add `--repo PATH` to bias scoring for
+the current repository's context size, model-size class, and workflow shape.
 
 ```bash
 superqode local optimize \
   --endpoint http://localhost:8080/v1 \
   --model qwen3-coder:30b-a3b \
   --model tiny-coder:7b \
+  --repo . \
   --generate local-optimized.yaml
 ```
 
