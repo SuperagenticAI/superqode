@@ -93,12 +93,18 @@ def explain_harness(
                 "text, because this model has weak or unreliable native tool support."
             )
         elif fmt in ("native", "json", "harmony", "xml") and fmt:
-            model_lines.append(f"Tool calls use {fmt.upper()} format (the model's native tool API).")
+            model_lines.append(
+                f"Tool calls use {fmt.upper()} format (the model's native tool API)."
+            )
         else:
             model_lines.append("Tool calls use the runtime default for this model.")
         model_lines.append(
             "Parallel tool calls are "
-            + ("ON." if resolved.parallel_tools else "OFF (one tool at a time, safer for local models).")
+            + (
+                "ON."
+                if resolved.parallel_tools
+                else "OFF (one tool at a time, safer for local models)."
+            )
         )
     iters = resolved.max_iterations
     model_lines.append(
@@ -121,25 +127,33 @@ def explain_harness(
     # Tools section.
     tool_lines: list[str] = []
     if profile.tools is None:
-        tool_lines.append("The model gets the full coding toolset (read, search, edit, shell, todos).")
+        tool_lines.append(
+            "The model gets the full coding toolset (read, search, edit, shell, todos)."
+        )
     else:
         tool_lines.append(f"The model gets these tools: {', '.join(profile.tools)}.")
     explanation.sections.append(("Tools", tool_lines))
 
     # Permissions section: this is the part people most want explained.
     perm_lines: list[str] = []
-    perm_lines.append("Reading files and searching the repo: allowed."
-                      if exec_policy.allow_read else "Reading files: blocked.")
     perm_lines.append(
-        "Writing/editing files: allowed." if exec_policy.allow_write
+        "Reading files and searching the repo: allowed."
+        if exec_policy.allow_read
+        else "Reading files: blocked."
+    )
+    perm_lines.append(
+        "Writing/editing files: allowed."
+        if exec_policy.allow_write
         else "Writing/editing files: BLOCKED (read-only harness)."
     )
     perm_lines.append(
-        "Running shell commands: allowed." if exec_policy.allow_shell
+        "Running shell commands: allowed."
+        if exec_policy.allow_shell
         else "Running shell commands: BLOCKED."
     )
     perm_lines.append(
-        "Network access: allowed." if exec_policy.allow_network
+        "Network access: allowed."
+        if exec_policy.allow_network
         else "Network access: blocked (offline by default)."
     )
     approval = exec_policy.approval_profile or "balanced"
@@ -153,12 +167,16 @@ def explain_harness(
     for rule in exec_policy.permission_rules:
         target = rule.tool if rule.tool != "*" else "any tool"
         pat = f" matching '{rule.pattern}'" if rule.pattern not in ("", "*") else ""
-        verb = {"allow": "auto-allow", "deny": "block", "ask": "ask before"}.get(rule.action, rule.action)
+        verb = {"allow": "auto-allow", "deny": "block", "ask": "ask before"}.get(
+            rule.action, rule.action
+        )
         perm_lines.append(f"Rule: {verb} {target}{pat}.")
     if exec_policy.allowed_commands:
         perm_lines.append(f"Shell allow-list: {', '.join(exec_policy.allowed_commands)}.")
     if exec_policy.blocked_categories:
-        perm_lines.append(f"Blocked command categories: {', '.join(exec_policy.blocked_categories)}.")
+        perm_lines.append(
+            f"Blocked command categories: {', '.join(exec_policy.blocked_categories)}."
+        )
     perm_lines.append(f"Sandbox: {exec_policy.sandbox}.")
     explanation.sections.append(("Permissions", perm_lines))
 
@@ -201,7 +219,9 @@ def _append_context_section(explanation: HarnessExplanation, spec: HarnessSpec) 
     ctx = spec.context
     lines: list[str] = []
     if ctx.instruction_files:
-        lines.append(f"Auto-loads instructions from: {', '.join(ctx.instruction_files)} (if present).")
+        lines.append(
+            f"Auto-loads instructions from: {', '.join(ctx.instruction_files)} (if present)."
+        )
     compaction = ctx.compaction or {}
     if compaction:
         threshold = compaction.get("threshold")
@@ -223,7 +243,7 @@ def _append_usage_section(explanation: HarnessExplanation, spec: HarnessSpec) ->
             "How to use it",
             [
                 "Interactive:  superqode --harness <file>.yaml",
-                "Headless:     superqode harness run --spec <file>.yaml -p \"<task>\"",
+                'Headless:     superqode harness run --spec <file>.yaml -p "<task>"',
                 "Verify policy: superqode harness compile --spec <file>.yaml",
             ],
         )

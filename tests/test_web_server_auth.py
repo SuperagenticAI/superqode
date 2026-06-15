@@ -59,8 +59,6 @@ def test_web_auth_rejects_missing_or_wrong_token():
 
 
 def test_web_auth_extracts_query_before_cookie():
-    token = extract_web_auth_token(
-        {"token": "query-token"}, {}, {AUTH_COOKIE_NAME: "cookie-token"}
-    )
+    token = extract_web_auth_token({"token": "query-token"}, {}, {AUTH_COOKIE_NAME: "cookie-token"})
 
     assert token == "query-token"

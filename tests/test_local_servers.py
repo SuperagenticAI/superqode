@@ -50,9 +50,7 @@ def test_build_command_lmstudio_uses_lms_server_start(manager: ServerManager):
 
 
 def test_build_command_mlx_uses_venv_interpreter_not_path(manager: ServerManager):
-    cmd, _env, _cwd = manager.build_command(
-        "mlx", host="127.0.0.1", port=8080, model="org/model"
-    )
+    cmd, _env, _cwd = manager.build_command("mlx", host="127.0.0.1", port=8080, model="org/model")
     # Must invoke `python -m mlx_lm server`, never a bare mlx_lm.server on PATH.
     assert cmd[0].endswith("python") or "python" in cmd[0]
     assert cmd[1:4] == ["-m", "mlx_lm", "server"]
@@ -407,7 +405,9 @@ def test_start_mlx_allows_download_when_permitted(manager, monkeypatch):
 def test_install_mlx_prefers_uv(monkeypatch):
     from superqode.local import servers
 
-    monkeypatch.setattr(servers.shutil, "which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        servers.shutil, "which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
     captured = {}
 
     class R:

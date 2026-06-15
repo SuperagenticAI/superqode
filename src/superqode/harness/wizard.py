@@ -65,7 +65,9 @@ def build_wizard_spec(answers: WizardAnswers) -> HarnessSpec:
     # Model policy: keep the template's tuning, override only what the user set.
     primary = spec.model_policy.primary
     if answers.model:
-        primary = f"{answers.provider}/{answers.model}".strip("/") if answers.provider else answers.model
+        primary = (
+            f"{answers.provider}/{answers.model}".strip("/") if answers.provider else answers.model
+        )
     elif answers.provider and primary and "/" not in primary:
         primary = f"{answers.provider}/{primary}"
     tool_format = spec.model_policy.tool_call_format

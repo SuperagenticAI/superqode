@@ -62,12 +62,18 @@ def test_file_harness_store_sanitizes_file_names(tmp_path):
     assert (tmp_path / "harness" / "sessions" / "bad_session:id.json").exists()
 
 
-@pytest.mark.parametrize("store_factory", [MemoryHarnessStore, FileHarnessStore, SQLiteHarnessStore])
+@pytest.mark.parametrize(
+    "store_factory", [MemoryHarnessStore, FileHarnessStore, SQLiteHarnessStore]
+)
 def test_harness_store_inbox_contract(tmp_path, store_factory):
     if store_factory is MemoryHarnessStore:
         store = store_factory()
     else:
-        path = tmp_path / "store.sqlite3" if store_factory is SQLiteHarnessStore else tmp_path / "files"
+        path = (
+            tmp_path / "store.sqlite3"
+            if store_factory is SQLiteHarnessStore
+            else tmp_path / "files"
+        )
         store = store_factory(path)
 
     first = store.admit_input(
@@ -131,12 +137,18 @@ def test_harness_store_inbox_contract(tmp_path, store_factory):
     assert store.claim_next_input(session_id="session-2").input_id == other.input_id
 
 
-@pytest.mark.parametrize("store_factory", [MemoryHarnessStore, FileHarnessStore, SQLiteHarnessStore])
+@pytest.mark.parametrize(
+    "store_factory", [MemoryHarnessStore, FileHarnessStore, SQLiteHarnessStore]
+)
 def test_harness_store_recovers_stale_running_inputs(tmp_path, store_factory):
     if store_factory is MemoryHarnessStore:
         store = store_factory()
     else:
-        path = tmp_path / "store.sqlite3" if store_factory is SQLiteHarnessStore else tmp_path / "files"
+        path = (
+            tmp_path / "store.sqlite3"
+            if store_factory is SQLiteHarnessStore
+            else tmp_path / "files"
+        )
         store = store_factory(path)
 
     admitted = store.admit_input(

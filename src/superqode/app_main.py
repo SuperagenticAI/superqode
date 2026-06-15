@@ -719,9 +719,7 @@ def render_welcome(
     # DESCRIPTION SECTION - Tagline + tagline parts + one-liner
     # ═══════════════════════════════════════════════════════════════════════
     desc_text = Text(justify=align)
-    desc_text.append(
-        "Your Portable Local Agentic Coding Harness\n", style="bold #ffffff"
-    )
+    desc_text.append("Your Portable Local Agentic Coding Harness\n", style="bold #ffffff")
     desc_text.append("\n", style="")
 
     # Single differentiator line: three accented segments + a muted local-model
@@ -12287,9 +12285,7 @@ memory:
         # tools, no system scaffolding, no @file/MCP/plan expansion. This is the
         # fastest way to feel the model's latency and decode speed.
         if getattr(self, "_chat_mode", False):
-            if not (
-                hasattr(self, "_pure_mode") and self._pure_mode.session.connected
-            ):
+            if not (hasattr(self, "_pure_mode") and self._pure_mode.session.connected):
                 log.add_error("Chat mode needs a connected model. Use :connect local first.")
                 return
             log.add_user(text)
@@ -12525,8 +12521,13 @@ memory:
         if self._hub_mode:
             t = Text()
             t.append("\n  🔎 Model search ON\n", style=f"bold {THEME['cyan']}")
-            t.append("  Just type a model name to find it in the trusted catalog.\n", style=THEME["muted"])
-            t.append("  Shows size, fit for your hardware, and the get-command.\n", style=THEME["muted"])
+            t.append(
+                "  Just type a model name to find it in the trusted catalog.\n",
+                style=THEME["muted"],
+            )
+            t.append(
+                "  Shows size, fit for your hardware, and the get-command.\n", style=THEME["muted"]
+            )
             t.append("  Add ", style=THEME["muted"])
             t.append("--hub", style=f"bold {THEME['cyan']}")
             t.append(" on a line for the latest live from Hugging Face.\n", style=THEME["muted"])
@@ -12668,9 +12669,7 @@ memory:
             # Stops the indicator + scanning waves and restores the prompt.
             self._call_ui(self._stop_thinking)
 
-    def _write_chat_stats(
-        self, log: ConversationLog, ttft, tps, tokens: int, total: float
-    ) -> None:
+    def _write_chat_stats(self, log: ConversationLog, ttft, tps, tokens: int, total: float) -> None:
         """One muted metrics line under a chat reply."""
         line = Text()
         line.append("  ⚡ ", style=f"bold {THEME['gold']}")
@@ -20717,7 +20716,9 @@ memory:
         t0.append("\n  ⏳ ", style=THEME["warning"])
         t0.append(f"Starting {engine} server", style=f"bold {THEME['text']}")
         t0.append(f" with {label}", style=THEME["cyan"])
-        t0.append(" — loading the model into memory, this can take a minute...\n", style=THEME["muted"])
+        t0.append(
+            " — loading the model into memory, this can take a minute...\n", style=THEME["muted"]
+        )
         self._call_ui(log.write, t0)
 
         self.is_busy = True
@@ -22500,7 +22501,10 @@ memory:
                     t = Text()
                     t.append("\n  🟢 llama.cpp", style=f"bold {THEME['success']}")
                     t.append(f"  {len(paths)} cached GGUF model(s)\n", style=THEME["dim"])
-                    t.append("  Pick one and SuperQode will start llama-server with it.\n\n", style=THEME["muted"])
+                    t.append(
+                        "  Pick one and SuperQode will start llama-server with it.\n\n",
+                        style=THEME["muted"],
+                    )
                     for idx, p in enumerate(paths, 1):
                         is_hl = (idx - 1) == hl
                         t.append("  ▶ " if is_hl else "    ", style=f"bold {THEME['success']}")
@@ -22510,7 +22514,9 @@ memory:
                         if is_hl:
                             t.append("  ← SELECTED", style=f"bold {THEME['success']}")
                         t.append("\n", style="")
-                    t.append("\n  💡 Select a number or name to launch + connect\n", style=THEME["text"])
+                    t.append(
+                        "\n  💡 Select a number or name to launch + connect\n", style=THEME["text"]
+                    )
                     log.write(t)
                     self.set_timer(0.05, self._ensure_input_focus)
                     return
@@ -22525,7 +22531,10 @@ memory:
             t.append("\n  Then ", style=THEME["muted"])
             t.append(":connect", style=f"bold {THEME['cyan']}")
             t.append(" again and pick llama.cpp.\n", style=THEME["muted"])
-            t.append("  (LLAMACPP_HOST overrides the port if you use a different one.)\n", style=THEME["dim"])
+            t.append(
+                "  (LLAMACPP_HOST overrides the port if you use a different one.)\n",
+                style=THEME["dim"],
+            )
             # Stable final state — no auto-reopen (that clears the log = flash).
             self._awaiting_local_model = False
             self._awaiting_local_provider = False
@@ -22974,9 +22983,7 @@ memory:
         live = "--live" in tokens or "live" in tokens
         configured = "--configured" in tokens
         source_tokens = [
-            token
-            for token in tokens
-            if token in {"openrouter", "models-dev", "litellm"}
+            token for token in tokens if token in {"openrouter", "models-dev", "litellm"}
         ]
         provider_tokens = [
             token
@@ -23075,7 +23082,10 @@ memory:
             t.append(f"{item.model}\n", style=THEME["green"])
             t.append(f"    ctx={ctx}  {tools}  source={item.source_url}\n", style=THEME["muted"])
         if len(candidates) > 20:
-            t.append(f"\n  ... and {len(candidates) - 20} more. Use CLI --json for all rows.\n", style=THEME["dim"])
+            t.append(
+                f"\n  ... and {len(candidates) - 20} more. Use CLI --json for all rows.\n",
+                style=THEME["dim"],
+            )
         if errors:
             t.append("\n  Source errors:\n", style=THEME["warning"])
             for error in errors:
@@ -24125,9 +24135,15 @@ memory:
             if subargs:
                 self.run_worker(self._local_serve(subargs, log))
             else:
-                log.add_info("Usage: :local serve <ollama|lmstudio|mlx|ds4|llama.cpp> [--model X] [--port N] [--ctx N] [--host H]")
-                log.add_system("e.g. :local serve mlx --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit --port 8090")
-                log.add_system("e.g. :local serve ds4 --ctx 200000   ·   :local serve ollama --ctx 16384")
+                log.add_info(
+                    "Usage: :local serve <ollama|lmstudio|mlx|ds4|llama.cpp> [--model X] [--port N] [--ctx N] [--host H]"
+                )
+                log.add_system(
+                    "e.g. :local serve mlx --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit --port 8090"
+                )
+                log.add_system(
+                    "e.g. :local serve ds4 --ctx 200000   ·   :local serve ollama --ctx 16384"
+                )
         elif sub == "servers":
             # :local servers - Show managed/running server status
             self.run_worker(self._local_servers(log))
@@ -24203,7 +24219,10 @@ memory:
         t0 = Text()
         t0.append("\n  ◈ ", style=f"bold {THEME['purple']}")
         t0.append("Local Coding Init\n\n", style=f"bold {THEME['text']}")
-        t0.append("  Detecting hardware, engines, trusted model routes, and repo shape...\n", style=THEME["muted"])
+        t0.append(
+            "  Detecting hardware, engines, trusted model routes, and repo shape...\n",
+            style=THEME["muted"],
+        )
         log.write(t0)
 
         self.is_busy = True
@@ -24215,7 +24234,9 @@ memory:
                 chosen_engine = opts.get("engine") or report.recommendation.engine or ""
                 chosen_model = opts.get("model") or ""
                 if not chosen_model and best is not None:
-                    chosen_model = best.downloaded.bare_id if best.downloaded else best.pull.split()[-1]
+                    chosen_model = (
+                        best.downloaded.bare_id if best.downloaded else best.pull.split()[-1]
+                    )
                 smoke = await asyncio.to_thread(
                     run_smoke,
                     engine=chosen_engine,
@@ -24234,7 +24255,13 @@ memory:
         t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
         t.append("Local Coding Init\n\n", style=f"bold {THEME['text']}")
         for line in render_report(report).splitlines():
-            t.append(f"  {line}\n", style=f"bold {THEME['text']}" if line in {"Verdict", "Engines", "Recommended models"} or line.startswith("SuperQode") else THEME["text"])
+            t.append(
+                f"  {line}\n",
+                style=f"bold {THEME['text']}"
+                if line in {"Verdict", "Engines", "Recommended models"}
+                or line.startswith("SuperQode")
+                else THEME["text"],
+            )
         if smoke is not None:
             t.append("\n")
             for line in render_smoke(smoke).splitlines():
@@ -24307,7 +24334,9 @@ memory:
             return
         for row in rows[:10]:
             mark = "*" if row.recommended_for_local else "-"
-            t.append(f"  {mark} ", style=THEME["success"] if row.recommended_for_local else THEME["dim"])
+            t.append(
+                f"  {mark} ", style=THEME["success"] if row.recommended_for_local else THEME["dim"]
+            )
             t.append(f"{row.id}", style=f"bold {THEME['text']}")
             traits = []
             if row.open_weights:
@@ -24418,7 +24447,9 @@ memory:
                 t.append(f"  [{fmt}, {m.downloads:,} dl, {fit}]\n", style=THEME["dim"])
                 t.append(f"      superqode models download {m.id}\n", style=THEME["cyan"])
 
-        t.append("\n  Sizes are rough estimates (params x quant), not a guarantee.\n", style=THEME["dim"])
+        t.append(
+            "\n  Sizes are rough estimates (params x quant), not a guarantee.\n", style=THEME["dim"]
+        )
         if not want_hub:
             t.append("  Add ", style=THEME["muted"])
             t.append("--hub", style=f"bold {THEME['cyan']}")
@@ -24478,7 +24509,10 @@ memory:
         t.append("\n  ● ", style=f"bold {THEME['success']}")
         t.append(f"ready: {model}\n", style=f"bold {THEME['text']}")
         tps = f"{result.decode_tps} tok/s" if result.decode_tps is not None else "n/a"
-        t.append(f"  TTFT {result.ttft_s}s · decode {tps} · total {result.total_s}s\n", style=THEME["text"])
+        t.append(
+            f"  TTFT {result.ttft_s}s · decode {tps} · total {result.total_s}s\n",
+            style=THEME["text"],
+        )
         self._show_command_output(log, t)
 
     @staticmethod
@@ -24528,7 +24562,9 @@ memory:
             return
 
         manager = get_manager()
-        if not manager.is_running(engine, opts.get("host"), opts.get("port")) and not manager.is_installed(engine):
+        if not manager.is_running(
+            engine, opts.get("host"), opts.get("port")
+        ) and not manager.is_installed(engine):
             log.add_error(f"{engine} is not installed on this machine")
             return
 
@@ -24653,7 +24689,9 @@ memory:
             default_port = SPECS[engine].default_port
 
             t.append("\n  🟡 ", style=THEME["warning"])
-            t.append(f"{name} is installed but the server isn't running\n", style=f"bold {THEME['text']}")
+            t.append(
+                f"{name} is installed but the server isn't running\n", style=f"bold {THEME['text']}"
+            )
 
             if startable:
                 self._awaiting_local_server_start = engine
@@ -24704,7 +24742,9 @@ memory:
             self._awaiting_local_dep_install = "mlx"
             self._awaiting_local_model = False
             t.append("\n  🔴 ", style=THEME["error"])
-            t.append("MLX (mlx-lm) is not installed in this environment\n", style=f"bold {THEME['text']}")
+            t.append(
+                "MLX (mlx-lm) is not installed in this environment\n", style=f"bold {THEME['text']}"
+            )
             t.append("  ▶ Press ", style=THEME["muted"])
             t.append("Enter", style=f"bold {THEME['success']}")
             t.append(" to install it now", style=THEME["muted"])
@@ -24720,7 +24760,14 @@ memory:
         t.append("\n  🔴 ", style=THEME["error"])
         t.append(f"{name} is not installed\n\n", style=f"bold {THEME['text']}")
         for line in readiness.install_guide:
-            t.append(f"  {line}\n", style=THEME["cyan"] if line.strip().startswith(("brew", "uv", "curl", "npx", "superqode", "cd", "ollama")) else THEME["muted"])
+            t.append(
+                f"  {line}\n",
+                style=THEME["cyan"]
+                if line.strip().startswith(
+                    ("brew", "uv", "curl", "npx", "superqode", "cd", "ollama")
+                )
+                else THEME["muted"],
+            )
         t.append("\n  Once installed, start it with: ", style=THEME["muted"])
         t.append(f"{readiness.start_hint}\n", style=f"bold {THEME['success']}")
         log.write(t)
@@ -24773,7 +24820,9 @@ memory:
             t.append("\n  ⏭  ", style=THEME["warning"])
             t.append(f"Skipped installing {engine}.", style=f"bold {THEME['text']}")
             t.append(" Pick another provider below, or install later with:\n", style=THEME["muted"])
-            t.append("      uv tool install superqode --reinstall --with mlx-lm\n", style=THEME["cyan"])
+            t.append(
+                "      uv tool install superqode --reinstall --with mlx-lm\n", style=THEME["cyan"]
+            )
             log.write(t)
             # Re-open the provider picker so this is not a dead end.
             self._show_local_provider_picker(log)
@@ -27139,7 +27188,10 @@ memory:
                     (":local", "Show local provider status"),
                     (":local init", "Generate a local harness and run readiness smoke"),
                     (":local smoke", "Run non-destructive local coding readiness checks"),
-                    (":local search <query>", "Find a trusted model + how to get it (hardware-aware)"),
+                    (
+                        ":local search <query>",
+                        "Find a trusted model + how to get it (hardware-aware)",
+                    ),
                     (":local labs", "Browse trusted models.dev local model labs"),
                     (":local warm <engine>", "Warm a model and measure first-token latency"),
                     (":local scan", "Scan for running local providers"),
@@ -27153,7 +27205,10 @@ memory:
                 "🔍 Search & Context (local-optimized)",
                 THEME["cyan"],
                 [
-                    (":chat", "Raw direct-to-model chat: no repo context, no tools, shows TTFT + tok/s"),
+                    (
+                        ":chat",
+                        "Raw direct-to-model chat: no repo context, no tools, shows TTFT + tok/s",
+                    ),
                     (":chat off", "Leave chat mode and return to the full coding harness"),
                     (":hub", "Model-search mode: just type a model name to find it (size + fit)"),
                     (":hub <name>", "One-shot model search (short for :local search)"),

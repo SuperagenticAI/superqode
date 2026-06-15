@@ -204,7 +204,9 @@ def generate_harness_yaml(report: DoctorReport, name: str = "local-coder") -> st
     tool_format = "  tool_call_format: prompt\n" if small else ""
     repo = report.repo
     workflow_mode = "chain" if repo is not None and repo.workflow_shape != "single" else "single"
-    workflow_preset = repo.workflow_shape if repo is not None and repo.workflow_shape != "single" else ""
+    workflow_preset = (
+        repo.workflow_shape if repo is not None and repo.workflow_shape != "single" else ""
+    )
     context_limit = repo.recommended_context_tokens if repo is not None else None
     context_line = f"  context_window: {context_limit}\n" if context_limit else ""
     repo_metadata = ""

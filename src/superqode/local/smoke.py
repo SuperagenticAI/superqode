@@ -60,7 +60,11 @@ def _first_running_engine() -> tuple[str, str]:
 
 
 def _status_from(report: SmokeReport, bench: BenchResult | None) -> str:
-    failed = [check for check in report.checks if not check.ok and check.name in {"server", "model", "chat"}]
+    failed = [
+        check
+        for check in report.checks
+        if not check.ok and check.name in {"server", "model", "chat"}
+    ]
     if failed:
         return "failed"
     if report.warnings:
@@ -133,7 +137,9 @@ def run_smoke(
     if context:
         report.context_window, report.context_source = context
         report.checks.append(
-            SmokeCheck("context", True, f"{report.context_window:,} tokens from {report.context_source}")
+            SmokeCheck(
+                "context", True, f"{report.context_window:,} tokens from {report.context_source}"
+            )
         )
     else:
         report.checks.append(SmokeCheck("context", False, "loaded context window not reported"))
@@ -147,7 +153,9 @@ def run_smoke(
     report.agentic_score = bench.agentic_score
     if not bench.ok:
         report.checks.append(SmokeCheck("chat", False, bench.error or "agentic probe failed"))
-        report.next_steps.append(f"Warm the model: superqode local warm {chosen_engine or '<engine>'} --model {chosen_model}")
+        report.next_steps.append(
+            f"Warm the model: superqode local warm {chosen_engine or '<engine>'} --model {chosen_model}"
+        )
         report.status = _status_from(report, bench)
         return report
 
@@ -177,7 +185,9 @@ def run_smoke(
     if bench.shell_call_success is False:
         report.warnings.append("Shell tool calls looked unreliable; keep shell approval required.")
     if bench.context_recall_success is False:
-        report.warnings.append("Long-context recall probe failed; use smaller context or compact sooner.")
+        report.warnings.append(
+            "Long-context recall probe failed; use smaller context or compact sooner."
+        )
     for note in bench.agentic_notes:
         if note not in report.warnings:
             report.warnings.append(note)

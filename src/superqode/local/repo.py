@@ -202,8 +202,7 @@ def render_repo_profile(profile: RepoProfile) -> str:
         f"{profile.config_file_count} docs/config"
     )
     lines.append(
-        f"Code size  {_human_bytes(profile.code_bytes)} "
-        f"(~{profile.estimated_tokens:,} tokens)"
+        f"Code size  {_human_bytes(profile.code_bytes)} (~{profile.estimated_tokens:,} tokens)"
     )
     lines.append(
         f"Advice     {profile.recommended_model_size} model, "
@@ -291,12 +290,18 @@ def _notes(
 ) -> tuple[str, ...]:
     notes: list[str] = []
     if estimated_tokens > context:
-        notes.append("Full-repository context will not fit; rely on search, summaries, and focused reads.")
+        notes.append(
+            "Full-repository context will not fit; rely on search, summaries, and focused reads."
+        )
     if code_file_count > 600:
-        notes.append("Use a planner/reviewer split so the main model does not carry every decision.")
+        notes.append(
+            "Use a planner/reviewer split so the main model does not carry every decision."
+        )
     if languages:
         top_language = next(iter(languages))
-        notes.append(f"Primary language appears to be {top_language}; prefer a coder-tuned local model.")
+        notes.append(
+            f"Primary language appears to be {top_language}; prefer a coder-tuned local model."
+        )
     if workflow != "single":
         notes.append(f"Recommended harness workflow: {workflow}.")
     return tuple(notes)

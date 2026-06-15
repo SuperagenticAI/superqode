@@ -142,7 +142,9 @@ def omnigent_agent_to_harness_spec(
     )
 
 
-def _resolve_instructions(data: dict[str, Any], base_dir: Path) -> tuple[tuple[str, ...], str | None]:
+def _resolve_instructions(
+    data: dict[str, Any], base_dir: Path
+) -> tuple[tuple[str, ...], str | None]:
     instructions = data.get("instructions")
     if isinstance(instructions, str) and instructions.strip():
         value = instructions.strip()
@@ -248,4 +250,3 @@ def _safe_id(value: str) -> str:
     while "--" in out:
         out = out.replace("--", "-")
     return out or "agent"
-

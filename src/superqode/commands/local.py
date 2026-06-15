@@ -189,7 +189,9 @@ def local_bench(endpoint, models, max_tokens, api_key, agentic, json_output):
                 )
             )
         else:
-            results.append(run_bench(target_endpoint, model, max_tokens=max_tokens, api_key=api_key))
+            results.append(
+                run_bench(target_endpoint, model, max_tokens=max_tokens, api_key=api_key)
+            )
 
     if json_output:
         click.echo(json.dumps([asdict(r) for r in results], indent=2))
@@ -322,14 +324,22 @@ def _local_client_for(engine: str):
 
 @local.command("serve")
 @click.argument("engine", type=click.Choice(["ollama", "lmstudio", "mlx", "ds4", "llama.cpp"]))
-@click.option("--model", "-m", default=None, help="Model id / weight path (required for mlx and llama.cpp)")
+@click.option(
+    "--model", "-m", default=None, help="Model id / weight path (required for mlx and llama.cpp)"
+)
 @click.option("--port", "-p", default=None, type=int, help="Port (default: engine default)")
 @click.option("--host", default=None, help="Bind host (default: 127.0.0.1)")
 @click.option("--ctx", default=None, type=int, help="Context window (where the engine supports it)")
 @click.option("--no-wait", is_flag=True, help="Return immediately, do not wait for readiness")
 @click.option("--build", is_flag=True, help="(ds4) Build the ds4-server binary first if missing")
-@click.option("--allow-download", is_flag=True, help="(mlx) Permit downloading the model from Hugging Face if not cached")
-@click.option("--extra", "extra_args", multiple=True, help="Extra flag passed to the server (repeatable)")
+@click.option(
+    "--allow-download",
+    is_flag=True,
+    help="(mlx) Permit downloading the model from Hugging Face if not cached",
+)
+@click.option(
+    "--extra", "extra_args", multiple=True, help="Extra flag passed to the server (repeatable)"
+)
 def local_serve(engine, model, port, host, ctx, no_wait, build, allow_download, extra_args):
     """Start a local model server as a managed background daemon.
 
@@ -428,7 +438,9 @@ def local_models(engine, json_output):
     from superqode.providers.local.base import is_embedding_model
 
     manager = get_manager()
-    engines = [engine] if engine else [row["engine"] for row in manager.list_all() if row["running"]]
+    engines = (
+        [engine] if engine else [row["engine"] for row in manager.list_all() if row["running"]]
+    )
     if not engines:
         raise click.ClickException(
             "No running local servers found. Start one with: superqode local serve <engine>"
@@ -619,7 +631,9 @@ def local_search(query, hub, gguf, mlx, json_output):
                         {
                             "id": m.id,
                             "downloads": m.downloads,
-                            "format": "gguf" if m.is_gguf else ("mlx" if m.is_mlx else "safetensors"),
+                            "format": "gguf"
+                            if m.is_gguf
+                            else ("mlx" if m.is_mlx else "safetensors"),
                             "command": f"superqode models download {m.id}",
                         }
                         for m in hub_models
@@ -656,7 +670,9 @@ def local_search(query, hub, gguf, mlx, json_output):
         for engine, command in hit.commands:
             click.echo(f"    {engine:<11} {command}")
         if hit.hub_repo:
-            click.echo(f"    {'SuperQode':<11} superqode models download {hit.hub_repo}  (any engine)")
+            click.echo(
+                f"    {'SuperQode':<11} superqode models download {hit.hub_repo}  (any engine)"
+            )
         meta = []
         if hit.sources:
             meta.append("source: " + ", ".join(hit.sources))
@@ -687,7 +703,9 @@ def local_search(query, hub, gguf, mlx, json_output):
 
 @local.command("warm")
 @click.argument("engine", type=click.Choice(["ollama", "lmstudio", "mlx", "ds4", "llama.cpp"]))
-@click.option("--model", "-m", default=None, help="Model id to preload (default: first served model)")
+@click.option(
+    "--model", "-m", default=None, help="Model id to preload (default: first served model)"
+)
 @click.option("--max-tokens", default=8, show_default=True, type=int)
 def local_warm(engine, model, max_tokens):
     """Preload a local model and report first-token latency.
@@ -702,7 +720,9 @@ def local_warm(engine, model, max_tokens):
     manager = get_manager()
     status = manager.status(engine)
     if not status["running"]:
-        raise click.ClickException(f"{engine} is not running. Start it with: superqode local serve {engine}")
+        raise click.ClickException(
+            f"{engine} is not running. Start it with: superqode local serve {engine}"
+        )
 
     endpoint = status["base_url"]
     chosen = model

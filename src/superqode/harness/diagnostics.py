@@ -935,9 +935,13 @@ def _workflow_readiness_check(spec: HarnessSpec) -> dict[str, Any]:
         errors.append("workflow.max_task_depth must be at least 1")
 
     if mode != WorkflowMode.SINGLE and not spec.agents:
-        warnings.append("non-single workflow has no agents; doctor can only validate generated steps")
+        warnings.append(
+            "non-single workflow has no agents; doctor can only validate generated steps"
+        )
     if mode == WorkflowMode.EVALUATOR_OPTIMIZER and len(spec.agents) not in {0, 3}:
-        warnings.append("evaluator_optimizer works best with exactly candidate/evaluator/optimizer agents")
+        warnings.append(
+            "evaluator_optimizer works best with exactly candidate/evaluator/optimizer agents"
+        )
 
     retry_value = config.get("max_retries")
     if retry_value is not None and _int_or_none(retry_value) is None:
@@ -1685,9 +1689,7 @@ def _local_model_refs(spec: HarnessSpec) -> list[str]:
         if item and _looks_local_model_ref(item)
     ]
     models.extend(
-        agent.model
-        for agent in spec.agents
-        if agent.model and _looks_local_model_ref(agent.model)
+        agent.model for agent in spec.agents if agent.model and _looks_local_model_ref(agent.model)
     )
     return list(dict.fromkeys(models))
 

@@ -116,7 +116,11 @@ def workflow_steps_from_spec(
                 **({"agent_model": agent.model} if agent.model else {}),
                 **({"agent_tools": list(agent.tools)} if agent.tools else {}),
                 **({"agent_max_iterations": agent.max_iterations} if agent.max_iterations else {}),
-                **({"agent_runtime": agent.config["runtime"]} if agent.config.get("runtime") else {}),
+                **(
+                    {"agent_runtime": agent.config["runtime"]}
+                    if agent.config.get("runtime")
+                    else {}
+                ),
                 **(
                     {"agent_provider": agent.config["provider"]}
                     if agent.config.get("provider")
@@ -446,7 +450,9 @@ async def _run_parallel(
             raise item
         else:
             results.append(item)
-    return WorkflowResult(mode=WorkflowMode.PARALLEL, results=tuple(results), failures=tuple(failures))
+    return WorkflowResult(
+        mode=WorkflowMode.PARALLEL, results=tuple(results), failures=tuple(failures)
+    )
 
 
 async def _run_router(
@@ -698,7 +704,9 @@ async def _prompt_workflow_step(
                 },
             )
             try:
-                result = await _run_step_prompt(session, fallback, kwargs, step_id=fallback.id or "fallback")
+                result = await _run_step_prompt(
+                    session, fallback, kwargs, step_id=fallback.id or "fallback"
+                )
                 _emit_progress(
                     kwargs,
                     WorkflowProgress(

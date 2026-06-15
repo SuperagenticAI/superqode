@@ -207,7 +207,11 @@ def augment_commands_with_hub(hits: List["ModelSearchHit"], hub_models: list) ->
     by_key: Dict[str, dict] = {}
     for m in hub_models:
         key = _core_key(m.id.split("/", 1)[-1])
-        fmt = "mlx" if getattr(m, "is_mlx", False) else ("gguf" if getattr(m, "is_gguf", False) else "")
+        fmt = (
+            "mlx"
+            if getattr(m, "is_mlx", False)
+            else ("gguf" if getattr(m, "is_gguf", False) else "")
+        )
         if not fmt:
             continue
         slot = by_key.setdefault(key, {})

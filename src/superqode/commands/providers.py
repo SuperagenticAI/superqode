@@ -67,7 +67,9 @@ def providers():
 @click.option("--limit", default=100, show_default=True, type=int, help="Maximum live rows")
 @click.option("--configured", is_flag=True, help="Only show offers ready on this machine")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
-def scan_free(provider, access_mode, offer_kind, live, live_sources, limit, configured, json_output):
+def scan_free(
+    provider, access_mode, offer_kind, live, live_sources, limit, configured, json_output
+):
     """Scan known free-tier, starter-credit, ACP, and local inference paths."""
     import json
 
@@ -673,7 +675,9 @@ def ds4_command(action: str, host: Optional[str]):
 
 
 @providers.command("mlx")
-@click.argument("action", type=click.Choice(["server", "doctor", "check", "list", "models", "setup"]))
+@click.argument(
+    "action", type=click.Choice(["server", "doctor", "check", "list", "models", "setup"])
+)
 @click.option(
     "--model", "model_id", default=None, help="HF model id (for example mlx-community/...)"
 )
@@ -762,9 +766,7 @@ def mlx_command(action: str, model_id: Optional[str], host: str, port: int, extr
         for model in MLXClient.suggest_models():
             console.print(f"  • {model}")
         console.print()
-        console.print(
-            "Start one with: [cyan]superqode providers mlx server --model <hf-id>[/cyan]"
-        )
+        console.print("Start one with: [cyan]superqode providers mlx server --model <hf-id>[/cyan]")
         return
 
     if action == "setup":

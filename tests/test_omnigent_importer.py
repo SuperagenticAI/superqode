@@ -172,4 +172,3 @@ executor:
     assert result.exit_code == 0, result.output
     assert "Imported Omnigent agent" in result.output
     assert load_harness_spec(output).runtime.backend == "claude-agent-sdk"
-

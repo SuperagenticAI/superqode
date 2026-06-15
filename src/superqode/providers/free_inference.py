@@ -21,8 +21,7 @@ LiveSource = Literal["openrouter", "models-dev", "litellm"]
 
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 LITELLM_PRICES_URL = (
-    "https://raw.githubusercontent.com/BerriAI/litellm/main/"
-    "model_prices_and_context_window.json"
+    "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
 )
 
 

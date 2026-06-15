@@ -101,9 +101,13 @@ def build_guardrails(
             notes.append("Large repository profile reduced recommended worker concurrency.")
 
     if hw.tier in {"cpu", "apple_16", "nvidia_16"}:
-        notes.append("Small hardware tier: prefer prompt tool-calling and smaller quantized models.")
+        notes.append(
+            "Small hardware tier: prefer prompt tool-calling and smaller quantized models."
+        )
     if hw.tier in {"apple_128", "nvidia_48"}:
-        notes.append("High-memory tier: concurrent utility and reviewer roles are reasonable on AC power.")
+        notes.append(
+            "High-memory tier: concurrent utility and reviewer roles are reasonable on AC power."
+        )
 
     return LocalGuardrails(
         hardware_tier=hw.tier,

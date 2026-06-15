@@ -121,9 +121,7 @@ def is_web_request_authorized(
 ) -> bool:
     """Check web request auth without leaking timing on token comparison."""
     supplied = extract_web_auth_token(query, headers, cookies)
-    return bool(
-        expected_token and supplied and secrets.compare_digest(supplied, expected_token)
-    )
+    return bool(expected_token and supplied and secrets.compare_digest(supplied, expected_token))
 
 
 @dataclass

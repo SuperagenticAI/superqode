@@ -601,7 +601,9 @@ def test_optimization_harness_yaml_contains_repo_context(tmp_path):
         shell_call_success=True,
         context_recall_success=True,
     )
-    report = recommend_roles([result], roles=("planner",), repo_profile=analyze_repository(tmp_path))
+    report = recommend_roles(
+        [result], roles=("planner",), repo_profile=analyze_repository(tmp_path)
+    )
 
     text = optimization_harness_yaml(report, name="repo-routed")
 

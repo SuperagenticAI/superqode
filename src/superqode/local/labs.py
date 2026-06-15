@@ -208,7 +208,9 @@ def list_lab_models(lab_id: str, *, refresh: bool = False) -> list[LabModel]:
                 max_output=output,
                 supports_tools=bool(model_data.get("tool_call")),
                 supports_reasoning=bool(model_data.get("reasoning")),
-                supports_structured=bool(model_data.get("structured") or model_data.get("tool_call")),
+                supports_structured=bool(
+                    model_data.get("structured") or model_data.get("tool_call")
+                ),
                 supports_vision="image" in (input_modalities or [])
                 or "video" in (input_modalities or []),
                 open_weights=_model_has_open_weights(model_data),

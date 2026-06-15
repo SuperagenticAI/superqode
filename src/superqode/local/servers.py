@@ -403,7 +403,9 @@ class ServerManager:
         # readiness path (e.g. /health) is a separate, lighter probe.
         return f"http://{host}:{port}/v1"
 
-    def is_running(self, engine: str, host: Optional[str] = None, port: Optional[int] = None) -> bool:
+    def is_running(
+        self, engine: str, host: Optional[str] = None, port: Optional[int] = None
+    ) -> bool:
         spec = SPECS[engine]
         host = host or spec.default_host
         port = port or spec.default_port
@@ -678,8 +680,7 @@ class ServerManager:
             if not ready:
                 tail = _tail(log_path)
                 raise ServerError(
-                    f"{engine} did not become ready within {timeout:.0f}s.\n"
-                    f"Last log lines:\n{tail}"
+                    f"{engine} did not become ready within {timeout:.0f}s.\nLast log lines:\n{tail}"
                 )
             # LM Studio sets context at model load, not server start. Once the
             # server is up, load the requested model at the requested context.

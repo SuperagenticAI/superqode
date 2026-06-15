@@ -34,7 +34,9 @@ def test_search_finds_qwen_with_commands():
 def test_search_fit_depends_on_tier():
     # A 30B coder model is tuned for big tiers; it should not "fit" cpu.
     cpu_hits = {h.name: h.fits for h in search_models("qwen3-coder", tier="cpu", inventory=[])}
-    big_hits = {h.name: h.fits for h in search_models("qwen3-coder", tier="apple_128", inventory=[])}
+    big_hits = {
+        h.name: h.fits for h in search_models("qwen3-coder", tier="apple_128", inventory=[])
+    }
     big_model = "Qwen3-Coder 30B-A3B"
     assert cpu_hits.get(big_model) is False
     assert big_hits.get(big_model) is True
@@ -273,9 +275,7 @@ def test_tui_local_search_renders():
 
     app = SuperQodeApp.__new__(SuperQodeApp)
     app._call_ui = lambda f, *a: f(*a)
-    app._show_command_output = lambda log, t, **k: log.parts.append(
-        getattr(t, "plain", str(t))
-    )
+    app._show_command_output = lambda log, t, **k: log.parts.append(getattr(t, "plain", str(t)))
     log = _Log()
     asyncio.run(SuperQodeApp._local_search(app, "qwen3-coder", log))
     assert "Qwen3-Coder" in log.text

@@ -320,9 +320,7 @@ workflow:
             assert any("max_retries" in item for item in workflow["errors"])
             assert any("continue_on_error" in item for item in workflow["errors"])
 
-    def test_harness_doctor_json_reports_local_endpoint_model_readiness(
-        self, runner, monkeypatch
-    ):
+    def test_harness_doctor_json_reports_local_endpoint_model_readiness(self, runner, monkeypatch):
         monkeypatch.setattr(
             "superqode.local.bench.list_endpoint_models",
             lambda endpoint, timeout=0.5: ["qwen3-coder:30b"],
@@ -1567,7 +1565,9 @@ class TestProvidersCommand:
         monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
-        result = runner.invoke(cli_main, ["providers", "scan-free", "--provider", "google", "--json"])
+        result = runner.invoke(
+            cli_main, ["providers", "scan-free", "--provider", "google", "--json"]
+        )
 
         assert result.exit_code == 0
         payload = json.loads(result.output)

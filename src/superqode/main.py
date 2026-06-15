@@ -1549,7 +1549,9 @@ def harness_wizard(output, force):
     no_tool = starter == "no-tool"
 
     provider = click.prompt(
-        "Provider (e.g. ollama, lmstudio, mlx, ds4; blank to keep template)", default="", show_default=False
+        "Provider (e.g. ollama, lmstudio, mlx, ds4; blank to keep template)",
+        default="",
+        show_default=False,
     )
     model = click.prompt(
         "Model id (blank to keep the template's model)", default="", show_default=False
@@ -2003,9 +2005,7 @@ def harness_run(
                             "workflow": {
                                 "mode": workflow_result.mode.value,
                                 "result_count": len(workflow_result.results),
-                                "result_run_ids": [
-                                    item.run_id for item in workflow_result.results
-                                ],
+                                "result_run_ids": [item.run_id for item in workflow_result.results],
                                 "failures": list(workflow_result.failures),
                             },
                             "results": [
@@ -2418,7 +2418,9 @@ async def _execute_claimed_harness_input(
 )
 @click.option("--limit", default=1, show_default=True, type=int, help="Maximum inputs to drain")
 @click.option("--owner-id", default=None, help="Drain worker owner id")
-@click.option("--lease-seconds", default=300, show_default=True, type=int, help="Claim lease duration")
+@click.option(
+    "--lease-seconds", default=300, show_default=True, type=int, help="Claim lease duration"
+)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def harness_drain(
     spec_path,
@@ -2513,8 +2515,12 @@ def harness_drain(
     help="Harness store directory",
 )
 @click.option("--owner-id", default=None, help="Worker owner id")
-@click.option("--lease-seconds", default=300, show_default=True, type=int, help="Claim lease duration")
-@click.option("--concurrency", default=1, show_default=True, type=int, help="Concurrent worker loops")
+@click.option(
+    "--lease-seconds", default=300, show_default=True, type=int, help="Claim lease duration"
+)
+@click.option(
+    "--concurrency", default=1, show_default=True, type=int, help="Concurrent worker loops"
+)
 @click.option("--poll-seconds", default=2.0, show_default=True, type=float, help="Idle poll delay")
 @click.option("--max-runs", default=None, type=int, help="Stop after this many claimed inputs")
 @click.option("--once", is_flag=True, help="Exit when no pending input is available")

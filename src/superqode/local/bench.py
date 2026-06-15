@@ -264,8 +264,7 @@ def run_agentic_bench(
         result.shell_call_success = _has_tool_call(
             shell_calls,
             "bash",
-            lambda args: args.get("command") == "pytest -q"
-            or args.get("cmd") == "pytest -q",
+            lambda args: args.get("command") == "pytest -q" or args.get("cmd") == "pytest -q",
         )
         if not result.shell_call_success:
             result.agentic_notes.append("bash tool call missing or wrong command")

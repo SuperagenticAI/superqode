@@ -13,10 +13,17 @@ def _plain_is_busy(monkeypatch):
 
 
 class _Log:
-    def add_info(self, t): pass
-    def add_error(self, t): pass
-    def add_system(self, t): pass
-    def write(self, x): pass
+    def add_info(self, t):
+        pass
+
+    def add_error(self, t):
+        pass
+
+    def add_system(self, t):
+        pass
+
+    def write(self, x):
+        pass
 
 
 def _app(monkeypatch, running: bool):
