@@ -149,18 +149,19 @@ def _install_hint(model_id: str, model: dict[str, Any], lab_id: str) -> str:
     if isinstance(weights, dict):
         hf_repo = weights.get("huggingface") or weights.get("hf") or weights.get("repo")
         if hf_repo:
-            return f"huggingface-cli download {hf_repo}"
+            return f"hf download {hf_repo}"
         if weights.get("url"):
             return str(weights["url"])
 
     lowered = model_id.lower()
     if lab_id == "zhipuai" or "glm" in lowered:
-        return f"huggingface-cli download THUDM/{model_id.split('/')[-1]}"
+        return f"hf download THUDM/{model_id.split('/')[-1]}"
     if "qwen" in lowered:
-        return f"huggingface-cli download Qwen/{model_id.split('/')[-1]}"
+        return f"hf download Qwen/{model_id.split('/')[-1]}"
     if "gemma" in lowered:
-        return f"huggingface-cli download google/{model_id.split('/')[-1]}"
-    return f"huggingface-cli search {model_id.split('/')[-1]}"
+        return f"hf download google/{model_id.split('/')[-1]}"
+    # No known repo: point at a real search, not a made-up download command.
+    return f"superqode models hub {model_id.split('/')[-1]}"
 
 
 def _recommended_for_local(item: LabModel) -> bool:
@@ -237,11 +238,51 @@ def list_lab_models(lab_id: str, *, refresh: bool = False) -> list[LabModel]:
     )
 
 
+# Vetted Hugging Face publishers: the model labs plus the quant communities
+# SuperQode trusts. Live Hub search is filtered to these so "latest from the
+# labs" never surfaces a random unvetted upload.
+TRUSTED_HF_ORGS = {
+    "qwen",
+    "google",
+    "deepseek-ai",
+    "mistralai",
+    "zai-org",
+    "thudm",
+    "mlx-community",
+    "lmstudio-community",
+    "ggml-org",
+    "unsloth",
+}
+
+
+def search_hub_trusted(query: str, *, kind: str | None = None, limit: int = 8) -> list:
+    """Live Hugging Face search restricted to trusted publishers.
+
+    ``kind`` is ``"gguf"``, ``"mlx"``, or ``None`` (general text-generation).
+    Returns ``HubModel`` entries, newest-popular first, only from
+    ``TRUSTED_HF_ORGS``. Raises ``HFNotInstalled`` if ``huggingface_hub`` is
+    missing so the caller can show an install hint.
+    """
+    from superqode.providers.huggingface.fetch import search_hub
+
+    raw = search_hub(query, kind=kind, sort="downloads", limit=max(limit * 4, 24))
+    out = []
+    for model in raw:
+        org = model.id.split("/", 1)[0].lower() if "/" in model.id else ""
+        if org in TRUSTED_HF_ORGS:
+            out.append(model)
+        if len(out) >= limit:
+            break
+    return out
+
+
 __all__ = [
     "CURATED_LOCAL_LABS",
     "LabModel",
     "LocalLab",
+    "TRUSTED_HF_ORGS",
     "list_curated_labs",
     "list_lab_models",
     "load_models_dev_api",
+    "search_hub_trusted",
 ]

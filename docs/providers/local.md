@@ -46,6 +46,37 @@ Once `init` reports the harness is ready, start coding:
 superqode --harness superqode.local.yaml
 ```
 
+### Find The Right Model To Download
+
+You download models with each engine's own tool (`ollama pull`, Hugging Face, a GGUF). To find the right one for your hardware without guessing or wasting a download, search the trusted catalog:
+
+```bash
+superqode local search qwen
+superqode local search qwen3-coder --json
+```
+
+Add `--hub` to also query the Hugging Face Hub live, filtered to trusted publishers (the model labs plus vetted quant communities like mlx-community and lmstudio-community), so you see the latest releases:
+
+```bash
+superqode local search glm --hub
+superqode local search qwen3-coder --hub --gguf
+```
+
+In the TUI, type `:hub` to enter **model-search mode**, then just type a model name (no `:local search` prefix needed). `:hub <name>` does a one-shot search, and `:hub off` exits. Add `--hub` on a line for live Hugging Face results.
+
+For each match it lists the real native download command for every engine the model can run on, plus a one-line `superqode models download` alternative that auto-picks the engine:
+
+```text
+Qwen3-Coder 30B-A3B  [~17.4 GB · likely fits]
+    ollama      ollama pull qwen3-coder:30b-a3b
+    llama.cpp   llama-server -hf unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF
+    LM Studio   lms get https://huggingface.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF
+    MLX         hf download lmstudio-community/Qwen3-Coder-30B-A3B-Instruct-MLX-4bit
+    SuperQode   superqode models download lmstudio-community/...-MLX-4bit  (any engine)
+```
+
+The MLX and GGUF repositories come from the live Hugging Face API (trusted publishers only), and the command syntaxes are the current ones: `hf download` (not the deprecated `huggingface-cli`), `llama-server -hf <repo>`, and `lms get <full HF URL>`. Each match also shows an approximate model size, whether you already have it, and a rough memory-fit verdict for your hardware. The size is estimated from the parameter count and quantization, so treat it as a guide, not a guarantee. (Works offline too: without a network it falls back to the catalog command only.) SuperQode prints the command; you run it in your tool, then `:connect local`.
+
 ### Verify Readiness Anytime
 
 `local smoke` runs the same non-destructive readiness probe on demand. It never reads or edits your repo:

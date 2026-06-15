@@ -336,6 +336,8 @@ superqode sandbox run e2b -- "pytest -q"
 
 The full `harness` command group (wizard, init, explain, compile, diff, run, runs, events, replay, inbox, worker, and more) is documented in [Harness Commands](harness-commands.md).
 
+The full `local` command group (init, doctor, search, serve, servers, stop, models, warm, smoke, bench, labs, packs, optimize, guardrails) is documented in [Local Commands](local-commands.md).
+
 ### Provider Commands
 
 | Command | Description |

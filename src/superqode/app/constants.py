@@ -296,6 +296,8 @@ COMMANDS = [
     ":chat",
     ":chat off",
     ":chat clear",
+    ":hub",
+    ":hub off",
     ":disconnect",
     # Runtime backend selection (see ':runtime list' for status)
     ":runtime",
@@ -407,6 +409,9 @@ COMMANDS = [
     ":local",
     ":local doctor",
     ":local packs",
+    ":local search",
+    ":local labs",
+    ":local serve",
     ":skills",
     ":skills list",
     ":skills info",

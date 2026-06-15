@@ -952,6 +952,7 @@ class SuperQodeApp(App):
     _plan_mode_enabled: bool = False  # Keep native BYOK/local prompts in plan-only mode
     _chat_mode: bool = False  # Raw direct-to-model chat: no repo context, no tools, speed metrics
     _chat_history: list = None  # Conversation buffer used only while chat mode is on
+    _hub_mode: bool = False  # Model-search mode: typed lines search the model catalog
     _force_plan_once: bool = False  # Run the next native prompt as plan-only
     _force_execute_once: bool = False  # Run the next prompt even if plan mode is enabled
     _pending_plan_request: str = ""  # Last planned request available for approval/execution
@@ -5582,6 +5583,8 @@ class SuperQodeApp(App):
             self.run_worker(self._mcp_cmd(args, log))
         elif c == "chat":
             self._chat_cmd(args, log)
+        elif c == "hub":
+            self._hub_cmd(args, log)
         elif c == "context":
             self._show_context(log)
         elif c == "status":
@@ -12272,6 +12275,14 @@ memory:
             self._enqueue_message(text)
             return
 
+        # Hub (model-search) mode: a typed line is a model name to look up, so
+        # the user can browse the catalog without retyping ":local search".
+        if getattr(self, "_hub_mode", False):
+            log.add_user(text)
+            self._last_user_message = text
+            self.run_worker(self._local_search(text, log))
+            return
+
         # Chat mode: a raw, direct-to-model conversation. No repo context, no
         # tools, no system scaffolding, no @file/MCP/plan expansion. This is the
         # fastest way to feel the model's latency and decode speed.
@@ -12489,6 +12500,42 @@ memory:
         self._reset_input_placeholder()
         log.add_info("Answered agent question. Continuing...")
         return True
+
+    def _hub_cmd(self, args: str, log: ConversationLog):
+        """Model-search mode: type a model name to find it (no `:local search`).
+
+        ``:hub`` toggles the mode; ``:hub <name>`` does a one-shot search.
+        """
+        arg = (args or "").strip()
+        low = arg.lower()
+
+        if low in ("off", "stop", "exit"):
+            self._hub_mode = False
+            log.add_info("Model search OFF. Back to normal input.")
+            return
+        if low in ("on", "start"):
+            self._hub_mode = True
+        elif arg:
+            # One-shot search; do not change the mode.
+            self.run_worker(self._local_search(arg, log))
+            return
+        else:
+            self._hub_mode = not getattr(self, "_hub_mode", False)
+
+        if self._hub_mode:
+            t = Text()
+            t.append("\n  🔎 Model search ON\n", style=f"bold {THEME['cyan']}")
+            t.append("  Just type a model name to find it in the trusted catalog.\n", style=THEME["muted"])
+            t.append("  Shows size, fit for your hardware, and the get-command.\n", style=THEME["muted"])
+            t.append("  Add ", style=THEME["muted"])
+            t.append("--hub", style=f"bold {THEME['cyan']}")
+            t.append(" on a line for the latest live from Hugging Face.\n", style=THEME["muted"])
+            t.append("  Turn off with ", style=THEME["muted"])
+            t.append(":hub off", style=f"bold {THEME['cyan']}")
+            t.append("\n", style="")
+            log.write(t)
+        else:
+            log.add_info("Model search OFF. Back to normal input.")
 
     def _chat_cmd(self, args: str, log: ConversationLog):
         """Toggle raw direct-to-model chat mode (no repo context, no tools)."""
@@ -20632,52 +20679,63 @@ memory:
         # MLX and llama.cpp serve exactly one model per process and are NOT
         # always-on background apps like Ollama or LM Studio. Connecting alone
         # would point at a dead endpoint, so if their server is not already up
-        # we launch it with the chosen model first, then connect.
-        if provider in ("mlx", "llama.cpp") and model:
+        # we launch it with the chosen model first, then connect. Note the
+        # provider id "llamacpp" maps to the server-manager engine "llama.cpp".
+        engine_for_provider = {"mlx": "mlx", "llamacpp": "llama.cpp"}
+        if provider in engine_for_provider and model:
+            engine = engine_for_provider[provider]
             try:
                 from superqode.local.servers import get_manager
 
-                running = bool(get_manager().status(provider).get("running"))
+                running = bool(get_manager().status(engine).get("running"))
             except Exception:
                 running = False
             if not running:
-                self.run_worker(self._start_local_then_connect(provider, model, log))
+                self.run_worker(self._start_local_then_connect(provider, engine, model, log))
                 return
 
         # Local providers use the same connection mechanism as BYOK
         # but are identified by ProviderCategory.LOCAL
         self._connect_byok_mode(provider, model, log)
 
-    async def _start_local_then_connect(self, provider: str, model: str, log: ConversationLog):
-        """Launch a one-model local server (MLX/llama.cpp), then connect to it."""
+    async def _start_local_then_connect(
+        self, provider: str, engine: str, model: str, log: ConversationLog
+    ):
+        """Launch a one-model local server (MLX/llama.cpp), then connect to it.
+
+        ``model`` is an HF id for MLX or a ``.gguf`` path for llama.cpp. After
+        the server is up it serves the model under a short id (the GGUF
+        basename for llama.cpp), which is what we connect with.
+        """
         import asyncio
+        from pathlib import Path as _Path
 
         from superqode.local.servers import ServerError, get_manager
 
+        label = _Path(model).name if engine == "llama.cpp" else model
         t0 = Text()
         t0.append("\n  ⏳ ", style=THEME["warning"])
-        t0.append(f"Starting {provider} server", style=f"bold {THEME['text']}")
-        t0.append(f" with {model}", style=THEME["cyan"])
+        t0.append(f"Starting {engine} server", style=f"bold {THEME['text']}")
+        t0.append(f" with {label}", style=THEME["cyan"])
         t0.append(" — loading the model into memory, this can take a minute...\n", style=THEME["muted"])
         self._call_ui(log.write, t0)
 
         self.is_busy = True
         try:
-            # Large MLX models load slowly; give the server room before the
-            # readiness probe gives up. The picker only lists cached models, so
-            # we do not need allow_download here.
+            # Large models load slowly; give the server room before the
+            # readiness probe gives up. Cached files only, so no download.
             handle = await asyncio.to_thread(
-                get_manager().start, provider, model=model, timeout=300.0
+                get_manager().start, engine, model=model, timeout=300.0
             )
         except ServerError as exc:
             self._call_ui(log.add_error, str(exc))
             self._call_ui(
                 log.add_system,
-                f"Start it manually with: superqode local serve {provider} --model {model}",
+                f"Start it manually with: superqode local serve {engine} --model {model}",
             )
             return
         except Exception as exc:  # noqa: BLE001
-            self._call_ui(log.add_error, f"Failed to start {provider}: {exc}")
+            self._call_ui(log.add_error, f"Failed to start {engine}: {exc}")
             return
         finally:
             self.is_busy = False
@@ -20685,12 +20743,13 @@ memory:
         t = Text()
         verb = "Adopted running" if getattr(handle, "adopted", False) else "Started"
         t.append("  ● ", style=f"bold {THEME['success']}")
-        t.append(f"{verb} {provider}", style=f"bold {THEME['text']}")
+        t.append(f"{verb} {engine}", style=f"bold {THEME['text']}")
         t.append(f"  {handle.base_url}\n", style=THEME["cyan"])
         self._call_ui(log.write, t)
 
-        # Server is up and holding the model; now wire SuperQode to it.
-        self._call_ui(self._connect_byok_mode, provider, model, log)
+        # llama-server serves the GGUF under its basename; MLX serves the HF id.
+        connect_model = _Path(model).name if engine == "llama.cpp" else model
+        self._call_ui(self._connect_byok_mode, provider, connect_model, log)
 
     def _show_local_provider_picker(self, log: ConversationLog, clear_log: bool = True):
         """Show interactive local provider picker with discovery.
@@ -22420,17 +22479,57 @@ memory:
         models = [m for m in ids if not is_embedding_model(m)]
 
         if not models:
+            # No server is up. For llama.cpp we can launch one ourselves: list
+            # the user's cached GGUF files and start llama-server with whichever
+            # they pick (see _connect_local_mode auto-start).
+            if provider_id == "llamacpp":
+                from superqode.local.servers import discover_gguf_models
+
+                gguf = await asyncio.to_thread(discover_gguf_models)
+                if gguf:
+                    paths = [g["path"] for g in gguf]
+                    self._local_selected_provider = provider_id
+                    self._local_model_list = paths
+                    self._local_cached_models = paths
+                    self._awaiting_local_model = True
+                    self._awaiting_local_provider = False
+                    if not hasattr(self, "_local_highlighted_model_index"):
+                        self._local_highlighted_model_index = 0
+                    hl = getattr(self, "_local_highlighted_model_index", 0)
+
+                    t = Text()
+                    t.append("\n  🟢 llama.cpp", style=f"bold {THEME['success']}")
+                    t.append(f"  {len(paths)} cached GGUF model(s)\n", style=THEME["dim"])
+                    t.append("  Pick one and SuperQode will start llama-server with it.\n\n", style=THEME["muted"])
+                    for idx, p in enumerate(paths, 1):
+                        is_hl = (idx - 1) == hl
+                        t.append("  ▶ " if is_hl else "    ", style=f"bold {THEME['success']}")
+                        t.append(f"[{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
+                        style = f"bold {THEME['success']}" if is_hl else f"bold {THEME['text']}"
+                        t.append(Path(p).name, style=style)
+                        if is_hl:
+                            t.append("  ← SELECTED", style=f"bold {THEME['success']}")
+                        t.append("\n", style="")
+                    t.append("\n  💡 Select a number or name to launch + connect\n", style=THEME["text"])
+                    log.write(t)
+                    self.set_timer(0.05, self._ensure_input_focus)
+                    return
+
             t = Text()
             t.append("\n  🟡 ", style=THEME["warning"])
-            t.append(f"No {name} server answering at {base_url}\n", style=f"bold {THEME['text']}")
-            t.append("  llama.cpp serves one GGUF model that you launch yourself:\n", style=THEME["muted"])
-            t.append("      llama-server -m /path/to/model.gguf --port 8080\n", style=THEME["cyan"])
-            t.append("  or let SuperQode manage it:\n", style=THEME["muted"])
-            t.append("      :local serve llama.cpp --model /path/to/model.gguf\n", style=THEME["cyan"])
-            t.append("  Then pick llama.cpp again to connect.\n", style=THEME["muted"])
+            t.append(f"No {name} answering at {base_url}\n", style=f"bold {THEME['text']}")
+            t.append("  No cached GGUF models found. Download one, e.g.:\n", style=THEME["muted"])
+            t.append("      hf download <repo> <file>.gguf\n", style=THEME["cyan"])
+            t.append("  or point at a running server:\n", style=THEME["muted"])
+            t.append("      llama-server -m /path/to/model.gguf --port 8081\n", style=THEME["cyan"])
+            t.append("\n  Then ", style=THEME["muted"])
+            t.append(":connect", style=f"bold {THEME['cyan']}")
+            t.append(" again and pick llama.cpp.\n", style=THEME["muted"])
+            t.append("  (LLAMACPP_HOST overrides the port if you use a different one.)\n", style=THEME["dim"])
+            # Stable final state — no auto-reopen (that clears the log = flash).
+            self._awaiting_local_model = False
+            self._awaiting_local_provider = False
             log.write(t)
-            # Hand control back to the picker so this is never a hang.
-            self._show_local_provider_picker(log)
             return
 
         self._local_selected_provider = provider_id
@@ -22539,6 +22638,14 @@ memory:
         highlighted_idx = getattr(self, "_local_highlighted_model_index", 0)
 
         for idx, model in enumerate(models, 1):
+            # Entries can be rich LocalModel objects or plain id strings (e.g.
+            # from OpenAI-compatible endpoints / the HF cache list). Coerce so
+            # attribute access below never explodes on a str.
+            if isinstance(model, str):
+                from superqode.providers.local.base import LocalModel
+
+                model = LocalModel(id=model, name=model.split("/")[-1] or model)
+
             is_highlighted = (idx - 1) == highlighted_idx
 
             if is_highlighted:
@@ -23991,6 +24098,11 @@ memory:
             self.run_worker(self._local_smoke(subargs, log))
         elif sub == "labs":
             self.run_worker(self._local_labs(subargs, log))
+        elif sub == "search":
+            if subargs.strip():
+                self.run_worker(self._local_search(subargs.strip(), log))
+            else:
+                log.add_info("Usage: :local search <query>   (e.g. :local search qwen3-coder)")
         elif sub == "warm":
             self.run_worker(self._local_warm(subargs, log))
         elif sub == "test":
@@ -24028,8 +24140,8 @@ memory:
         else:
             log.add_info(f"Unknown subcommand: {sub}")
             log.add_system(
-                "Available: init, smoke, labs, warm, status, scan, models, test, info, "
-                "recommend, serve, servers, stop"
+                "Available: init, smoke, labs, search, warm, status, scan, models, test, "
+                "info, recommend, serve, servers, stop"
             )
 
     @staticmethod
@@ -24212,6 +24324,108 @@ memory:
             if row.recommended_for_local and row.install_hint:
                 t.append(f"      install: {row.install_hint}\n", style=THEME["cyan"])
         self._show_command_output(log, t)
+
+    async def _local_search(self, query: str, log: ConversationLog):
+        """Search the trusted catalog for a model + how to get it, in the TUI.
+
+        Append ``--hub`` to also query Hugging Face live (trusted publishers).
+        """
+        import asyncio
+
+        from superqode.local.hardware import detect_hardware
+        from superqode.local.matrix import search_models
+
+        want_hub = "--hub" in query.split()
+        query = query.replace("--hub", "").strip()
+
+        log.add_info(f"Searching trusted catalog for {query!r}...")
+        try:
+            hw = detect_hardware()
+            tier = hw.tier
+            ram_gb = hw.available_memory_gb
+            hits = await asyncio.to_thread(search_models, query, tier=tier)
+        except Exception as exc:  # noqa: BLE001
+            self._call_ui(log.add_error, f"Search failed: {exc}")
+            return
+
+        # Always look up trusted Hub artifacts so each model lists every engine
+        # it can run on (Ollama + MLX + GGUF), not just the catalog's command.
+        from superqode.local.labs import search_hub_trusted
+        from superqode.local.matrix import augment_commands_with_hub
+
+        hub_models = []
+        try:
+            hub_models = await asyncio.to_thread(search_hub_trusted, query, limit=25)
+        except Exception:  # noqa: BLE001 - offline / no huggingface_hub
+            hub_models = []
+        augment_commands_with_hub(hits, hub_models)
+        matched_ids = {cmd.split()[-1] for h in hits for _, cmd in h.commands}
+        hub_extra = [m for m in hub_models if m.id not in matched_ids]
+        hub_models = hub_extra if want_hub else hub_extra[:3]
+
+        if not hits and not hub_models:
+            t = Text()
+            t.append(f"\n  No models match {query!r}.\n", style=THEME["warning"])
+            t.append("  Browse families with ", style=THEME["muted"])
+            t.append(":local labs", style=f"bold {THEME['cyan']}")
+            t.append("  ·  live: ", style=THEME["muted"])
+            t.append(f":local search {query} --hub\n", style=f"bold {THEME['cyan']}")
+            self._call_ui(self._show_command_output, log, t)
+            return
+
+        from superqode.local.matrix import estimate_model_memory_gb, memory_fit_phrase
+
+        ram_note = f"  ·  your RAM: ~{ram_gb:g} GB" if ram_gb else ""
+        t = Text()
+        if hits:
+            t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+            t.append("Curated matches", style=f"bold {THEME['text']}")
+            t.append(f"  for {query!r}  ·  {tier}{ram_note}\n\n", style=THEME["dim"])
+        for hit in hits:
+            fit = memory_fit_phrase(hit.est_memory_gb, ram_gb)
+            t.append("  ● ", style=f"bold {THEME['success']}")
+            t.append(hit.name, style=f"bold {THEME['text']}")
+            badges = []
+            if hit.downloaded_as:
+                badges.append("downloaded")
+            badges.append(fit)
+            if hit.role and hit.role != "main":
+                badges.append(hit.role)
+            badge_color = THEME["warning"] if "too large" in fit else THEME["success"]
+            t.append(f"  [{', '.join(badges)}]\n", style=badge_color)
+            if hit.downloaded_as:
+                t.append(f"      you already have: {hit.downloaded_as}\n", style=THEME["success"])
+            for engine, command in hit.commands:
+                t.append(f"      {engine:<11} ", style=THEME["dim"])
+                t.append(f"{command}\n", style=THEME["cyan"])
+            if hit.hub_repo:
+                t.append(f"      {'SuperQode':<11} ", style=THEME["dim"])
+                t.append(f"superqode models download {hit.hub_repo}", style=THEME["cyan"])
+                t.append("  (any engine)\n", style=THEME["dim"])
+            if hit.sources:
+                t.append(f"      (source: {', '.join(hit.sources)})\n", style=THEME["dim"])
+
+        if hub_models:
+            t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+            t.append("Latest on Hugging Face", style=f"bold {THEME['text']}")
+            t.append("  (trusted publishers)\n\n", style=THEME["dim"])
+            for m in hub_models:
+                fmt = "GGUF" if m.is_gguf else ("MLX" if m.is_mlx else "safetensors")
+                est = estimate_model_memory_gb(m.id, quantized_default=(m.is_gguf or m.is_mlx))
+                fit = memory_fit_phrase(est, ram_gb)
+                t.append("  ● ", style=f"bold {THEME['cyan']}")
+                t.append(m.id, style=f"bold {THEME['text']}")
+                t.append(f"  [{fmt}, {m.downloads:,} dl, {fit}]\n", style=THEME["dim"])
+                t.append(f"      superqode models download {m.id}\n", style=THEME["cyan"])
+
+        t.append("\n  Sizes are rough estimates (params x quant), not a guarantee.\n", style=THEME["dim"])
+        if not want_hub:
+            t.append("  Add ", style=THEME["muted"])
+            t.append("--hub", style=f"bold {THEME['cyan']}")
+            t.append(" to see the latest releases live from Hugging Face.\n", style=THEME["muted"])
+        t.append("  After downloading, ", style=THEME["muted"])
+        t.append(":connect local\n", style=f"bold {THEME['cyan']}")
+        self._call_ui(self._show_command_output, log, t)
 
     async def _local_warm(self, subargs: str, log: ConversationLog):
         """Warm a local model and show first-token latency in the TUI."""
@@ -26925,6 +27139,7 @@ memory:
                     (":local", "Show local provider status"),
                     (":local init", "Generate a local harness and run readiness smoke"),
                     (":local smoke", "Run non-destructive local coding readiness checks"),
+                    (":local search <query>", "Find a trusted model + how to get it (hardware-aware)"),
                     (":local labs", "Browse trusted models.dev local model labs"),
                     (":local warm <engine>", "Warm a model and measure first-token latency"),
                     (":local scan", "Scan for running local providers"),
@@ -26940,6 +27155,8 @@ memory:
                 [
                     (":chat", "Raw direct-to-model chat: no repo context, no tools, shows TTFT + tok/s"),
                     (":chat off", "Leave chat mode and return to the full coding harness"),
+                    (":hub", "Model-search mode: just type a model name to find it (size + fit)"),
+                    (":hub <name>", "One-shot model search (short for :local search)"),
                     (":chat clear", "Clear the chat-mode conversation buffer"),
                     (":context", "Show the detected context window + compaction budgets"),
                     (":context <tokens>", "Pin the context window (e.g. :context 8192 / 16k)"),

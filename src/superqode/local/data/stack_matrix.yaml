@@ -48,7 +48,7 @@ tiers:
     models:
       - name: "GLM-4.5-Air (4bit)"
         match: ["glm-4.5-air", "glm4.5-air", "glm-4-5-air"]
-        pull: "huggingface-cli download THUDM/GLM-4.5-Air"
+        pull: "hf download THUDM/GLM-4.5-Air"
         role: main
         pack: glm
         source: models.dev/labs/zhipuai
@@ -79,7 +79,7 @@ tiers:
     models:
       - name: "GLM-4.5-Air (8bit or MLX)"
         match: ["glm-4.5-air", "glm4.5-air", "glm-4-5-air"]
-        pull: "huggingface-cli download THUDM/GLM-4.5-Air"
+        pull: "hf download THUDM/GLM-4.5-Air"
         role: main
         pack: glm
         source: models.dev/labs/zhipuai
@@ -110,7 +110,7 @@ tiers:
     models:
       - name: "GLM-4.5-Air (bf16 or 8bit)"
         match: ["glm-4.5-air", "glm4.5-air", "glm-4-5-air"]
-        pull: "huggingface-cli download THUDM/GLM-4.5-Air"
+        pull: "hf download THUDM/GLM-4.5-Air"
         role: main
         pack: glm
         source: models.dev/labs/zhipuai
@@ -172,19 +172,19 @@ tiers:
     models:
       - name: "GLM-4.5-Air (AWQ/FP8)"
         match: ["glm-4.5-air", "glm4.5-air", "glm-4-5-air"]
-        pull: "huggingface-cli download THUDM/GLM-4.5-Air"
+        pull: "hf download THUDM/GLM-4.5-Air"
         role: main
         pack: glm
         source: models.dev/labs/zhipuai
       - name: "Qwen3-Coder-Next (its design target)"
         match: ["qwen3-coder-next"]
-        pull: "huggingface-cli download Qwen/Qwen3-Coder-Next"
+        pull: "hf download Qwen/Qwen3-Coder-Next"
         role: main
         pack: qwen-coder
         source: models.dev/labs/alibaba
       - name: "Qwen3.6 27B (AWQ)"
         match: ["qwen3.6-27b"]
-        pull: "huggingface-cli download Qwen/Qwen3.6-27B-AWQ"
+        pull: "hf download Qwen/Qwen3.6-27B-AWQ"
         role: main
         pack: qwen3
         source: models.dev/labs/alibaba
@@ -197,19 +197,19 @@ tiers:
     models:
       - name: "GLM-4.6 / GLM-4.5-Air (server route)"
         match: ["glm-4.6", "glm4.6", "glm-4.5-air"]
-        pull: "huggingface-cli download THUDM/GLM-4.6"
+        pull: "hf download THUDM/GLM-4.6"
         role: main
         pack: glm
         source: models.dev/labs/zhipuai
       - name: "Qwen3-Coder 30B-A3B (FP8)"
         match: ["qwen3-coder-30b"]
-        pull: "huggingface-cli download Qwen/Qwen3-Coder-30B-A3B-FP8"
+        pull: "hf download Qwen/Qwen3-Coder-30B-A3B-FP8"
         role: main
         pack: qwen-coder
         source: models.dev/labs/alibaba
       - name: "DeepSeek V4 Flash (FP8, via DS4 or SGLang)"
         match: ["deepseek-v4-flash"]
-        pull: "huggingface-cli download deepseek-ai/DeepSeek-V4-Flash"
+        pull: "hf download deepseek-ai/DeepSeek-V4-Flash"
         role: main
         pack: ds4
         source: models.dev/labs/deepseek

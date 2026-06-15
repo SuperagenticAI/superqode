@@ -195,7 +195,7 @@ def generate_harness_yaml(report: DoctorReport, name: str = "local-coder") -> st
                 provider = "ollama"
             elif "ds4" in best.pull:
                 provider, model_ref = "ds4", "deepseek-v4-flash"
-            elif best.pull.startswith("huggingface-cli"):
+            elif best.pull.startswith(("hf download", "huggingface-cli")):
                 provider = "mlx"
     primary = f"{provider}/{model_ref}" if model_ref else provider
 

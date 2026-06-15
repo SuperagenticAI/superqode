@@ -179,10 +179,23 @@ def _is_simple_conversational_query(message: str) -> bool:
 
     This is conservative - only returns True for very obvious cases.
     """
-    message_lower = message.lower().strip()
+    # Strip trailing punctuation so "How are you?" / "thanks!" match cleanly.
+    message_lower = message.lower().strip().rstrip("?!. ")
 
-    # Very short greetings only
-    if message_lower in ["hi", "hello", "hey"]:
+    # Greetings and small talk - no tools, no repo context needed. Keeping these
+    # off the tool path is what makes a quick "how are you" feel instant on a
+    # local model (no multi-KB tool-schema prefill).
+    greetings = {
+        "hi", "hello", "hey", "yo", "howdy", "hiya", "sup", "wassup",
+        "how are you", "how are you doing", "how r u", "how are u", "how ya doing",
+        "how's it going", "hows it going", "how is it going",
+        "how's everything", "hows everything", "how have you been",
+        "what's up", "whats up", "what is up",
+        "good morning", "good afternoon", "good evening", "good day",
+        "thanks", "thank you", "thx", "ty", "thanks!", "cheers",
+        "ok", "okay", "cool", "nice", "great", "awesome", "gotcha",
+    }
+    if message_lower in greetings:
         return True
 
     # Simple question patterns - detect basic general knowledge questions
@@ -193,6 +206,8 @@ def _is_simple_conversational_query(message: str) -> bool:
         r"^who .+\??$",  # "Who is the president?"
         r"^when .+\??$",  # "When was the war?"
         r"^how (many|much|long|old) .+\??$",  # "How many people?", "How old is it?"
+        r"^how (are|is|'s|s|have|was|do) (you|it|things|everything|ya)\b.*$",  # "how are you", "how's it going"
+        r"^(tell me about|introduce) yourself\b.*$",  # meta questions about the agent
     ]
 
     for pattern in simple_patterns:

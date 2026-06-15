@@ -161,6 +161,39 @@ def install_guide(engine: str) -> List[str]:
 MLX_REQUIREMENT = "mlx-lm>=0.31.0,<0.32.0"
 
 
+def discover_gguf_models(limit: int = 50) -> List[dict]:
+    """Find cached ``.gguf`` model files across the common local caches.
+
+    Returns dicts ``{"id": <filename>, "path": <abs path>}``. Multimodal
+    projector files (``mmproj``) and embedding models are skipped since they
+    cannot serve chat completions.
+    """
+    roots = [
+        Path.home() / ".cache" / "huggingface" / "hub",
+        Path.home() / ".cache" / "lm-studio" / "models",
+        Path.home() / "models",
+        Path.home() / ".cache" / "llama.cpp",
+        Path.home() / ".local" / "share" / "models",
+    ]
+    seen: dict[str, dict] = {}
+    for root in roots:
+        if not root.exists():
+            continue
+        try:
+            for path in root.rglob("*.gguf"):
+                low = path.name.lower()
+                if "mmproj" in low or "embed" in low or "nomic" in low:
+                    continue
+                key = str(path)
+                if key not in seen:
+                    seen[key] = {"id": path.name, "path": key}
+                if len(seen) >= limit:
+                    return list(seen.values())
+        except (OSError, PermissionError):
+            continue
+    return list(seen.values())
+
+
 def _mlx_importable(python: str) -> bool:
     try:
         result = subprocess.run(  # noqa: S603

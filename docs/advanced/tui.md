@@ -104,8 +104,11 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:connect byok` - Open the BYOK provider picker
 - `:local init` - Generate `superqode.local.yaml` and run local readiness checks
 - `:local smoke` - Run non-destructive local coding readiness checks
+- `:local search <name>` - Find a model + how to get it on every engine (size + fit)
+- `:hub` - Model-search mode: just type a model name (off by default)
 - `:local labs` - Browse trusted models.dev Labs recommendations
 - `:local warm <engine>` - Warm a local model and show first-token latency
+- `:chat` - Raw direct-to-model chat: no repo/tools, shows TTFT + tok/s (off by default)
 - `:harness <path>` - Load a HarnessSpec
 - `:harness status` - Show the active harness
 - `:harness templates` - List built-in harness templates

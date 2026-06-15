@@ -676,13 +676,16 @@ PROVIDERS: Dict[str, ProviderDef] = {
         category=ProviderCategory.LOCAL,
         env_vars=[],
         base_url_env="LLAMACPP_HOST",
-        default_base_url="http://localhost:8080/v1",
+        # Port 8081 matches SuperQode's server manager (SPECS["llama.cpp"]) and
+        # avoids colliding with MLX, which owns :8080. Override with LLAMACPP_HOST
+        # if you run llama-server on a different port.
+        default_base_url="http://localhost:8081/v1",
         litellm_prefix="openai/",
         docs_url="https://github.com/ggerganov/llama.cpp",
         example_models=[
             "local-model",
         ],
-        notes="CPU/GPU inference. GGUF format models.",
+        notes="CPU/GPU inference (GGUF models) on port 8081.",
     ),
     "openai-compatible": ProviderDef(
         id="openai-compatible",

@@ -45,6 +45,19 @@ class HardwareProfile:
         return round(sum(g.vram_gb for g in self.nvidia_gpus), 1)
 
     @property
+    def available_memory_gb(self) -> Optional[float]:
+        """Rough memory budget a local model must fit in.
+
+        Apple Silicon shares unified memory with the OS; NVIDIA is bounded by
+        VRAM; CPU-only falls back to system RAM.
+        """
+        if self.is_apple_silicon and self.unified_memory_gb:
+            return float(self.unified_memory_gb)
+        if self.nvidia_gpus:
+            return self.total_vram_gb
+        return _total_memory_gb()
+
+    @property
     def tier(self) -> str:
         """Coarse tier used by the recommendation matrix."""
         if self.is_apple_silicon and self.unified_memory_gb:

@@ -223,6 +223,7 @@ nav:
       - 🧠 Memory: cli-reference/memory-commands.md
       - 🔌 Plugins: cli-reference/plugins-commands.md
       - ⚓ Harness: cli-reference/harness-commands.md
+      - 💻 Local: cli-reference/local-commands.md
       - ⚡ Runtime: cli-reference/runtime-commands.md
       - 🏖️ Sandbox: cli-reference/sandbox-commands.md
       - 📊 Benchmark: cli-reference/benchmark-commands.md

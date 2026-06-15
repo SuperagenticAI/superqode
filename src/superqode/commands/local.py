@@ -566,6 +566,125 @@ def local_labs(lab, limit, refresh, json_output):
             click.echo(f"  install: {row.install_hint}")
 
 
+@local.command("search")
+@click.argument("query")
+@click.option("--hub", is_flag=True, help="Also search Hugging Face live (trusted publishers)")
+@click.option("--gguf", is_flag=True, help="With --hub: only GGUF (Ollama / llama.cpp)")
+@click.option("--mlx", is_flag=True, help="With --hub: only MLX (Apple Silicon)")
+@click.option("--json", "json_output", is_flag=True, help="Emit results as JSON")
+def local_search(query, hub, gguf, mlx, json_output):
+    """Search the trusted catalog for a model and how to get it.
+
+    Finds models matching QUERY from SuperQode's vetted stack matrix, shows the
+    exact download command per engine, whether you already have it, and whether
+    it fits your hardware. With --hub it also queries the Hugging Face Hub live,
+    filtered to trusted publishers, so you see the latest releases.
+    """
+    from superqode.local.hardware import detect_hardware
+    from superqode.local.matrix import search_models
+
+    from superqode.local.matrix import augment_commands_with_hub
+
+    hw = detect_hardware()
+    tier = hw.tier
+    ram_gb = hw.available_memory_gb
+    hits = search_models(query, tier=tier)
+
+    # Always look up the trusted Hub so each model lists EVERY engine it can run
+    # on (Ollama from the catalog, MLX + GGUF from the Hub), not just Ollama.
+    # Graceful: offline / no huggingface_hub falls back to catalog commands.
+    hub_models = []
+    hub_error = ""
+    from superqode.local.labs import search_hub_trusted
+
+    kind = "gguf" if gguf else ("mlx" if mlx else None)
+    try:
+        hub_models = search_hub_trusted(query, kind=kind, limit=25)
+    except Exception as exc:  # noqa: BLE001 - includes HFNotInstalled / network
+        hub_error = str(exc)
+    augment_commands_with_hub(hits, hub_models)
+
+    # Hub models not matched to a curated row are the "newest releases" tail.
+    matched_ids = {cmd.split()[-1] for h in hits for _, cmd in h.commands}
+    hub_extra = [m for m in hub_models if m.id not in matched_ids]
+
+    if json_output:
+        click.echo(
+            json.dumps(
+                {
+                    "query": query,
+                    "tier": tier,
+                    "results": [h.to_dict() for h in hits],
+                    "hub": [
+                        {
+                            "id": m.id,
+                            "downloads": m.downloads,
+                            "format": "gguf" if m.is_gguf else ("mlx" if m.is_mlx else "safetensors"),
+                            "command": f"superqode models download {m.id}",
+                        }
+                        for m in hub_models
+                    ],
+                    "hub_error": hub_error,
+                },
+                indent=2,
+            )
+        )
+        return
+
+    if not hits and not hub_models:
+        click.echo(f"No trusted-catalog models match {query!r}.")
+        if hub_error:
+            click.echo(f"Hugging Face search unavailable: {hub_error}")
+        click.echo("Browse families with: superqode local labs  ·  live: add --hub")
+        return
+
+    from superqode.local.matrix import estimate_model_memory_gb, memory_fit_phrase
+
+    ram_note = f" · your RAM: ~{ram_gb:g} GB" if ram_gb else ""
+    if hits:
+        click.echo(f"Curated matches for {query!r}  (hardware: {tier}{ram_note})\n")
+    for hit in hits:
+        badges = []
+        if hit.downloaded_as:
+            badges.append("● downloaded")
+        badges.append(memory_fit_phrase(hit.est_memory_gb, ram_gb))
+        if hit.role and hit.role != "main":
+            badges.append(hit.role)
+        click.echo(f"{hit.name}  [{', '.join(badges)}]")
+        if hit.downloaded_as:
+            click.echo(f"    you already have: {hit.downloaded_as}")
+        for engine, command in hit.commands:
+            click.echo(f"    {engine:<11} {command}")
+        if hit.hub_repo:
+            click.echo(f"    {'SuperQode':<11} superqode models download {hit.hub_repo}  (any engine)")
+        meta = []
+        if hit.sources:
+            meta.append("source: " + ", ".join(hit.sources))
+        if hit.tiers:
+            meta.append("tuned for: " + ", ".join(hit.tiers))
+        if meta:
+            click.echo(f"    ({'  ·  '.join(meta)})")
+        click.echo("")
+
+    tail = hub_extra if hub else hub_extra[:3]
+    if tail:
+        click.echo(f"Newer / other on Hugging Face (trusted publishers) for {query!r}\n")
+        for m in tail:
+            fmt = "GGUF" if m.is_gguf else ("MLX" if m.is_mlx else "safetensors")
+            est = estimate_model_memory_gb(m.id, quantized_default=(m.is_gguf or m.is_mlx))
+            fit = memory_fit_phrase(est, ram_gb)
+            click.echo(f"{m.id}  [{fmt}, {m.downloads:,} downloads, {fit}]")
+            click.echo(f"    superqode models download {m.id}")
+        click.echo("")
+    elif hub_error:
+        click.echo(f"(Hugging Face options unavailable: {hub_error})\n")
+
+    click.echo("Sizes are rough estimates (params x quant), not a guarantee.")
+    if not hub and len(hub_extra) > 3:
+        click.echo(f"Add --hub to see all {len(hub_extra)} Hugging Face matches.")
+    click.echo("After downloading: superqode local serve <engine>  or  :connect local")
+
+
 @local.command("warm")
 @click.argument("engine", type=click.Choice(["ollama", "lmstudio", "mlx", "ds4", "llama.cpp"]))
 @click.option("--model", "-m", default=None, help="Model id to preload (default: first served model)")
