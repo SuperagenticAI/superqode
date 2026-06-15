@@ -295,6 +295,26 @@ def test_doctor_harness_pull_fallback(monkeypatch):
     assert "pack: glm" in text
 
 
+def test_doctor_generates_minimal_inherited_harness(monkeypatch, tmp_path):
+    from superqode.local.doctor import generate_harness_yaml
+
+    report = _fake_report(
+        monkeypatch,
+        inventory=[LocalModel(model_id="hf:org/gemma-4-31b-it-4bit-mlx", source="hf")],
+    )
+    path = tmp_path / "minimal.yaml"
+    path.write_text(generate_harness_yaml(report, minimal=True), encoding="utf-8")
+
+    text = path.read_text(encoding="utf-8")
+    spec = load_harness_spec(path)
+
+    assert "inherits: coding" in text
+    assert "runtime:" not in text
+    assert spec.inherits == "coding"
+    assert spec.execution_policy.allow_write is True
+    assert spec.model_policy.primary == "mlx/org/gemma-4-31b-it-4bit-mlx"
+
+
 def test_repository_profile_recommends_context_and_workflow(tmp_path):
     src = tmp_path / "src"
     src.mkdir()

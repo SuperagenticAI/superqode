@@ -85,6 +85,86 @@ harness:
     assert spec.execution_policy.allow_shell is False
 
 
+def test_harness_spec_inherits_builtin_template(tmp_path: Path):
+    path = tmp_path / "team.yaml"
+    path.write_text(
+        """
+name: team-coder
+inherits: coding
+model_policy:
+  primary: ollama/qwen3-coder
+  config:
+    local:
+      num_ctx: 32768
+execution_policy:
+  config:
+    local_guardrails:
+      battery_mode: false
+agents:
+  - id: team-coder
+    tools: [read_file]
+metadata:
+  owner: platform
+""",
+        encoding="utf-8",
+    )
+
+    spec = load_harness_spec(path)
+
+    assert spec.name == "team-coder"
+    assert spec.inherits == "coding"
+    assert spec.execution_policy.allow_write is True
+    assert spec.execution_policy.allow_shell is True
+    assert spec.model_policy.primary == "ollama/qwen3-coder"
+    assert spec.model_policy.config["local"]["num_ctx"] == 32768
+    assert spec.execution_policy.config["local_guardrails"]["battery_mode"] is False
+    assert spec.agents[0].id == "team-coder"
+    assert spec.agents[0].tools == ("read_file",)
+    assert spec.metadata["template"] == "coding"
+    assert spec.metadata["owner"] == "platform"
+
+
+def test_harness_spec_inherits_relative_file_and_detects_cycles(tmp_path: Path):
+    base = tmp_path / "base.yaml"
+    child = tmp_path / "child.yaml"
+    base.write_text(
+        """
+name: base
+runtime:
+  backend: builtin
+model_policy:
+  config:
+    a: 1
+    nested:
+      keep: true
+agents:
+  - id: base-agent
+""",
+        encoding="utf-8",
+    )
+    child.write_text(
+        """
+name: child
+inherits: base.yaml
+model_policy:
+  config:
+    nested:
+      add: true
+""",
+        encoding="utf-8",
+    )
+
+    spec = load_harness_spec(child)
+
+    assert spec.name == "child"
+    assert spec.model_policy.config == {"a": 1, "nested": {"keep": True, "add": True}}
+    assert spec.agents[0].id == "base-agent"
+
+    base.write_text("name: base\ninherits: child.yaml\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="cycle"):
+        load_harness_spec(child)
+
+
 def test_harness_spec_round_trip_preserves_core_fields():
     spec = harness_spec_from_dict(
         {

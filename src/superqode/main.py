@@ -1628,7 +1628,12 @@ def harness_wizard(output, force):
     help="Apply a workflow preset to the generated HarnessSpec",
 )
 @click.option("--force", is_flag=True, help="Overwrite an existing spec file")
-def harness_init(name, template, output, workflow_preset, force):
+@click.option(
+    "--minimal",
+    is_flag=True,
+    help="Write a small spec that inherits from the selected template",
+)
+def harness_init(name, template, output, workflow_preset, force, minimal):
     """Scaffold a harness spec and local agent directories."""
     from dataclasses import replace
 
@@ -1642,6 +1647,27 @@ def harness_init(name, template, output, workflow_preset, force):
 
     if output.exists() and not force:
         raise click.ClickException(f"{output} already exists. Use --force to overwrite.")
+
+    if minimal:
+        import yaml
+
+        payload = {
+            "version": 1,
+            "name": name,
+            "inherits": template,
+        }
+        if workflow_preset:
+            payload["workflow"] = {"preset": workflow_preset}
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+        (Path(".agents") / "skills").mkdir(parents=True, exist_ok=True)
+        (Path(".agents") / "roles").mkdir(parents=True, exist_ok=True)
+        click.echo(f"Created {output}")
+        click.echo(f"Inherits template: {template}")
+        if workflow_preset:
+            click.echo(f"Applied workflow preset: {workflow_preset}")
+        click.echo("Created .agents/skills and .agents/roles")
+        return
 
     spec = replace(get_harness_template(template), name=name)
     if workflow_preset:
@@ -1907,6 +1933,312 @@ def harness_doctor(spec_path, runtime_name, sandbox_backend, store_path, json_ou
     click.echo(render_harness_doctor(report))
     if report.status == "error":
         raise click.Abort()
+
+
+@harness.command("test")
+@click.argument("spec_arg", required=False, type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--spec", "spec_option", type=click.Path(exists=True, path_type=Path), help="Harness spec file"
+)
+@click.option("--provider", envvar="SUPERQODE_PROVIDER", default="openai", show_default=True)
+@click.option(
+    "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-4o-mini", show_default=True
+)
+@click.option("--runtime", "runtime_name", default=None, help="Override runtime or backend")
+@click.option(
+    "--working-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("."),
+    show_default=False,
+)
+@click.option("--sandbox", "sandbox_backend", default="local", show_default=True)
+@click.option("--prompt", default="Reply with exactly: superqode harness ok", show_default=True)
+@click.option("--live", is_flag=True, help="Actually call the configured model endpoint")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_test(
+    spec_arg,
+    spec_option,
+    provider,
+    model_name,
+    runtime_name,
+    working_dir,
+    sandbox_backend,
+    prompt,
+    live,
+    json_output,
+):
+    """Run a fast HarnessSpec smoke test with a failure digest."""
+    import asyncio
+
+    from superqode.harness import render_harness_smoke_test, run_harness_smoke_test
+
+    spec_path = spec_option or spec_arg
+    if spec_path is None:
+        raise click.ClickException("Missing harness spec. Pass --spec <path>.")
+    payload = asyncio.run(
+        run_harness_smoke_test(
+            spec_path,
+            provider=provider,
+            model=model_name,
+            runtime=runtime_name,
+            working_dir=working_dir,
+            sandbox_backend=sandbox_backend,
+            prompt=prompt,
+            live=live,
+        )
+    )
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+    else:
+        click.echo(render_harness_smoke_test(payload))
+    if payload["status"] == "failed":
+        raise click.exceptions.Exit(1)
+
+
+@harness.command("eval")
+@click.option(
+    "--spec",
+    "spec_paths",
+    type=click.Path(exists=True, path_type=Path),
+    multiple=True,
+    required=True,
+)
+@click.option("--tasks", "tasks_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option(
+    "--variant", "variant_paths", type=click.Path(exists=True, path_type=Path), multiple=True
+)
+@click.option("--provider", envvar="SUPERQODE_PROVIDER", default="openai", show_default=True)
+@click.option(
+    "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-4o-mini", show_default=True
+)
+@click.option("--runtime", "runtime_name", default=None, help="Override runtime or backend")
+@click.option(
+    "--working-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("."),
+    show_default=False,
+)
+@click.option("--sandbox", "sandbox_backend", default="local", show_default=True)
+@click.option("--live", is_flag=True, help="Execute tasks against the model endpoint")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_eval(
+    spec_paths,
+    tasks_path,
+    variant_paths,
+    provider,
+    model_name,
+    runtime_name,
+    working_dir,
+    sandbox_backend,
+    live,
+    json_output,
+):
+    """Run a HarnessSpec eval scorecard across tasks and variants."""
+    import asyncio
+
+    from superqode.harness import render_harness_eval, run_harness_eval
+
+    payload = asyncio.run(
+        run_harness_eval(
+            spec_paths=[*spec_paths, *variant_paths],
+            tasks_path=tasks_path,
+            provider=provider,
+            model=model_name,
+            runtime=runtime_name,
+            working_dir=working_dir,
+            sandbox_backend=sandbox_backend,
+            live=live,
+        )
+    )
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+    else:
+        click.echo(render_harness_eval(payload))
+    if payload["status"] == "failed":
+        raise click.exceptions.Exit(1)
+
+
+@harness.command("auto-bench")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--tasks", "tasks_path", type=click.Path(exists=True, path_type=Path), default=None)
+@click.option("--provider", envvar="SUPERQODE_PROVIDER", default="openai", show_default=True)
+@click.option(
+    "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-4o-mini", show_default=True
+)
+@click.option("--runtime", "runtime_name", default=None, help="Override runtime or backend")
+@click.option(
+    "--working-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("."),
+    show_default=False,
+)
+@click.option("--sandbox", "sandbox_backend", default="local", show_default=True)
+@click.option("--live", is_flag=True, help="Call the configured model endpoint")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_auto_bench(
+    spec_path,
+    tasks_path,
+    provider,
+    model_name,
+    runtime_name,
+    working_dir,
+    sandbox_backend,
+    live,
+    json_output,
+):
+    """Probe a model-backed harness and recommend next settings."""
+    import asyncio
+
+    from superqode.harness import run_harness_eval, run_harness_smoke_test
+
+    if tasks_path:
+        payload = asyncio.run(
+            run_harness_eval(
+                spec_paths=[spec_path],
+                tasks_path=tasks_path,
+                provider=provider,
+                model=model_name,
+                runtime=runtime_name,
+                working_dir=working_dir,
+                sandbox_backend=sandbox_backend,
+                live=live,
+            )
+        )
+        status = payload["status"]
+        recommendation = _auto_bench_recommendation(status, payload, live=live)
+        result = {
+            "mode": "eval",
+            "status": status,
+            "scorecard": payload,
+            "recommendation": recommendation,
+        }
+    else:
+        payload = asyncio.run(
+            run_harness_smoke_test(
+                spec_path,
+                provider=provider,
+                model=model_name,
+                runtime=runtime_name,
+                working_dir=working_dir,
+                sandbox_backend=sandbox_backend,
+                live=live,
+            )
+        )
+        status = payload["status"]
+        recommendation = _auto_bench_recommendation(status, payload, live=live)
+        result = {
+            "mode": "test",
+            "status": status,
+            "test": payload,
+            "recommendation": recommendation,
+        }
+
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+        return
+    click.echo(f"Harness auto-bench: {result['status']}")
+    click.echo(f"Recommendation: {result['recommendation']['summary']}")
+    for item in result["recommendation"]["next_steps"]:
+        click.echo(f"  next: {item}")
+
+
+def _auto_bench_recommendation(status: str, payload: dict, *, live: bool) -> dict:
+    if not live:
+        return {
+            "summary": "Dry run completed. Re-run with --live to benchmark the model endpoint.",
+            "next_steps": ["Pass --live once the local endpoint is running."],
+        }
+    if status == "passed":
+        return {
+            "summary": "Harness/model path is usable with the current settings.",
+            "next_steps": [
+                "Keep the current model_policy settings as a baseline.",
+                "Run `superqode harness eval` with task-specific variants before widening permissions.",
+            ],
+        }
+    digest = payload.get("failure_digest") or {}
+    if payload.get("variants"):
+        failed = [variant for variant in payload["variants"] if variant.get("failed")]
+        digest = (
+            failed[0]["tasks"][0].get("failure_digest") if failed and failed[0]["tasks"] else {}
+        ) or {}
+    return {
+        "summary": f"Benchmark failed: {digest.get('failure_category') or 'unknown'}",
+        "next_steps": digest.get("suggested_next_checks")
+        or ["Run `superqode harness test --live --json` and inspect the failure digest."],
+    }
+
+
+@harness.group("registry")
+def harness_registry():
+    """Publish, list, and install local HarnessSpec registry entries."""
+
+
+@harness_registry.command("publish")
+@click.argument("spec_path", type=click.Path(exists=True, path_type=Path))
+@click.option("--name", default=None, help="Registry entry name")
+@click.option("--registry", "registry_path", type=click.Path(path_type=Path), default=None)
+@click.option("--force", is_flag=True, help="Replace an existing registry entry")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_registry_publish(spec_path, name, registry_path, force, json_output):
+    """Publish a validated HarnessSpec to the local registry."""
+    from superqode.harness import publish_harness_spec
+
+    try:
+        payload = publish_harness_spec(spec_path, root=registry_path, name=name, force=force)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    click.echo(f"Published {payload['name']} -> {payload['spec']}")
+
+
+@harness_registry.command("list")
+@click.option("--registry", "registry_path", type=click.Path(path_type=Path), default=None)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_registry_list(registry_path, json_output):
+    """List local registry entries."""
+    from superqode.harness import list_registry_specs
+
+    payload = list_registry_specs(root=registry_path)
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    if not payload:
+        click.echo("No harness registry entries found.")
+        return
+    for item in payload:
+        click.echo(
+            f"{item['name']}  {item.get('flavor', '-')}  "
+            f"{item.get('runtime', '-')}  {item.get('model', '-')}"
+        )
+
+
+@harness_registry.command("install")
+@click.argument("name")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=Path("harness.yaml"),
+    show_default=True,
+)
+@click.option("--registry", "registry_path", type=click.Path(path_type=Path), default=None)
+@click.option("--force", is_flag=True, help="Overwrite output")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_registry_install(name, output, registry_path, force, json_output):
+    """Install a local registry HarnessSpec into this project."""
+    from superqode.harness import install_registry_spec
+
+    try:
+        payload = install_registry_spec(name, output, root=registry_path, force=force)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    click.echo(f"Installed {name} -> {payload['installed_to']}")
 
 
 @harness.command("run")

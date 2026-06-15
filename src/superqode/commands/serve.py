@@ -19,8 +19,11 @@ console = Console()
 
 
 @click.group()
-def serve():
+@click.pass_context
+def serve(ctx: click.Context):
     """Server commands for IDE and web integration."""
+    if ctx.invoked_subcommand == "harness":
+        return
     if not require_enterprise("Server integrations"):
         raise SystemExit(1)
 
@@ -76,6 +79,35 @@ def serve_web(
         )
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
+
+
+@serve.command("harness")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), default=None)
+@click.option("--dir", "harness_dir", type=click.Path(path_type=Path), default=None)
+@click.option("--http", is_flag=True, help="Serve over streamable HTTP instead of stdio")
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8765, show_default=True, type=int)
+def serve_harness(
+    spec_path: Optional[Path], harness_dir: Optional[Path], http: bool, host: str, port: int
+):
+    """Expose HarnessSpec workflows as MCP tools.
+
+    This is a friendly alias over `superqode mcp`; use --spec for one harness
+    file or --dir for a directory of harness specs.
+    """
+    from superqode.mcp.harness_server import run_server
+
+    if spec_path and harness_dir:
+        raise click.ClickException("Pass either --spec or --dir, not both.")
+    if spec_path:
+        console.print(f"[cyan]Serving harness MCP tools from {spec_path.parent}[/cyan]")
+        console.print(f"[dim]Use harness name: {spec_path.stem}[/dim]")
+        run_server("http" if http else "stdio", host, port, str(spec_path.parent))
+        return
+    console.print(
+        f"[cyan]Serving harness MCP tools from {harness_dir or 'default harness directories'}[/cyan]"
+    )
+    run_server("http" if http else "stdio", host, port, str(harness_dir) if harness_dir else None)
 
 
 @serve.command("status")

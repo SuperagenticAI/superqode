@@ -9,6 +9,7 @@ Expose SuperQode over the network: a browser-based TUI and an MCP server for you
 | Surface | Command | Who connects |
 |---------|---------|--------------|
 | MCP | `superqode mcp` | Any MCP client (Claude Desktop, IDEs, other agents). Exposes your HarnessSpec workflows as `list_harnesses`, `describe_harness`, and `run_harness` tools. |
+| Harness MCP alias | `superqode serve harness --spec harness.yaml` | Same MCP server, shaped around one harness file or directory. |
 | Web TUI | `superqode serve web` | A browser, for the full TUI without a terminal emulator. |
 | A2A | `create_a2a_server()` (Python API) | Other agents and orchestrators over the Agent-to-Agent protocol. See [A2A Providers](../providers/a2a.md). |
 
@@ -43,6 +44,19 @@ A typical MCP client configuration entry:
   }
 }
 ```
+
+---
+
+## serve harness
+
+Expose harness workflows as MCP tools with a command that reads like harness-as-a-service:
+
+```bash
+superqode serve harness --spec harness.yaml
+superqode serve harness --dir ./harnesses --http --port 8765
+```
+
+`--spec` serves the containing directory so relative `inherits` paths keep working; use the file stem as the harness name.
 
 ---
 

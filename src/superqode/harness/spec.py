@@ -191,6 +191,7 @@ class HarnessSpec:
     """Top-level SuperQode harness definition."""
 
     name: str
+    inherits: str | None = None
     version: int = 1
     description: str = ""
     flavor: HarnessFlavor = HarnessFlavor.CODING

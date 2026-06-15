@@ -161,7 +161,9 @@ def render_report(report: DoctorReport) -> str:
     return "\n".join(lines)
 
 
-def generate_harness_yaml(report: DoctorReport, name: str = "local-coder") -> str:
+def generate_harness_yaml(
+    report: DoctorReport, name: str = "local-coder", *, minimal: bool = False
+) -> str:
     """A tuned harness spec for the doctor's verdict."""
     rec = report.recommendation
     best = rec.best_model
@@ -233,11 +235,28 @@ def generate_harness_yaml(report: DoctorReport, name: str = "local-coder") -> st
             f"  guardrail_max_worker_concurrency: {guardrails.max_worker_concurrency}\n"
         )
 
+    if minimal:
+        header = f"version: 1\nname: {name}\ninherits: coding\n"
+    else:
+        header = f"version: 1\nname: {name}\nflavor: coding\n"
+    if minimal:
+        return (
+            header + "workflow:\n"
+            f"  mode: {workflow_mode}\n"
+            f"{f'  preset: {workflow_preset}\n' if workflow_preset else ''}"
+            "model_policy:\n"
+            f"  primary: {primary}\n"
+            f"{pack_line}{tool_format}{context_line}"
+            f"{'execution_policy:\n' + guardrail_config if guardrail_config else ''}"
+            "metadata:\n"
+            f"  generated_by: superqode local doctor\n"
+            f"  hardware_tier: {rec.tier_id}\n"
+            f"{repo_metadata}"
+            f"{guardrail_metadata}"
+        )
+
     return (
-        "version: 1\n"
-        f"name: {name}\n"
-        "flavor: coding\n"
-        "workflow:\n"
+        header + "workflow:\n"
         f"  mode: {workflow_mode}\n"
         f"{f'  preset: {workflow_preset}\n' if workflow_preset else ''}"
         "runtime:\n"

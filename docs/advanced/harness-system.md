@@ -166,6 +166,7 @@ Harness specs are usable from the command line:
 superqode harness list-templates
 superqode harness list-backends
 superqode harness init my-coder --template coding --output harness.yaml
+superqode harness init my-coder --template coding --minimal --output harness.yaml
 superqode harness import-omnigent path/to/agent.yaml --output harness.yaml
 superqode harness validate --spec harness.yaml
 superqode harness validate --spec harness.yaml --schema
@@ -173,7 +174,13 @@ superqode harness inspect --spec harness.yaml
 superqode harness compile --spec harness.yaml --json
 superqode harness diff old-harness.yaml new-harness.yaml
 superqode harness doctor --spec harness.yaml
+superqode harness test --spec harness.yaml
 superqode harness run --spec harness.yaml --prompt "summarize this repository"
+superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml
+superqode harness auto-bench --spec harness.yaml --tasks eval-tasks.yaml
+superqode harness registry publish harness.yaml
+superqode harness registry list
+superqode harness registry install my-coder --output harness.yaml
 superqode harness inbox add --session my-session --prompt "fix auth bug"
 superqode harness inbox list --session my-session
 superqode harness inbox recover --session my-session
@@ -189,6 +196,20 @@ superqode harness graph <run-id>
 
 Use `--schema` on `harness validate` to print the HarnessSpec JSON Schema for editor integration and CI
 checks.
+
+Use `inherits` to compose a harness from a built-in template or another YAML file:
+
+```yaml
+version: 1
+name: team-coder
+inherits: coding
+model_policy:
+  primary: ollama/qwen3-coder
+```
+
+Inheritance is resolved when the spec loads. Mapping fields are deep-merged, child scalar values override the
+base, and list fields such as agents and permission rules replace the base list. Relative inherited files are
+resolved from the child spec's directory, and cycles are rejected.
 
 Use `harness import-omnigent` to convert an Omnigent `agent.yaml` into a SuperQode
 `HarnessSpec` without making Omnigent the controlling runtime. The importer maps
@@ -232,6 +253,22 @@ Use `harness doctor` before sharing or committing a spec. It checks spec loading
 agent IDs and per-agent policy, requested tools, backend installation, backend/spec compatibility, local
 endpoint/model routing, sandbox policy, event-store writability, rich-event graph support, approval
 support, checks commands, hooks, skills, and MCP config paths.
+
+Use `harness test` for a quick end-to-end readiness probe. Without `--live` it validates load, doctor, and
+kernel initialization paths without calling a model. With `--live` it also sends a small prompt and emits a
+compact failure digest that points at likely components such as `model_policy`, `execution_policy`, tools, or
+runtime setup.
+
+Use `harness eval` to run one or more specs against a task file and produce a scorecard. Pass extra variants
+with repeated `--variant` options to keep task-specific harnesses isolated instead of forcing one global spec
+to fit every workflow. Use `--live` when you want to execute tasks against the configured model endpoint.
+
+Use `harness auto-bench` as the quick model-facing wrapper around `harness test` or `harness eval`. It keeps
+the output focused on the next recommended action so first-run local model setup has a single obvious command.
+
+Use `harness registry` for local sharing before publishing specs to a remote hub. `publish` validates and
+copies a spec into `~/.superqode/harness-registry`, `list` shows available entries, and `install` copies one
+into the current project.
 
 The default `builtin` backend supports approval pauses for ASK-permission tool calls. `pydanticai` and
 `openai-agents` also support approval pauses through their runtime adapters. Backends that cannot pause for

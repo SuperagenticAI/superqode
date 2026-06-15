@@ -37,7 +37,8 @@ def local():
 @click.option(
     "--name", default="local-coder", show_default=True, help="Name for the generated harness"
 )
-def local_doctor(json_output, repo_path, guardrails, generate_path, name):
+@click.option("--minimal", is_flag=True, help="Generated harness inherits from coding template")
+def local_doctor(json_output, repo_path, guardrails, generate_path, name, minimal):
     """Detect hardware, engines, and downloaded models; recommend a local stack.
 
     Reads the shipped recommendation matrix (override it with
@@ -70,7 +71,9 @@ def local_doctor(json_output, repo_path, guardrails, generate_path, name):
         target = Path(generate_path)
         if target.exists():
             raise click.ClickException(f"{target} already exists; choose another path")
-        target.write_text(generate_harness_yaml(report, name=name), encoding="utf-8")
+        target.write_text(
+            generate_harness_yaml(report, name=name, minimal=minimal), encoding="utf-8"
+        )
         click.echo(f"\nWrote tuned harness to {target}")
         click.echo(f"Run it with: superqode --harness {target} -p 'your task'")
 
@@ -806,9 +809,10 @@ def local_smoke(engine, endpoint, model, repo_path, api_key, max_tokens, json_ou
 @click.option("--engine", default="", help="Local engine to smoke test")
 @click.option("--model", default="", help="Model id to smoke test")
 @click.option("--skip-smoke", is_flag=True, help="Generate the harness without running smoke")
+@click.option("--minimal", is_flag=True, help="Generated harness inherits from coding template")
 @click.option("--yes", "-y", is_flag=True, help="Overwrite existing harness file")
 @click.option("--json", "json_output", is_flag=True, help="Emit summary as JSON")
-def local_init(repo_path, output_path, engine, model, skip_smoke, yes, json_output):
+def local_init(repo_path, output_path, engine, model, skip_smoke, minimal, yes, json_output):
     """Initialize a local coding harness for this repository."""
     from dataclasses import asdict
 
@@ -828,7 +832,9 @@ def local_init(repo_path, output_path, engine, model, skip_smoke, yes, json_outp
             chosen_model = best.downloaded.bare_id if best.downloaded else best.pull.split()[-1]
         smoke = run_smoke(engine=chosen_engine, model=chosen_model, repo_path=repo_path)
 
-    output_path.write_text(generate_harness_yaml(report, name="local-coder"), encoding="utf-8")
+    output_path.write_text(
+        generate_harness_yaml(report, name="local-coder", minimal=minimal), encoding="utf-8"
+    )
 
     payload = {
         "harness": str(output_path),

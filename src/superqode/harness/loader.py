@@ -31,6 +31,12 @@ from .workflow_presets import apply_workflow_preset
 def load_harness_spec(path: str | Path) -> HarnessSpec:
     """Load a harness spec from a YAML or JSON file."""
     spec_path = Path(path).expanduser()
+    data = _load_harness_data(spec_path)
+    resolved = resolve_harness_inheritance(data, base_dir=spec_path.parent, seen=())
+    return harness_spec_from_dict(resolved)
+
+
+def _load_harness_data(spec_path: Path) -> dict[str, Any]:
     raw = spec_path.read_text(encoding="utf-8")
     if spec_path.suffix.lower() == ".json":
         data = json.loads(raw)
@@ -38,7 +44,76 @@ def load_harness_spec(path: str | Path) -> HarnessSpec:
         data = yaml.safe_load(raw) or {}
     if not isinstance(data, dict):
         raise ValueError(f"Harness spec must be a mapping: {spec_path}")
-    return harness_spec_from_dict(data)
+    return data
+
+
+def resolve_harness_inheritance(
+    data: dict[str, Any],
+    *,
+    base_dir: str | Path | None = None,
+    seen: tuple[str, ...] = (),
+    max_depth: int = 16,
+) -> dict[str, Any]:
+    """Resolve ``inherits`` / ``extends`` on raw HarnessSpec dictionaries.
+
+    Composition happens before dataclass construction so omitted child fields
+    remain distinguishable from explicit default-looking values.
+    """
+    raw = dict(data.get("harness") if isinstance(data.get("harness"), dict) else data)
+    inherited = raw.get("inherits", raw.get("extends"))
+    if not inherited:
+        return raw
+    if not isinstance(inherited, str) or not inherited.strip():
+        raise ValueError("Harness inherits/extends must be a non-empty string")
+    if len(seen) >= max_depth:
+        chain = " -> ".join((*seen, inherited))
+        raise ValueError(f"Harness inheritance depth exceeded {max_depth}: {chain}")
+
+    base_payload, base_token, child_base_dir = _load_inherited_harness(
+        inherited.strip(), Path(base_dir or ".")
+    )
+    if base_token in seen:
+        chain = " -> ".join((*seen, base_token))
+        raise ValueError(f"Harness inheritance cycle detected: {chain}")
+    resolved_base = resolve_harness_inheritance(
+        base_payload,
+        base_dir=child_base_dir,
+        seen=(*seen, base_token),
+        max_depth=max_depth,
+    )
+    return _deep_merge_dicts(resolved_base, raw)
+
+
+def _load_inherited_harness(name: str, base_dir: Path) -> tuple[dict[str, Any], str, Path]:
+    candidate = Path(name).expanduser()
+    if not candidate.is_absolute():
+        candidate = base_dir / candidate
+    if candidate.is_file():
+        resolved = candidate.resolve()
+        return _load_harness_data(resolved), str(resolved), resolved.parent
+
+    from .templates import get_harness_template
+
+    try:
+        template = get_harness_template(name)
+    except ValueError as exc:
+        raise ValueError(
+            f"Unable to resolve inherited harness {name!r} as a file or built-in template"
+        ) from exc
+    return harness_spec_to_dict(template), f"template:{name.strip().lower()}", base_dir
+
+
+def _deep_merge_dicts(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(parent)
+    for key, child_value in child.items():
+        if key == "extends":
+            continue
+        parent_value = merged.get(key)
+        if isinstance(parent_value, dict) and isinstance(child_value, dict):
+            merged[key] = _deep_merge_dicts(parent_value, child_value)
+        else:
+            merged[key] = child_value
+    return merged
 
 
 def save_harness_spec(spec: HarnessSpec, path: str | Path) -> Path:
@@ -67,6 +142,7 @@ def harness_spec_from_dict(data: dict[str, Any]) -> HarnessSpec:
 
     spec = HarnessSpec(
         name=name,
+        inherits=str(raw["inherits"]) if raw.get("inherits") else None,
         version=int(raw.get("version", 1) or 1),
         description=str(raw.get("description", "") or ""),
         flavor=flavor,
@@ -89,6 +165,7 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
     return {
         "version": spec.version,
         "name": spec.name,
+        **({"inherits": spec.inherits} if spec.inherits else {}),
         "description": spec.description,
         "flavor": spec.flavor.value,
         "runtime": {
@@ -233,6 +310,8 @@ def harness_spec_json_schema() -> dict[str, Any]:
         "properties": {
             "version": {"type": "integer", "minimum": 1},
             "name": {"type": "string", "minLength": 1},
+            "inherits": {"type": "string", "minLength": 1},
+            "extends": {"type": "string", "minLength": 1},
             "description": {"type": "string"},
             "flavor": {"type": "string", "enum": [item.value for item in HarnessFlavor]},
             "runtime": {

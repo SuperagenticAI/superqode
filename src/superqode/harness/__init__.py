@@ -6,6 +6,7 @@ from .loader import (
     harness_spec_json_schema,
     harness_spec_to_dict,
     load_harness_spec,
+    resolve_harness_inheritance,
     save_harness_spec,
 )
 from .model_policy import EffectiveModelPolicy, resolve_harness_model_policy
@@ -158,6 +159,16 @@ _LAZY_IMPORTS = {
     "render_harness_graph": (".diagnostics", "render_harness_graph"),
     "render_harness_inspect": (".diagnostics", "render_harness_inspect"),
     "render_harness_replay_plan": (".diagnostics", "render_harness_replay_plan"),
+    # Test/eval/registry
+    "run_harness_smoke_test": (".testing", "run_harness_smoke_test"),
+    "render_harness_smoke_test": (".testing", "render_harness_smoke_test"),
+    "build_failure_digest": (".testing", "build_failure_digest"),
+    "load_eval_tasks": (".eval", "load_eval_tasks"),
+    "run_harness_eval": (".eval", "run_harness_eval"),
+    "render_harness_eval": (".eval", "render_harness_eval"),
+    "publish_harness_spec": (".registry", "publish_harness_spec"),
+    "list_registry_specs": (".registry", "list_registry_specs"),
+    "install_registry_spec": (".registry", "install_registry_spec"),
 }
 
 
@@ -296,11 +307,21 @@ __all__ = [
     "run_workflow",
     "workflow_steps_from_spec",
     "resolve_harness_model_policy",
+    "resolve_harness_inheritance",
     "render_harness_doctor",
     "render_harness_evidence",
     "render_harness_graph",
     "render_harness_inspect",
     "render_harness_replay_plan",
+    "run_harness_smoke_test",
+    "render_harness_smoke_test",
+    "build_failure_digest",
+    "load_eval_tasks",
+    "run_harness_eval",
+    "render_harness_eval",
+    "publish_harness_spec",
+    "list_registry_specs",
+    "install_registry_spec",
     "omnigent_agent_to_harness_spec",
     "spec_from_headless_profile",
     # Performance

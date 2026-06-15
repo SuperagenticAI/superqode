@@ -22,7 +22,11 @@ superqode harness COMMAND [OPTIONS]
 | `validate` | Validate a spec or emit its JSON Schema |
 | `inspect` | Spec plus backend capability compatibility |
 | `doctor` | Diagnose a spec before running it |
+| `test` | Fast smoke test plus failure digest |
+| `eval` | Scorecard across tasks and harness variants |
+| `auto-bench` | First-run model probe and recommendation wrapper |
 | `run` | Run a task through a spec |
+| `registry` | Local publish/list/install hub for harness specs |
 | `import-omnigent` | Convert an Omnigent `agent.yaml` into a spec |
 | `runs` | List persisted runs |
 | `events` | Normalized events for a run |
@@ -59,6 +63,7 @@ Scaffold a spec from a built-in template, optionally applying a workflow preset.
 ```bash
 superqode harness init my-coder --template qwen-coding
 superqode harness init team --template coding --preset plan-implement-review
+superqode harness init team --template coding --minimal
 ```
 
 | Option | Description |
@@ -66,9 +71,22 @@ superqode harness init team --template coding --preset plan-implement-review
 | `-t, --template` | `coding`, `no-tool`, `qwen-coding`, `glm-coding`, `gemma4-coding`, `gemma4-no-tool`, `ds4-coding`, `ds4-fast-local` (default `coding`) |
 | `-o, --output PATH` | Spec file to write (default `harness.yaml`) |
 | `--preset` | `single`, `plan-implement-review`, `fix-and-verify`, `parallel-review`, `security-review`, `release-check`, `router`, `evaluator-optimizer` |
+| `--minimal` | Write a small spec with `inherits: <template>` instead of a fully expanded template |
 | `--force` | Overwrite an existing file |
 
 The `qwen-coding` and `glm-coding` templates reference a model-policy pack, so the matching tuning (temperature, parallel tools, history budget) is applied automatically.
+
+Specs can also compose from templates or relative files:
+
+```yaml
+version: 1
+name: team-coder
+inherits: coding
+model_policy:
+  primary: ollama/qwen3-coder
+```
+
+Mappings are deep-merged, child scalar values override the base, and list fields replace the base list.
 
 ### `harness list-templates`
 
@@ -195,6 +213,53 @@ superqode harness doctor --spec harness.yaml
 | `--sandbox TEXT` | Override sandbox backend |
 | `--store PATH` | Override harness event store directory |
 | `--json` | Emit JSON |
+
+### `harness test`
+
+Run a quick readiness probe. Without `--live`, this validates spec loading, doctor checks, and kernel initialization. With `--live`, it also sends a small prompt to the configured model and returns a compact failure digest.
+
+```bash
+superqode harness test --spec harness.yaml
+superqode harness test --spec harness.yaml --live --provider ollama --model qwen3-coder --json
+```
+
+| Option | Description |
+| --- | --- |
+| `--spec PATH` | Spec file (also accepts a positional path) |
+| `--provider TEXT` | Provider (default `openai`) |
+| `--model TEXT` | Model (default `gpt-4o-mini`) |
+| `--runtime TEXT` | Override runtime or backend |
+| `--sandbox TEXT` | Override sandbox backend |
+| `--prompt TEXT` | Prompt for the live model check |
+| `--live` | Call the model endpoint |
+| `--json` | Emit JSON |
+
+### `harness eval`
+
+Run a task scorecard against one or more harness specs. Use `--variant` to compare task-specific specs against a baseline while keeping variants isolated.
+
+```bash
+superqode harness eval --spec base.yaml --variant debug.yaml --tasks tasks.yaml
+superqode harness eval --spec base.yaml --tasks tasks.yaml --live --json
+```
+
+Task files are YAML:
+
+```yaml
+tasks:
+  - id: smoke
+    prompt: "Reply with hello"
+    expect_contains: hello
+```
+
+### `harness auto-bench`
+
+Run the quick model-facing wrapper around `harness test` or `harness eval` and print a recommendation.
+
+```bash
+superqode harness auto-bench --spec harness.yaml
+superqode harness auto-bench --spec harness.yaml --tasks tasks.yaml --live
+```
 
 ---
 
@@ -400,6 +465,26 @@ superqode harness worker --spec harness.yaml --session <id> \
 | `--recover-stale / --no-recover-stale` | Recover stale running inputs on startup (default on) |
 | `--stale-after INTEGER` | Recover running inputs older than this many seconds (default `300`) |
 | `--json` | Emit JSON when the worker exits |
+
+---
+
+## Sharing
+
+### `harness registry`
+
+Use the local registry as a low-risk share hub before moving to a remote marketplace. Publishing validates and copies a spec into `~/.superqode/harness-registry`; installing copies it back into a project.
+
+```bash
+superqode harness registry publish harness.yaml
+superqode harness registry list
+superqode harness registry install team-coder --output harness.yaml
+```
+
+| Subcommand | Purpose |
+| --- | --- |
+| `publish` | Validate and copy a spec into the local registry |
+| `list` | Show local registry entries |
+| `install` | Copy an entry from the registry into the current project |
 
 ---
 

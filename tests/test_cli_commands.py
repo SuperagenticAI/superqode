@@ -73,6 +73,12 @@ class TestCLIHelp:
         assert result.exit_code == 0
         assert "providers" in result.output.lower()
 
+    def test_serve_help_lists_harness_alias_without_enterprise_gate(self, runner):
+        result = runner.invoke(cli_main, ["serve", "--help"])
+
+        assert result.exit_code == 0
+        assert "harness" in result.output
+
     def test_doctor_json(self, runner):
         """Doctor should show basic developer setup state."""
         result = runner.invoke(cli_main, ["doctor", "--json"])
@@ -99,6 +105,10 @@ class TestHarnessCommand:
         assert "compile" in result.output
         assert "diff" in result.output
         assert "doctor" in result.output
+        assert "test" in result.output
+        assert "eval" in result.output
+        assert "auto-bench" in result.output
+        assert "registry" in result.output
         assert "run" in result.output
         assert "replay" in result.output
         assert "fork" in result.output
@@ -158,6 +168,142 @@ class TestHarnessCommand:
             schema_payload = json.loads(schema.output)
             assert schema_payload["title"] == "SuperQode HarnessSpec"
             assert "flavor" in schema_payload["properties"]
+            assert "inherits" in schema_payload["properties"]
+
+    def test_harness_minimal_init_inherits_template(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "init",
+                    "demo",
+                    "--template",
+                    "coding",
+                    "--minimal",
+                    "--output",
+                    "harness.yaml",
+                ],
+            )
+
+            assert result.exit_code == 0
+            text = Path("harness.yaml").read_text(encoding="utf-8")
+            assert "inherits: coding" in text
+
+            validate = runner.invoke(cli_main, ["harness", "validate", "harness.yaml", "--json"])
+            assert validate.exit_code == 0
+            payload = json.loads(validate.output)
+            assert payload["valid"] is True
+            assert payload["spec"]["inherits"] == "coding"
+            assert payload["spec"]["execution_policy"]["allow_write"] is True
+
+    def test_harness_test_dry_run_json(self, runner):
+        with runner.isolated_filesystem():
+            Path("harness.yaml").write_text("name: demo\ninherits: no-tool\n", encoding="utf-8")
+
+            result = runner.invoke(
+                cli_main,
+                ["harness", "test", "--spec", "harness.yaml", "--json"],
+            )
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["status"] == "passed"
+            by_check = {item["name"]: item for item in payload["checks"]}
+            assert by_check["load"]["status"] == "passed"
+            assert by_check["model_prompt"]["status"] == "skipped"
+            assert payload["failure_digest"]["outcome"] == "passed"
+
+    def test_harness_eval_dry_run_variants_json(self, runner):
+        with runner.isolated_filesystem():
+            Path("base.yaml").write_text("name: base\ninherits: no-tool\n", encoding="utf-8")
+            Path("variant.yaml").write_text(
+                "name: variant\ninherits: base.yaml\nmodel_policy:\n  temperature: 0.1\n",
+                encoding="utf-8",
+            )
+            Path("tasks.yaml").write_text(
+                "tasks:\n  - id: smoke\n    prompt: say hello\n",
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "eval",
+                    "--spec",
+                    "base.yaml",
+                    "--variant",
+                    "variant.yaml",
+                    "--tasks",
+                    "tasks.yaml",
+                    "--json",
+                ],
+            )
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["baseline"] == "base"
+            assert [item["harness"] for item in payload["variants"]] == ["base", "variant"]
+            assert payload["variants"][0]["tasks"][0]["status"] == "skipped"
+
+    def test_harness_auto_bench_dry_run_json(self, runner):
+        with runner.isolated_filesystem():
+            Path("harness.yaml").write_text("name: demo\ninherits: no-tool\n", encoding="utf-8")
+
+            result = runner.invoke(
+                cli_main,
+                ["harness", "auto-bench", "--spec", "harness.yaml", "--json"],
+            )
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["mode"] == "test"
+            assert payload["recommendation"]["summary"].startswith("Dry run completed")
+
+    def test_harness_registry_publish_list_install(self, runner):
+        with runner.isolated_filesystem():
+            Path("harness.yaml").write_text("name: demo\ninherits: no-tool\n", encoding="utf-8")
+            registry = Path("registry")
+
+            publish = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "registry",
+                    "publish",
+                    "harness.yaml",
+                    "--registry",
+                    str(registry),
+                    "--json",
+                ],
+            )
+            assert publish.exit_code == 0
+            assert json.loads(publish.output)["name"] == "demo"
+
+            listed = runner.invoke(
+                cli_main,
+                ["harness", "registry", "list", "--registry", str(registry), "--json"],
+            )
+            assert listed.exit_code == 0
+            assert json.loads(listed.output)[0]["name"] == "demo"
+
+            install = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "registry",
+                    "install",
+                    "demo",
+                    "--registry",
+                    str(registry),
+                    "--output",
+                    "installed.yaml",
+                    "--json",
+                ],
+            )
+            assert install.exit_code == 0
+            assert Path("installed.yaml").exists()
 
     def test_harness_inspect_json_reports_backend_capabilities(self, runner):
         with runner.isolated_filesystem():
