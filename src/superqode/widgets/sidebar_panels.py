@@ -1426,6 +1426,7 @@ class HarnessPanel(Container):
             )
             text.append(f"  :harness evidence {run['run_id']}\n", style=SQ_COLORS.text_dim)
             self._append_recent_harness_events(text, FileHarnessStore, spec, run["run_id"])
+        self._append_metaharness_summary(text)
 
     def _latest_evidence(self, store_cls, evidence_fn, spec):
         """Return latest persisted evidence for the active spec, if available."""
@@ -1437,6 +1438,56 @@ class HarnessPanel(Container):
             return evidence_fn(store, runs[0].run_id)
         except Exception:
             return None
+
+    def _append_metaharness_summary(self, text: Text) -> None:
+        """Append the newest local meta-harness optimization ledger, if present."""
+        try:
+            run_dir = self._latest_metaharness_run_dir()
+            if run_dir is None:
+                return
+            from superqode.harness import metaharness_candidate_ledger, summarize_metaharness_run
+
+            summary = summarize_metaharness_run(run_dir)
+            rows = metaharness_candidate_ledger(run_dir)
+        except Exception:
+            return
+        text.append("\nMeta-harness Optimize\n", style=f"bold {SQ_COLORS.primary_light}")
+        text.append(f"  run         {run_dir}\n", style=SQ_COLORS.text_dim)
+        text.append(
+            f"  best        {summary.get('best_candidate_id') or '-'}"
+            f"  objective={summary.get('best_objective')}\n",
+            style=SQ_COLORS.text_secondary,
+        )
+        for row in rows[:3]:
+            marker = "*" if row.get("is_best") else " "
+            changed = ", ".join(str(item) for item in row.get("changed_files", [])[:2])
+            text.append(
+                f"  {marker} {row.get('candidate_id') or '-':<8}"
+                f" objective={row.get('objective')}"
+                f" valid={row.get('valid')}"
+                f" {changed}\n",
+                style=SQ_COLORS.text_secondary,
+            )
+        text.append("  superqode harness optimize-ledger <run-dir>\n", style=SQ_COLORS.text_dim)
+
+    def _latest_metaharness_run_dir(self) -> Path | None:
+        """Return the newest conventional local meta-harness run directory."""
+        roots = [Path(".superqode") / "metaharness", Path("mh-project")]
+        candidates: list[Path] = []
+        for root in roots:
+            if not root.exists():
+                continue
+            candidates.extend(
+                path.parent.parent for path in root.glob("*/runs/*/indexes/leaderboard.json")
+            )
+            candidates.extend(
+                path.parent.parent for path in root.glob("runs/*/indexes/leaderboard.json")
+            )
+        if not candidates:
+            return None
+        return max(
+            candidates, key=lambda path: (path / "indexes" / "leaderboard.json").stat().st_mtime
+        )
 
     def _append_permission_rules(self, text: Text, rules: list[dict]) -> None:
         """Append compact rule-based permission policy details."""

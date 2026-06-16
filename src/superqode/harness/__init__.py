@@ -172,8 +172,11 @@ _LAZY_IMPORTS = {
     "export_metaharness_project": (".optimize", "export_metaharness_project"),
     "run_metaharness_project": (".optimize", "run_metaharness_project"),
     "summarize_metaharness_run": (".optimize", "summarize_metaharness_run"),
+    "metaharness_candidate_ledger": (".optimize", "metaharness_candidate_ledger"),
     "apply_metaharness_best_spec": (".optimize", "apply_metaharness_best_spec"),
     "render_optimize_payload": (".optimize", "render_optimize_payload"),
+    "render_metaharness_summary": (".optimize", "render_metaharness_summary"),
+    "render_metaharness_ledger": (".optimize", "render_metaharness_ledger"),
 }
 
 
@@ -330,8 +333,11 @@ __all__ = [
     "export_metaharness_project",
     "run_metaharness_project",
     "summarize_metaharness_run",
+    "metaharness_candidate_ledger",
     "apply_metaharness_best_spec",
     "render_optimize_payload",
+    "render_metaharness_summary",
+    "render_metaharness_ledger",
     "omnigent_agent_to_harness_spec",
     "spec_from_headless_profile",
     # Performance

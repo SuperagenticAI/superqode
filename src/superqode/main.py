@@ -2193,6 +2193,20 @@ def _auto_bench_recommendation(status: str, payload: dict, *, live: bool) -> dic
 )
 @click.option("--force", is_flag=True, help="Overwrite project dir or output spec when needed")
 @click.option("--trace-evidence", type=click.Path(exists=True, path_type=Path), default=None)
+@click.option(
+    "--test-result",
+    "test_results",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    multiple=True,
+    help="Previous `harness test --json` output to include as trace evidence",
+)
+@click.option(
+    "--eval-result",
+    "eval_results",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    multiple=True,
+    help="Previous `harness eval --json` output to include as trace evidence",
+)
 @click.option("--objective", default=None, help="Override the meta-harness objective")
 @click.option(
     "--hosted", is_flag=True, help="Pass --hosted to metaharness backends that support it"
@@ -2218,6 +2232,8 @@ def harness_optimize(
     output_spec,
     force,
     trace_evidence,
+    test_results,
+    eval_results,
     objective,
     hosted,
     oss,
@@ -2260,6 +2276,8 @@ def harness_optimize(
             proposal_batch_size=proposal_batch_size,
             selection_policy=selection_policy,
             trace_evidence_path=trace_evidence,
+            test_result_paths=test_results,
+            eval_result_paths=eval_results,
             force=force,
         )
     except Exception as exc:
@@ -2323,6 +2341,40 @@ def harness_optimize(
         click.echo(json.dumps(payload, indent=2))
         return
     click.echo(render_optimize_payload(payload))
+
+
+@harness.command("optimize-inspect")
+@click.argument("run_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_optimize_inspect(run_dir, json_output):
+    """Inspect a meta-harness optimization run summary."""
+    from superqode.harness import render_metaharness_summary, summarize_metaharness_run
+
+    try:
+        summary = summarize_metaharness_run(run_dir)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(summary, indent=2))
+        return
+    click.echo(render_metaharness_summary(summary))
+
+
+@harness.command("optimize-ledger")
+@click.argument("run_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_optimize_ledger(run_dir, json_output):
+    """Show the candidate ledger from a meta-harness optimization run."""
+    from superqode.harness import metaharness_candidate_ledger, render_metaharness_ledger
+
+    try:
+        rows = metaharness_candidate_ledger(run_dir)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(rows, indent=2))
+        return
+    click.echo(render_metaharness_ledger(rows))
 
 
 @harness.group("registry")

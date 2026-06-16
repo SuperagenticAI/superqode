@@ -5,6 +5,7 @@ Tests the command-line interface functionality.
 """
 
 import json
+import shutil
 import pytest
 from click.testing import CliRunner
 from pathlib import Path
@@ -13,6 +14,14 @@ from contextlib import contextmanager
 
 from superqode.agent.loop import AgentResponse
 from superqode.main import cli_main
+
+
+def _metaharness_bin() -> str | None:
+    return shutil.which("metaharness") or (
+        "/Users/shashi/miniconda3/bin/metaharness"
+        if Path("/Users/shashi/miniconda3/bin/metaharness").exists()
+        else None
+    )
 
 
 @pytest.fixture
@@ -108,6 +117,8 @@ class TestHarnessCommand:
         assert "test" in result.output
         assert "eval" in result.output
         assert "auto-bench" in result.output
+        assert "optimize-inspect" in result.output
+        assert "optimize-ledger" in result.output
         assert "optimize" in result.output
         assert "registry" in result.output
         assert "run" in result.output
@@ -269,6 +280,56 @@ class TestHarnessCommand:
                 "tasks:\n  - id: smoke\n    prompt: say hello\n",
                 encoding="utf-8",
             )
+            Path("test-result.json").write_text(
+                json.dumps(
+                    {
+                        "spec": "harness.yaml",
+                        "status": "failed",
+                        "duration_seconds": 0.1,
+                        "checks": [
+                            {
+                                "name": "doctor",
+                                "status": "failed",
+                                "error": "model endpoint missing",
+                            }
+                        ],
+                        "failure_digest": {
+                            "failure_category": "model_endpoint_error",
+                            "evidence": ["doctor: model endpoint missing"],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            Path("eval-result.json").write_text(
+                json.dumps(
+                    {
+                        "tasks_file": "tasks.yaml",
+                        "live": False,
+                        "status": "passed",
+                        "baseline": "demo",
+                        "best": "demo",
+                        "variants": [
+                            {
+                                "harness": "demo",
+                                "score": 0.0,
+                                "passed": 0,
+                                "failed": 0,
+                                "skipped": 1,
+                                "regressions_vs_baseline": [],
+                                "tasks": [
+                                    {
+                                        "id": "smoke",
+                                        "status": "skipped",
+                                        "reason": "dry run",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             result = runner.invoke(
                 cli_main,
@@ -282,6 +343,10 @@ class TestHarnessCommand:
                     "--project-dir",
                     "mh-project",
                     "--export-only",
+                    "--test-result",
+                    "test-result.json",
+                    "--eval-result",
+                    "eval-result.json",
                     "--json",
                 ],
             )
@@ -299,6 +364,67 @@ class TestHarnessCommand:
             by_id = {item["id"]: item for item in tasks}
             assert by_id["harness-validates"]["type"] == "command"
             assert "superqode harness eval" in by_id["harness-eval-dry"]["command"]
+            evidence = Path("mh-project/trace-evidence.md").read_text(encoding="utf-8")
+            assert "## Harness Snapshot" in evidence
+            assert "## Eval Tasks" in evidence
+            assert "- smoke: say hello" in evidence
+            assert "## Previous Harness Test Results" in evidence
+            assert "failure_category: model_endpoint_error" in evidence
+            assert "## Previous Harness Eval Results" in evidence
+            assert "variant demo: score=0" in evidence
+
+    @pytest.mark.skipif(_metaharness_bin() is None, reason="metaharness CLI not installed")
+    def test_harness_optimize_runs_fake_backend_and_inspects_ledger(self, runner):
+        metaharness_bin = _metaharness_bin()
+        assert metaharness_bin is not None
+        with runner.isolated_filesystem():
+            Path("harness.yaml").write_text("name: demo\ninherits: no-tool\n", encoding="utf-8")
+            Path("tasks.yaml").write_text(
+                "tasks:\n  - id: smoke\n    prompt: say hello\n",
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "optimize",
+                    "--spec",
+                    "harness.yaml",
+                    "--tasks",
+                    "tasks.yaml",
+                    "--project-dir",
+                    "mh-project",
+                    "--backend",
+                    "fake",
+                    "--budget",
+                    "1",
+                    "--force",
+                    "--metaharness-bin",
+                    metaharness_bin,
+                    "--json",
+                ],
+            )
+
+            assert result.exit_code == 0, result.output
+            payload = json.loads(result.output)
+            assert payload["run"]["ok"] is True
+            run_dir = Path(payload["run"]["run_dir"])
+            assert payload["summary"]["best_candidate_id"]
+
+            inspect = runner.invoke(
+                cli_main,
+                ["harness", "optimize-inspect", str(run_dir), "--json"],
+            )
+            assert inspect.exit_code == 0, inspect.output
+            assert json.loads(inspect.output)["best_candidate_id"]
+
+            ledger = runner.invoke(
+                cli_main,
+                ["harness", "optimize-ledger", str(run_dir), "--json"],
+            )
+            assert ledger.exit_code == 0, ledger.output
+            assert len(json.loads(ledger.output)) >= 1
 
     def test_harness_registry_publish_list_install(self, runner):
         with runner.isolated_filesystem():

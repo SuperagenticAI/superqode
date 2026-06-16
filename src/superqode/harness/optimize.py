@@ -50,6 +50,8 @@ def export_metaharness_project(
     proposal_batch_size: int = 1,
     selection_policy: str = "single",
     trace_evidence_path: str | Path | None = None,
+    test_result_paths: tuple[str | Path, ...] = (),
+    eval_result_paths: tuple[str | Path, ...] = (),
     force: bool = False,
 ) -> MetaHarnessExport:
     """Create a meta-harness project for optimizing one SuperQode HarnessSpec."""
@@ -61,7 +63,7 @@ def export_metaharness_project(
         raise FileExistsError(f"{project} already exists and is not empty; pass --force")
 
     spec = load_harness_spec(source_spec)
-    load_eval_tasks(source_tasks)
+    task_file = load_eval_tasks(source_tasks)
 
     baseline.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source_spec, baseline / "harness.yaml")
@@ -93,7 +95,15 @@ def export_metaharness_project(
         shutil.copyfile(source_evidence, evidence_target)
     else:
         evidence_target = project / "trace-evidence.md"
-        evidence_target.write_text(_default_trace_evidence(spec.name), encoding="utf-8")
+        evidence_target.write_text(
+            _default_trace_evidence(
+                spec,
+                task_file,
+                test_results=_load_result_payloads(test_result_paths),
+                eval_results=_load_result_payloads(eval_result_paths),
+            ),
+            encoding="utf-8",
+        )
 
     return MetaHarnessExport(
         project_dir=project,
@@ -205,6 +215,43 @@ def summarize_metaharness_run(run_dir: str | Path) -> dict[str, Any]:
     }
 
 
+def metaharness_candidate_ledger(run_dir: str | Path) -> list[dict[str, Any]]:
+    """Read a lightweight candidate ledger from a meta-harness run directory."""
+    run = Path(run_dir).expanduser().resolve()
+    leaderboard = _read_json(run / "indexes" / "leaderboard.json")
+    best_id = str(leaderboard.get("best_candidate_id") or "c0000")
+    rows = []
+    candidates_dir = run / "candidates"
+    if not candidates_dir.is_dir():
+        return rows
+    for candidate_dir in sorted(path for path in candidates_dir.iterdir() if path.is_dir()):
+        manifest_path = candidate_dir / "manifest.json"
+        if not manifest_path.is_file():
+            continue
+        manifest = _read_json(manifest_path)
+        candidate_id = str(manifest.get("candidate_id") or candidate_dir.name)
+        proposal_path = candidate_dir / "proposal" / "result.json"
+        proposal = _read_json(proposal_path) if proposal_path.is_file() else {}
+        rows.append(
+            {
+                "candidate_id": candidate_id,
+                "is_best": candidate_id == best_id,
+                "objective": manifest.get("objective"),
+                "search_objective": manifest.get("search_objective"),
+                "test_objective": manifest.get("test_objective"),
+                "valid": bool(manifest.get("valid")),
+                "proposal_applied": bool(manifest.get("proposal_applied")),
+                "outcome": manifest.get("outcome"),
+                "outcome_summary": manifest.get("outcome_summary") or "",
+                "frontier_rank": manifest.get("frontier_rank"),
+                "changed_files": proposal.get("changed_files", []),
+                "proposal_summary": proposal.get("summary", ""),
+                "scope_violation_paths": manifest.get("scope_violation_paths", []),
+            }
+        )
+    return rows
+
+
 def apply_metaharness_best_spec(
     *,
     run_dir: str | Path,
@@ -246,6 +293,41 @@ def render_optimize_payload(payload: dict[str, Any]) -> str:
     if payload.get("next_steps"):
         lines.append("Next steps:")
         lines.extend(f"  {item}" for item in payload["next_steps"])
+    return "\n".join(lines)
+
+
+def render_metaharness_summary(summary: dict[str, Any]) -> str:
+    lines = [
+        f"Run: {summary['run_dir']}",
+        f"Best candidate: {summary['best_candidate_id']}",
+        f"Best objective: {summary['best_objective']}",
+        f"Candidates: {summary['candidate_count']}",
+    ]
+    if summary.get("frontier_candidate_ids"):
+        lines.append(f"Frontier: {', '.join(summary['frontier_candidate_ids'])}")
+    if summary.get("best_spec_path"):
+        lines.append(f"Best spec: {summary['best_spec_path']}")
+    if summary.get("best_outcome"):
+        lines.append(f"Outcome: {summary['best_outcome']}")
+    if summary.get("best_outcome_summary"):
+        lines.append(f"Summary: {summary['best_outcome_summary']}")
+    return "\n".join(lines)
+
+
+def render_metaharness_ledger(rows: list[dict[str, Any]]) -> str:
+    if not rows:
+        return "No meta-harness candidates found."
+    lines = ["candidate  best  objective  valid  outcome  changed"]
+    for row in rows:
+        changed = ",".join(str(item) for item in row.get("changed_files", []))
+        lines.append(
+            f"{row['candidate_id']:<9} "
+            f"{'yes' if row['is_best'] else 'no':<4} "
+            f"{row.get('objective')!s:<9} "
+            f"{'yes' if row.get('valid') else 'no':<5} "
+            f"{row.get('outcome') or '-':<10} "
+            f"{changed}"
+        )
     return "\n".join(lines)
 
 
@@ -371,12 +453,108 @@ def _write_baseline_docs(baseline: Path, spec_name: str) -> None:
     )
 
 
-def _default_trace_evidence(spec_name: str) -> str:
-    return (
-        f"# Trace Evidence for {spec_name}\n\n"
-        "No external trace evidence was supplied. Optimize against the exported "
-        "SuperQode validation, readiness, and eval tasks.\n"
+def _default_trace_evidence(
+    spec,
+    task_file: dict[str, Any],
+    *,
+    test_results: list[dict[str, Any]] | None = None,
+    eval_results: list[dict[str, Any]] | None = None,
+) -> str:
+    lines = [
+        f"# Trace Evidence for {spec.name}",
+        "",
+        "No external trace evidence was supplied. Optimize against the exported SuperQode validation, readiness, and eval tasks.",
+        "",
+        "## Harness Snapshot",
+        "",
+        f"- Name: {spec.name}",
+        f"- Inherits: {spec.inherits or '-'}",
+        f"- Flavor: {spec.flavor.value}",
+        f"- Runtime: {spec.runtime.backend}",
+        f"- Workflow: {spec.workflow.mode.value}",
+        f"- Primary model: {spec.model_policy.primary or '-'}",
+        f"- Tool call format: {spec.model_policy.tool_call_format or '-'}",
+        f"- Allows write: {spec.execution_policy.allow_write}",
+        f"- Allows shell: {spec.execution_policy.allow_shell}",
+        f"- Allows network: {spec.execution_policy.allow_network}",
+        "",
+        "## Eval Tasks",
+        "",
+    ]
+    for task in task_file["tasks"]:
+        lines.append(f"- {task['id']}: {task['prompt']}")
+        if task.get("expect_contains"):
+            lines.append(f"  - expect_contains: {task['expect_contains']}")
+    if test_results:
+        _append_test_result_evidence(lines, test_results)
+    if eval_results:
+        _append_eval_result_evidence(lines, eval_results)
+    lines.extend(
+        [
+            "",
+            "## Optimization Guidance",
+            "",
+            "- Preserve or improve `superqode harness validate --spec harness.yaml --json`.",
+            "- Preserve or improve `superqode harness test --spec harness.yaml --json`.",
+            "- Preserve or improve `superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml --json`.",
+            "- Prefer narrow changes to model policy, workflow, checks, context, and tool-call format before widening permissions.",
+        ]
     )
+    return "\n".join(lines) + "\n"
+
+
+def _load_result_payloads(paths: tuple[str | Path, ...]) -> list[dict[str, Any]]:
+    payloads = []
+    for path in paths:
+        source = Path(path).expanduser().resolve()
+        payload = _read_json(source)
+        payloads.append({"path": str(source), "payload": payload})
+    return payloads
+
+
+def _append_test_result_evidence(lines: list[str], results: list[dict[str, Any]]) -> None:
+    lines.extend(["", "## Previous Harness Test Results", ""])
+    for item in results:
+        payload = item["payload"]
+        lines.append(f"- Source: {item['path']}")
+        lines.append(f"  - status: {payload.get('status') or '-'}")
+        lines.append(f"  - duration_seconds: {payload.get('duration_seconds') or 0}")
+        for check in payload.get("checks", []):
+            lines.append(f"  - check {check.get('name') or '-'}: {check.get('status') or '-'}")
+            if check.get("error"):
+                lines.append(f"    - error: {check['error']}")
+        digest = payload.get("failure_digest") or {}
+        if digest.get("failure_category"):
+            lines.append(f"  - failure_category: {digest['failure_category']}")
+        for evidence in digest.get("evidence", [])[:3]:
+            lines.append(f"    - evidence: {evidence}")
+
+
+def _append_eval_result_evidence(lines: list[str], results: list[dict[str, Any]]) -> None:
+    lines.extend(["", "## Previous Harness Eval Results", ""])
+    for item in results:
+        payload = item["payload"]
+        lines.append(f"- Source: {item['path']}")
+        lines.append(f"  - status: {payload.get('status') or '-'}")
+        lines.append(f"  - live: {payload.get('live')}")
+        lines.append(f"  - baseline: {payload.get('baseline') or '-'}")
+        lines.append(f"  - best: {payload.get('best') or '-'}")
+        for variant in payload.get("variants", []):
+            lines.append(
+                "  - variant "
+                f"{variant.get('harness') or '-'}: "
+                f"score={variant.get('score') or 0} "
+                f"passed={variant.get('passed') or 0} "
+                f"failed={variant.get('failed') or 0} "
+                f"skipped={variant.get('skipped') or 0}"
+            )
+            regressions = variant.get("regressions_vs_baseline") or []
+            if regressions:
+                lines.append(f"    - regressions: {', '.join(regressions)}")
+            for task in variant.get("tasks", [])[:3]:
+                lines.append(f"    - task {task.get('id') or '-'}: {task.get('status') or '-'}")
+                if task.get("reason"):
+                    lines.append(f"      - reason: {task['reason']}")
 
 
 def _drop_none(data: dict[str, Any]) -> dict[str, Any]:

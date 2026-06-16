@@ -272,6 +272,14 @@ then optionally run a meta-harness backend such as Codex, Gemini, Omnigent, or t
 keeps meta-harness optional: `--export-only` creates the project without requiring the external tool, and
 `--apply` copies the best candidate `harness.yaml` back only after an explicit request.
 
+The exporter also writes `trace-evidence.md` when you do not pass your own evidence file. That evidence captures
+the current harness snapshot, model policy, permission posture, workflow, and eval task prompts. Pass
+`--test-result` with JSON from `harness test --json` or `--eval-result` with JSON from `harness eval --json`
+to carry previous failures, scorecards, and regressions into the optimizer evidence. After a run,
+`harness optimize-inspect RUN_DIR` summarizes the best candidate and `harness optimize-ledger RUN_DIR` renders
+the candidate ledger from the meta-harness artifacts. Both commands have `--json` for CI and release evidence.
+The TUI harness sidebar shows the latest local meta-harness ledger when run artifacts exist.
+
 Use `harness registry` for local sharing before publishing specs to a remote hub. `publish` validates and
 copies a spec into `~/.superqode/harness-registry`, `list` shows available entries, and `install` copies one
 into the current project.

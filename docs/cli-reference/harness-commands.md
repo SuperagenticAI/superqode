@@ -268,8 +268,11 @@ Export a HarnessSpec and eval task file into a `superagentic-metaharness` projec
 
 ```bash
 superqode harness optimize --spec harness.yaml --tasks tasks.yaml --export-only
+superqode harness optimize --spec harness.yaml --tasks tasks.yaml --test-result test.json --eval-result eval.json
 superqode harness optimize --spec harness.yaml --tasks tasks.yaml --backend codex --budget 1
 superqode harness optimize --spec harness.yaml --tasks tasks.yaml --backend codex --apply --output optimized.yaml
+superqode harness optimize-inspect mh-project/runs/superqode-optimize
+superqode harness optimize-ledger mh-project/runs/superqode-optimize
 ```
 
 | Option | Description |
@@ -283,8 +286,14 @@ superqode harness optimize --spec harness.yaml --tasks tasks.yaml --backend code
 | `--apply` | Copy the best candidate `harness.yaml` back after a successful run |
 | `--output PATH` | Output path for `--apply` |
 | `--trace-evidence PATH` | Additional trace evidence to inject into meta-harness |
+| `--test-result PATH` | Previous `harness test --json` output to include as trace evidence. Can be repeated |
+| `--eval-result PATH` | Previous `harness eval --json` output to include as trace evidence. Can be repeated |
 | `--metaharness-bin TEXT` | Meta-harness executable name or path |
 | `--json` | Emit JSON |
+
+When `--trace-evidence` is omitted, SuperQode writes `trace-evidence.md` from the current spec and eval task file. The generated evidence includes the harness runtime, workflow, model policy, permission posture, and task prompts so the optimizer has a useful starting snapshot. Add `--test-result` or `--eval-result` to include previous scorecards and failure digests from prior runs.
+
+Use `harness optimize-inspect RUN_DIR` to summarize a completed meta-harness run. Use `harness optimize-ledger RUN_DIR` to list candidates, objective values, validation state, outcomes, and changed files. Both commands support `--json`. The TUI harness sidebar also shows the latest local meta-harness run under `.superqode/metaharness` or `mh-project` when artifacts are present.
 
 ---
 
