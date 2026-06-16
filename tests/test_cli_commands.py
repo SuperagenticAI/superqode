@@ -108,6 +108,7 @@ class TestHarnessCommand:
         assert "test" in result.output
         assert "eval" in result.output
         assert "auto-bench" in result.output
+        assert "optimize" in result.output
         assert "registry" in result.output
         assert "run" in result.output
         assert "replay" in result.output
@@ -260,6 +261,44 @@ class TestHarnessCommand:
             payload = json.loads(result.output)
             assert payload["mode"] == "test"
             assert payload["recommendation"]["summary"].startswith("Dry run completed")
+
+    def test_harness_optimize_export_only_json(self, runner):
+        with runner.isolated_filesystem():
+            Path("harness.yaml").write_text("name: demo\ninherits: no-tool\n", encoding="utf-8")
+            Path("tasks.yaml").write_text(
+                "tasks:\n  - id: smoke\n    prompt: say hello\n",
+                encoding="utf-8",
+            )
+
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "optimize",
+                    "--spec",
+                    "harness.yaml",
+                    "--tasks",
+                    "tasks.yaml",
+                    "--project-dir",
+                    "mh-project",
+                    "--export-only",
+                    "--json",
+                ],
+            )
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["run"] is None
+            assert Path("mh-project/metaharness.json").exists()
+            assert Path("mh-project/baseline/harness.yaml").exists()
+            assert Path("mh-project/baseline/eval-tasks.yaml").exists()
+            config = json.loads(Path("mh-project/metaharness.json").read_text(encoding="utf-8"))
+            assert config["example_profile"] == "superqode-harness"
+            assert "harness.yaml" in config["allowed_write_paths"]
+            tasks = json.loads(Path("mh-project/tasks.json").read_text(encoding="utf-8"))
+            by_id = {item["id"]: item for item in tasks}
+            assert by_id["harness-validates"]["type"] == "command"
+            assert "superqode harness eval" in by_id["harness-eval-dry"]["command"]
 
     def test_harness_registry_publish_list_install(self, runner):
         with runner.isolated_filesystem():

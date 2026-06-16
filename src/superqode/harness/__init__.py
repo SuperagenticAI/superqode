@@ -169,6 +169,11 @@ _LAZY_IMPORTS = {
     "publish_harness_spec": (".registry", "publish_harness_spec"),
     "list_registry_specs": (".registry", "list_registry_specs"),
     "install_registry_spec": (".registry", "install_registry_spec"),
+    "export_metaharness_project": (".optimize", "export_metaharness_project"),
+    "run_metaharness_project": (".optimize", "run_metaharness_project"),
+    "summarize_metaharness_run": (".optimize", "summarize_metaharness_run"),
+    "apply_metaharness_best_spec": (".optimize", "apply_metaharness_best_spec"),
+    "render_optimize_payload": (".optimize", "render_optimize_payload"),
 }
 
 
@@ -322,6 +327,11 @@ __all__ = [
     "publish_harness_spec",
     "list_registry_specs",
     "install_registry_spec",
+    "export_metaharness_project",
+    "run_metaharness_project",
+    "summarize_metaharness_run",
+    "apply_metaharness_best_spec",
+    "render_optimize_payload",
     "omnigent_agent_to_harness_spec",
     "spec_from_headless_profile",
     # Performance

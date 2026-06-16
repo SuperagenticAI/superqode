@@ -178,6 +178,7 @@ superqode harness test --spec harness.yaml
 superqode harness run --spec harness.yaml --prompt "summarize this repository"
 superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml
 superqode harness auto-bench --spec harness.yaml --tasks eval-tasks.yaml
+superqode harness optimize --spec harness.yaml --tasks eval-tasks.yaml --export-only
 superqode harness registry publish harness.yaml
 superqode harness registry list
 superqode harness registry install my-coder --output harness.yaml
@@ -265,6 +266,11 @@ to fit every workflow. Use `--live` when you want to execute tasks against the c
 
 Use `harness auto-bench` as the quick model-facing wrapper around `harness test` or `harness eval`. It keeps
 the output focused on the next recommended action so first-run local model setup has a single obvious command.
+
+Use `harness optimize` to export a HarnessSpec and eval task file into a `superagentic-metaharness` project,
+then optionally run a meta-harness backend such as Codex, Gemini, Omnigent, or the fake backend. The command
+keeps meta-harness optional: `--export-only` creates the project without requiring the external tool, and
+`--apply` copies the best candidate `harness.yaml` back only after an explicit request.
 
 Use `harness registry` for local sharing before publishing specs to a remote hub. `publish` validates and
 copies a spec into `~/.superqode/harness-registry`, `list` shows available entries, and `install` copies one

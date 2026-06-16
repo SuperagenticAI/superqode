@@ -25,6 +25,7 @@ superqode harness COMMAND [OPTIONS]
 | `test` | Fast smoke test plus failure digest |
 | `eval` | Scorecard across tasks and harness variants |
 | `auto-bench` | First-run model probe and recommendation wrapper |
+| `optimize` | Export and optionally run a meta-harness optimization project |
 | `run` | Run a task through a spec |
 | `registry` | Local publish/list/install hub for harness specs |
 | `import-omnigent` | Convert an Omnigent `agent.yaml` into a spec |
@@ -260,6 +261,30 @@ Run the quick model-facing wrapper around `harness test` or `harness eval` and p
 superqode harness auto-bench --spec harness.yaml
 superqode harness auto-bench --spec harness.yaml --tasks tasks.yaml --live
 ```
+
+### `harness optimize`
+
+Export a HarnessSpec and eval task file into a `superagentic-metaharness` project, then optionally run a meta-harness backend. This keeps harness optimization optional and auditable: use `--export-only` to inspect the generated project, and use `--apply` only when you want the best candidate copied back.
+
+```bash
+superqode harness optimize --spec harness.yaml --tasks tasks.yaml --export-only
+superqode harness optimize --spec harness.yaml --tasks tasks.yaml --backend codex --budget 1
+superqode harness optimize --spec harness.yaml --tasks tasks.yaml --backend codex --apply --output optimized.yaml
+```
+
+| Option | Description |
+| --- | --- |
+| `--spec PATH` | Harness spec to optimize |
+| `--tasks PATH` | Eval task file used as the optimization contract |
+| `--project-dir PATH` | Meta-harness project directory to create |
+| `--backend TEXT` | Meta-harness backend, for example `fake`, `codex`, `gemini`, or `omnigent` |
+| `--budget INTEGER` | Proposal budget |
+| `--export-only` | Create the project without running meta-harness |
+| `--apply` | Copy the best candidate `harness.yaml` back after a successful run |
+| `--output PATH` | Output path for `--apply` |
+| `--trace-evidence PATH` | Additional trace evidence to inject into meta-harness |
+| `--metaharness-bin TEXT` | Meta-harness executable name or path |
+| `--json` | Emit JSON |
 
 ---
 

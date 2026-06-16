@@ -2169,6 +2169,162 @@ def _auto_bench_recommendation(status: str, payload: dict, *, live: bool) -> dic
     }
 
 
+@harness.command("optimize")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--tasks", "tasks_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option(
+    "--project-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Meta-harness project directory to create",
+)
+@click.option("--backend", default="fake", show_default=True, help="Meta-harness backend")
+@click.option("--budget", default=1, show_default=True, type=int, help="Proposal budget")
+@click.option("--run-name", default="superqode-optimize", show_default=True)
+@click.option("--metaharness-bin", default="metaharness", show_default=True)
+@click.option("--export-only", is_flag=True, help="Only create the meta-harness project")
+@click.option("--apply", "apply_best", is_flag=True, help="Apply the best candidate harness.yaml")
+@click.option(
+    "--output",
+    "output_spec",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Where --apply writes the optimized spec (default: --spec path)",
+)
+@click.option("--force", is_flag=True, help="Overwrite project dir or output spec when needed")
+@click.option("--trace-evidence", type=click.Path(exists=True, path_type=Path), default=None)
+@click.option("--objective", default=None, help="Override the meta-harness objective")
+@click.option(
+    "--hosted", is_flag=True, help="Pass --hosted to metaharness backends that support it"
+)
+@click.option("--oss", is_flag=True, help="Pass --oss to metaharness backends that support it")
+@click.option("--local-provider", type=click.Choice(["ollama", "lmstudio"]), default=None)
+@click.option("--model", "model_name", default=None)
+@click.option("--proposal-timeout", type=float, default=None)
+@click.option("--search-mode", type=click.Choice(["hill-climb", "frontier"]), default="hill-climb")
+@click.option("--proposal-batch-size", default=1, show_default=True, type=int)
+@click.option("--selection-policy", type=click.Choice(["single", "pareto"]), default="single")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_optimize(
+    spec_path,
+    tasks_path,
+    project_dir,
+    backend,
+    budget,
+    run_name,
+    metaharness_bin,
+    export_only,
+    apply_best,
+    output_spec,
+    force,
+    trace_evidence,
+    objective,
+    hosted,
+    oss,
+    local_provider,
+    model_name,
+    proposal_timeout,
+    search_mode,
+    proposal_batch_size,
+    selection_policy,
+    json_output,
+):
+    """Optimize a HarnessSpec through an optional meta-harness project."""
+    from superqode.harness import (
+        apply_metaharness_best_spec,
+        export_metaharness_project,
+        render_optimize_payload,
+        run_metaharness_project,
+        summarize_metaharness_run,
+    )
+
+    if hosted and oss:
+        raise click.ClickException("--hosted cannot be combined with --oss")
+    resolved_project_dir = project_dir or (
+        Path(".superqode") / "metaharness" / Path(spec_path).stem
+    )
+    try:
+        export = export_metaharness_project(
+            spec_path=spec_path,
+            tasks_path=tasks_path,
+            project_dir=resolved_project_dir,
+            backend=backend,
+            budget=budget,
+            objective=objective,
+            model=model_name,
+            hosted=hosted,
+            oss=oss,
+            local_provider=local_provider,
+            proposal_timeout=proposal_timeout,
+            search_mode=search_mode,
+            proposal_batch_size=proposal_batch_size,
+            selection_policy=selection_policy,
+            trace_evidence_path=trace_evidence,
+            force=force,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    payload = {
+        "export": export.to_dict(),
+        "run": None,
+        "summary": None,
+        "applied": None,
+        "next_steps": [
+            f"Run: superqode harness optimize --spec {spec_path} --tasks {tasks_path} --backend codex",
+            f"Inspect: {metaharness_bin} inspect {Path(export.project_dir) / 'runs' / run_name}",
+        ],
+    }
+    if not export_only:
+        try:
+            run = run_metaharness_project(
+                project_dir=export.project_dir,
+                backend=backend,
+                budget=budget,
+                run_name=run_name,
+                metaharness_bin=metaharness_bin,
+                trace_evidence_path=export.trace_evidence_path,
+                hosted=hosted,
+                oss=oss,
+                local_provider=local_provider,
+                model=model_name,
+                proposal_timeout=proposal_timeout,
+                search_mode=search_mode,
+                proposal_batch_size=proposal_batch_size,
+                selection_policy=selection_policy,
+            )
+        except Exception as exc:
+            raise click.ClickException(str(exc)) from exc
+        payload["run"] = run
+        if not run["ok"]:
+            if json_output:
+                click.echo(json.dumps(payload, indent=2))
+            else:
+                click.echo(render_optimize_payload(payload))
+                if run.get("stderr"):
+                    click.echo(run["stderr"], err=True)
+            raise click.exceptions.Exit(1)
+        try:
+            payload["summary"] = summarize_metaharness_run(run["run_dir"])
+        except Exception as exc:
+            raise click.ClickException(
+                f"Meta-harness run completed but summary failed: {exc}"
+            ) from exc
+        if apply_best:
+            try:
+                payload["applied"] = apply_metaharness_best_spec(
+                    run_dir=run["run_dir"],
+                    output_spec=output_spec or spec_path,
+                    force=force or output_spec is None,
+                )
+            except Exception as exc:
+                raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    click.echo(render_optimize_payload(payload))
+
+
 @harness.group("registry")
 def harness_registry():
     """Publish, list, and install local HarnessSpec registry entries."""

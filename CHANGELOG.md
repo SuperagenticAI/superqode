@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Model auto-bench wrapper** - `superqode harness auto-bench` reuses the smoke and eval paths to give a first-run recommendation for local or hosted model setup. Dry runs explain how to proceed, while live failures surface the same digest format as `harness test`.
 - **Local harness registry** - `superqode harness registry publish`, `list`, and `install` provide a local share hub under `~/.superqode/harness-registry`, giving teams a low-risk path to publish validated HarnessSpec files before introducing any remote registry.
 - **Harness-as-a-service alias** - `superqode serve harness --spec ...` and `--dir ...` expose HarnessSpec workflows through the existing MCP harness server with a command shaped around serving one harness or a directory of harnesses.
+- **Meta-harness optimization bridge** - `superqode harness optimize` exports a HarnessSpec and eval task file into a `superagentic-metaharness` project, can run an optional backend such as Codex, Gemini, Omnigent, or fake, and only applies the best candidate spec when `--apply` is passed.
 - **Local-first product strategy note** - Added `product/local-first-strategy.md` to capture the current local model CLI surface, near-term direction, and success criteria for local-first harness workflows.
 - **Live tool progress and runtime footer in channels** - While the agent works, the "Working on it" message is edited in place with the running tool and call count. Telegram, Slack, and Discord each use their native update path, and the final reply carries a compact `model · cwd` footer.
 - **Hermes Agent via ACP, verified end to end** - `uv tool install 'hermes-agent[acp]'`, local OpenAI-compatible server configuration in `~/.hermes/config.yaml`, `superqode agents doctor hermes --live`, and TUI connection through `:connect acp hermes`.
@@ -34,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Harness docs and CLI reference** - Documented inheritance, minimal init, harness testing, eval scorecards, auto-bench, local registry commands, and the `serve harness` alias in the advanced harness guide and CLI reference.
+- **Harness docs and CLI reference** - Documented inheritance, minimal init, harness testing, eval scorecards, auto-bench, meta-harness optimization, local registry commands, and the `serve harness` alias in the advanced harness guide and CLI reference.
 - **Local model workflow continuity** - The new inherited local harness output builds on the recent local stack work: model inventory, local server lifecycle, local search/inference support, benchmark commands, and CI-focused lint cleanup remain available through the same generated HarnessSpec contract.
 - **Release metadata** - Bumped the package version and runtime `__version__` to `0.1.44`.
 
