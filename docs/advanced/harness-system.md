@@ -12,6 +12,9 @@ are stored, and what output should be returned.
 !!! tip "Explain any harness in plain English"
     `superqode harness explain --spec harness.yaml` reads the resolved policy (the same one the runtime enforces) and describes, in words, which tools the model gets, what it may read/write/run, how approvals work, and why a given tool-call format was chosen.
 
+!!! tip "Run vs measure vs optimize"
+    SuperQode runs a harness and measures it (`harness test` / `eval` / `auto-bench`). Improving the harness over many iterations is a separate, optional job: `superqode harness optimize` bridges to the optional [metaharness](harness-optimization.md) tool. See [Running, Measuring, and Optimizing a Harness](harness-optimization.md) for the distinction.
+
 ---
 
 ## What A Harness Gives You
@@ -42,6 +45,24 @@ Users configure a harness by selecting:
 - output: plain text, typed result, events, checks state, and run records
 
 This lets the same harness contract run through different engines while preserving the user-facing behavior.
+
+### Nine Behavioral Dimensions
+
+A harness behaves along nine orthogonal dimensions. SuperQode uses them to tag a failure with *where* in the spec to look: `harness test` reports a `dimension: {id, label, field}` on the failing check (see [Run, Measure, Optimize](harness-optimization.md)).
+
+| ID | Dimension | Spec field |
+| --- | --- | --- |
+| D1 | model selection | `model_policy` |
+| D2 | context assembly | `context` |
+| D3 | memory management | `context.memory` |
+| D4 | tool ecosystem | `agents.tools` |
+| D5 | execution environment | `execution_policy.sandbox` |
+| D6 | evaluation and reward | `checks` |
+| D7 | control and safety | `execution_policy` |
+| D8 | observability | `observability` |
+| D9 | training bridge | `metadata` |
+
+For example, a `model_endpoint_error` is tagged **D1** (`model_policy`); a `tool_or_permission_error` is tagged **D7** (`execution_policy`). The mapping mirrors the HarnessX taxonomy; see [Run, Measure, Optimize](harness-optimization.md).
 
 ### Harness Flavors
 

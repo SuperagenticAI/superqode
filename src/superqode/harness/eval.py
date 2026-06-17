@@ -74,7 +74,11 @@ async def run_harness_eval(
     for item in variant_results:
         item["delta_vs_baseline"] = round(item["score"] - baseline["score"], 3)
         item["regressions_vs_baseline"] = _regressions(baseline, item)
+        item["regressed"] = bool(item["regressions_vs_baseline"])
     best = max(variant_results, key=lambda item: (item["score"], -item["duration_seconds"]))
+    # Seesaw verdict: a candidate variant regresses if it breaks any task the
+    # baseline solved. The baseline itself cannot regress against itself.
+    regressed_variants = [item["harness"] for item in variant_results[1:] if item["regressed"]]
     return {
         "tasks_file": str(tasks_path),
         "live": live,
@@ -84,8 +88,19 @@ async def run_harness_eval(
         "duration_seconds": round(time.monotonic() - started, 3),
         "baseline": baseline["harness"],
         "best": best["harness"],
+        "regressed": bool(regressed_variants),
+        "regressed_variants": regressed_variants,
         "variants": variant_results,
     }
+
+
+def harness_eval_regressions(baseline: dict[str, Any], candidate: dict[str, Any]) -> list[str]:
+    """Task ids the baseline solved that the candidate no longer solves.
+
+    The seesaw constraint: an improved harness must not regress previously
+    passing tasks. Operates on `harness eval` variant dicts, no model needed.
+    """
+    return _regressions(baseline, candidate)
 
 
 async def _run_variant_eval(

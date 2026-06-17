@@ -219,6 +219,8 @@ superqode harness doctor --spec harness.yaml
 
 Run a quick readiness probe. Without `--live`, this validates spec loading, doctor checks, and kernel initialization. With `--live`, it also sends a small prompt to the configured model and returns a compact failure digest.
 
+The failure digest classifies a failure by one of the nine harness dimensions (`dimension: {id, label, field}`, e.g. `D1 model selection -> model_policy`), so it points at the spec field to edit, not just what failed.
+
 ```bash
 superqode harness test --spec harness.yaml
 superqode harness test --spec harness.yaml --live --provider ollama --model qwen3-coder --json
@@ -239,10 +241,25 @@ superqode harness test --spec harness.yaml --live --provider ollama --model qwen
 
 Run a task scorecard against one or more harness specs. Use `--variant` to compare task-specific specs against a baseline while keeping variants isolated.
 
+It also acts as a **seesaw gate**: if any variant regresses a task the baseline solved, `harness eval` exits non-zero (code `2`) so you can block a candidate before applying it. The per-variant `regressions_vs_baseline` and a top-level `regressed` / `regressed_variants` are in the JSON. Pass `--allow-regressions` to override the gate.
+
 ```bash
-superqode harness eval --spec base.yaml --variant debug.yaml --tasks tasks.yaml
+superqode harness eval --spec base.yaml --variant optimized.yaml --tasks tasks.yaml  # exits 2 on regression
+superqode harness eval --spec base.yaml --variant optimized.yaml --tasks tasks.yaml --allow-regressions
 superqode harness eval --spec base.yaml --tasks tasks.yaml --live --json
 ```
+
+| Option | Description |
+| --- | --- |
+| `--spec PATH` | Baseline spec (repeatable; first is the baseline) |
+| `--variant PATH` | Candidate spec compared against the baseline (repeatable) |
+| `--tasks PATH` | Task file to score against (required) |
+| `--provider` / `--model` / `--runtime` / `--sandbox` | Execution overrides |
+| `--live` | Execute tasks against the model endpoint |
+| `--allow-regressions` | Do not exit non-zero when a variant regresses (override the seesaw gate) |
+| `--json` | Emit JSON |
+
+Exit codes: `0` ok, `1` an eval errored, `2` a variant regressed a baseline-solved task.
 
 Task files are YAML:
 

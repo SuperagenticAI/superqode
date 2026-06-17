@@ -2020,6 +2020,11 @@ def harness_test(
 )
 @click.option("--sandbox", "sandbox_backend", default="local", show_default=True)
 @click.option("--live", is_flag=True, help="Execute tasks against the model endpoint")
+@click.option(
+    "--allow-regressions",
+    is_flag=True,
+    help="Do not fail when a variant regresses a task the baseline solved (seesaw gate)",
+)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def harness_eval(
     spec_paths,
@@ -2031,9 +2036,14 @@ def harness_eval(
     working_dir,
     sandbox_backend,
     live,
+    allow_regressions,
     json_output,
 ):
-    """Run a HarnessSpec eval scorecard across tasks and variants."""
+    """Run a HarnessSpec eval scorecard across tasks and variants.
+
+    Acts as a seesaw gate: if any variant regresses a task the baseline solved,
+    the command exits non-zero unless --allow-regressions is set.
+    """
     import asyncio
 
     from superqode.harness import render_harness_eval, run_harness_eval
@@ -2054,8 +2064,18 @@ def harness_eval(
         click.echo(json.dumps(payload, indent=2))
     else:
         click.echo(render_harness_eval(payload))
+        if payload.get("regressed") and not allow_regressions:
+            click.echo(
+                "REGRESSION: "
+                + ", ".join(payload.get("regressed_variants") or [])
+                + " regressed a task the baseline solved. "
+                + "Pass --allow-regressions to override.",
+                err=True,
+            )
     if payload["status"] == "failed":
         raise click.exceptions.Exit(1)
+    if payload.get("regressed") and not allow_regressions:
+        raise click.exceptions.Exit(2)
 
 
 @harness.command("auto-bench")

@@ -31,12 +31,49 @@ class HarnessTestCheck:
         }
 
 
+# The nine behavioral dimensions of a harness (HarnessX taxonomy, D1-D9), each
+# mapped to the canonical HarnessSpec field you would edit to address it. Used to
+# tag a failure with WHERE in the harness to look, not just what failed.
+HARNESS_DIMENSIONS: dict[str, dict[str, str]] = {
+    "D1": {"label": "model selection", "field": "model_policy"},
+    "D2": {"label": "context assembly", "field": "context"},
+    "D3": {"label": "memory management", "field": "context.memory"},
+    "D4": {"label": "tool ecosystem", "field": "agents.tools"},
+    "D5": {"label": "execution environment", "field": "execution_policy.sandbox"},
+    "D6": {"label": "evaluation and reward", "field": "checks"},
+    "D7": {"label": "control and safety", "field": "execution_policy"},
+    "D8": {"label": "observability", "field": "observability"},
+    "D9": {"label": "training bridge", "field": "metadata"},
+}
+
+# Which dimension each failure category most directly implicates.
+_DIMENSION_FOR_CATEGORY: dict[str, str] = {
+    "spec_load_error": "D2",  # the spec/composition does not assemble
+    "model_endpoint_error": "D1",
+    "tool_or_permission_error": "D7",
+    "runtime_error": "D5",
+}
+
+
+def dimension_for_category(category: str) -> dict[str, str]:
+    """Tag a failure category with its harness dimension (D1-D9) + field.
+
+    Returns ``{"id", "label", "field"}``; an empty id when there is no failure.
+    """
+    dim_id = _DIMENSION_FOR_CATEGORY.get(category, "")
+    if not dim_id:
+        return {"id": "", "label": "", "field": ""}
+    meta = HARNESS_DIMENSIONS[dim_id]
+    return {"id": dim_id, "label": meta["label"], "field": meta["field"]}
+
+
 def build_failure_digest(checks: list[HarnessTestCheck]) -> dict[str, Any]:
     failed = [check for check in checks if check.status == "failed"]
     if not failed:
         return {
             "outcome": "passed",
             "failure_category": "",
+            "dimension": {"id": "", "label": "", "field": ""},
             "implicated_components": [],
             "evidence": [],
             "suggested_next_checks": [],
@@ -47,6 +84,7 @@ def build_failure_digest(checks: list[HarnessTestCheck]) -> dict[str, Any]:
     return {
         "outcome": "failed",
         "failure_category": category,
+        "dimension": dimension_for_category(category),
         "implicated_components": components,
         "evidence": evidence,
         "suggested_next_checks": suggestions,

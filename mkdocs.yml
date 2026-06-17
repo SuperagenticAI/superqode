@@ -194,6 +194,7 @@ nav:
     - 🔧 Tools System: advanced/tools-system.md
     - 🐍 Monty Python REPL: advanced/monty-python-repl.md
     - ⚓ Harness System: advanced/harness-system.md
+    - 📈 Run, Measure, Optimize: advanced/harness-optimization.md
     - 🔁 Omnigent Compatibility: advanced/omnigent-compat.md
     - 🔌 Runtime Backends: runtimes.md
     - 📋 Session Management: advanced/session-management.md
