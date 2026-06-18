@@ -25,6 +25,7 @@ from .todo_tools import TodoWriteTool, TodoReadTool
 from .batch_tool import BatchTool
 from .shell_tools import BashTool
 from .search_tools import GrepTool, GlobTool, CodeSearchTool
+from .semantic_search import SemanticSearchTool, is_semantic_search_available
 from .diagnostics import DiagnosticsTool
 from .network_tools import FetchTool, DownloadTool
 from .agent_tools import SubAgentTool, TaskCoordinatorTool
@@ -69,6 +70,8 @@ __all__ = [
     "GrepTool",
     "GlobTool",
     "CodeSearchTool",
+    "SemanticSearchTool",
+    "is_semantic_search_available",
     # Diagnostics
     "DiagnosticsTool",
     # Network tools

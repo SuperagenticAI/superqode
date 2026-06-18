@@ -99,6 +99,37 @@ mcp_servers:
 | `cwd` | string | Working directory |
 | `timeout` | number | Connection timeout (seconds) |
 
+### Semantic Code Search MCP
+
+For AST-aware semantic repository search, install `ccc` and run
+`cocoindex-code` as a stdio MCP server:
+
+```bash
+uv tool install 'cocoindex-code'
+```
+
+```yaml
+mcp_servers:
+  cocoindex-code:
+    transport: stdio
+    enabled: true
+    auto_connect: true
+    command: ccc
+    args: ["mcp"]
+    cwd: /path/to/workspace
+```
+
+Run `ccc init --litellm-model ollama/nomic-embed-text` and `ccc index` in the
+workspace first if you want local Ollama embeddings. The MCP server exposes a
+semantic `search` tool with `query`, `limit`, `offset`, `languages`, `paths`,
+and `refresh_index`.
+
+For local laptops, note that `ccc mcp` starts a background index task and its
+search tool refreshes the index by default. For repeated searches after a manual
+`ccc index`, pass `refresh_index=false` to keep calls lightweight. See
+[Semantic Code Search](../advanced/semantic-search.md) for the native
+`semantic_search` tool, MCP tradeoffs, and local-model setup.
+
 ### HTTP Transport
 
 HTTP/HTTPS servers for remote or containerized MCP servers:

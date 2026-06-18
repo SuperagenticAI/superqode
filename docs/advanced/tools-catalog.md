@@ -44,6 +44,8 @@ Each call waits up to `yield_ms` (default 1500) and returns early once output se
 
 `grep` and `glob` spawn ripgrep directly with structured `--json` output, report truncation honestly, and fan out across every repo registered with `:workspace add`. `code_search` finds symbols (definitions/references); `repo_search` is the cross-repo entry point. All read-only, so multiple searches in one turn run concurrently.
 
+`semantic_search` adds meaning-based lookup: it matches code by intent ("where is the conversation history compacted") rather than by exact text or symbol name. It is optional and appears only when the `cocoindex-code` integration is installed. See [Semantic Code Search](semantic-search.md).
+
 ## Web & network
 
 `web_search`, `web_fetch` (HTML→markdown), `fetch`, `download`. Good candidates for [deferred loading](agent-loop.md#4-deferred-tools-and-tool_search) on small-window models.

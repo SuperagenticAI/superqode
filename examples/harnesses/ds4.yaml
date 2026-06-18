@@ -46,6 +46,8 @@ agents:
       # Local models have no web access, so lean on rich local search:
       - repo_search
       - code_search
+      # Optional: install superqode[semantic], index once with ccc, then enable:
+      # - semantic_search
       - bash
     skills:
       - repo-navigation
@@ -79,4 +81,3 @@ observability:
 metadata:
   example: ds4
   best_for: fast DS4 local coding
-

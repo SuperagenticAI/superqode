@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.45] - 2026-06-18
+
+### Added
+
+- **Optional semantic code search** - Added a first-class `semantic_search` tool backed by `cocoindex-code`, registered only when the optional `superqode[semantic]` extra is installed. The tool searches AST-chunked code by intent, supports language/path filters and offset pagination, runs read-only under the existing search permission group, and keeps the heavy indexing/embedding work in the CocoIndex daemon.
+- **CocoIndex Code MCP path** - Documented `ccc mcp` as the lightweight MCP integration path for sharing one semantic index across SuperQode and other agents. The MCP configuration guide now includes a ready-to-use `cocoindex-code` stdio server example and notes the MCP `search` parameters.
+- **Local-model semantic search guidance** - Documented local Ollama embeddings with `nomic-embed-text`, low-overhead search defaults (`refresh=false` / `refresh_index=false` for repeated searches), index freshness tradeoffs, and optional local harness wiring for DS4/Gemma-style coding harnesses.
+- **Semantic search docs** - Added the advanced Semantic Code Search guide and linked it from the tools catalog and documentation navigation.
+
+### Changed
+
+- **Slim semantic dependency** - The `semantic` extra now depends on slim `cocoindex-code>=0.2.35,<0.3` instead of the `[full]` extra, avoiding a default torch/sentence-transformers install in the SuperQode environment. Users who want offline Hugging Face sentence-transformers can still install `cocoindex-code[full]` explicitly.
+- **Release metadata** - Bumped the package version and runtime `__version__` to `0.1.45`.
+
 ## [0.1.44] - 2026-06-16
 
 ### Added

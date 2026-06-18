@@ -97,6 +97,7 @@ Every layer of the harness has a local-first answer:
 | Model families need different prompts, temperatures, and formats | [Model policy packs](advanced/local-stack.md#model-policy-packs): tuned defaults per family, user-overridable |
 | Many models have no reliable native tool head | `tool_call_format: prompt` renders tools into the prompt and parses calls from text |
 | Tool schemas eat the prompt budget | [Deferred tools](advanced/tools-system.md): heavy schemas hidden until the model activates them via `tool_search` |
+| Keyword search misses conceptual matches | Optional [semantic code search](advanced/semantic-search.md) via `superqode[semantic]`, backed by a local CocoIndex daemon and local Ollama embeddings |
 | A simple "hello" should not feel like a repo-sized agent run | Local fast-chat path: obvious greetings/basic non-code questions skip coding history, reminders, context probing, and tool schemas |
 | Small models loop and emit malformed calls | Doom-loop guard, tool-argument repair, and dangling tool-call repair in the [agent loop](advanced/agent-loop.md) |
 | Engine choice is hardware-dependent and changes monthly | The recommendation matrix ships as updatable data with user overrides |

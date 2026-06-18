@@ -201,3 +201,5 @@ src/superqode_cli/_protection.py
 release_builds/
 
 reference/
+# CocoIndex Code (ccc)
+/.cocoindex_code/

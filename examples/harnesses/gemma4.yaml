@@ -44,6 +44,8 @@ agents:
       - patch
       - grep
       - glob
+      # Optional: install superqode[semantic], index once with ccc, then enable:
+      # - semantic_search
       - bash
     skills:
       - repo-navigation
@@ -77,4 +79,3 @@ observability:
 metadata:
   example: gemma4
   best_for: local Gemma-style coding models
-

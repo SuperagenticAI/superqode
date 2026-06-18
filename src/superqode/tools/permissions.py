@@ -77,6 +77,7 @@ TOOL_GROUPS: Dict[str, ToolGroup] = {
     "diagnostics": ToolGroup.DIAGNOSTICS,
     # Search
     "code_search": ToolGroup.SEARCH,
+    "semantic_search": ToolGroup.SEARCH,
     # Agent
     "agent": ToolGroup.AGENT,
     "sub_agent": ToolGroup.AGENT,

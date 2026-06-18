@@ -182,6 +182,7 @@ nav:
     - advanced/index.md
     - 🔁 Inside the Agent Loop: advanced/agent-loop.md
     - 🧰 Tools Catalog: advanced/tools-catalog.md
+    - 🔎 Semantic Code Search: advanced/semantic-search.md
     - 🛡️ Policies & Safety: advanced/policies.md
     - 🤝 Multi-Agent Workflows: advanced/multi-agent.md
     - 🤖 Headless & CI: advanced/headless-ci.md

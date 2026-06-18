@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.1.44"
+version = "0.1.45"
 description = "SuperQode: Portable Coding Agent Harness Framework, built for Local Agentic Coding"
 readme = "README.md"
 license = "Apache-2.0"
@@ -56,6 +56,12 @@ mlx = [
 ]
 monty = [
     "pydantic-monty>=0.0.4",
+]
+semantic = [
+    # AST-based semantic code search client. The default integration stays slim:
+    # use LiteLLM/Ollama embeddings locally, or install cocoindex-code[full]
+    # separately if you want sentence-transformers in the same environment.
+    "cocoindex-code>=0.2.35,<0.3",
 ]
 channels = [
     # Slack Socket Mode and the Discord Gateway are websocket transports;

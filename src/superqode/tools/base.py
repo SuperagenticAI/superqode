@@ -328,6 +328,13 @@ class ToolRegistry:
         registry.register(RepoSearchTool())
         registry.register(CodeSearchTool())
 
+        # Semantic (embedding) search — only when the optional cocoindex-code
+        # integration is installed; otherwise silently skipped.
+        from .semantic_search import SemanticSearchTool, is_semantic_search_available
+
+        if is_semantic_search_available():
+            registry.register(SemanticSearchTool())
+
         if is_monty_available():
             registry.register(MontyPythonReplTool())
 
@@ -383,6 +390,13 @@ class ToolRegistry:
         # Semantic symbol/definition/reference search. Local models lean on
         # local search in place of web access, so give them the richer tool.
         registry.register(CodeSearchTool())
+
+        # Semantic (embedding) search — only when the optional cocoindex-code
+        # integration is installed; otherwise silently skipped.
+        from .semantic_search import SemanticSearchTool, is_semantic_search_available
+
+        if is_semantic_search_available():
+            registry.register(SemanticSearchTool())
 
         registry.register(QuestionTool())
         registry.register(ConfirmTool())
@@ -461,6 +475,13 @@ class ToolRegistry:
         registry.register(GlobTool())
         registry.register(RepoSearchTool())
         registry.register(CodeSearchTool())
+
+        # Semantic (embedding) search — only when the optional cocoindex-code
+        # integration is installed; otherwise silently skipped.
+        from .semantic_search import SemanticSearchTool, is_semantic_search_available
+
+        if is_semantic_search_available():
+            registry.register(SemanticSearchTool())
 
         # Diagnostics
         registry.register(DiagnosticsTool())
@@ -595,6 +616,13 @@ class ToolRegistry:
         registry.register(GlobTool())
         registry.register(RepoSearchTool())
         registry.register(CodeSearchTool())
+
+        # Semantic (embedding) search — only when the optional cocoindex-code
+        # integration is installed; otherwise silently skipped.
+        from .semantic_search import SemanticSearchTool, is_semantic_search_available
+
+        if is_semantic_search_available():
+            registry.register(SemanticSearchTool())
 
         # Diagnostics
         registry.register(DiagnosticsTool())
