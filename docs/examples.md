@@ -18,6 +18,7 @@ superqode harness run --spec examples/harnesses/coding.yaml --prompt "summarize 
 | `no-tool.yaml` | You want planning, architecture review, or summarization without filesystem, shell, network, or hidden repository context. | `builtin` |
 | `pydanticai.yaml` | You want PydanticAI with SuperQode tools, fallback models, typed-output-friendly runs, and optional Logfire traces. | `pydanticai` |
 | `deepagents.yaml` | You want a longer-running coding harness with subagent, memory, and rich graph events. | `deepagents` |
+| `omnigent-multi-agent.yaml` | You want an Omnigent-style orchestrator with researcher, coder, reviewer, MCP config, and persistent child sessions. | `builtin` |
 | `openai-agents.yaml` | You want OpenAI Agents SDK behavior with approval pauses and sandbox-aware event traces. | `openai-agents` |
 | `google-adk.yaml` | You want to run through the Google ADK backend with SuperQode tool and permission policy. | `adk` |
 | `gemma4.yaml` | You want a local Gemma-style coding profile with strict JSON tool calls and compact context. | `builtin` |
@@ -31,6 +32,16 @@ From the repository root:
 for spec in examples/harnesses/*.yaml; do
   superqode harness validate --spec "$spec"
 done
+```
+
+## Smoke Omnigent-Style Delegation
+
+The concise source form lives at `examples/omnigent-multi-agent.agent.yaml`.
+Run the offline smoke command to verify import, MCP preservation, delegated
+child agents, and `agent_session` resume behavior:
+
+```bash
+uv run python scripts/smoke_omnigent_agent_sessions.py
 ```
 
 ## Check Optional Backends

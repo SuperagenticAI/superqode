@@ -12,6 +12,7 @@ from ...tools.base import ToolRegistry
 from ...tools.permissions import PermissionManager
 from ..compiler import compile_to_headless_profile
 from ..events import HarnessEvent
+from ..mcp_bridge import HarnessMCPRuntime, create_harness_mcp_runtime
 from ..model_policy import EffectiveModelPolicy, resolve_harness_model_policy
 from ..sandbox import apply_backend_permissions
 from ..spec import HarnessFlavor, HarnessSpec
@@ -28,43 +29,64 @@ class RuntimeHarnessBackend:
 
     async def run(self, request: HarnessBackendRequest) -> HarnessBackendResult:
         runtime_events: list[HarnessEvent] = []
-        runtime_name, runtime_obj = _create_runtime_for_request(
-            request,
-            self.runtime_name,
-            event_sink=runtime_events,
-        )
-        runtime_events.insert(
-            0,
-            HarnessEvent(type="model_request", data={"runtime": runtime_name}),
-        )
-        response = await runtime_obj.run(request.prompt)
-        runtime_events.append(
-            HarnessEvent(
-                type="model_result",
-                data={
-                    "stopped_reason": response.stopped_reason,
-                    "tool_calls_made": response.tool_calls_made,
-                    "iterations": response.iterations,
+        mcp_runtime = await create_harness_mcp_runtime(request.spec)
+        keep_mcp_runtime = False
+        try:
+            runtime_name, runtime_obj = _create_runtime_for_request(
+                request,
+                self.runtime_name,
+                event_sink=runtime_events,
+                mcp_runtime=mcp_runtime,
+            )
+            runtime_events.insert(
+                0,
+                HarnessEvent(
+                    type="model_request",
+                    data={
+                        "runtime": runtime_name,
+                        **({"mcp_tools": len(mcp_runtime.tools)} if mcp_runtime.tools else {}),
+                    },
+                ),
+            )
+            _append_mcp_events(runtime_events, mcp_runtime)
+            response = await runtime_obj.run(request.prompt)
+            runtime_events.append(
+                HarnessEvent(
+                    type="model_result",
+                    data={
+                        "stopped_reason": response.stopped_reason,
+                        "tool_calls_made": response.tool_calls_made,
+                        "iterations": response.iterations,
+                    },
+                )
+            )
+            pending_approvals = _pending_approvals(runtime_obj)
+            keep_mcp_runtime = bool(pending_approvals)
+            return HarnessBackendResult(
+                response=response,
+                backend=self.name,
+                runtime=runtime_name,
+                metadata={
+                    **({"events": runtime_events} if runtime_events else {}),
+                    **({"pending_approvals": pending_approvals} if pending_approvals else {}),
+                    **({"pending_runtime": runtime_obj} if pending_approvals else {}),
                 },
             )
-        )
-        pending_approvals = _pending_approvals(runtime_obj)
-        return HarnessBackendResult(
-            response=response,
-            backend=self.name,
-            runtime=runtime_name,
-            metadata={
-                **({"events": runtime_events} if runtime_events else {}),
-                **({"pending_approvals": pending_approvals} if pending_approvals else {}),
-                **({"pending_runtime": runtime_obj} if pending_approvals else {}),
-            },
-        )
+        finally:
+            if not keep_mcp_runtime:
+                await mcp_runtime.close()
 
     async def stream(self, request: HarnessBackendRequest) -> AsyncIterator[HarnessEvent]:
         """Stream normalized harness delta events from the wrapped runtime."""
-        _runtime_name, runtime_obj = _create_runtime_for_request(request, self.runtime_name)
-        if hasattr(runtime_obj, "run_harness_events"):
-            async for event in runtime_obj.run_harness_events(request.prompt):
+        mcp_runtime = await create_harness_mcp_runtime(request.spec)
+        keep_mcp_runtime = False
+        try:
+            _runtime_name, runtime_obj = _create_runtime_for_request(
+                request,
+                self.runtime_name,
+                mcp_runtime=mcp_runtime,
+            )
+            for event in _mcp_events(mcp_runtime):
                 yield HarnessEvent(
                     type=event.type,
                     data=event.data,
@@ -72,31 +94,44 @@ class RuntimeHarnessBackend:
                     session_id=request.session_id,
                     run_id=event.run_id,
                 )
-        else:
-            async for chunk in runtime_obj.run_streaming(request.prompt):
-                if chunk:
+            if hasattr(runtime_obj, "run_harness_events"):
+                async for event in runtime_obj.run_harness_events(request.prompt):
                     yield HarnessEvent(
-                        type="delta",
-                        data={"text": chunk},
+                        type=event.type,
+                        data=event.data,
+                        timestamp=event.timestamp,
                         session_id=request.session_id,
+                        run_id=event.run_id,
                     )
-        pending_approvals = _pending_approvals(runtime_obj)
-        if pending_approvals:
+            else:
+                async for chunk in runtime_obj.run_streaming(request.prompt):
+                    if chunk:
+                        yield HarnessEvent(
+                            type="delta",
+                            data={"text": chunk},
+                            session_id=request.session_id,
+                        )
+            pending_approvals = _pending_approvals(runtime_obj)
+            keep_mcp_runtime = bool(pending_approvals)
+            if pending_approvals:
+                yield HarnessEvent(
+                    type="approval_required",
+                    data={
+                        "backend": self.name,
+                        "runtime": request.runtime or self.runtime_name,
+                        "pending_approvals": pending_approvals,
+                        "pending_runtime": runtime_obj,
+                    },
+                    session_id=request.session_id,
+                )
             yield HarnessEvent(
-                type="approval_required",
-                data={
-                    "backend": self.name,
-                    "runtime": request.runtime or self.runtime_name,
-                    "pending_approvals": pending_approvals,
-                    "pending_runtime": runtime_obj,
-                },
+                type="end",
+                data={"backend": self.name, "runtime": request.runtime or self.runtime_name},
                 session_id=request.session_id,
             )
-        yield HarnessEvent(
-            type="end",
-            data={"backend": self.name, "runtime": request.runtime or self.runtime_name},
-            session_id=request.session_id,
-        )
+        finally:
+            if not keep_mcp_runtime:
+                await mcp_runtime.close()
 
 
 class ADKHarnessBackend(RuntimeHarnessBackend):
@@ -248,6 +283,7 @@ def _create_runtime_for_request(
     default_runtime_name: str,
     *,
     event_sink: list[HarnessEvent] | None = None,
+    mcp_runtime: HarnessMCPRuntime | None = None,
 ):
     profile = compile_to_headless_profile(request.spec)
     model_policy = resolve_harness_model_policy(
@@ -310,6 +346,14 @@ def _create_runtime_for_request(
                 and request.spec.execution_policy.approval_profile != "deny"
             )
         ),
+        **(
+            {
+                "mcp_executor": mcp_runtime.execute,
+                "mcp_tools": mcp_runtime.tools,
+            }
+            if mcp_runtime and mcp_runtime.available
+            else {}
+        ),
         **callbacks,
         **hook_kwargs,
         permission_manager=PermissionManager(
@@ -325,6 +369,24 @@ def _pending_approvals(runtime_obj) -> list[dict]:
     if not pending:
         return []
     return [dict(item) for item in pending]
+
+
+def _append_mcp_events(events: list[HarnessEvent], mcp_runtime: HarnessMCPRuntime) -> None:
+    events.extend(_mcp_events(mcp_runtime))
+
+
+def _mcp_events(mcp_runtime: HarnessMCPRuntime) -> list[HarnessEvent]:
+    events: list[HarnessEvent] = []
+    if mcp_runtime.tools:
+        events.append(
+            HarnessEvent(
+                type="mcp_list_tools",
+                data={"tool_count": len(mcp_runtime.tools)},
+            )
+        )
+    for error in mcp_runtime.errors:
+        events.append(HarnessEvent(type="mcp_error", data={"error": error}))
+    return events
 
 
 def _builtin_event_callbacks(event_sink: list[HarnessEvent]) -> dict:

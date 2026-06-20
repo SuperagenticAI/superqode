@@ -36,6 +36,7 @@ class SpawnHarnessTool(Tool):
 
     _session_children: dict[str, int] = {}
     _session_started_at: dict[str, float] = {}
+    _session_budget_spent: dict[str, float] = {}
 
     @property
     def name(self) -> str:
@@ -87,6 +88,10 @@ class SpawnHarnessTool(Tool):
                     "type": "integer",
                     "description": "Maximum wall-clock budget for child spawning in this session.",
                 },
+                "max_budget": {
+                    "type": "number",
+                    "description": "Maximum child spawn-unit budget for this session. One child costs 1.0.",
+                },
                 "steering": {
                     "type": "string",
                     "description": "Task-specific guidance to improve child quality.",
@@ -124,8 +129,16 @@ class SpawnHarnessTool(Tool):
                 output="",
                 error="spawn_harness requires HarnessKernel context or the builtin child runner",
             )
+        recursion = getattr(ctx.harness_spec, "recursion", None) if has_harness_context else None
+        if recursion is not None and not bool(getattr(recursion, "enabled", False)):
+            return ToolResult(
+                success=False,
+                output="",
+                error="Recursive harnessing is disabled by recursion.enabled=false",
+                metadata={"recursion_enabled": False},
+            )
 
-        max_depth = max(0, int(args.get("max_depth", 1) or 0))
+        max_depth = _policy_int(args, "max_depth", recursion, default=1, minimum=0)
         child_depth = int(getattr(ctx, "delegation_depth", 0)) + 1
         if child_depth > max_depth:
             return ToolResult(
@@ -136,7 +149,7 @@ class SpawnHarnessTool(Tool):
             )
 
         session_key = str(ctx.session_id or "default")
-        max_children = max(0, int(args.get("max_children", 6) or 0))
+        max_children = _policy_int(args, "max_children", recursion, default=6, minimum=0)
         count = self._session_children.get(session_key, 0)
         if count >= max_children:
             return ToolResult(
@@ -146,7 +159,7 @@ class SpawnHarnessTool(Tool):
                 metadata={"child_count": count, "max_children": max_children},
             )
 
-        max_wall_seconds = max(0, int(args.get("max_wall_seconds", 600) or 0))
+        max_wall_seconds = _policy_int(args, "max_wall_seconds", recursion, default=600, minimum=0)
         started = self._session_started_at.setdefault(session_key, time.monotonic())
         if max_wall_seconds and time.monotonic() - started > max_wall_seconds:
             return ToolResult(
@@ -157,9 +170,28 @@ class SpawnHarnessTool(Tool):
             )
 
         mode = str(args.get("mode") or "read-only").strip().lower()
+        write_policy = str(getattr(recursion, "write_policy", "approval") or "approval").lower()
+        approval = await _check_write_policy(ctx, args, mode=mode, write_policy=write_policy)
+        if approval is not None:
+            return approval
         allowed_tools = READ_ONLY_TOOLS if mode != "write" else None
         context_handle = str(args.get("context_handle") or "").strip()
         steering = str(args.get("steering") or "").strip()
+        budget_limit = _policy_budget(args, recursion)
+        requested_model = _policy_label(
+            args,
+            "model",
+            recursion,
+            spec_attr="child_model",
+            fallback="",
+        )
+        requested_sandbox = _policy_label(
+            args,
+            "sandbox",
+            recursion,
+            spec_attr="child_sandbox",
+            fallback="",
+        )
         if bool(args.get("fanout")):
             return await self._run_fanout(
                 ctx,
@@ -169,18 +201,23 @@ class SpawnHarnessTool(Tool):
                 mode=mode,
                 allowed_tools=allowed_tools,
                 child_depth=child_depth,
-                requested_model=str(args.get("model") or ""),
-                requested_sandbox=str(args.get("sandbox") or ""),
+                requested_model=requested_model,
+                requested_sandbox=requested_sandbox,
                 max_children=max_children,
                 current_children=count,
                 chunk_chars=int(args.get("chunk_chars", 12000) or 12000),
                 max_chunks=int(args.get("max_chunks", max_children) or max_children),
-                max_parallel=int(args.get("max_parallel", 2) or 2),
+                max_parallel=_policy_int(args, "max_parallel", recursion, default=2, minimum=1),
                 has_harness_context=bool(has_harness_context),
+                budget_limit=budget_limit,
+                session_key=session_key,
             )
         child_task = _compose_child_task(task, context_handle=context_handle, steering=steering)
         child_id = f"child-{uuid.uuid4().hex[:8]}"
 
+        budget_error = self._reserve_budget(session_key, budget_limit=budget_limit, units=1.0)
+        if budget_error:
+            return budget_error
         self._session_children[session_key] = count + 1
         if has_harness_context:
             return await self._run_kernel_child(
@@ -191,8 +228,8 @@ class SpawnHarnessTool(Tool):
                 mode=mode,
                 context_handle=context_handle,
                 allowed_tools=allowed_tools,
-                requested_model=str(args.get("model") or ""),
-                requested_sandbox=str(args.get("sandbox") or ""),
+                requested_model=requested_model,
+                requested_sandbox=requested_sandbox,
             )
 
         try:
@@ -204,8 +241,8 @@ class SpawnHarnessTool(Tool):
                 mode=mode,
                 context_handle=context_handle,
                 allowed_tools=allowed_tools,
-                requested_model=str(args.get("model") or ""),
-                requested_sandbox=str(args.get("sandbox") or ""),
+                requested_model=requested_model,
+                requested_sandbox=requested_sandbox,
             )
         except Exception as exc:
             return ToolResult(
@@ -237,6 +274,8 @@ class SpawnHarnessTool(Tool):
         max_chunks: int,
         max_parallel: int,
         has_harness_context: bool,
+        budget_limit: float | None,
+        session_key: str,
     ) -> ToolResult:
         if not context_handle:
             return ToolResult(
@@ -261,7 +300,13 @@ class SpawnHarnessTool(Tool):
         if not chunks:
             return ToolResult(success=False, output="", error="context_handle produced no chunks")
 
-        session_key = str(ctx.session_id or "default")
+        budget_error = self._reserve_budget(
+            session_key,
+            budget_limit=budget_limit,
+            units=float(len(chunks)),
+        )
+        if budget_error:
+            return budget_error
         self._session_children[session_key] = current_children + len(chunks)
         semaphore = asyncio.Semaphore(max(1, min(max_parallel, len(chunks))))
 
@@ -327,6 +372,33 @@ class SpawnHarnessTool(Tool):
                 "truncated_to_available_children": available < max_chunks,
             },
         )
+
+    def _reserve_budget(
+        self,
+        session_key: str,
+        *,
+        budget_limit: float | None,
+        units: float,
+    ) -> ToolResult | None:
+        if budget_limit is None:
+            return None
+        spent = self._session_budget_spent.get(session_key, 0.0)
+        if spent + units > budget_limit:
+            return ToolResult(
+                success=False,
+                output="",
+                error=(
+                    "Recursive harness budget exceeded "
+                    f"({spent + units:.2f}/{budget_limit:.2f} spawn units)"
+                ),
+                metadata={
+                    "budget_spent": spent,
+                    "budget_requested": units,
+                    "max_budget": budget_limit,
+                },
+            )
+        self._session_budget_spent[session_key] = spent + units
+        return None
 
     async def _run_agent_loop_child(
         self,
@@ -491,6 +563,94 @@ class SpawnHarnessTool(Tool):
                 "requested_sandbox": child_sandbox,
             },
         )
+
+
+def _policy_int(
+    args: dict[str, Any],
+    key: str,
+    recursion: Any,
+    *,
+    default: int,
+    minimum: int,
+) -> int:
+    spec_value = getattr(recursion, key, None) if recursion is not None else None
+    limit = default if spec_value is None else int(spec_value)
+    if key in args and args.get(key) is not None:
+        requested = int(args.get(key) or 0)
+        limit = min(limit, requested) if recursion is not None else requested
+    return max(minimum, limit)
+
+
+def _policy_budget(args: dict[str, Any], recursion: Any) -> float | None:
+    spec_value = getattr(recursion, "max_budget", None) if recursion is not None else None
+    requested = args.get("max_budget")
+    values = [
+        float(value)
+        for value in (spec_value, requested)
+        if value is not None and float(value) >= 0
+    ]
+    if not values:
+        return None
+    return min(values)
+
+
+def _policy_label(
+    args: dict[str, Any],
+    key: str,
+    recursion: Any,
+    *,
+    spec_attr: str,
+    fallback: str,
+) -> str:
+    spec_value = getattr(recursion, spec_attr, None) if recursion is not None else None
+    if spec_value:
+        return str(spec_value)
+    return str(args.get(key) or fallback)
+
+
+async def _check_write_policy(
+    ctx: ToolContext,
+    args: dict[str, Any],
+    *,
+    mode: str,
+    write_policy: str,
+) -> ToolResult | None:
+    if mode != "write":
+        return None
+    if write_policy == "deny":
+        return ToolResult(
+            success=False,
+            output="",
+            error="Recursive write-mode child runs are denied by recursion.write_policy=deny",
+            metadata={"write_policy": write_policy},
+        )
+    if write_policy == "allow":
+        return None
+    manager = getattr(ctx, "permission_manager", None)
+    if manager is None:
+        return ToolResult(
+            success=False,
+            output="",
+            error="Recursive write-mode child runs require approval, but no permission manager is available",
+            metadata={"write_policy": write_policy},
+        )
+    approved = await manager.request_permission(
+        "spawn_harness",
+        {
+            "mode": "write",
+            "task": str(args.get("task") or "")[:500],
+            "context_handle": str(args.get("context_handle") or ""),
+        },
+        description="Approve write-capable recursive child harness run",
+    )
+    if approved:
+        return None
+    return ToolResult(
+        success=False,
+        output="",
+        error="Recursive write-mode child run was not approved",
+        metadata={"write_policy": write_policy},
+    )
 
 
 def _compose_child_task(

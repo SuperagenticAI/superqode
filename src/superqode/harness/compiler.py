@@ -100,7 +100,10 @@ def _tool_names_from_spec(spec: HarnessSpec) -> list[str] | None:
     tools = spec.agents[0].tools
     if not tools or tools == ("full",):
         return None
-    return list(tools)
+    out = list(tools)
+    if spec.agents[0].delegates_to and "agent_session" not in out:
+        out.append("agent_session")
+    return out
 
 
 def _system_level_from_spec(spec: HarnessSpec) -> SystemPromptLevel:

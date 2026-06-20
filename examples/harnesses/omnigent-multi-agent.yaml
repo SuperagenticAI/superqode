@@ -1,0 +1,153 @@
+version: 1
+name: example-omnigent-multi-agent
+description: Omnigent-style multi-agent coding harness with persistent delegated child sessions.
+flavor: coding
+runtime:
+  backend: builtin
+  config:
+    omnigent_harness: builtin
+    mcp_servers:
+      docs:
+        url: https://example.com/mcp
+        tools:
+          - search_docs
+model_policy:
+  primary: gpt-4o-mini
+  profile: balanced-coding
+  temperature: 0.2
+  reasoning: medium
+execution_policy:
+  sandbox: local
+  approval_profile: balanced
+  allow_read: true
+  allow_write: true
+  allow_shell: true
+  allow_network: true
+  allowed_commands:
+    - uv run pytest
+    - uv run ruff
+  blocked_categories:
+    - destructive
+    - credential-access
+agents:
+  - id: orchestrator
+    role: Coordinate research, implementation, and review work.
+    system_prompt: |
+      You are the orchestrator. Break work into clear tasks and delegate to
+      researcher, coder, and reviewer through agent_session. Use stable
+      session_id values for long-running child work so the run can resume later.
+    tools:
+      - agent_session
+      - read_file
+      - grep
+      - glob
+      - repo_search
+      - todo_write
+      - todo_read
+    delegates_to:
+      - researcher
+      - coder
+      - reviewer
+    max_iterations: 12
+    config:
+      source: omnigent-example
+      omnigent_tools:
+        researcher:
+          type: agent
+        coder:
+          type: agent
+        reviewer:
+          type: agent
+        docs:
+          type: mcp
+          url: https://example.com/mcp
+  - id: researcher
+    role: Investigate repository context and external docs.
+    model: gpt-4o-mini
+    system_prompt: |
+      You are the researcher. Summarize relevant files, APIs, docs, risks, and
+      open questions. Do not edit code.
+    tools:
+      - read_file
+      - grep
+      - glob
+      - repo_search
+      - mcp_docs_search_docs
+    skills:
+      - repo-navigation
+    max_iterations: 8
+    config:
+      source: omnigent-example
+      mcp_servers:
+        docs:
+          url: https://example.com/mcp
+          tools:
+            - search_docs
+      omnigent_tools:
+        docs:
+          type: mcp
+          url: https://example.com/mcp
+          tools:
+            - search_docs
+  - id: coder
+    role: Implement focused repository changes.
+    model: gpt-4o-mini
+    system_prompt: |
+      You are the coder. Read before editing, make small changes, and run the
+      narrowest useful verification command.
+    tools:
+      - read_file
+      - edit_file
+      - patch
+      - grep
+      - glob
+      - bash
+      - todo_write
+      - todo_read
+    skills:
+      - implementation
+    max_iterations: 10
+    config:
+      source: omnigent-example
+      pass_history: true
+  - id: reviewer
+    role: Review changes for correctness, tests, and risk.
+    model: gpt-4o-mini
+    system_prompt: |
+      You are the reviewer. Prioritize concrete bugs, regressions, missing tests,
+      and operational risks. Keep feedback specific and actionable.
+    tools:
+      - read_file
+      - grep
+      - glob
+      - repo_search
+    skills:
+      - code-review
+    max_iterations: 8
+    config:
+      source: omnigent-example
+      pass_history: true
+workflow:
+  mode: orchestrator
+  parallelism: 3
+  merge_strategy: summary
+  config:
+    source: omnigent-example
+context:
+  instruction_files:
+    - AGENTS.md
+    - CLAUDE.md
+    - SUPERQODE.md
+  session_storage: .superqode/sessions
+  compaction:
+    strategy: summarize-when-large
+observability:
+  events: true
+  traces: false
+  run_store: file
+metadata:
+  example: omnigent-multi-agent
+  best_for: Omnigent-style orchestration with persistent researcher/coder/reviewer child sessions
+  omnigent:
+    name: omnigent_multi_agent
+    source: example

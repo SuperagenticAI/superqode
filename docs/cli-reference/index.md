@@ -353,6 +353,7 @@ The full `local` command group (init, doctor, search, serve, servers, stop, mode
 |---------|-------------|
 | `superqode harness list-templates` | List built-in harness templates |
 | `superqode harness list-backends` | List harness runtime backends |
+| `superqode harness import-agent <agent.yaml>` | Compile concise SuperQode agent spec to a harness |
 | `superqode harness import-omnigent <agent.yaml>` | Convert an Omnigent agent spec to a SuperQode harness |
 | `superqode harness inspect --spec <file>` | Show resolved harness policy |
 | `superqode harness compile --spec <file>` | Compile effective harness settings |

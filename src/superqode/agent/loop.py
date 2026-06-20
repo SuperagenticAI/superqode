@@ -422,6 +422,10 @@ def _looks_like_unexecuted_tool_intent(content: str) -> bool:
     )
 
 
+def _normalize_peer_agent_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9_]+", "_", (value or "").strip().lower()).strip("_")
+
+
 @dataclass
 class AgentConfig:
     """Configuration for the agent loop.
@@ -812,16 +816,30 @@ class AgentLoop:
             self._peer_manager = PeerAgentManager(self._create_peer_loop)
         return self._peer_manager
 
-    def _create_peer_loop(self, task_name: str) -> "AgentLoop":
+    def _create_peer_loop(
+        self,
+        task_name: str,
+        session_id: str | None = None,
+    ) -> "AgentLoop":
         """Build an isolated loop for one peer agent (no nesting, no storage)."""
+        agent_spec = self._peer_agent_spec(task_name)
         peer_config = replace(
             self.config,
-            session_id=f"{self.session_id}:peer:{task_name}",
-            enable_session_storage=False,
+            session_id=session_id or f"{self.session_id}:peer:{task_name}",
+            enable_session_storage=True,
+            model=getattr(agent_spec, "model", None) or self.config.model,
+            custom_system_prompt=getattr(agent_spec, "system_prompt", None)
+            or self.config.custom_system_prompt,
+            job_description=getattr(agent_spec, "role", None) or self.config.job_description,
+            max_iterations=getattr(agent_spec, "max_iterations", None)
+            or self.config.max_iterations,
         )
-        return AgentLoop(
+        peer_tools = self.tools
+        if agent_spec is not None and getattr(agent_spec, "tools", ()):
+            peer_tools = self.tools.filtered([str(tool) for tool in agent_spec.tools])
+        peer_loop = AgentLoop(
             gateway=self.gateway,
-            tools=self.tools,
+            tools=peer_tools,
             config=peer_config,
             on_tool_call=self.on_tool_call,
             on_tool_result=self.on_tool_result,
@@ -833,6 +851,24 @@ class AgentLoop:
             permission_manager=self.permission_manager,
             allow_peer_agents=False,
         )
+        if agent_spec is not None:
+            peer_loop.pause_on_approval = True
+        return peer_loop
+
+    def _peer_agent_spec(self, task_name: str):
+        spec = self.config.harness_spec
+        agents = getattr(spec, "agents", ()) if spec is not None else ()
+        if not agents:
+            return None
+        primary = agents[0]
+        delegated = set(getattr(primary, "delegates_to", ()) or ())
+        normalized_task = _normalize_peer_agent_name(task_name)
+        for agent in agents:
+            if agent.id not in delegated:
+                continue
+            if _normalize_peer_agent_name(str(agent.id)) == normalized_task:
+                return agent
+        return None
 
     def _doom_threshold(self) -> int:
         """Doom-loop threshold; SUPERQODE_DOOM_LOOP_THRESHOLD overrides config."""

@@ -39,10 +39,12 @@ def _normalize_task_name(name: str) -> str:
 class PeerAgent:
     agent_id: str
     task_name: str
+    session_id: str
     loop: Any  # AgentLoop; typed loosely to avoid an import cycle
     inbox: "asyncio.Queue[Optional[str]]" = field(default_factory=asyncio.Queue)
     status: str = "starting"  # starting | running | idle | closed | error
     last_result: str = ""
+    pending_approvals: List[Dict[str, Any]] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
     runner: Optional[asyncio.Task] = None
     idle_event: asyncio.Event = field(default_factory=asyncio.Event)
@@ -51,7 +53,11 @@ class PeerAgent:
 class PeerAgentManager:
     """Spawn, address, await, and close peer agents for one parent loop."""
 
-    def __init__(self, loop_factory: Callable[[str], Any], max_agents: int = MAX_PEER_AGENTS):
+    def __init__(
+        self,
+        loop_factory: Callable[[str, str | None], Any],
+        max_agents: int = MAX_PEER_AGENTS,
+    ):
         self._loop_factory = loop_factory
         self._max_agents = max_agents
         self._agents: Dict[str, PeerAgent] = {}
@@ -64,7 +70,7 @@ class PeerAgentManager:
             return self._agents[target]
         normalized = _normalize_task_name(target)
         for agent in self._agents.values():
-            if agent.task_name == normalized:
+            if agent.task_name == normalized or agent.session_id == target:
                 return agent
         return None
 
@@ -73,42 +79,70 @@ class PeerAgentManager:
             {
                 "agent_id": a.agent_id,
                 "task_name": a.task_name,
+                "session_id": a.session_id,
                 "status": a.status,
                 "queued_inputs": a.inbox.qsize(),
                 "last_result_preview": (a.last_result or "")[:120],
+                "pending_approvals": [dict(item) for item in a.pending_approvals],
             }
             for a in self._agents.values()
         ]
 
     # -- lifecycle ---------------------------------------------------------
 
-    async def spawn(self, task_name: str, message: str) -> PeerAgent:
-        live = sum(1 for a in self._agents.values() if a.status != "closed")
-        if live >= self._max_agents:
-            raise RuntimeError(
-                f"Too many live peer agents ({self._max_agents}). Close one first (list_agents/close_agent)."
-            )
-        normalized = _normalize_task_name(task_name)
-        base = normalized
-        suffix = 2
-        while any(a.task_name == normalized for a in self._agents.values()):
-            normalized = f"{base}_{suffix}"
-            suffix += 1
-        agent = PeerAgent(
-            agent_id=uuid.uuid4().hex[:8],
-            task_name=normalized,
-            loop=self._loop_factory(normalized),
-        )
-        self._agents[agent.agent_id] = agent
+    async def spawn(
+        self,
+        task_name: str,
+        message: str,
+        *,
+        session_id: str | None = None,
+    ) -> PeerAgent:
+        agent = self._create_agent(task_name, session_id=session_id)
         # Enqueue before starting the runner so wait() can never observe an
         # idle agent that hasn't processed its first message.
         await agent.inbox.put(message)
         agent.runner = asyncio.create_task(self._run_agent(agent))
         return agent
 
+    async def resume(self, task_name: str, *, session_id: str | None = None) -> PeerAgent:
+        agent = self._create_agent(task_name, session_id=session_id)
+        agent.status = "idle"
+        agent.idle_event.set()
+        agent.runner = asyncio.create_task(self._run_agent(agent))
+        return agent
+
+    def _create_agent(self, task_name: str, *, session_id: str | None = None) -> PeerAgent:
+        live = sum(1 for a in self._agents.values() if a.status != "closed")
+        if live >= self._max_agents:
+            raise RuntimeError(
+                f"Too many live peer agents ({self._max_agents}). Close one first (list_agents/close_agent)."
+            )
+        if session_id:
+            existing = self.resolve(session_id)
+            if existing is not None and existing.status != "closed":
+                raise RuntimeError(
+                    f"Peer agent session {session_id!r} is already active as '{existing.task_name}'."
+                )
+        normalized = _normalize_task_name(task_name)
+        base = normalized
+        suffix = 2
+        while any(a.task_name == normalized for a in self._agents.values()):
+            normalized = f"{base}_{suffix}"
+            suffix += 1
+        loop = self._loop_factory(normalized, session_id)
+        resolved_session_id = str(getattr(loop, "session_id", None) or session_id or normalized)
+        agent = PeerAgent(
+            agent_id=uuid.uuid4().hex[:8],
+            task_name=normalized,
+            session_id=resolved_session_id,
+            loop=loop,
+        )
+        self._agents[agent.agent_id] = agent
+        return agent
+
     async def _run_agent(self, agent: PeerAgent) -> None:
         while True:
-            if agent.inbox.empty() and agent.status in ("idle", "error"):
+            if agent.inbox.empty() and agent.status in ("idle", "error", "needs_approval"):
                 agent.idle_event.set()
             message = await agent.inbox.get()
             if message is None:
@@ -118,6 +152,7 @@ class PeerAgentManager:
             agent.loop.reset_cancellation()
             try:
                 response = await agent.loop.run(message)
+                agent.pending_approvals = _pending_approvals(agent.loop)
                 agent.last_result = (
                     response.content or getattr(response, "error", None) or ""
                 ) or f"(stopped: {response.stopped_reason})"
@@ -125,7 +160,11 @@ class PeerAgentManager:
                 agent.last_result = f"Peer agent error: {e}"
                 agent.status = "error"
                 continue
-            agent.status = "idle"
+            agent.status = (
+                "needs_approval"
+                if response.stopped_reason == "needs_approval" and agent.pending_approvals
+                else "idle"
+            )
         agent.status = "closed"
         agent.idle_event.set()
 
@@ -135,6 +174,11 @@ class PeerAgentManager:
             raise KeyError(f"No peer agent matching {target!r}")
         if agent.status == "closed":
             raise RuntimeError(f"Peer agent '{agent.task_name}' is closed.")
+        if agent.status == "needs_approval" and not interrupt:
+            raise RuntimeError(
+                f"Peer agent '{agent.task_name}' is waiting for approval. "
+                "Approve or reject it before sending more input."
+            )
         if agent.status == "running" and not interrupt:
             # Steer the live run: lands between the peer's tool calls.
             agent.loop.steer(message)
@@ -158,16 +202,71 @@ class PeerAgentManager:
             return {
                 "agent_id": agent.agent_id,
                 "task_name": agent.task_name,
+                "session_id": agent.session_id,
                 "status": agent.status,
                 "done": False,
                 "result": "",
+                "pending_approvals": [dict(item) for item in agent.pending_approvals],
             }
         return {
             "agent_id": agent.agent_id,
             "task_name": agent.task_name,
+            "session_id": agent.session_id,
             "status": agent.status,
             "done": True,
             "result": agent.last_result,
+            "pending_approvals": [dict(item) for item in agent.pending_approvals],
+        }
+
+    async def approve(self, target: str, index: int = 0, always: bool = False) -> Dict[str, Any]:
+        agent = self.resolve(target)
+        if agent is None:
+            raise KeyError(f"No peer agent matching {target!r}")
+        if not agent.pending_approvals:
+            raise RuntimeError(f"Peer agent '{agent.task_name}' has no pending approval.")
+        response = await _approve_loop_pending(agent.loop, index=index, always=always)
+        agent.pending_approvals = _pending_approvals(agent.loop)
+        agent.last_result = response.content or response.error or ""
+        agent.status = "needs_approval" if agent.pending_approvals else "idle"
+        agent.idle_event.set()
+        return {
+            "agent_id": agent.agent_id,
+            "task_name": agent.task_name,
+            "session_id": agent.session_id,
+            "status": agent.status,
+            "result": agent.last_result,
+            "pending_approvals": [dict(item) for item in agent.pending_approvals],
+        }
+
+    async def reject(
+        self,
+        target: str,
+        index: int = 0,
+        message: str | None = None,
+        always: bool = False,
+    ) -> Dict[str, Any]:
+        agent = self.resolve(target)
+        if agent is None:
+            raise KeyError(f"No peer agent matching {target!r}")
+        if not agent.pending_approvals:
+            raise RuntimeError(f"Peer agent '{agent.task_name}' has no pending approval.")
+        response = await _reject_loop_pending(
+            agent.loop,
+            index=index,
+            message=message,
+            always=always,
+        )
+        agent.pending_approvals = _pending_approvals(agent.loop)
+        agent.last_result = response.content or response.error or ""
+        agent.status = "needs_approval" if agent.pending_approvals else "idle"
+        agent.idle_event.set()
+        return {
+            "agent_id": agent.agent_id,
+            "task_name": agent.task_name,
+            "session_id": agent.session_id,
+            "status": agent.status,
+            "result": agent.last_result,
+            "pending_approvals": [dict(item) for item in agent.pending_approvals],
         }
 
     async def close(self, target: str) -> bool:
@@ -187,6 +286,92 @@ class PeerAgentManager:
     async def close_all(self) -> None:
         for agent_id in list(self._agents):
             await self.close(agent_id)
+
+
+def _pending_approvals(loop: Any) -> List[Dict[str, Any]]:
+    pending = getattr(loop, "_pending_approval", None)
+    if not pending:
+        return []
+    return [
+        {
+            "index": 0,
+            "tool_name": pending.get("tool_name"),
+            "arguments": dict(pending.get("arguments") or {}),
+            "tool_call_id": pending.get("tool_call_id"),
+        }
+    ]
+
+
+async def _approve_loop_pending(loop: Any, index: int = 0, always: bool = False) -> Any:
+    if index != 0 or not getattr(loop, "_pending_approval", None):
+        raise RuntimeError("No pending approval to approve")
+    pending = dict(loop._pending_approval)
+    tool_name = str(pending.get("tool_name") or "")
+    arguments = dict(pending.get("arguments") or {})
+    tool_call_id = pending.get("tool_call_id")
+    if tool_call_id:
+        loop._approved_tool_call_ids.add(str(tool_call_id))
+    if always and getattr(loop.config, "harness_spec", None) is not None:
+        from ..harness.approval_memory import remember_approval_decision
+
+        remember_approval_decision(
+            loop.config.harness_spec,
+            tool_name=tool_name,
+            arguments=arguments,
+            action="allow",
+        )
+    loop._pending_approval = None
+    result = await loop._execute_tool(
+        tool_name,
+        arguments,
+        tool_call_id=str(tool_call_id) if tool_call_id else None,
+    )
+    if not always and tool_call_id:
+        loop._approved_tool_call_ids.discard(str(tool_call_id))
+    if loop.on_tool_result:
+        loop.on_tool_result(tool_name, result)
+    from .loop import AgentResponse
+
+    return AgentResponse(
+        content=result.to_message(),
+        messages=[],
+        tool_calls_made=1 if result.success else 0,
+        iterations=0,
+        stopped_reason="complete" if result.success else "error",
+        error=result.error,
+    )
+
+
+async def _reject_loop_pending(
+    loop: Any,
+    index: int = 0,
+    message: str | None = None,
+    always: bool = False,
+) -> Any:
+    if index != 0 or not getattr(loop, "_pending_approval", None):
+        raise RuntimeError("No pending approval to reject")
+    pending = dict(loop._pending_approval)
+    loop._pending_approval = None
+    tool_name = str(pending.get("tool_name") or "")
+    if always and getattr(loop.config, "harness_spec", None) is not None:
+        from ..harness.approval_memory import remember_approval_decision
+
+        remember_approval_decision(
+            loop.config.harness_spec,
+            tool_name=tool_name,
+            arguments=dict(pending.get("arguments") or {}),
+            action="deny",
+        )
+    from .loop import AgentResponse
+
+    reason = message or f"Permission rejected for tool: {tool_name}"
+    return AgentResponse(
+        content=reason,
+        messages=[],
+        tool_calls_made=0,
+        iterations=0,
+        stopped_reason="complete",
+    )
 
 
 __all__ = ["MAX_PEER_AGENTS", "PeerAgent", "PeerAgentManager"]

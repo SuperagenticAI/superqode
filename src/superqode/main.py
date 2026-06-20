@@ -1726,6 +1726,34 @@ def harness_import_omnigent(agent_yaml, output, name, force):
     )
 
 
+@harness.command("import-agent")
+@click.argument("agent_yaml", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=Path("harness.yaml"),
+    show_default=True,
+    help="Harness spec file to write",
+)
+@click.option("--name", default=None, help="Override the generated HarnessSpec name")
+@click.option("--force", is_flag=True, help="Overwrite an existing spec file")
+def harness_import_agent(agent_yaml, output, name, force):
+    """Compile a concise SuperQode agent.yaml into a HarnessSpec."""
+    from superqode.harness import import_agent_yaml, load_harness_spec
+
+    if output.exists() and not force:
+        raise click.ClickException(f"{output} already exists. Use --force to overwrite.")
+    written = import_agent_yaml(agent_yaml, output=output, name=name)
+    spec = load_harness_spec(written)
+    click.echo(f"Imported SuperQode agent: {agent_yaml}")
+    click.echo(f"Created {written}")
+    click.echo(
+        f"Harness: {spec.name} "
+        f"(runtime={spec.runtime.backend}, workflow={spec.workflow.mode.value})"
+    )
+
+
 @harness.command("validate")
 @click.argument("spec_arg", required=False, type=click.Path(exists=True, path_type=Path))
 @click.option(

@@ -100,6 +100,163 @@ executor:
     assert spec.agents[0].system_prompt is None
 
 
+def test_omnigent_importer_maps_current_mcp_skills_and_legacy_profile():
+    spec = omnigent_agent_to_harness_spec(
+        {
+            "name": "current_agent",
+            "prompt": "Use the declared tools.",
+            "skills": ["claude-api", "mlflow-onboarding"],
+            "executor": {
+                "harness": "open-responses",
+                "model": "databricks-gpt-5-5",
+                "profile": "legacy-profile",
+            },
+            "tools": {
+                "docs": {
+                    "type": "mcp",
+                    "url": "https://example.com/mcp",
+                    "headers": {"Authorization": "Bearer ${TOKEN}"},
+                    "tools": ["search_docs"],
+                },
+                "open_in_editor": {
+                    "type": "function",
+                    "runtime": "client",
+                    "description": "Open a file in the user's editor.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"path": {"type": "string"}},
+                        "required": ["path"],
+                    },
+                },
+            },
+        }
+    )
+
+    assert spec.runtime.backend == "openai-agents"
+    assert spec.runtime.config["mcp_servers"]["docs"]["url"] == "https://example.com/mcp"
+    assert spec.model_policy.profile == "legacy-profile"
+    assert spec.model_policy.config["legacy_executor_profile"] == "legacy-profile"
+    assert spec.agents[0].tools == ("docs", "open_in_editor")
+    assert spec.agents[0].skills == ("claude-api", "mlflow-onboarding")
+    assert spec.agents[0].config["skills_filter"] == ["claude-api", "mlflow-onboarding"]
+    assert spec.agents[0].config["mcp_servers"]["docs"]["tools"] == ["search_docs"]
+    assert spec.metadata["omnigent"]["skills"] == ["claude-api", "mlflow-onboarding"]
+
+
+def test_omnigent_importer_preserves_newer_sandbox_controls():
+    spec = omnigent_agent_to_harness_spec(
+        {
+            "name": "sandbox_agent",
+            "prompt": "Inspect files safely.",
+            "executor": {"model": "databricks-gpt-5-4-mini"},
+            "os_env": {
+                "type": "caller_process",
+                "cwd": ".",
+                "sandbox": {
+                    "type": "darwin_seatbelt",
+                    "read_paths": ["/opt/reference"],
+                    "env_passthrough": ["AWS_PROFILE"],
+                    "egress_rules": ["GET httpbin.org/get"],
+                },
+            },
+        }
+    )
+
+    assert spec.execution_policy.allow_read is True
+    assert spec.execution_policy.allow_write is False
+    assert spec.execution_policy.allow_shell is True
+    assert spec.execution_policy.allow_network is True
+    assert spec.execution_policy.config["omnigent_sandbox"]["egress_rules"] == [
+        "GET httpbin.org/get"
+    ]
+
+
+def test_omnigent_importer_preserves_richer_agent_tool_config(tmp_path: Path):
+    (tmp_path / "WORKER.md").write_text("Worker instructions", encoding="utf-8")
+
+    spec = omnigent_agent_to_harness_spec(
+        {
+            "name": "supervisor",
+            "prompt": "Coordinate specialists.",
+            "executor": {"model": "parent-model"},
+            "tools": {
+                "search_web": {
+                    "type": "function",
+                    "callable": "tools.search_web",
+                },
+                "worker": {
+                    "type": "agent",
+                    "description": "Investigate and implement.",
+                    "instructions": "WORKER.md",
+                    "executor": {
+                        "harness": "open-responses",
+                        "model": "child-model",
+                        "auth": {"type": "databricks", "profile": "child-profile"},
+                        "base_url": "https://example.cloud.databricks.com",
+                        "reasoning": "high",
+                        "temperature": 0.2,
+                        "context_window": 200000,
+                    },
+                    "skills": "none",
+                    "max_iterations": 7,
+                    "pass_history": True,
+                    "os_env": {
+                        "type": "caller_process",
+                        "fork": True,
+                        "sandbox": {"type": "none"},
+                    },
+                    "tools": {
+                        "search_web": "inherit",
+                        "docs": {
+                            "type": "mcp",
+                            "url": "https://example.com/mcp",
+                            "tools": ["lookup"],
+                        },
+                    },
+                    "output_schema": {
+                        "type": "object",
+                        "properties": {"summary": {"type": "string"}},
+                    },
+                    "policies": {
+                        "gate_shell": {
+                            "type": "function",
+                            "handler": "policies.gate_shell",
+                        }
+                    },
+                },
+            },
+        },
+        source_path=tmp_path / "agent.yaml",
+    )
+
+    worker = spec.agents[1]
+    assert worker.id == "worker"
+    assert worker.model == "child-model"
+    assert worker.system_prompt is None
+    assert worker.tools == ("search_web", "docs")
+    assert worker.skills == ()
+    assert worker.max_iterations == 7
+    assert worker.output_schema == {
+        "type": "object",
+        "properties": {"summary": {"type": "string"}},
+    }
+    assert worker.config["executor_harness"] == "open-responses"
+    assert worker.config["runtime_backend"] == "openai-agents"
+    assert worker.config["model_profile"] == "child-profile"
+    assert worker.config["model_config"]["auth"]["profile"] == "child-profile"
+    assert worker.config["model_config"]["base_url"] == "https://example.cloud.databricks.com"
+    assert worker.config["model_config"]["reasoning"] == "high"
+    assert worker.config["model_config"]["temperature"] == 0.2
+    assert worker.config["model_config"]["context_window"] == 200000
+    assert worker.config["pass_history"] is True
+    assert worker.config["os_env"]["fork"] is True
+    assert worker.config["instruction_files"] == ("WORKER.md",)
+    assert worker.config["omnigent_tools"]["search_web"] == "inherit"
+    assert worker.config["mcp_servers"]["docs"]["url"] == "https://example.com/mcp"
+    assert worker.config["skills_filter"] == "none"
+    assert worker.config["omnigent"]["policies"]["gate_shell"]["handler"] == "policies.gate_shell"
+
+
 def test_import_omnigent_agent_writes_loadable_harness(tmp_path: Path):
     source = tmp_path / "agent.yaml"
     output = tmp_path / "harness.yaml"

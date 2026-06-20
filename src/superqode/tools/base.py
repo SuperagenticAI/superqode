@@ -540,6 +540,9 @@ class ToolRegistry:
         registry.register(WaitAgentTool())
         registry.register(ListAgentsTool())
         registry.register(CloseAgentTool())
+        from .harness_agent_session import AgentSessionTool
+
+        registry.register(AgentSessionTool())
 
         # Permission escalation (model asks, user decides)
         from .request_permissions_tool import RequestPermissionsTool

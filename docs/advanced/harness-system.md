@@ -239,6 +239,25 @@ executor, model, prompt, instruction file, OS access, tools, and sub-agent field
 into SuperQode's spec, then preserves Omnigent-only fields under `metadata.omnigent`.
 See [Omnigent Compatibility](omnigent-compat.md).
 
+Use `harness import-agent` when you want that concise authoring style without
+depending on Omnigent. It compiles a SuperQode `agent.yaml` with `executor`,
+`tools`, `skills`, `os_env`, policies, and agent-valued tools into a normal
+`HarnessSpec`, preserving source details under `metadata.agent`.
+
+Harness-local MCP servers can be declared directly under
+`runtime.config.mcp_servers` or via `import-agent` tool declarations. During a
+harness run, SuperQode connects those inline MCP servers, exposes discovered
+tools as `mcp_<server>_<tool>`, and records MCP list/error events in the run
+ledger.
+
+Harness child agents declared with Omnigent-style `tools.<name>.type: agent`
+compile into delegated `AgentSpec`s. The builtin runtime exposes them through
+`agent_session`, which starts persistent named child sessions, sends follow-up
+input, resumes saved child context by `session_id`, waits for results, lists
+active sessions, approves or rejects pending child tool approvals, and closes
+them. Child sessions use the declared child agent's prompt, model, tool filter,
+and iteration limit.
+
 Use `harness inbox` when you want durable prompt admission before execution. Inputs are written to the
 harness store first, then `harness drain` claims pending `queue` inputs for one session and marks each input
 `done` or `failed` with the resulting run id. `--delivery admit-only` stages an input without letting a drain

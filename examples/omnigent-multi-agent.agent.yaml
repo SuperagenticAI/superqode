@@ -1,0 +1,69 @@
+name: omnigent_multi_agent
+description: Omnigent-style orchestrator with researcher, coder, and reviewer child agents.
+prompt: |
+  You are the orchestrator. Break work into research, coding, and review tasks.
+  Use agent_session with stable session_id values for long-running child work.
+executor:
+  harness: builtin
+  model: gpt-4o-mini
+skills:
+  - repo-navigation
+tools:
+  docs:
+    type: mcp
+    url: https://example.com/mcp
+    tools: [search_docs]
+
+  researcher:
+    type: agent
+    description: Investigate repository context and external docs.
+    prompt: |
+      You are the researcher. Summarize relevant files, APIs, docs, risks, and
+      open questions. Do not edit code.
+    executor:
+      model: gpt-4o-mini
+    skills:
+      - repo-navigation
+    tools:
+      repo_search: inherit
+      docs:
+        type: mcp
+        url: https://example.com/mcp
+        tools: [search_docs]
+    max_iterations: 8
+
+  coder:
+    type: agent
+    description: Implement focused repository changes.
+    prompt: |
+      You are the coder. Read before editing, make small changes, and run the
+      narrowest useful verification command.
+    executor:
+      model: gpt-4o-mini
+    skills:
+      - implementation
+    tools:
+      read_file: inherit
+      edit_file: inherit
+      patch: inherit
+      grep: inherit
+      bash: inherit
+    pass_history: true
+    max_iterations: 10
+
+  reviewer:
+    type: agent
+    description: Review changes for correctness, tests, and risk.
+    prompt: |
+      You are the reviewer. Prioritize concrete bugs, regressions, missing tests,
+      and operational risks. Keep feedback specific and actionable.
+    executor:
+      model: gpt-4o-mini
+    skills:
+      - code-review
+    tools:
+      read_file: inherit
+      grep: inherit
+      repo_search: inherit
+    pass_history: true
+    max_iterations: 8

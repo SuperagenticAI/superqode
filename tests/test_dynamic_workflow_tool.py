@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from superqode.agent.loop import AgentResponse
-from superqode.harness import HarnessBackendResult, HarnessSpec, MemoryHarnessStore
+from superqode.harness import HarnessBackendResult, HarnessSpec, MemoryHarnessStore, RecursionSpec
 from superqode.tools import DynamicWorkflowScriptTool, DynamicWorkflowTool, ToolContext, ToolRegistry
 from superqode.tools.dynamic_workflow import compile_dynamic_workflow_script
 
@@ -65,7 +65,7 @@ async def test_dynamic_workflow_runs_kernel_child_steps(monkeypatch, tmp_path: P
     backend = FakeDynamicBackend()
     monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda name: backend)
     store = MemoryHarnessStore()
-    spec = HarnessSpec(name="dynamic")
+    spec = HarnessSpec(name="dynamic", recursion=RecursionSpec(enabled=True))
     parent = store.start_run(
         session_id="dynamic-parent",
         spec=spec,
@@ -136,7 +136,7 @@ async def test_dynamic_workflow_script_executes_compiled_plan(
     backend = FakeDynamicBackend()
     monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda name: backend)
     store = MemoryHarnessStore()
-    spec = HarnessSpec(name="dynamic-script")
+    spec = HarnessSpec(name="dynamic-script", recursion=RecursionSpec(enabled=True))
     parent = store.start_run(
         session_id="dynamic-script-parent",
         spec=spec,
@@ -186,7 +186,7 @@ async def test_dynamic_workflow_step_can_fanout_context_handle(
         encoding="utf-8",
     )
     store = MemoryHarnessStore()
-    spec = HarnessSpec(name="dynamic")
+    spec = HarnessSpec(name="dynamic", recursion=RecursionSpec(enabled=True))
     parent = store.start_run(
         session_id="dynamic-fanout-parent",
         spec=spec,

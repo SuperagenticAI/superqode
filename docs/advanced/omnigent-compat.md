@@ -47,9 +47,15 @@ Use `--force` only when you intentionally want to replace an existing output fil
 | `instructions: AGENTS.md` | `ContextSpec.instruction_files` |
 | `executor.harness` | `RuntimeSpec.backend` |
 | `executor.model` | `ModelPolicySpec.primary` |
-| `executor.auth` | `ModelPolicySpec.config.auth` |
+| `executor.auth` | `ModelPolicySpec.config.auth` and Databricks profile |
+| legacy `executor.profile` | `ModelPolicySpec.profile` and preserved config |
 | non-agent `tools` | primary agent tool names and preserved tool metadata |
-| `tools.<name>.type: agent` | child `AgentSpec` with orchestrator workflow |
+| `tools.<name>.type: mcp` | runtime/agent `mcp_servers` config, exposed as harness-local MCP tools |
+| `tools.<name>.type: agent` | child `AgentSpec`, orchestrator workflow, builtin `agent_session` target, and parent-routed child approvals |
+| child `executor`, `skills`, `tools`, `instructions`, `os_env` | preserved on the child `AgentSpec`, including inherited tool names and child MCP servers |
+| child `output_schema`, `policies`, `params`, timers | preserved in child `AgentSpec.config.omnigent` |
+| `skills: [name, ...]` | primary `AgentSpec.skills` and preserved skill filter |
+| `skills: all` / `none` | preserved as the Omnigent skill filter |
 | `os_env.sandbox` | `ExecutionPolicySpec` read/write/shell/network settings |
 | `policies`, `params`, `terminals`, timers | preserved in `metadata.omnigent` |
 
@@ -65,6 +71,7 @@ Common Omnigent harness names are mapped to SuperQode runtime backend names:
 | --- | --- |
 | `claude-sdk` | `claude-agent-sdk` |
 | `openai-agents` | `openai-agents` |
+| `open-responses` | `openai-agents` |
 | `codex` | `codex-sdk` |
 | `codex-native` | `codex-sdk` |
 | `claude-native` | `claude-agent-sdk` |
@@ -89,4 +96,3 @@ bring into SuperQode natively are:
 
 Those are product and architecture ideas to adopt directly in SuperQode, not a
 reason to make Omnigent the controlling runtime.
-

@@ -41,10 +41,16 @@ recursion:
   max_children: 6
   max_parallel: 2
   max_wall_seconds: 600
+  max_budget: 6
   child_model: utility-coder
   child_sandbox: docker
   write_policy: approval
 ```
+
+`recursion.enabled` is a hard gate for harness-backed child runs. The harness
+spec also caps depth, children, parallelism, wall-clock time, spawn-unit budget,
+child model, child sandbox, and write policy. Tool calls may request lower
+limits, but cannot raise above the spec.
 
 The first implementation exposes two local tools:
 
@@ -236,9 +242,10 @@ for route in routes:
 FINAL(summarize(findings))
 ```
 
-This tier depends on the local `spawn_harness` tool, context handles, budget
-governance, and recursive replay. It should not ship before those foundations
-are tested.
+The shipped dynamic workflow path is the restricted `dynamic_workflow_script`
+DSL above. A fuller Monty REPL runtime, where the model writes a longer
+orchestration program with injected `spawn_harness(...)`, is deferred until
+there is demand beyond the bounded DSL.
 
 ## Constraints
 

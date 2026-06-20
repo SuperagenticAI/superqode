@@ -29,6 +29,7 @@ recursion:
   max_children: 8
   max_parallel: 2
   max_wall_seconds: 600
+  max_budget: 8
   child_model: qwen3:8b
   child_sandbox: docker
   write_policy: deny

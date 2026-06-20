@@ -18,6 +18,7 @@ from superqode.harness import (
     ModelPolicySpec,
     OpenAIAgentsHarnessBackend,
     PydanticAIHarnessBackend,
+    RuntimeSpec,
     RuntimeHarnessBackend,
     backend_capabilities,
     create_harness_backend,
@@ -25,6 +26,8 @@ from superqode.harness import (
     inspect_harness_backend,
     known_harness_backend_names,
 )
+from superqode.harness.mcp_bridge import HarnessMCPRuntime, harness_mcp_server_configs
+from superqode.providers.gateway.base import ToolDefinition
 
 
 class FakeRuntime:
@@ -286,6 +289,119 @@ async def test_runtime_harness_backend_applies_agent_step_policy(monkeypatch, tm
     assert created["kwargs"]["config"].model == "qwen3:4b"
     assert created["kwargs"]["config"].max_iterations == 2
     assert [tool.name for tool in created["kwargs"]["tools"].list()] == ["read_file"]
+
+
+@pytest.mark.asyncio
+async def test_runtime_harness_backend_passes_inline_mcp_tools(monkeypatch, tmp_path):
+    from superqode.harness import HarnessSpec
+
+    created = {}
+    mcp_runtime = HarnessMCPRuntime(
+        tools=[
+            ToolDefinition(
+                name="mcp_docs_search",
+                description="[MCP:docs] Search docs",
+                parameters={"type": "object", "properties": {}},
+            )
+        ]
+    )
+
+    async def fake_create_harness_mcp_runtime(spec):
+        return mcp_runtime
+
+    def fake_create_runtime(name, **kwargs):
+        created["kwargs"] = kwargs
+        return FakeRuntime(**kwargs)
+
+    monkeypatch.setattr("superqode.harness.backends.runtime.create_runtime", fake_create_runtime)
+    monkeypatch.setattr(
+        "superqode.harness.backends.runtime.create_harness_mcp_runtime",
+        fake_create_harness_mcp_runtime,
+    )
+    spec = HarnessSpec(
+        name="mcp-harness",
+        runtime=RuntimeSpec(
+            config={
+                "mcp_servers": {
+                    "docs": {"url": "https://example.com/mcp"},
+                }
+            }
+        ),
+    )
+    backend = RuntimeHarnessBackend("builtin")
+    request = HarnessBackendRequest(
+        spec=spec,
+        prompt="search",
+        provider="openai",
+        model="gpt-4o-mini",
+        working_directory=tmp_path,
+        session_id="s",
+    )
+
+    result = await backend.run(request)
+
+    assert result.runtime == "builtin"
+    assert created["kwargs"]["mcp_tools"] == mcp_runtime.tools
+    assert created["kwargs"]["mcp_executor"] == mcp_runtime.execute
+    assert result.metadata["events"][0].data["mcp_tools"] == 1
+    assert "mcp_list_tools" in [event.type for event in result.metadata["events"]]
+
+
+def test_harness_mcp_server_configs_normalizes_inline_servers():
+    from superqode.harness import HarnessSpec
+    from superqode.mcp.config import MCPHttpConfig, MCPStdioConfig
+
+    spec = HarnessSpec(
+        name="mcp-harness",
+        runtime=RuntimeSpec(
+            config={
+                "mcp_servers": {
+                    "docs": {
+                        "url": "https://example.com/mcp",
+                        "headers": {"Authorization": "Bearer ${TOKEN}"},
+                    },
+                    "local": {
+                        "command": "uvx",
+                        "args": ["mcp-server-example"],
+                        "env": {"DEBUG": "1"},
+                    },
+                }
+            }
+        ),
+    )
+
+    servers = harness_mcp_server_configs(spec)
+
+    assert set(servers) == {"docs", "local"}
+    assert isinstance(servers["docs"].config, MCPHttpConfig)
+    assert servers["docs"].config.url == "https://example.com/mcp"
+    assert servers["docs"].config.headers == {"Authorization": "Bearer ${TOKEN}"}
+    assert isinstance(servers["local"].config, MCPStdioConfig)
+    assert servers["local"].config.command == "uvx"
+    assert servers["local"].config.args == ["mcp-server-example"]
+
+
+def test_doctor_accepts_inline_mcp_servers_without_config_file():
+    from superqode.harness import HarnessSpec
+    from superqode.harness.diagnostics import doctor_harness
+
+    spec = HarnessSpec(
+        name="mcp-harness",
+        runtime=RuntimeSpec(
+            config={
+                "mcp_servers": {
+                    "docs": {"url": "https://example.com/mcp"},
+                }
+            }
+        ),
+    )
+
+    report = doctor_harness(spec)
+    mcp_check = next(check for check in report.checks if check.name == "mcp")
+
+    assert mcp_check.status == "ok"
+    assert mcp_check.data["servers"] == ["docs"]
+    assert mcp_check.data["fix"] == "No action needed."
 
 
 @pytest.mark.asyncio

@@ -29,6 +29,7 @@ superqode harness COMMAND [OPTIONS]
 | `optimize` | Export and optionally run a meta-harness optimization project |
 | `run` | Run a task through a spec |
 | `registry` | Local publish/list/install hub for harness specs |
+| `import-agent` | Compile concise SuperQode `agent.yaml` into a spec |
 | `import-omnigent` | Convert an Omnigent `agent.yaml` into a spec |
 | `runs` | List persisted runs |
 | `events` | Normalized events for a run |
@@ -114,6 +115,68 @@ Convert an Omnigent `agent.yaml` into a SuperQode harness spec.
 ```bash
 superqode harness import-omnigent agent.yaml --output harness.yaml
 ```
+
+| Option | Description |
+| --- | --- |
+| `-o, --output PATH` | Spec file to write (default `harness.yaml`) |
+| `--name TEXT` | Override the generated spec name |
+| `--force` | Overwrite an existing file |
+
+### `harness import-agent`
+
+Compile a concise SuperQode `agent.yaml` into a full `HarnessSpec`. The authoring
+shape intentionally supports the useful Omnigent-style fields SuperQode is
+adopting: `executor`, `tools`, `skills`, `os_env`, `policies`, and agent-valued
+tools.
+
+```bash
+superqode harness import-agent agent.yaml --output harness.yaml
+```
+
+Example:
+
+```yaml
+name: coding_supervisor
+prompt: Coordinate coding work through named tools and subagents.
+executor:
+  harness: codex
+  model: databricks-gpt-5-5
+skills:
+  - code-review
+tools:
+  github:
+    type: mcp
+    command: uvx
+    args: [github-mcp-server]
+  reviewer:
+    type: agent
+    prompt: Review proposed changes for correctness and tests.
+    executor:
+      harness: claude-sdk
+      model: claude-sonnet
+```
+
+MCP tool declarations are compiled into `runtime.config.mcp_servers`. Harness
+runtimes that support SuperQode's MCP bridge connect those servers for the run
+and expose discovered tools as `mcp_<server>_<tool>` tool calls.
+
+Agent tool declarations are compiled into child `AgentSpec`s. This is the
+SuperQode runtime surface for Omnigent-style `tools.<name>.type: agent` entries.
+In the builtin harness runtime, the parent gets the `agent_session` tool for
+persistent child sessions:
+
+```text
+agent_session(action="start", agent="reviewer", message="Review this diff", session_id="reviewer-main")
+agent_session(action="resume", agent="reviewer", session_id="reviewer-main")
+agent_session(action="send", agent="reviewer-main", message="Now check tests")
+agent_session(action="wait", agent="reviewer-main")
+agent_session(action="approve", agent="reviewer")
+agent_session(action="reject", agent="reviewer", message="Use a safer command")
+agent_session(action="close", agent="reviewer")
+```
+
+The `session_id` is optional on `start`; when supplied, another parent run can
+reattach to the child context later with `resume`.
 
 | Option | Description |
 | --- | --- |

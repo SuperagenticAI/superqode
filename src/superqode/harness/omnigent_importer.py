@@ -24,6 +24,7 @@ from .spec import (
 _HARNESS_BACKEND_MAP = {
     "claude-sdk": "claude-agent-sdk",
     "openai-agents": "openai-agents",
+    "open-responses": "openai-agents",
     "codex": "codex-sdk",
     "codex-native": "codex-sdk",
     "claude-native": "claude-agent-sdk",
@@ -73,6 +74,8 @@ def omnigent_agent_to_harness_spec(
     *,
     source_path: str | Path | None = None,
     name: str | None = None,
+    source_label: str = "omnigent",
+    metadata_key: str = "omnigent",
 ) -> HarnessSpec:
     """Convert an Omnigent agent mapping into a SuperQode HarnessSpec."""
     source = Path(source_path).expanduser() if source_path is not None else None
@@ -83,10 +86,18 @@ def omnigent_agent_to_harness_spec(
     harness_name = str(executor.get("harness") or "builtin").strip()
     runtime_backend = _HARNESS_BACKEND_MAP.get(harness_name, harness_name or "builtin")
     model = _string_or_none(executor.get("model"))
+    model_profile = _executor_profile(executor)
     instruction_files, system_prompt = _resolve_instructions(data, base_dir)
     tool_entries = _dict(data.get("tools"))
     main_tools = _tool_names(tool_entries)
-    subagents = _subagent_specs(tool_entries)
+    subagents = _subagent_specs(
+        tool_entries,
+        base_dir=base_dir,
+        source_label=source_label,
+        metadata_key=metadata_key,
+    )
+    skills_filter = _skills_filter(data.get("skills"))
+    mcp_servers = _mcp_servers(tool_entries)
     os_env = _dict(data.get("os_env"))
     execution_policy = _execution_policy(os_env, main_tools)
     agents = (
@@ -96,11 +107,14 @@ def omnigent_agent_to_harness_spec(
             model=model,
             system_prompt=system_prompt,
             tools=main_tools,
+            skills=tuple(skills_filter) if isinstance(skills_filter, list) else (),
             delegates_to=tuple(agent.id for agent in subagents),
             config={
-                "source": "omnigent",
+                "source": source_label,
                 "executor": executor,
-                **({"omnigent_tools": tool_entries} if tool_entries else {}),
+                **({"skills_filter": skills_filter} if skills_filter != "all" else {}),
+                **({f"{metadata_key}_tools": tool_entries} if tool_entries else {}),
+                **({"mcp_servers": mcp_servers} if mcp_servers else {}),
             },
         ),
         *subagents,
@@ -108,29 +122,44 @@ def omnigent_agent_to_harness_spec(
     workflow = WorkflowSpec(
         mode=WorkflowMode.ORCHESTRATOR if subagents else WorkflowMode.SINGLE,
         parallelism=max(1, int(data.get("parallelism") or len(subagents) or 1)),
-        config={"source": "omnigent"} if subagents else {},
+        config={"source": source_label} if subagents else {},
     )
 
     metadata: dict[str, Any] = {
-        "source": "omnigent",
-        "omnigent": {
+        "source": source_label,
+        metadata_key: {
             "name": omnigent_name,
             "executor_harness": harness_name,
             **({"source_path": str(source)} if source is not None else {}),
         },
     }
-    for key in ("policies", "params", "terminals", "async", "cancellable", "timers"):
+    for key in (
+        "policies",
+        "params",
+        "terminals",
+        "async",
+        "cancellable",
+        "timers",
+        "skills",
+    ):
         if key in data:
-            metadata["omnigent"][key] = data[key]
+            metadata[metadata_key][key] = data[key]
 
     return HarnessSpec(
         name=spec_name,
         description=str(data.get("description") or f"Imported from Omnigent agent {omnigent_name}"),
         flavor=HarnessFlavor.CODING,
-        runtime=RuntimeSpec(backend=runtime_backend, config={"omnigent_harness": harness_name}),
+        runtime=RuntimeSpec(
+            backend=runtime_backend,
+            config={
+                f"{metadata_key}_harness": harness_name,
+                **({"mcp_servers": mcp_servers} if mcp_servers else {}),
+            },
+        ),
         model_policy=ModelPolicySpec(
             primary=model,
-            config={"auth": executor.get("auth")} if isinstance(executor.get("auth"), dict) else {},
+            profile=model_profile,
+            config=_model_policy_config(executor),
         ),
         execution_policy=execution_policy,
         agents=agents,
@@ -173,7 +202,7 @@ def _execution_policy(os_env: dict[str, Any], tools: tuple[str, ...]) -> Executi
     has_os = True
     allow_shell = has_os
     allow_write = bool(sandbox_spec.get("write_paths") or sandbox_type == "none")
-    allow_network = bool(sandbox_spec.get("allow_network", False))
+    allow_network = bool(sandbox_spec.get("allow_network", False) or sandbox_spec.get("egress_rules"))
     return ExecutionPolicySpec(
         sandbox=sandbox,
         allow_read=True,
@@ -184,37 +213,77 @@ def _execution_policy(os_env: dict[str, Any], tools: tuple[str, ...]) -> Executi
     )
 
 
-def _tool_names(tools: dict[str, Any]) -> tuple[str, ...]:
+def _tool_names(tools: dict[str, Any], *, include_inherit: bool = False) -> tuple[str, ...]:
     names: list[str] = []
     for name, spec in tools.items():
         if _is_subagent_tool(spec):
             continue
         if str(spec).strip().lower() in {"inherit", "self"}:
+            if include_inherit:
+                names.append(str(name))
             continue
         names.append(str(name))
     return tuple(names)
 
 
-def _subagent_specs(tools: dict[str, Any]) -> tuple[AgentSpec, ...]:
+def _subagent_specs(
+    tools: dict[str, Any],
+    *,
+    base_dir: Path | None = None,
+    source_label: str = "omnigent",
+    metadata_key: str = "omnigent",
+) -> tuple[AgentSpec, ...]:
     agents: list[AgentSpec] = []
+    resolved_base_dir = base_dir or Path.cwd()
     for name, raw in tools.items():
         spec = _dict(raw)
         if not _is_subagent_tool(spec):
             continue
         executor = _dict(spec.get("executor"))
+        skills_filter = _skills_filter(spec.get("skills"))
+        instruction_files, system_prompt = _resolve_instructions(spec, resolved_base_dir)
+        child_tools = _dict(spec.get("tools"))
+        child_mcp_servers = _mcp_servers(child_tools)
+        preserved: dict[str, Any] = {}
+        for key in (
+            "policies",
+            "params",
+            "terminals",
+            "async",
+            "cancellable",
+            "timers",
+            "output_schema",
+        ):
+            if key in spec:
+                preserved[key] = spec[key]
         agents.append(
             AgentSpec(
                 id=_safe_id(str(name)),
                 role=str(spec.get("description") or name),
                 model=_string_or_none(executor.get("model")),
-                system_prompt=_string_or_none(spec.get("prompt")),
-                tools=_tool_names(_dict(spec.get("tools"))),
-                max_iterations=_int_or_none(spec.get("max_sessions")),
+                system_prompt=system_prompt,
+                tools=_tool_names(child_tools, include_inherit=True),
+                skills=tuple(skills_filter) if isinstance(skills_filter, list) else (),
+                max_iterations=_int_or_none(spec.get("max_iterations"))
+                or _int_or_none(spec.get("max_sessions")),
+                output_schema=_dict(spec.get("output_schema")) or None,
                 config={
-                    "source": "omnigent",
+                    "source": source_label,
                     "executor": executor,
+                    "executor_harness": _string_or_none(executor.get("harness")),
+                    "runtime_backend": _HARNESS_BACKEND_MAP.get(
+                        str(executor.get("harness") or "").strip(),
+                        _string_or_none(executor.get("harness")),
+                    ),
+                    "model_profile": _executor_profile(executor),
+                    "model_config": _model_policy_config(executor),
                     "pass_history": bool(spec.get("pass_history", False)),
                     "os_env": spec.get("os_env"),
+                    **({"instruction_files": instruction_files} if instruction_files else {}),
+                    **({f"{metadata_key}_tools": child_tools} if child_tools else {}),
+                    **({"mcp_servers": child_mcp_servers} if child_mcp_servers else {}),
+                    **({"skills_filter": skills_filter} if skills_filter != "all" else {}),
+                    **({metadata_key: preserved} if preserved else {}),
                 },
             )
         )
@@ -223,6 +292,56 @@ def _subagent_specs(tools: dict[str, Any]) -> tuple[AgentSpec, ...]:
 
 def _is_subagent_tool(value: Any) -> bool:
     return isinstance(value, dict) and value.get("type") == "agent"
+
+
+def _mcp_servers(tools: dict[str, Any]) -> dict[str, Any]:
+    servers: dict[str, Any] = {}
+    for name, raw in tools.items():
+        spec = _dict(raw)
+        if spec.get("type") != "mcp":
+            continue
+        servers[str(name)] = {
+            key: value
+            for key, value in spec.items()
+            if key in {"command", "args", "url", "headers", "env", "tools", "description"}
+        }
+    return servers
+
+
+def _executor_profile(executor: dict[str, Any]) -> str | None:
+    auth = executor.get("auth")
+    if isinstance(auth, dict):
+        profile = _string_or_none(auth.get("profile"))
+        if profile:
+            return profile
+    return _string_or_none(executor.get("profile"))
+
+
+def _model_policy_config(executor: dict[str, Any]) -> dict[str, Any]:
+    config: dict[str, Any] = {}
+    auth = executor.get("auth")
+    if isinstance(auth, dict):
+        config["auth"] = auth
+    legacy_profile = _string_or_none(executor.get("profile"))
+    if legacy_profile:
+        config["legacy_executor_profile"] = legacy_profile
+    for key in ("base_url", "reasoning", "temperature", "context_window"):
+        if key in executor:
+            config[key] = executor[key]
+    return config
+
+
+def _skills_filter(value: Any) -> str | list[str]:
+    if value is None:
+        return "all"
+    if isinstance(value, str):
+        text = value.strip()
+        if text in {"all", "none"}:
+            return text
+        return "all"
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return "all"
 
 
 def _dict(value: Any) -> dict[str, Any]:

@@ -27,12 +27,15 @@ It enables:
 - `spawn_harness`
 - `dynamic_workflow`
 - `dynamic_workflow_script`
-- conservative recursion caps: depth 1, eight children, parallelism 2
+- conservative recursion caps: depth 1, eight children, parallelism 2,
+  eight spawn units, and a 600 second wall-clock cap
 - Docker sandboxing
 - file-backed observability
 
 The harness is read-only by default. That is intentional: prove recursive
 analysis first, then enable write tools only for specific coding tasks.
+Harness-backed recursion is also gated by `recursion.enabled`; child runs fail
+closed if a spec has not explicitly opted in.
 
 ## Eval Pack
 
@@ -70,7 +73,11 @@ superqode harness eval \
   --live
 ```
 
-Use JSON when you want the run id for automation:
+This is the live proof command for the local RLM integration. It requires an
+Ollama-compatible local model named `qwen3:8b` and Docker. If either dependency
+is missing, the command should fail before any remote service is contacted.
+
+Use JSON when you want score output for automation:
 
 ```bash
 superqode harness eval \
@@ -84,9 +91,27 @@ superqode harness eval \
   --json
 ```
 
+`harness eval --live` is the scoring path. It may use an in-memory run store, so
+the returned task `run_id` is not guaranteed to be replayable after the eval
+process exits.
+
+For a replayable proof, run the same task through the file-backed harness store:
+
+```bash
+superqode harness run \
+  --spec examples/harnesses/local-recursive-dynamic.yaml \
+  --provider ollama \
+  --model qwen3:8b \
+  --runtime builtin \
+  --sandbox docker \
+  --store file \
+  --prompt "Diagnose the root cause in src/superqode/data/eval_fixtures/ci-dynamic-root-cause.log using dynamic_workflow_script and context_handle. Return the ROOT_CAUSE line and identify downstream failures." \
+  --json
+```
+
 ## Inspect Replay
 
-After a run, use the returned `run_id`:
+After a file-backed `harness run`, use the returned `run_id`:
 
 ```bash
 superqode harness replay <run-id>

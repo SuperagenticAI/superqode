@@ -20,6 +20,7 @@ from .backends.registry import (
     inspect_harness_backend,
     known_harness_backend_names,
 )
+from .mcp_bridge import harness_mcp_server_configs
 from .model_policy import resolve_harness_model_policy
 from .sandbox import get_sandbox_capabilities
 from .spec import HarnessSpec, WorkflowMode
@@ -1524,6 +1525,31 @@ def _mcp_check(spec: HarnessSpec, root: Path) -> dict[str, Any]:
                 ),
             },
         }
+    inline_servers, inline_errors, inline_warnings = _inspect_inline_mcp_servers(spec)
+    if inline_servers:
+        summary["servers"] = sorted(set(summary["servers"]) | set(inline_servers))
+        summary["errors"] = inline_errors
+        summary["warnings"] = inline_warnings
+        return {
+            "status": "error" if inline_errors else "warning" if inline_warnings else "ok",
+            "message": (
+                "Inline MCP servers have blockers."
+                if inline_errors
+                else "Inline MCP servers have warnings."
+                if inline_warnings
+                else "Inline MCP servers are declared."
+            ),
+            "data": {
+                **summary,
+                "fix": (
+                    "Fix inline runtime.config.mcp_servers command or URL values."
+                    if inline_errors
+                    else "Review disabled or incomplete inline MCP server entries."
+                    if inline_warnings
+                    else "No action needed."
+                ),
+            },
+        }
     return {
         "status": "warning",
         "message": "MCP servers are declared but no config file is linked for readiness checks.",
@@ -1532,6 +1558,32 @@ def _mcp_check(spec: HarnessSpec, root: Path) -> dict[str, Any]:
             "fix": "Set runtime.config.mcp_config_path so doctor can validate MCP server commands.",
         },
     }
+
+
+def _inspect_inline_mcp_servers(spec: HarnessSpec) -> tuple[list[str], list[str], list[str]]:
+    servers = harness_mcp_server_configs(spec)
+    names: list[str] = []
+    errors: list[str] = []
+    warnings: list[str] = []
+    for server_id, server in servers.items():
+        names.append(server_id)
+        if not server.enabled:
+            warnings.append(f"{server_id} is disabled")
+            continue
+        config = server.config
+        if isinstance(config, MCPStdioConfig):
+            if not config.command:
+                errors.append(f"{server_id} stdio server is missing command")
+            elif shutil.which(config.command) is None:
+                warnings.append(f"{server_id} command not found on PATH: {config.command}")
+        elif isinstance(config, (MCPHttpConfig, MCPSSEConfig)):
+            if not config.url:
+                errors.append(f"{server_id} HTTP/SSE server is missing url")
+            elif not config.url.startswith(("http://", "https://")):
+                errors.append(f"{server_id} URL must start with http:// or https://")
+        else:
+            errors.append(f"{server_id} has unknown MCP transport")
+    return names, errors, warnings
 
 
 def _permission_check(spec: HarnessSpec) -> tuple[str, str, dict[str, Any]]:
