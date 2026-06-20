@@ -15,7 +15,7 @@ model_policy:
     provider: openai
     max_iterations: 12
 execution_policy:
-  sandbox: local
+  sandbox: docker
   approval_profile: balanced
   allow_read: true
   allow_write: true
@@ -43,6 +43,16 @@ agents:
       - grep
       - glob
       - repo_search
+      # Optional: install superqode[semantic], index once with ccc, then enable:
+      # - semantic_search
+      # Optional: inspect large files/logs/diffs by handle:
+      # - context_handle
+      # Optional: enable recursion policy, then use for bounded child fan-out:
+      # - spawn_harness
+      # Optional: execute a bounded dynamic plan over spawn_harness:
+      # - dynamic_workflow
+      # Optional: compile a restricted Python-like plan to dynamic_workflow:
+      # - dynamic_workflow_script
       - bash
       - todo_write
       - todo_read

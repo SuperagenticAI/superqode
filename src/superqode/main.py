@@ -2078,6 +2078,36 @@ def harness_eval(
         raise click.exceptions.Exit(2)
 
 
+@harness.command("eval-packs")
+@click.argument("pack", required=False)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_eval_packs(pack, json_output):
+    """List bundled HarnessSpec eval packs, or show one pack path."""
+    from superqode.harness import eval_pack_path, list_eval_packs
+
+    if pack:
+        path = eval_pack_path(pack)
+        payload = {"id": pack, "path": str(path)}
+        if json_output:
+            click.echo(json.dumps(payload, indent=2))
+        else:
+            click.echo(str(path))
+        return
+
+    payload = list_eval_packs()
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    if not payload:
+        click.echo("No bundled eval packs found.")
+        return
+    for item in payload:
+        click.echo(
+            f"{item['id']}  tasks={item['tasks']}  {item['description']}\n"
+            f"  {item['path']}"
+        )
+
+
 @harness.command("auto-bench")
 @click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
 @click.option("--tasks", "tasks_path", type=click.Path(exists=True, path_type=Path), default=None)
@@ -3231,6 +3261,75 @@ def harness_evidence(run_id, store_path, json_output):
     click.echo(render_harness_evidence(evidence))
 
 
+@harness.group("observability")
+def harness_observability():
+    """Inspect and export harness observability artifacts."""
+
+
+@harness_observability.command("status")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), default=None)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_observability_status(spec_path, json_output):
+    """Show local and optional external observability sink status."""
+    from superqode.harness import (
+        load_harness_spec,
+        observability_status,
+        render_observability_status,
+    )
+
+    spec = load_harness_spec(spec_path) if spec_path else None
+    rows = observability_status(spec)
+    if json_output:
+        click.echo(json.dumps(rows, indent=2))
+        return
+    click.echo(render_observability_status(rows))
+
+
+@harness_observability.command("export")
+@click.argument("run_id")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), default=None)
+@click.option(
+    "--store",
+    "store_path",
+    type=click.Path(path_type=Path),
+    default=Path(".superqode/sessions"),
+    show_default=True,
+    help="Harness store directory",
+)
+@click.option(
+    "--output",
+    "output_dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Output directory for JSON/JSONL observability artifacts",
+)
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_observability_export(run_id, spec_path, store_path, output_dir, json_output):
+    """Export a harness run tree to local JSONL and optional configured sinks."""
+    from superqode.harness import (
+        FileHarnessStore,
+        export_harness_observability,
+        load_harness_spec,
+        render_observability_export,
+    )
+
+    store = FileHarnessStore(store_path)
+    spec = load_harness_spec(spec_path) if spec_path else None
+    try:
+        payload = export_harness_observability(
+            store,
+            run_id,
+            output_dir=output_dir,
+            spec=spec,
+        )
+    except KeyError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    click.echo(render_observability_export(payload))
+
+
 @harness.command("replay")
 @click.argument("run_id")
 @click.option(
@@ -3705,22 +3804,13 @@ def sandbox():
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def sandbox_doctor(backend, json_output):
     """Show setup status for sandbox providers."""
-    from superqode.sandbox import get_sandbox_capabilities, sandbox_provider_status
-
-    backends = (
-        [backend]
-        if backend
-        else [
-            "docker",
-            "e2b",
-            "daytona",
-            "modal",
-            "vercel",
-            "runloop",
-            "agentcore",
-            "langsmith",
-        ]
+    from superqode.sandbox import (
+        get_sandbox_capabilities,
+        sandbox_provider_status,
+        supported_sandbox_backends,
     )
+
+    backends = [backend] if backend else supported_sandbox_backends(include_cloud=True)
     payload = []
     for name in backends:
         status = sandbox_provider_status(name).to_dict()
@@ -3750,7 +3840,17 @@ def sandbox_doctor(backend, json_output):
 @click.argument(
     "backend",
     type=click.Choice(
-        ["docker", "e2b", "daytona", "modal", "vercel", "runloop", "agentcore", "langsmith"]
+        [
+            "local",
+            "local-os",
+            "docker",
+            "podman",
+            "apple-container",
+            "e2b",
+            "daytona",
+            "modal",
+            "vercel",
+        ]
     ),
 )
 @click.argument("command", nargs=-1, required=True)
@@ -3759,7 +3859,7 @@ def sandbox_doctor(backend, json_output):
 @click.option("--image", default="python:3.12-slim", show_default=True)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def sandbox_run(backend, command, cwd, timeout, image, json_output):
-    """Run a command in Docker or a remote sandbox provider."""
+    """Run a command in a local or explicitly configured cloud sandbox provider."""
     from superqode.sandbox import run_in_sandbox
 
     shell_command = " ".join(command).strip()

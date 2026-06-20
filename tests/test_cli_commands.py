@@ -2202,18 +2202,21 @@ class TestSandboxCommand:
         assert result.exit_code == 0
         payload = json.loads(result.output)
         assert {item["backend"] for item in payload} >= {
+            "local-os",
             "docker",
+            "podman",
+            "apple-container",
             "e2b",
             "daytona",
             "modal",
             "vercel",
-            "runloop",
-            "agentcore",
-            "langsmith",
         }
+        assert "runloop" not in {item["backend"] for item in payload}
         docker = next(item for item in payload if item["backend"] == "docker")
         assert docker["available"] is False
         assert docker["capabilities"]["can_shell"] is True
+        assert docker["location"] == "local"
+        assert docker["account_required"] is False
 
     def test_sandbox_run_json(self, runner, monkeypatch, tmp_path):
         """Sandbox run should return structured command results."""
@@ -2251,6 +2254,58 @@ class TestSandboxCommand:
         payload = json.loads(result.output)
         assert payload["backend"] == "docker"
         assert payload["stdout"] == "hi\n"
+
+
+class TestHarnessObservabilityCommand:
+    """Tests for harness observability CLI commands."""
+
+    def test_harness_observability_status_json(self, runner):
+        result = runner.invoke(cli_main, ["harness", "observability", "status", "--json"])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert {row["name"] for row in payload} >= {"local-jsonl", "mlflow", "langsmith"}
+
+    def test_harness_observability_export_json(self, runner, tmp_path):
+        from superqode.harness import FileHarnessStore, HarnessEvent, get_harness_template
+
+        store_path = tmp_path / "store"
+        output_dir = tmp_path / "obs"
+        store = FileHarnessStore(store_path)
+        spec = get_harness_template("coding")
+        run = store.start_run(
+            session_id="cli-obs",
+            spec=spec,
+            provider="test",
+            model="model",
+            runtime="builtin",
+            prompt="observe",
+        )
+        store.append_event(
+            run.run_id,
+            HarnessEvent(type="run_start", data={"ok": True}, run_id=run.run_id),
+        )
+        store.end_run(run.run_id, status="succeeded")
+
+        result = runner.invoke(
+            cli_main,
+            [
+                "harness",
+                "observability",
+                "export",
+                run.run_id,
+                "--store",
+                str(store_path),
+                "--output",
+                str(output_dir),
+                "--json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["run_id"] == run.run_id
+        assert Path(payload["files"]["otel_spans"]).exists()
 
 
 class TestHeadlessCommand:

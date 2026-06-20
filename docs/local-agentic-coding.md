@@ -62,6 +62,76 @@ prompt-based tool calling. The smoke test verifies server reachability, chat
 model availability, context-window detection, TTFT, read-file tool calls,
 patch-format behavior, shell tool calls, and long-context recall.
 
+### Add local semantic code search
+
+For larger repositories, add conceptual code search to the same local loop. It
+is optional: if the integration is not installed, leave `semantic_search` out of
+the harness and the rest of the stack still works.
+
+```bash
+uv pip install 'superqode[semantic]'
+ollama pull nomic-embed-text
+ccc init --litellm-model ollama/nomic-embed-text
+ccc index
+```
+
+Then add the read-only tool to the local coding agent:
+
+```yaml
+execution_policy:
+  sandbox: docker        # or local-os / podman / apple-container when available
+  allow_network: false
+agents:
+  - id: local-coder
+    tools:
+      - read_file
+      - grep
+      - glob
+      - repo_search
+      - semantic_search
+      - edit_file
+      - patch
+      - bash
+```
+
+Use it explicitly in prompts when the model needs to find code by intent:
+
+```bash
+superqode harness run \
+  --spec superqode.local.yaml \
+  --provider openai-compatible \
+  --model qwen3:8b \
+  --sandbox docker \
+  --prompt "First use semantic_search to find where request retries are implemented, then patch the bug and run the focused tests."
+```
+
+The index stays local. With the Ollama embedding path above, code chunks and
+embeddings are produced on the same machine as the agent run. Re-run
+`ccc index` after a batch of edits, or ask the tool for `refresh=true` when the
+agent must search changes it just made.
+
+### Add recursive dynamic workflows
+
+For long logs, dense diffs, traces, and repo-slice audits, use the bundled
+local recursive dynamic harness:
+
+```bash
+superqode harness eval \
+  --spec examples/harnesses/local-recursive-dynamic.yaml \
+  --tasks "$(superqode harness eval-packs local-dynamic-workflow-smoke)" \
+  --provider ollama \
+  --model qwen3:8b \
+  --runtime builtin \
+  --sandbox docker \
+  --live
+```
+
+This proves the full local loop: `context_handle` keeps the artifact outside
+the prompt, `dynamic_workflow_script` compiles a bounded plan,
+`spawn_harness` runs child inspections, and `harness replay` / `harness
+evidence` show the resulting tree. See
+[Local Recursive Dynamic Coding](local-recursive-dynamic-coding.md).
+
 You own this harness. Build a custom one by answering a few questions with
 `superqode harness wizard`, start from a model-family template such as
 `qwen-coding` or `glm-coding`, and read exactly what any harness does in plain

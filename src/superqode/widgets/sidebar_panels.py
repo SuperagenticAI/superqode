@@ -1230,9 +1230,9 @@ class HarnessPanel(Container):
 
         text.append("\nSandboxes\n", style=f"bold {SQ_COLORS.primary_light}")
         try:
-            from superqode.sandbox import sandbox_provider_status
+            from superqode.sandbox import sandbox_provider_status, supported_sandbox_backends
 
-            for backend in ("docker", "e2b", "daytona", "modal", "vercel"):
+            for backend in supported_sandbox_backends(include_cloud=True):
                 status = sandbox_provider_status(backend)
                 style = SQ_COLORS.success if status.available else SQ_COLORS.warning
                 text.append(f"  {backend:<10}", style=SQ_COLORS.info)

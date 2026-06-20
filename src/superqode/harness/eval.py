@@ -16,6 +16,47 @@ from .testing import build_failure_digest
 from .workflow import run_workflow, workflow_steps_from_spec
 
 
+def bundled_eval_packs_dir() -> Path:
+    return Path(__file__).resolve().parents[1] / "data" / "eval_packs"
+
+
+def list_eval_packs() -> list[dict[str, Any]]:
+    """Return bundled HarnessSpec eval packs."""
+    rows: list[dict[str, Any]] = []
+    root = bundled_eval_packs_dir()
+    for path in sorted(root.glob("*.yaml")):
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            continue
+        metadata = data.get("metadata") if isinstance(data, dict) else {}
+        if not isinstance(metadata, dict):
+            metadata = {}
+        rows.append(
+            {
+                "id": str(metadata.get("id") or path.stem),
+                "name": str(metadata.get("name") or path.stem),
+                "description": str(metadata.get("description") or ""),
+                "best_for": str(metadata.get("best_for") or ""),
+                "path": str(path),
+                "tasks": len(data.get("tasks") or []) if isinstance(data, dict) else 0,
+            }
+        )
+    return rows
+
+
+def eval_pack_path(pack_id: str) -> Path:
+    """Resolve a bundled eval pack id or path."""
+    candidate = Path(pack_id).expanduser()
+    if candidate.exists():
+        return candidate
+    normalized = pack_id.strip().removesuffix(".yaml")
+    for row in list_eval_packs():
+        if row["id"] == normalized or Path(row["path"]).stem == normalized:
+            return Path(row["path"])
+    raise ValueError(f"Unknown eval pack: {pack_id}")
+
+
 def load_eval_tasks(path: str | Path) -> dict[str, Any]:
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     if not isinstance(data, dict):

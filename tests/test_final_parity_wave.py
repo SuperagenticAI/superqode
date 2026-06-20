@@ -271,6 +271,16 @@ def test_extract_text_tool_calls_variants():
     )
     assert calls and calls[0]["function"]["name"] == "grep"
 
+    # Local prompt-mode models can double-escape text content; normalize before
+    # file tools see it so code is written with real newlines.
+    cleaned, calls = extract_text_tool_calls(
+        '<tool_call>{"name":"write_file","arguments":{"path":"a.py","content":"def f():\\\\n    return 1"}}</tool_call>'
+    )
+    assert json.loads(calls[0]["function"]["arguments"]) == {
+        "path": "a.py",
+        "content": "def f():\n    return 1",
+    }
+
     # Malformed blocks stay in the text; nothing extracted.
     cleaned, calls = extract_text_tool_calls("<tool_call>garbage</tool_call>")
     assert calls == []

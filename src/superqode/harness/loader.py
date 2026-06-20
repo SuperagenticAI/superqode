@@ -19,6 +19,8 @@ from .spec import (
     ModelPolicySpec,
     PermissionRuleSpec,
     ObservabilitySpec,
+    RecursionSpec,
+    RemoteHarnessSpec,
     RuntimeSpec,
     ChecksSpec,
     CheckStepSpec,
@@ -151,6 +153,8 @@ def harness_spec_from_dict(data: dict[str, Any]) -> HarnessSpec:
         execution_policy=_execution_policy(raw.get("execution_policy"), flavor),
         agents=_agents(raw.get("agents")),
         workflow=_workflow(raw.get("workflow")),
+        recursion=_recursion(raw.get("recursion")),
+        remote_harness=_remote_harness(raw.get("remote_harness")),
         context=_context(raw.get("context")),
         checks=_checks(raw.get("checks")),
         observability=_observability(raw.get("observability")),
@@ -245,6 +249,38 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
             "merge_strategy": spec.workflow.merge_strategy,
             **({"config": spec.workflow.config} if spec.workflow.config else {}),
         },
+        **(
+            {
+                "recursion": {
+                    "enabled": spec.recursion.enabled,
+                    "max_depth": spec.recursion.max_depth,
+                    "max_children": spec.recursion.max_children,
+                    "max_parallel": spec.recursion.max_parallel,
+                    "max_wall_seconds": spec.recursion.max_wall_seconds,
+                    **({"max_budget": spec.recursion.max_budget} if spec.recursion.max_budget is not None else {}),
+                    **({"child_model": spec.recursion.child_model} if spec.recursion.child_model else {}),
+                    "child_sandbox": spec.recursion.child_sandbox,
+                    "write_policy": spec.recursion.write_policy,
+                    **({"config": spec.recursion.config} if spec.recursion.config else {}),
+                }
+            }
+            if spec.recursion.enabled or spec.recursion.config
+            else {}
+        ),
+        **(
+            {
+                "remote_harness": {
+                    "enabled": spec.remote_harness.enabled,
+                    "provider": spec.remote_harness.provider,
+                    **({"agent_id": spec.remote_harness.agent_id} if spec.remote_harness.agent_id else {}),
+                    **({"region": spec.remote_harness.region} if spec.remote_harness.region else {}),
+                    "context_policy": spec.remote_harness.context_policy,
+                    **({"config": spec.remote_harness.config} if spec.remote_harness.config else {}),
+                }
+            }
+            if spec.remote_harness.enabled or spec.remote_harness.provider or spec.remote_harness.config
+            else {}
+        ),
         "context": {
             "instruction_files": list(spec.context.instruction_files),
             "skills_dir": spec.context.skills_dir,
@@ -271,7 +307,10 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
         "observability": {
             "events": spec.observability.events,
             "traces": spec.observability.traces,
+            "local": spec.observability.local,
+            "exporters": list(spec.observability.exporters),
             "run_store": spec.observability.run_store,
+            **({"config": spec.observability.config} if spec.observability.config else {}),
         },
         **(
             {
@@ -401,6 +440,34 @@ def harness_spec_json_schema() -> dict[str, Any]:
                     "config": {"type": "object"},
                 },
             },
+            "recursion": {
+                "type": "object",
+                "additionalProperties": True,
+                "properties": {
+                    "enabled": {"type": "boolean"},
+                    "max_depth": {"type": "integer", "minimum": 0},
+                    "max_children": {"type": "integer", "minimum": 0},
+                    "max_parallel": {"type": "integer", "minimum": 1},
+                    "max_wall_seconds": {"type": "integer", "minimum": 0},
+                    "max_budget": {"type": "number", "minimum": 0},
+                    "child_model": {"type": "string"},
+                    "child_sandbox": {"type": "string"},
+                    "write_policy": {"type": "string", "enum": ["approval", "deny", "allow"]},
+                    "config": {"type": "object"},
+                },
+            },
+            "remote_harness": {
+                "type": "object",
+                "additionalProperties": True,
+                "properties": {
+                    "enabled": {"type": "boolean"},
+                    "provider": {"type": "string"},
+                    "agent_id": {"type": "string"},
+                    "region": {"type": "string"},
+                    "context_policy": {"type": "string"},
+                    "config": {"type": "object"},
+                },
+            },
             "context": {
                 "type": "object",
                 "additionalProperties": True,
@@ -442,6 +509,18 @@ def harness_spec_json_schema() -> dict[str, Any]:
                 "properties": {
                     "events": {"type": "boolean"},
                     "traces": {"type": "boolean"},
+                    "local": {"type": "boolean"},
+                    "exporters": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": True,
+                            "properties": {
+                                "type": {"type": "string"},
+                                "enabled": {"type": "boolean"},
+                            },
+                        },
+                    },
                     "run_store": {"type": "string"},
                     "config": {"type": "object"},
                 },
@@ -583,6 +662,38 @@ def _workflow(value: Any) -> WorkflowSpec:
     )
 
 
+def _recursion(value: Any) -> RecursionSpec:
+    data = value if isinstance(value, dict) else {}
+    write_policy = str(data.get("write_policy") or "approval").strip().lower()
+    if write_policy not in {"approval", "deny", "allow"}:
+        raise ValueError("recursion.write_policy must be one of: approval, deny, allow")
+    max_budget = data.get("max_budget")
+    return RecursionSpec(
+        enabled=bool(data.get("enabled", False)),
+        max_depth=max(0, int(data.get("max_depth", 1) or 0)),
+        max_children=max(0, int(data.get("max_children", 6) or 0)),
+        max_parallel=max(1, int(data.get("max_parallel", 2) or 1)),
+        max_wall_seconds=max(0, int(data.get("max_wall_seconds", 600) or 0)),
+        max_budget=float(max_budget) if max_budget is not None else None,
+        child_model=str(data["child_model"]) if data.get("child_model") else None,
+        child_sandbox=str(data.get("child_sandbox") or "docker"),
+        write_policy=write_policy,
+        config=dict(data.get("config") or {}) if isinstance(data.get("config"), dict) else {},
+    )
+
+
+def _remote_harness(value: Any) -> RemoteHarnessSpec:
+    data = value if isinstance(value, dict) else {}
+    return RemoteHarnessSpec(
+        enabled=bool(data.get("enabled", False)),
+        provider=str(data.get("provider") or ""),
+        agent_id=str(data["agent_id"]) if data.get("agent_id") else None,
+        region=str(data["region"]) if data.get("region") else None,
+        context_policy=str(data.get("context_policy") or "selected-files"),
+        config=dict(data.get("config") or {}) if isinstance(data.get("config"), dict) else {},
+    )
+
+
 def _context(value: Any) -> ContextSpec:
     data = value if isinstance(value, dict) else {}
     prompt_persistence = str(data.get("prompt_persistence") or "preview").strip().lower()
@@ -632,9 +743,16 @@ def _checks(value: Any) -> ChecksSpec:
 
 def _observability(value: Any) -> ObservabilitySpec:
     data = value if isinstance(value, dict) else {}
+    exporters: list[dict[str, Any]] = []
+    for index, item in enumerate(data.get("exporters") or ()):
+        if not isinstance(item, dict):
+            raise ValueError(f"observability.exporters[{index}] must be a mapping")
+        exporters.append(dict(item))
     return ObservabilitySpec(
         events=bool(data.get("events", True)),
         traces=bool(data.get("traces", False)),
+        local=bool(data.get("local", True)),
+        exporters=tuple(exporters),
         run_store=str(data.get("run_store") or "memory"),
         config=dict(data.get("config") or {}) if isinstance(data.get("config"), dict) else {},
     )

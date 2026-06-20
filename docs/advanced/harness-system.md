@@ -443,6 +443,54 @@ Set the default in `observability.run_store`, or override a single CLI run:
 superqode harness run --spec harness.yaml --store sqlite --prompt "summarize this repository"
 ```
 
+### Observability Export
+
+Replay and evidence are local-first. External observability is an optional
+mirror over the same stored run graph:
+
+```bash
+uv sync --extra observability
+```
+
+```yaml
+observability:
+  events: true
+  traces: true
+  local: true
+  run_store: file
+  exporters:
+    - type: opentelemetry
+      enabled: false
+      endpoint: http://localhost:4317
+    - type: mlflow
+      enabled: true
+    - type: langsmith
+      enabled: false
+    - type: logfire
+      enabled: false
+    - type: arize
+      enabled: false
+```
+
+Check sink status:
+
+```bash
+superqode harness observability status --spec harness.yaml
+```
+
+Export a root run and its recursive child runs:
+
+```bash
+superqode harness observability export <run-id> --spec harness.yaml
+```
+
+The local export writes `trace.json`, `runs.jsonl`, `events.jsonl`,
+`otel_spans.jsonl`, and `overview.md`. MLflow can optionally log those files as
+artifacts and metrics. LangSmith creates a child run tree, Logfire mirrors the
+run as spans and log events, and Arize/Phoenix uses the OTEL collector path.
+Availability checks stay separate from run execution, so missing credentials
+never block the harness.
+
 ### Example Specs
 
 Coding harness:

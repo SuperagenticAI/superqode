@@ -1,0 +1,36 @@
+metadata:
+  id: local-dynamic-workflow-smoke
+  name: Local Dynamic Workflow Smoke
+  description: Proof pack for dynamic_workflow_script over a local CI log.
+  best_for: validating local dynamic orchestration, context handles, recursive child lineage
+tasks:
+  - id: ci-log-dynamic-root-cause
+    prompt: |
+      Diagnose the root cause in this CI log using a local dynamic workflow.
+
+      Use dynamic_workflow_script with a restricted script similar to:
+
+      workflow("diagnose checkout CI root cause", max_children=4, max_depth=1)
+      step(
+          "log-map",
+          task="Inspect this log chunk for the earliest root-cause failure. Return evidence and whether later failures are downstream.",
+          context_handle="file:src/superqode/data/eval_fixtures/ci-dynamic-root-cause.log",
+          fanout=True,
+          chunk_chars=12000,
+          max_chunks=2,
+          max_parallel=2,
+          mode="read-only",
+      )
+
+      Then synthesize the child findings. The final answer must include the exact text:
+      ROOT_CAUSE: migration 20260619_add_payment_id missed unique index on payments.payment_id
+
+      Also explain that the ledger and web failures are downstream.
+    expect_contains:
+      - "ROOT_CAUSE: migration 20260619_add_payment_id missed unique index on payments.payment_id"
+      - "downstream"
+    tags:
+      - dynamic_workflow_script
+      - recursive
+      - context_handle
+      - ci-log

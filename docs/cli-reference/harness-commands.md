@@ -24,6 +24,7 @@ superqode harness COMMAND [OPTIONS]
 | `doctor` | Diagnose a spec before running it |
 | `test` | Fast smoke test plus failure digest |
 | `eval` | Scorecard across tasks and harness variants |
+| `eval-packs` | List bundled eval task packs |
 | `auto-bench` | First-run model probe and recommendation wrapper |
 | `optimize` | Export and optionally run a meta-harness optimization project |
 | `run` | Run a task through a spec |
@@ -270,6 +271,16 @@ tasks:
     expect_contains: hello
 ```
 
+### `harness eval-packs`
+
+List bundled eval packs, or print the path to one pack:
+
+```bash
+superqode harness eval-packs
+superqode harness eval-packs local-recursive-smoke
+superqode harness eval --spec harness.yaml --tasks "$(superqode harness eval-packs local-recursive-smoke)" --live
+```
+
 ### `harness auto-bench`
 
 Run the quick model-facing wrapper around `harness test` or `harness eval` and print a recommendation.
@@ -385,9 +396,62 @@ Show a readable evidence report for a run (what the agent did and the resulting 
 superqode harness evidence <run-id>
 ```
 
+For recursive and dynamic workflow runs, the report includes child run lineage
+and any `dynamic_workflow` / `dynamic_workflow_script` plan tree recovered from
+tool result metadata.
+
 | Option | Description |
 | --- | --- |
 | `--store PATH` | Store directory (default `.superqode/sessions`) |
+| `--json` | Emit JSON |
+
+### `harness observability status`
+
+Show local and optional external observability sink status.
+
+```bash
+superqode harness observability status
+superqode harness observability status --spec harness.yaml --json
+```
+
+The command reports local JSONL export availability, OTEL-shaped export
+availability, and optional live sinks such as MLflow, LangSmith, Logfire, and
+Arize/Phoenix. Install the optional SDK set for these integrations:
+
+```bash
+uv sync --extra observability
+```
+
+Missing optional packages or credentials are reported, not treated as run
+failures.
+
+### `harness observability export`
+
+Export a persisted run tree to local observability artifacts and any configured
+optional sink.
+
+```bash
+superqode harness observability export <run-id>
+superqode harness observability export <run-id> --spec harness.yaml --output .superqode/obs/<run-id>
+```
+
+The export includes:
+
+- `trace.json`: complete normalized run tree
+- `runs.jsonl`: one row per root/child run
+- `events.jsonl`: normalized harness events
+- `otel_spans.jsonl`: OTEL-shaped spans for trace backends
+- `overview.md`: human-readable summary
+
+MLflow, when enabled and installed, logs the export directory as artifacts.
+LangSmith creates a run tree, Logfire mirrors the run as spans and log events,
+and Arize/Phoenix uses the OTEL collector endpoint path.
+
+| Option | Description |
+| --- | --- |
+| `--spec PATH` | Spec used to resolve observability exporters |
+| `--store PATH` | Store directory (default `.superqode/sessions`) |
+| `--output PATH` | Output directory |
 | `--json` | Emit JSON |
 
 ### `harness graph`
@@ -413,6 +477,9 @@ Show a replay plan for a persisted run, or re-execute it with `--execute`.
 superqode harness replay <run-id>
 superqode harness replay <run-id> --execute --provider ollama --model qwen3-coder
 ```
+
+For dynamic runs, replay output shows the compiled script/plan, step ids,
+fan-out markers, and child run ids alongside the normal lineage tree.
 
 | Option | Description |
 | --- | --- |

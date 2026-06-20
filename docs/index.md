@@ -162,7 +162,7 @@ superqode --print "inspect this repository and suggest the smallest safe cleanup
       primary: ollama/gemma4
       tool_call_format: prompt    # for models without a native tool head
     execution_policy:
-      sandbox: local
+      sandbox: docker
       approval_profile: ask
     ```
 

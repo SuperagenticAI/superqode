@@ -9,6 +9,7 @@ from .base import (
     HarnessBackendResult,
 )
 from .deepagents import DeepAgentsHarnessBackend
+from .managed import ManagedAgentHarnessBackend
 from .pydanticai import PydanticAIHarnessBackend
 from .registry import (
     backend_capabilities,
@@ -35,6 +36,7 @@ __all__ = [
     "ClaudeAgentSDKHarnessBackend",
     "CodexSDKHarnessBackend",
     "DeepAgentsHarnessBackend",
+    "ManagedAgentHarnessBackend",
     "OpenAIAgentsHarnessBackend",
     "PydanticAIHarnessBackend",
     "RuntimeHarnessBackend",

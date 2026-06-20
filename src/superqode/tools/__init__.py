@@ -27,8 +27,11 @@ from .shell_tools import BashTool
 from .search_tools import GrepTool, GlobTool, CodeSearchTool
 from .semantic_search import SemanticSearchTool, is_semantic_search_available
 from .diagnostics import DiagnosticsTool
+from .context_handle import ContextHandleTool
 from .network_tools import FetchTool, DownloadTool
 from .agent_tools import SubAgentTool, TaskCoordinatorTool
+from .spawn_harness import SpawnHarnessTool
+from .dynamic_workflow import DynamicWorkflowScriptTool, DynamicWorkflowTool
 from .lsp_tools import LSPTool
 from .web_tools import WebSearchTool, WebFetchTool
 from .mcp_tools import MCPSearchTool, MCPExecuteTool, create_mcp_tools
@@ -74,6 +77,7 @@ __all__ = [
     "is_semantic_search_available",
     # Diagnostics
     "DiagnosticsTool",
+    "ContextHandleTool",
     # Network tools
     "FetchTool",
     "DownloadTool",
@@ -95,6 +99,9 @@ __all__ = [
     # Agent tools
     "SubAgentTool",
     "TaskCoordinatorTool",
+    "SpawnHarnessTool",
+    "DynamicWorkflowScriptTool",
+    "DynamicWorkflowTool",
     # LSP tools
     "LSPTool",
     # Interactive tools

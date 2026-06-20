@@ -272,6 +272,13 @@ def _create_runtime_for_request(
         session_id=request.session_id,
         session_history_limit=model_policy.session_history_limit,
         tool_call_format=model_policy.tool_call_format,
+        harness_store=request.metadata.get("_harness_store"),
+        harness_spec=request.spec,
+        harness_run_id=str(request.metadata.get("_harness_run_id") or ""),
+        harness_root_run_id=str(request.metadata.get("_harness_root_run_id") or ""),
+        harness_runtime=runtime_name,
+        harness_sandbox_backend=request.sandbox_backend,
+        harness_delegation_depth=int(request.metadata.get("delegation_depth") or 0),
     )
     callbacks = {}
     hook_kwargs = {}

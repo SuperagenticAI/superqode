@@ -144,18 +144,6 @@ class HarnessSession:
     ) -> AsyncIterator[HarnessEvent]:
         """Stream one prompt through this harness session as normalized events."""
         runtime_name = runtime or self.kernel.spec.runtime.backend
-        request = HarnessBackendRequest(
-            spec=self.kernel.spec,
-            prompt=prompt,
-            provider=provider,
-            model=model,
-            working_directory=working_directory or Path.cwd(),
-            session_id=self.session_id,
-            runtime=runtime,
-            sandbox_backend=sandbox_backend,
-            system_level=system_level,
-            metadata=dict(metadata or {}),
-        )
         self.kernel.store.open_session(
             self.session_id,
             self.kernel.spec,
@@ -171,6 +159,23 @@ class HarnessSession:
             metadata=dict(metadata or {}),
         )
         run_id = run_record.run_id
+        request = HarnessBackendRequest(
+            spec=self.kernel.spec,
+            prompt=prompt,
+            provider=provider,
+            model=model,
+            working_directory=working_directory or Path.cwd(),
+            session_id=self.session_id,
+            runtime=runtime,
+            sandbox_backend=sandbox_backend,
+            system_level=system_level,
+            metadata={
+                **dict(metadata or {}),
+                "_harness_store": self.kernel.store,
+                "_harness_run_id": run_id,
+                "_harness_root_run_id": run_record.root_run_id or run_id,
+            },
+        )
         started_at = time.monotonic()
         self._emit(
             "run_start",
@@ -292,7 +297,12 @@ class HarnessSession:
             runtime=request.runtime,
             sandbox_backend=request.sandbox_backend,
             system_level=request.system_level,
-            metadata=request.metadata,
+            metadata={
+                **request.metadata,
+                "_harness_store": self.kernel.store,
+                "_harness_run_id": run_id,
+                "_harness_root_run_id": run_record.root_run_id or run_id,
+            },
         )
         try:
             backend_result = await backend.run(backend_request)

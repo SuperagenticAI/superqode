@@ -8,6 +8,7 @@ from superqode.agent.system_prompts import SystemPromptLevel
 from superqode.harness import (
     HarnessFlavor,
     WorkflowMode,
+    backend_capabilities,
     compile_to_headless_profile,
     get_harness_template,
     harness_spec_from_dict,
@@ -195,6 +196,76 @@ def test_harness_spec_round_trip_preserves_core_fields():
     assert restored.checks.custom_steps[0].command == "pytest -q"
 
 
+def test_harness_spec_round_trip_preserves_recursion_and_remote_harness():
+    spec = harness_spec_from_dict(
+        {
+            "name": "recursive-local",
+            "recursion": {
+                "enabled": True,
+                "max_depth": 2,
+                "max_children": 4,
+                "max_parallel": 2,
+                "max_wall_seconds": 300,
+                "max_budget": 1.25,
+                "child_model": "utility-coder",
+                "child_sandbox": "docker",
+                "write_policy": "deny",
+            },
+            "remote_harness": {
+                "enabled": True,
+                "provider": "google-agent-engine",
+                "agent_id": "agent-123",
+                "region": "us-central1",
+                "context_policy": "selected-files",
+            },
+        }
+    )
+
+    payload = harness_spec_to_dict(spec)
+    restored = harness_spec_from_dict(payload)
+
+    assert restored.recursion.enabled is True
+    assert restored.recursion.max_depth == 2
+    assert restored.recursion.max_children == 4
+    assert restored.recursion.max_budget == 1.25
+    assert restored.recursion.child_model == "utility-coder"
+    assert restored.recursion.child_sandbox == "docker"
+    assert restored.recursion.write_policy == "deny"
+    assert restored.remote_harness.enabled is True
+    assert restored.remote_harness.provider == "google-agent-engine"
+    assert restored.remote_harness.agent_id == "agent-123"
+    assert restored.remote_harness.region == "us-central1"
+
+
+def test_harness_spec_round_trip_preserves_observability_exporters():
+    spec = harness_spec_from_dict(
+        {
+            "name": "observable-local",
+            "observability": {
+                "events": True,
+                "traces": True,
+                "local": True,
+                "run_store": "file",
+                "exporters": [
+                    {"type": "mlflow", "enabled": True, "experiment": "sq-test"},
+                    {"type": "langsmith", "enabled": False},
+                ],
+                "config": {"mlflow_tracking_uri": "file:/tmp/mlruns"},
+            },
+        }
+    )
+
+    payload = harness_spec_to_dict(spec)
+    restored = harness_spec_from_dict(payload)
+
+    assert restored.observability.traces is True
+    assert restored.observability.local is True
+    assert restored.observability.run_store == "file"
+    assert restored.observability.exporters[0]["type"] == "mlflow"
+    assert restored.observability.exporters[0]["experiment"] == "sq-test"
+    assert restored.observability.config["mlflow_tracking_uri"] == "file:/tmp/mlruns"
+
+
 def test_workflow_preset_expands_harness_agents_and_mode():
     spec = harness_spec_from_dict(
         {
@@ -210,6 +281,17 @@ def test_workflow_preset_expands_harness_agents_and_mode():
 
     payload = harness_spec_to_dict(spec)
     assert payload["workflow"]["preset"] == "parallel-review"
+
+
+def test_managed_agent_backend_capability_scaffolds_are_known():
+    google = backend_capabilities("google-agent-engine")
+    anthropic = backend_capabilities("anthropic-managed")
+
+    assert google.backend == "google-agent-engine"
+    assert google.availability in {"needs-config", "configured"}
+    assert google.supports_sandbox is True
+    assert anthropic.backend == "anthropic-managed"
+    assert anthropic.availability in {"needs-config", "configured"}
 
 
 @pytest.mark.parametrize("profile_name", ["build", "plan", "review", "no-tool"])

@@ -12,6 +12,7 @@ from .base import (
     HarnessBackendIssue,
 )
 from .deepagents import DeepAgentsHarnessBackend
+from .managed import ManagedAgentHarnessBackend
 from .pydanticai import PydanticAIHarnessBackend
 from .runtime import (
     ADKHarnessBackend,
@@ -24,10 +25,12 @@ from .runtime import (
 _RUNTIME_BACKENDS = {"builtin"}
 _OPTIONAL_BACKENDS = {
     "adk",
+    "anthropic-managed",
     "openai-agents",
     "codex-sdk",
     "claude-agent-sdk",
     "deepagents",
+    "google-agent-engine",
     "pydanticai",
 }
 
@@ -49,6 +52,8 @@ def create_harness_backend(name: str | None) -> HarnessBackend:
         return DeepAgentsHarnessBackend()
     if resolved == "pydanticai":
         return PydanticAIHarnessBackend()
+    if resolved in {"google-agent-engine", "anthropic-managed"}:
+        return ManagedAgentHarnessBackend(resolved)
     valid = ", ".join(known_harness_backend_names())
     raise ValueError(f"Unknown harness backend {name!r}. Known: {valid}")
 
@@ -141,6 +146,8 @@ def backend_capabilities(name: str | None):
 
 
 def _with_availability(capabilities: HarnessBackendCapabilities) -> HarnessBackendCapabilities:
+    if capabilities.backend in {"google-agent-engine", "anthropic-managed"}:
+        return capabilities
     packages = {
         "builtin": (None, None),
         "adk": ("google.adk", "pip install superqode[adk]"),

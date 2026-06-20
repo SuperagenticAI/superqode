@@ -362,6 +362,8 @@ The full `local` command group (init, doctor, search, serve, servers, stop, mode
 | `superqode harness graph <run-id>` | Show event graph |
 | `superqode harness evidence <run-id>` | Show run evidence receipt |
 | `superqode harness replay <run-id>` | Replay or inspect a prior run |
+| `superqode harness observability status` | Show local and optional external sink status |
+| `superqode harness observability export <run-id>` | Export JSONL and OTEL-shaped trace artifacts |
 | `superqode harness fork <run-id>` | Fork persisted run context |
 
 ---

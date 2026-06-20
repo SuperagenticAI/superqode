@@ -1,0 +1,85 @@
+version: 1
+name: local-recursive-dynamic
+description: Local-first recursive and dynamic workflow harness for long logs, diffs, traces, and repo slices.
+flavor: coding
+runtime:
+  backend: builtin
+model_policy:
+  primary: qwen3:8b
+  profile: balanced-coding
+  temperature: 0.1
+  reasoning: medium
+  tool_call_format: prompt
+  config:
+    provider: ollama
+    max_iterations: 16
+execution_policy:
+  sandbox: docker
+  approval_profile: balanced
+  allow_read: true
+  allow_write: false
+  allow_shell: false
+  allow_network: false
+  blocked_categories:
+    - destructive
+    - credential-access
+recursion:
+  enabled: true
+  max_depth: 1
+  max_children: 8
+  max_parallel: 2
+  max_wall_seconds: 600
+  child_model: qwen3:8b
+  child_sandbox: docker
+  write_policy: deny
+agents:
+  - id: recursive-coder
+    role: local recursive analysis
+    system_prompt: |
+      Work as a local recursive coding analyst. Keep large artifacts outside the
+      prompt by using context_handle. Use spawn_harness for narrow child
+      inspections, dynamic_workflow for bounded multi-step plans, and
+      dynamic_workflow_script when a compact restricted script is clearer.
+      Prefer read-only analysis unless the user explicitly asks for edits.
+    tools:
+      - read_file
+      - list_directory
+      - grep
+      - glob
+      - repo_search
+      - code_search
+      # Optional: install superqode[semantic], index once with ccc, then enable:
+      # - semantic_search
+      - context_handle
+      - spawn_harness
+      - dynamic_workflow
+      - dynamic_workflow_script
+      - diagnostics
+      - get_context_remaining
+    skills:
+      - repo-navigation
+      - debugging
+    max_iterations: 16
+workflow:
+  mode: single
+  max_task_depth: 2
+  parallelism: 1
+  merge_strategy: summary
+context:
+  instruction_files:
+    - AGENTS.md
+    - CLAUDE.md
+    - SUPERQODE.md
+  skills_dir: .agents/skills
+  roles_dir: .agents/roles
+  session_storage: .superqode/sessions
+  prompt_persistence: preview
+  compaction:
+    strategy: summarize-when-large
+observability:
+  events: true
+  traces: false
+  run_store: file
+metadata:
+  example: local-recursive-dynamic
+  best_for: local recursive log diagnosis, long diff review, repo slice fan-out, dynamic workflow demos

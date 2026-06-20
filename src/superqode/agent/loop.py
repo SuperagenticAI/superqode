@@ -504,6 +504,15 @@ class AgentConfig:
     session_id: Optional[str] = None
     session_history_limit: int = 20
 
+    # HarnessKernel context, populated only for harness-backed builtin runs.
+    harness_store: Optional[Any] = None
+    harness_spec: Optional[Any] = None
+    harness_run_id: str = ""
+    harness_root_run_id: str = ""
+    harness_runtime: str = ""
+    harness_sandbox_backend: str = "local"
+    harness_delegation_depth: int = 0
+
 
 @dataclass
 class AgentMessage:
@@ -1041,6 +1050,15 @@ class AgentLoop:
             peer_manager=self._get_peer_manager(),
             permission_manager=self.permission_manager,
             context_status=self._context_status,
+            harness_store=self.config.harness_store,
+            harness_spec=self.config.harness_spec,
+            harness_run_id=self.config.harness_run_id,
+            harness_root_run_id=self.config.harness_root_run_id,
+            harness_runtime=self.config.harness_runtime,
+            harness_provider=self.config.provider,
+            harness_model=self.config.model,
+            harness_sandbox_backend=self.config.harness_sandbox_backend,
+            delegation_depth=self.config.harness_delegation_depth,
         )
 
     def _context_status(self) -> Dict[str, Any]:
@@ -1089,6 +1107,7 @@ class AgentLoop:
             self.config,
             session_id=f"{self.session_id}:sub:{uuid.uuid4().hex[:8]}",
             enable_session_storage=False,
+            harness_delegation_depth=child_depth,
         )
 
         # Sub-agent shares the parent's runtime. For Phase 1 the parent always

@@ -69,6 +69,15 @@ class ToolContext:
     # Live context-budget reporter for get_context_remaining. Returns a dict
     # with window/used/compaction_threshold. Set by the agent loop.
     context_status: Optional[Callable[[], Dict[str, Any]]] = None
+    # Harness run context, populated when tools execute inside HarnessKernel.
+    harness_store: Optional[Any] = None
+    harness_spec: Optional[Any] = None
+    harness_run_id: str = ""
+    harness_root_run_id: str = ""
+    harness_runtime: str = ""
+    harness_provider: str = ""
+    harness_model: str = ""
+    harness_sandbox_backend: str = "local"
 
     async def emit_output(self, text: str) -> None:
         """Emit output to the callback if set."""
@@ -301,6 +310,7 @@ class ToolRegistry:
         from .todo_tools import TodoWriteTool, TodoReadTool
         from .batch_tool import BatchTool
         from .compact_tool import CompactTool
+        from .dynamic_workflow import DynamicWorkflowScriptTool, DynamicWorkflowTool
         from .monty_tool import MontyPythonReplTool, is_monty_available
         from .web_tools import WebSearchTool, WebFetchTool
 
@@ -345,6 +355,8 @@ class ToolRegistry:
         registry.register(QuestionTool())
         registry.register(ConfirmTool())
         registry.register(CompactTool())
+        registry.register(DynamicWorkflowTool())
+        registry.register(DynamicWorkflowScriptTool())
 
         # Context-budget visibility for the model
         from .context_tools import GetContextRemainingTool
@@ -437,6 +449,7 @@ class ToolRegistry:
         from .diagnostics import DiagnosticsTool
         from .network_tools import FetchTool, DownloadTool
         from .agent_tools import SubAgentTool, TaskCoordinatorTool
+        from .dynamic_workflow import DynamicWorkflowScriptTool, DynamicWorkflowTool
         from .lsp_tools import LSPTool
         from .web_tools import WebSearchTool, WebFetchTool
         from .question_tool import QuestionTool, ConfirmTool
@@ -485,6 +498,9 @@ class ToolRegistry:
 
         # Diagnostics
         registry.register(DiagnosticsTool())
+        from .context_handle import ContextHandleTool
+
+        registry.register(ContextHandleTool())
 
         # Sandboxed Python interpreter (optional pydantic-monty extra)
         if is_monty_available():
@@ -504,6 +520,11 @@ class ToolRegistry:
         # Agent tools
         registry.register(SubAgentTool())
         registry.register(TaskCoordinatorTool())
+        from .spawn_harness import SpawnHarnessTool
+
+        registry.register(SpawnHarnessTool())
+        registry.register(DynamicWorkflowTool())
+        registry.register(DynamicWorkflowScriptTool())
 
         # Peer agents (long-lived, addressable child agents)
         from .peer_agent_tools import (

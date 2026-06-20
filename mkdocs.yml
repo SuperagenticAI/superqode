@@ -154,7 +154,9 @@ nav:
     - ⚙️ Configuration: getting-started/configuration.md
     - 🧭 Troubleshooting: getting-started/troubleshooting.md
 
-  - 🖥️ Local Agentic Coding: local-agentic-coding.md
+  - 🖥️ Local Agentic Coding:
+    - local-agentic-coding.md
+    - 🔁 Recursive Dynamic Coding: local-recursive-dynamic-coding.md
 
   - 📚 Concepts:
     - concepts/index.md
@@ -183,6 +185,7 @@ nav:
     - 🔁 Inside the Agent Loop: advanced/agent-loop.md
     - 🧰 Tools Catalog: advanced/tools-catalog.md
     - 🔎 Semantic Code Search: advanced/semantic-search.md
+    - 🔁 Recursive Agent Harness: advanced/recursive-agent-harness.md
     - 🛡️ Policies & Safety: advanced/policies.md
     - 🤝 Multi-Agent Workflows: advanced/multi-agent.md
     - 🤖 Headless & CI: advanced/headless-ci.md

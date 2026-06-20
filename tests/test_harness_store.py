@@ -9,6 +9,10 @@ from superqode.harness import (
     HarnessEventGraph,
     MemoryHarnessStore,
     SQLiteHarnessStore,
+    build_harness_replay_plan,
+    build_harness_evidence,
+    render_harness_replay_plan,
+    render_harness_evidence,
     get_harness_template,
 )
 from superqode.harness.spec import HarnessSpec
@@ -50,6 +54,192 @@ def test_file_harness_store_persists_sessions_runs_and_events(tmp_path):
     assert store.get_events(run.run_id)[0].type == "run_start"
     assert store.list_sessions()[0].session_id == "s:1"
     assert store.list_runs(session_id="s:1")[0].run_id == run.run_id
+
+
+@pytest.mark.parametrize(
+    "store_factory", [MemoryHarnessStore, FileHarnessStore, SQLiteHarnessStore]
+)
+def test_harness_store_persists_run_lineage(tmp_path, store_factory):
+    if store_factory is MemoryHarnessStore:
+        store = store_factory()
+    else:
+        path = (
+            tmp_path / "store.sqlite3"
+            if store_factory is SQLiteHarnessStore
+            else tmp_path / "files"
+        )
+        store = store_factory(path)
+    spec = get_harness_template("coding")
+
+    root = store.start_run(
+        session_id="session-lineage",
+        spec=spec,
+        provider="openai",
+        model="gpt-5",
+        runtime="builtin",
+        prompt="root",
+    )
+    child = store.start_run(
+        session_id="session-lineage",
+        spec=spec,
+        provider="openai",
+        model="gpt-5",
+        runtime="builtin",
+        prompt="child",
+        metadata={"parent_run_id": root.run_id, "root_run_id": root.run_id},
+    )
+
+    loaded = store.get_run(child.run_id)
+
+    assert loaded is not None
+    assert loaded.parent_run_id == root.run_id
+    assert loaded.root_run_id == root.run_id
+
+
+def test_harness_replay_plan_renders_recursive_children(tmp_path):
+    store = FileHarnessStore(tmp_path / "harness")
+    spec = get_harness_template("coding")
+    root = store.start_run(
+        session_id="session-lineage",
+        spec=spec,
+        provider="openai",
+        model="gpt-5",
+        runtime="builtin",
+        prompt="root task",
+    )
+    child = store.start_run(
+        session_id="session-lineage",
+        spec=spec,
+        provider="openai",
+        model="gpt-5-mini",
+        runtime="builtin",
+        prompt="child task",
+        metadata={"parent_run_id": root.run_id, "root_run_id": root.run_id},
+    )
+
+    plan = build_harness_replay_plan(store, root.run_id)
+    rendered = render_harness_replay_plan(plan)
+
+    assert plan["lineage"]["children"][0]["run_id"] == child.run_id
+    assert "Child runs:" in rendered
+    assert child.run_id in rendered
+
+
+def test_harness_replay_plan_renders_dynamic_workflow_tree(tmp_path):
+    store = FileHarnessStore(tmp_path / "harness")
+    spec = get_harness_template("coding")
+    root = store.start_run(
+        session_id="session-dynamic",
+        spec=spec,
+        provider="openai",
+        model="gpt-5",
+        runtime="builtin",
+        prompt="root task",
+    )
+    child = store.start_run(
+        session_id="session-dynamic",
+        spec=spec,
+        provider="openai",
+        model="gpt-5-mini",
+        runtime="builtin",
+        prompt="child task",
+        metadata={"parent_run_id": root.run_id, "root_run_id": root.run_id},
+    )
+    store.append_event(
+        root.run_id,
+        HarnessEvent(
+            type="tool_result",
+            run_id=root.run_id,
+            data={
+                "tool_name": "dynamic_workflow_script",
+                "success": True,
+                "metadata": {
+                    "script_compiled": True,
+                    "plan": {
+                        "objective": "diagnose ci",
+                        "steps": [
+                            {
+                                "id": "logs",
+                                "task": "scan logs",
+                                "context_handle": "file:ci.log",
+                                "fanout": True,
+                            }
+                        ],
+                    },
+                    "child_run_ids": [child.run_id],
+                    "results": [
+                        {
+                            "id": "logs",
+                            "success": True,
+                            "metadata": {"child_run_ids": [child.run_id]},
+                        }
+                    ],
+                },
+            },
+        ),
+    )
+
+    plan = build_harness_replay_plan(store, root.run_id)
+    rendered = render_harness_replay_plan(plan)
+
+    assert plan["dynamic_workflows"][0]["objective"] == "diagnose ci"
+    assert plan["dynamic_workflows"][0]["steps"][0]["child_run_ids"] == [child.run_id]
+    assert "Dynamic workflows:" in rendered
+    assert "dynamic_workflow_script compiled-script: diagnose ci" in rendered
+    assert child.run_id in rendered
+
+
+def test_harness_evidence_renders_dynamic_workflow_tree(tmp_path):
+    store = FileHarnessStore(tmp_path / "harness")
+    spec = get_harness_template("coding")
+    root = store.start_run(
+        session_id="session-dynamic-evidence",
+        spec=spec,
+        provider="openai",
+        model="gpt-5",
+        runtime="builtin",
+        prompt="root task",
+    )
+    child = store.start_run(
+        session_id="session-dynamic-evidence",
+        spec=spec,
+        provider="openai",
+        model="gpt-5-mini",
+        runtime="builtin",
+        prompt="child task",
+        metadata={"parent_run_id": root.run_id, "root_run_id": root.run_id},
+    )
+    store.append_event(
+        root.run_id,
+        HarnessEvent(
+            type="tool_result",
+            run_id=root.run_id,
+            data={
+                "tool_name": "dynamic_workflow",
+                "success": True,
+                "metadata": {
+                    "objective": "audit auth",
+                    "child_run_ids": [child.run_id],
+                    "results": [
+                        {
+                            "id": "routes",
+                            "success": True,
+                            "metadata": {"child_run_id": child.run_id},
+                        }
+                    ],
+                },
+            },
+        ),
+    )
+
+    evidence = build_harness_evidence(store, root.run_id)
+    rendered = render_harness_evidence(evidence)
+
+    assert evidence["dynamic_workflows"][0]["objective"] == "audit auth"
+    assert evidence["dynamic_workflows"][0]["steps"][0]["child_run_ids"] == [child.run_id]
+    assert "Dynamic workflows:" in rendered
+    assert "dynamic_workflow: audit auth" in rendered
+    assert child.run_id in rendered
 
 
 def test_file_harness_store_sanitizes_file_names(tmp_path):

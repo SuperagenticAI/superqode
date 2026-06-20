@@ -39,10 +39,13 @@ class SandboxCapabilityBackend(str, Enum):
     """Supported sandbox capability profiles."""
 
     LOCAL = "local"
+    LOCAL_OS = "local-os"
     READ_ONLY = "read-only"
     NO_SHELL = "no-shell"
     GIT_WORKTREE = "git-worktree"
     DOCKER = "docker"
+    PODMAN = "podman"
+    APPLE_CONTAINER = "apple-container"
     E2B = "e2b"
     DAYTONA = "daytona"
     MODAL = "modal"
@@ -388,7 +391,15 @@ def get_sandbox_capabilities(
     selected = SandboxCapabilityBackend(backend)
     capabilities: dict[SandboxCapabilityBackend, SandboxCapabilities] = {
         SandboxCapabilityBackend.LOCAL: SandboxCapabilities(
-            selected, True, True, True, True, "Local workspace with full tool access."
+            selected, True, True, True, True, "Local workspace with no sandbox isolation."
+        ),
+        SandboxCapabilityBackend.LOCAL_OS: SandboxCapabilities(
+            selected,
+            True,
+            True,
+            True,
+            False,
+            "Local OS sandbox using macOS Seatbelt or Linux Bubblewrap.",
         ),
         SandboxCapabilityBackend.READ_ONLY: SandboxCapabilities(
             selected,
@@ -405,7 +416,18 @@ def get_sandbox_capabilities(
             selected, True, True, True, True, "Git worktree-isolated workspace."
         ),
         SandboxCapabilityBackend.DOCKER: SandboxCapabilities(
-            selected, True, True, True, True, "Container-isolated workspace."
+            selected, True, True, True, False, "Local Docker container-isolated workspace."
+        ),
+        SandboxCapabilityBackend.PODMAN: SandboxCapabilities(
+            selected, True, True, True, False, "Local Podman container-isolated workspace."
+        ),
+        SandboxCapabilityBackend.APPLE_CONTAINER: SandboxCapabilities(
+            selected,
+            True,
+            True,
+            True,
+            False,
+            "macOS-native local container-isolated workspace.",
         ),
         SandboxCapabilityBackend.E2B: SandboxCapabilities(
             selected, True, True, True, True, "E2B remote sandbox workspace."

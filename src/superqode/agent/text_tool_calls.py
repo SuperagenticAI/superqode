@@ -30,6 +30,19 @@ def is_prompt_format(value: Any) -> bool:
     return str(value or "").strip().lower() in PROMPT_FORMATS
 
 
+def _normalize_prompt_argument(value: Any) -> Any:
+    """Repair common double-escaped strings from prompt-mode local models."""
+    if isinstance(value, str):
+        return value.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t").replace(
+            "\\r", "\r"
+        )
+    if isinstance(value, list):
+        return [_normalize_prompt_argument(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _normalize_prompt_argument(item) for key, item in value.items()}
+    return value
+
+
 def render_tool_catalog(tool_defs: List[Any]) -> str:
     """System-prompt section teaching the model the available tools + format."""
     if not tool_defs:
@@ -82,6 +95,7 @@ def extract_text_tool_calls(content: str) -> Tuple[str, List[Dict[str, Any]]]:
             arguments, _err = parse_tool_arguments(arguments)
         if not isinstance(arguments, dict):
             arguments = {}
+        arguments = _normalize_prompt_argument(arguments)
         tool_calls.append(
             {
                 "id": f"text-{uuid.uuid4().hex[:8]}",

@@ -23283,23 +23283,14 @@ memory:
 
     def _sandbox_cmd(self, args: str, log: ConversationLog):
         """Show sandbox provider readiness in the TUI."""
-        from superqode.sandbox import get_sandbox_capabilities, sandbox_provider_status
+        from superqode.sandbox import (
+            get_sandbox_capabilities,
+            sandbox_provider_status,
+            supported_sandbox_backends,
+        )
 
         requested = args.strip()
-        backends = (
-            [requested]
-            if requested
-            else [
-                "docker",
-                "e2b",
-                "daytona",
-                "modal",
-                "vercel",
-                "runloop",
-                "agentcore",
-                "langsmith",
-            ]
-        )
+        backends = [requested] if requested else supported_sandbox_backends(include_cloud=True)
         t = Text()
         t.append("\n  ▣ ", style=f"bold {THEME['cyan']}")
         t.append("Sandbox Backends\n\n", style=f"bold {THEME['text']}")

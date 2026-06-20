@@ -24,17 +24,22 @@ def test_no_shell_backend_only_denies_shell_group():
 
 def test_remote_provider_backends_have_full_capabilities():
     for backend in (
-        "docker",
         "e2b",
         "daytona",
         "modal",
         "vercel",
-        "runloop",
-        "agentcore",
-        "langsmith",
     ):
         caps = get_sandbox_capabilities(backend)
         assert caps.can_read is True
         assert caps.can_write is True
         assert caps.can_shell is True
         assert caps.can_network is True
+
+
+def test_local_container_backends_default_to_network_disabled():
+    for backend in ("local-os", "docker", "podman", "apple-container"):
+        caps = get_sandbox_capabilities(backend)
+        assert caps.can_read is True
+        assert caps.can_write is True
+        assert caps.can_shell is True
+        assert caps.can_network is False

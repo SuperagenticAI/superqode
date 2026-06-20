@@ -32,6 +32,13 @@ def generate_input_id() -> str:
     return f"input_{time_part}{rand_part}"
 
 
+def _run_lineage(metadata: dict[str, Any] | None) -> tuple[str, str]:
+    data = metadata or {}
+    parent = str(data.get("parent_run_id") or "")
+    root = str(data.get("root_run_id") or parent or "")
+    return parent, root
+
+
 @dataclass(frozen=True)
 class HarnessSessionRecord:
     """Durable metadata for a harness session."""
@@ -134,6 +141,8 @@ class HarnessRunRecord:
     status: str
     started_at: float
     ended_at: float | None = None
+    parent_run_id: str = ""
+    root_run_id: str = ""
     prompt_preview: str = ""
     events: tuple[HarnessEvent, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -150,6 +159,8 @@ class HarnessRunRecord:
             "status": self.status,
             "started_at": self.started_at,
             "ended_at": self.ended_at,
+            "parent_run_id": self.parent_run_id,
+            "root_run_id": self.root_run_id,
             "prompt_preview": self.prompt_preview,
             "events": [event.to_dict() for event in self.events],
             "metadata": dict(self.metadata),
@@ -168,6 +179,8 @@ class HarnessRunRecord:
             status=str(data.get("status") or "running"),
             started_at=float(data["started_at"]),
             ended_at=float(data["ended_at"]) if data.get("ended_at") is not None else None,
+            parent_run_id=str(data.get("parent_run_id") or ""),
+            root_run_id=str(data.get("root_run_id") or ""),
             prompt_preview=str(data.get("prompt_preview") or ""),
             events=tuple(_event_from_dict(item) for item in data.get("events", [])),
             metadata=dict(data.get("metadata") or {}),
@@ -480,6 +493,7 @@ class MemoryHarnessStore:
         prompt: str,
         metadata: dict[str, Any] | None = None,
     ) -> HarnessRunRecord:
+        parent_run_id, root_run_id = _run_lineage(metadata)
         record = HarnessRunRecord(
             run_id=generate_run_id(),
             session_id=session_id,
@@ -490,6 +504,8 @@ class MemoryHarnessStore:
             runtime=runtime,
             status="running",
             started_at=time.time(),
+            parent_run_id=parent_run_id,
+            root_run_id=root_run_id,
             prompt_preview=_stored_prompt_preview(spec, prompt),
             metadata=_run_metadata_with_prompt(spec, prompt, metadata),
         )
@@ -591,6 +607,8 @@ class MemoryHarnessStore:
                 **source.metadata,
                 "fork_of": source.run_id,
                 "fork_after": after,
+                "parent_run_id": source.run_id,
+                "root_run_id": source.root_run_id or source.run_id,
                 **(metadata or {}),
             },
         )
@@ -876,6 +894,7 @@ class FileHarnessStore:
         metadata: dict[str, Any] | None = None,
     ) -> HarnessRunRecord:
         run_id = generate_run_id()
+        parent_run_id, root_run_id = _run_lineage(metadata)
         record = HarnessRunRecord(
             run_id=run_id,
             session_id=session_id,
@@ -886,6 +905,8 @@ class FileHarnessStore:
             runtime=runtime,
             status="running",
             started_at=time.time(),
+            parent_run_id=parent_run_id,
+            root_run_id=root_run_id,
             prompt_preview=_stored_prompt_preview(spec, prompt),
             metadata=_run_metadata_with_prompt(spec, prompt, metadata),
         )
@@ -1006,6 +1027,8 @@ class FileHarnessStore:
                 **source.metadata,
                 "fork_of": source.run_id,
                 "fork_after": after,
+                "parent_run_id": source.run_id,
+                "root_run_id": source.root_run_id or source.run_id,
                 **(metadata or {}),
             },
         )
@@ -1373,6 +1396,7 @@ class SQLiteHarnessStore:
         prompt: str,
         metadata: dict[str, Any] | None = None,
     ) -> HarnessRunRecord:
+        parent_run_id, root_run_id = _run_lineage(metadata)
         record = HarnessRunRecord(
             run_id=generate_run_id(),
             session_id=session_id,
@@ -1383,6 +1407,8 @@ class SQLiteHarnessStore:
             runtime=runtime,
             status="running",
             started_at=time.time(),
+            parent_run_id=parent_run_id,
+            root_run_id=root_run_id,
             prompt_preview=_stored_prompt_preview(spec, prompt),
             metadata=_run_metadata_with_prompt(spec, prompt, metadata),
         )
@@ -1391,9 +1417,9 @@ class SQLiteHarnessStore:
                 """
                 insert into runs(
                     run_id, session_id, harness, flavor, provider, model, runtime, status,
-                    started_at, ended_at, prompt_preview, metadata
+                    started_at, ended_at, parent_run_id, root_run_id, prompt_preview, metadata
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.run_id,
@@ -1406,6 +1432,8 @@ class SQLiteHarnessStore:
                     record.status,
                     record.started_at,
                     record.ended_at,
+                    record.parent_run_id,
+                    record.root_run_id,
                     record.prompt_preview,
                     json.dumps(record.metadata, sort_keys=True),
                 ),
@@ -1555,6 +1583,8 @@ class SQLiteHarnessStore:
             **source.metadata,
             "fork_of": source.run_id,
             "fork_after": after,
+            "parent_run_id": source.run_id,
+            "root_run_id": source.root_run_id or source.run_id,
             **(metadata or {}),
         }
         spec = HarnessSpec(name=source.harness)
@@ -1604,6 +1634,8 @@ class SQLiteHarnessStore:
             status=row["status"],
             started_at=float(row["started_at"]),
             ended_at=float(row["ended_at"]) if row["ended_at"] is not None else None,
+            parent_run_id=row["parent_run_id"] or "",
+            root_run_id=row["root_run_id"] or "",
             prompt_preview=row["prompt_preview"] or "",
             events=tuple(self.get_events(row["run_id"])),
             metadata=json.loads(row["metadata"] or "{}"),
@@ -1637,6 +1669,8 @@ class SQLiteHarnessStore:
                     status text not null,
                     started_at real not null,
                     ended_at real,
+                    parent_run_id text not null default '',
+                    root_run_id text not null default '',
                     prompt_preview text not null,
                     metadata text not null
                 );
@@ -1689,6 +1723,8 @@ class SQLiteHarnessStore:
                 );
                 """
             )
+            _ensure_sqlite_column(conn, "runs", "parent_run_id", "text not null default ''")
+            _ensure_sqlite_column(conn, "runs", "root_run_id", "text not null default ''")
             _ensure_sqlite_column(conn, "inputs", "owner_id", "text not null default ''")
             _ensure_sqlite_column(conn, "inputs", "lease_expires_at", "real")
 

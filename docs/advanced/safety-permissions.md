@@ -243,8 +243,15 @@ The sandbox system (`safety/sandbox.py`) provides isolation:
 
 ```yaml
 sandbox:
-  # Isolation mode: worktree, snapshot
-  mode: snapshot
+  # Default local-first profile for account-free sandboxing
+  profile: local-secure
+
+  # Fallback order for local execution without cloud accounts
+  fallback_runtimes:
+    - docker
+    - podman
+    - apple-container
+    - local-os
 
   # Preserve sandbox on error for debugging
   preserve_on_error: false
@@ -256,6 +263,47 @@ sandbox:
     allowed_hosts:
       - "*.github.com"
       - "*.pypi.org"
+```
+
+---
+
+## Local-First Sandbox Providers
+
+SuperQode treats account-free local sandboxes as the primary path for agentic
+coding. Cloud providers are explicit integrations, not the default.
+
+| Backend | Location | Account | Notes |
+|---------|----------|---------|-------|
+| `local-os` | local | none | macOS Seatbelt or Linux Bubblewrap command sandbox |
+| `docker` | local | none | Recommended local secure default |
+| `podman` | local | none | Docker-compatible local alternative, often rootless |
+| `apple-container` | local | none | macOS-native container runtime; detected as experimental |
+| `e2b` | cloud | required | Popular cloud sandbox integration |
+| `daytona` | cloud | required | Popular cloud/dev environment integration |
+| `modal` | cloud | required | Popular cloud execution integration |
+| `vercel` | cloud | required | Vercel Sandbox CLI integration |
+
+Useful profiles:
+
+| Profile | Fallback order |
+|---------|----------------|
+| `local-secure` | `docker -> podman -> apple-container -> local-os` |
+| `local-fast` | `local-os -> docker -> podman` |
+| `cloud-secure` | `e2b -> daytona -> modal -> vercel` |
+| `dev` | `local-os -> docker` |
+
+Check the current machine:
+
+```bash
+superqode sandbox doctor
+superqode sandbox doctor docker
+```
+
+Run a one-off command through a provider:
+
+```bash
+superqode sandbox run docker pytest -q
+superqode sandbox run podman python -V
 ```
 
 ---

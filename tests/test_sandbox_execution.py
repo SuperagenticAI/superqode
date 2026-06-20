@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from superqode.sandbox.execution import run_in_sandbox, sandbox_provider_status
+from superqode.sandbox.execution import (
+    run_in_sandbox,
+    sandbox_profile_backends,
+    sandbox_provider_status,
+    supported_sandbox_backends,
+)
 
 
 def test_docker_status_reports_cli_presence(monkeypatch):
@@ -35,6 +40,37 @@ def test_optional_provider_status_reports_missing_setup(monkeypatch):
     assert status.available is False
     assert status.required_env == ["E2B_API_KEY"]
     assert status.optional_dependency == "e2b"
+    assert status.location == "cloud"
+    assert status.account_required is True
+
+
+def test_supported_backends_are_local_first():
+    assert supported_sandbox_backends(include_cloud=False) == [
+        "local-os",
+        "docker",
+        "podman",
+        "apple-container",
+    ]
+    assert sandbox_profile_backends("local-secure") == (
+        "docker",
+        "podman",
+        "apple-container",
+        "local-os",
+    )
+
+
+def test_podman_status_reports_cli_presence(monkeypatch):
+    monkeypatch.setattr(
+        "superqode.sandbox.execution.shutil.which",
+        lambda name: "/usr/bin/podman" if name == "podman" else None,
+    )
+
+    status = sandbox_provider_status("podman")
+
+    assert status.backend == "podman"
+    assert status.available is True
+    assert status.location == "local"
+    assert status.account_required is False
 
 
 def test_run_docker_builds_isolated_command(monkeypatch, tmp_path):

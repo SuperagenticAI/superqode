@@ -20,7 +20,7 @@ model_policy:
     provider: openai
     max_iterations: 12
 execution_policy:
-  sandbox: local
+  sandbox: docker
   approval_profile: balanced
   allow_read: true
   allow_write: true

@@ -412,6 +412,7 @@ def build_harness_evidence(store: FileHarnessStore, run_id: str) -> dict[str, An
         or event.type == "approval_required"
     ]
     checks_events = [event for event in events if event.type.startswith("checks.")]
+    dynamic_workflows = _dynamic_workflows_from_events(events)
     final_event = next(
         (event for event in reversed(events) if event.type == "workflow.result"), None
     )
@@ -448,6 +449,8 @@ def build_harness_evidence(store: FileHarnessStore, run_id: str) -> dict[str, An
             "started_at": run.started_at,
             "ended_at": run.ended_at,
             "prompt_preview": run.prompt_preview,
+            "parent_run_id": run.parent_run_id,
+            "root_run_id": run.root_run_id,
             "workflow": bool(metadata.get("workflow")),
         },
         "workflow": {
@@ -458,6 +461,12 @@ def build_harness_evidence(store: FileHarnessStore, run_id: str) -> dict[str, An
             "failed_steps": [_workflow_step_summary(event) for event in failed_steps],
             "child_run_ids": child_run_ids,
         },
+        "lineage": {
+            "parent_run_id": run.parent_run_id,
+            "root_run_id": run.root_run_id,
+            "children": _run_lineage_children(store, run.run_id),
+        },
+        "dynamic_workflows": dynamic_workflows,
         "changes": changed_files,
         "checks": checks,
         "approvals": [event.to_dict() for event in approval_events],
@@ -503,6 +512,7 @@ def build_harness_replay_plan(store: FileHarnessStore, run_id: str) -> dict[str,
         run.metadata.get("prompt") if isinstance(run.metadata.get("prompt"), str) else ""
     )
     replayable = bool(stored_prompt)
+    dynamic_workflows = _dynamic_workflows_from_events(events)
     return {
         "run": {
             "run_id": run.run_id,
@@ -515,6 +525,8 @@ def build_harness_replay_plan(store: FileHarnessStore, run_id: str) -> dict[str,
             "prompt_preview": run.prompt_preview,
             "prompt_persistence": run.metadata.get("prompt_persistence") or "unknown",
             "has_full_prompt": bool(stored_prompt),
+            "parent_run_id": run.parent_run_id,
+            "root_run_id": run.root_run_id,
         },
         "events": {
             "count": len(events),
@@ -526,7 +538,11 @@ def build_harness_replay_plan(store: FileHarnessStore, run_id: str) -> dict[str,
         "lineage": {
             "fork_of": run.metadata.get("fork_of"),
             "fork_after": run.metadata.get("fork_after"),
+            "parent_run_id": run.parent_run_id,
+            "root_run_id": run.root_run_id,
+            "children": _run_lineage_children(store, run.run_id),
         },
+        "dynamic_workflows": dynamic_workflows,
         "replayable": replayable,
         "prompt": stored_prompt,
         "limitations": []
@@ -560,6 +576,18 @@ def render_harness_replay_plan(plan: dict[str, Any]) -> str:
     lineage = plan.get("lineage") or {}
     if lineage.get("fork_of"):
         lines.append(f"Forked from: {lineage['fork_of']} after={lineage.get('fork_after')}")
+    if lineage.get("parent_run_id"):
+        lines.append(f"Parent run: {lineage['parent_run_id']}")
+    if lineage.get("root_run_id"):
+        lines.append(f"Root run: {lineage['root_run_id']}")
+    children = lineage.get("children") or []
+    if children:
+        lines.extend(["", "Child runs:"])
+        lines.extend(_render_lineage_children(children, indent="  "))
+    dynamic_workflows = plan.get("dynamic_workflows") or []
+    if dynamic_workflows:
+        lines.extend(["", "Dynamic workflows:"])
+        lines.extend(_render_dynamic_workflows(dynamic_workflows, indent="  "))
     terminal = plan.get("terminal")
     if terminal:
         lines.append(f"Terminal event: {terminal.get('type')}")
@@ -574,6 +602,171 @@ def render_harness_replay_plan(plan: dict[str, Any]) -> str:
     lines.append(f"  {commands.get('fork')}")
     lines.append(f"  {commands.get('events')}")
     return "\n".join(lines)
+
+
+def _run_lineage_children(store: FileHarnessStore, run_id: str) -> list[dict[str, Any]]:
+    try:
+        runs = store.list_runs()
+    except Exception:
+        return []
+    by_parent: dict[str, list[Any]] = {}
+    for item in runs:
+        if item.parent_run_id:
+            by_parent.setdefault(item.parent_run_id, []).append(item)
+    for children in by_parent.values():
+        children.sort(key=lambda item: item.started_at)
+
+    def walk(parent_id: str, depth: int = 0) -> list[dict[str, Any]]:
+        if depth > 8:
+            return []
+        out: list[dict[str, Any]] = []
+        for child in by_parent.get(parent_id, []):
+            out.append(
+                {
+                    "run_id": child.run_id,
+                    "harness": child.harness,
+                    "status": child.status,
+                    "model": child.model,
+                    "runtime": child.runtime,
+                    "prompt_preview": child.prompt_preview,
+                    "children": walk(child.run_id, depth + 1),
+                }
+            )
+        return out
+
+    return walk(run_id)
+
+
+def _render_lineage_children(children: list[dict[str, Any]], *, indent: str) -> list[str]:
+    lines: list[str] = []
+    for child in children:
+        lines.append(
+            f"{indent}- {child['run_id']} status={child['status']} "
+            f"runtime={child['runtime']} model={child['model']}"
+        )
+        if child.get("prompt_preview"):
+            lines.append(f"{indent}  prompt={child['prompt_preview']}")
+        lines.extend(_render_lineage_children(child.get("children") or [], indent=indent + "  "))
+    return lines
+
+
+def _dynamic_workflows_from_events(events: list[Any]) -> list[dict[str, Any]]:
+    workflows: list[dict[str, Any]] = []
+    for index, event in enumerate(events):
+        if event.type != "tool_result":
+            continue
+        data = event.data if isinstance(event.data, dict) else {}
+        tool_name = str(data.get("tool_name") or "")
+        if tool_name not in {"dynamic_workflow", "dynamic_workflow_script"}:
+            continue
+        metadata = data.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        plan = metadata.get("plan") if isinstance(metadata.get("plan"), dict) else {}
+        objective = str(
+            plan.get("objective")
+            or metadata.get("objective")
+            or data.get("objective")
+            or ""
+        )
+        steps = _dynamic_workflow_steps(plan, metadata)
+        child_run_ids = [
+            str(item)
+            for item in (metadata.get("child_run_ids") or [])
+            if item
+        ]
+        workflows.append(
+            {
+                "event_index": index,
+                "tool_name": tool_name,
+                "objective": objective,
+                "script_compiled": bool(metadata.get("script_compiled")),
+                "steps": steps,
+                "child_run_ids": child_run_ids,
+                "failed": int(metadata.get("failed") or 0),
+                "truncated": bool(metadata.get("truncated")),
+            }
+        )
+    return workflows
+
+
+def _dynamic_workflow_steps(plan: dict[str, Any], metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    plan_steps = plan.get("steps") if isinstance(plan.get("steps"), list) else []
+    result_steps = metadata.get("results") if isinstance(metadata.get("results"), list) else []
+    by_id = {
+        str(item.get("id") or ""): item
+        for item in result_steps
+        if isinstance(item, dict)
+    }
+    steps: list[dict[str, Any]] = []
+    for index, step in enumerate(plan_steps, start=1):
+        if not isinstance(step, dict):
+            continue
+        step_id = str(step.get("id") or f"step-{index}")
+        result = by_id.get(step_id, {})
+        result_metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
+        child_run_ids = []
+        if result_metadata.get("child_run_id"):
+            child_run_ids.append(str(result_metadata["child_run_id"]))
+        for run_id in result_metadata.get("child_run_ids") or []:
+            if run_id:
+                child_run_ids.append(str(run_id))
+        steps.append(
+            {
+                "id": step_id,
+                "task": str(step.get("task") or ""),
+                "context_handle": str(step.get("context_handle") or ""),
+                "fanout": bool(step.get("fanout")),
+                "success": result.get("success"),
+                "error": result.get("error"),
+                "child_run_ids": child_run_ids,
+            }
+        )
+    if steps:
+        return steps
+    return [
+        {
+            "id": str(item.get("id") or f"step-{index}"),
+            "task": "",
+            "context_handle": "",
+            "fanout": False,
+            "success": item.get("success"),
+            "error": item.get("error"),
+            "child_run_ids": _result_child_run_ids(item),
+        }
+        for index, item in enumerate(result_steps, start=1)
+        if isinstance(item, dict)
+    ]
+
+
+def _result_child_run_ids(item: dict[str, Any]) -> list[str]:
+    metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    out: list[str] = []
+    if metadata.get("child_run_id"):
+        out.append(str(metadata["child_run_id"]))
+    for run_id in metadata.get("child_run_ids") or []:
+        if run_id:
+            out.append(str(run_id))
+    return out
+
+
+def _render_dynamic_workflows(workflows: list[dict[str, Any]], *, indent: str) -> list[str]:
+    lines: list[str] = []
+    for workflow in workflows:
+        compiled = " compiled-script" if workflow.get("script_compiled") else ""
+        objective = workflow.get("objective") or "(no objective)"
+        lines.append(f"{indent}- {workflow['tool_name']}{compiled}: {objective}")
+        for step in workflow.get("steps") or []:
+            status = "ok" if step.get("success") is True else "failed" if step.get("success") is False else "unknown"
+            child_runs = step.get("child_run_ids") or []
+            suffix = f" -> {', '.join(child_runs)}" if child_runs else ""
+            fanout = " fanout" if step.get("fanout") else ""
+            lines.append(f"{indent}  - {step.get('id')} [{status}{fanout}]{suffix}")
+            if step.get("context_handle"):
+                lines.append(f"{indent}    context={step['context_handle']}")
+            if step.get("error"):
+                lines.append(f"{indent}    error={step['error']}")
+    return lines
 
 
 def fork_harness_run(
@@ -613,6 +806,19 @@ def render_harness_evidence(evidence: dict[str, Any]) -> str:
     ]
     if workflow.get("mode"):
         lines.append(f"Workflow: {workflow['mode']}")
+    lineage = evidence.get("lineage") or {}
+    if lineage.get("parent_run_id"):
+        lines.append(f"Parent run: {lineage['parent_run_id']}")
+    if lineage.get("root_run_id"):
+        lines.append(f"Root run: {lineage['root_run_id']}")
+    children = lineage.get("children") or []
+    if children:
+        lines.extend(["", "Child runs:"])
+        lines.extend(_render_lineage_children(children, indent="  "))
+    dynamic_workflows = evidence.get("dynamic_workflows") or []
+    if dynamic_workflows:
+        lines.extend(["", "Dynamic workflows:"])
+        lines.extend(_render_dynamic_workflows(dynamic_workflows, indent="  "))
     lines.extend(
         [
             "",

@@ -117,6 +117,34 @@ class WorkflowSpec:
 
 
 @dataclass(frozen=True)
+class RecursionSpec:
+    """Bounded recursive harness delegation policy."""
+
+    enabled: bool = False
+    max_depth: int = 1
+    max_children: int = 6
+    max_parallel: int = 2
+    max_wall_seconds: int = 600
+    max_budget: float | None = None
+    child_model: str | None = None
+    child_sandbox: str = "docker"
+    write_policy: str = "approval"  # approval | deny | allow
+    config: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class RemoteHarnessSpec:
+    """Optional managed-agent execution backend policy."""
+
+    enabled: bool = False
+    provider: str = ""
+    agent_id: str | None = None
+    region: str | None = None
+    context_policy: str = "selected-files"
+    config: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ContextSpec:
     """Context, instruction, memory, and compaction policy."""
 
@@ -182,6 +210,8 @@ class ObservabilitySpec:
 
     events: bool = True
     traces: bool = False
+    local: bool = True
+    exporters: tuple[dict[str, Any], ...] = ()
     run_store: str = "memory"
     config: dict[str, Any] = field(default_factory=dict)
 
@@ -200,6 +230,8 @@ class HarnessSpec:
     execution_policy: ExecutionPolicySpec = field(default_factory=ExecutionPolicySpec)
     agents: tuple[AgentSpec, ...] = ()
     workflow: WorkflowSpec = field(default_factory=WorkflowSpec)
+    recursion: RecursionSpec = field(default_factory=RecursionSpec)
+    remote_harness: RemoteHarnessSpec = field(default_factory=RemoteHarnessSpec)
     context: ContextSpec = field(default_factory=ContextSpec)
     checks: ChecksSpec = field(default_factory=ChecksSpec)
     observability: ObservabilitySpec = field(default_factory=ObservabilitySpec)

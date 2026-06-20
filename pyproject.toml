@@ -68,6 +68,20 @@ channels = [
     # Telegram long polling is stdlib-only and needs no extra.
     "websocket-client>=1.6.0",
 ]
+sandbox-e2b = [
+    "e2b>=2.0.0",
+]
+sandbox-modal = [
+    "modal>=1.0.0",
+]
+sandbox-daytona = [
+    "daytona>=0.1.0",
+]
+sandbox-cloud = [
+    "e2b>=2.0.0",
+    "modal>=1.0.0",
+    "daytona>=0.1.0",
+]
 web = [
     "textual-serve>=1.1.3",
 ]
@@ -150,6 +164,15 @@ docs = [
     "pymdown-extensions>=10.12.0",
     "mkdocs-minify-plugin>=0.8.0",
 ]
+observability = [
+    "arize-phoenix>=17.7.0",
+    "arize-phoenix-otel>=0.16.1",
+    "langsmith>=0.8.5",
+    "logfire>=4.33.0",
+    "mlflow>=3.14.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.39.1",
+    "opentelemetry-sdk>=1.39.1",
+]
 
 [project.urls]
 Repository = "https://github.com/SuperagenticAI/superqode"
@@ -171,6 +194,8 @@ where = ["src"]
 superqode = [
     "agents/data/*.toml",
     "data/*.yaml",
+    "data/eval_fixtures/*.log",
+    "data/eval_packs/*.yaml",
     "local/data/*.yaml",
     "local/data/model-packs/*.yaml",
     "py.typed",

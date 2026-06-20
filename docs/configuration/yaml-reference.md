@@ -356,6 +356,8 @@ These fields are not part of `superqode.yaml`. They belong in a harness file:
 - `execution_policy`
 - `agents`
 - `workflow`
+- `recursion`
+- `remote_harness`
 - `context`
 - `checks`
 - `hooks`
@@ -369,8 +371,176 @@ superqode harness init my-coder --template coding --output harness.yaml
 superqode harness validate --spec harness.yaml
 ```
 
+### Sandbox Backends
+
+Use `execution_policy.sandbox` in a harness spec to select a concrete backend.
+The local, no-account backends are first-class:
+
+```yaml
+execution_policy:
+  sandbox: docker        # docker | podman | apple-container | local-os
+  allow_shell: true
+  allow_write: true
+  allow_network: false
+```
+
+Cloud sandbox integrations are explicit opt-ins:
+
+```yaml
+execution_policy:
+  sandbox: e2b           # e2b | daytona | modal | vercel
+```
+
+Check availability with:
+
+```bash
+superqode sandbox doctor
+```
+
+### Recursive Harnessing
+
+Use `recursion` to allow bounded child harness delegation through
+`spawn_harness`:
+
+```yaml
+recursion:
+  enabled: true
+  max_depth: 1
+  max_children: 6
+  max_parallel: 2
+  max_wall_seconds: 600
+  child_model: utility-coder
+  child_sandbox: docker
+  write_policy: approval   # approval | deny | allow
+```
+
+Inside `HarnessKernel`, children run as real child harness runs with
+`parent_run_id` and `root_run_id` lineage. Use read-only child tasks for
+repo/log/trace fan-out and require approval before write-capable children.
+
+Pair recursion with local context handles:
+
+```yaml
+agents:
+  - id: root-coder
+    tools:
+      - context_handle   # file:ci.log, repo:src/**/*.py, diff:working-tree, run:<id>
+      - spawn_harness
+      - dynamic_workflow # bounded multi-step orchestration over spawn_harness
+      - dynamic_workflow_script # restricted Python-like DSL compiled to dynamic_workflow
+```
+
+`spawn_harness` also supports bounded chunk fan-out:
+
+```json
+{
+  "task": "Inspect this chunk for root-cause evidence.",
+  "context_handle": "file:ci-run.log",
+  "fanout": true,
+  "chunk_chars": 12000,
+  "max_chunks": 6,
+  "max_parallel": 2,
+  "mode": "read-only"
+}
+```
+
+### Observability
+
+Use `observability` to keep local run history and configure optional export
+sinks:
+
+```bash
+uv sync --extra observability
+```
+
+```yaml
+observability:
+  events: true
+  traces: true
+  local: true
+  run_store: file        # memory | file | sqlite
+  exporters:
+    - type: opentelemetry
+      enabled: false
+      endpoint: http://localhost:4317
+    - type: mlflow
+      enabled: true
+      experiment: superqode-harness
+    - type: langsmith
+      enabled: false
+    - type: logfire
+      enabled: false
+    - type: arize
+      enabled: false
+```
+
+Local artifacts are the source of truth. Export a stored run tree with:
+
+```bash
+superqode harness observability export <run-id>
+```
+
+The export writes `trace.json`, `runs.jsonl`, `events.jsonl`,
+`otel_spans.jsonl`, and `overview.md`. External sinks are optional mirrors:
+OpenTelemetry sends spans to an OTLP collector, MLflow logs the export
+directory as artifacts and metrics, LangSmith creates a run tree, Logfire emits
+spans/log events, and Arize/Phoenix uses the OTEL collector path. Missing
+packages or credentials report as unavailable and do not break the harness run.
+
+### Remote Managed Harnesses
+
+Use `remote_harness` to describe an optional managed-agent execution backend:
+
+```yaml
+remote_harness:
+  enabled: true
+  provider: google-agent-engine   # google-agent-engine | anthropic-managed
+  region: us-central1
+  context_policy: selected-files
+  config:
+    mode: generate_content
+    base_agent: gemini-flash-latest
+    api_key_env: GEMINI_API_KEY
+```
+
+For Google, `mode: generate_content` follows the same working shape as the
+Gemini direct harness path: SuperQode posts to
+`models/{base_agent}:generateContent` with `x-goog-api-key`. Set
+`GEMINI_API_KEY`, or override `api_key_env`.
+
+For a deployed managed-agent interaction endpoint, use `mode: persisted` or
+`mode: agent`:
+
+```yaml
+remote_harness:
+  enabled: true
+  provider: google-agent-engine
+  agent_id: projects/.../locations/.../agents/...
+  config:
+    mode: persisted
+    api_base: https://...
+    api_key_env: GEMINI_API_KEY
+```
+
+For Anthropic managed agents, configure `endpoint` and `ANTHROPIC_API_KEY`:
+
+```yaml
+remote_harness:
+  enabled: true
+  provider: anthropic-managed
+  agent_id: agent_...
+  config:
+    endpoint: https://...
+    api_key_env: ANTHROPIC_API_KEY
+```
+
+Managed backends are explicit remote execution adapters. Without the required
+provider credential and endpoint, where that mode requires one, they fail
+closed. Local harness execution remains the default.
+
 ## Next Steps
 
 - [MCP Configuration](mcp-config.md)
 - [Harness System](../advanced/harness-system.md)
+- [Recursive Agent Harness](../advanced/recursive-agent-harness.md)
 - [Providers](../providers/index.md)

@@ -1,0 +1,24 @@
+metadata:
+  id: local-recursive-smoke
+  name: Local Recursive Harness Smoke
+  description: Small proof pack for context_handle plus spawn_harness on a long CI log.
+  best_for: validating local recursive log diagnosis
+tasks:
+  - id: ci-log-root-cause
+    prompt: |
+      Diagnose the root cause in this CI log using the local recursive harness pattern.
+
+      1. Use context_handle with handle="file:src/superqode/data/eval_fixtures/ci-root-cause.log"
+         to grep for ERROR, FAILED, and root cause markers.
+      2. Use spawn_harness in read-only mode for the most relevant log cluster.
+      3. Return the exact root cause string and explain why other failures are downstream.
+
+      The answer must include the exact text:
+      ROOT_CAUSE: migration 20260619_add_payment_id missed unique index on payments.payment_id
+    expect_contains:
+      - "ROOT_CAUSE: migration 20260619_add_payment_id missed unique index on payments.payment_id"
+      - "downstream"
+    tags:
+      - recursive
+      - context_handle
+      - ci-log

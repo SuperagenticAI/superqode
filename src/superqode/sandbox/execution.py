@@ -1,13 +1,179 @@
-"""Sandbox command execution providers."""
+"""Sandbox command execution providers.
+
+SuperQode is local-first: the default supported sandbox surface should work
+without creating any cloud account. Cloud sandboxes are still available, but
+they are explicit integrations rather than the default path.
+"""
 
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import subprocess
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
+
+
+class SandboxLocation(str, Enum):
+    """Where a sandbox backend runs."""
+
+    LOCAL = "local"
+    CLOUD = "cloud"
+
+
+class SandboxSupportTier(str, Enum):
+    """Support tier exposed by the public SuperQode sandbox surface."""
+
+    CORE = "core"
+    POPULAR_CLOUD = "popular-cloud"
+    EXPERIMENTAL = "experimental"
+
+
+@dataclass(frozen=True)
+class SandboxProviderDefinition:
+    """Static metadata for one sandbox provider."""
+
+    backend: str
+    display_name: str
+    location: SandboxLocation
+    tier: SandboxSupportTier
+    account_required: bool
+    description: str
+    default_image: str = "python:3.12-slim"
+    executable: Optional[str] = None
+    required_env: tuple[str, ...] = ()
+    optional_dependency: Optional[str] = None
+
+
+SANDBOX_PROVIDERS: dict[str, SandboxProviderDefinition] = {
+    "local-os": SandboxProviderDefinition(
+        backend="local-os",
+        display_name="Local OS Sandbox",
+        location=SandboxLocation.LOCAL,
+        tier=SandboxSupportTier.CORE,
+        account_required=False,
+        description="macOS Seatbelt or Linux Bubblewrap sandbox on the local machine.",
+    ),
+    "local": SandboxProviderDefinition(
+        backend="local",
+        display_name="Local",
+        location=SandboxLocation.LOCAL,
+        tier=SandboxSupportTier.CORE,
+        account_required=False,
+        description="Direct local execution with no isolation; development fallback only.",
+    ),
+    "docker": SandboxProviderDefinition(
+        backend="docker",
+        display_name="Docker",
+        location=SandboxLocation.LOCAL,
+        tier=SandboxSupportTier.CORE,
+        account_required=False,
+        description="Local container sandbox using Docker.",
+        executable="docker",
+    ),
+    "podman": SandboxProviderDefinition(
+        backend="podman",
+        display_name="Podman",
+        location=SandboxLocation.LOCAL,
+        tier=SandboxSupportTier.CORE,
+        account_required=False,
+        description="Local container sandbox using Podman, often rootless on Linux.",
+        executable="podman",
+    ),
+    "apple-container": SandboxProviderDefinition(
+        backend="apple-container",
+        display_name="Apple Container",
+        location=SandboxLocation.LOCAL,
+        tier=SandboxSupportTier.EXPERIMENTAL,
+        account_required=False,
+        description="macOS-native local container runtime.",
+        executable="container",
+    ),
+    "e2b": SandboxProviderDefinition(
+        backend="e2b",
+        display_name="E2B",
+        location=SandboxLocation.CLOUD,
+        tier=SandboxSupportTier.POPULAR_CLOUD,
+        account_required=True,
+        description="Cloud sandbox provider for AI agents.",
+        required_env=("E2B_API_KEY",),
+        optional_dependency="e2b",
+    ),
+    "daytona": SandboxProviderDefinition(
+        backend="daytona",
+        display_name="Daytona",
+        location=SandboxLocation.CLOUD,
+        tier=SandboxSupportTier.POPULAR_CLOUD,
+        account_required=True,
+        description="Cloud or customer-managed development sandbox infrastructure.",
+        required_env=("DAYTONA_API_KEY",),
+        optional_dependency="daytona",
+    ),
+    "modal": SandboxProviderDefinition(
+        backend="modal",
+        display_name="Modal",
+        location=SandboxLocation.CLOUD,
+        tier=SandboxSupportTier.POPULAR_CLOUD,
+        account_required=True,
+        description="Cloud sandbox execution on Modal.",
+        optional_dependency="modal",
+    ),
+    "vercel": SandboxProviderDefinition(
+        backend="vercel",
+        display_name="Vercel Sandbox",
+        location=SandboxLocation.CLOUD,
+        tier=SandboxSupportTier.POPULAR_CLOUD,
+        account_required=True,
+        description="Vercel Sandbox CLI execution.",
+        executable="sandbox",
+        required_env=("VERCEL_OIDC_TOKEN or VERCEL_TOKEN",),
+    ),
+    "runloop": SandboxProviderDefinition(
+        backend="runloop",
+        display_name="Runloop",
+        location=SandboxLocation.CLOUD,
+        tier=SandboxSupportTier.EXPERIMENTAL,
+        account_required=True,
+        description="Experimental remote devbox integration.",
+        required_env=("RUNLOOP_API_KEY",),
+        optional_dependency="runloop_api_client, langchain_runloop",
+    ),
+    "agentcore": SandboxProviderDefinition(
+        backend="agentcore",
+        display_name="AgentCore",
+        location=SandboxLocation.CLOUD,
+        tier=SandboxSupportTier.EXPERIMENTAL,
+        account_required=True,
+        description="Experimental Amazon Bedrock AgentCore Code Interpreter integration.",
+        required_env=("AWS credentials",),
+        optional_dependency="bedrock_agentcore, langchain_agentcore_codeinterpreter",
+    ),
+    "langsmith": SandboxProviderDefinition(
+        backend="langsmith",
+        display_name="LangSmith",
+        location=SandboxLocation.CLOUD,
+        tier=SandboxSupportTier.EXPERIMENTAL,
+        account_required=True,
+        description="Experimental LangSmith/DeepAgents sandbox integration.",
+        required_env=("LANGSMITH_API_KEY",),
+        optional_dependency="langsmith, deepagents",
+    ),
+}
+
+LOCAL_SANDBOX_BACKENDS = ("local-os", "docker", "podman", "apple-container")
+POPULAR_CLOUD_SANDBOX_BACKENDS = ("e2b", "daytona", "modal", "vercel")
+SUPPORTED_SANDBOX_BACKENDS = LOCAL_SANDBOX_BACKENDS + POPULAR_CLOUD_SANDBOX_BACKENDS
+EXPERIMENTAL_SANDBOX_BACKENDS = ("runloop", "agentcore", "langsmith")
+
+SANDBOX_PROFILES: dict[str, tuple[str, ...]] = {
+    "local-secure": ("docker", "podman", "apple-container", "local-os"),
+    "local-fast": ("local-os", "docker", "podman"),
+    "cloud-secure": ("e2b", "daytona", "modal", "vercel"),
+    "dev": ("local-os", "docker"),
+}
 
 
 @dataclass(frozen=True)
@@ -47,6 +213,10 @@ class SandboxProviderStatus:
     required_env: List[str]
     optional_dependency: Optional[str] = None
     executable: Optional[str] = None
+    location: str = "local"
+    tier: str = "core"
+    account_required: bool = False
+    description: str = ""
 
     def to_dict(self) -> Dict[str, object]:
         return {
@@ -56,23 +226,139 @@ class SandboxProviderStatus:
             "required_env": self.required_env,
             "optional_dependency": self.optional_dependency,
             "executable": self.executable,
+            "location": self.location,
+            "tier": self.tier,
+            "account_required": self.account_required,
+            "description": self.description,
         }
 
 
 def _missing_env(env_vars: List[str]) -> List[str]:
-    return [name for name in env_vars if not os.environ.get(name)]
+    return [name for name in env_vars if " or " not in name and not os.environ.get(name)]
+
+
+def _status(
+    backend: str,
+    *,
+    available: bool,
+    detail: str,
+    required_env: List[str] | None = None,
+    optional_dependency: Optional[str] = None,
+    executable: Optional[str] = None,
+) -> SandboxProviderStatus:
+    definition = SANDBOX_PROVIDERS.get(backend)
+    return SandboxProviderStatus(
+        backend=backend,
+        available=available,
+        detail=detail,
+        required_env=required_env
+        if required_env is not None
+        else list(definition.required_env)
+        if definition
+        else [],
+        optional_dependency=optional_dependency
+        if optional_dependency is not None
+        else definition.optional_dependency
+        if definition
+        else None,
+        executable=executable
+        if executable is not None
+        else definition.executable
+        if definition
+        else None,
+        location=definition.location.value if definition else "local",
+        tier=definition.tier.value if definition else "experimental",
+        account_required=definition.account_required if definition else False,
+        description=definition.description if definition else "",
+    )
+
+
+def supported_sandbox_backends(
+    *, include_cloud: bool = True, include_experimental: bool = False
+) -> list[str]:
+    """Return public sandbox backend IDs in display order."""
+    backends = list(LOCAL_SANDBOX_BACKENDS)
+    if include_cloud:
+        backends.extend(POPULAR_CLOUD_SANDBOX_BACKENDS)
+    if include_experimental:
+        backends.extend(EXPERIMENTAL_SANDBOX_BACKENDS)
+    return backends
+
+
+def sandbox_profile_backends(profile: str = "local-secure") -> tuple[str, ...]:
+    """Return backend fallback order for a named sandbox profile."""
+    return SANDBOX_PROFILES.get(profile, SANDBOX_PROFILES["local-secure"])
 
 
 def sandbox_provider_status(backend: str) -> SandboxProviderStatus:
     """Return availability status for a sandbox execution backend."""
+    if backend == "local-os":
+        try:
+            from superqode.sandbox.local_sandbox import sandbox_available, sandbox_status
+
+            status = sandbox_status()
+            available = sandbox_available()
+            detail = (
+                f"{status['backend']} available"
+                if available
+                else "no local OS sandbox backend found (macOS sandbox-exec or Linux bwrap)"
+            )
+        except Exception as exc:
+            available = False
+            detail = f"local OS sandbox check failed: {exc}"
+        return _status(backend, available=available, detail=detail)
+    if backend == "local":
+        return _status(
+            backend,
+            available=True,
+            detail="available without isolation; use only as an explicit development fallback",
+        )
     if backend == "docker":
         available = shutil.which("docker") is not None
-        return SandboxProviderStatus(
-            backend=backend,
+        return _status(
+            backend,
             available=available,
             detail="docker CLI found" if available else "docker CLI not found",
             required_env=[],
             executable="docker",
+        )
+    if backend == "podman":
+        available = shutil.which("podman") is not None
+        return _status(
+            backend,
+            available=available,
+            detail="podman CLI found" if available else "podman CLI not found",
+            required_env=[],
+            executable="podman",
+        )
+    if backend == "apple-container":
+        has_cli = platform.system() == "Darwin" and shutil.which("container") is not None
+        system_ready = False
+        if has_cli:
+            try:
+                completed = subprocess.run(
+                    ["container", "system", "status"],
+                    text=True,
+                    capture_output=True,
+                    timeout=5,
+                    check=False,
+                )
+                system_ready = completed.returncode == 0
+            except Exception:
+                system_ready = False
+        ready_detail = (
+            "Apple container CLI found; execution support is experimental and not normalized yet"
+            if system_ready
+            else "Apple container CLI not found or system not ready"
+            if not has_cli
+            else "Apple container CLI found but system is not ready"
+        )
+        return _status(
+            backend,
+            available=False,
+            detail=ready_detail,
+            required_env=[],
+            executable="container",
         )
     if backend == "e2b":
         missing = _missing_env(["E2B_API_KEY"])
@@ -81,8 +367,8 @@ def sandbox_provider_status(backend: str) -> SandboxProviderStatus:
             has_dep = True
         except ImportError:
             has_dep = False
-        return SandboxProviderStatus(
-            backend=backend,
+        return _status(
+            backend,
             available=has_dep and not missing,
             detail="ready" if has_dep and not missing else "install e2b and set E2B_API_KEY",
             required_env=["E2B_API_KEY"],
@@ -95,8 +381,8 @@ def sandbox_provider_status(backend: str) -> SandboxProviderStatus:
             has_dep = True
         except ImportError:
             has_dep = False
-        return SandboxProviderStatus(
-            backend=backend,
+        return _status(
+            backend,
             available=has_dep and not missing,
             detail="ready"
             if has_dep and not missing
@@ -113,8 +399,8 @@ def sandbox_provider_status(backend: str) -> SandboxProviderStatus:
         available = has_dep and bool(
             os.environ.get("MODAL_TOKEN_ID") or os.environ.get("MODAL_PROFILE")
         )
-        return SandboxProviderStatus(
-            backend=backend,
+        return _status(
+            backend,
             available=available,
             detail="ready" if available else "install modal and run modal setup",
             required_env=[],
@@ -123,8 +409,8 @@ def sandbox_provider_status(backend: str) -> SandboxProviderStatus:
     if backend == "vercel":
         available = shutil.which("sandbox") is not None
         has_auth = bool(os.environ.get("VERCEL_OIDC_TOKEN") or os.environ.get("VERCEL_TOKEN"))
-        return SandboxProviderStatus(
-            backend=backend,
+        return _status(
+            backend,
             available=available and has_auth,
             detail="ready"
             if available and has_auth
@@ -140,8 +426,8 @@ def sandbox_provider_status(backend: str) -> SandboxProviderStatus:
             has_dep = True
         except ImportError:
             has_dep = False
-        return SandboxProviderStatus(
-            backend=backend,
+        return _status(
+            backend,
             available=has_dep and not missing,
             detail=(
                 "ready"
@@ -158,8 +444,8 @@ def sandbox_provider_status(backend: str) -> SandboxProviderStatus:
             has_dep = True
         except ImportError:
             has_dep = False
-        return SandboxProviderStatus(
-            backend=backend,
+        return _status(
+            backend,
             available=has_dep,
             detail=(
                 "ready"
@@ -177,8 +463,8 @@ def sandbox_provider_status(backend: str) -> SandboxProviderStatus:
             has_dep = True
         except ImportError:
             has_dep = False
-        return SandboxProviderStatus(
-            backend=backend,
+        return _status(
+            backend,
             available=has_dep and not missing,
             detail=(
                 "ready"
@@ -188,8 +474,8 @@ def sandbox_provider_status(backend: str) -> SandboxProviderStatus:
             required_env=["LANGSMITH_API_KEY"],
             optional_dependency="langsmith, deepagents",
         )
-    return SandboxProviderStatus(
-        backend=backend,
+    return _status(
+        backend,
         available=False,
         detail=f"unsupported sandbox backend: {backend}",
         required_env=[],
@@ -204,8 +490,16 @@ def run_in_sandbox(
     image: str = "python:3.12-slim",
 ) -> SandboxRunResult:
     """Run a shell command using a sandbox backend."""
+    if backend == "local":
+        return _run_local(command, cwd, timeout)
+    if backend == "local-os":
+        return _run_local_os(command, cwd, timeout)
     if backend == "docker":
         return _run_docker(command, cwd, timeout, image)
+    if backend == "podman":
+        return _run_podman(command, cwd, timeout, image)
+    if backend == "apple-container":
+        return _run_apple_container(command, cwd, timeout, image)
     if backend == "e2b":
         return _run_e2b(command, timeout)
     if backend == "daytona":
@@ -226,9 +520,21 @@ def run_in_sandbox(
 def _run_docker(command: str, cwd: Path, timeout: int, image: str) -> SandboxRunResult:
     if shutil.which("docker") is None:
         raise RuntimeError("docker CLI not found")
+    return _run_container_cli("docker", command, cwd, timeout, image)
+
+
+def _run_podman(command: str, cwd: Path, timeout: int, image: str) -> SandboxRunResult:
+    if shutil.which("podman") is None:
+        raise RuntimeError("podman CLI not found")
+    return _run_container_cli("podman", command, cwd, timeout, image)
+
+
+def _run_container_cli(
+    cli: str, command: str, cwd: Path, timeout: int, image: str
+) -> SandboxRunResult:
     completed = subprocess.run(
         [
-            "docker",
+            cli,
             "run",
             "--rm",
             "-v",
@@ -246,11 +552,64 @@ def _run_docker(command: str, cwd: Path, timeout: int, image: str) -> SandboxRun
         check=False,
     )
     return SandboxRunResult(
-        backend="docker",
+        backend=cli,
         command=command,
         exit_code=completed.returncode,
         stdout=completed.stdout,
         stderr=completed.stderr,
+    )
+
+
+def _run_local(command: str, cwd: Path, timeout: int) -> SandboxRunResult:
+    completed = subprocess.run(
+        command,
+        cwd=cwd,
+        shell=True,
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+    )
+    return SandboxRunResult(
+        backend="local",
+        command=command,
+        exit_code=completed.returncode,
+        stdout=completed.stdout,
+        stderr=completed.stderr,
+    )
+
+
+def _run_local_os(command: str, cwd: Path, timeout: int) -> SandboxRunResult:
+    from superqode.sandbox.local_sandbox import build_sandboxed_command
+
+    plan = build_sandboxed_command(command, cwd, mode="workspace-write")
+    if not plan.applied:
+        raise RuntimeError(f"local OS sandbox unavailable: {plan.reason}")
+    completed = subprocess.run(
+        plan.argv,
+        cwd=cwd,
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+    )
+    return SandboxRunResult(
+        backend="local-os",
+        command=command,
+        exit_code=completed.returncode,
+        stdout=completed.stdout,
+        stderr=completed.stderr,
+    )
+
+
+def _run_apple_container(command: str, cwd: Path, timeout: int, image: str) -> SandboxRunResult:
+    if platform.system() != "Darwin" or shutil.which("container") is None:
+        raise RuntimeError("Apple container CLI not found or not running on macOS")
+    # Apple Container's CLI is still evolving. Prefer Docker-compatible local
+    # engines for now; expose status so users can see the local option without
+    # promising command semantics we cannot reliably normalize yet.
+    raise NotImplementedError(
+        "apple-container status is supported, but command execution is not normalized yet"
     )
 
 
