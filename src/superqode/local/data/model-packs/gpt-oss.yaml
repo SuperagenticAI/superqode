@@ -1,6 +1,6 @@
 # OpenAI gpt-oss family pack.
 name: gpt-oss
-description: "gpt-oss 20B/120B: reasoning models, medium effort, native tools"
+description: "gpt-oss 20B/120B starter: reasoning models, medium effort, native tools"
 match: [gpt-oss]
 policy:
   temperature: 0.2
@@ -10,3 +10,4 @@ policy:
 notes:
   - "Reasoning effort is the main quality lever; raise to high for hard refactors, drop to low for chores."
   - "The 20B runs on 16GB-class hardware; the 120B wants 80GB+ unified memory or multi-GPU."
+  - "Use this as a baseline and tune reasoning, tools, and history with project evals."

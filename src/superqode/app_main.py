@@ -4921,6 +4921,10 @@ class SuperQodeApp(App):
                 self._handle_local_server_start_input("", log)
                 event.input.value = ""
                 return
+            if getattr(self, "_awaiting_local_connect_start", None):
+                self._handle_local_connect_start_input("", log)
+                event.input.value = ""
+                return
 
             if getattr(self, "_awaiting_agent_question", False):
                 self._handle_agent_question_input(text, log)
@@ -5071,6 +5075,9 @@ class SuperQodeApp(App):
                 return
         if getattr(self, "_awaiting_local_server_start", None):
             if self._handle_local_server_start_input(text, log):
+                return
+        if getattr(self, "_awaiting_local_connect_start", None):
+            if self._handle_local_connect_start_input(text, log):
                 return
 
         # Check if awaiting connect type selection (profile-driven)
@@ -5676,6 +5683,8 @@ class SuperQodeApp(App):
             self._show_tools(args, log)
         elif c == "skills":
             self._skills_cmd(args, log)
+        elif c == "skillopt":
+            self._skillopt_cmd(args, log)
         elif c in ("recipe", "recipes", "workflow", "workflows"):
             self.run_worker(self._recipe_cmd(args, log))
         elif c == "attach":
@@ -6367,6 +6376,8 @@ class SuperQodeApp(App):
             t.append(":skills add <name>", style=THEME["cyan"])
             t.append(", ", style=THEME["muted"])
             t.append(":skills import <path>\n", style=THEME["cyan"])
+            t.append("            ", style=THEME["muted"])
+            t.append(":skills optimize <name> --harness <path> --tasks <path> --live\n", style=THEME["cyan"])
             self._show_command_output(log, t)
             return
 
@@ -6438,6 +6449,20 @@ class SuperQodeApp(App):
 
         if action in {"doctor", "validate", "check"}:
             self._skills_doctor(skills_root, log)
+            return
+
+        if action in {"optimize", "optimise"}:
+            if not rest:
+                log.add_error(
+                    "Usage: :skills optimize <name> --harness harness.yaml --tasks eval-tasks.yaml --live"
+                )
+                return
+            if "--live" not in rest:
+                log.add_error(
+                    ":skills optimize requires --live so eval tasks produce real scores."
+                )
+                return
+            self.run_worker(self._skills_optimize_cmd(rest, log))
             return
 
         if action in {"enable", "disable"}:
@@ -6524,7 +6549,70 @@ class SuperQodeApp(App):
             log.add_success(f"Removed skill: {target}")
             return
 
-        log.add_info("Usage: :skills [list|info <name>|add <name>|import <path>|remove <name>]")
+        log.add_info(
+            "Usage: :skills [list|info <name>|add <name>|import <path>|optimize <name> --harness <path> --tasks <path> --live|remove <name>]"
+        )
+
+    async def _skills_optimize_cmd(self, tokens: list[str], log: ConversationLog) -> None:
+        """Run the GEPA skill optimizer from the TUI without blocking input."""
+        await self._superqode_cli_cmd(["skills", "optimize", *tokens], log, "Skill optimization")
+
+    def _skillopt_cmd(self, args: str, log: ConversationLog) -> None:
+        """Run legacy SkillOpt workspace/check commands from the TUI."""
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :skillopt arguments: {exc}")
+            return
+        if not tokens or tokens[0] not in {"export", "check"}:
+            log.add_info(
+                "Usage: :skillopt export <skill> --tasks <path> --project <dir> | :skillopt check --baseline <path> --candidate <path>"
+            )
+            return
+        self.run_worker(self._superqode_cli_cmd(["skillopt", *tokens], log, "SkillOpt command"))
+
+    async def _superqode_cli_cmd(
+        self,
+        command_parts: list[str],
+        log: ConversationLog,
+        label: str,
+    ) -> None:
+        """Run a SuperQode CLI command from the TUI without blocking input."""
+        import sys
+
+        command = [
+            sys.executable,
+            "-m",
+            "superqode.main",
+            *command_parts,
+        ]
+        display_command = " ".join(shlex.quote(part) for part in command)
+        log.add_info(f"Starting {label}:\n  {display_command}")
+
+        def _run() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                command,
+                cwd=Path.cwd(),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        try:
+            completed = await asyncio.to_thread(_run)
+        except Exception as exc:
+            log.add_error(f"{label} failed to start: {exc}")
+            return
+
+        output = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
+        if completed.returncode == 0:
+            log.add_success(f"{label} completed.")
+            if output:
+                log.write(Text(output + "\n", style=THEME["text"], overflow="fold"))
+        else:
+            log.add_error(f"{label} failed with exit code {completed.returncode}.")
+            if output:
+                log.write(Text(output + "\n", style=THEME["error"], overflow="fold"))
 
     def _find_skill_file(self, skills_root: Path, name: str) -> Path | None:
         """Find a local skill file by directory, file stem, or frontmatter name."""
@@ -7026,6 +7114,7 @@ class SuperQodeApp(App):
             (":mcp attach ", self._mcp_resource_completion_candidates),
             (":skills info ", self._skill_completion_candidates),
             (":skills search ", self._skill_completion_candidates),
+            (":skills optimize ", self._skill_completion_candidates),
             (":skills enable ", self._skill_completion_candidates),
             (":skills disable ", self._all_skill_completion_candidates),
             (":skills remove ", self._all_skill_completion_candidates),
@@ -10429,6 +10518,23 @@ class SuperQodeApp(App):
             self._show_harness_events(log, subargs)
             return
 
+        if sub in ("optimize", "optimize-inspect", "optimize-ledger"):
+            try:
+                tokens = shlex.split(subargs or "")
+            except ValueError as exc:
+                log.add_error(f"Could not parse :harness {sub} arguments: {exc}")
+                return
+            if sub == "optimize" and not tokens:
+                log.add_info("Usage: :harness optimize --spec <path> --tasks <path> [--export-only]")
+                return
+            if sub in {"optimize-inspect", "optimize-ledger"} and not tokens:
+                log.add_info(f"Usage: :harness {sub} <run_dir>")
+                return
+            self.run_worker(
+                self._superqode_cli_cmd(["harness", sub, *tokens], log, "Harness optimization")
+            )
+            return
+
         if sub in ("off", "disable", "none"):
             _os.environ.pop("SUPERQODE_HARNESS", None)
             if hasattr(self, "_pure_mode") and self._pure_mode is not None:
@@ -10446,7 +10552,7 @@ class SuperQodeApp(App):
 
         if not path:
             log.add_info(
-                "Usage: :harness <spec.yaml> | :harness inspect | :harness doctor | :harness graph | :harness replay <run_id> | :harness fork <run_id> | :harness evidence <run_id> | :harness runs | :harness templates | :harness off"
+                "Usage: :harness <spec.yaml> | :harness inspect | :harness doctor | :harness graph | :harness replay <run_id> | :harness fork <run_id> | :harness evidence <run_id> | :harness runs | :harness optimize --spec <path> --tasks <path> | :harness optimize-inspect <run_dir> | :harness optimize-ledger <run_dir> | :harness templates | :harness off"
             )
             return
 
@@ -20678,8 +20784,8 @@ memory:
         # MLX and llama.cpp serve exactly one model per process and are NOT
         # always-on background apps like Ollama or LM Studio. Connecting alone
         # would point at a dead endpoint, so if their server is not already up
-        # we launch it with the chosen model first, then connect. Note the
-        # provider id "llamacpp" maps to the server-manager engine "llama.cpp".
+        # ask before launching a managed server. Note the provider id
+        # "llamacpp" maps to the server-manager engine "llama.cpp".
         engine_for_provider = {"mlx": "mlx", "llamacpp": "llama.cpp"}
         if provider in engine_for_provider and model:
             engine = engine_for_provider[provider]
@@ -20690,12 +20796,96 @@ memory:
             except Exception:
                 running = False
             if not running:
-                self.run_worker(self._start_local_then_connect(provider, engine, model, log))
+                self._prompt_local_connect_start(provider, engine, model, log)
                 return
 
         # Local providers use the same connection mechanism as BYOK
         # but are identified by ProviderCategory.LOCAL
         self._connect_byok_mode(provider, model, log)
+
+    @staticmethod
+    def _local_serve_command(engine: str, model: str) -> str:
+        import shlex
+
+        return f":local serve {engine} --model {shlex.quote(model)}"
+
+    def _prompt_local_connect_start(
+        self, provider: str, engine: str, model: str, log: ConversationLog
+    ) -> None:
+        """Ask before starting a one-model local server during connect."""
+        from pathlib import Path as _Path
+
+        label = _Path(model).name if engine == "llama.cpp" else model
+        command = self._local_serve_command(engine, model)
+        self._awaiting_local_connect_start = {
+            "provider": provider,
+            "engine": engine,
+            "model": model,
+            "command": command,
+        }
+        self._awaiting_local_model = False
+
+        t = Text()
+        t.append("\n  🟡 ", style=THEME["warning"])
+        t.append(f"{engine} is not running", style=f"bold {THEME['text']}")
+        t.append(f" for {label}\n", style=THEME["cyan"])
+        t.append("  SuperQode can start a managed local server for this model.\n", style=THEME["muted"])
+        t.append("  It will run in the background, write logs under ", style=THEME["muted"])
+        t.append("~/.superqode/servers/", style=THEME["cyan"])
+        t.append(", and can be stopped with ", style=THEME["muted"])
+        t.append(f":local stop {engine}", style=THEME["success"])
+        t.append(".\n", style=THEME["muted"])
+        t.append("  Command: ", style=THEME["muted"])
+        t.append(command, style=THEME["cyan"])
+        t.append("\n  Press ", style=THEME["muted"])
+        t.append("Enter", style=f"bold {THEME['success']}")
+        t.append(" to start and connect, ", style=THEME["muted"])
+        t.append("'n'", style=THEME["warning"])
+        t.append(" to skip, or type ", style=THEME["muted"])
+        t.append("manual", style=THEME["cyan"])
+        t.append(" to copy/run the command yourself.\n", style=THEME["muted"])
+        if engine == "mlx":
+            t.append(
+                "  MLX will not download missing Hugging Face weights unless you explicitly use --allow-download.\n",
+                style=THEME["dim"],
+            )
+        log.write(t)
+
+    def _handle_local_connect_start_input(self, text: str, log: ConversationLog) -> bool:
+        pending = getattr(self, "_awaiting_local_connect_start", None)
+        if not pending:
+            return False
+
+        choice = text.strip().lower()
+        command = pending["command"]
+        engine = pending["engine"]
+        provider = pending["provider"]
+        model = pending["model"]
+
+        if choice in ("n", "no", "skip", "cancel", "q"):
+            self._awaiting_local_connect_start = None
+            t = Text()
+            t.append("\n  ⏭  ", style=THEME["warning"])
+            t.append(f"Left {engine} stopped.", style=f"bold {THEME['text']}")
+            t.append(" Start it later with: ", style=THEME["muted"])
+            t.append(f"{command}\n", style=THEME["cyan"])
+            log.write(t)
+            self._show_local_provider_picker(log, clear_log=False)
+            return True
+
+        if choice in ("manual", "command", "cmd"):
+            self._awaiting_local_connect_start = None
+            log.add_system(f"Run this yourself, then connect again: {command}")
+            self._show_local_provider_picker(log, clear_log=False)
+            return True
+
+        if choice not in ("", "y", "yes", "start", "ok"):
+            log.add_error("Press Enter to start, type 'manual' for the command, or 'n' to skip.")
+            return True
+
+        self._awaiting_local_connect_start = None
+        self.run_worker(self._start_local_then_connect(provider, engine, model, log))
+        return True
 
     async def _start_local_then_connect(
         self, provider: str, engine: str, model: str, log: ConversationLog
@@ -22480,9 +22670,8 @@ memory:
         models = [m for m in ids if not is_embedding_model(m)]
 
         if not models:
-            # No server is up. For llama.cpp we can launch one ourselves: list
-            # the user's cached GGUF files and start llama-server with whichever
-            # they pick (see _connect_local_mode auto-start).
+            # No server is up. For llama.cpp, list cached GGUF files and ask
+            # before starting llama-server with whichever one they pick.
             if provider_id == "llamacpp":
                 from superqode.local.servers import discover_gguf_models
 
@@ -22502,7 +22691,7 @@ memory:
                     t.append("\n  🟢 llama.cpp", style=f"bold {THEME['success']}")
                     t.append(f"  {len(paths)} cached GGUF model(s)\n", style=THEME["dim"])
                     t.append(
-                        "  Pick one and SuperQode will start llama-server with it.\n\n",
+                        "  Pick one and SuperQode will ask before starting llama-server with it.\n\n",
                         style=THEME["muted"],
                     )
                     for idx, p in enumerate(paths, 1):
@@ -22515,7 +22704,8 @@ memory:
                             t.append("  ← SELECTED", style=f"bold {THEME['success']}")
                         t.append("\n", style="")
                     t.append(
-                        "\n  💡 Select a number or name to launch + connect\n", style=THEME["text"]
+                        "\n  💡 Select a number or name to review the start command\n",
+                        style=THEME["text"],
                     )
                     log.write(t)
                     self.set_timer(0.05, self._ensure_input_focus)
@@ -24095,10 +24285,31 @@ memory:
             self.run_worker(self._local_models(log))
         elif sub == "init":
             self.run_worker(self._local_init(subargs, log))
+        elif sub == "setup":
+            self.run_worker(self._local_setup(subargs, log))
         elif sub == "smoke":
             self.run_worker(self._local_smoke(subargs, log))
         elif sub == "labs":
             self.run_worker(self._local_labs(subargs, log))
+        elif sub == "optimize":
+            try:
+                tokens = shlex.split(subargs or "")
+            except ValueError as exc:
+                log.add_error(f"Could not parse :local optimize arguments: {exc}")
+                return
+            self.run_worker(
+                self._superqode_cli_cmd(["local", "optimize", *tokens], log, "Local optimization")
+            )
+        elif sub == "build":
+            self.run_worker(self._local_build(subargs, log))
+        elif sub == "migrate":
+            self.run_worker(self._local_migrate(subargs, log))
+        elif sub == "pack":
+            parts2 = subargs.split(maxsplit=1)
+            if parts2 and parts2[0].lower() == "init":
+                self.run_worker(self._local_pack_init(parts2[1] if len(parts2) > 1 else "", log))
+            else:
+                log.add_info("Usage: :local pack init [name] [--model MODEL] [--dry-run]")
         elif sub == "search":
             if subargs.strip():
                 self.run_worker(self._local_search(subargs.strip(), log))
@@ -24133,7 +24344,7 @@ memory:
                     "e.g. :local serve mlx --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit --port 8090"
                 )
                 log.add_system(
-                    "e.g. :local serve ds4 --ctx 200000   ·   :local serve ollama --ctx 16384"
+                    "e.g. :local serve ds4 --ctx 32768   ·   long DS4: --ctx 100000   ·   Think Max: --ctx 393216"
                 )
         elif sub == "servers":
             # :local servers - Show managed/running server status
@@ -24148,7 +24359,7 @@ memory:
             log.add_info(f"Unknown subcommand: {sub}")
             log.add_system(
                 "Available: init, smoke, labs, search, warm, status, scan, models, test, "
-                "info, recommend, serve, servers, stop"
+                "info, recommend, serve, servers, stop, optimize, build, setup, migrate, pack init"
             )
 
     @staticmethod
@@ -24177,10 +24388,26 @@ memory:
                 opts["endpoint"] = tok.split("=", 1)[1]
             elif tok == "--endpoint":
                 opts["_expect"] = "endpoint"
+            elif tok.startswith("--pack="):
+                opts["pack"] = tok.split("=", 1)[1]
+            elif tok == "--pack":
+                opts["_expect"] = "pack"
+            elif tok.startswith("--from-smoke="):
+                opts["from_smoke"] = tok.split("=", 1)[1]
+            elif tok == "--from-smoke":
+                opts["_expect"] = "from_smoke"
             elif tok in ("--skip-smoke", "--no-smoke"):
                 opts["skip_smoke"] = True
             elif tok in ("--yes", "-y"):
                 opts["yes"] = True
+            elif tok == "--dry-run":
+                opts["dry_run"] = True
+            elif tok == "--force":
+                opts["force"] = True
+            elif tok == "--write-pack":
+                opts["write_pack"] = True
+            elif tok == "--json":
+                opts["json"] = True
             elif opts.get("_expect"):
                 opts[opts.pop("_expect")] = tok
             else:
@@ -24234,7 +24461,11 @@ memory:
                     model=chosen_model,
                     repo_path=repo,
                 )
-            harness = generate_harness_yaml(report, name="local-coder")
+            harness = generate_harness_yaml(
+                report,
+                name="local-coder",
+                pack_override=opts.get("pack", ""),
+            )
             await asyncio.to_thread(output.write_text, harness, encoding="utf-8")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Local init failed: {exc}")
@@ -24259,8 +24490,156 @@ memory:
                 t.append(f"  {line}\n", style=THEME["text"])
         t.append("\n  Wrote local harness: ", style=THEME["muted"])
         t.append(f"{output}\n", style=f"bold {THEME['success']}")
+        if opts.get("pack"):
+            t.append("  Model pack: ", style=THEME["muted"])
+            t.append(f"{opts['pack']}\n", style=f"bold {THEME['cyan']}")
         t.append("  Start coding with: ", style=THEME["muted"])
         t.append(f"superqode --harness {output}\n", style=THEME["cyan"])
+        self._show_command_output(log, t)
+
+    async def _local_setup(self, subargs: str, log: ConversationLog):
+        """Show the non-mutating local model setup guide from the TUI."""
+        import asyncio
+
+        from superqode.local.setup import build_local_setup_guide, render_local_setup_guide
+
+        try:
+            opts = self._parse_local_kv_args(subargs)
+        except ValueError as exc:
+            log.add_error(f"Could not parse :local setup arguments: {exc}")
+            return
+        query = " ".join(opts.get("_pos") or [])
+        repo = Path(opts.get("repo") or ".")
+        self.is_busy = True
+        try:
+            guide = await asyncio.to_thread(build_local_setup_guide, query, repo_path=repo)
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Local setup guide failed: {exc}")
+            return
+        finally:
+            self.is_busy = False
+
+        t = Text()
+        t.append("\n")
+        for line in render_local_setup_guide(guide, tui_first=True).splitlines():
+            style = f"bold {THEME['text']}" if line.startswith("SuperQode") else THEME["text"]
+            if line.startswith(("1.", "2.", "3.", "4.", "5.", "6.")):
+                style = f"bold {THEME['cyan']}"
+            t.append(f"  {line}\n", style=style)
+        self._show_command_output(log, t)
+
+    async def _local_migrate(self, subargs: str, log: ConversationLog):
+        """Show a non-mutating local migration plan from the TUI."""
+        import asyncio
+
+        from superqode.local.migrate import plan_local_migration, render_migration_report
+
+        try:
+            opts = self._parse_local_kv_args(subargs)
+        except ValueError as exc:
+            log.add_error(f"Could not parse :local migrate arguments: {exc}")
+            return
+        repo = Path(opts.get("repo") or ".")
+        self.is_busy = True
+        try:
+            report = await asyncio.to_thread(
+                plan_local_migration,
+                repo,
+                endpoint=opts.get("endpoint", ""),
+                model=opts.get("model", ""),
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Local migrate failed: {exc}")
+            return
+        finally:
+            self.is_busy = False
+
+        t = Text()
+        t.append("\n")
+        for line in render_migration_report(report).splitlines():
+            style = f"bold {THEME['text']}" if line.startswith("SuperQode") else THEME["text"]
+            t.append(f"  {line}\n", style=style)
+        self._show_command_output(log, t)
+
+    async def _local_pack_init(self, subargs: str, log: ConversationLog):
+        """Create or preview a project-owned model policy pack from the TUI."""
+        import asyncio
+
+        from superqode.local.packs import draft_pack, render_pack_draft, write_pack_draft
+
+        try:
+            opts = self._parse_local_kv_args(subargs)
+        except ValueError as exc:
+            log.add_error(f"Could not parse :local pack init arguments: {exc}")
+            return
+        name = opts["_pos"][0] if opts.get("_pos") else ""
+        output = opts.get("output")
+        self.is_busy = True
+        try:
+            draft = await asyncio.to_thread(
+                draft_pack,
+                name=name,
+                model=opts.get("model", ""),
+                endpoint=opts.get("endpoint", ""),
+                from_smoke=opts.get("from_smoke"),
+            )
+            if not opts.get("dry_run"):
+                draft = await asyncio.to_thread(
+                    write_pack_draft,
+                    draft,
+                    output=output,
+                    force=bool(opts.get("force")),
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Local pack init failed: {exc}")
+            return
+        finally:
+            self.is_busy = False
+
+        t = Text()
+        t.append("\n")
+        for line in render_pack_draft(draft).splitlines():
+            style = f"bold {THEME['text']}" if line.startswith("SuperQode") else THEME["text"]
+            t.append(f"  {line}\n", style=style)
+        if opts.get("dry_run"):
+            t.append("\n  Dry run only; pass without --dry-run to write the pack.\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    async def _local_build(self, subargs: str, log: ConversationLog):
+        """Run the non-live local harness builder from the TUI."""
+        import asyncio
+
+        from superqode.local.build import build_local_harness, render_local_build_report
+
+        try:
+            opts = self._parse_local_kv_args(subargs)
+        except ValueError as exc:
+            log.add_error(f"Could not parse :local build arguments: {exc}")
+            return
+        self.is_busy = True
+        try:
+            report = await asyncio.to_thread(
+                build_local_harness,
+                repo_path=Path(opts.get("repo") or "."),
+                model=opts.get("model", ""),
+                endpoint=opts.get("endpoint", ""),
+                pack=opts.get("pack", ""),
+                output=Path(opts.get("output") or "superqode.local.yaml"),
+                write_pack=bool(opts.get("write_pack")),
+                force=bool(opts.get("force") or opts.get("yes")),
+                dry_run=bool(opts.get("dry_run")),
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Local build failed: {exc}")
+            return
+        finally:
+            self.is_busy = False
+
+        t = Text()
+        t.append("\n")
+        for line in render_local_build_report(report).splitlines():
+            style = f"bold {THEME['text']}" if line.startswith("SuperQode") else THEME["text"]
+            t.append(f"  {line}\n", style=style)
         self._show_command_output(log, t)
 
     async def _local_smoke(self, subargs: str, log: ConversationLog):
@@ -24447,6 +24826,8 @@ memory:
             t.append(" to see the latest releases live from Hugging Face.\n", style=THEME["muted"])
         t.append("  After downloading, ", style=THEME["muted"])
         t.append(":connect local\n", style=f"bold {THEME['cyan']}")
+        t.append("  For the full first-run path: ", style=THEME["muted"])
+        t.append(f":local setup {query}\n", style=f"bold {THEME['cyan']}")
         self._call_ui(self._show_command_output, log, t)
 
     async def _local_warm(self, subargs: str, log: ConversationLog):
@@ -24529,6 +24910,12 @@ memory:
             elif tok == "--host" and i + 1 < len(tokens):
                 opts["host"] = tokens[i + 1]
                 i += 2
+            elif tok == "--extra" and i + 1 < len(tokens):
+                opts.setdefault("extra_args", []).append(tokens[i + 1])
+                i += 2
+            elif tok.startswith("--extra="):
+                opts.setdefault("extra_args", []).append(tok.split("=", 1)[1])
+                i += 1
             elif tok in ("--allow-download", "-y"):
                 opts["allow_download"] = True
                 i += 1
@@ -24539,6 +24926,7 @@ memory:
     async def _local_serve(self, subargs: str, log: ConversationLog):
         """Start a local model server from the TUI as a managed daemon."""
         import asyncio
+        import shlex
 
         from superqode.local.servers import SPECS, ServerError, get_manager
 
@@ -24559,6 +24947,37 @@ memory:
             log.add_error(f"{engine} is not installed on this machine")
             return
 
+        host_eff = opts.get("host") or SPECS[engine].default_host
+        port_eff = opts.get("port") or SPECS[engine].default_port
+        if not manager.is_running(engine, host_eff, port_eff):
+            try:
+                cmd, env_overrides, cwd = manager.build_command(
+                    engine,
+                    host=host_eff,
+                    port=port_eff,
+                    model=opts.get("model"),
+                    ctx=opts.get("ctx"),
+                    extra_args=opts.get("extra_args"),
+                )
+                t0 = Text()
+                t0.append(f"Starting managed {engine} server\n", style=f"bold {THEME['text']}")
+                t0.append("  command: ", style=THEME["muted"])
+                t0.append(" ".join(shlex.quote(part) for part in cmd), style=THEME["cyan"])
+                t0.append("\n", style="")
+                if env_overrides:
+                    env_text = " ".join(
+                        f"{key}={shlex.quote(value)}"
+                        for key, value in sorted(env_overrides.items())
+                    )
+                    t0.append("  env: ", style=THEME["muted"])
+                    t0.append(env_text, style=THEME["cyan"])
+                    t0.append("\n", style="")
+                if cwd:
+                    t0.append(f"  cwd: {cwd}\n", style=THEME["dim"])
+                t0.append(f"  log: ~/.superqode/servers/{engine}.log\n", style=THEME["dim"])
+                log.write(t0)
+            except ServerError:
+                pass
         log.add_info(f"Starting {engine} server (this may take a moment while it binds)...")
         try:
             handle = await asyncio.to_thread(manager.start, engine, **opts)
@@ -27177,7 +27596,13 @@ memory:
                 THEME["orange"],
                 [
                     (":local", "Show local provider status"),
+                    (":local setup [model]", "TUI-first guide: pick model, serve, harness, smoke"),
                     (":local init", "Generate a local harness and run readiness smoke"),
+                    (":local build", "Guided local harness builder without live model calls"),
+                    (":local init --pack <pack> --skip-smoke", "Generate a harness with your pack"),
+                    (":local migrate", "Plan prompt/skill migration to local models"),
+                    (":local pack init", "Create a project-owned model policy pack"),
+                    (":local optimize", "Benchmark local model candidates and role routing"),
                     (":local smoke", "Run non-destructive local coding readiness checks"),
                     (
                         ":local search <query>",
@@ -27266,6 +27691,18 @@ memory:
                     (":skills add <name>", "Create a SKILL.md template for a new skill"),
                     (":skills import <path>", "Import a local skill file or directory"),
                     (":skills doctor", "Validate local skill metadata and duplicates"),
+                    (
+                        ":skills optimize <name> --harness <path> --tasks <path> --live",
+                        "Run GEPA skill optimization and stage the result",
+                    ),
+                    (
+                        ":skillopt export <skill> --tasks <path> --project <dir>",
+                        "Export a SkillOpt-style workspace",
+                    ),
+                    (
+                        ":skillopt check --baseline <path> --candidate <path>",
+                        "Run the bounded-edit candidate gate",
+                    ),
                     (":skills enable|disable <name>", "Toggle a local skill's enabled flag"),
                     (":recipes", "List reusable local workflows from .superqode/recipes"),
                     (":recipe run <name>", "Load or run a reusable workflow recipe"),
@@ -27294,6 +27731,18 @@ memory:
                         "Show run evidence, changes, checks, and result receipt",
                     ),
                     (":harness events <run_id>", "Show persisted event timeline for a harness run"),
+                    (
+                        ":harness optimize --spec <path> --tasks <path>",
+                        "Optimize a HarnessSpec through optional metaharness",
+                    ),
+                    (
+                        ":harness optimize-inspect <run_dir>",
+                        "Inspect a completed harness optimization run",
+                    ),
+                    (
+                        ":harness optimize-ledger <run_dir>",
+                        "Show candidate ledger for a harness optimization run",
+                    ),
                     (":harness templates", "List built-in HarnessSpec templates"),
                     (":harness off", "Disable the active HarnessSpec"),
                     (
@@ -27329,7 +27778,11 @@ memory:
                     (":memory forget <id>", "Delete a local memory"),
                     (":memory export [provider]", "Export local or SpecMem memory JSON"),
                     (":local init", "Local Agentic Coding setup: harness + smoke test"),
+                    (":local build", "Guided local harness builder without live model calls"),
                     (":local packs", "List model policy packs (tuned open-model defaults)"),
+                    (":local pack init", "Create a project-owned model policy pack"),
+                    (":local migrate", "Plan prompt/skill migration to local models"),
+                    (":local optimize", "Benchmark local model candidates and role routing"),
                     (":benchmark", "Show benchmark target readiness and CLI usage"),
                 ],
             ),

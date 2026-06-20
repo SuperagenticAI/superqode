@@ -184,3 +184,50 @@ def test_local_init_writes_harness(monkeypatch, tmp_path):
     text = target.read_text(encoding="utf-8")
     assert "primary: mlx/THUDM/GLM-4.5-Air" in text
     assert "pack: glm" in text
+
+
+def test_local_init_pack_override(monkeypatch, tmp_path):
+    from superqode.local import doctor as doctor_mod
+
+    candidate = ModelCandidate(
+        name="GLM-4.5-Air",
+        match=["glm-4.5-air"],
+        pull="hf download THUDM/GLM-4.5-Air",
+        pack="glm",
+        source="models.dev/labs/zhipuai",
+    )
+    report = DoctorReport(
+        hardware=HardwareProfile(platform="darwin", is_apple_silicon=True, unified_memory_gb=64),
+        engines={"mlx-lm": EngineStatus(engine="mlx-lm", installed=True, running=True)},
+        inventory=[],
+        recommendation=StackRecommendation(
+            tier_id="apple_64",
+            description="test",
+            engine="mlx-lm",
+            engine_ranked=["mlx-lm"],
+            models=[candidate],
+        ),
+        matrix_version="test",
+    )
+    monkeypatch.setattr(doctor_mod, "run_doctor", lambda *a, **k: report)
+    target = tmp_path / "superqode.local.yaml"
+
+    result = CliRunner().invoke(
+        local,
+        [
+            "init",
+            "--repo",
+            str(tmp_path),
+            "--output",
+            str(target),
+            "--skip-smoke",
+            "--pack",
+            "minimax-m1",
+        ],
+    )
+
+    assert result.exit_code == 0
+    text = target.read_text(encoding="utf-8")
+    assert "pack: minimax-m1" in text
+    assert "model_pack: minimax-m1" in text
+    assert "model_pack_source: user" in text

@@ -366,6 +366,26 @@ The full `local` command group (init, doctor, search, serve, servers, stop, mode
 | `superqode harness observability status` | Show local and optional external sink status |
 | `superqode harness observability export <run-id>` | Export JSONL and OTEL-shaped trace artifacts |
 | `superqode harness fork <run-id>` | Fork persisted run context |
+| `superqode skills optimize <skill>` | Optimize a markdown skill with GEPA against harness eval tasks |
+
+---
+
+## Skill Commands
+
+Optimize a markdown skill with GEPA and stage the result for review:
+
+```bash
+superqode skills optimize review \
+  --engine gepa \
+  --harness harness.yaml \
+  --tasks eval-tasks.yaml \
+  --live \
+  --max-metric-calls 20
+```
+
+Install the optional dependency with `pip install "superqode[optimization]"`.
+The command writes `staged/best_skill.md` and a report; it does not overwrite
+the live skill. See [Skill Optimization](../advanced/skill-optimization.md).
 
 ---
 
@@ -417,6 +437,7 @@ When running the interactive TUI (`superqode`), prefix commands with `:`:
 
 For detailed documentation of each command group:
 
+- [Optimization Story](../advanced/optimization.md) - Choosing the right optimization layer
 - [Config Commands](config-commands.md) - Configuration management
 - [Provider Commands](provider-commands.md) - Provider management
 - [Agents Commands](agents-commands.md) - ACP agent management

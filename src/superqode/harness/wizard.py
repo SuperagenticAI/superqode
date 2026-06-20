@@ -15,11 +15,12 @@ from .templates import BUILTIN_TEMPLATES, get_harness_template
 
 # Model-family starters surfaced by the wizard, in the order shown.
 WIZARD_STARTERS: tuple[tuple[str, str], ...] = (
+    ("coding", "Model-agnostic harness (recommended: choose your own model and pack)"),
     ("qwen-coding", "Qwen Coder (local, native tools, low temperature)"),
     ("glm-coding", "GLM 4.x/5.x (strong agentic coder, native tools)"),
+    ("minimax-coding", "MiniMax M-series (long context, reasoning/coding)"),
     ("gemma4-coding", "Gemma 4 (local MLX, strict-JSON tool calls)"),
     ("ds4-coding", "DeepSeek/DS4 (compact-JSON tool calls)"),
-    ("coding", "Generic coding (any model)"),
     ("no-tool", "Model-only (no tools, reasoning/review)"),
 )
 

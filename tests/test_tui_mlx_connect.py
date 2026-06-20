@@ -1,4 +1,4 @@
-"""MLX/llama.cpp connect routing: start the one-model server before connecting."""
+"""MLX/llama.cpp connect routing: ask before starting one-model servers."""
 
 from __future__ import annotations
 
@@ -13,17 +13,24 @@ def _plain_is_busy(monkeypatch):
 
 
 class _Log:
+    def __init__(self):
+        self.messages = []
+
     def add_info(self, t):
-        pass
+        self.messages.append(("info", t))
 
     def add_error(self, t):
-        pass
+        self.messages.append(("error", t))
 
     def add_system(self, t):
-        pass
+        self.messages.append(("system", t))
 
     def write(self, x):
-        pass
+        self.messages.append(("write", getattr(x, "plain", str(x))))
+
+    @property
+    def text(self):
+        return "\n".join(str(item[1]) for item in self.messages)
 
 
 def _app(monkeypatch, running: bool):
@@ -43,13 +50,23 @@ def _app(monkeypatch, running: bool):
     return app
 
 
-def test_mlx_with_server_down_starts_server_first(monkeypatch):
+def test_mlx_with_server_down_prompts_before_starting(monkeypatch):
     app = _app(monkeypatch, running=False)
-    SuperQodeApp._connect_local_mode(app, "mlx", "mlx-community/phi-2", _Log())
-    # Routed to the start-then-connect worker, NOT a bare connect.
+    log = _Log()
+    SuperQodeApp._connect_local_mode(app, "mlx", "mlx-community/phi-2", log)
+    assert app._started == []
+    assert app._connected == []
+    assert app._awaiting_local_connect_start["engine"] == "mlx"
+    assert ":local serve mlx --model mlx-community/phi-2" in log.text
+
+
+def test_mlx_confirmed_start_schedules_worker(monkeypatch):
+    app = _app(monkeypatch, running=False)
+    log = _Log()
+    SuperQodeApp._connect_local_mode(app, "mlx", "mlx-community/phi-2", log)
+    assert SuperQodeApp._handle_local_connect_start_input(app, "", log) is True
     assert len(app._started) == 1
     assert app._connected == []
-    # close the un-awaited coroutine to avoid a warning
     app._started[0].close()
 
 

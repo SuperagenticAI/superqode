@@ -31,7 +31,7 @@ this produces a bad agent. SuperQode is engineered for exactly these realities.
 
 ---
 
-## From zero to a tuned local agent
+## From zero to a local harness you own
 
 One command starts the guided MVP path:
 
@@ -57,10 +57,19 @@ superqode --harness harness.yaml -p "your task"
 ```
 
 The generated harness routes to the right provider for where the model lives,
-references the matching model policy pack, and switches small machines to
-prompt-based tool calling. The smoke test verifies server reachability, chat
-model availability, context-window detection, TTFT, read-file tool calls,
-patch-format behavior, shell tool calls, and long-context recall.
+references the matching model policy pack when one is available, and switches
+small machines to prompt-based tool calling. It is a starting point you can
+read and edit, not a hidden SuperQode behavior bundle.
+
+The smoke test verifies server reachability, chat model availability,
+context-window detection, TTFT, read-file tool calls, patch-format behavior,
+shell tool calls, and long-context recall.
+
+The principle is simple: do not depend on someone else's harness as your
+product boundary. Pick your model, pick or generate a harness, choose memory
+and permissions, then customize it until it matches your repo. SuperQode ships
+starter packs, but they are scaffolds. Use them, inspect them, fork them, and
+make the harness yours.
 
 ### Add local semantic code search
 
@@ -144,16 +153,53 @@ Labs view:
 
 ```bash
 superqode local labs
+superqode local labs minimax
 superqode local labs zhipuai
 superqode local labs alibaba --refresh
 ```
 
-The Labs view highlights local-friendly families such as GLM, Qwen, Gemma,
-DeepSeek, and Devstral, then shows open-weight, tool-capable, long-context
-candidates with Hugging Face download hints where models.dev provides them.
+The Labs view highlights local-friendly families such as GLM, MiniMax, Qwen,
+Gemma, DeepSeek, and Devstral, then shows open-weight, tool-capable,
+long-context candidates with Hugging Face download hints where models.dev
+provides them.
 SuperQode's own recommendations are intentionally narrower than generic model
 search: they come from curated models.dev Labs or vetted community namespaces
 such as `mlx-community`, so random Hub results do not become default guidance.
+
+### Migrate your existing setup
+
+Most teams already have prompts, skills, role files, and an older harness. Do
+not throw them away and do not blindly trust a vendor harness. Start with a
+dry-run migration plan:
+
+```bash
+superqode local migrate \
+  --repo . \
+  --endpoint http://localhost:8000/v1 \
+  --model MiniMaxAI/MiniMax-M1
+```
+
+The migration plan inventories `AGENTS.md`, `CLAUDE.md`, `SUPERQODE.md`,
+`.agents/skills`, `.agents/roles`, existing harnesses, and project config. It
+flags cloud-only assumptions, oversized prompts, web-search assumptions, shell
+approval needs, detected model packs, and the next smoke/explain commands. It
+does not rewrite files. The output is meant to help you build a local harness
+you own, with measured model behavior instead of hidden defaults.
+
+Create a project-owned pack before the live run, then refine it from saved
+smoke results at the end:
+
+```bash
+:local build --repo . --model MiniMaxAI/MiniMax-M1 --pack minimax-m1 --output superqode.local.yaml
+superqode local pack init --model MiniMaxAI/MiniMax-M1 --dry-run
+superqode local pack init --model MiniMaxAI/MiniMax-M1
+superqode local init --repo . --pack minimax-m1 --skip-smoke
+```
+
+`:local build` is the TUI-first path: it inventories prompts and skills, carries
+the selected pack into the generated harness, writes `superqode.local.yaml`, and
+prints the final live smoke/eval commands. It does not contact the model.
+`local pack init` is the lower-level pack-only command.
 
 ---
 
@@ -164,7 +210,7 @@ Every layer of the harness has a local-first answer:
 | Reality of local models | SuperQode's answer |
 |---|---|
 | The loaded context window is smaller than the model card says | Live window detection from the running server, [adaptive compaction](advanced/local-context.md) sized to it |
-| Model families need different prompts, temperatures, and formats | [Model policy packs](advanced/local-stack.md#model-policy-packs): tuned defaults per family, user-overridable |
+| Model families need different prompts, temperatures, and formats | [Model policy packs](advanced/local-stack.md#model-policy-packs): researched starter defaults per family, user-overridable |
 | Many models have no reliable native tool head | `tool_call_format: prompt` renders tools into the prompt and parses calls from text |
 | Tool schemas eat the prompt budget | [Deferred tools](advanced/tools-system.md): heavy schemas hidden until the model activates them via `tool_search` |
 | Keyword search misses conceptual matches | Optional [semantic code search](advanced/semantic-search.md) via `superqode[semantic]`, backed by a local CocoIndex daemon and local Ollama embeddings |

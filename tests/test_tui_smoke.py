@@ -558,6 +558,13 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":plugins" in COMMANDS
     assert ":plugins doctor" in COMMANDS
     assert ":plugins add" in COMMANDS
+    assert ":skills optimize" in COMMANDS
+    assert ":skillopt export" in COMMANDS
+    assert ":skillopt check" in COMMANDS
+    assert ":harness optimize" in COMMANDS
+    assert ":harness optimize-inspect" in COMMANDS
+    assert ":harness optimize-ledger" in COMMANDS
+    assert ":local optimize" in COMMANDS
     assert ":memory" in COMMANDS
     assert ":memory providers" in COMMANDS
     assert ":memory remember" in COMMANDS
@@ -573,6 +580,13 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":harness events" in slash_values
     assert ":connect" in slash_values
     assert ":connect acp" in slash_values
+    assert ":skills optimize" in slash_values
+    assert ":skillopt export" in slash_values
+    assert ":skillopt check" in slash_values
+    assert ":harness optimize" in slash_values
+    assert ":harness optimize-inspect" in slash_values
+    assert ":harness optimize-ledger" in slash_values
+    assert ":local optimize" in slash_values
     assert ":connect byok" in slash_values
     assert ":connect local" in slash_values
     assert ":exit" in slash_values
@@ -1579,6 +1593,62 @@ def test_prompt_completion_candidates_include_descriptions(tmp_path, monkeypatch
     assert candidates[0].label == "repo-review"
     assert candidates[0].description == "Review repository changes"
     assert candidates[0].kind == "skill"
+
+
+def test_prompt_completion_candidates_include_skill_optimize_targets(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    skill_dir = tmp_path / ".agents" / "skills" / "repo-review"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: repo-review\ndescription: Review repository changes\nenabled: true\n---\n\n# Review\n"
+    )
+    app = make_app()
+
+    candidates = app._prompt_completion_candidates_for(":skills optimize rep")
+
+    assert candidates[0].label == "repo-review"
+    assert candidates[0].kind == "skill"
+
+
+def test_tui_optimize_commands_delegate_to_cli(monkeypatch):
+    app = make_app()
+    log = FakeLog()
+    calls: list[tuple[list[str], str]] = []
+
+    async def fake_cli(command_parts, _log, label):
+        calls.append((command_parts, label))
+
+    monkeypatch.setattr(app, "_superqode_cli_cmd", fake_cli)
+    app.run_worker = lambda coro: asyncio.run(coro)
+
+    app._harness_cmd("optimize --spec harness.yaml --tasks eval-tasks.yaml --export-only", log)
+    app._harness_cmd("optimize-inspect .superqode/metaharness/run", log)
+    app._harness_cmd("optimize-ledger .superqode/metaharness/run", log)
+    app._local_cmd("optimize --endpoint http://127.0.0.1:11434/v1 --model qwen", log)
+    app._skillopt_cmd("check --baseline base.md --candidate candidate.md", log)
+
+    assert calls == [
+        (
+            ["harness", "optimize", "--spec", "harness.yaml", "--tasks", "eval-tasks.yaml", "--export-only"],
+            "Harness optimization",
+        ),
+        (
+            ["harness", "optimize-inspect", ".superqode/metaharness/run"],
+            "Harness optimization",
+        ),
+        (
+            ["harness", "optimize-ledger", ".superqode/metaharness/run"],
+            "Harness optimization",
+        ),
+        (
+            ["local", "optimize", "--endpoint", "http://127.0.0.1:11434/v1", "--model", "qwen"],
+            "Local optimization",
+        ),
+        (
+            ["skillopt", "check", "--baseline", "base.md", "--candidate", "candidate.md"],
+            "SkillOpt command",
+        ),
+    ]
 
 
 def test_prompt_completion_accepts_visible_candidate():
@@ -3206,6 +3276,179 @@ def test_tui_local_init_writes_harness(monkeypatch, tmp_path):
     rendered = render_plain(log.items[-1])
     assert "Local Coding Init" in rendered
     assert "Wrote local harness" in rendered
+
+
+def test_tui_local_init_pack_override(monkeypatch, tmp_path):
+    from superqode.local.doctor import DoctorReport
+    from superqode.local.engines import EngineStatus
+    from superqode.local.hardware import HardwareProfile
+    from superqode.local.matrix import ModelCandidate, StackRecommendation
+
+    app = make_app()
+    log = FakeLog()
+    app.run_worker = lambda coro: asyncio.run(coro)
+
+    candidate = ModelCandidate(
+        name="GLM-4.5-Air",
+        match=["glm-4.5-air"],
+        pull="hf download THUDM/GLM-4.5-Air",
+        pack="glm",
+        source="models.dev/labs/zhipuai",
+    )
+    report = DoctorReport(
+        hardware=HardwareProfile(platform="darwin", is_apple_silicon=True, unified_memory_gb=64),
+        engines={"mlx-lm": EngineStatus(engine="mlx-lm", installed=True, running=True)},
+        inventory=[],
+        recommendation=StackRecommendation(
+            tier_id="apple_64",
+            description="test",
+            engine="mlx-lm",
+            engine_ranked=["mlx-lm"],
+            models=[candidate],
+        ),
+    )
+    monkeypatch.setattr("superqode.local.doctor.run_doctor", lambda *a, **k: report)
+    target = tmp_path / "superqode.local.yaml"
+
+    app._local_cmd(
+        f"init --repo {tmp_path} --output {target} --pack minimax-m1 --skip-smoke",
+        log,
+    )
+
+    text = target.read_text(encoding="utf-8")
+    assert "pack: minimax-m1" in text
+    assert "model_pack_source: user" in text
+    assert "Model pack" in render_plain(log.items[-1])
+
+
+def test_tui_local_migrate_renders_plan(tmp_path):
+    app = make_app()
+    log = FakeLog()
+    app.run_worker = lambda coro: asyncio.run(coro)
+    (tmp_path / "AGENTS.md").write_text("Use local tools.\n", encoding="utf-8")
+
+    app._local_cmd(f"migrate --repo {tmp_path} --model MiniMaxAI/MiniMax-M1", log)
+
+    rendered = render_plain(log.items[-1])
+    assert "SuperQode local migration plan" in rendered
+    assert "pack: minimax" in rendered
+    assert "local init --repo" in rendered
+
+
+def test_tui_local_pack_init_dry_run(monkeypatch, tmp_path):
+    from superqode.local import packs
+
+    app = make_app()
+    log = FakeLog()
+    app.run_worker = lambda coro: asyncio.run(coro)
+    monkeypatch.setattr(packs, "USER_PACKS_DIR", tmp_path)
+
+    app._local_cmd("pack init --model MiniMaxAI/MiniMax-M1 --dry-run", log)
+
+    rendered = render_plain(log.items[-1])
+    assert "SuperQode model pack draft" in rendered
+    assert "minimax-m1" in rendered
+    assert "Dry run only" in rendered
+    assert not (tmp_path / "minimax-m1.yaml").exists()
+
+
+def test_tui_local_build(monkeypatch, tmp_path):
+    from superqode.local import build as build_mod
+    from superqode.local.doctor import DoctorReport
+    from superqode.local.engines import EngineStatus
+    from superqode.local.hardware import HardwareProfile
+    from superqode.local.matrix import ModelCandidate, StackRecommendation
+
+    app = make_app()
+    log = FakeLog()
+    app.run_worker = lambda coro: asyncio.run(coro)
+    candidate = ModelCandidate(
+        name="GLM-4.5-Air",
+        match=["glm-4.5-air"],
+        pull="hf download THUDM/GLM-4.5-Air",
+        pack="glm",
+        source="models.dev/labs/zhipuai",
+    )
+    report = DoctorReport(
+        hardware=HardwareProfile(platform="darwin", is_apple_silicon=True, unified_memory_gb=64),
+        engines={"mlx-lm": EngineStatus(engine="mlx-lm", installed=True, running=True)},
+        inventory=[],
+        recommendation=StackRecommendation(
+            tier_id="apple_64",
+            description="test",
+            engine="mlx-lm",
+            engine_ranked=["mlx-lm"],
+            models=[candidate],
+        ),
+    )
+    monkeypatch.setattr(build_mod, "run_doctor", lambda *a, **k: report)
+
+    app._local_cmd(
+        f"build --repo {tmp_path} --model MiniMaxAI/MiniMax-M1 --pack minimax-m1 --force",
+        log,
+    )
+
+    rendered = render_plain(log.items[-1])
+    assert "SuperQode local harness builder" in rendered
+    assert "Final live checks" in rendered
+    assert (tmp_path / "superqode.local.yaml").exists()
+
+
+def test_tui_local_setup_renders_tui_first_guide(monkeypatch, tmp_path):
+    from superqode.local import setup as setup_mod
+    from superqode.local.doctor import DoctorReport
+    from superqode.local.engines import EngineStatus
+    from superqode.local.guardrails import LocalGuardrails
+    from superqode.local.hardware import HardwareProfile
+    from superqode.local.matrix import ModelCandidate, StackRecommendation
+    from superqode.local.repo import RepoProfile
+    from superqode.local.setup import LocalSetupGuide
+
+    app = make_app()
+    log = FakeLog()
+    app.run_worker = lambda coro: asyncio.run(coro)
+    candidate = ModelCandidate(
+        name="GLM-4.5-Air",
+        match=["glm-4.5-air"],
+        pull="hf download THUDM/GLM-4.5-Air",
+        pack="glm",
+        source="models.dev/labs/zhipuai",
+    )
+    report = DoctorReport(
+        hardware=HardwareProfile(platform="darwin", is_apple_silicon=True, unified_memory_gb=64),
+        engines={"mlx-lm": EngineStatus(engine="mlx-lm", installed=True, running=False)},
+        inventory=[],
+        recommendation=StackRecommendation(
+            tier_id="apple_64",
+            description="test",
+            engine="mlx-lm",
+            engine_ranked=["mlx-lm"],
+            models=[candidate],
+        ),
+        repo=RepoProfile(
+            root=str(tmp_path),
+            estimated_tokens=42000,
+            recommended_context_tokens=65536,
+            recommended_model_size="medium",
+        ),
+        guardrails=LocalGuardrails(
+            hardware_tier="apple_64",
+            max_worker_concurrency=2,
+            recommended_context_cap=65536,
+            memory_headroom_gb=12,
+            battery_mode="normal",
+        ),
+    )
+    guide = LocalSetupGuide(query="glm", repo=str(tmp_path), report=report, hits=[])
+    monkeypatch.setattr(setup_mod, "build_local_setup_guide", lambda *a, **k: guide)
+
+    app._local_cmd(f"setup glm --repo {tmp_path}", log)
+
+    rendered = render_plain(log.items[-1])
+    assert "SuperQode Local Model Setup" in rendered
+    assert "TUI  : :local serve mlx" in rendered
+    assert "TUI  : :local build" in rendered
+    assert "Do not rely on anyone else's harness as-is" in rendered
 
 
 def test_tui_local_no_model_hints_avoid_llama(monkeypatch):

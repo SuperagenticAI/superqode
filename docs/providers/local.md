@@ -17,7 +17,7 @@ Local providers offer:
 
 ## Quick Start: Zero To Local Coding
 
-SuperQode bundles a guided path from "I want local coding" to a harness you can trust on your repo. You pay once in hardware, not forever in token bills. Local is slower than frontier labs and quality depends on your model and machine, so SuperQode focuses on measurement, control, and ownership of the harness.
+SuperQode bundles a guided path from "I want local coding" to a harness you can inspect, run, and improve on your repo. You pay once in hardware, not forever in token bills. Local is slower than frontier labs and quality depends on your model and machine, so SuperQode focuses on measurement, control, and ownership of the harness.
 
 Run one command from inside your repository:
 
@@ -46,19 +46,54 @@ Once `init` reports the harness is ready, start coding:
 superqode --harness superqode.local.yaml
 ```
 
+Do not treat any shipped harness pack as sacred. Pick your model, pick or
+generate a harness, pick your memory and permissions, then customize the YAML
+for your project. SuperQode's Gemma, Qwen, GLM, MiniMax, DS4, Devstral, and
+gpt-oss packs are getting-started defaults; your smoke tests and evals are what
+turn them into a project harness.
+
+### Who Starts The Server?
+
+SuperQode does not secretly start model servers from readiness checks. Commands
+such as `local init`, `local build`, `local migrate`, and `local smoke` diagnose
+the setup and print next steps.
+
+When you explicitly run `superqode local serve <engine>` or `:local serve
+<engine>`, SuperQode starts a managed background server, records pid/log data in
+`~/.superqode/servers/`, and can stop only servers it started. Existing servers
+are adopted for status display, not restarted. In the TUI, selecting an MLX or
+llama.cpp model asks before launching because those engines serve one model per
+process. Type `manual` at that prompt to run the printed command yourself.
+
+For MLX, missing Hugging Face weights are not downloaded unless you explicitly
+pass `--allow-download`.
+
 ### Find The Right Model To Download
 
 You download models with each engine's own tool (`ollama pull`, Hugging Face, a GGUF). To find the right one for your hardware without guessing or wasting a download, search the trusted catalog:
 
 ```bash
+superqode local setup qwen3-coder --repo .
 superqode local search qwen
 superqode local search qwen3-coder --json
 ```
+
+Prefer the TUI for first setup:
+
+```text
+:local setup qwen3-coder --repo .
+```
+
+`local setup` is guidance-only. It recommends a model, download command,
+server command, context length, harness pack, and smoke test, but it does not
+download weights or start a server. That keeps large downloads and long-running
+local processes explicit.
 
 Add `--hub` to also query the Hugging Face Hub live, filtered to trusted publishers (the model labs plus vetted quant communities like mlx-community and lmstudio-community), so you see the latest releases:
 
 ```bash
 superqode local search glm --hub
+superqode local search minimax --hub
 superqode local search qwen3-coder --hub --gguf
 ```
 
@@ -112,6 +147,15 @@ It checks that the server is reachable, a chat model (not an embedding model) is
 | **MLX** | General Apple Silicon model serving | Medium |
 | **vLLM** | Production, high throughput | Advanced |
 
+Before adapting an existing project, run a migration dry-run:
+
+```bash
+superqode local migrate --repo . --model MiniMaxAI/MiniMax-M1
+```
+
+It inventories prompts, skills, role files, existing harnesses, and config,
+then prints the local-model adaptation work without changing files.
+
 ---
 
 ## DS4 / DwarfStar 4
@@ -130,16 +174,40 @@ See the upstream project for installation and model details: [antirez/ds4](https
 
 ### Start DS4
 
-From the directory that contains `ds4-server` and the model file:
+SuperQode-managed start:
+
+```bash
+superqode local serve ds4 --ctx 32768
+superqode local servers
+superqode local stop ds4
+```
+
+`local serve ds4` starts the DS4 binary from `~/oss/ds4` or `PATH`, uses a safe
+32K context by default, and enables disk KV cache under
+`~/.superqode/ds4-kv`. SuperQode prints the exact command before launching it.
+
+Manual start from the directory that contains `ds4-server` and the model file:
+
+```bash
+./ds4-server --ctx 32768 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192
+```
+
+For long local-agent sessions, raise context only when memory headroom allows:
 
 ```bash
 ./ds4-server --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192
 ```
 
+Think Max needs at least 393,216 context tokens:
+
+```bash
+./ds4-server --ctx 393216 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 16384
+```
+
 If you launch the server from another directory, pass the DS4 checkout path so runtime files resolve correctly:
 
 ```bash
-./ds4-server --chdir /path/to/ds4 --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192
+./ds4-server --chdir /path/to/ds4 --ctx 32768 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192
 ```
 
 By default, SuperQode expects DS4 at:
@@ -152,6 +220,13 @@ If your DS4 server runs somewhere else, set:
 
 ```bash
 export DS4_HOST=http://127.0.0.1:8000/v1
+```
+
+DS4 is moving quickly. To use a new upstream server flag that SuperQode has not
+promoted yet, either start `./ds4-server` manually or pass it through:
+
+```bash
+superqode local serve ds4 --ctx 32768 --extra=--ssd-streaming --extra=--ssd-streaming-cache-experts --extra=32GB
 ```
 
 ### Check SuperQode Connectivity
@@ -259,9 +334,10 @@ export SUPERQODE_DS4_WARMUP=0   # 0/false/no/off - skip warm-up on connect
 
 Local models have no internet access, so `web_search` is intentionally not part
 of the DS4/local tool profile - and asking a local model to "search the web"
-will not work. Instead, local models are tuned to answer from **local code**
-using `repo_search` (broad, ranked files + content + symbols in one pass),
-`grep`, `code_search` (symbols/definitions/references), and `read_file`.
+will not work. Instead, local harnesses should ground the model in **local
+code** using `repo_search` (broad, ranked files + content + symbols in one
+pass), `grep`, `code_search` (symbols/definitions/references), and
+`read_file`.
 
 To let a local model search a repo you downloaded **outside** your project (for
 reference, API examples, etc.), point SuperQode at it with
@@ -391,11 +467,19 @@ pip install mlx-lm
 # Download model
 mlx_lm.download mlx-community/Qwen2.5-Coder-3B-4bit
 
-# Start server (in separate terminal)
+# Start server yourself (in a separate terminal)
 mlx_lm.server --model mlx-community/Qwen2.5-Coder-3B-4bit
 
 # Connect in SuperQode
 superqode connect local mlx mlx-community/Qwen2.5-Coder-3B-4bit
+```
+
+You can also ask SuperQode to manage the server explicitly:
+
+```bash
+superqode local serve mlx --model mlx-community/Qwen2.5-Coder-3B-4bit
+superqode local servers
+superqode local stop mlx
 ```
 
 ### Recommended Models

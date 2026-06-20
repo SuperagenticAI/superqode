@@ -162,7 +162,12 @@ def render_report(report: DoctorReport) -> str:
 
 
 def generate_harness_yaml(
-    report: DoctorReport, name: str = "local-coder", *, minimal: bool = False
+    report: DoctorReport,
+    name: str = "local-coder",
+    *,
+    minimal: bool = False,
+    pack_override: str = "",
+    primary_override: str = "",
 ) -> str:
     """A tuned harness spec for the doctor's verdict."""
     rec = report.recommendation
@@ -199,9 +204,10 @@ def generate_harness_yaml(
                 provider, model_ref = "ds4", "deepseek-v4-flash"
             elif best.pull.startswith(("hf download", "huggingface-cli")):
                 provider = "mlx"
-    primary = f"{provider}/{model_ref}" if model_ref else provider
+    primary = primary_override.strip() or (f"{provider}/{model_ref}" if model_ref else provider)
 
-    pack_line = f"  pack: {best.pack}\n" if best is not None and best.pack else ""
+    pack_name = pack_override.strip() or (best.pack if best is not None and best.pack else "")
+    pack_line = f"  pack: {pack_name}\n" if pack_name else ""
     small = report.hardware.tier in ("apple_16", "cpu")
     tool_format = "  tool_call_format: prompt\n" if small else ""
     repo = report.repo
@@ -218,6 +224,9 @@ def generate_harness_yaml(
             f"  repo_context_tokens: {repo.recommended_context_tokens}\n"
             f"  repo_workflow_shape: {repo.workflow_shape}\n"
         )
+    pack_metadata = f"  model_pack: {pack_name}\n" if pack_name else ""
+    if pack_override.strip():
+        pack_metadata += "  model_pack_source: user\n"
     guardrail_config = ""
     guardrail_metadata = ""
     if report.guardrails is not None:
@@ -251,6 +260,7 @@ def generate_harness_yaml(
             "metadata:\n"
             f"  generated_by: superqode local doctor\n"
             f"  hardware_tier: {rec.tier_id}\n"
+            f"{pack_metadata}"
             f"{repo_metadata}"
             f"{guardrail_metadata}"
         )
@@ -275,6 +285,7 @@ def generate_harness_yaml(
         f"metadata:\n"
         f"  generated_by: superqode local doctor\n"
         f"  hardware_tier: {rec.tier_id}\n"
+        f"{pack_metadata}"
         f"{repo_metadata}"
         f"{guardrail_metadata}"
     )

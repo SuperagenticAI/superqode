@@ -1,6 +1,6 @@
 # Qwen 3 / 3.5 / 3.6 general family pack.
 name: qwen3
-description: "Qwen 3.x dense and MoE (35B-A3B sweet spot): native tools, moderate prompt"
+description: "Qwen 3.x starter: native tools, moderate prompt"
 match: [qwen3, qwen-3, qwen3.5, qwen3.6]
 policy:
   temperature: 0.2
@@ -8,5 +8,6 @@ policy:
   parallel_tools: false
   session_history_limit: 14
 notes:
-  - "Qwen 3.x has a reliable native tool head; no prompt-format fallback needed."
+  - "Start with native tools for Qwen 3.x, then fall back to prompt format if smoke or evals show malformed calls."
   - "Prefer the MoE A3B variants on unified memory: large-model quality at ~3B active decode cost."
+  - "Tune history, permissions, and tool set for your project."

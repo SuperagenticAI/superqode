@@ -37,8 +37,9 @@ def local():
 @click.option(
     "--name", default="local-coder", show_default=True, help="Name for the generated harness"
 )
+@click.option("--pack", "pack_name", default="", help="Model policy pack for generated harness")
 @click.option("--minimal", is_flag=True, help="Generated harness inherits from coding template")
-def local_doctor(json_output, repo_path, guardrails, generate_path, name, minimal):
+def local_doctor(json_output, repo_path, guardrails, generate_path, name, pack_name, minimal):
     """Detect hardware, engines, and downloaded models; recommend a local stack.
 
     Reads the shipped recommendation matrix (override it with
@@ -72,7 +73,13 @@ def local_doctor(json_output, repo_path, guardrails, generate_path, name, minima
         if target.exists():
             raise click.ClickException(f"{target} already exists; choose another path")
         target.write_text(
-            generate_harness_yaml(report, name=name, minimal=minimal), encoding="utf-8"
+            generate_harness_yaml(
+                report,
+                name=name,
+                minimal=minimal,
+                pack_override=pack_name,
+            ),
+            encoding="utf-8",
         )
         click.echo(f"\nWrote tuned harness to {target}")
         click.echo(f"Run it with: superqode --harness {target} -p 'your task'")
@@ -125,6 +132,77 @@ def local_packs(json_output):
         if pack.match:
             click.echo(f"{'':<12} matches: {', '.join(pack.match)}")
     click.echo(f"\nOverride or add packs in {USER_PACKS_DIR}")
+
+
+@local.command("setup")
+@click.argument("query", required=False, default="")
+@click.option(
+    "--repo",
+    "repo_path",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=".",
+    show_default=True,
+    help="Repository to size for context and harness recommendations",
+)
+@click.option("--json", "json_output", is_flag=True, help="Emit the guide as JSON")
+def local_setup(query, repo_path, json_output):
+    """Show a TUI-first local model setup path without taking action.
+
+    Recommends the next download, serve, context, harness, and smoke-test
+    commands. It never downloads weights or starts a server.
+    """
+    from superqode.local.setup import build_local_setup_guide, render_local_setup_guide
+
+    guide = build_local_setup_guide(query, repo_path=repo_path)
+    if json_output:
+        click.echo(json.dumps(guide.to_dict(), indent=2))
+        return
+    click.echo(render_local_setup_guide(guide, tui_first=True))
+
+
+@local.group("pack")
+def local_pack():
+    """Create and manage project-owned model policy packs."""
+
+
+@local_pack.command("init")
+@click.argument("name", required=False)
+@click.option("--model", default="", help="Target model id to match")
+@click.option("--endpoint", default="", metavar="URL", help="Target endpoint hint")
+@click.option(
+    "--from-smoke",
+    "from_smoke",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Saved `superqode local smoke --json` payload to derive conservative defaults",
+)
+@click.option(
+    "--output",
+    "output_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Pack YAML path (default: ~/.superqode/model-packs/<name>.yaml)",
+)
+@click.option("--force", is_flag=True, help="Overwrite an existing pack file")
+@click.option("--dry-run", is_flag=True, help="Print the draft without writing it")
+@click.option("--json", "json_output", is_flag=True, help="Emit the draft as JSON")
+def local_pack_init(name, model, endpoint, from_smoke, output_path, force, dry_run, json_output):
+    """Create a user-owned model policy pack without probing a live model."""
+    from superqode.local.packs import draft_pack, render_pack_draft, write_pack_draft
+
+    draft = draft_pack(name=name or "", model=model, endpoint=endpoint, from_smoke=from_smoke)
+    if not dry_run:
+        try:
+            draft = write_pack_draft(draft, output=output_path, force=force)
+        except FileExistsError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    if json_output:
+        click.echo(json.dumps(draft.to_dict(), indent=2))
+        return
+    click.echo(render_pack_draft(draft))
+    if dry_run:
+        click.echo("\nDry run only; pass without --dry-run to write the pack.")
 
 
 @local.command("bench")
@@ -350,7 +428,15 @@ def local_serve(engine, model, port, host, ctx, no_wait, build, allow_download, 
     `superqode local servers` and `superqode local stop <engine>`. An
     already-running server on the target port is adopted, not restarted.
     """
-    from superqode.local.servers import ServerError, ds4_build, ds4_build_plan, get_manager
+    import shlex
+
+    from superqode.local.servers import (
+        SPECS,
+        ServerError,
+        ds4_build,
+        ds4_build_plan,
+        get_manager,
+    )
 
     manager = get_manager()
 
@@ -365,6 +451,32 @@ def local_serve(engine, model, port, host, ctx, no_wait, build, allow_download, 
             "Built ds4-server. The model weights are a separate (large) download:\n"
             f"  cd {plan['checkout']} && ./download_model.sh"
         )
+
+    host_eff = host or SPECS[engine].default_host
+    port_eff = port or SPECS[engine].default_port
+    if not manager.is_running(engine, host_eff, port_eff) and manager.is_installed(engine):
+        try:
+            cmd, env_overrides, cwd = manager.build_command(
+                engine,
+                host=host_eff,
+                port=port_eff,
+                model=model,
+                ctx=ctx,
+                extra_args=list(extra_args),
+            )
+            click.echo(f"Starting managed {engine} server:", err=True)
+            click.echo(f"  command: {' '.join(shlex.quote(part) for part in cmd)}", err=True)
+            if env_overrides:
+                env_text = " ".join(
+                    f"{key}={shlex.quote(value)}" for key, value in sorted(env_overrides.items())
+                )
+                click.echo(f"  env: {env_text}", err=True)
+            if cwd:
+                click.echo(f"  cwd: {cwd}", err=True)
+            click.echo(f"  log: ~/.superqode/servers/{engine}.log", err=True)
+        except ServerError:
+            # Let manager.start produce the canonical error below.
+            pass
 
     try:
         handle = manager.start(
@@ -542,7 +654,7 @@ def local_labs(lab, limit, refresh, json_output):
             mark = "*" if item.recommended else " "
             click.echo(f"{mark} {item.id:<10} {item.name}")
             click.echo(f"  {item.description}")
-        click.echo("\nOpen one with: superqode local labs zhipuai")
+        click.echo("\nOpen one with: superqode local labs minimax")
         return
 
     try:
@@ -579,6 +691,96 @@ def local_labs(lab, limit, refresh, json_output):
         click.echo(f"{mark} {row.id}{suffix}")
         if row.recommended_for_local and row.install_hint:
             click.echo(f"  install: {row.install_hint}")
+
+
+@local.command("migrate")
+@click.option(
+    "--repo",
+    "repo_path",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("."),
+    show_default=True,
+    help="Repository whose prompts, skills, and harnesses should be analyzed",
+)
+@click.option(
+    "--endpoint",
+    default="",
+    metavar="URL",
+    help="Target local/OpenAI-compatible endpoint",
+)
+@click.option("--model", default="", help="Target model id")
+@click.option("--json", "json_output", is_flag=True, help="Emit the migration plan as JSON")
+def local_migrate(repo_path, endpoint, model, json_output):
+    """Dry-run migration plan for prompts, skills, and harnesses.
+
+    This command does not rewrite files. It inventories the current project and
+    explains how to adapt the setup into a local-model harness the developer
+    owns and can review.
+    """
+    from superqode.local.migrate import plan_local_migration, render_migration_report
+
+    report = plan_local_migration(repo_path, endpoint=endpoint, model=model)
+    if json_output:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+        return
+    click.echo(render_migration_report(report))
+
+
+@local.command("build")
+@click.option(
+    "--repo",
+    "repo_path",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("."),
+    show_default=True,
+    help="Repository to analyze and generate a harness for",
+)
+@click.option("--model", default="", help="Target model id")
+@click.option("--endpoint", default="", metavar="URL", help="Target local/OpenAI-compatible endpoint")
+@click.option("--pack", "pack_name", default="", help="Model policy pack to use")
+@click.option(
+    "--output",
+    "output_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=Path("superqode.local.yaml"),
+    show_default=True,
+    help="Harness file to write",
+)
+@click.option("--write-pack", is_flag=True, help="Write a generated pack when one is missing")
+@click.option("--dry-run", is_flag=True, help="Plan only; do not write harness or pack files")
+@click.option("--force", is_flag=True, help="Overwrite existing harness/pack files")
+@click.option("--json", "json_output", is_flag=True, help="Emit build report as JSON")
+def local_build(
+    repo_path,
+    model,
+    endpoint,
+    pack_name,
+    output_path,
+    write_pack,
+    dry_run,
+    force,
+    json_output,
+):
+    """Guided local harness builder without live model calls."""
+    from superqode.local.build import build_local_harness, render_local_build_report
+
+    try:
+        report = build_local_harness(
+            repo_path=repo_path,
+            model=model,
+            endpoint=endpoint,
+            pack=pack_name,
+            output=output_path,
+            write_pack=write_pack,
+            force=force,
+            dry_run=dry_run,
+        )
+    except FileExistsError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+        return
+    click.echo(render_local_build_report(report))
 
 
 @local.command("search")
@@ -702,6 +904,7 @@ def local_search(query, hub, gguf, mlx, json_output):
     if not hub and len(hub_extra) > 3:
         click.echo(f"Add --hub to see all {len(hub_extra)} Hugging Face matches.")
     click.echo("After downloading: superqode local serve <engine>  or  :connect local")
+    click.echo(f"New to local setup? Run: superqode local setup {query}")
 
 
 @local.command("warm")
@@ -808,11 +1011,22 @@ def local_smoke(engine, endpoint, model, repo_path, api_key, max_tokens, json_ou
 )
 @click.option("--engine", default="", help="Local engine to smoke test")
 @click.option("--model", default="", help="Model id to smoke test")
+@click.option("--pack", "pack_name", default="", help="Model policy pack for generated harness")
 @click.option("--skip-smoke", is_flag=True, help="Generate the harness without running smoke")
 @click.option("--minimal", is_flag=True, help="Generated harness inherits from coding template")
 @click.option("--yes", "-y", is_flag=True, help="Overwrite existing harness file")
 @click.option("--json", "json_output", is_flag=True, help="Emit summary as JSON")
-def local_init(repo_path, output_path, engine, model, skip_smoke, minimal, yes, json_output):
+def local_init(
+    repo_path,
+    output_path,
+    engine,
+    model,
+    pack_name,
+    skip_smoke,
+    minimal,
+    yes,
+    json_output,
+):
     """Initialize a local coding harness for this repository."""
     from dataclasses import asdict
 
@@ -833,7 +1047,13 @@ def local_init(repo_path, output_path, engine, model, skip_smoke, minimal, yes, 
         smoke = run_smoke(engine=chosen_engine, model=chosen_model, repo_path=repo_path)
 
     output_path.write_text(
-        generate_harness_yaml(report, name="local-coder", minimal=minimal), encoding="utf-8"
+        generate_harness_yaml(
+            report,
+            name="local-coder",
+            minimal=minimal,
+            pack_override=pack_name,
+        ),
+        encoding="utf-8",
     )
 
     payload = {
@@ -846,6 +1066,7 @@ def local_init(repo_path, output_path, engine, model, skip_smoke, minimal, yes, 
             else None,
         },
         "smoke": smoke.to_dict() if smoke else None,
+        "pack": pack_name,
     }
     if json_output:
         click.echo(json.dumps(payload, indent=2, default=str))

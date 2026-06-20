@@ -115,6 +115,35 @@ Store project facts and preferences with `:memory remember "text"` or `superqode
 
 See [Memory Commands](cli-reference/memory-commands.md) and [Agent Memory Layer](advanced/memory.md) for provider setup and the full API.
 
+## Skill Optimization Development
+
+The GEPA skill optimizer is intentionally staged and review-first:
+
+- `superqode skills optimize --engine gepa` requires `--harness`, `--tasks`,
+  and `--live`.
+- SuperQode passes the complete `SKILL.md` text as the GEPA candidate.
+- Each candidate is evaluated by creating a temporary harness variant and
+  running `harness eval` against the supplied task file.
+- The evaluator returns per-task score plus side information: prompt,
+  expected checks, task status, failure reason, and failure digest.
+- The best candidate is written to `staged/best_skill.md`; the live skill is
+  never overwritten by the optimizer.
+- `superqode skillopt check` is the bounded-edit gate used before adoption.
+
+The CLI currently exposes the main GEPA search controls: metric-call budget,
+candidate proposal budget, reflection cost cap, minibatch size, worker count,
+candidate-selection strategy, frontier type, acceptance criterion, evaluation
+cache, and merge proposals.
+
+Developer extension points that should stay out of the user-facing workflow
+until they have a clear review UX:
+
+- GEPA refiner mode
+- custom GEPA callbacks from the CLI
+- custom reflection prompt templates from the CLI
+- multi-component optimization across multiple skills
+- automatic adoption of staged skills
+
 ## Runtime-Specific TUI Commands
 
 Codex SDK:

@@ -65,6 +65,22 @@ def test_ds4_provider_autodetects_ds4_coding_policy():
     assert policy.parallel_tools is False
 
 
+def test_minimax_pack_autodetects_policy():
+    spec = get_harness_template("coding")
+
+    policy = resolve_harness_model_policy(
+        spec,
+        provider="openai-compatible",
+        model="MiniMaxAI/MiniMax-M1",
+    )
+
+    assert policy.family == "general"
+    assert policy.temperature == 0.2
+    assert policy.reasoning == "medium"
+    assert policy.parallel_tools is False
+    assert policy.session_history_limit == 16
+
+
 def test_gemma3_autodetects_optimized_gemma_policy():
     # Gemma 3 (not just Gemma 4) is tool-capable and should get the
     # Gemma-optimized profile from the generic coding template.

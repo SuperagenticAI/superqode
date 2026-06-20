@@ -77,7 +77,38 @@ def test_build_command_ds4_maps_ctx_to_flag_and_sets_cwd(manager, monkeypatch, t
     cmd, _env, cwd = manager.build_command("ds4", host="127.0.0.1", port=8000, ctx=100000)
     assert cmd[0] == str(binary)
     assert "--ctx" in cmd and "100000" in cmd
+    assert "--kv-disk-dir" in cmd
+    assert "--kv-disk-space-mb" in cmd and "8192" in cmd
     assert cwd == binary.parent
+
+
+def test_build_command_ds4_defaults_safe_ctx_and_kv_cache(manager, monkeypatch, tmp_path):
+    binary = tmp_path / "ds4-server"
+    binary.write_text("#!/bin/sh\n")
+    binary.chmod(0o755)
+    monkeypatch.setattr(manager, "_ds4_binary", lambda: binary)
+    cmd, _env, cwd = manager.build_command("ds4", host="127.0.0.1", port=8000)
+    assert cmd[0] == str(binary)
+    assert "--ctx" in cmd and "32768" in cmd
+    assert "--kv-disk-dir" in cmd
+    assert "--kv-disk-space-mb" in cmd and "8192" in cmd
+    assert cwd == binary.parent
+
+
+def test_build_command_ds4_respects_custom_kv_cache_extra(manager, monkeypatch, tmp_path):
+    binary = tmp_path / "ds4-server"
+    binary.write_text("#!/bin/sh\n")
+    binary.chmod(0o755)
+    monkeypatch.setattr(manager, "_ds4_binary", lambda: binary)
+    cmd, _env, _cwd = manager.build_command(
+        "ds4",
+        host="127.0.0.1",
+        port=8000,
+        extra_args=["--kv-disk-dir", "/tmp/custom-kv", "--kv-disk-space-mb=4096"],
+    )
+    assert cmd.count("--kv-disk-dir") == 1
+    assert "/tmp/custom-kv" in cmd
+    assert "--kv-disk-space-mb=4096" in cmd
 
 
 def test_build_command_ds4_errors_when_binary_missing(manager, monkeypatch):
@@ -282,6 +313,33 @@ def test_start_passes_custom_port_into_handle(manager, monkeypatch, tmp_path):
     assert handle.ctx == 123456
     # ds4 puts both onto the argv
     assert "9001" in captured["cmd"] and "123456" in captured["cmd"]
+
+
+def test_start_ds4_records_default_context(manager, monkeypatch, tmp_path):
+    binary = tmp_path / "ds4-server"
+    binary.write_text("#!/bin/sh\n")
+    binary.chmod(0o755)
+    monkeypatch.setattr(manager, "_ds4_binary", lambda: binary)
+    monkeypatch.setattr(manager, "is_installed", lambda e: True)
+    monkeypatch.setattr(manager, "is_running", lambda *a, **k: False)
+
+    class FakeProc:
+        pid = 1
+
+        def poll(self):
+            return None
+
+    captured = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(servers.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(servers, "_probe", lambda url, timeout=1.5: True)
+    handle = manager.start("ds4", host="127.0.0.1")
+    assert handle.ctx == 32768
+    assert "32768" in captured["cmd"]
 
 
 # -- precheck (the TUI gate) ------------------------------------------------
@@ -516,6 +574,19 @@ def test_tui_parse_serve_args_accepts_quoted_model_path():
     )
     assert engine == "llama.cpp"
     assert opts == {"model": "/models/code model.gguf", "port": 8090, "ctx": 8192}
+
+
+def test_tui_parse_serve_args_accepts_extra_passthrough():
+    from superqode.app_main import SuperQodeApp
+
+    engine, opts = SuperQodeApp._parse_serve_args(
+        "ds4 --ctx 32768 --extra=--ssd-streaming --extra=--ssd-streaming-cache-experts --extra=32GB"
+    )
+    assert engine == "ds4"
+    assert opts == {
+        "ctx": 32768,
+        "extra_args": ["--ssd-streaming", "--ssd-streaming-cache-experts", "32GB"],
+    }
 
 
 def test_local_models_cli_filters_embeddings(monkeypatch):

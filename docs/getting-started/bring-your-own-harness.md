@@ -1,6 +1,6 @@
 # Bring Your Own Harness
 
-A harness is a single YAML file that decides how your coding agent behaves: which model it uses, which tools it can call, whether it can write files or run shell commands, and how it asks for approval. You own this file. It lives in your repo, you can read it, edit it, and check it into git. Nothing about your agent is hidden "SuperQode magic". When a run does something you did not expect, the harness tells you why.
+A harness is a single YAML file that decides how your coding agent behaves: which model it uses, which tools it can call, whether it can write files or run shell commands, how memory is restored, and how it asks for approval. You own this file. It lives in your repo, you can read it, edit it, and check it into git. Nothing about your agent is hidden "SuperQode magic". When a run does something you did not expect, the harness tells you why.
 
 This guide shows you how to create one, understand it in plain English, customize it, and run it against a local model.
 
@@ -12,6 +12,12 @@ With a frontier API you mostly trust the provider's defaults. With a local model
 - The same harness file gives you the same behavior every time.
 - If a small local model is unreliable with native tool calls, you can switch it to prompt tool-call format in one line.
 - A read-only "reviewer" harness can never edit your files, no matter what the model decides.
+
+The rule of thumb is: do not rely on someone else's harness as your product
+boundary, including SuperQode's shipped starters. Use a starter when it saves
+time, then inspect it, fork it, and make it yours. Pick your model, pick your
+harness, pick your memory and permissions, and extend the behavior for your
+project.
 
 ## Step 1: Get A Harness
 
@@ -27,35 +33,65 @@ superqode harness wizard
 
 It asks for a name, a starting point (model family), the provider/model, whether the agent may write files or run shell commands, the approval style, the tool-call format, and an optional multi-agent workflow. Then it writes `harness.yaml` and immediately explains what it built in plain English.
 
-### Option B: Start from an optimized template
+### Option B: Start from a model-family template
 
-SuperQode ships templates tuned per model family. Pick the one closest to your model and edit from there:
+SuperQode ships templates with researched starter defaults per model family.
+Pick the one closest to your model and edit from there:
 
 ```bash
 superqode harness init my-coder -t qwen-coding
 ```
 
-| Template | Tuned for |
+| Template | Starting point |
 | --- | --- |
 | `qwen-coding` | Qwen Coder (low temperature, native tools, long agentic sessions) |
 | `glm-coding` | GLM 4.x/5.x (strong agentic coder, native tools) |
 | `gemma4-coding` | Gemma 4 local (strict-JSON tool calls, MLX) |
 | `ds4-coding` | DeepSeek/DS4 (compact-JSON tool calls) |
-| `ds4-fast-local` | DS4 tuned for fast local iteration |
+| `ds4-fast-local` | DS4 fast local iteration starter |
 | `coding` | Any model (generic full coding agent) |
 | `no-tool` | Model-only reasoning/review, no tools |
 
 List them anytime with `superqode harness list-templates`.
 
-### Option C: Let the doctor tune it for your hardware
+### Option C: Let the doctor generate it for your hardware
 
 ```bash
 superqode local init --repo .
 ```
 
-That detects your machine, picks a trusted model, and generates `superqode.local.yaml` using the same harness format.
+That detects your machine, picks a trusted model when one is available, and generates `superqode.local.yaml` using the same harness format.
 
-All three produce the same kind of file. Whichever you use, the next steps are identical.
+### Option D: Migrate what you already have
+
+If your repo already has `AGENTS.md`, `CLAUDE.md`, `.agents/skills`, role
+prompts, or an older harness, start with a dry-run plan:
+
+```bash
+superqode local migrate --repo . --model MiniMaxAI/MiniMax-M1
+```
+
+The migrator does not rewrite your files. It shows what exists, which model
+pack matches, which prompts or skills need local-model cleanup, and which smoke
+and explain commands to run next.
+
+Then create a model pack you own:
+
+```bash
+:local build --repo . --model MiniMaxAI/MiniMax-M1 --pack minimax-m1
+superqode local pack init --model MiniMaxAI/MiniMax-M1 --dry-run
+superqode local pack init --model MiniMaxAI/MiniMax-M1
+superqode local init --repo . --pack minimax-m1 --skip-smoke
+```
+
+All paths produce the same kind of file. Whichever you use, the next steps are identical.
+
+!!! note "Starter packs are not certification"
+    The Gemma, Qwen, GLM, MiniMax, DS4, Devstral, and gpt-oss packs are default
+    starting points for model families. They have not been live-certified
+    against every checkpoint, quantization, serving engine, hardware tier, and
+    repository. Run smoke checks, explain the harness, and adapt the pack for
+    your own project before giving broad write or shell access.
 
 ## Step 2: Understand It In Plain English
 

@@ -2,6 +2,9 @@
 
 These are three different jobs. SuperQode does the first two. A separate, optional tool, `metaharness`, does the third. Keeping them clear avoids a common confusion: "is `harness eval` the same as harness optimization?" No. They answer different questions.
 
+For the broader picture across local model routing, harness specs, markdown
+skills, and custom optimizers, see [Optimization Story](optimization.md).
+
 | Job | Question it answers | Tool |
 | --- | --- | --- |
 | **Run** | "Do the work with this harness." | SuperQode (`superqode --harness ...`) |

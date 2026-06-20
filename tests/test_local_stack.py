@@ -184,6 +184,7 @@ def test_matrix_recommendations_have_trusted_sources():
         "models.dev/labs/deepseek",
         "models.dev/labs/google",
         "models.dev/labs/mistral",
+        "models.dev/labs/minimax",
         "models.dev/labs/zhipuai",
         "mlx-community",
         "lmstudio-community",

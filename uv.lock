@@ -798,28 +798,6 @@ wheels = [
 ]
 
 [[package]]
-name = "codeoptix"
-version = "0.1.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "agent-client-protocol" },
-    { name = "anthropic" },
-    { name = "click" },
-    { name = "gepa" },
-    { name = "google-genai" },
-    { name = "litellm" },
-    { name = "numpy" },
-    { name = "openai" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-    { name = "tenacity" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/e8/04/7e7254f92744b169bf1893a459b917267e5ec639c19181763f4acd7d0e78/codeoptix-0.1.3.tar.gz", hash = "sha256:d81cba3944b9d8e6cb13aeaa0d4b0ee267e25ded768e962561899873613efa48", size = 152221, upload-time = "2025-12-27T20:08:40.57Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/fa/dd/6e2b1f36180470a88e2520f9b05fdfb5fdecbd01b5ba66ffa36daab165ac/codeoptix-0.1.3-py3-none-any.whl", hash = "sha256:26e84cca4b1b1d491b761c64bd4e2630a1bcdc6e0bebe83fea7b471e3540cd74", size = 219812, upload-time = "2025-12-27T20:08:38.382Z" },
-]
-
-[[package]]
 name = "cohere"
 version = "6.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1709,11 +1687,11 @@ wheels = [
 
 [[package]]
 name = "gepa"
-version = "0.0.22"
+version = "0.1.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ae/be/9a4c31c65c4910e73bd4a316df99347681bce4f2ef6d10877cc1ed8d57da/gepa-0.0.22.tar.gz", hash = "sha256:0b13a644efd2af52186e456eaad2ae28fcf88c6f796a9c999910c587863d4315", size = 116337, upload-time = "2025-11-10T21:39:27.044Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/62/10f5a8f24c075e3b64f952be73ba8e15f0055584bbcdf9ce48d754a36679/gepa-0.1.1.tar.gz", hash = "sha256:643fda01c23de4c9f01306e01305dd69facc29bcb34ad59e4cd07e6621d34aa1", size = 272251, upload-time = "2026-03-16T10:17:53.131Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b3/0e/d41272b28f2163f5bf840b508cbaf4a0bc01eaeaa6e5d447558d1050eb3b/gepa-0.0.22-py3-none-any.whl", hash = "sha256:ff57ee0442399a5cc62d01411935476bc80cfa8f1c318bed82e3db4c2c834665", size = 119666, upload-time = "2025-11-10T21:39:26.028Z" },
+    { url = "https://files.pythonhosted.org/packages/dc/b7/8c72dedbb950d88a6f64588fcbc590d2a21e2b9f19b36aa6c5016c54ec75/gepa-0.1.1-py3-none-any.whl", hash = "sha256:71ead7c591eafcc727b83509cdc4182f20264800a6ddf8520d61419daeb47466", size = 244246, upload-time = "2026-03-16T10:17:51.922Z" },
 ]
 
 [[package]]
@@ -5906,7 +5884,6 @@ dependencies = [
     { name = "agent-client-protocol" },
     { name = "anyio" },
     { name = "click" },
-    { name = "codeoptix" },
     { name = "httpx" },
     { name = "httpx-sse" },
     { name = "litellm" },
@@ -5993,6 +5970,9 @@ observability = [
 openai-agents = [
     { name = "openai-agents", extra = ["litellm"] },
 ]
+optimization = [
+    { name = "gepa" },
+]
 performance = [
     { name = "locust" },
 ]
@@ -6050,7 +6030,6 @@ requires-dist = [
     { name = "claude-agent-sdk", marker = "extra == 'claude-agent-sdk'", specifier = ">=0.2.9,<0.3.0" },
     { name = "click", specifier = ">=8.0.0" },
     { name = "cocoindex-code", marker = "extra == 'semantic'", specifier = ">=0.2.35,<0.3" },
-    { name = "codeoptix", specifier = ">=0.1.3" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "coverage", marker = "extra == 'testing'", specifier = ">=7.0.0" },
     { name = "daytona", marker = "extra == 'sandbox-cloud'", specifier = ">=0.1.0" },
@@ -6061,6 +6040,7 @@ requires-dist = [
     { name = "exa-py", marker = "extra == 'extras'", specifier = ">=1.0.0" },
     { name = "fastapi", marker = "extra == 'a2a'", specifier = ">=0.115.0" },
     { name = "flake8", marker = "extra == 'linters'", specifier = ">=7.1.0" },
+    { name = "gepa", marker = "extra == 'optimization'", specifier = ">=0.1.1" },
     { name = "google-adk", marker = "extra == 'adk'", specifier = ">=2.1.0,<3.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "httpx", marker = "extra == 'testing'", specifier = ">=0.28.1" },
@@ -6117,7 +6097,7 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'a2a'", specifier = ">=0.32.0" },
     { name = "websocket-client", marker = "extra == 'channels'", specifier = ">=1.6.0" },
 ]
-provides-extras = ["hf", "mlx", "monty", "semantic", "channels", "sandbox-e2b", "sandbox-modal", "sandbox-daytona", "sandbox-cloud", "web", "extras", "a2a", "adk", "openai-agents", "codex-sdk", "claude-agent-sdk", "deepagents", "pydanticai", "pydanticai-logfire", "mem0", "supermemory", "memory-providers", "dev", "testing", "linters", "ui-testing", "performance", "docs", "observability"]
+provides-extras = ["hf", "mlx", "monty", "semantic", "channels", "sandbox-e2b", "sandbox-modal", "sandbox-daytona", "sandbox-cloud", "web", "extras", "a2a", "adk", "openai-agents", "codex-sdk", "claude-agent-sdk", "deepagents", "pydanticai", "pydanticai-logfire", "mem0", "supermemory", "memory-providers", "dev", "testing", "linters", "ui-testing", "performance", "docs", "optimization", "observability"]
 
 [[package]]
 name = "synchronicity"

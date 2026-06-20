@@ -1,6 +1,6 @@
 # Gemma 3 / Gemma 4 family pack.
 name: gemma4
-description: "Gemma 3 and Gemma 4 (E2B/E4B/12B/26B-MoE/31B): strict-JSON tools, minimal prompt"
+description: "Gemma 3 and Gemma 4 starter: strict-JSON tools, minimal prompt"
 match: [gemma-4, gemma4, gemma-3, gemma3]
 policy:
   temperature: 0.2
@@ -10,5 +10,6 @@ policy:
   parallel_tools: false
   session_history_limit: 12
 notes:
-  - "Gemma follows strict JSON tool schemas reliably but degrades with verbose system prompts."
+  - "This pack assumes strict JSON tool schemas and a compact system prompt; validate that against your exact Gemma checkpoint, quantization, and engine."
   - "The 12B variant is multimodal; pair it as a vision/utility companion to a larger coder."
+  - "Customize history, tools, and permissions for your project before broad write/shell use."

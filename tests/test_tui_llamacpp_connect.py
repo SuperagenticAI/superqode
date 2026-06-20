@@ -20,6 +20,9 @@ class _Log:
     def add_error(self, t):
         self.msgs.append(("error", t))
 
+    def add_system(self, t):
+        self.msgs.append(("system", t))
+
     def write(self, x):
         self.msgs.append(("write", getattr(x, "plain", str(x))))
 
@@ -69,17 +72,17 @@ def test_llamacpp_no_server_lists_cached_gguf_for_autolaunch(monkeypatch):
     app = _app()
     log = _Log()
     asyncio.run(SuperQodeApp._show_openai_compatible_models(app, "llamacpp", log))
-    # The picker arms selection with GGUF PATHS so selecting one auto-launches.
+    # The picker arms selection with GGUF PATHS so selecting one asks before launch.
     assert app._local_model_list == ["/cache/qwen2.5-0.5b.gguf", "/cache/gemma.gguf"]
     assert app._awaiting_local_model is True
     assert app._local_selected_provider == "llamacpp"
-    assert "start llama-server" in log.text
+    assert "ask before starting llama-server" in log.text
     # Display uses basenames, not full paths.
     assert "qwen2.5-0.5b.gguf" in log.text
 
 
-def test_selecting_gguf_routes_to_autolaunch(monkeypatch):
-    # Picking a GGUF when no server is up must launch llama-server (run_worker),
+def test_selecting_gguf_prompts_before_launch(monkeypatch):
+    # Picking a GGUF when no server is up must ask before launching llama-server,
     # mapping provider id 'llamacpp' to the manager engine 'llama.cpp'.
     import superqode.local.servers as servers
 
@@ -95,10 +98,17 @@ def test_selecting_gguf_routes_to_autolaunch(monkeypatch):
     app._connected = []
     app.run_worker = lambda coro: app._started.append(coro)
     app._connect_byok_mode = lambda p, m, log: app._connected.append((p, m))
+    app._show_local_provider_picker = lambda log, **k: None
+    log = _Log()
 
-    SuperQodeApp._connect_local_mode(app, "llamacpp", "/cache/qwen.gguf", _Log())
-    assert len(app._started) == 1  # auto-launch worker scheduled
+    SuperQodeApp._connect_local_mode(app, "llamacpp", "/cache/qwen.gguf", log)
+    assert app._started == []
     assert app._connected == []
+    assert app._awaiting_local_connect_start["engine"] == "llama.cpp"
+    assert ":local serve llama.cpp --model /cache/qwen.gguf" in log.text
+
+    assert SuperQodeApp._handle_local_connect_start_input(app, "", log) is True
+    assert len(app._started) == 1
     app._started[0].close()
 
 

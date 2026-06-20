@@ -169,7 +169,8 @@ def detect_ds4() -> EngineStatus:
     if _http_json("http://localhost:8000/v1/models") is not None:
         status.running = True
     if status.installed:
-        status.notes.append("Start with: superqode local serve ds4 --ctx 100000")
+        status.notes.append("Start with: superqode local serve ds4 --ctx 32768")
+        status.notes.append("Use --ctx 100000 for long sessions; Think Max needs --ctx 393216+")
     return status
 
 

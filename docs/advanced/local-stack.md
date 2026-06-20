@@ -2,10 +2,10 @@
 
 The hardest part of Local Agentic Coding is not the agent. It is choosing the
 right engine and the right model for the machine in front of you, out of a
-landscape that changes monthly. The **Local Stack Doctor** does that choice for
-you: it detects your hardware, inventories your engines and downloaded models,
-and recommends a tuned stack. One more flag turns the recommendation into a
-ready-to-run harness.
+landscape that changes monthly. The **Local Stack Doctor** helps with that
+choice: it detects your hardware, inventories your engines and downloaded
+models, and recommends a practical starting stack. One more flag turns the
+recommendation into a ready-to-edit harness.
 
 ```bash
 superqode local init --repo .
@@ -61,7 +61,7 @@ Recommended models
 
 Verdict
   Engine mlx-lm + GLM-4.5-Air (ready now)
-  Generate a tuned harness: superqode local doctor --generate harness.yaml
+  Generate a starter harness: superqode local doctor --generate harness.yaml
 ```
 
 Use `--json` for the full machine-readable report. Add `--repo PATH` to size a
@@ -73,17 +73,18 @@ concurrency.
 
 ---
 
-## Generate a tuned harness
+## Generate a starter harness you own
 
 ```bash
 superqode local init --repo .
 superqode --harness superqode.local.yaml
 ```
 
-`local init` is the MVP one-command path. It runs the doctor, writes a tuned
+`local init` is the MVP one-command path. It runs the doctor, writes
 `superqode.local.yaml`, and runs `local smoke` when a local server is available.
-If smoke fails, the harness is still written but the output gives exact next
-steps before you trust it for a real coding task.
+The file is intentionally transparent YAML: start from it, inspect it, and edit
+it for your repo. If smoke fails, the harness is still written but the output
+gives exact next steps before you trust it for a real coding task.
 
 For manual control:
 
@@ -94,11 +95,16 @@ superqode --harness harness.yaml -p "your task"
 
 The generated spec routes to the right provider for where the model actually
 lives (an HF cache model is served by `mlx_lm.server`, not Ollama), references
-the matching model policy pack, and switches small-hardware tiers to
-prompt-based tool calling. When `--repo` is supplied, the generated harness also
-sets a repository-sized `model_policy.context_window`, records the model-size
-and workflow recommendation in metadata, and uses a workflow preset for larger
-repositories. When `--guardrails` is supplied, it also writes
+the matching model policy pack when one is available, and switches
+small-hardware tiers to prompt-based tool calling. Treat the generated pack and
+harness as a default starting point, not proof that the model is optimized for
+your project. Real optimization starts after `local smoke`, `harness explain`,
+and your own held-out coding tasks.
+
+When `--repo` is supplied, the generated harness also sets a repository-sized
+`model_policy.context_window`, records the model-size and workflow
+recommendation in metadata, and uses a workflow preset for larger repositories.
+When `--guardrails` is supplied, it also writes
 `execution_policy.config.local_guardrails` so workers and launchers can apply
 safe local defaults.
 
@@ -148,13 +154,21 @@ Your tiers replace shipped tiers with the same `id`; everything else is kept.
 
 ## Model policy packs
 
-A **pack** is one YAML file of tuned defaults for an open-model family:
-temperature, system prompt level, tool-call format, and session history
-budget. SuperQode ships packs for `gemma4`, `qwen3`, `qwen-coder`, `ds4`,
-`devstral`, `gpt-oss`, and `glm`.
+A **pack** is one YAML file of starter defaults for an open-model family:
+temperature, system prompt level, tool-call format, and session history budget.
+SuperQode ships packs for `gemma4`, `qwen3`, `qwen-coder`, `ds4`, `devstral`,
+`gpt-oss`, `glm`, and `minimax`.
+
+Shipped packs are researched defaults, not live certification for every
+checkpoint, quantization, engine, context size, and repository. Use them to get
+moving quickly, then customize the harness and pack from your own smoke tests,
+eval tasks, and project rules. A Gemma pack, for example, is a Gemma-family
+starting point; it is not a promise that every Gemma model is optimal for your
+repo without changes.
 
 ```bash
 superqode local packs
+superqode local pack init --model MiniMaxAI/MiniMax-M1 --dry-run
 ```
 
 Packs apply in two ways:
@@ -172,7 +186,9 @@ model_policy:
 
 Precedence is strict: pack values override profile defaults, explicit spec
 fields (`temperature`, `tool_call_format`, `reasoning`) override the pack, and
-`model_policy.config` overrides everything.
+`model_policy.config` overrides everything. This is deliberate: use the shipped
+pack as scaffolding, then make project-specific choices directly in your
+harness.
 
 Add your own packs in `~/.superqode/model-packs/`; a file with the same `name`
 replaces the shipped pack:
@@ -186,6 +202,24 @@ policy:
   temperature: 0.1
   session_history_limit: 20
 ```
+
+Generate a project-owned starter pack without probing a live model:
+
+```bash
+superqode local pack init --model MiniMaxAI/MiniMax-M1 --dry-run
+superqode local pack init --model MiniMaxAI/MiniMax-M1
+```
+
+After the final live readiness pass, save the smoke JSON and use it to tighten
+the pack from measured behavior:
+
+```bash
+superqode local smoke --repo . --model MiniMaxAI/MiniMax-M1 --json > smoke.json
+superqode local pack init --from-smoke smoke.json --force
+```
+
+The command only writes the pack YAML. It does not start a server or call a
+model.
 
 ---
 

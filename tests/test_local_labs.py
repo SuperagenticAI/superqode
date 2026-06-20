@@ -31,6 +31,19 @@ def _fake_models_dev():
                     "limit": {"context": 131072, "output": 8192},
                 },
             }
+        },
+        "minimax": {
+            "models": {
+                "minimax-m1": {
+                    "name": "MiniMax M1",
+                    "tool_call": True,
+                    "reasoning": True,
+                    "structured": True,
+                    "weights": {"open": True, "huggingface": "MiniMaxAI/MiniMax-M1"},
+                    "limit": {"context": 1000000, "output": 40000},
+                    "modalities": {"input": ["text"]},
+                }
+            }
         }
     }
 
@@ -40,6 +53,7 @@ def test_list_curated_labs_promotes_glm():
 
     assert rows[0].recommended is True
     assert any(row.id == "zhipuai" and "GLM" in row.name for row in rows)
+    assert any(row.id == "minimax" for row in rows)
 
 
 def test_lab_models_mark_open_tool_long_context_glm(monkeypatch):
@@ -71,3 +85,15 @@ def test_local_labs_cli_json_models(monkeypatch):
     assert result.exit_code == 0
     assert '"id": "glm-4.5-air"' in result.output
     assert '"recommended_for_local": true' in result.output
+
+
+def test_lab_models_include_minimax(monkeypatch):
+    monkeypatch.setattr(labs, "load_models_dev_api", lambda refresh=False: _fake_models_dev())
+
+    rows = labs.list_lab_models("minimax")
+
+    assert rows[0].id == "minimax-m1"
+    assert rows[0].recommended_for_local is True
+    assert rows[0].supports_reasoning is True
+    assert rows[0].context_window == 1000000
+    assert "MiniMaxAI/MiniMax-M1" in rows[0].install_hint

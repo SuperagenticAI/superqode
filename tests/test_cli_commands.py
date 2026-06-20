@@ -1950,6 +1950,9 @@ class TestProvidersCommand:
         result = runner.invoke(cli_main, ["providers", "ds4", "server"])
         assert result.exit_code == 0
         assert "ds4-server" in result.output
+        assert "--ctx 32768" in result.output
+        assert "--ctx 100000" in result.output
+        assert "--ctx 393216" in result.output
         assert "--kv-disk-dir" in result.output
 
     def test_providers_ds4_doctor_reports_unreachable_when_no_server(self, runner):

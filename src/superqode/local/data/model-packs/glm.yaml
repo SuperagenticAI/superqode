@@ -1,6 +1,6 @@
 # Zhipu GLM family pack.
 name: glm
-description: "GLM 4.x/5.x: strong agentic coder, native tools, longer history budget"
+description: "GLM 4.x/5.x starter: native tools, longer history budget"
 match: [glm-4, glm-5, glm4, glm5]
 policy:
   temperature: 0.2
@@ -9,3 +9,4 @@ policy:
 notes:
   - "GLM-5.1 (754B) is a server-class model; connect over an OpenAI-compatible endpoint rather than running it locally."
   - "GLM-4.x air/flash variants run well on 24-48GB hardware."
+  - "Validate tool calls and context behavior with `superqode local smoke`; tune this pack for your endpoint and repo."

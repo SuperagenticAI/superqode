@@ -636,7 +636,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
             "deepseek-v4-flash",
             "deepseek-chat",
         ],
-        notes="Local DS4 server for DeepSeek V4 Flash. Run ds4-server with an OpenAI-compatible endpoint, for example: ./ds4-server --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192",
+        notes="Local DS4 server for DeepSeek V4 Flash. Safe start: ./ds4-server --ctx 32768 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192. Use --ctx 100000 for long coding sessions with enough memory; Think Max requires --ctx >= 393216.",
         deployment_mode="local",
     ),
     "sglang": ProviderDef(

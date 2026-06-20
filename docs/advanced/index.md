@@ -96,6 +96,22 @@ Advanced SuperQode features for users who want more control over tools, safety, 
 
     [:octicons-arrow-right-24: Harness System](harness-system.md)
 
+-   **Optimization Story**
+
+    ---
+
+    Choose the right optimization layer: local model routing, harness specs, markdown skills, or custom staged optimizers.
+
+    [:octicons-arrow-right-24: Optimization Story](optimization.md)
+
+-   **Skill Optimization**
+
+    ---
+
+    Use GEPA to evolve markdown skills against SuperQode harness eval tasks, with staged output and bounded-edit checks.
+
+    [:octicons-arrow-right-24: Skill Optimization](skill-optimization.md)
+
 -   **Omnigent Compatibility**
 
     ---

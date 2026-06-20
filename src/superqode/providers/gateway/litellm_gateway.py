@@ -1792,7 +1792,9 @@ class LiteLLMGateway(GatewayInterface):
             raise GatewayError(
                 f"Cannot connect to DS4 server at {self._ds4_server_url()}.\n\n"
                 f"Start ds4-server, then retry:\n"
-                f"./ds4-server --ctx 100000 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192\n\n"
+                f"./ds4-server --ctx 32768 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192\n\n"
+                f"For long coding sessions, use --ctx 100000 if you have memory headroom. "
+                f"Think Max requires --ctx >= 393216.\n\n"
                 f"If DS4 is running somewhere else, set DS4_HOST.",
                 provider="ds4",
                 model=model,

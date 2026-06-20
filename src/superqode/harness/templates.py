@@ -202,6 +202,26 @@ def glm_coding_template() -> HarnessSpec:
     )
 
 
+def minimax_coding_template() -> HarnessSpec:
+    """MiniMax optimized coding harness starting point."""
+    base = coding_template(name="minimax-coding")
+    return HarnessSpec(
+        **{
+            **base.__dict__,
+            "description": "MiniMax local/endpoint coding harness: long-context reasoning with measured tool behavior.",
+            "model_policy": ModelPolicySpec(
+                primary="minimax/minimax-m1",
+                fallbacks=("ollama/qwen3-coder",),
+                profile="minimax-coding",
+                pack="minimax",
+                temperature=0.2,
+                reasoning="medium",
+            ),
+            "metadata": {"template": "minimax-coding"},
+        }
+    )
+
+
 BUILTIN_TEMPLATES = {
     "coding": coding_template,
     "no-tool": no_tool_template,
@@ -214,6 +234,7 @@ BUILTIN_TEMPLATES = {
     "ds4-fast_local": ds4_fast_local_template,
     "qwen-coding": qwen_coding_template,
     "glm-coding": glm_coding_template,
+    "minimax-coding": minimax_coding_template,
 }
 
 

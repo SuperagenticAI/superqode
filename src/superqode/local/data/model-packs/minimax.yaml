@@ -1,0 +1,13 @@
+# MiniMax family pack.
+name: minimax
+description: "MiniMax M-series starter: long-context reasoning/coding, measured tools, conservative parallelism"
+match: [minimax, mini-max, minimax-m1, minimax-m2, minimax-text]
+policy:
+  temperature: 0.2
+  reasoning: medium
+  parallel_tools: false
+  session_history_limit: 16
+notes:
+  - "MiniMax M-series models are long-context reasoning models; validate tool calls with `superqode local smoke` before enabling broad write/shell access."
+  - "Prefer OpenAI-compatible endpoints or proven local quantizations; use models.dev metadata plus smoke results rather than hardcoded assumptions."
+  - "Customize the harness for your repo; this pack is not a substitute for held-out coding evals."

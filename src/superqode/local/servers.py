@@ -56,6 +56,9 @@ _POLL_INTERVAL = 0.4
 
 # Default ds4 checkout used when the binary is not on PATH.
 DS4_CHECKOUT = Path.home() / "oss" / "ds4"
+DS4_DEFAULT_CTX = 32768
+DS4_DEFAULT_KV_DISK_MB = 8192
+DS4_DEFAULT_KV_DIR = Path.home() / ".superqode" / "ds4-kv"
 
 
 @dataclass
@@ -145,6 +148,8 @@ INSTALL_GUIDES: Dict[str, List[str]] = {
         "DS4 (DeepSeek V4 Flash) ships as a source build:",
         "  superqode local serve ds4 --build     # clones + makes the binary",
         "  cd ~/oss/ds4 && ./download_model.sh   # large GGUF, run when ready",
+        "Start safely with: superqode local serve ds4 --ctx 32768",
+        "Use --ctx 100000 only for long coding sessions with enough memory headroom.",
     ],
     "llama.cpp": [
         "Install llama.cpp's server binary:",
@@ -159,6 +164,10 @@ def install_guide(engine: str) -> List[str]:
 
 
 MLX_REQUIREMENT = "mlx-lm>=0.31.0,<0.32.0"
+
+
+def _has_extra_arg(extra_args: List[str], flag: str) -> bool:
+    return flag in extra_args or any(arg.startswith(f"{flag}=") for arg in extra_args)
 
 
 def discover_gguf_models(limit: int = 50) -> List[dict]:
@@ -559,9 +568,12 @@ class ServerManager:
                 raise ServerError(
                     "ds4-server not built. Build it with: superqode local serve ds4 --build"
                 )
-            cmd = [str(binary), "--host", host, "--port", str(port)]
-            if ctx:
-                cmd += ["--ctx", str(ctx)]
+            ctx = ctx or DS4_DEFAULT_CTX
+            cmd = [str(binary), "--host", host, "--port", str(port), "--ctx", str(ctx)]
+            if not _has_extra_arg(extra_args, "--kv-disk-dir"):
+                cmd += ["--kv-disk-dir", str(DS4_DEFAULT_KV_DIR)]
+            if not _has_extra_arg(extra_args, "--kv-disk-space-mb"):
+                cmd += ["--kv-disk-space-mb", str(DS4_DEFAULT_KV_DISK_MB)]
             return (cmd + extra_args, {}, binary.parent)
 
         if engine == "llama.cpp":
@@ -599,6 +611,8 @@ class ServerManager:
         spec = SPECS[engine]
         host = host or spec.default_host
         port = port or spec.default_port
+        if engine == "ds4" and ctx is None:
+            ctx = DS4_DEFAULT_CTX
 
         # Guard against silent multi-GB downloads. MLX pulls from Hugging Face on
         # launch; refuse unless the model is already cached or the caller opted in.

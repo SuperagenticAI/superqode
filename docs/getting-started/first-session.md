@@ -96,6 +96,18 @@ Other harness commands:
 | `:harness templates` | List available templates |
 | `:harness off` | Return to the non-harness runtime path |
 
+For local models, you can build a repo-local harness from the TUI:
+
+```text
+:local build --repo . --model MiniMaxAI/MiniMax-M1 --pack minimax-m1
+```
+
+This path does not run the model. It migrates existing prompts/skills into a
+plan, carries the selected pack into `superqode.local.yaml`, and prints the
+final live checks to run later. Treat the pack as a model-family starter, then
+edit the harness for your repo's memory, tools, approval policy, and eval
+results.
+
 You can also start the TUI with a harness:
 
 ```bash

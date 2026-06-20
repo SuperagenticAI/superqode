@@ -26,6 +26,12 @@ def test_wizard_glm_starter():
     assert spec.model_policy.pack == "glm"
 
 
+def test_wizard_minimax_starter():
+    spec = build_wizard_spec(WizardAnswers(name="mm", starter="minimax-coding"))
+    assert spec.model_policy.pack == "minimax"
+    assert spec.model_policy.reasoning == "medium"
+
+
 def test_wizard_permission_choices_apply():
     spec = build_wizard_spec(
         WizardAnswers(

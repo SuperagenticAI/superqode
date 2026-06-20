@@ -82,6 +82,13 @@ CURATED_LOCAL_LABS: dict[str, LocalLab] = {
         description="Devstral and Mistral local/server routes for coding.",
         recommended=True,
     ),
+    "minimax": LocalLab(
+        id="minimax",
+        name="MiniMax",
+        provider_ids=("minimax",),
+        description="MiniMax long-context reasoning/coding models and open-weight routes.",
+        recommended=True,
+    ),
 }
 
 
@@ -156,6 +163,8 @@ def _install_hint(model_id: str, model: dict[str, Any], lab_id: str) -> str:
     lowered = model_id.lower()
     if lab_id == "zhipuai" or "glm" in lowered:
         return f"hf download THUDM/{model_id.split('/')[-1]}"
+    if lab_id == "minimax" or "minimax" in lowered:
+        return f"hf download MiniMaxAI/{model_id.split('/')[-1]}"
     if "qwen" in lowered:
         return f"hf download Qwen/{model_id.split('/')[-1]}"
     if "gemma" in lowered:
@@ -248,6 +257,8 @@ TRUSTED_HF_ORGS = {
     "google",
     "deepseek-ai",
     "mistralai",
+    "minimaxai",
+    "minimax-ai",
     "zai-org",
     "thudm",
     "mlx-community",

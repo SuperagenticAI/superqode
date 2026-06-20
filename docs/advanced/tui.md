@@ -102,6 +102,7 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:connect` - Connect to provider/agent
 - `:connect local` - Open the local provider picker
 - `:connect byok` - Open the BYOK provider picker
+- `:local setup <name>` - TUI-first guide for model download, serving, context, harness, and smoke
 - `:local init` - Generate `superqode.local.yaml` and run local readiness checks
 - `:local smoke` - Run non-destructive local coding readiness checks
 - `:local search <name>` - Find a model + how to get it on every engine (size + fit)

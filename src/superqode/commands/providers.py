@@ -554,15 +554,26 @@ def ds4_command(action: str, host: Optional[str]):
     )
 
     if action == "server":
-        # The README's canonical example. Show it verbatim so users can copy-paste
-        # without us inventing flag combinations that might drift from upstream.
-        console.print("[bold]Recommended ds4-server start command[/bold]")
+        console.print("[bold]Recommended ds4-server start commands[/bold]")
         console.print()
+        console.print("[dim]Safe coding default (DS4 upstream default context is 32K):[/dim]")
+        console.print(
+            "  [cyan]./ds4-server --ctx 32768 "
+            "--kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192[/cyan]"
+        )
+        console.print("[dim]Long local-agent sessions, if memory headroom allows:[/dim]")
         console.print(
             "  [cyan]./ds4-server --ctx 100000 "
             "--kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192[/cyan]"
         )
+        console.print("[dim]Think Max requires at least 393,216 context tokens:[/dim]")
+        console.print(
+            "  [cyan]./ds4-server --ctx 393216 "
+            "--kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 16384[/cyan]"
+        )
         console.print()
+        console.print("[dim]Managed SuperQode start:[/dim]")
+        console.print("  [cyan]superqode local serve ds4 --ctx 32768[/cyan]")
         console.print("[dim]Notes:[/dim]")
         console.print(
             "[dim]  • --kv-disk-dir is what makes prefixes survive restarts and"
@@ -571,6 +582,10 @@ def ds4_command(action: str, host: Optional[str]):
         console.print(
             "[dim]  • --ctx caps the in-memory KV window; raise it only if you have"
             " RAM headroom (full 1M ctx ≈ 26GB).[/dim]"
+        )
+        console.print(
+            "[dim]  • For newer DS4 runtime flags, pass them yourself or use"
+            " `superqode local serve ds4 --extra ...`.[/dim]"
         )
         console.print(
             f"[dim]  • SuperQode talks to it at: {base_url} (override with DS4_HOST).[/dim]"
@@ -780,7 +795,7 @@ def mlx_command(action: str, model_id: Optional[str], host: str, port: int, extr
             "   [cyan]superqode providers mlx server --model "
             "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit[/cyan]"
         )
-        console.print("4. Generate a tuned local harness:")
+        console.print("4. Generate a starter local harness:")
         console.print("   [cyan]superqode local doctor --generate harness.yaml[/cyan]")
         return
 
