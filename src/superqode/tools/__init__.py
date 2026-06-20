@@ -24,7 +24,7 @@ from .edit_tools import EditFileTool, InsertTextTool, PatchTool, MultiEditTool
 from .todo_tools import TodoWriteTool, TodoReadTool
 from .batch_tool import BatchTool
 from .shell_tools import BashTool
-from .search_tools import GrepTool, GlobTool, CodeSearchTool
+from .search_tools import GrepTool, GlobTool, CodeSearchTool, LocalCodeSearchTool
 from .semantic_search import SemanticSearchTool, is_semantic_search_available
 from .diagnostics import DiagnosticsTool
 from .context_handle import ContextHandleTool
@@ -73,6 +73,7 @@ __all__ = [
     "GrepTool",
     "GlobTool",
     "CodeSearchTool",
+    "LocalCodeSearchTool",
     "SemanticSearchTool",
     "is_semantic_search_available",
     # Diagnostics

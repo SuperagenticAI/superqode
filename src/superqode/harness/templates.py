@@ -41,6 +41,7 @@ def coding_template(*, name: str = "superqode-coding", backend: str = "builtin")
                     "multi_edit",
                     "grep",
                     "glob",
+                    "local_code_search",
                     "repo_search",
                     "code_search",
                     "bash",

@@ -268,7 +268,7 @@ class ToolRegistry:
         from .file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
         from .edit_tools import EditFileTool, InsertTextTool
         from .shell_tools import BashTool
-        from .search_tools import GrepTool, GlobTool, RepoSearchTool
+        from .search_tools import GrepTool, GlobTool, LocalCodeSearchTool, RepoSearchTool
 
         registry = cls()
 
@@ -288,6 +288,7 @@ class ToolRegistry:
         # Search
         registry.register(GrepTool())
         registry.register(GlobTool())
+        registry.register(LocalCodeSearchTool())
         registry.register(RepoSearchTool())
 
         return registry
@@ -305,7 +306,13 @@ class ToolRegistry:
         from .shell_tools import BashTool
         from .shell_session import ShellSessionTool
         from .image_tools import ViewImageTool
-        from .search_tools import GrepTool, GlobTool, CodeSearchTool, RepoSearchTool
+        from .search_tools import (
+            GrepTool,
+            GlobTool,
+            CodeSearchTool,
+            LocalCodeSearchTool,
+            RepoSearchTool,
+        )
         from .question_tool import QuestionTool, ConfirmTool
         from .todo_tools import TodoWriteTool, TodoReadTool
         from .batch_tool import BatchTool
@@ -335,6 +342,7 @@ class ToolRegistry:
         registry.register(ShellSessionTool())
         registry.register(GrepTool())
         registry.register(GlobTool())
+        registry.register(LocalCodeSearchTool())
         registry.register(RepoSearchTool())
         registry.register(CodeSearchTool())
 
@@ -377,7 +385,13 @@ class ToolRegistry:
         from .edit_tools import EditFileTool, PatchTool
         from .apply_patch import ApplyPatchTool
         from .shell_tools import BashTool
-        from .search_tools import GrepTool, GlobTool, RepoSearchTool, CodeSearchTool
+        from .search_tools import (
+            GrepTool,
+            GlobTool,
+            RepoSearchTool,
+            CodeSearchTool,
+            LocalCodeSearchTool,
+        )
         from .question_tool import QuestionTool, ConfirmTool
         from .todo_tools import TodoWriteTool, TodoReadTool
 
@@ -398,6 +412,7 @@ class ToolRegistry:
         registry.register(BashTool())
         registry.register(GrepTool())
         registry.register(GlobTool())
+        registry.register(LocalCodeSearchTool())
         registry.register(RepoSearchTool())
         # Semantic symbol/definition/reference search. Local models lean on
         # local search in place of web access, so give them the richer tool.
@@ -445,7 +460,13 @@ class ToolRegistry:
         from .shell_tools import BashTool
         from .shell_session import ShellSessionTool
         from .image_tools import ViewImageTool
-        from .search_tools import GrepTool, GlobTool, CodeSearchTool, RepoSearchTool
+        from .search_tools import (
+            GrepTool,
+            GlobTool,
+            CodeSearchTool,
+            LocalCodeSearchTool,
+            RepoSearchTool,
+        )
         from .diagnostics import DiagnosticsTool
         from .network_tools import FetchTool, DownloadTool
         from .agent_tools import SubAgentTool, TaskCoordinatorTool
@@ -486,6 +507,7 @@ class ToolRegistry:
         # Search (basic + semantic)
         registry.register(GrepTool())
         registry.register(GlobTool())
+        registry.register(LocalCodeSearchTool())
         registry.register(RepoSearchTool())
         registry.register(CodeSearchTool())
 
@@ -602,7 +624,13 @@ class ToolRegistry:
         from .shell_tools import BashTool
         from .shell_session import ShellSessionTool
         from .image_tools import ViewImageTool
-        from .search_tools import GrepTool, GlobTool, CodeSearchTool, RepoSearchTool
+        from .search_tools import (
+            GrepTool,
+            GlobTool,
+            CodeSearchTool,
+            LocalCodeSearchTool,
+            RepoSearchTool,
+        )
         from .diagnostics import DiagnosticsTool
         from .lsp_tools import LSPTool
         from .question_tool import QuestionTool, ConfirmTool
@@ -638,6 +666,7 @@ class ToolRegistry:
         # Search
         registry.register(GrepTool())
         registry.register(GlobTool())
+        registry.register(LocalCodeSearchTool())
         registry.register(RepoSearchTool())
         registry.register(CodeSearchTool())
 

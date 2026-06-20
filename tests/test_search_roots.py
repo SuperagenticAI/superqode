@@ -11,7 +11,7 @@ import pytest
 
 from superqode.tools.base import ToolContext
 from superqode.tools.file_tools import ReadFileTool, WriteFileTool
-from superqode.tools.search_tools import GrepTool, RepoSearchTool
+from superqode.tools.search_tools import GrepTool, LocalCodeSearchTool, RepoSearchTool
 from superqode.tools.validation import (
     get_configured_search_roots,
     validate_path_in_search_scope,
@@ -129,6 +129,25 @@ async def test_grep_all_repos_fans_out_and_labels(project_and_ref):
 
 
 @pytest.mark.asyncio
+async def test_local_code_search_all_repos_fans_out_and_labels(project_and_ref):
+    proj, ref = project_and_ref
+    (proj / "a.py").write_text("def shared_token_project():\n    return 1\n")
+    (ref / "lib.py").write_text("def shared_token_reference():\n    return 2\n")
+    ctx = ToolContext(session_id="t", working_directory=proj, search_roots=[ref])
+
+    res = await LocalCodeSearchTool().execute(
+        {"query": "shared_token", "all_repos": True},
+        ctx,
+    )
+
+    assert res.success
+    assert res.metadata["repos"] == 2
+    assert f"{proj.name}/a.py" in res.output
+    assert f"{ref.name}/lib.py" in res.output
+    assert "Symbols:" in res.output
+
+
+@pytest.mark.asyncio
 async def test_grep_absolute_path_in_scope_allowed(project_and_ref):
     proj, ref = project_and_ref
     ctx = ToolContext(session_id="t", working_directory=proj, search_roots=[ref])
@@ -146,6 +165,22 @@ async def test_grep_absolute_path_out_of_scope_blocked(project_and_ref, monkeypa
         (outside_p / "secret.py").write_text("magic_helper\n")
         ctx = ToolContext(session_id="t", working_directory=proj, search_roots=[ref])
         res = await GrepTool().execute({"pattern": "magic_helper", "path": str(outside_p)}, ctx)
+        assert res.success is False
+        assert ":workspace add" in (res.error or "")
+
+
+@pytest.mark.asyncio
+async def test_local_code_search_absolute_path_out_of_scope_blocked(project_and_ref, monkeypatch):
+    proj, ref = project_and_ref
+    monkeypatch.delenv("SUPERQODE_ALLOW_EXTERNAL_SEARCH", raising=False)
+    with tempfile.TemporaryDirectory() as outside:
+        outside_p = Path(outside)
+        (outside_p / "secret.py").write_text("def shared_token_secret():\n    return 0\n")
+        ctx = ToolContext(session_id="t", working_directory=proj, search_roots=[ref])
+        res = await LocalCodeSearchTool().execute(
+            {"query": "shared_token", "path": str(outside_p)},
+            ctx,
+        )
         assert res.success is False
         assert ":workspace add" in (res.error or "")
 

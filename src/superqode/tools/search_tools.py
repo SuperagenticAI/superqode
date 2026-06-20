@@ -1172,3 +1172,433 @@ class RepoSearchTool(Tool):
         if not separator:
             return line
         return f"{self._relative_display(file_name, root)}:{rest}"
+
+
+class LocalCodeSearchTool(Tool):
+    """Fast offline code-search broker over local roots.
+
+    This is intentionally an orchestration layer over local filesystem search.
+    It gives local/airplane agents one high-signal tool while keeping the first
+    implementation small: path ranking, literal content matches, and
+    regex-symbol extraction. Persistent indexes can replace these internals
+    later without changing the tool contract.
+    """
+
+    read_only = True
+
+    MAX_LIMIT = 100
+
+    @property
+    def name(self) -> str:
+        return "local_code_search"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Fast local-only code search broker. Searches file paths, content, and code "
+            "symbols across the current repo or all registered local repos. Prefer this "
+            "in Airplane Mode and for broad offline code exploration."
+        )
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Text, symbol, filename, or concept to search for locally",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Directory or file to search from (default: current repo)",
+                },
+                "all_repos": {
+                    "type": "boolean",
+                    "description": "Search the working repo plus registered read-only search roots",
+                },
+                "include": {
+                    "type": "string",
+                    "description": "Optional file glob, for example '*.py' or 'src/**/*.ts'",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["all", "path", "content", "symbol"],
+                    "description": "Which local search lanes to run (default: all)",
+                },
+                "language": {
+                    "type": "string",
+                    "description": "Optional language for symbol search (python, javascript, typescript, go, rust)",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results per lane (default: 20)",
+                },
+                "backend": {
+                    "type": "string",
+                    "enum": ["auto", "index", "live"],
+                    "description": "Search backend: auto uses the local SQLite index when available, live uses filesystem search",
+                },
+            },
+            "required": ["query"],
+        }
+
+    async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        query = str(args.get("query", "")).strip()
+        if not query:
+            return ToolResult(success=False, output="", error="Query is required")
+
+        mode = str(args.get("mode") or "all").strip().lower()
+        if mode not in {"all", "path", "content", "symbol"}:
+            return ToolResult(success=False, output="", error="mode must be one of: all, path, content, symbol")
+        include = args.get("include")
+        language = args.get("language")
+        limit = max(1, min(int(args.get("limit") or 20), self.MAX_LIMIT))
+        backend = str(args.get("backend") or "auto").strip().lower()
+        if backend not in {"auto", "index", "live"}:
+            return ToolResult(success=False, output="", error="backend must be one of: auto, index, live")
+        targets, error, multi = resolve_search_targets(
+            args.get("path"), bool(args.get("all_repos")), ctx
+        )
+        if error:
+            return ToolResult(success=False, output="", error=error)
+
+        if backend in {"auto", "index"}:
+            indexed = self._try_index_search(
+                query=query,
+                targets=targets,
+                ctx=ctx,
+                mode=mode,
+                include=include,
+                language=language,
+                limit=limit,
+                multi=multi,
+            )
+            if indexed is not None:
+                return indexed
+            if backend == "index":
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error="Local code index is unavailable or does not cover the requested roots. Run `superqode local airplane index` or use backend='live'.",
+                )
+
+        sections: list[str] = []
+        metadata: dict[str, Any] = {
+            "backend": "ripgrep+regex-symbols" if shutil.which("rg") else "python-fallback",
+            "repos": len(targets),
+            "mode": mode,
+            "path": 0,
+            "content": 0,
+            "symbol": 0,
+        }
+
+        if mode in {"all", "path"}:
+            paths = await self._search_paths(query, targets, ctx, include, limit, multi)
+            metadata["path"] = len(paths)
+            if paths:
+                sections.append("Files:\n" + "\n".join(paths))
+
+        if mode in {"all", "content"}:
+            content = await self._search_content(query, targets, ctx, include, limit, multi)
+            metadata["content"] = len(content)
+            if content:
+                sections.append("Content:\n" + "\n".join(content))
+
+        if mode in {"all", "symbol"}:
+            symbols = await self._search_symbols(query, targets, ctx, language, include, limit, multi)
+            metadata["symbol"] = len(symbols)
+            if symbols:
+                sections.append("Symbols:\n" + "\n".join(symbols))
+
+        if not sections:
+            roots = ", ".join(root.name for root in targets)
+            return ToolResult(
+                success=True,
+                output=f"No local code matches found for '{query}' in {roots or 'workspace'}",
+                metadata=metadata,
+            )
+
+        header = (
+            f"Local code search results for '{query}' "
+            f"({len(targets)} root{'s' if len(targets) != 1 else ''}; {metadata['backend']})"
+        )
+        return ToolResult(
+            success=True,
+            output=header + "\n\n" + "\n\n".join(sections),
+            metadata=metadata,
+        )
+
+    def _try_index_search(
+        self,
+        *,
+        query: str,
+        targets: List[Path],
+        ctx: ToolContext,
+        mode: str,
+        include: Optional[str],
+        language: Optional[str],
+        limit: int,
+        multi: bool,
+    ) -> Optional[ToolResult]:
+        try:
+            from superqode.local.code_index import search_code_index
+
+            report = search_code_index(
+                workspace_root=ctx.working_directory,
+                roots=targets,
+                query=query,
+                mode=mode,
+                include=include,
+                language=language,
+                limit=limit,
+            )
+        except Exception:
+            return None
+        if not report.covered:
+            return None
+        return self._format_index_report(report, targets, ctx.working_directory, multi, mode)
+
+    def _format_index_report(
+        self,
+        report: Any,
+        targets: List[Path],
+        cwd: Path,
+        multi: bool,
+        mode: str,
+    ) -> ToolResult:
+        sections: list[str] = []
+        if report.files:
+            sections.append(
+                "Files:\n"
+                + "\n".join(
+                    f"{self._index_display(item.root_path, item.rel_path, targets, cwd, multi)}  [{item.preview}]"
+                    for item in report.files
+                )
+            )
+        if report.content:
+            lines: list[str] = []
+            for item in report.content:
+                display = self._index_display(item.root_path, item.rel_path, targets, cwd, multi)
+                line = f":{item.line}" if item.line is not None else ""
+                lines.append(f"{display}{line}:{item.preview}")
+            sections.append("Content:\n" + "\n".join(lines))
+        if report.symbols:
+            lines = []
+            for item in report.symbols:
+                display = self._index_display(item.root_path, item.rel_path, targets, cwd, multi)
+                lines.append(
+                    f"{display}:{item.line} [{item.kind}] {item.name}\n  {item.preview}"
+                )
+            sections.append("Symbols:\n" + "\n".join(lines))
+
+        metadata = {
+            "backend": "sqlite-fts5",
+            "index_path": report.index_path,
+            "repos": len(targets),
+            "mode": mode,
+            "path": len(report.files),
+            "content": len(report.content),
+            "symbol": len(report.symbols),
+        }
+        if not sections:
+            roots = ", ".join(root.name for root in targets)
+            return ToolResult(
+                success=True,
+                output=f"No indexed local code matches found for '{report.query}' in {roots or 'workspace'}",
+                metadata=metadata,
+            )
+
+        header = (
+            f"Indexed local code search results for '{report.query}' "
+            f"({len(targets)} root{'s' if len(targets) != 1 else ''}; sqlite-fts5)"
+        )
+        return ToolResult(success=True, output=header + "\n\n" + "\n\n".join(sections), metadata=metadata)
+
+    def _index_display(
+        self, root_path: str, rel_path: str, targets: List[Path], cwd: Path, multi: bool
+    ) -> str:
+        return _label_match_path(str(Path(root_path) / rel_path), targets, cwd, multi)
+
+    async def _search_paths(
+        self,
+        query: str,
+        targets: List[Path],
+        ctx: ToolContext,
+        include: Optional[str],
+        limit: int,
+        multi: bool,
+    ) -> List[str]:
+        files: list[str] = []
+        rg_path = shutil.which("rg")
+        if rg_path:
+            command = [rg_path, "--no-config", "--files"]
+            if include:
+                command.extend(["--glob", include])
+            command.extend(str(target) for target in targets)
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(ctx.working_directory),
+            )
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20)
+            files = stdout.decode("utf-8", errors="replace").splitlines()
+        else:
+            for target in targets:
+                glob_pattern = include or "**/*"
+                iterator = target.glob(glob_pattern) if target.is_dir() else [target]
+                files.extend(str(path) for path in iterator if path.is_file())
+
+        ranked: list[tuple[int, str]] = []
+        for file_name in files:
+            display = _label_match_path(file_name, targets, ctx.working_directory, multi)
+            score = RepoSearchTool()._path_score(query, display)
+            if score > 0:
+                ranked.append((score, display))
+        ranked.sort(key=lambda item: (-item[0], item[1]))
+        return [f"{display}  [score {score}]" for score, display in ranked[:limit]]
+
+    async def _search_content(
+        self,
+        query: str,
+        targets: List[Path],
+        ctx: ToolContext,
+        include: Optional[str],
+        limit: int,
+        multi: bool,
+    ) -> List[str]:
+        rg_path = shutil.which("rg")
+        if rg_path:
+            command = [
+                rg_path,
+                "--no-config",
+                "--line-number",
+                "--no-heading",
+                "--color",
+                "never",
+                "-i",
+                "-F",
+            ]
+            if include:
+                command.extend(["--glob", include])
+            command.extend(["--", query])
+            command.extend(str(target) for target in targets)
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(ctx.working_directory),
+            )
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20)
+            lines = stdout.decode("utf-8", errors="replace").splitlines()
+            return [
+                self._label_content_line(line, targets, ctx.working_directory, multi)
+                for line in lines[:limit]
+            ]
+
+        results: list[str] = []
+        query_lower = query.lower()
+        for path in self._iter_candidate_files(targets, include, None):
+            try:
+                for line_num, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
+                    if query_lower in line.lower():
+                        display = _label_match_path(str(path), targets, ctx.working_directory, multi)
+                        results.append(f"{display}:{line_num}:{line.rstrip()}")
+                        if len(results) >= limit:
+                            return results
+            except Exception:
+                continue
+        return results
+
+    async def _search_symbols(
+        self,
+        query: str,
+        targets: List[Path],
+        ctx: ToolContext,
+        language: Optional[str],
+        include: Optional[str],
+        limit: int,
+        multi: bool,
+    ) -> List[str]:
+        query_pattern = re.compile(re.escape(query), re.IGNORECASE)
+        out: list[str] = []
+        for file_path in self._iter_candidate_files(targets, include, language):
+            lang = CodeSearchTool()._get_language(file_path)
+            if not lang:
+                continue
+            for item in self._symbols_in_file(file_path, lang):
+                name = item["name"]
+                if not query_pattern.search(name):
+                    continue
+                display = _label_match_path(str(file_path), targets, ctx.working_directory, multi)
+                out.append(
+                    f"{display}:{item['line']} [{item['kind']}] {name}\n  {item['signature']}"
+                )
+                if len(out) >= limit:
+                    return out
+        return out
+
+    def _iter_candidate_files(
+        self, targets: List[Path], include: Optional[str], language: Optional[str]
+    ) -> List[Path]:
+        code = CodeSearchTool()
+        allowed_exts = {
+            ext for ext, lang in code.EXTENSIONS.items() if language is None or lang == language
+        }
+        files: list[Path] = []
+        for target in targets:
+            if target.is_file():
+                candidates = [target]
+            else:
+                candidates = list(target.glob(include or "**/*"))
+            for path in candidates:
+                if not path.is_file() or path.suffix.lower() not in allowed_exts:
+                    continue
+                try:
+                    rel_parts = path.relative_to(target).parts
+                except ValueError:
+                    rel_parts = path.parts
+                if any(
+                    part
+                    in {"node_modules", "__pycache__", ".git", "venv", ".venv", "dist", "build"}
+                    for part in rel_parts
+                ):
+                    continue
+                files.append(path)
+        return files
+
+    def _symbols_in_file(self, file_path: Path, language: str) -> List[dict[str, Any]]:
+        patterns = CodeSearchTool.PATTERNS.get(language, {})
+        symbols: list[dict[str, Any]] = []
+        try:
+            lines = file_path.read_text(errors="replace").splitlines()
+        except Exception:
+            return []
+        for line_num, line in enumerate(lines, 1):
+            for kind_name, pattern in patterns.items():
+                match = re.match(pattern, line)
+                if not match:
+                    continue
+                groups = match.groups()
+                raw = groups[-1] if groups else ""
+                names = [item.strip() for item in raw.split(",")] if "," in raw else [raw]
+                for name in names:
+                    if name:
+                        symbols.append(
+                            {
+                                "name": name,
+                                "kind": kind_name,
+                                "line": line_num,
+                                "signature": line.strip()[:120],
+                            }
+                        )
+        return symbols
+
+    def _label_content_line(
+        self, line: str, targets: List[Path], cwd: Path, multi: bool
+    ) -> str:
+        file_name, sep, rest = line.partition(":")
+        if not sep:
+            return line
+        return f"{_label_match_path(file_name, targets, cwd, multi)}:{rest}"

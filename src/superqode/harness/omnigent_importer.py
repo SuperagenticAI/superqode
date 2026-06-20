@@ -38,6 +38,7 @@ _OS_TOOL_NAMES = {
     "bash",
     "grep",
     "glob",
+    "local_code_search",
     "repo_search",
 }
 

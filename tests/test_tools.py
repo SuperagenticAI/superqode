@@ -14,7 +14,7 @@ from superqode.tools.file_tools import (
     ListDirectoryTool,
 )
 from superqode.tools.edit_tools import EditFileTool, InsertTextTool, MultiEditTool, PatchTool
-from superqode.tools.search_tools import GlobTool, RepoSearchTool
+from superqode.tools.search_tools import GlobTool, LocalCodeSearchTool, RepoSearchTool
 from superqode.tools.shell_tools import BashTool
 
 
@@ -52,6 +52,7 @@ class TestToolRegistry:
         assert "bash" in tool_names
         assert "grep" in tool_names
         assert "glob" in tool_names
+        assert "local_code_search" in tool_names
 
     def test_openai_format(self):
         """Test conversion to OpenAI format."""
@@ -101,6 +102,7 @@ class TestToolRegistry:
         assert "patch" in names
         assert "bash" in names
         assert "repo_search" in names
+        assert "local_code_search" in names
         # Local models lean on local search in place of web access.
         assert "code_search" in names
         assert "web_search" not in names
@@ -408,6 +410,41 @@ class TestRepoSearchTool:
         assert "Content:" in result.output
         assert "Symbols:" in result.output
         assert "src/provider_manager.py" in result.output
+
+
+@pytest.mark.asyncio
+class TestLocalCodeSearchTool:
+    """Test the offline local code-search broker."""
+
+    async def test_local_code_search_returns_files_content_and_symbols(self, temp_dir, tool_context):
+        src = temp_dir / "src"
+        src.mkdir()
+        (src / "provider_manager.py").write_text(
+            "class ProviderManager:\n    def list_models(self):\n        return ['model']\n",
+            encoding="utf-8",
+        )
+
+        result = await LocalCodeSearchTool().execute({"query": "ProviderManager"}, tool_context)
+
+        assert result.success
+        assert "Local code search results" in result.output
+        assert "Files:" in result.output
+        assert "Content:" in result.output
+        assert "Symbols:" in result.output
+        assert "src/provider_manager.py" in result.output
+        assert result.metadata["backend"] in {"ripgrep+regex-symbols", "python-fallback"}
+
+    async def test_local_code_search_mode_filters(self, temp_dir, tool_context):
+        (temp_dir / "alpha.py").write_text("def alpha_symbol():\n    return 1\n", encoding="utf-8")
+
+        result = await LocalCodeSearchTool().execute(
+            {"query": "alpha_symbol", "mode": "symbol"},
+            tool_context,
+        )
+
+        assert result.success
+        assert "Symbols:" in result.output
+        assert "Content:" not in result.output
 
 
 class TestListDirectoryTool:

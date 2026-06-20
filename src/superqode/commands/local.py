@@ -992,6 +992,211 @@ def local_smoke(engine, endpoint, model, repo_path, api_key, max_tokens, json_ou
         raise click.exceptions.Exit(1)
 
 
+@local.group("airplane")
+def local_airplane():
+    """Prepare and verify strict offline local coding sessions."""
+
+
+@local_airplane.command("prepare")
+@click.option(
+    "--repo",
+    "repo_path",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("."),
+    show_default=True,
+    help="Working repository that remains writable",
+)
+@click.option(
+    "--ref",
+    "refs",
+    multiple=True,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Extra local repository/search root to make readable",
+)
+@click.option(
+    "--output",
+    "output_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=Path("superqode.airplane.yaml"),
+    show_default=True,
+    help="Harness file to write",
+)
+@click.option("--model", default="", help="Explicit provider/model for the offline harness")
+@click.option("--pack", "pack_name", default="", help="Model policy pack for the harness")
+@click.option("--name", default="airplane-coder", show_default=True, help="Harness name")
+@click.option("--index/--no-index", "build_index", default=True, show_default=True, help="Build the local SQLite code index during prepare")
+@click.option("--force", is_flag=True, help="Overwrite an existing harness")
+@click.option("--json", "json_output", is_flag=True, help="Emit report as JSON")
+def airplane_prepare(repo_path, refs, output_path, model, pack_name, name, build_index, force, json_output):
+    """Write a strict no-network Airplane Mode harness and manifest."""
+    from superqode.local.airplane import prepare_airplane, render_report
+
+    try:
+        report = prepare_airplane(
+            repo_path=repo_path,
+            refs=refs,
+            output_path=output_path,
+            model=model,
+            pack=pack_name,
+            name=name,
+            build_index=build_index,
+            force=force,
+        )
+    except FileExistsError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+        return
+    click.echo(render_report(report))
+    click.echo(f"\nRun offline with: superqode --harness {report.harness_path} -p 'your task'")
+
+
+@local_airplane.command("doctor")
+@click.option(
+    "--repo",
+    "repo_path",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("."),
+    show_default=True,
+    help="Working repository that remains writable",
+)
+@click.option(
+    "--ref",
+    "refs",
+    multiple=True,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Extra local repository/search root to check",
+)
+@click.option("--json", "json_output", is_flag=True, help="Emit report as JSON")
+def airplane_doctor(repo_path, refs, json_output):
+    """Check Airplane Mode readiness without writing files."""
+    from superqode.local.airplane import doctor_airplane, render_report
+
+    report = doctor_airplane(repo_path=repo_path, refs=refs)
+    if json_output:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo(render_report(report))
+
+
+@local_airplane.command("smoke")
+@click.option(
+    "--repo",
+    "repo_path",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("."),
+    show_default=True,
+    help="Working repository that remains writable",
+)
+@click.option(
+    "--ref",
+    "refs",
+    multiple=True,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Extra local repository/search root to check",
+)
+@click.option("--json", "json_output", is_flag=True, help="Emit report as JSON")
+def airplane_smoke(repo_path, refs, json_output):
+    """Fast offline smoke test for search roots and network-denial policy."""
+    from superqode.local.airplane import render_report, smoke_airplane
+
+    report = smoke_airplane(repo_path=repo_path, refs=refs)
+    if json_output:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo(render_report(report, include_models=False))
+    if report.status != "ready":
+        raise click.exceptions.Exit(1)
+
+
+@local_airplane.command("index")
+@click.option(
+    "--repo",
+    "repo_path",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("."),
+    show_default=True,
+    help="Working repository that owns the index",
+)
+@click.option(
+    "--ref",
+    "refs",
+    multiple=True,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Extra local repository/search root to index",
+)
+@click.option("--json", "json_output", is_flag=True, help="Emit report as JSON")
+def airplane_index(repo_path, refs, json_output):
+    """Build or rebuild the local SQLite code-search index."""
+    from superqode.local.airplane import build_airplane_index
+
+    report = build_airplane_index(repo_path=repo_path, refs=refs)
+    if json_output:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+        return
+    if not report.ok:
+        raise click.ClickException(report.error or "index build failed")
+    click.echo("Airplane Mode code index")
+    click.echo(f"Index      {report.index_path}")
+    click.echo(f"Roots      {len(report.roots)}")
+    click.echo(f"Files      {report.files_indexed}")
+    click.echo(f"Symbols    {report.symbols_indexed}")
+    click.echo(f"Bytes      {report.bytes_indexed}")
+    click.echo(f"Elapsed    {report.elapsed_s}s")
+
+
+@local_airplane.command("models")
+@click.option("--json", "json_output", is_flag=True, help="Emit model fit data as JSON")
+def airplane_models(json_output):
+    """Show neutral model-fit suggestions for this machine."""
+    from superqode.local.airplane import doctor_airplane
+
+    report = doctor_airplane(repo_path=Path("."))
+    if json_output:
+        click.echo(json.dumps(report.model_suggestions, indent=2))
+        return
+    click.echo("Airplane Mode model fit suggestions\n")
+    if not report.model_suggestions:
+        click.echo("No local-fit suggestions found in the trusted matrix.")
+        return
+    for item in report.model_suggestions:
+        downloaded = f" downloaded as {item['downloaded_as']}" if item.get("downloaded_as") else ""
+        click.echo(f"- {item['name']} [{item['estimated_memory']}]{downloaded}")
+        for cmd in item.get("commands", [])[:2]:
+            click.echo(f"    {cmd['engine']:<11} {cmd['command']}")
+    click.echo("\nThese are fit suggestions, not endorsements. Validate with `superqode local smoke`.")
+
+
+@local_airplane.command("health")
+@click.option("--json", "json_output", is_flag=True, help="Emit health data as JSON")
+def airplane_health(json_output):
+    """Show best-effort thermal, memory, battery, and load signals."""
+    from superqode.local.airplane import collect_health
+
+    health = collect_health()
+    if json_output:
+        click.echo(json.dumps(health.to_dict(), indent=2))
+        return
+    click.echo("Airplane Mode local health\n")
+    click.echo(
+        f"RAM        {health.ram_available_gb or '?'} GB available / "
+        f"{health.ram_total_gb or '?'} GB total"
+    )
+    click.echo(f"Swap       {health.swap_used_gb if health.swap_used_gb is not None else '?'} GB used")
+    click.echo(f"CPU        {health.cpu_percent if health.cpu_percent is not None else '?'}%")
+    if health.max_temperature_c is not None:
+        click.echo(f"Temp       {health.max_temperature_c} C max sensor")
+    if health.nvidia_temperatures_c:
+        click.echo("NVIDIA     " + ", ".join(f"{t} C" for t in health.nvidia_temperatures_c))
+    if health.battery_percent is not None:
+        plugged = "plugged in" if health.plugged_in else "on battery"
+        click.echo(f"Battery    {health.battery_percent}% ({plugged})")
+    if health.warnings:
+        click.echo("\nWarnings")
+        for warning in health.warnings:
+            click.echo(f"  - {warning}")
+
+
 @local.command("init")
 @click.option(
     "--repo",

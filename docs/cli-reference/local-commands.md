@@ -30,6 +30,7 @@ superqode local COMMAND [OPTIONS]
 | `bench` | Measure TTFT and decode speed |
 | `optimize` | Benchmark candidates and recommend role routing |
 | `guardrails` | Recommend conservative runtime limits for this machine |
+| `airplane` | Prepare and verify strict offline local coding sessions |
 
 ---
 
@@ -54,6 +55,35 @@ The guide sequences model search, explicit download, server start, context
 choice, harness build, and smoke test. It also repeats the product contract:
 packs are starter templates, not a finished harness. Build or bring your own
 harness, then tune prompts, skills, memory, routing, and context to your repo.
+
+### `local airplane`
+
+Prepare a strict offline coding harness for the current repo plus optional
+read-only reference repos.
+
+```bash
+superqode local airplane doctor --repo . --ref ~/src/reference
+superqode local airplane prepare --repo . --ref ~/src/reference --model ollama/qwen3:8b
+superqode local airplane index --repo . --ref ~/src/reference
+superqode local airplane smoke --repo . --ref ~/src/reference
+superqode local airplane models
+superqode local airplane health
+```
+
+`prepare` writes `superqode.airplane.yaml`,
+`.superqode/airplane/manifest.json`, and by default
+`.superqode/code-search.sqlite3`. The harness sets `allow_network: false`,
+blocks network/fetch/download categories, and advertises only local coding and
+local search tools.
+
+| Subcommand | Purpose |
+| --- | --- |
+| `doctor` | Check local roots, ripgrep, semantic search, model fit, and health warnings |
+| `prepare` | Write the no-network harness and manifest |
+| `index` | Build or rebuild the SQLite FTS5 local code-search index |
+| `smoke` | Fast offline readiness check |
+| `models` | Show neutral "fits this machine" suggestions |
+| `health` | Show memory, swap, battery, CPU, and temperature signals where available |
 
 ### `local init`
 

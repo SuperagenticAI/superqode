@@ -61,6 +61,7 @@ TOOL_GROUPS: Dict[str, ToolGroup] = {
     "list_directory": ToolGroup.READ,
     "grep": ToolGroup.READ,
     "glob": ToolGroup.READ,
+    "local_code_search": ToolGroup.SEARCH,
     "repo_search": ToolGroup.SEARCH,
     # Write operations
     "write_file": ToolGroup.WRITE,

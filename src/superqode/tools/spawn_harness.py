@@ -22,6 +22,7 @@ READ_ONLY_TOOLS = [
     "list_directory",
     "grep",
     "glob",
+    "local_code_search",
     "repo_search",
     "code_search",
     "semantic_search",

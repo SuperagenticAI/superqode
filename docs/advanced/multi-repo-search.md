@@ -7,8 +7,15 @@ many**: and an immediate feedback loop after every edit so they self-correct.
 
 ## Code search (grep / glob)
 
-Search is powered by **ripgrep**, spawned directly (no shell) with structured
-`--json` output:
+For broad local exploration, start with `local_code_search`. It runs a compact
+offline broker over local file paths, literal content, and code symbols, and it
+can fan out across every registered repo with `all_repos`. When
+`.superqode/code-search.sqlite3` covers the requested roots, `local_code_search`
+uses that SQLite FTS5 index first; otherwise it falls back to live filesystem
+search.
+
+For exact search, SuperQode uses **ripgrep**, spawned directly (no shell) with
+structured `--json` output:
 
 - **Grep** searches file *contents* by regex, returning `file:line: match`.
 - **Glob** finds files by *name* pattern (`**/*.py`), honoring `.gitignore`.
