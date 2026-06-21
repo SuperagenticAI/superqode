@@ -1,0 +1,7 @@
+[2026-06-19T10:20:02Z] checkout-service migrate
+[2026-06-19T10:20:03Z] applying migration 20260619_add_payment_id
+[2026-06-19T10:20:04Z] ERROR unique lookup returned multiple payments for payment_id
+[2026-06-19T10:20:04Z] FAILED migration validation
+[2026-06-19T10:20:04Z] ROOT_CAUSE: migration 20260619_add_payment_id missed unique index on payments.payment_id
+[2026-06-19T10:20:09Z] ledger-service FAILED downstream after duplicate payment ids
+[2026-06-19T10:20:14Z] web-checkout FAILED downstream because ledger totals were unavailable

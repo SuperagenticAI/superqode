@@ -102,7 +102,9 @@ class SessionStore:
         try:
             from superqode.session.switchboard import SessionGraphStore
 
-            SessionGraphStore(self.base_dir).upsert(metadata.session_id, metadata=metadata, **updates)
+            SessionGraphStore(self.base_dir).upsert(
+                metadata.session_id, metadata=metadata, **updates
+            )
         except Exception:
             # Session JSONL is the primary store; graph recording must never break it.
             pass

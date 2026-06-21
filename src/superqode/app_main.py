@@ -6414,7 +6414,10 @@ class SuperQodeApp(App):
             t.append(", ", style=THEME["muted"])
             t.append(":skills import <path>\n", style=THEME["cyan"])
             t.append("            ", style=THEME["muted"])
-            t.append(":skills optimize <name> --harness <path> --tasks <path> --live\n", style=THEME["cyan"])
+            t.append(
+                ":skills optimize <name> --harness <path> --tasks <path> --live\n",
+                style=THEME["cyan"],
+            )
             self._show_command_output(log, t)
             return
 
@@ -6495,9 +6498,7 @@ class SuperQodeApp(App):
                 )
                 return
             if "--live" not in rest:
-                log.add_error(
-                    ":skills optimize requires --live so eval tasks produce real scores."
-                )
+                log.add_error(":skills optimize requires --live so eval tasks produce real scores.")
                 return
             self.run_worker(self._skills_optimize_cmd(rest, log))
             return
@@ -8993,7 +8994,9 @@ class SuperQodeApp(App):
         elif subcommand in {"share-tree", "share"}:
             self._switchboard_share_tree(rest, log)
         else:
-            log.add_info("Usage: :switchboard [graph|switch|info|history|children|handoff|fork-agent|approvals|share-tree]")
+            log.add_info(
+                "Usage: :switchboard [graph|switch|info|history|children|handoff|fork-agent|approvals|share-tree]"
+            )
 
     def _switchboard(self):
         from superqode.session.switchboard import SessionSwitchboard
@@ -9002,15 +9005,24 @@ class SuperQodeApp(App):
 
     def _show_switchboard_help(self, log: ConversationLog) -> None:
         t = Text()
-        t.append("\n  Session Switchboard\n\n", style=f"bold {THEME['purple']}")
+        t.append("\n  Session Tree / Session Switchboard\n\n", style=f"bold {THEME['purple']}")
         commands = [
             (":switchboard", "graph cockpit with active marker, status, approvals, and previews"),
-            (":switchboard switch <id>", "mark a session active and resume it when local storage can"),
+            (
+                ":switchboard switch <id>",
+                "mark a session active and resume it when local storage can",
+            ),
             (":switchboard info <id>", "show graph metadata and child sessions"),
             (":switchboard history <id> [limit]", "show recent transcript messages"),
             (":switchboard children <id>", "list child/fork/agent sessions"),
-            (":switchboard handoff <source> --to <target> --goal \"...\"", "deliver context to another session"),
-            (":switchboard fork-agent <source> --agent reviewer --goal \"...\"", "fork to a named coding agent"),
+            (
+                ':switchboard handoff <source> --to <target> --goal "..."',
+                "deliver context to another session",
+            ),
+            (
+                ':switchboard fork-agent <source> --agent reviewer --goal "..."',
+                "fork to a named coding agent",
+            ),
             (":switchboard approvals", "show cross-agent approval inbox"),
             (":switchboard share-tree <id> [path]", "export a portable session subtree"),
         ]
@@ -9029,7 +9041,7 @@ class SuperQodeApp(App):
             return
 
         t = Text()
-        t.append("\n  Session Switchboard\n\n", style=f"bold {THEME['purple']}")
+        t.append("\n  Session Tree / Session Switchboard\n\n", style=f"bold {THEME['purple']}")
         if active:
             t.append("  Active  ", style=THEME["muted"])
             t.append(f"{active}\n\n", style=f"bold {THEME['cyan']}")
@@ -9214,13 +9226,19 @@ class SuperQodeApp(App):
     def _switchboard_handoff(self, tokens: list[str], log: ConversationLog) -> None:
         positionals, options = self._parse_switchboard_options(tokens)
         source = positionals[0] if positionals else ""
-        target = str(options.get("to") or options.get("target") or options.get("target_session_id") or "")
+        target = str(
+            options.get("to") or options.get("target") or options.get("target_session_id") or ""
+        )
         goal = str(options.get("goal") or " ".join(positionals[1:]) or "")
         reason = str(options.get("reason") or "")
         try:
             if target:
-                payload = self._switchboard().handoff_to_session(source, target, goal=goal, reason=reason)
-                log.add_success(f"Delivered handoff {payload['id']} to {payload['target_session_id']}")
+                payload = self._switchboard().handoff_to_session(
+                    source, target, goal=goal, reason=reason
+                )
+                log.add_success(
+                    f"Delivered handoff {payload['id']} to {payload['target_session_id']}"
+                )
             else:
                 packet = self._switchboard().make_handoff(
                     source,
@@ -9237,7 +9255,9 @@ class SuperQodeApp(App):
         source = positionals[0] if positionals else ""
         agent = str(options.get("agent") or (positionals[1] if len(positionals) > 1 else ""))
         if not agent:
-            log.add_info('Usage: :switchboard fork-agent [source] --agent reviewer --goal "review this"')
+            log.add_info(
+                'Usage: :switchboard fork-agent [source] --agent reviewer --goal "review this"'
+            )
             return
         try:
             payload = self._switchboard().fork_to_agent(
@@ -9263,7 +9283,8 @@ class SuperQodeApp(App):
         blocked = [
             item
             for item in sessions
-            if item.get("status") == "needs_approval" or int(item.get("pending_approvals_count") or 0) > 0
+            if item.get("status") == "needs_approval"
+            or int(item.get("pending_approvals_count") or 0) > 0
         ]
         t = Text()
         t.append("\n  Approval Inbox\n\n", style=f"bold {THEME['orange']}")
@@ -9274,7 +9295,9 @@ class SuperQodeApp(App):
         for item in blocked:
             t.append(f"  {item['session_id'][:10]:<12}", style=f"bold {THEME['cyan']}")
             t.append(f"{item.get('status') or '-':<16}", style=f"bold {THEME['orange']}")
-            t.append(f"approvals={item.get('pending_approvals_count') or 0:<3}", style=THEME["muted"])
+            t.append(
+                f"approvals={item.get('pending_approvals_count') or 0:<3}", style=THEME["muted"]
+            )
             t.append(f" {item.get('agent_id') or '-'}", style=THEME["purple"])
             t.append(f"  {item.get('title') or ''}\n", style=THEME["text"])
         t.append("\n  Use the parent session's ", style=THEME["muted"])
@@ -9326,7 +9349,9 @@ class SuperQodeApp(App):
         elif subcommand in {"lineage", "timeline"}:
             self._factory_lineage(rest, log)
         else:
-            log.add_info("Usage: :factory [status|routes|mode|switch-model|switch-harness|fork-model|fork-harness|lineage]")
+            log.add_info(
+                "Usage: :factory [status|routes|mode|switch-model|switch-harness|fork-model|fork-harness|lineage]"
+            )
 
     def _factory(self):
         from superqode.session.factory import SoftwareFactory
@@ -9340,12 +9365,30 @@ class SuperQodeApp(App):
             (":factory", "show current model/harness/route lineage"),
             (":factory init-policy", "create .superqode/factory.yaml with local-first defaults"),
             (":factory policy", "show merged factory policy and policy path"),
-            (":factory routes", "list private, cheap, best, review, long-context, no-subscription routes"),
-            (":factory mode no-subscription", "prefer local OSS/BYOK and avoid subscription-only paths"),
-            (":factory switch-model local/qwen3-coder", "record model/provider switch on the active session"),
-            (":factory switch-harness coding", "record harness/orchestration switch on the active session"),
-            (":factory fork-model --model local/deepseek --role coder", "fork work to another model worker"),
-            (":factory fork-harness --harness review --role reviewer", "fork work to another harness worker"),
+            (
+                ":factory routes",
+                "list private, cheap, best, review, long-context, no-subscription routes",
+            ),
+            (
+                ":factory mode no-subscription",
+                "prefer local OSS/BYOK and avoid subscription-only paths",
+            ),
+            (
+                ":factory switch-model local/qwen3-coder",
+                "record model/provider switch on the active session",
+            ),
+            (
+                ":factory switch-harness coding",
+                "record harness/orchestration switch on the active session",
+            ),
+            (
+                ":factory fork-model --model local/deepseek --role coder",
+                "fork work to another model worker",
+            ),
+            (
+                ":factory fork-harness --harness review --role reviewer",
+                "fork work to another harness worker",
+            ),
             (":factory lineage", "show model/harness/mode changes over time"),
         ]
         for command, desc in commands:
@@ -11165,7 +11208,9 @@ class SuperQodeApp(App):
                 log.add_error(f"Could not parse :harness {sub} arguments: {exc}")
                 return
             if sub == "optimize" and not tokens:
-                log.add_info("Usage: :harness optimize --spec <path> --tasks <path> [--export-only]")
+                log.add_info(
+                    "Usage: :harness optimize --spec <path> --tasks <path> [--export-only]"
+                )
                 return
             if sub in {"optimize-inspect", "optimize-ledger"} and not tokens:
                 log.add_info(f"Usage: :harness {sub} <run_dir>")
@@ -21478,7 +21523,9 @@ memory:
         t.append("\n  🟡 ", style=THEME["warning"])
         t.append(f"{engine} is not running", style=f"bold {THEME['text']}")
         t.append(f" for {label}\n", style=THEME["cyan"])
-        t.append("  SuperQode can start a managed local server for this model.\n", style=THEME["muted"])
+        t.append(
+            "  SuperQode can start a managed local server for this model.\n", style=THEME["muted"]
+        )
         t.append("  It will run in the background, write logs under ", style=THEME["muted"])
         t.append("~/.superqode/servers/", style=THEME["cyan"])
         t.append(", and can be stopped with ", style=THEME["muted"])
@@ -25246,7 +25293,10 @@ memory:
             style = f"bold {THEME['text']}" if line.startswith("SuperQode") else THEME["text"]
             t.append(f"  {line}\n", style=style)
         if opts.get("dry_run"):
-            t.append("\n  Dry run only; pass without --dry-run to write the pack.\n", style=THEME["muted"])
+            t.append(
+                "\n  Dry run only; pass without --dry-run to write the pack.\n",
+                style=THEME["muted"],
+            )
         self._show_command_output(log, t)
 
     async def _local_build(self, subargs: str, log: ConversationLog):
@@ -28441,11 +28491,20 @@ memory:
                     (":sw approvals", "Show cross-agent approval inbox"),
                     (":sw share-tree <id>", "Export a portable session subtree"),
                     (":factory", "Show Software Factory status for current work"),
-                    (":factory routes", "List private, cheap, best, review, and no-subscription routes"),
-                    (":factory switch-model <provider/model>", "Move a session between model providers"),
+                    (
+                        ":factory routes",
+                        "List private, cheap, best, review, and no-subscription routes",
+                    ),
+                    (
+                        ":factory switch-model <provider/model>",
+                        "Move a session between model providers",
+                    ),
                     (":factory switch-harness <name>", "Move a session between harnesses"),
                     (":factory fork-model --model local/qwen", "Fork work to another model worker"),
-                    (":factory fork-harness --harness review", "Fork work to another harness worker"),
+                    (
+                        ":factory fork-harness --harness review",
+                        "Fork work to another harness worker",
+                    ),
                     (":tree", "Show saved session branches and forks"),
                     (":share", "Show local/offline session sharing options"),
                     (":share create [id]", "Create a portable superqode-share-v1 artifact"),

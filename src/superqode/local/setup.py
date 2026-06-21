@@ -36,9 +36,7 @@ class LocalSetupGuide:
             "repo_context_tokens": (
                 repo_profile.recommended_context_tokens if repo_profile is not None else None
             ),
-            "context_cap": (
-                guardrails.recommended_context_cap if guardrails is not None else None
-            ),
+            "context_cap": (guardrails.recommended_context_cap if guardrails is not None else None),
             "hits": [hit.to_dict() for hit in self.hits],
         }
 
@@ -157,7 +155,9 @@ def render_local_setup_guide(guide: LocalSetupGuide, *, tui_first: bool = False)
     else:
         lines.append(f"   CLI  : {serve}")
         lines.append(f"   TUI  : {tui_serve}")
-    lines.append("   Manual guides stay valid too: Ollama, LM Studio, MLX, DS4, llama.cpp, vLLM, or SGLang.")
+    lines.append(
+        "   Manual guides stay valid too: Ollama, LM Studio, MLX, DS4, llama.cpp, vLLM, or SGLang."
+    )
 
     lines.extend(["", "4. Choose context for this repo"])
     if repo is not None:
@@ -169,7 +169,9 @@ def render_local_setup_guide(guide: LocalSetupGuide, *, tui_first: bool = False)
         lines.append(
             f"   DS4 default   : {DS4_DEFAULT_CTX:,} tokens; raise it only when memory and latency allow."
         )
-    lines.append("   Bigger context can help large repos, but it costs memory and can slow local decoding.")
+    lines.append(
+        "   Bigger context can help large repos, but it costs memory and can slow local decoding."
+    )
 
     lines.extend(["", "5. Build your own harness"])
     build_cmd = f"superqode local build --repo {guide.repo} --model {model_id}{pack}"

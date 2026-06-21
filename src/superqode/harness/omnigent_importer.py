@@ -203,7 +203,9 @@ def _execution_policy(os_env: dict[str, Any], tools: tuple[str, ...]) -> Executi
     has_os = True
     allow_shell = has_os
     allow_write = bool(sandbox_spec.get("write_paths") or sandbox_type == "none")
-    allow_network = bool(sandbox_spec.get("allow_network", False) or sandbox_spec.get("egress_rules"))
+    allow_network = bool(
+        sandbox_spec.get("allow_network", False) or sandbox_spec.get("egress_rules")
+    )
     return ExecutionPolicySpec(
         sandbox=sandbox,
         allow_read=True,

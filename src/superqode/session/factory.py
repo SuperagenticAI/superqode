@@ -62,7 +62,9 @@ def _now() -> str:
 
 
 def _safe_id(value: str) -> str:
-    return "".join(ch if ch.isalnum() or ch in "._:-" else "-" for ch in value).strip("-") or "factory"
+    return (
+        "".join(ch if ch.isalnum() or ch in "._:-" else "-" for ch in value).strip("-") or "factory"
+    )
 
 
 def classify_model_ref(model_ref: str) -> dict[str, Any]:
@@ -220,7 +222,9 @@ class SoftwareFactory:
         return routes
 
     def resolve_route(self, route: str) -> dict[str, Any]:
-        normalized = route.strip().lower() or str(self.policy().get("default_route") or "no-subscription")
+        normalized = route.strip().lower() or str(
+            self.policy().get("default_route") or "no-subscription"
+        )
         routes = self.routes()
         if normalized not in routes:
             raise KeyError(f"Unknown factory route: {route}")
@@ -314,7 +318,11 @@ class SoftwareFactory:
             resolved,
             record_metadata={"factory": self._with_event(factory, event)},
         )
-        return {"session": graph_record.to_dict(), "event": event.to_dict(), "factory": self.status(resolved)["factory"]}
+        return {
+            "session": graph_record.to_dict(),
+            "event": event.to_dict(),
+            "factory": self.status(resolved)["factory"],
+        }
 
     def fork_model(
         self,
@@ -450,7 +458,9 @@ class SoftwareFactory:
             if (cwd / name).exists():
                 signals.append(f"Sensitive-looking file present: {name}")
         if (cwd / ".git").exists():
-            signals.append("Git repository detected; review private/uncommitted content before cloud handoff.")
+            signals.append(
+                "Git repository detected; review private/uncommitted content before cloud handoff."
+            )
         return signals
 
     @staticmethod

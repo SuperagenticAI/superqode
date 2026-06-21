@@ -44,7 +44,7 @@ def _fake_models_dev():
                     "modalities": {"input": ["text"]},
                 }
             }
-        }
+        },
     }
 
 

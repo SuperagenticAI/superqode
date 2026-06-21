@@ -121,7 +121,9 @@ def plan_local_migration(
             "Treat the endpoint as bring-your-own infrastructure: probe capabilities before enabling broad write or shell access."
         )
 
-    harness_hint = _harness_hint(endpoint=endpoint, model=model, pack_name=pack.name if pack else "")
+    harness_hint = _harness_hint(
+        endpoint=endpoint, model=model, pack_name=pack.name if pack else ""
+    )
     next_steps = _next_steps(
         repo,
         endpoint=endpoint,
@@ -273,7 +275,9 @@ def _next_steps(repo: Path, *, endpoint: str, model: str, pack_name: str) -> lis
     steps.append(init)
     if model and not pack_name:
         steps.append("Create a project-owned model pack after smoke confirms the model behavior.")
-    steps.append("Run: superqode harness explain --spec <harness.yaml> before trusting the harness.")
+    steps.append(
+        "Run: superqode harness explain --spec <harness.yaml> before trusting the harness."
+    )
     if (repo / ".agents" / "skills").is_dir():
         steps.append("Run held-out evals before optimizing migrated skills for the local model.")
     return steps

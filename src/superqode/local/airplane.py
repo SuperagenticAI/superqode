@@ -189,7 +189,11 @@ def collect_health() -> AirplaneHealth:
         )
     if health.swap_used_gb is not None and health.swap_used_gb >= 2:
         health.warnings.append("Swap is already in use; choose a smaller model or lower context.")
-    if health.battery_percent is not None and health.plugged_in is False and health.battery_percent < 35:
+    if (
+        health.battery_percent is not None
+        and health.plugged_in is False
+        and health.battery_percent < 35
+    ):
         health.warnings.append("Battery is low; local inference can drain it quickly.")
     if temps and max(temps) >= 85:
         health.warnings.append("High device temperature detected; reduce concurrency or context.")
@@ -213,7 +217,9 @@ def _model_suggestions(limit: int = 8) -> list[dict[str, Any]]:
                 "estimated_memory": memory_fit_phrase(hit.est_memory_gb, ram_gb),
                 "sources": hit.sources,
                 "tiers": hit.tiers,
-                "commands": [{"engine": engine, "command": command} for engine, command in hit.commands],
+                "commands": [
+                    {"engine": engine, "command": command} for engine, command in hit.commands
+                ],
             }
         )
         if len(out) >= limit:
@@ -256,7 +262,9 @@ def _search_checks(repo: Path, refs: Iterable[Path]) -> list[AirplaneCheck]:
         AirplaneCheck(
             "code_index",
             index_ok,
-            f"{index_path} covers local roots" if index_ok else f"run `superqode local airplane index` to build {index_path}",
+            f"{index_path} covers local roots"
+            if index_ok
+            else f"run `superqode local airplane index` to build {index_path}",
             "warning" if not index_ok else "info",
         )
     )
@@ -302,7 +310,9 @@ def _airplane_harness_text(
     tools = "\n".join(f"    - {tool}" for tool in AIRPLANE_TOOLS)
     blocked = "\n".join(f"    - {category}" for category in NETWORK_BLOCKED_CATEGORIES)
     search_roots = "\n".join(f"      - {root}" for root in roots)
-    search_roots_block = f"    search_roots:\n{search_roots}\n" if roots else "    search_roots: []\n"
+    search_roots_block = (
+        f"    search_roots:\n{search_roots}\n" if roots else "    search_roots: []\n"
+    )
     small = report.hardware.tier in {"apple_16", "cpu"}
     pack_line = f"  pack: {pack_name}\n" if pack_name else ""
     tool_format = "  tool_call_format: prompt\n" if small else ""
@@ -427,7 +437,9 @@ def prepare_airplane(
         refs=[str(path) for path in ref_roots],
         harness_path=str(output),
         manifest_path=str(manifest),
-        index_path=index_report.index_path if index_report is not None else str(default_code_index_path(repo)),
+        index_path=index_report.index_path
+        if index_report is not None
+        else str(default_code_index_path(repo)),
         indexed_files=index_report.files_indexed if index_report is not None else 0,
         indexed_symbols=index_report.symbols_indexed if index_report is not None else 0,
         hardware_tier=hw.tier,
@@ -502,7 +514,9 @@ def render_report(report: AirplaneReport, *, include_models: bool = True) -> str
         lines.append("")
         lines.append("Model fit suggestions")
         for item in report.model_suggestions[:5]:
-            downloaded = f" downloaded as {item['downloaded_as']}" if item.get("downloaded_as") else ""
+            downloaded = (
+                f" downloaded as {item['downloaded_as']}" if item.get("downloaded_as") else ""
+            )
             lines.append(f"  - {item['name']} [{item['estimated_memory']}]{downloaded}")
     lines.append("")
     if report.status == "ready":
@@ -522,16 +536,16 @@ def smoke_airplane(
     text = "\n".join(["allow_network: false", "fetch", "download", str(int(time.time()))])
     if "allow_network: false" not in text:
         report.checks.append(
-            AirplaneCheck("network_policy", False, "offline harness must set allow_network: false", "error")
+            AirplaneCheck(
+                "network_policy", False, "offline harness must set allow_network: false", "error"
+            )
         )
     else:
         report.checks.append(
             AirplaneCheck("network_policy", True, "offline harness denies network")
         )
     report.status = (
-        "ready"
-        if all(c.ok or c.severity == "warning" for c in report.checks)
-        else "warning"
+        "ready" if all(c.ok or c.severity == "warning" for c in report.checks) else "warning"
     )
     return report
 

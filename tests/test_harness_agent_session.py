@@ -103,7 +103,9 @@ def _approval_loop(gateway: RecordingGateway, tmp_path) -> AgentLoop:
     spec = HarnessSpec(
         name="team",
         agents=(
-            AgentSpec(id="lead", role="Coordinate.", tools=("agent_session",), delegates_to=("echoer",)),
+            AgentSpec(
+                id="lead", role="Coordinate.", tools=("agent_session",), delegates_to=("echoer",)
+            ),
             AgentSpec(
                 id="echoer",
                 role="Echo after approval.",

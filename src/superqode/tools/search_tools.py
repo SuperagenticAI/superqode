@@ -1250,13 +1250,17 @@ class LocalCodeSearchTool(Tool):
 
         mode = str(args.get("mode") or "all").strip().lower()
         if mode not in {"all", "path", "content", "symbol"}:
-            return ToolResult(success=False, output="", error="mode must be one of: all, path, content, symbol")
+            return ToolResult(
+                success=False, output="", error="mode must be one of: all, path, content, symbol"
+            )
         include = args.get("include")
         language = args.get("language")
         limit = max(1, min(int(args.get("limit") or 20), self.MAX_LIMIT))
         backend = str(args.get("backend") or "auto").strip().lower()
         if backend not in {"auto", "index", "live"}:
-            return ToolResult(success=False, output="", error="backend must be one of: auto, index, live")
+            return ToolResult(
+                success=False, output="", error="backend must be one of: auto, index, live"
+            )
         targets, error, multi = resolve_search_targets(
             args.get("path"), bool(args.get("all_repos")), ctx
         )
@@ -1306,7 +1310,9 @@ class LocalCodeSearchTool(Tool):
                 sections.append("Content:\n" + "\n".join(content))
 
         if mode in {"all", "symbol"}:
-            symbols = await self._search_symbols(query, targets, ctx, language, include, limit, multi)
+            symbols = await self._search_symbols(
+                query, targets, ctx, language, include, limit, multi
+            )
             metadata["symbol"] = len(symbols)
             if symbols:
                 sections.append("Symbols:\n" + "\n".join(symbols))
@@ -1387,9 +1393,7 @@ class LocalCodeSearchTool(Tool):
             lines = []
             for item in report.symbols:
                 display = self._index_display(item.root_path, item.rel_path, targets, cwd, multi)
-                lines.append(
-                    f"{display}:{item.line} [{item.kind}] {item.name}\n  {item.preview}"
-                )
+                lines.append(f"{display}:{item.line} [{item.kind}] {item.name}\n  {item.preview}")
             sections.append("Symbols:\n" + "\n".join(lines))
 
         metadata = {
@@ -1413,7 +1417,9 @@ class LocalCodeSearchTool(Tool):
             f"Indexed local code search results for '{report.query}' "
             f"({len(targets)} root{'s' if len(targets) != 1 else ''}; sqlite-fts5)"
         )
-        return ToolResult(success=True, output=header + "\n\n" + "\n\n".join(sections), metadata=metadata)
+        return ToolResult(
+            success=True, output=header + "\n\n" + "\n\n".join(sections), metadata=metadata
+        )
 
     def _index_display(
         self, root_path: str, rel_path: str, targets: List[Path], cwd: Path, multi: bool
@@ -1503,7 +1509,9 @@ class LocalCodeSearchTool(Tool):
             try:
                 for line_num, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
                     if query_lower in line.lower():
-                        display = _label_match_path(str(path), targets, ctx.working_directory, multi)
+                        display = _label_match_path(
+                            str(path), targets, ctx.working_directory, multi
+                        )
                         results.append(f"{display}:{line_num}:{line.rstrip()}")
                         if len(results) >= limit:
                             return results
@@ -1595,9 +1603,7 @@ class LocalCodeSearchTool(Tool):
                         )
         return symbols
 
-    def _label_content_line(
-        self, line: str, targets: List[Path], cwd: Path, multi: bool
-    ) -> str:
+    def _label_content_line(self, line: str, targets: List[Path], cwd: Path, multi: bool) -> str:
         file_name, sep, rest = line.partition(":")
         if not sep:
             return line

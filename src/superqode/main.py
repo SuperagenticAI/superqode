@@ -1179,13 +1179,17 @@ def sessions_children(session_id, json_output):
 
 @sessions.command("handoff")
 @click.argument("source_session_id", required=False)
-@click.option("--target-session-id", default="", help="Existing target session to receive the handoff")
+@click.option(
+    "--target-session-id", default="", help="Existing target session to receive the handoff"
+)
 @click.option("--agent", default="", help="Target agent id/name")
 @click.option("--goal", default="", help="Goal for the receiving session/agent")
 @click.option("--reason", default="", help="Why the handoff is being made")
 @click.option("--deliver", is_flag=True, help="Append the handoff message to --target-session-id")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
-def sessions_handoff(source_session_id, target_session_id, agent, goal, reason, deliver, json_output):
+def sessions_handoff(
+    source_session_id, target_session_id, agent, goal, reason, deliver, json_output
+):
     """Create or deliver a cross-session handoff packet."""
     from superqode.session.switchboard import SessionSwitchboard
 
@@ -1394,7 +1398,9 @@ def factory_switch_harness(harness, session_id, reason, json_output):
     from superqode.session.factory import SoftwareFactory
 
     try:
-        payload = SoftwareFactory().switch_harness(harness, session_id=session_id or "", reason=reason)
+        payload = SoftwareFactory().switch_harness(
+            harness, session_id=session_id or "", reason=reason
+        )
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     if json_output:
@@ -1897,8 +1903,12 @@ def skillopt_export(
 
 
 @skillopt.command("check")
-@click.option("--baseline", "baseline_path", type=click.Path(exists=True, path_type=Path), required=True)
-@click.option("--candidate", "candidate_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option(
+    "--baseline", "baseline_path", type=click.Path(exists=True, path_type=Path), required=True
+)
+@click.option(
+    "--candidate", "candidate_path", type=click.Path(exists=True, path_type=Path), required=True
+)
 @click.option("--max-edits", default=4, show_default=True, type=int)
 @click.option("--max-bytes", default=50_000, show_default=True, type=int)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
@@ -1929,7 +1939,9 @@ def skills():
 @skills.command("optimize")
 @click.argument("skill")
 @click.option("--engine", type=click.Choice(["gepa"]), default="gepa", show_default=True)
-@click.option("--harness", "harness_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option(
+    "--harness", "harness_path", type=click.Path(exists=True, path_type=Path), required=True
+)
 @click.option("--tasks", "tasks_path", type=click.Path(exists=True, path_type=Path), required=True)
 @click.option(
     "--output",
@@ -1940,7 +1952,9 @@ def skills():
 )
 @click.option("--root", type=click.Path(path_type=Path), default=Path("."), show_default=True)
 @click.option("--provider", envvar="SUPERQODE_PROVIDER", default="openai", show_default=True)
-@click.option("--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-4o-mini", show_default=True)
+@click.option(
+    "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-4o-mini", show_default=True
+)
 @click.option("--runtime", "runtime_name", default=None, help="Override runtime or backend")
 @click.option(
     "--working-dir",
@@ -1976,7 +1990,9 @@ def skills():
     show_default=True,
 )
 @click.option("--cache-evaluation", is_flag=True, help="Enable GEPA candidate/example cache")
-@click.option("--use-merge", is_flag=True, help="Enable GEPA merge proposals across frontier candidates")
+@click.option(
+    "--use-merge", is_flag=True, help="Enable GEPA merge proposals across frontier candidates"
+)
 @click.option("--max-merge-invocations", default=5, show_default=True, type=int)
 @click.option("--live", is_flag=True, help="Execute eval tasks against the configured model")
 @click.option("--force", is_flag=True, help="Overwrite an existing output directory")
@@ -2757,10 +2773,7 @@ def harness_eval_packs(pack, json_output):
         click.echo("No bundled eval packs found.")
         return
     for item in payload:
-        click.echo(
-            f"{item['id']}  tasks={item['tasks']}  {item['description']}\n"
-            f"  {item['path']}"
-        )
+        click.echo(f"{item['id']}  tasks={item['tasks']}  {item['description']}\n  {item['path']}")
 
 
 @harness.command("auto-bench")

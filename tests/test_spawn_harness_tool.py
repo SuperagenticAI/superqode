@@ -136,7 +136,9 @@ async def test_spawn_harness_uses_kernel_child_run_when_harness_context_exists(
     assert backend.requests[0].metadata["parent_run_id"] == parent.run_id
     assert backend.requests[0].metadata["delegation_depth"] == 1
     assert "read_file" in backend.requests[0].metadata["agent_tools"]
-    assert any(event.type == "recursive.child.completed" for event in store.get_events(parent.run_id))
+    assert any(
+        event.type == "recursive.child.completed" for event in store.get_events(parent.run_id)
+    )
 
 
 @pytest.mark.asyncio
@@ -229,9 +231,7 @@ async def test_spawn_harness_requires_enabled_recursion_in_harness_context(tmp_p
 
 
 @pytest.mark.asyncio
-async def test_spawn_harness_applies_recursion_spec_defaults(
-    monkeypatch, tmp_path: Path
-):
+async def test_spawn_harness_applies_recursion_spec_defaults(monkeypatch, tmp_path: Path):
     backend = FakeKernelBackend()
     monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda name: backend)
     store = MemoryHarnessStore()
@@ -318,9 +318,7 @@ async def test_spawn_harness_enforces_write_policy_deny(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_spawn_harness_enforces_write_policy_approval(
-    monkeypatch, tmp_path: Path
-):
+async def test_spawn_harness_enforces_write_policy_approval(monkeypatch, tmp_path: Path):
     backend = FakeKernelBackend()
     monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda name: backend)
     store = MemoryHarnessStore()

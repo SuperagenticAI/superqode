@@ -4,7 +4,12 @@ import pytest
 
 from superqode.agent.loop import AgentResponse
 from superqode.harness import HarnessBackendResult, HarnessSpec, MemoryHarnessStore, RecursionSpec
-from superqode.tools import DynamicWorkflowScriptTool, DynamicWorkflowTool, ToolContext, ToolRegistry
+from superqode.tools import (
+    DynamicWorkflowScriptTool,
+    DynamicWorkflowTool,
+    ToolContext,
+    ToolRegistry,
+)
 from superqode.tools.dynamic_workflow import compile_dynamic_workflow_script
 
 
@@ -55,9 +60,7 @@ def test_dynamic_workflow_script_rejects_arbitrary_python():
         compile_dynamic_workflow_script("for item in range(3):\n    step(task='x')")
 
     with pytest.raises(ValueError, match="literal"):
-        compile_dynamic_workflow_script(
-            "workflow('x')\nstep('bad', task='scan ' + 'repo')"
-        )
+        compile_dynamic_workflow_script("workflow('x')\nstep('bad', task='scan ' + 'repo')")
 
 
 @pytest.mark.asyncio
@@ -130,9 +133,7 @@ step(id="payment", task="scan payment code")
 
 
 @pytest.mark.asyncio
-async def test_dynamic_workflow_script_executes_compiled_plan(
-    monkeypatch, tmp_path: Path
-):
+async def test_dynamic_workflow_script_executes_compiled_plan(monkeypatch, tmp_path: Path):
     backend = FakeDynamicBackend()
     monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda name: backend)
     store = MemoryHarnessStore()
@@ -176,9 +177,7 @@ step("ledger", task="scan ledger code")
 
 
 @pytest.mark.asyncio
-async def test_dynamic_workflow_step_can_fanout_context_handle(
-    monkeypatch, tmp_path: Path
-):
+async def test_dynamic_workflow_step_can_fanout_context_handle(monkeypatch, tmp_path: Path):
     backend = FakeDynamicBackend()
     monkeypatch.setattr("superqode.harness.kernel.create_harness_backend", lambda name: backend)
     (tmp_path / "ci.log").write_text(

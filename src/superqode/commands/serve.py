@@ -123,9 +123,13 @@ def serve_api(host: str, port: int, storage_dir: str, allow_remote: bool, token:
     if host not in {"127.0.0.1", "localhost", "::1"} and not allow_remote:
         raise click.ClickException("Use --allow-remote to bind outside localhost.")
     if allow_remote:
-        console.print("[yellow]Remote API serving enabled. Use --token on trusted networks.[/yellow]")
+        console.print(
+            "[yellow]Remote API serving enabled. Use --token on trusted networks.[/yellow]"
+        )
     console.print(f"[cyan]Serving SuperQode session API on http://{host}:{port}[/cyan]")
-    console.print("[dim]Endpoints: /health, /sessions, /sessions/graph, /sessions/{id}/history[/dim]")
+    console.print(
+        "[dim]Endpoints: /health, /sessions, /sessions/graph, /sessions/{id}/history[/dim]"
+    )
     try:
         run_session_api(host=host, port=port, storage_dir=storage_dir, token=token)
     except KeyboardInterrupt:

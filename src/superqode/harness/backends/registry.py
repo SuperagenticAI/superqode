@@ -159,12 +159,25 @@ def _with_availability(capabilities: HarnessBackendCapabilities) -> HarnessBacke
     module_name, hint = packages.get(capabilities.backend, (None, None))
     if module_name is None:
         return replace(capabilities, availability="available", install_hint=None)
-    available = importlib.util.find_spec(module_name) is not None
+    available = _optional_module_available(module_name)
     return replace(
         capabilities,
         availability="available" if available else "missing",
         install_hint=None if available else hint,
     )
+
+
+def _optional_module_available(module_name: str) -> bool:
+    """Return whether an optional dependency can be imported without raising.
+
+    ``importlib.util.find_spec("google.adk")`` can raise ModuleNotFoundError
+    when the top-level namespace package is absent. Optional backend discovery
+    should report that as "missing", not crash CLI/tests.
+    """
+    try:
+        return importlib.util.find_spec(module_name) is not None
+    except ModuleNotFoundError:
+        return False
 
 
 def _uses_mcp(spec) -> bool:

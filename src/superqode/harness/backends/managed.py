@@ -59,9 +59,7 @@ class ManagedAgentHarnessBackend:
     def __init__(self, name: str):
         self.name = name
         provider_label = (
-            "Google Agent Engine"
-            if name == "google-agent-engine"
-            else "Anthropic Managed Agents"
+            "Google Agent Engine" if name == "google-agent-engine" else "Anthropic Managed Agents"
         )
         self.capabilities = HarnessBackendCapabilities(
             backend=name,
@@ -216,11 +214,7 @@ def _resolve_config(backend: str, request: HarnessBackendRequest) -> ManagedBack
     ).strip()
     api_key_env = str(
         config.get("api_key_env")
-        or (
-            "GEMINI_API_KEY"
-            if backend == "google-agent-engine"
-            else "ANTHROPIC_API_KEY"
-        )
+        or ("GEMINI_API_KEY" if backend == "google-agent-engine" else "ANTHROPIC_API_KEY")
     ).strip()
     fallback_api_key_env = "GOOGLE_API_KEY" if backend == "google-agent-engine" else ""
     api_key = str(
@@ -245,9 +239,7 @@ def _resolve_config(backend: str, request: HarnessBackendRequest) -> ManagedBack
     if credential:
         if backend == "anthropic-managed":
             headers["x-api-key"] = api_key
-            headers["anthropic-version"] = str(
-                config.get("anthropic_version") or "2023-06-01"
-            )
+            headers["anthropic-version"] = str(config.get("anthropic_version") or "2023-06-01")
         elif auth_type == "bearer":
             headers["Authorization"] = f"Bearer {access_token}"
         else:
@@ -293,7 +285,9 @@ def _resolve_config(backend: str, request: HarnessBackendRequest) -> ManagedBack
     )
 
 
-def _request_payload(config: ManagedBackendConfig, request: HarnessBackendRequest) -> dict[str, Any]:
+def _request_payload(
+    config: ManagedBackendConfig, request: HarnessBackendRequest
+) -> dict[str, Any]:
     if config.provider == "google-agent-engine" and _is_google_generate_content(config):
         return _google_generate_content_payload(config, request)
     if config.provider == "google-agent-engine" and _is_google_interaction(config):
@@ -452,9 +446,7 @@ def _timeout_seconds(request: HarnessBackendRequest) -> float:
     return float(config.get("timeout_seconds") or request.metadata.get("timeout_seconds") or 300)
 
 
-def _unconfigured_result(
-    backend: str, config: ManagedBackendConfig
-) -> HarnessBackendResult:
+def _unconfigured_result(backend: str, config: ManagedBackendConfig) -> HarnessBackendResult:
     response = AgentResponse(
         content="",
         messages=[],

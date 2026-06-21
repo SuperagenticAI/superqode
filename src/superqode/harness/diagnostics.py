@@ -666,17 +666,10 @@ def _dynamic_workflows_from_events(events: list[Any]) -> list[dict[str, Any]]:
             continue
         plan = metadata.get("plan") if isinstance(metadata.get("plan"), dict) else {}
         objective = str(
-            plan.get("objective")
-            or metadata.get("objective")
-            or data.get("objective")
-            or ""
+            plan.get("objective") or metadata.get("objective") or data.get("objective") or ""
         )
         steps = _dynamic_workflow_steps(plan, metadata)
-        child_run_ids = [
-            str(item)
-            for item in (metadata.get("child_run_ids") or [])
-            if item
-        ]
+        child_run_ids = [str(item) for item in (metadata.get("child_run_ids") or []) if item]
         workflows.append(
             {
                 "event_index": index,
@@ -695,11 +688,7 @@ def _dynamic_workflows_from_events(events: list[Any]) -> list[dict[str, Any]]:
 def _dynamic_workflow_steps(plan: dict[str, Any], metadata: dict[str, Any]) -> list[dict[str, Any]]:
     plan_steps = plan.get("steps") if isinstance(plan.get("steps"), list) else []
     result_steps = metadata.get("results") if isinstance(metadata.get("results"), list) else []
-    by_id = {
-        str(item.get("id") or ""): item
-        for item in result_steps
-        if isinstance(item, dict)
-    }
+    by_id = {str(item.get("id") or ""): item for item in result_steps if isinstance(item, dict)}
     steps: list[dict[str, Any]] = []
     for index, step in enumerate(plan_steps, start=1):
         if not isinstance(step, dict):
@@ -759,7 +748,13 @@ def _render_dynamic_workflows(workflows: list[dict[str, Any]], *, indent: str) -
         objective = workflow.get("objective") or "(no objective)"
         lines.append(f"{indent}- {workflow['tool_name']}{compiled}: {objective}")
         for step in workflow.get("steps") or []:
-            status = "ok" if step.get("success") is True else "failed" if step.get("success") is False else "unknown"
+            status = (
+                "ok"
+                if step.get("success") is True
+                else "failed"
+                if step.get("success") is False
+                else "unknown"
+            )
             child_runs = step.get("child_run_ids") or []
             suffix = f" -> {', '.join(child_runs)}" if child_runs else ""
             fanout = " fanout" if step.get("fanout") else ""

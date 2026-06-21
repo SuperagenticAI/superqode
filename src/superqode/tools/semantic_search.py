@@ -214,8 +214,7 @@ class SemanticSearchTool(Tool):
         lines = [f"Found {len(results)} semantic match(es) for {query!r}:", ""]
         for r in results:
             header = (
-                f"{r.file_path}:{r.start_line}-{r.end_line} "
-                f"(score {r.score:.3f}) [{r.language}]"
+                f"{r.file_path}:{r.start_line}-{r.end_line} (score {r.score:.3f}) [{r.language}]"
             )
             lines.append(header)
             snippet = (r.content or "").splitlines()

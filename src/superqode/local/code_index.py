@@ -187,14 +187,20 @@ def build_code_index(
 ) -> CodeIndexBuildReport:
     started = time.perf_counter()
     root_paths = normalize_roots(roots)
-    db_path = Path(index_path).expanduser().resolve() if index_path else default_code_index_path(workspace_root)
+    db_path = (
+        Path(index_path).expanduser().resolve()
+        if index_path
+        else default_code_index_path(workspace_root)
+    )
     report = CodeIndexBuildReport(index_path=str(db_path), roots=[str(root) for root in root_paths])
     try:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(db_path) as conn:
             _create_schema(conn)
             _clear_index(conn)
-            conn.execute("INSERT INTO meta(key, value) VALUES('schema_version', ?)", (str(SCHEMA_VERSION),))
+            conn.execute(
+                "INSERT INTO meta(key, value) VALUES('schema_version', ?)", (str(SCHEMA_VERSION),)
+            )
             indexed_at = time.time()
             for root in root_paths:
                 root_files = 0
@@ -298,7 +304,11 @@ def search_code_index(
     index_path: str | Path | None = None,
 ) -> CodeIndexSearchReport:
     root_paths = normalize_roots(roots)
-    db_path = Path(index_path).expanduser().resolve() if index_path else default_code_index_path(workspace_root)
+    db_path = (
+        Path(index_path).expanduser().resolve()
+        if index_path
+        else default_code_index_path(workspace_root)
+    )
     report = CodeIndexSearchReport(
         index_path=str(db_path),
         query=query,
@@ -438,7 +448,9 @@ def _extract_symbols(file_path: Path, text: str, language: str) -> list[_Symbol]
             names = [name.strip() for name in raw.split(",")] if "," in raw else [raw]
             for name in names:
                 if name:
-                    out.append(_Symbol(name=name, kind=kind, line=line_num, signature=line.strip()[:160]))
+                    out.append(
+                        _Symbol(name=name, kind=kind, line=line_num, signature=line.strip()[:160])
+                    )
     return out
 
 
@@ -446,7 +458,7 @@ def _fts_query(text: str) -> str:
     tokens = re.findall(r"[A-Za-z0-9_./-]+", text)
     if not tokens:
         return '""'
-    return " OR ".join(f'"{token.replace("\"", "\"\"")}"' for token in tokens[:8])
+    return " OR ".join(f'"{token.replace('"', '""')}"' for token in tokens[:8])
 
 
 def _roots_clause(roots: list[str]) -> tuple[str, list[str]]:

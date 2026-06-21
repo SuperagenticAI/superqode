@@ -125,7 +125,9 @@ def test_eval_cli_exits_nonzero_on_regression(monkeypatch):
 
         os.write(os.open("s.yaml", os.O_CREAT | os.O_WRONLY), b"name: s\n")
         os.write(os.open("t.yaml", os.O_CREAT | os.O_WRONLY), b"tasks: []\n")
-        blocked = runner.invoke(cli_main, ["harness", "eval", "--spec", "s.yaml", "--tasks", "t.yaml"])
+        blocked = runner.invoke(
+            cli_main, ["harness", "eval", "--spec", "s.yaml", "--tasks", "t.yaml"]
+        )
         assert blocked.exit_code == 2  # seesaw gate blocks
         allowed = runner.invoke(
             cli_main,

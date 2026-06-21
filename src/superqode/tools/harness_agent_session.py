@@ -8,9 +8,7 @@ from typing import Any
 from .base import Tool, ToolContext, ToolResult
 
 
-_NO_MANAGER_ERROR = (
-    "agent_session requires the builtin harness runtime with peer-agent support."
-)
+_NO_MANAGER_ERROR = "agent_session requires the builtin harness runtime with peer-agent support."
 
 
 class AgentSessionTool(Tool):
@@ -113,7 +111,9 @@ class AgentSessionTool(Tool):
         session_target = str(args.get("session_id") or target).strip()
         if action in {"info", "history", "handoff"}:
             if not session_target:
-                return ToolResult(success=False, output="", error="'session_id' or 'agent' is required")
+                return ToolResult(
+                    success=False, output="", error="'session_id' or 'agent' is required"
+                )
             if action == "info":
                 return _info(session_target)
             if action == "history":
@@ -221,7 +221,9 @@ async def _start_session(
     if session_id is None and title:
         from superqode.session.switchboard import SessionGraphStore
 
-        existing = SessionGraphStore().find_named_child(str(ctx.session_id), str(declared.id), title)
+        existing = SessionGraphStore().find_named_child(
+            str(ctx.session_id), str(declared.id), title
+        )
         if existing is not None:
             session_id = existing.session_id
     try:
@@ -292,7 +294,9 @@ async def _send_session(
     interrupt: bool,
 ) -> ToolResult:
     if manager.resolve(target) is None and _resolve_declared_agent(ctx, target) is None:
-        return ToolResult(success=False, output="", error=f"No child agent session matching {target!r}")
+        return ToolResult(
+            success=False, output="", error=f"No child agent session matching {target!r}"
+        )
     message = message.strip()
     if not message:
         return ToolResult(success=False, output="", error="'message' is required for send")
@@ -388,7 +392,9 @@ async def _reject_session(
 async def _close_session(manager: Any, target: str) -> ToolResult:
     closed = await manager.close(target)
     if not closed:
-        return ToolResult(success=False, output="", error=f"No child agent session matching {target!r}")
+        return ToolResult(
+            success=False, output="", error=f"No child agent session matching {target!r}"
+        )
     return ToolResult(success=True, output=f"Closed child agent session {target}.")
 
 
@@ -408,7 +414,11 @@ def _list_sessions(ctx: ToolContext, manager: Any) -> ToolResult:
         return ToolResult(
             success=True,
             output=f"No active child agent sessions. Declared child agents: {declared_text}",
-            metadata={"agents": [], "durable_children": durable_children, "declared_agents": declared},
+            metadata={
+                "agents": [],
+                "durable_children": durable_children,
+                "declared_agents": declared,
+            },
         )
     rows = [
         f"{item['agent_id']}  {item['task_name']:<20}  {item['session_id']:<28}  "
@@ -418,7 +428,11 @@ def _list_sessions(ctx: ToolContext, manager: Any) -> ToolResult:
     return ToolResult(
         success=True,
         output="agent_id  task_name  session_id  status  last_result\n" + "\n".join(rows),
-        metadata={"agents": sessions, "durable_children": durable_children, "declared_agents": declared},
+        metadata={
+            "agents": sessions,
+            "durable_children": durable_children,
+            "declared_agents": declared,
+        },
     )
 
 
@@ -468,7 +482,9 @@ def _children(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
         f"{item['session_id']}  {item['agent_id'] or '-'}  {item['status']}  {item['title']}"
         for item in payload
     ]
-    return ToolResult(success=True, output="\n".join(rows) or "No child sessions.", metadata={"children": payload})
+    return ToolResult(
+        success=True, output="\n".join(rows) or "No child sessions.", metadata={"children": payload}
+    )
 
 
 def _handoff(ctx: ToolContext, source_session_id: str, args: dict[str, Any]) -> ToolResult:

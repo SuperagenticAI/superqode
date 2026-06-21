@@ -15,9 +15,7 @@ def _make_repo(root: Path, name: str) -> Path:
     repo = root / name
     repo.mkdir()
     (repo / "service.py").write_text(
-        "class MagicService:\n"
-        "    def shared_token_lookup(self):\n"
-        "        return 'shared-token'\n",
+        "class MagicService:\n    def shared_token_lookup(self):\n        return 'shared-token'\n",
         encoding="utf-8",
     )
     (repo / "README.md").write_text("shared-token documentation\n", encoding="utf-8")

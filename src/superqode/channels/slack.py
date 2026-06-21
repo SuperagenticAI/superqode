@@ -220,18 +220,19 @@ class SlackRunner:
         self._seen_keys: deque = deque(maxlen=500)
         self._stopping = False
 
-    def validate(self) -> None:
+    def validate(self, *, require_socket: bool = True) -> None:
         if not self.config.app_token or not self.config.bot_token:
             raise SlackUnavailableError(
                 "Slack needs an app token (xapp-, Socket Mode) and a bot token (xoxb-)."
             )
-        try:
-            import websocket  # noqa: F401
-        except ImportError as exc:
-            raise SlackUnavailableError(
-                "Slack Socket Mode requires the websocket-client package: "
-                "pip install superqode[channels]"
-            ) from exc
+        if require_socket:
+            try:
+                import websocket  # noqa: F401
+            except ImportError as exc:
+                raise SlackUnavailableError(
+                    "Slack Socket Mode requires the websocket-client package: "
+                    "pip install superqode[channels]"
+                ) from exc
         slack_api_call(self.config.bot_token, "auth.test")
 
     def stop(self) -> None:

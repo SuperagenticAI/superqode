@@ -67,9 +67,7 @@ def test_normalize_harness_trace_preserves_child_lineage(tmp_path):
     assert trace["schema_version"] == "superqode.harness.observability.v1"
     assert {run["run_id"] for run in trace["runs"]} == {root.run_id, child.run_id}
     child_span = next(
-        span
-        for span in trace["spans"]
-        if span["attributes"]["superqode.run_id"] == child.run_id
+        span for span in trace["spans"] if span["attributes"]["superqode.run_id"] == child.run_id
     )
     root_span = next(
         span for span in trace["spans"] if span["attributes"]["superqode.run_id"] == root.run_id

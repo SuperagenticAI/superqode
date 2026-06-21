@@ -45,11 +45,7 @@ async def test_google_managed_backend_defaults_to_gemini_generate_content(monkey
 
     def fake_post(endpoint, payload, *, headers, timeout):
         calls.append((endpoint, payload, headers, timeout))
-        return {
-            "candidates": [
-                {"content": {"parts": [{"text": "remote google agent answer"}]}}
-            ]
-        }
+        return {"candidates": [{"content": {"parts": [{"text": "remote google agent answer"}]}}]}
 
     monkeypatch.setattr("superqode.harness.backends.managed._post_json", fake_post)
     monkeypatch.setenv("GEMINI_API_KEY", "test-google-token")

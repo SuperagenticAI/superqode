@@ -586,9 +586,7 @@ def _policy_budget(args: dict[str, Any], recursion: Any) -> float | None:
     spec_value = getattr(recursion, "max_budget", None) if recursion is not None else None
     requested = args.get("max_budget")
     values = [
-        float(value)
-        for value in (spec_value, requested)
-        if value is not None and float(value) >= 0
+        float(value) for value in (spec_value, requested) if value is not None and float(value) >= 0
     ]
     if not values:
         return None

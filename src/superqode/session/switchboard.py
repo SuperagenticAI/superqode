@@ -173,7 +173,9 @@ class SessionGraphStore:
         graph_path: str | Path | None = None,
     ) -> None:
         self.storage_dir = Path(storage_dir)
-        self.graph_path = Path(graph_path) if graph_path else graph_path_for_storage(self.storage_dir)
+        self.graph_path = (
+            Path(graph_path) if graph_path else graph_path_for_storage(self.storage_dir)
+        )
         self.graph_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _load(self) -> dict[str, Any]:
@@ -241,7 +243,9 @@ class SessionGraphStore:
             existing.parent_session_id,
             session_id,
         )
-        existing.updated_at = str(updates.get("updated_at") or (now if has_updates else existing.updated_at) or now)
+        existing.updated_at = str(
+            updates.get("updated_at") or (now if has_updates else existing.updated_at) or now
+        )
         records[session_id] = existing
         data["sessions"] = {sid: rec.to_dict() for sid, rec in records.items()}
         self._save(data)
@@ -266,7 +270,9 @@ class SessionGraphStore:
         records.sort(key=lambda item: item.updated_at, reverse=True)
         return records
 
-    def children(self, parent_session_id: str, *, include_closed: bool = True) -> list[SessionGraphRecord]:
+    def children(
+        self, parent_session_id: str, *, include_closed: bool = True
+    ) -> list[SessionGraphRecord]:
         return [
             item
             for item in self.list(include_closed=include_closed)
@@ -303,7 +309,9 @@ class SessionGraphStore:
     def set_active(self, session_id: str) -> SessionGraphRecord:
         record = self.get(session_id)
         if record is None:
-            metadata = SessionManager(storage_dir=str(self.storage_dir)).get_session_info(session_id)
+            metadata = SessionManager(storage_dir=str(self.storage_dir)).get_session_info(
+                session_id
+            )
             if metadata is None:
                 raise KeyError(f"Session not found: {session_id}")
             record = self.ingest_metadata(metadata)

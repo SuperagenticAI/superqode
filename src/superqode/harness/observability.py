@@ -329,7 +329,9 @@ class LangSmithLiveSink:
                 )
                 child.end(outputs=_langsmith_outputs(run))
                 by_id[run_id] = child
-            root_tree.end(outputs={"summary": _trace_summary(trace), "artifact_dir": str(output_dir)})
+            root_tree.end(
+                outputs={"summary": _trace_summary(trace), "artifact_dir": str(output_dir)}
+            )
             root_tree.post()
             return {"name": self.name, "status": "exported", "detail": self.project}
         except Exception as exc:
@@ -340,7 +342,10 @@ class LangSmithLiveSink:
         return self._run_tree(
             name=f"superqode harness {run.get('run_id')}",
             run_type="chain",
-            inputs={"root_run_id": trace.get("root_run_id"), "prompt_preview": run.get("prompt_preview")},
+            inputs={
+                "root_run_id": trace.get("root_run_id"),
+                "prompt_preview": run.get("prompt_preview"),
+            },
             extra={
                 "metadata": {
                     "schema_version": trace.get("schema_version"),
@@ -435,7 +440,9 @@ class HarnessObservability:
     sinks: list[HarnessObservabilitySink] = field(default_factory=list)
 
     @classmethod
-    def from_spec(cls, spec: HarnessSpec | ObservabilitySpec | None = None) -> "HarnessObservability":
+    def from_spec(
+        cls, spec: HarnessSpec | ObservabilitySpec | None = None
+    ) -> "HarnessObservability":
         obs = spec.observability if isinstance(spec, HarnessSpec) else spec
         obs = obs or ObservabilitySpec()
         return cls(sinks=build_observability_sinks(obs))
@@ -470,13 +477,16 @@ def build_observability_sinks(
         or os.getenv("OTEL_SERVICE_NAME")
         or "superqode-harness"
     )
-    otel_endpoint = str(
-        _value("opentelemetry", exporters, "endpoint")
-        or _value("otel", exporters, "endpoint")
-        or config.get("otel_endpoint")
-        or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-        or ""
-    ) or None
+    otel_endpoint = (
+        str(
+            _value("opentelemetry", exporters, "endpoint")
+            or _value("otel", exporters, "endpoint")
+            or config.get("otel_endpoint")
+            or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+            or ""
+        )
+        or None
+    )
     sinks.append(
         OpenTelemetryLiveSink(
             enabled=_enabled("opentelemetry", exporters, "SUPERQODE_OBS_OTEL_ENABLED")
@@ -565,7 +575,9 @@ def build_observability_sinks(
     return sinks
 
 
-def observability_status(spec: HarnessSpec | ObservabilitySpec | None = None) -> list[dict[str, Any]]:
+def observability_status(
+    spec: HarnessSpec | ObservabilitySpec | None = None,
+) -> list[dict[str, Any]]:
     """Return status rows for all known observability sinks."""
     return HarnessObservability.from_spec(spec).status()
 
@@ -748,9 +760,7 @@ def _flatten_events(runs: list[HarnessRunRecord]) -> list[dict[str, Any]]:
     return rows
 
 
-def _event_summary(
-    run: HarnessRunRecord, event: HarnessEvent, index: int
-) -> dict[str, Any]:
+def _event_summary(run: HarnessRunRecord, event: HarnessEvent, index: int) -> dict[str, Any]:
     return {
         "run_id": run.run_id,
         "session_id": event.session_id or run.session_id,

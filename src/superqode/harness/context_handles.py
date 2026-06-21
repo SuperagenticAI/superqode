@@ -162,7 +162,9 @@ def _repo_glob(pattern: str, root: Path) -> str:
     files = [
         path
         for path in root.rglob("*")
-        if path.is_file() and ".git" not in path.parts and fnmatch.fnmatch(str(path.relative_to(root)), pattern)
+        if path.is_file()
+        and ".git" not in path.parts
+        and fnmatch.fnmatch(str(path.relative_to(root)), pattern)
     ]
     files.sort()
     parts: list[str] = []

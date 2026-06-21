@@ -74,7 +74,10 @@ def run_session_api(
                 return {"graph": switchboard.graph_tree()}
             if method == "GET" and parts == ["sessions", "active"]:
                 active = switchboard.active()
-                return {"active_session_id": active, "session": switchboard.info(active) if active else None}
+                return {
+                    "active_session_id": active,
+                    "session": switchboard.info(active) if active else None,
+                }
             if method == "GET" and parts == ["factory", "routes"]:
                 return {"routes": SoftwareFactory(storage_dir=storage_dir).routes()}
             if len(parts) >= 2 and parts[0] == "sessions":
@@ -83,7 +86,12 @@ def run_session_api(
                     return switchboard.info(session_id)
                 if method == "GET" and len(parts) == 3 and parts[2] == "factory":
                     return SoftwareFactory(storage_dir=storage_dir).status(session_id)
-                if method == "GET" and len(parts) == 4 and parts[2] == "factory" and parts[3] == "lineage":
+                if (
+                    method == "GET"
+                    and len(parts) == 4
+                    and parts[2] == "factory"
+                    and parts[3] == "lineage"
+                ):
                     return {"lineage": SoftwareFactory(storage_dir=storage_dir).lineage(session_id)}
                 if method == "GET" and len(parts) == 3 and parts[2] == "history":
                     limit = int((query.get("limit") or ["20"])[0])

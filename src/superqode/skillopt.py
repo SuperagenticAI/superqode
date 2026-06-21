@@ -384,7 +384,9 @@ class _GEPASkillEvaluator:
         self._lock = threading.Lock()
         self._counter = 0
 
-    def evaluate(self, candidate: dict[str, str], example: dict[str, Any]) -> tuple[float, dict[str, Any]]:
+    def evaluate(
+        self, candidate: dict[str, str], example: dict[str, Any]
+    ) -> tuple[float, dict[str, Any]]:
         skill_text = candidate.get("skill", "")
         with self._lock:
             self._counter += 1
@@ -401,7 +403,10 @@ class _GEPASkillEvaluator:
             skill_text=skill_text,
         )
         task_path.write_text(
-            yaml.safe_dump({"tasks": [task], "metadata": {"source": "gepa-skill-optimization"}}, sort_keys=False),
+            yaml.safe_dump(
+                {"tasks": [task], "metadata": {"source": "gepa-skill-optimization"}},
+                sort_keys=False,
+            ),
             encoding="utf-8",
         )
 
@@ -752,8 +757,7 @@ def _write_candidate_harness(
 
     spec = load_harness_spec(source_harness_path)
     injection = (
-        f"\n\n## Candidate Skill Under GEPA Optimization: {skill_name}\n\n"
-        f"{skill_text.strip()}\n"
+        f"\n\n## Candidate Skill Under GEPA Optimization: {skill_name}\n\n{skill_text.strip()}\n"
     )
     if spec.agents:
         first = spec.agents[0]
@@ -778,7 +782,9 @@ def _write_candidate_harness(
                 ),
             ),
         )
-    output_path.write_text(yaml.safe_dump(harness_spec_to_dict(spec), sort_keys=False), encoding="utf-8")
+    output_path.write_text(
+        yaml.safe_dump(harness_spec_to_dict(spec), sort_keys=False), encoding="utf-8"
+    )
 
 
 def _safe_name(value: str) -> str:

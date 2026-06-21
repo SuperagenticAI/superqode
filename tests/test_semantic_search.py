@@ -138,27 +138,21 @@ def test_success_formats_results(fake_client, tmp_path):
 def test_limit_is_clamped(fake_client, tmp_path):
     import asyncio
 
-    asyncio.run(
-        SemanticSearchTool().execute({"query": "q", "limit": 999}, _ctx(tmp_path))
-    )
+    asyncio.run(SemanticSearchTool().execute({"query": "q", "limit": 999}, _ctx(tmp_path)))
     assert fake_client["search"]["limit"] == SemanticSearchTool.MAX_LIMIT
 
 
 def test_offset_is_forwarded(fake_client, tmp_path):
     import asyncio
 
-    asyncio.run(
-        SemanticSearchTool().execute({"query": "q", "offset": 7}, _ctx(tmp_path))
-    )
+    asyncio.run(SemanticSearchTool().execute({"query": "q", "offset": 7}, _ctx(tmp_path)))
     assert fake_client["search"]["offset"] == 7
 
 
 def test_refresh_triggers_index(fake_client, tmp_path):
     import asyncio
 
-    asyncio.run(
-        SemanticSearchTool().execute({"query": "q", "refresh": True}, _ctx(tmp_path))
-    )
+    asyncio.run(SemanticSearchTool().execute({"query": "q", "refresh": True}, _ctx(tmp_path)))
     assert fake_client["index"] == str(tmp_path)
 
 
@@ -170,9 +164,7 @@ def test_refresh_index_error_fails(monkeypatch, fake_client, tmp_path):
         raise RuntimeError("bad index")
 
     monkeypatch.setattr(mod, "index", fail_index)
-    res = asyncio.run(
-        SemanticSearchTool().execute({"query": "q", "refresh": True}, _ctx(tmp_path))
-    )
+    res = asyncio.run(SemanticSearchTool().execute({"query": "q", "refresh": True}, _ctx(tmp_path)))
     assert res.success is False
     assert "bad index" in res.error
     assert "search" not in fake_client

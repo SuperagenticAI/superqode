@@ -416,7 +416,9 @@ class TestRepoSearchTool:
 class TestLocalCodeSearchTool:
     """Test the offline local code-search broker."""
 
-    async def test_local_code_search_returns_files_content_and_symbols(self, temp_dir, tool_context):
+    async def test_local_code_search_returns_files_content_and_symbols(
+        self, temp_dir, tool_context
+    ):
         src = temp_dir / "src"
         src.mkdir()
         (src / "provider_manager.py").write_text(

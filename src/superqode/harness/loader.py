@@ -257,8 +257,16 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
                     "max_children": spec.recursion.max_children,
                     "max_parallel": spec.recursion.max_parallel,
                     "max_wall_seconds": spec.recursion.max_wall_seconds,
-                    **({"max_budget": spec.recursion.max_budget} if spec.recursion.max_budget is not None else {}),
-                    **({"child_model": spec.recursion.child_model} if spec.recursion.child_model else {}),
+                    **(
+                        {"max_budget": spec.recursion.max_budget}
+                        if spec.recursion.max_budget is not None
+                        else {}
+                    ),
+                    **(
+                        {"child_model": spec.recursion.child_model}
+                        if spec.recursion.child_model
+                        else {}
+                    ),
                     "child_sandbox": spec.recursion.child_sandbox,
                     "write_policy": spec.recursion.write_policy,
                     **({"config": spec.recursion.config} if spec.recursion.config else {}),
@@ -272,13 +280,23 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
                 "remote_harness": {
                     "enabled": spec.remote_harness.enabled,
                     "provider": spec.remote_harness.provider,
-                    **({"agent_id": spec.remote_harness.agent_id} if spec.remote_harness.agent_id else {}),
-                    **({"region": spec.remote_harness.region} if spec.remote_harness.region else {}),
+                    **(
+                        {"agent_id": spec.remote_harness.agent_id}
+                        if spec.remote_harness.agent_id
+                        else {}
+                    ),
+                    **(
+                        {"region": spec.remote_harness.region} if spec.remote_harness.region else {}
+                    ),
                     "context_policy": spec.remote_harness.context_policy,
-                    **({"config": spec.remote_harness.config} if spec.remote_harness.config else {}),
+                    **(
+                        {"config": spec.remote_harness.config} if spec.remote_harness.config else {}
+                    ),
                 }
             }
-            if spec.remote_harness.enabled or spec.remote_harness.provider or spec.remote_harness.config
+            if spec.remote_harness.enabled
+            or spec.remote_harness.provider
+            or spec.remote_harness.config
             else {}
         ),
         "context": {

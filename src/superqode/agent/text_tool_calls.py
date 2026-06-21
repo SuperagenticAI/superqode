@@ -33,8 +33,11 @@ def is_prompt_format(value: Any) -> bool:
 def _normalize_prompt_argument(value: Any) -> Any:
     """Repair common double-escaped strings from prompt-mode local models."""
     if isinstance(value, str):
-        return value.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t").replace(
-            "\\r", "\r"
+        return (
+            value.replace("\\r\\n", "\n")
+            .replace("\\n", "\n")
+            .replace("\\t", "\t")
+            .replace("\\r", "\r")
         )
     if isinstance(value, list):
         return [_normalize_prompt_argument(item) for item in value]

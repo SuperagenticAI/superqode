@@ -70,9 +70,15 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":harness events", "Show persisted run event timeline", category="workflow"),
     SlashCommand("/harness runs", "List persisted harness runs", category="workflow"),
     SlashCommand(":harness runs", "List persisted harness runs", category="workflow"),
-    SlashCommand(":harness optimize", "Optimize a HarnessSpec through metaharness", category="workflow"),
-    SlashCommand(":harness optimize-inspect", "Inspect a harness optimization run", category="workflow"),
-    SlashCommand(":harness optimize-ledger", "Show harness optimization candidates", category="workflow"),
+    SlashCommand(
+        ":harness optimize", "Optimize a HarnessSpec through metaharness", category="workflow"
+    ),
+    SlashCommand(
+        ":harness optimize-inspect", "Inspect a harness optimization run", category="workflow"
+    ),
+    SlashCommand(
+        ":harness optimize-ledger", "Show harness optimization candidates", category="workflow"
+    ),
     SlashCommand("/runtime", "List or switch runtime backends", category="workflow"),
     SlashCommand(":codex", "Connect to Codex SDK runtime", category="workflow"),
     SlashCommand(":codex status", "Show Codex SDK/app-server status", category="workflow"),
@@ -100,19 +106,29 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":switchboard history", "Show recent session messages", category="workflow"),
     SlashCommand(":switchboard children", "List child/fork/agent sessions", category="workflow"),
     SlashCommand(":switchboard handoff", "Send context to another session", category="workflow"),
-    SlashCommand(":switchboard fork-agent", "Fork session to a named coding agent", category="workflow"),
+    SlashCommand(
+        ":switchboard fork-agent", "Fork session to a named coding agent", category="workflow"
+    ),
     SlashCommand(":switchboard approvals", "Show cross-agent approval inbox", category="workflow"),
-    SlashCommand(":switchboard share-tree", "Export a portable session subtree", category="workflow"),
+    SlashCommand(
+        ":switchboard share-tree", "Export a portable session subtree", category="workflow"
+    ),
     SlashCommand(":factory", "Open Software Factory status", category="workflow"),
     SlashCommand(":factory init-policy", "Create .superqode/factory.yaml", category="workflow"),
     SlashCommand(":factory policy", "Show factory policy", category="workflow"),
     SlashCommand(":factory routes", "List model/harness routing presets", category="workflow"),
-    SlashCommand(":factory mode no-subscription", "Prefer local OSS and BYOK paths", category="workflow"),
+    SlashCommand(
+        ":factory mode no-subscription", "Prefer local OSS and BYOK paths", category="workflow"
+    ),
     SlashCommand(":factory mode private", "Prefer local private execution", category="workflow"),
     SlashCommand(":factory switch-model", "Record a model/provider switch", category="workflow"),
-    SlashCommand(":factory switch-harness", "Record a harness/orchestration switch", category="workflow"),
+    SlashCommand(
+        ":factory switch-harness", "Record a harness/orchestration switch", category="workflow"
+    ),
     SlashCommand(":factory fork-model", "Fork work to another model worker", category="workflow"),
-    SlashCommand(":factory fork-harness", "Fork work to another harness worker", category="workflow"),
+    SlashCommand(
+        ":factory fork-harness", "Fork work to another harness worker", category="workflow"
+    ),
     SlashCommand(":factory lineage", "Show model/harness/mode lineage", category="workflow"),
     SlashCommand("/resume", "Resume latest or selected session", category="workflow"),
     SlashCommand(":diff", "Open current diff review", category="workflow"),
@@ -126,7 +142,9 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand("/tree", "Show saved session branches", category="workflow"),
     SlashCommand(":share", "Show local session sharing options", category="workflow"),
     SlashCommand(":share create", "Create a portable share artifact", category="workflow"),
-    SlashCommand(":share create --tree", "Create a portable session tree artifact", category="workflow"),
+    SlashCommand(
+        ":share create --tree", "Create a portable session tree artifact", category="workflow"
+    ),
     SlashCommand(
         ":share export", "Export a saved session as Markdown or JSON", category="workflow"
     ),
@@ -181,8 +199,12 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":local setup", "TUI-first local model setup guide", category="workflow"),
     SlashCommand(":local build", "Guided local harness builder", category="workflow"),
     SlashCommand(":local packs", "List model policy packs", category="workflow"),
-    SlashCommand(":local pack init", "Create a project-owned model policy pack", category="workflow"),
-    SlashCommand(":local migrate", "Plan prompt/skill migration to local models", category="workflow"),
+    SlashCommand(
+        ":local pack init", "Create a project-owned model policy pack", category="workflow"
+    ),
+    SlashCommand(
+        ":local migrate", "Plan prompt/skill migration to local models", category="workflow"
+    ),
     SlashCommand(":local optimize", "Benchmark local model routing", category="workflow"),
     SlashCommand("/skills", "List local skills", category="workflow"),
     SlashCommand("/skills add", "Create a local skill template", category="workflow"),

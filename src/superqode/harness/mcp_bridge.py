@@ -33,7 +33,9 @@ class HarnessMCPRuntime:
             return ToolResult(
                 success=False,
                 output="",
-                error=result.error_message or _format_mcp_content(result.content) or "MCP tool error",
+                error=result.error_message
+                or _format_mcp_content(result.content)
+                or "MCP tool error",
             )
         return ToolResult(
             success=True,
@@ -118,7 +120,9 @@ def _server_config_from_dict(server_id: str, data: dict[str, Any]) -> MCPServerC
     else:
         transport_config = MCPStdioConfig(
             command=str(data.get("command") or ""),
-            args=[str(item) for item in data.get("args", [])] if isinstance(data.get("args"), list) else [],
+            args=[str(item) for item in data.get("args", [])]
+            if isinstance(data.get("args"), list)
+            else [],
             env=_str_dict(data.get("env")),
             cwd=str(data["cwd"]) if data.get("cwd") else None,
             timeout=float(data.get("timeout", 30.0)),

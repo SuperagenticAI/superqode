@@ -1645,7 +1645,15 @@ def test_tui_optimize_commands_delegate_to_cli(monkeypatch):
 
     assert calls == [
         (
-            ["harness", "optimize", "--spec", "harness.yaml", "--tasks", "eval-tasks.yaml", "--export-only"],
+            [
+                "harness",
+                "optimize",
+                "--spec",
+                "harness.yaml",
+                "--tasks",
+                "eval-tasks.yaml",
+                "--export-only",
+            ],
             "Harness optimization",
         ),
         (

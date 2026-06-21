@@ -10,7 +10,14 @@ from .spawn_harness import SpawnHarnessTool
 
 
 MAX_DYNAMIC_STEPS = 12
-WORKFLOW_KEYS = {"objective", "max_steps", "max_depth", "max_children", "max_wall_seconds", "stop_on_error"}
+WORKFLOW_KEYS = {
+    "objective",
+    "max_steps",
+    "max_depth",
+    "max_children",
+    "max_wall_seconds",
+    "stop_on_error",
+}
 STEP_KEYS = {
     "id",
     "task",
@@ -135,7 +142,9 @@ class DynamicWorkflowTool(Tool):
         if not isinstance(raw_steps, list) or not raw_steps:
             return ToolResult(success=False, output="", error="steps must be a non-empty list")
 
-        max_steps = min(max(1, int(args.get("max_steps", MAX_DYNAMIC_STEPS) or 1)), MAX_DYNAMIC_STEPS)
+        max_steps = min(
+            max(1, int(args.get("max_steps", MAX_DYNAMIC_STEPS) or 1)), MAX_DYNAMIC_STEPS
+        )
         steps = raw_steps[:max_steps]
         truncated = len(raw_steps) > len(steps)
         stop_on_error = bool(args.get("stop_on_error", True))

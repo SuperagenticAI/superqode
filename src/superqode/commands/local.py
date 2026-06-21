@@ -736,7 +736,9 @@ def local_migrate(repo_path, endpoint, model, json_output):
     help="Repository to analyze and generate a harness for",
 )
 @click.option("--model", default="", help="Target model id")
-@click.option("--endpoint", default="", metavar="URL", help="Target local/OpenAI-compatible endpoint")
+@click.option(
+    "--endpoint", default="", metavar="URL", help="Target local/OpenAI-compatible endpoint"
+)
 @click.option("--pack", "pack_name", default="", help="Model policy pack to use")
 @click.option(
     "--output",
@@ -1024,10 +1026,18 @@ def local_airplane():
 @click.option("--model", default="", help="Explicit provider/model for the offline harness")
 @click.option("--pack", "pack_name", default="", help="Model policy pack for the harness")
 @click.option("--name", default="airplane-coder", show_default=True, help="Harness name")
-@click.option("--index/--no-index", "build_index", default=True, show_default=True, help="Build the local SQLite code index during prepare")
+@click.option(
+    "--index/--no-index",
+    "build_index",
+    default=True,
+    show_default=True,
+    help="Build the local SQLite code index during prepare",
+)
 @click.option("--force", is_flag=True, help="Overwrite an existing harness")
 @click.option("--json", "json_output", is_flag=True, help="Emit report as JSON")
-def airplane_prepare(repo_path, refs, output_path, model, pack_name, name, build_index, force, json_output):
+def airplane_prepare(
+    repo_path, refs, output_path, model, pack_name, name, build_index, force, json_output
+):
     """Write a strict no-network Airplane Mode harness and manifest."""
     from superqode.local.airplane import prepare_airplane, render_report
 
@@ -1164,7 +1174,9 @@ def airplane_models(json_output):
         click.echo(f"- {item['name']} [{item['estimated_memory']}]{downloaded}")
         for cmd in item.get("commands", [])[:2]:
             click.echo(f"    {cmd['engine']:<11} {cmd['command']}")
-    click.echo("\nThese are fit suggestions, not endorsements. Validate with `superqode local smoke`.")
+    click.echo(
+        "\nThese are fit suggestions, not endorsements. Validate with `superqode local smoke`."
+    )
 
 
 @local_airplane.command("health")
@@ -1182,7 +1194,9 @@ def airplane_health(json_output):
         f"RAM        {health.ram_available_gb or '?'} GB available / "
         f"{health.ram_total_gb or '?'} GB total"
     )
-    click.echo(f"Swap       {health.swap_used_gb if health.swap_used_gb is not None else '?'} GB used")
+    click.echo(
+        f"Swap       {health.swap_used_gb if health.swap_used_gb is not None else '?'} GB used"
+    )
     click.echo(f"CPU        {health.cpu_percent if health.cpu_percent is not None else '?'}%")
     if health.max_temperature_c is not None:
         click.echo(f"Temp       {health.max_temperature_c} C max sensor")

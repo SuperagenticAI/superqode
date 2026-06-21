@@ -155,7 +155,10 @@ def daemon(telegram_flag, slack_flag, discord_flag, config_path, check):
     # Validate everything (tokens, deps, connectivity) before going resident.
     for name, runner in runners:
         try:
-            runner.validate()
+            if check and name == "slack":
+                runner.validate(require_socket=False)
+            else:
+                runner.validate()
             click.echo(f"{name}: configured and reachable")
         except Exception as exc:
             raise click.ClickException(f"{name}: {exc}") from exc

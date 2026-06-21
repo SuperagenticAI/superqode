@@ -8,29 +8,24 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from superqode.main import cli_main
-from superqode.skillopt import check_skill_candidate, export_skillopt_project, optimize_skill_with_gepa
+from superqode.skillopt import (
+    check_skill_candidate,
+    export_skillopt_project,
+    optimize_skill_with_gepa,
+)
 
 
 def _write_skill(path: Path, body: str = "Follow the existing project style.") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        "---\n"
-        "name: review\n"
-        "description: Review code\n"
-        "enabled: true\n"
-        "---\n\n"
-        "# Review\n\n"
-        f"{body}\n",
+        f"---\nname: review\ndescription: Review code\nenabled: true\n---\n\n# Review\n\n{body}\n",
         encoding="utf-8",
     )
 
 
 def _write_tasks(path: Path) -> None:
     path.write_text(
-        "tasks:\n"
-        "  - id: smoke\n"
-        "    prompt: Say ready\n"
-        "    expect_contains: ready\n",
+        "tasks:\n  - id: smoke\n    prompt: Say ready\n    expect_contains: ready\n",
         encoding="utf-8",
     )
 

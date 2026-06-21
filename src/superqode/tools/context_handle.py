@@ -93,9 +93,9 @@ class ContextHandleTool(Tool):
                     ctx.working_directory,
                     limit=int(args.get("limit", 50) or 50),
                 )
-                output = "\n".join(
-                    f"{item['line']}:{item['text']}" for item in matches
-                ) or "No matches"
+                output = (
+                    "\n".join(f"{item['line']}:{item['text']}" for item in matches) or "No matches"
+                )
                 return ToolResult(
                     success=True,
                     output=output,
