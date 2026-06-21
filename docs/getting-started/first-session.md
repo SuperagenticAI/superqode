@@ -57,7 +57,7 @@ You can also connect directly:
 
 ```text
 :connect acp opencode
-:connect byok openai gpt-4o-mini
+:connect byok openai <openai-model>
 :connect local ollama qwen3:8b
 ```
 
@@ -96,17 +96,18 @@ Other harness commands:
 | `:harness templates` | List available templates |
 | `:harness off` | Return to the non-harness runtime path |
 
-For local models, you can build a repo-local harness from the TUI:
+For local models, start with a repo-local harness:
 
-```text
-:local build --repo . --model MiniMaxAI/MiniMax-M1 --pack minimax-m1
+```bash
+superqode local init --repo .
+superqode --harness superqode.local.yaml
 ```
 
-This path does not run the model. It migrates existing prompts/skills into a
-plan, carries the selected pack into `superqode.local.yaml`, and prints the
-final live checks to run later. Treat the pack as a model-family starter, then
-edit the harness for your repo's memory, tools, approval policy, and eval
-results.
+`local init` detects hardware and available engines, writes `superqode.local.yaml`,
+and runs a non-destructive smoke check when possible. Use `:local build` when
+you want the guided builder for a specific model, endpoint, or pack. Treat the
+pack as a model-family starter, then edit the harness for your repo's memory,
+tools, approval policy, and eval results.
 
 You can also start the TUI with a harness:
 

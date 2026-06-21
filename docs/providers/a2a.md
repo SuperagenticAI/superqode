@@ -225,7 +225,7 @@ from superqode.agent import AgentConfig
 
 config = AgentConfig(
     provider="openai",
-    model="gpt-4o",
+    model="<openai-model>",
 )
 
 server = await create_a2a_server(config, server_url="http://localhost:8000")

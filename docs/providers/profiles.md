@@ -57,13 +57,13 @@ The struct is frozen: trying to mutate `profile.init_kwargs["x"] = 1` raises
 from superqode.providers.profiles import ModelProfile, register_model_profile
 
 register_model_profile(
-    "anthropic:claude-sonnet-4-6",
+    "anthropic:<anthropic-balanced-model>",
     ModelProfile(system_prompt_suffix="Think step by step."),
 )
 ```
 
 Keys are either a **bare provider** (`"anthropic"`, applies to every model
-from that provider) or a full **`provider:model`** spec (`"anthropic:claude-sonnet-4-6"`,
+from that provider) or a full **`provider:model`** spec (`"anthropic:<anthropic-balanced-model>"`,
 applies only to that one model).
 
 Registrations are **additive**: if a profile already exists under the same
@@ -122,10 +122,10 @@ layer your own profile on top of any of them with another
 
 Registered under:
 
-- `anthropic:claude-sonnet-4-6`
+- `anthropic:<anthropic-balanced-model>`
 - `anthropic:claude-opus-4-7`
-- `anthropic:claude-opus-4-8`
-- `anthropic:claude-haiku-4-5`
+- `anthropic:<anthropic-model>`
+- `anthropic:<anthropic-fast-model>`
 
 Applies a `system_prompt_suffix` with three blocks drawn from Anthropic's
 [prompt-engineering best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices):
@@ -154,7 +154,7 @@ yours, separated by a blank line.
 
 ```python
 register_model_profile(
-    "anthropic:claude-sonnet-4-6",
+    "anthropic:<anthropic-balanced-model>",
     ModelProfile(system_prompt_suffix="Respond in under 100 words."),
 )
 ```

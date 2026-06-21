@@ -311,7 +311,7 @@ asyncio.run(go())
 
 # multi-turn on one Codex thread; list models your account exposes
 with codex_session(cwd="myrepo") as cx:
-    print(cx.models())                       # e.g. gpt-5.5 (default), gpt-5.4, gpt-5.4-mini
+    print(cx.models())                       # e.g. <openai-model> (default), <openai-fast-model>, <openai-small-model>
     asyncio.run(cx.run("Summarize the repo"))
 ```
 
@@ -371,7 +371,7 @@ observability:
   traces: true
 model_policy:
   fallbacks:
-    - anthropic:claude-sonnet-4-5
+    - anthropic:<anthropic-balanced-model>
 ```
 
 ### `deepagents`

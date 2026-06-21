@@ -103,10 +103,10 @@ superqode providers show anthropic
 │   ✓ ANTHROPIC_API_KEY                                        │
 │                                                               │
 │ Example Models:                                               │
-│   • claude-opus-4-5                                          │
-│   • claude-sonnet-4-5                                        │
-│   • claude-haiku-4-5                                         │
-│   • claude-sonnet-4                                          │
+│   • <anthropic-model>                                          │
+│   • <anthropic-balanced-model>                                        │
+│   • <anthropic-fast-model>                                         │
+│   • <anthropic-balanced-model>                                        │
 │                                                               │
 │ Documentation: https://docs.anthropic.com/                    │
 ╰──────────────────────────────────────────────────────────────╯
@@ -141,17 +141,17 @@ superqode providers test PROVIDER_ID [OPTIONS]
 superqode providers test anthropic
 
 # Test with specific model
-superqode providers test anthropic -m claude-sonnet-4
+superqode providers test anthropic -m <anthropic-balanced-model>
 ```
 
 ### Output
 
 ```text
-Testing Anthropic with model claude-sonnet-4...
+Testing Anthropic with model <anthropic-balanced-model>...
 
 [CORRECT] Success!
   Provider: anthropic
-  Model: claude-sonnet-4
+  Model: <anthropic-balanced-model>
   Tokens used: 15
 ```
 
@@ -435,16 +435,16 @@ superqode connect byok PROVIDER MODEL
 | Argument | Description |
 |----------|-------------|
 | `PROVIDER` | Provider ID (e.g., `anthropic`, `openai`) |
-| `MODEL` | Model ID (e.g., `claude-sonnet-4`, `gpt-4o`) |
+| `MODEL` | Model ID (e.g., `<anthropic-balanced-model>`, `<openai-model>`) |
 
 ### Examples
 
 ```bash
 # Connect to Anthropic
-superqode connect byok anthropic claude-sonnet-4
+superqode connect byok anthropic <anthropic-balanced-model>
 
 # Connect to OpenAI
-superqode connect byok openai gpt-4o
+superqode connect byok openai <openai-model>
 
 # Connect to Google AI
 superqode connect byok google gemini-3.1-pro-preview
@@ -567,7 +567,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 superqode providers test anthropic
 
 # 3. Connect
-superqode connect byok anthropic claude-sonnet-4
+superqode connect byok anthropic <anthropic-balanced-model>
 ```
 
 ### Local Providers (Ollama)

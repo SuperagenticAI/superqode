@@ -40,7 +40,7 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | Variable | Values | Default | Effect |
 |---|---|---|---|
 | `SUPERQODE_PROVIDER` | provider id | `openai` | Default provider for headless runs. |
-| `SUPERQODE_MODEL` | model id | `gpt-5.4` | Default model for headless runs. |
+| `SUPERQODE_MODEL` | model id | `<openai-fast-model>` | Default model for headless runs. |
 | `SUPERQODE_HARNESS` | path | unset | HarnessSpec YAML/JSON to load on start. |
 | `SUPERQODE_CONNECT` | profile name | unset | Auto-connect a connection profile when the TUI starts (set by `--connect`). |
 | `OLLAMA_HOST` etc. | URL | per-provider | Local server endpoints (see [Local Models](../providers/local.md)). |

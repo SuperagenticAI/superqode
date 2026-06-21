@@ -96,21 +96,14 @@ superqode --version
 
 ---
 
-## Alternate Installation Methods (No Python Required)
+## Alternate Installation Method (No Python Required)
 
-These methods provide a pre-compiled binary for the SuperQode TUI. Validation workflows require
-the Python install (uv or pip). These methods are convenient for users who do not want to manage a
+This method provides a pre-compiled binary for the SuperQode TUI. Validation workflows require
+the Python install (uv or pip). It is convenient for users who do not want to manage a
 Python environment, but may have a slightly slower startup time (~1-2 seconds) compared to the
 primary methods.
 
-### Method 3: Homebrew (macOS/Linux)
-
-```bash
-brew tap SuperagenticAI/superqode
-brew install superqode
-```
-
-### Method 4: Installer Script
+### Method 3: Installer Script
 
 ```bash
 curl -fsSL https://super-agentic.ai/install.sh | bash
@@ -316,8 +309,8 @@ $ superqode auth info
 ├─────────────────────────────────────────────────┤
 │ Provider      │ Status    │ Model Access        │
 ├───────────────┼───────────┼─────────────────────┤
-│ anthropic     │ ✓ Valid   │ claude-sonnet-4     │
-│ openai        │ ✓ Valid   │ gpt-4o              │
+│ anthropic     │ ✓ Valid   │ <anthropic-model>     │
+│ openai        │ ✓ Valid   │ <openai-model>             │
 │ ollama        │ ✓ Running │ qwen3:8b            │
 ╰─────────────────────────────────────────────────╯
 ```

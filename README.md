@@ -1,15 +1,12 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/super-qode-header.png" alt="SuperQode">
-</p>
-<p align="center">
-  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode-logo.png" alt="SuperQode Logo" width="200">
+  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode-logo.png" alt="SuperQode" width="220">
 </p>
 
 <h1 align="center">SuperQode</h1>
 
 <p align="center">
-  <strong>Coding Harness Framework Optimized for Open Models</strong><br>
-  <em>Model independence is not enough if the harness is fixed. SuperQode gives teams a coding harness they can own in the repo, optimized for Open Models and portable across closed models, local endpoints, and remote runtimes.</em>
+  <strong>The harness engineering framework for coding agents, optimized for local and open models</strong><br>
+  <em>Build your own coding harness. Measure it. Extend it. Optimize it. Use any model, open or closed, small or large, local or remote, without giving up control of the agent loop.</em>
 </p>
 
 <p align="center">
@@ -35,11 +32,18 @@
 
 ## What is SuperQode?
 
-SuperQode is a **coding harness framework optimized for Open Models**. It turns the harness around a coding agent into a repository artifact: model routing, tools, memory, context, search, approvals, sandboxing, workflows, evals, and optimization.
+SuperQode is a **harness engineering framework for coding agents**, optimized for local and open models. The harness is the software around the model that decides what it can see, which tools it can call, how it remembers, and how its work is checked. After prompt engineering and context engineering, the harness is the layer that now decides whether a coding agent is reliable.
 
-Most coding products ship a finished agent loop. SuperQode gives teams the framework to define that loop, run it local first, and connect any model route without giving up the harness.
+Most coding products ship a finished harness you cannot see, tuned to keep you on one model. Open Models ship with no harness at all. SuperQode gives you one you own: model routing, tools, memory, context, search, approvals, sandboxing, workflows, evals, and optimization, written as a YAML artifact that lives in your repo.
 
-Use SuperQode when you want harness independence: the ability to inspect, version, measure, extend, and optimize the system that makes a model useful on your codebase.
+You do four things with a harness you own:
+
+- **Build** it as a versioned file, with a wizard, model-family templates, and a plain-English `explain`.
+- **Measure** it with eval scorecards, agentic benchmarks, and regression gates before you trust it.
+- **Extend** it across runtimes, providers, MCP, ACP, and A2A without changing the contract.
+- **Optimize** it with staged candidates a human adopts, so a failure gets fixed once instead of retried.
+
+Use SuperQode when you want harness independence: the freedom to inspect, version, measure, and improve the system that makes a model useful on your codebase, with any model you choose, open or closed, small or large, local or remote.
 
 Run `superqode` for the terminal workbench, then `:local init` to detect your hardware, generate a local first starter harness, and run a readiness smoke test. The CLI mirrors the same path with `superqode local init --repo .`. Run `superqode local optimize` to benchmark candidates and generate role specific routing for planner, implementer, reviewer, and utility agents.
 
@@ -52,10 +56,6 @@ cd your-project && superqode
 ## Core Concepts
 
 SuperQode separates agent systems into interchangeable pieces: the **harness** controls runtime, tools, sandbox, memory, search, workflow, approvals, and model policy; the **runtime** executes the work; **tools** expose file, search, edit, shell, MCP, and verification capabilities under policy; and **model policy** controls routing, temperature, reasoning, context, and iteration limits. Change any piece without rewriting the rest.
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode TUI">
-</p>
 
 ## Quick Start
 
@@ -72,9 +72,6 @@ pip install superqode
 
 **Alternate (No Python Required, SuperQode TUI Only)**
 ```bash
-# Using Homebrew (macOS/Linux)
-brew install SuperagenticAI/superqode/superqode
-
 # Using Curl script
 curl -fsSL https://super-agentic.ai/install.sh | bash
 ```

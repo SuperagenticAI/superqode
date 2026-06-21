@@ -92,13 +92,13 @@ superqode models show PROVIDER/MODEL
 
 | Argument | Description |
 |----------|-------------|
-| `PROVIDER/MODEL` | Provider and model ID (e.g., `anthropic/claude-sonnet-4`) |
+| `PROVIDER/MODEL` | Provider and model ID (e.g., `anthropic/<anthropic-balanced-model>`) |
 
 ### Examples
 
 ```bash
-superqode models show anthropic/claude-sonnet-4
-superqode models show openai/gpt-4o
+superqode models show anthropic/<anthropic-balanced-model>
+superqode models show openai/<openai-model>
 ```
 
 ---

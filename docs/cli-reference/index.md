@@ -2,6 +2,11 @@
 
 SuperQode provides a CLI for your portable coding agent harness: coding sessions, runtime management, provider setup, agents, and configuration. This reference documents the available commands, options, and usage patterns.
 
+!!! note "Model names are for reference"
+    Model identifiers in command examples and sample output across this reference
+    are illustrative and change as providers release new models. Replace them with
+    the latest model your provider offers; run `superqode models` for the live catalog.
+
 ---
 
 ## Command Structure
@@ -132,6 +137,14 @@ superqode memory export --provider local --output memory.json
 `supermemory` are opt-in providers configured under `memory.providers` in
 `superqode.yaml`.
 
+Skills and tool inspection:
+
+```bash
+superqode skills optimize review --harness harness.yaml --tasks eval-tasks.yaml --live
+superqode skillopt check --baseline baseline/SKILL.md --candidate staged/best_skill.md
+superqode tools list --profile build
+```
+
 Provider and model guidance:
 
 ```bash
@@ -199,6 +212,15 @@ superqode sandbox run e2b -- "pytest -q"
 
 `docker` uses the local Docker CLI. `e2b`, `daytona`, `modal`, `runloop`, `agentcore`, and `langsmith` use optional Python SDKs when installed and authenticated. `vercel` uses the Vercel Sandbox CLI and token/OIDC authentication.
 
+Remote control and harness serving:
+
+```bash
+superqode daemon --check
+superqode daemon
+superqode mcp --dir ./harnesses
+superqode mcp --http --port 8765
+```
+
 ---
 
 ## Command Groups
@@ -253,6 +275,46 @@ superqode sandbox run e2b -- "pytest -q"
     Connect to ACP agents, BYOK providers, local models, or self-contained runtimes.
 
     [:octicons-arrow-right-24: Connect Commands](connect-commands.md)
+
+-   **Skills Commands (superqode skills)**
+
+    ---
+
+    Optimize project skills through staged eval-gated runs.
+
+    [:octicons-arrow-right-24: Skills Commands](skills-commands.md)
+
+-   **SkillOpt Commands (superqode skillopt)**
+
+    ---
+
+    Export SkillOpt-style workspaces and check bounded skill edits.
+
+    [:octicons-arrow-right-24: SkillOpt Commands](skillopt-commands.md)
+
+-   **Tools Commands (superqode tools)**
+
+    ---
+
+    Inspect builtin tools available to each harness profile.
+
+    [:octicons-arrow-right-24: Tools Commands](tools-commands.md)
+
+-   **Daemon Command (superqode daemon)**
+
+    ---
+
+    Run chat-channel remote control for long agent sessions.
+
+    [:octicons-arrow-right-24: Daemon Command](daemon-command.md)
+
+-   **MCP Command (superqode mcp)**
+
+    ---
+
+    Expose harness workflows as MCP tools.
+
+    [:octicons-arrow-right-24: MCP Command](mcp-command.md)
 
 -   **Model Commands (superqode models)**
 

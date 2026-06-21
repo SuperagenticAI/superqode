@@ -1,35 +1,57 @@
 /* ============================================================================
    SuperQode documentation theme
-   A thin brand layer over Material for MkDocs. Material owns the design
-   system; this file only sets brand colors through the supported custom
-   palette hooks and styles the landing-page hero. Resist adding per-element
-   overrides here: they are how themes rot.
+   A thin brand layer over Material for MkDocs. Single dark-black scheme:
+   black page and chrome, violet brand accent, colorful code tokens, and a
+   standout hero logo. Material owns the design system; this file only sets
+   the brand palette through supported hooks and styles the landing hero.
+   Resist adding per-element overrides here: they are how themes rot.
    ============================================================================ */
 
 /* ----------------------------------------------------------------------------
-   Brand palette (palette.primary/accent: custom in mkdocs.yml)
+   Brand palette (single dark scheme; palette.scheme: slate in mkdocs.yml)
    ---------------------------------------------------------------------------- */
 
-[data-md-color-scheme="default"] {
-  --md-primary-fg-color: #4c1d95;
-  --md-primary-fg-color--light: #6d28d9;
-  --md-primary-fg-color--dark: #3b0764;
-  --md-accent-fg-color: #7c3aed;
-  --md-accent-fg-color--transparent: rgba(124, 58, 237, 0.1);
-  --md-typeset-a-color: #6d28d9;
+[data-md-color-scheme="slate"] {
+  /* Chrome reads pure black */
+  --md-primary-fg-color: #000000;
+  --md-primary-fg-color--light: #14141a;
+  --md-primary-fg-color--dark: #000000;
+
+  /* Interactive accent: a violet that stays readable on black */
+  --md-accent-fg-color: #a78bfa;
+  --md-accent-fg-color--transparent: rgba(167, 139, 250, 0.14);
+  --md-typeset-a-color: #a78bfa;
+
+  /* Surfaces: near-black page, lifted code panel so tokens pop */
+  --md-default-bg-color: #0a0a0c;
+  --md-code-bg-color: #14161f;
+  --md-footer-bg-color: #000000;
+  --md-footer-bg-color--dark: #000000;
+
+  /* Colorful syntax highlighting */
+  --md-code-hl-comment-color: #7a8190;
+  --md-code-hl-keyword-color: #c792ea;
+  --md-code-hl-string-color: #c3e88d;
+  --md-code-hl-number-color: #f78c6c;
+  --md-code-hl-function-color: #82aaff;
+  --md-code-hl-constant-color: #ff5572;
+  --md-code-hl-name-color: #e7e7ea;
+  --md-code-hl-operator-color: #89ddff;
+  --md-code-hl-punctuation-color: #89ddff;
+  --md-code-hl-variable-color: #f07178;
+  --md-code-hl-special-color: #ffcb6b;
+  --md-code-hl-color: rgba(167, 139, 250, 0.18);
 }
 
-/* Dark mode: deep purple chrome, warm amber accents (bright purple reads
-   harsh on dark backgrounds; amber keeps contrast without the glare). */
-[data-md-color-scheme="slate"] {
-  --md-primary-fg-color: #2e1065;
-  --md-primary-fg-color--light: #6d28d9;
-  --md-primary-fg-color--dark: #1e1b4b;
-  --md-accent-fg-color: #eab308;
-  --md-accent-fg-color--transparent: rgba(234, 179, 8, 0.12);
-  --md-typeset-a-color: #eab308;
-  --md-default-bg-color: #0f1117;
-  --md-code-bg-color: #181b24;
+/* Force a true-black header, tabs, and footer with a hairline separation
+   so structure stays legible against the page. */
+.md-header,
+.md-tabs {
+  background-color: #000000;
+}
+
+.md-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 /* ----------------------------------------------------------------------------
@@ -44,7 +66,7 @@
 .md-typeset h1,
 .md-typeset h2 {
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .md-typeset h2 {
@@ -88,7 +110,7 @@
 .md-typeset .grid.cards > ul > li:hover,
 .md-typeset .grid > .card:hover {
   border-color: var(--md-accent-fg-color);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 6px 20px rgba(167, 139, 250, 0.12);
   transform: translateY(-2px);
 }
 
@@ -102,59 +124,51 @@
    ---------------------------------------------------------------------------- */
 
 .sq-hero {
-  margin: 1.5rem auto 0;
-  max-width: 42rem;
+  margin: 2.4rem auto 0;
+  max-width: 64rem;
   text-align: center;
 }
 
 .sq-hero-logo {
-  width: 96px;
+  width: clamp(116px, 16vw, 172px);
   height: auto;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.75rem;
+  filter: drop-shadow(0 0 26px rgba(244, 114, 182, 0.22));
 }
 
 .sq-hero h1 {
-  margin: 0.2em 0 0.1em;
-  font-size: 2.4em;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #6d28d9 0%, #a78bfa 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  margin: 0.08em 0 0.16em;
+  font-size: clamp(3.25rem, 10vw, 7.25rem);
+  font-weight: 900;
+  line-height: 0.92;
+  letter-spacing: 0;
+  color: #ffffff;
+  text-shadow: 0 20px 70px rgba(255, 255, 255, 0.14);
 }
 
-[data-md-color-scheme="slate"] .sq-hero h1 {
-  background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-}
-
-/* Wide product banner under the hero */
-.sq-banner {
-  display: block;
-  margin: 1.6rem auto 0;
-  width: 100%;
-  max-width: 56rem;
-  border-radius: 0.6rem;
-  border: 1px solid var(--md-default-fg-color--lightest);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+.sq-hero h1 .headerlink {
+  display: none;
 }
 
 .sq-kicker {
-  margin: 0 0 0.7rem;
-  font-size: 0.62rem;
+  display: inline-block;
+  margin: 0 0 0.95rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.08);
+  font-size: clamp(0.86rem, 2vw, 1.08rem);
   font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--md-accent-fg-color);
+  letter-spacing: 0;
+  color: #fbbf24;
 }
 
 .sq-tagline {
-  margin: 0 auto 0.9rem;
-  max-width: 36rem;
-  font-size: 0.92rem;
-  color: var(--md-default-fg-color--light);
+  margin: 0 auto 1.15rem;
+  max-width: 52rem;
+  font-size: clamp(1.02rem, 2.2vw, 1.28rem);
+  line-height: 1.55;
+  color: #e8e5ff;
 }
 
 .sq-badges {
@@ -170,7 +184,36 @@
 }
 
 .sq-hero .md-button {
-  margin: 0.2rem 0.25rem;
+  margin: 0.24rem 0.3rem;
+  min-width: 11.5rem;
+  border-color: rgba(251, 191, 36, 0.42);
+  border-radius: 0.45rem;
+  color: #f8fafc;
+  font-weight: 800;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.sq-hero .md-button:hover,
+.sq-hero .md-button:focus {
+  border-color: #fbbf24;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.sq-hero .md-button--primary,
+.sq-footer-cta .md-button--primary {
+  border-color: transparent;
+  background: linear-gradient(135deg, #f59e0b 0%, #ec4899 100%);
+  color: #111827;
+}
+
+.sq-hero .md-button--primary:hover,
+.sq-hero .md-button--primary:focus,
+.sq-footer-cta .md-button--primary:hover,
+.sq-footer-cta .md-button--primary:focus {
+  background: linear-gradient(135deg, #fbbf24 0%, #f472b6 100%);
+  color: #111827;
 }
 
 .sq-footer-cta {

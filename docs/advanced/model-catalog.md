@@ -4,6 +4,11 @@ SuperQode integrates with models.dev to provide a live catalog of 5000+ models a
 
 Use `--refresh` to force re-fetch.
 
+!!! note "Model names are for reference"
+    Model identifiers in the examples below are illustrative and change as
+    providers release new models. Use `superqode models` to browse the live
+    catalog and pick the latest model available.
+
 ## Live Model Discovery
 
 Use `--live` to query a provider's `/v1/models` endpoint directly for the freshest model list. Falls back to the cached catalog if the endpoint is unreachable. Any OpenAI-compatible endpoint works without registration.
@@ -33,8 +38,8 @@ superqode models providers
 superqode models providers --json
 
 # Model details
-superqode models show anthropic/claude-sonnet-4
-superqode models show gpt-4o
+superqode models show anthropic/<anthropic-balanced-model>
+superqode models show <openai-model>
 
 # Hugging Face Hub
 superqode models hub qwen
@@ -42,14 +47,14 @@ superqode models hub --gguf --sort downloads
 superqode models hub deepseek --mlx --limit 10
 
 # Download models
-superqode models download deepseek-ai/DeepSeek-V4-GGUF
-superqode models download THUDM/GLM-4.5-Air --to transformers
+superqode models download mlx-community/Qwen3-8B-4bit
+superqode models download bartowski/Qwen2.5-Coder-7B-GGUF --to ollama --quant Q4_K_M
 
 # Check local readiness
 superqode local smoke --repo .
 
 # Convert to MLX
-superqode models convert-mlx mlx-community/Qwen3-8B-4bit
+superqode models convert-mlx google/gemma-4-31b-it --q-bits 8
 
 # Manage cache
 superqode models cached

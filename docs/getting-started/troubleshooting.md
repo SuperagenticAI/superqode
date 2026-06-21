@@ -82,7 +82,7 @@ Open the connection picker:
 Or connect directly:
 
 ```text
-:connect byok openai gpt-4o-mini
+:connect byok openai <openai-model>
 :connect local ollama qwen3:8b
 :connect acp opencode
 ```

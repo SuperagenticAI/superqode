@@ -1,6 +1,6 @@
 # Core Concepts
 
-SuperQode is a portable coding agent harness. It gives developers one repeatable contract for model choice, runtime backend, tool access, sandbox policy, approvals, session history, event capture, and output handling.
+SuperQode is a harness engineering framework for coding agents, optimized for local and open models. It gives developers one repeatable contract for model choice, runtime backend, tool access, sandbox policy, approvals, session history, event capture, and output handling.
 
 Use this section to understand the pieces that make a SuperQode run predictable across local models, hosted providers, ACP agents, and optional runtime SDKs.
 
@@ -95,7 +95,7 @@ The harness is the product contract. Runtimes and providers are interchangeable 
 | Mode | Best for | Typical command |
 | --- | --- | --- |
 | ACP | External coding agents that own their own model and tool loop | `:connect acp opencode` |
-| BYOK | Hosted providers using your API keys | `:connect byok openai gpt-4o-mini` |
+| BYOK | Hosted providers using your API keys | `:connect byok openai <openai-model>` |
 | Local | Ollama, LM Studio, MLX, vLLM, SGLang, DS4, and other local servers | `:connect local ollama qwen3:8b` |
 
 See [Connection Modes](modes.md) for setup details.

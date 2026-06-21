@@ -361,8 +361,8 @@ concurrently, so this is safe to fan out - and because SuperQode is multi-runtim
 you can mix providers in one comparison.
 
 ```text
-:compare openai/gpt-4o anthropic/claude-3-5-sonnet
-:compare gpt-4o o3            # bare model names use the connected provider
+:compare openai/<openai-model> anthropic/<anthropic-balanced-model>
+:compare <openai-model> <openai-fast-model>     # bare model names use the connected provider
 ```
 
 ## Command Sandbox

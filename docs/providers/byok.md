@@ -2,6 +2,11 @@
 
 Bring Your Own Key (BYOK) mode connects to cloud AI providers using your API keys.
 
+!!! note "Model names are examples"
+    Model identifiers in this guide, such as `<anthropic-model>` or `<openai-model>`, are
+    examples and change as providers release new models. Run `superqode providers list`
+    to see configured providers, then pick the latest model your provider offers.
+
 ---
 
 ## Overview
@@ -25,7 +30,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 superqode providers test anthropic
 
 # 3. Connect
-superqode connect byok anthropic claude-opus-4-6
+superqode connect byok anthropic <anthropic-model>
 ```
 
 ---
@@ -40,15 +45,14 @@ Full optimization and testing:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-superqode connect byok anthropic claude-sonnet-4
+superqode connect byok anthropic <anthropic-balanced-model>
 ```
 
 | Model | Best For |
 |-------|----------|
-| `claude-opus-4-6` | Complex analysis (latest/new) |
-| `claude-sonnet-4-5` | Balanced performance |
-| `claude-sonnet-4` | General use |
-| `claude-haiku-4-5` | Fast, cost-effective |
+| `<anthropic-model>` | Most capable, complex analysis |
+| `<anthropic-balanced-model>` | Balanced performance |
+| `<anthropic-fast-model>` | Fast, cost-effective |
 
 **Documentation**: [docs.anthropic.com](https://docs.anthropic.com)
 
@@ -56,15 +60,13 @@ superqode connect byok anthropic claude-sonnet-4
 
 ```bash
 export OPENAI_API_KEY=sk-...
-superqode connect byok openai gpt-4o-mini
+superqode connect byok openai <openai-model>
 ```
 
 | Model | Best For |
 |-------|----------|
-| `gpt-4o` | General use |
-| `gpt-4o-mini` | Cost-effective |
-| `o1` | Complex reasoning |
-| `o1-mini` | Fast reasoning |
+| `<openai-model>` | Most capable, complex reasoning |
+| `<openai-fast-model>` | Faster, cost-effective |
 
 **Documentation**: [platform.openai.com](https://platform.openai.com)
 
@@ -124,7 +126,7 @@ Access multiple models through a single API:
 
 ```bash
 export OPENROUTER_API_KEY=sk-or-...
-superqode connect byok openrouter anthropic/claude-sonnet-4
+superqode connect byok openrouter anthropic/<anthropic-balanced-model>
 ```
 
 - **95+ models** from various providers
@@ -222,19 +224,15 @@ providers:
   anthropic:
     api_key_env: ANTHROPIC_API_KEY
     recommended_models:
-      - claude-opus-4-5
-      - claude-opus-4-6
-      - claude-sonnet-4-5
-      - claude-sonnet-4
-      - claude-haiku-4-5
+      - <anthropic-model>
+      - <anthropic-balanced-model>
+      - <anthropic-fast-model>
 
   openai:
     api_key_env: OPENAI_API_KEY
     recommended_models:
-      - gpt-4o
-      - gpt-4o-mini
-      - o1
-      - o1-mini
+      - <openai-model>
+      - <openai-fast-model>
 
   deepseek:
     api_key_env: DEEPSEEK_API_KEY
@@ -275,7 +273,7 @@ After each task, you'll see:
 ```text
 Cost Summary:
   Provider: anthropic
-  Model: claude-sonnet-4
+  Model: <anthropic-balanced-model>
   Input tokens: 15,234
   Output tokens: 2,456
   Estimated cost: $0.12

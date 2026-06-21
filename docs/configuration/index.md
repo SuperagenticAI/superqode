@@ -96,13 +96,13 @@ superqode:
 default:
   mode: byok
   provider: openai
-  model: gpt-4o-mini
+  model: <openai-model>
 
 providers:
   openai:
     api_key_env: OPENAI_API_KEY
     recommended_models:
-      - gpt-4o-mini
+      - <openai-model>
 ```
 
 For ACP:

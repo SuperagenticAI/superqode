@@ -129,7 +129,7 @@ Share artifacts use the `superqode-share-v1` envelope format:
   "source_id": "abc123",
   "metadata": {
     "provider": "anthropic",
-    "model": "claude-sonnet-4",
+    "model": "<anthropic-balanced-model>",
     "turn_count": 12
   },
   "turns": [...]

@@ -23,7 +23,7 @@ Direct examples:
 
 ```text
 :connect acp opencode
-:connect byok openai gpt-4o-mini
+:connect byok openai <openai-model>
 :connect local ollama qwen3:8b
 :connect codex
 :connect claude
@@ -33,7 +33,7 @@ CLI equivalents:
 
 ```bash
 superqode connect acp opencode
-superqode connect byok openai gpt-4o-mini
+superqode connect byok openai <openai-model>
 superqode connect local ollama qwen3:8b
 superqode --runtime codex-sdk --print "review this repo"
 ```
@@ -101,7 +101,7 @@ export GOOGLE_API_KEY=your-key
 Connect:
 
 ```text
-:connect byok openai gpt-4o-mini
+:connect byok openai <openai-model>
 ```
 
 Check setup:
@@ -118,14 +118,14 @@ Example config:
 default:
   mode: byok
   provider: openai
-  model: gpt-4o-mini
+  model: <openai-model>
 
 providers:
   openai:
     api_key_env: OPENAI_API_KEY
     recommended_models:
-      - gpt-4o-mini
-      - gpt-4o
+      - <openai-model>
+      - <openai-fast-model>
 ```
 
 ---
@@ -186,7 +186,7 @@ Examples:
 
 | Choice | Meaning |
 | --- | --- |
-| `:connect byok openai gpt-4o-mini` | Use a hosted OpenAI model through SuperQode's provider path |
+| `:connect byok openai <openai-model>` | Use a hosted OpenAI model through SuperQode's provider path |
 | `:connect local ollama qwen3:8b` | Use a local Ollama model |
 | `:connect acp opencode` | Use an ACP coding agent |
 | `:runtime pydanticai` | Switch the runtime backend for compatible harness runs |

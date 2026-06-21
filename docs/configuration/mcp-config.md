@@ -374,17 +374,20 @@ mcp_servers:
 
 **Solution**:
 
-1. Verify server is enabled:
+1. Verify the project configuration is valid:
    ```bash
-   superqode providers mcp list
+   superqode config validate
    ```
 
-2. Check server connection:
+2. Start SuperQode or the harness MCP server and watch startup output for MCP
+   connection errors:
    ```bash
-   superqode providers mcp test filesystem
+   superqode
+   superqode mcp --dir ./harnesses
    ```
 
-3. Verify MCP server connection:
+3. Verify the configured MCP server command works outside SuperQode. For stdio
+   servers, run the configured command directly and check that it starts.
 
 ---
 
@@ -437,7 +440,8 @@ mcp_servers:
 Verify servers work before using:
 
 ```bash
-superqode providers mcp test filesystem
+superqode config validate
+superqode mcp --dir ./harnesses
 ```
 
 ---

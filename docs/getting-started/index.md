@@ -1,6 +1,6 @@
 # Getting Started
 
-SuperQode is your portable coding agent harness. It gives developers a TUI and CLI for running coding agents with explicit model choice, tool access, sandbox policy, approvals, sessions, events, and repeatable HarnessSpec files.
+SuperQode is a harness engineering framework for coding agents, optimized for local and open models. It gives developers a TUI and CLI for building, measuring, and running a coding harness they own, with explicit model choice, tool access, sandbox policy, approvals, sessions, events, and repeatable HarnessSpec files.
 
 This guide gets you from install to a useful first run.
 
@@ -123,7 +123,7 @@ Connect a model or agent:
 Direct examples:
 
 ```text
-:connect byok openai gpt-4o-mini
+:connect byok openai <openai-model>
 :connect local ollama qwen3:8b
 :connect acp opencode
 ```

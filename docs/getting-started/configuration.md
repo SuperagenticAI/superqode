@@ -38,14 +38,14 @@ superqode:
 default:
   mode: byok
   provider: openai
-  model: gpt-4o-mini
+  model: <openai-model>
 
 providers:
   openai:
     api_key_env: OPENAI_API_KEY
     recommended_models:
-      - gpt-4o-mini
-      - gpt-4o
+      - <openai-model>
+      - <openai-fast-model>
 ```
 
 For a local model:
@@ -141,7 +141,7 @@ providers:
   anthropic:
     api_key_env: ANTHROPIC_API_KEY
     recommended_models:
-      - claude-sonnet-4
+      - <anthropic-model>
 
   google:
     api_key_env: GOOGLE_API_KEY

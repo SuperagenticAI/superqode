@@ -37,9 +37,12 @@ Direct shortcuts:
 - `:connect codex` - connect Codex SDK directly
 - `:connect claude` - connect Claude Agent SDK directly
 - `:connect antigravity` - show agy handoff
-- `:connect byok [provider[/model]]` - connect to cloud provider
-- `:connect local [provider[/model]]` - connect to local provider
-- `:connect acp [agent]` - connect to ACP agent
+- `:connect byok` - open the cloud provider picker
+- `:connect byok <provider>/<model>` - connect to a cloud model directly
+- `:connect local` - open the local provider picker
+- `:connect local <provider>/<model>` - connect to a local model directly
+- `:connect acp` - open the ACP agent picker
+- `:connect acp <agent>` - connect to an ACP agent directly
 
 Special syntax: `:connect byok -` (previous), `:connect byok !` (history), `:connect byok last` (reconnect).
 
@@ -56,7 +59,7 @@ Use `superqode connect` subcommands:
 
 ```bash
 superqode connect acp opencode
-superqode connect byok anthropic claude-sonnet-4
+superqode connect byok anthropic <anthropic-model>
 superqode connect local ollama qwen3:8b
 superqode connect setup deepseek --json
 ```

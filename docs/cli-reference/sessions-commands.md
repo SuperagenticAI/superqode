@@ -22,8 +22,8 @@ superqode sessions list [OPTIONS]
 
 ```text
 ID         Provider    Model               Turns  Created
-abc123     anthropic   claude-sonnet-4      12    2026-06-01T10:00:00
-def456     openai      gpt-4o               8    2026-06-02T14:30:00
+abc123     anthropic   <anthropic-balanced-model>    12    2026-06-01T10:00:00
+def456     openai      <openai-model>              8    2026-06-02T14:30:00
 ```
 
 ---

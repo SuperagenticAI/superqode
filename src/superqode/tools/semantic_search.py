@@ -55,6 +55,16 @@ _INSTALL_HINT = (
 )
 
 
+def is_available() -> bool:
+    """Backward-compatible alias for Airplane Mode readiness checks."""
+    return is_semantic_search_available()
+
+
+def install_hint() -> str:
+    """Return the install hint for optional semantic search support."""
+    return _INSTALL_HINT
+
+
 class SemanticSearchTool(Tool):
     """Meaning-based code search backed by cocoindex-code's vector index."""
 

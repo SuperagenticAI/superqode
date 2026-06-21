@@ -48,7 +48,7 @@ from superqode.agent import AgentConfig
 
 config = AgentConfig(
     provider="openai",
-    model="gpt-4o",
+    model="<openai-model>",
     enable_session_storage=True,
     session_storage_dir=".superqode/sessions",
 )
@@ -69,8 +69,8 @@ Shows recent sessions with metadata:
 ```text
 Recent Sessions:
 --------------------------------------------------
-1. abc12345 | gpt-4o | 2026-05-11 10:00 | 5 msgs
-2. def67890 | claude-3 | 2026-05-10 15:30 | 12 msgs
+1. abc12345 | <openai-model> | 2026-05-11 10:00 | 5 msgs
+2. def67890 | <anthropic-balanced-model> | 2026-05-10 15:30 | 12 msgs
 --------------------------------------------------
 Use /resume <id> to continue a session
 ```
@@ -203,7 +203,7 @@ manager = SessionManager(storage_dir=".superqode/sessions")
 # Start new session
 session_id = manager.start_session(
     provider="openai",
-    model="gpt-4o",
+    model="<openai-model>",
 )
 
 # Add messages
@@ -233,7 +233,7 @@ Each session includes metadata:
   "created_at": "2026-05-11T10:00:00",
   "updated_at": "2026-05-11T10:05:00",
   "provider": "openai",
-  "model": "gpt-4o",
+  "model": "<openai-model>",
   "message_count": 15,
   "total_tokens": 4500
 }
@@ -249,7 +249,7 @@ Session storage integrates with Pure Mode for minimal harness testing:
 from superqode.pure_mode import PureMode
 
 pm = PureMode()
-pm.connect(provider="openai", model="gpt-4o")
+pm.connect(provider="openai", model="<openai-model>")
 
 # Sessions are auto-enabled
 print(pm.get_current_session_id())

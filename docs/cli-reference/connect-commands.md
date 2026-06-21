@@ -9,8 +9,8 @@ Commands and global flags for connecting to a provider, agent, or runtime.
 SuperQode provides two ways to connect:
 
 - **`--connect` / `-C` global flag** -- set the connection profile on startup.
-- **`superqode connect` command group** -- interactive connect, setup guides, and
-  agent connections.
+- **`superqode connect` command group** -- explicit CLI connect commands,
+  setup guides, and agent connections.
 
 ---
 
@@ -32,7 +32,7 @@ superqode -C PROFILE [COMMAND]
 | `antigravity` | Handoff to the `agy` CLI for Antigravity cloud-managed sessions. |
 | `byok` | Bring Your Own Key. Connect to a cloud provider with your own API key. |
 | `local` | Connect to a local or self-hosted provider (Ollama, MLX, LM Studio, etc.). |
-| `acp` | Connect to an ACP (Agent Client Protocol) coding agent. Opens an interactive agent picker. |
+| `acp` | Connect to an ACP (Agent Client Protocol) coding agent. |
 
 ### Self-Contained Profiles
 
@@ -46,7 +46,7 @@ runtime, so the `runtime` setting is automatically selected:
 
 ```bash
 # Start the TUI connected to Anthropic
-superqode --connect byok anthropic claude-sonnet-4
+superqode --connect byok anthropic <anthropic-model>
 
 # Run a headless task via Codex
 superqode --connect codex -p "explain this project"
@@ -96,19 +96,20 @@ provider selection, sandbox provisioning, and session persistence in the cloud.
 ### byok
 
 Bring Your Own Key. Connect to any supported cloud provider using your own API
-key. Provider and model arguments are optional; when omitted, interactive
-pickers open.
+key. The CLI command requires a provider and model. The TUI `:connect byok`
+command can open interactive pickers.
 
 ### local
 
 Connect to a local or self-hosted provider (Ollama, MLX, LM Studio, vLLM, DS4,
-etc.). Provider and model arguments are optional; interactive pickers open when
-omitted.
+etc.). The CLI command requires a provider and model. The TUI `:connect local`
+command can open interactive pickers.
 
 ### acp
 
-Connect to any ACP-compatible coding agent installed on your system. Opens an
-interactive agent picker when no agent name is given.
+Connect to any ACP-compatible coding agent installed on your system. The CLI
+command requires an agent name. The TUI `:connect acp` command can open an
+interactive picker.
 
 ---
 
@@ -173,34 +174,33 @@ experience, run `superqode` and use `:connect acp <agent>` inside the TUI.
 ## connect byok
 
 Connect to a cloud provider using your own API key. Provider and model are
-optional; missing arguments open interactive pickers.
+required in the CLI command. Use the TUI `:connect byok` picker when you want
+interactive provider and model selection.
 
 ```bash
-superqode connect byok [PROVIDER] [MODEL]
+superqode connect byok PROVIDER MODEL
 ```
 
 ### Arguments
 
 | Argument | Description |
 |----------|-------------|
-| `PROVIDER` | Provider ID (e.g., `anthropic`, `openai`, `google`). Opens picker if omitted. |
-| `MODEL` | Model ID (e.g., `claude-sonnet-4`, `gpt-4o`). Opens picker if omitted. |
+| `PROVIDER` | Provider ID, for example `anthropic`, `openai`, or `google` |
+| `MODEL` | Model ID, for example `<anthropic-balanced-model>` or `<openai-model>` |
 
 ### Examples
 
 ```bash
 # Full inline specification
-superqode connect byok anthropic claude-sonnet-4
+superqode connect byok anthropic <anthropic-model>
 
 # Hugging Face Inference Provider route
 superqode connect byok huggingface zai-org/GLM-5.2:fireworks-ai
 superqode connect byok hf.zai-org/GLM-5.2:together
 
-# Provider only; picker for model
-superqode connect byok anthropic
-
-# Both missing; pickers for provider and model
-superqode connect byok
+# For interactive selection, use the TUI
+superqode
+# then type: :connect byok
 ```
 
 For Hugging Face Inference Providers, `hf.<repo>:<provider>`,
@@ -213,19 +213,20 @@ normalize to the `huggingface` provider. GLM-5.2 aliases include `glm52`,
 
 ## connect local
 
-Connect to a local or self-hosted provider. Provider and model are optional;
-missing arguments open interactive pickers.
+Connect to a local or self-hosted provider. The CLI command requires both
+provider and model. Use the TUI `:connect local` picker when you want
+interactive provider and model selection.
 
 ```bash
-superqode connect local [PROVIDER] [MODEL]
+superqode connect local PROVIDER MODEL
 ```
 
 ### Arguments
 
 | Argument | Description |
 |----------|-------------|
-| `PROVIDER` | Local provider ID (e.g., `ollama`, `lmstudio`, `mlx`, `ds4`). Opens picker if omitted. |
-| `MODEL` | Model ID. Opens picker if omitted. |
+| `PROVIDER` | Local provider ID, for example `ollama`, `lmstudio`, `mlx`, or `ds4` |
+| `MODEL` | Model ID |
 
 ### Examples
 
@@ -233,11 +234,9 @@ superqode connect local [PROVIDER] [MODEL]
 # Full inline specification
 superqode connect local ollama qwen3:8b
 
-# Provider only; picker for model
-superqode connect local ollama
-
-# Both missing; pickers for provider and model
-superqode connect local
+# For interactive selection, use the TUI
+superqode
+# then type: :connect local
 ```
 
 ---
@@ -291,9 +290,9 @@ Base URL: https://api.anthropic.com
 Documentation: https://docs.anthropic.com/
 
 Example Models:
-  - claude-opus-4-5
-  - claude-sonnet-4-5
-  - claude-haiku-4-5
+  - <anthropic-model>
+  - <anthropic-balanced-model>
+  - <anthropic-fast-model>
 
 Connect Command:
   superqode connect byok anthropic <model>

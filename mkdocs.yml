@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
-site_description: "Coding harness framework optimized for Open Models. Own the harness around local models, closed models, local endpoints, and remote runtimes."
+site_description: "A harness engineering framework for coding agents, optimized for local and open models. Build, measure, extend, and optimize a coding harness you own, across local endpoints, closed models, and remote runtimes."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode
@@ -25,24 +25,11 @@ theme:
     text: Inter
     code: JetBrains Mono
 
+  # Single dark-black scheme. Brand colors live in stylesheets/extra.css.
   palette:
-    # Light mode
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-
-    # Dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
+    scheme: slate
+    primary: custom
+    accent: custom
 
   features:
     - navigation.instant
@@ -143,21 +130,14 @@ extra_css:
 nav:
   - 🏠 Home: index.md
 
-  - 🚀 Getting Started:
+  - 🚀 Start Here:
     - getting-started/index.md
     - 📦 Installation: getting-started/installation.md
     - ⚡ Quick Start: getting-started/quickstart.md
-    - 🧰 Developer Workflows: developer-workflows.md
-    - 🧪 Harness Examples: examples.md
     - 🎯 Your First Session: getting-started/first-session.md
-    - ⚓ Bring Your Own Harness: getting-started/bring-your-own-harness.md
+    - ⚓ Your First Harness: getting-started/bring-your-own-harness.md
     - ⚙️ Configuration: getting-started/configuration.md
     - 🧭 Troubleshooting: getting-started/troubleshooting.md
-
-  - 🖥️ Local Agentic Coding:
-    - local-agentic-coding.md
-    - ✈️ Airplane Mode: advanced/airplane-mode.md
-    - 🔁 Recursive Dynamic Coding: local-recursive-dynamic-coding.md
 
   - 📚 Concepts:
     - concepts/index.md
@@ -165,78 +145,99 @@ nav:
     - 🧬 Configuration vs Harness: concepts/configuration-vs-harness.md
     - 🔐 Authentication: concepts/authentication.md
 
+  - ⚓ Harness Engineering:
+    - 🧭 What Is Harness Engineering: harness-engineering.md
+    - 🏗️ Harness System: advanced/harness-system.md
+    - 🧪 Harness Examples: examples.md
+    - 📈 Run, Measure, Optimize: advanced/harness-optimization.md
+    - 📊 Optimization Story: advanced/optimization.md
+    - 🧠 Skill Optimization: advanced/skill-optimization.md
+    - 📐 Benchmark Runner: advanced/benchmark-runner.md
+    - 🔁 Omnigent Compatibility: advanced/omnigent-compat.md
 
-  - ⚙️ Configuration:
-    - configuration/index.md
-    - 📄 superqode.yaml Reference: configuration/yaml-reference.md
-    - 🔧 MCP Configuration: configuration/mcp-config.md
-    - 🌱 Environment Variables: configuration/environment-variables.md
+  - 🖥️ Local & Open Models:
+    - local-agentic-coding.md
+    - 💻 Local Models: providers/local.md
+    - 🩺 Local Stack Doctor: advanced/local-stack.md
+    - 🪟 Local Context & Compaction: advanced/local-context.md
+    - 🔎 Semantic Code Search: advanced/semantic-search.md
+    - 🔁 Recursive Dynamic Coding: local-recursive-dynamic-coding.md
+    - ✈️ Airplane Mode: advanced/airplane-mode.md
 
-  - 🔌 Providers:
+  - 🔌 Models & Providers:
     - providers/index.md
     - 🔑 BYOK Providers: providers/byok.md
     - 🤖 ACP Agents: providers/acp.md
     - 🔁 A2A Providers: providers/a2a.md
-    - 💻 Local Models: providers/local.md
     - 🌐 OpenResponses: providers/openresponses.md
     - 🎛️ Model Profiles: providers/profiles.md
+    - 🗂️ Model Catalog: advanced/model-catalog.md
+    - 🔗 Connection Profiles: advanced/connection-profiles.md
 
   - 🔬 Advanced:
     - advanced/index.md
-    - 🔁 Inside the Agent Loop: advanced/agent-loop.md
-    - 🧰 Tools Catalog: advanced/tools-catalog.md
-    - 🔎 Semantic Code Search: advanced/semantic-search.md
-    - 🔁 Recursive Agent Harness: advanced/recursive-agent-harness.md
-    - 🛡️ Policies & Safety: advanced/policies.md
-    - 🤝 Multi-Agent Workflows: advanced/multi-agent.md
-    - 🤖 Headless & CI: advanced/headless-ci.md
-    - 🩺 Local Stack Doctor: advanced/local-stack.md
-    - 📱 Chat Channels Remote Control: advanced/channels.md
-    - 🪟 Local Context & Compaction: advanced/local-context.md
-    - 🔍 Multi-Repo Search & Edit Safety: advanced/multi-repo-search.md
-    - 🔒 Safety & Permissions: advanced/safety-permissions.md
-    - 🧠 Memory & Learning: advanced/memory.md
-    - 🔧 Tools System: advanced/tools-system.md
-    - 🐍 Monty Python REPL: advanced/monty-python-repl.md
-    - ⚓ Harness System: advanced/harness-system.md
-    - 📈 Optimization Story: advanced/optimization.md
-    - 📈 Run, Measure, Optimize: advanced/harness-optimization.md
-    - 🧪 Skill Optimization: advanced/skill-optimization.md
-    - 🔁 Omnigent Compatibility: advanced/omnigent-compat.md
-    - 🏭 Software Factory: advanced/software-factory.md
-    - 🔌 Runtime Backends: runtimes.md
-    - 📋 Session Management: advanced/session-management.md
+    - 🔁 Engine & Runtimes:
+      - ⚙️ Inside the Agent Loop: advanced/agent-loop.md
+      - 🔌 Runtime Backends: runtimes.md
+      - 🐍 Python Runtimes API: advanced/python-runtimes.md
+    - 🧰 Tools & Search:
+      - 🧰 Tools Catalog: advanced/tools-catalog.md
+      - 🔧 Tools System: advanced/tools-system.md
+      - 🔍 Multi-Repo Search & Edit Safety: advanced/multi-repo-search.md
+      - 🏗️ Workspace System: advanced/workspace-system.md
+      - 📝 LSP Integration: advanced/lsp-integration.md
+      - 🐍 Monty Python REPL: advanced/monty-python-repl.md
+    - 🤝 Workflows & Automation:
+      - 🧰 Developer Workflows: developer-workflows.md
+      - 🤝 Multi-Agent Workflows: advanced/multi-agent.md
+      - 🔁 Recursive Agent Harness: advanced/recursive-agent-harness.md
+      - 🤖 Headless & CI: advanced/headless-ci.md
+      - 🏭 Software Factory: advanced/software-factory.md
+      - 📱 Chat Channels Remote Control: advanced/channels.md
+    - 🛡️ Safety & Memory:
+      - 🛡️ Policies & Safety: advanced/policies.md
+      - 🔒 Safety & Permissions: advanced/safety-permissions.md
+      - 🧠 Memory & Learning: advanced/memory.md
+      - 📜 Logging System: advanced/logging-system.md
+      - 🧩 Plugin Authoring: advanced/plugin-authoring.md
+    - 📋 Sessions:
+      - 📋 Session Management: advanced/session-management.md
+      - 📤 Session Sharing: advanced/session-sharing.md
+    - 🔧 MCP:
+      - 🔧 MCP Configuration: configuration/mcp-config.md
+      - 🔐 MCP OAuth: advanced/mcp-oauth.md
     - 🧭 TUI Reference: advanced/tui.md
-    - 🏗️ Workspace System: advanced/workspace-system.md
-    - 📝 LSP Integration: advanced/lsp-integration.md
-    - 📜 Logging System: advanced/logging-system.md
-    - 🗂️ Model Catalog: advanced/model-catalog.md
-    - 🔗 Connection Profiles: advanced/connection-profiles.md
-    - 🧩 Plugin Authoring: advanced/plugin-authoring.md
-    - 🔐 MCP OAuth: advanced/mcp-oauth.md
-    - 📊 Benchmark Runner: advanced/benchmark-runner.md
-    - 🐍 Python Runtimes API: advanced/python-runtimes.md
-    - 📤 Session Sharing: advanced/session-sharing.md
-    - 💻 CLI Reference:
-      - cli-reference/index.md
-      - ⚙️ Config: cli-reference/config-commands.md
-      - 🎬 Init: cli-reference/init-commands.md
-      - 🔌 Providers: cli-reference/provider-commands.md
-      - 📦 Models: cli-reference/models-commands.md
-      - 🤖 Agents: cli-reference/agents-commands.md
-      - 🔗 Connect: cli-reference/connect-commands.md
-      - 🔐 Auth: cli-reference/auth-commands.md
-      - 🛡️ Trust: cli-reference/trust-commands.md
-      - ⏱️ Sessions: cli-reference/sessions-commands.md
-      - 🏭 Factory: cli-reference/factory-commands.md
-      - 📤 Share: cli-reference/share-commands.md
-      - 🧠 Memory: cli-reference/memory-commands.md
-      - 🔌 Plugins: cli-reference/plugins-commands.md
-      - ⚓ Harness: cli-reference/harness-commands.md
-      - 💻 Local: cli-reference/local-commands.md
-      - ⚡ Runtime: cli-reference/runtime-commands.md
-      - 🏖️ Sandbox: cli-reference/sandbox-commands.md
-      - 📊 Benchmark: cli-reference/benchmark-commands.md
-      - 🎛️ Profiles/Tools: cli-reference/profiles-commands.md
-      - 🚀 Serve: cli-reference/serve-commands.md
-      - 🩺 Doctor: cli-reference/doctor-command.md
+
+  - ⚙️ Configuration:
+    - configuration/index.md
+    - 📄 superqode.yaml Reference: configuration/yaml-reference.md
+    - 🌱 Environment Variables: configuration/environment-variables.md
+
+  - 💻 CLI Reference:
+    - cli-reference/index.md
+    - ⚙️ Config: cli-reference/config-commands.md
+    - 🎬 Init: cli-reference/init-commands.md
+    - 🔌 Providers: cli-reference/provider-commands.md
+    - 📦 Models: cli-reference/models-commands.md
+    - 🤖 Agents: cli-reference/agents-commands.md
+    - 🔗 Connect: cli-reference/connect-commands.md
+    - 🔐 Auth: cli-reference/auth-commands.md
+    - 🛡️ Trust: cli-reference/trust-commands.md
+    - ⏱️ Sessions: cli-reference/sessions-commands.md
+    - 🏭 Factory: cli-reference/factory-commands.md
+    - 📤 Share: cli-reference/share-commands.md
+    - 🧠 Memory: cli-reference/memory-commands.md
+    - 🧠 Skills: cli-reference/skills-commands.md
+    - 🧪 SkillOpt: cli-reference/skillopt-commands.md
+    - 🧰 Tools: cli-reference/tools-commands.md
+    - 📱 Daemon: cli-reference/daemon-command.md
+    - 🔧 MCP: cli-reference/mcp-command.md
+    - 🔌 Plugins: cli-reference/plugins-commands.md
+    - ⚓ Harness: cli-reference/harness-commands.md
+    - 💻 Local: cli-reference/local-commands.md
+    - ⚡ Runtime: cli-reference/runtime-commands.md
+    - 🏖️ Sandbox: cli-reference/sandbox-commands.md
+    - 📊 Benchmark: cli-reference/benchmark-commands.md
+    - 🎛️ Profiles/Tools: cli-reference/profiles-commands.md
+    - 🚀 Serve: cli-reference/serve-commands.md
+    - 🩺 Doctor: cli-reference/doctor-command.md

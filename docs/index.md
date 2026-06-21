@@ -11,9 +11,9 @@ hide:
 
 # SuperQode
 
-<p class="sq-kicker">Coding Harness Framework Optimized for Open Models</p>
+<p class="sq-kicker">The harness engineering framework for coding agents, optimized for local and open models</p>
 
-<p class="sq-tagline">Model independence is not enough if the harness is fixed. SuperQode gives teams a coding harness they can own in the repo, optimized for Open Models and portable across closed models, local endpoints, and remote runtimes.</p>
+<p class="sq-tagline">Build your own coding harness. Measure it. Extend it. Optimize it. Use any model, open or closed, small or large, local or remote, without giving up control of the agent loop.</p>
 
 <p class="sq-badges">
   <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/v/superqode?style=flat-square&color=7c3aed" alt="PyPI version"></a>
@@ -22,13 +22,11 @@ hide:
   <a href="https://github.com/SuperagenticAI/superqode"><img src="https://img.shields.io/github/stars/SuperagenticAI/superqode?style=flat-square&color=64748b" alt="GitHub stars"></a>
 </p>
 
-[Harness Guide](getting-started/bring-your-own-harness.md){ .md-button .md-button--primary }
-[Optimization Guide](advanced/optimization.md){ .md-button }
-[View on GitHub](https://github.com/SuperagenticAI/superqode){ .md-button }
+[Build Your First Harness](getting-started/bring-your-own-harness.md){ .md-button .md-button--primary }
+[Optimize Local Models](local-agentic-coding.md){ .md-button }
+[Read Harness Engineering](harness-engineering.md){ .md-button }
 
 </div>
-
-<img src="assets/super-qode-header.png" alt="SuperQode: any provider, any model, any runtime, any protocol" class="sq-banner" />
 
 ---
 
@@ -40,19 +38,76 @@ cd your-project
 superqode
 ```
 
-That is the full interactive TUI. For scripts and CI, run one task and print the answer:
+That launches the interactive TUI. Connect a model, then start working:
+
+```text
+:connect local ollama <open-model>      # a local server you run
+:connect byok <provider> <model>        # a hosted provider with an API key
+:connect acp <agent>                    # an installed ACP coding agent
+```
+
+Prefer scripts and CI? See the headless examples below.
+
+For local and Open Model work, generate a starter harness that belongs to your
+repo:
 
 ```bash
-superqode --print "inspect this repository and suggest the smallest safe cleanup"
+superqode local init --repo .
+superqode --harness superqode.local.yaml
 ```
+
+Use `local init` for the fastest owned-harness path. Use `local build` when you
+want the guided builder for a specific model, endpoint, or model pack.
 
 ---
 
 ## Overview
 
-SuperQode is a coding harness framework optimized for Open Models. It turns the harness around a coding agent into a repository artifact: model routing, tools, memory, context, search, approvals, sandboxing, workflows, evals, and optimization.
+SuperQode is a harness engineering framework for coding agents, optimized for local and open models. It turns the harness around a coding agent into a repository artifact: model routing, tools, memory, context, search, approvals, sandboxing, workflows, evals, and optimization.
 
-Most coding products ship a finished agent loop. SuperQode gives teams the framework to define that loop, run it local first, and connect any model route without giving up the harness.
+Most coding products ship a finished agent loop. SuperQode gives teams the framework to define that loop, run it local first, and connect any model route without giving up the harness. Harness engineering is the practice. Harness independence is the outcome.
+
+---
+
+## Build. Measure. Extend. Optimize.
+
+Harness engineering is the discipline after prompt engineering and context engineering: design the system around the model so it works reliably. SuperQode gives you four moves on a harness you own.
+
+<div class="grid cards" markdown>
+
+-   :octicons-tools-16:{ .lg .middle } **Build**
+
+    ---
+
+    Author a harness as a versioned `harness.yaml`. Use the wizard, start from a model-family template, and read what it does in plain English with `harness explain`.
+
+    [:octicons-arrow-right-24: Bring Your Own Harness](getting-started/bring-your-own-harness.md)
+
+-   :octicons-graph-16:{ .lg .middle } **Measure**
+
+    ---
+
+    Prove behavior before you trust it: eval scorecards, agentic benchmarks, and regression gates that fail a candidate which breaks a task the baseline solved.
+
+    [:octicons-arrow-right-24: Run, Measure, Optimize](advanced/harness-optimization.md)
+
+-   :octicons-plug-16:{ .lg .middle } **Extend**
+
+    ---
+
+    Run the same contract across runtimes, providers, MCP, ACP, and A2A. Swap models, memory, search, or tools without rewriting the workflow.
+
+    [:octicons-arrow-right-24: Runtime Backends](runtimes.md)
+
+-   :octicons-rocket-16:{ .lg .middle } **Optimize**
+
+    ---
+
+    Improve model routes, harnesses, and skills with staged candidates a human adopts, so a failure gets fixed once instead of retried.
+
+    [:octicons-arrow-right-24: Optimization Story](advanced/optimization.md)
+
+</div>
 
 ---
 

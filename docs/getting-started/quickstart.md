@@ -83,16 +83,18 @@ Useful TUI commands after connecting:
 | `:rewind` | Rewind the conversation to an earlier message |
 | `:help` | Show available commands |
 
-For local models, the fastest TUI path to a harness you own is:
+For local models, the fastest path to a harness you own is:
 
-```text
-:local build --repo . --model MiniMaxAI/MiniMax-M1 --pack minimax-m1
+```bash
+superqode local init --repo .
+superqode --harness superqode.local.yaml
 ```
 
-It plans prompt/skill migration, applies the selected model pack, writes a
-local harness, and prints the live smoke checks to run when your model server is
-ready. The pack is only the starting point; inspect the generated YAML and
-customize model policy, memory, tools, and approvals for your project.
+`local init` detects the machine, writes `superqode.local.yaml`, and runs a
+non-destructive smoke check when a local server is available. Use `:local build`
+or `superqode local build` when you already know the model, endpoint, or pack
+you want to target. The pack is only the starting point; inspect the generated
+YAML and customize model policy, memory, tools, and approvals for your project.
 
 You can also ask directly in natural language:
 

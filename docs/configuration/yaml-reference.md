@@ -36,7 +36,7 @@ superqode:
 default:
   mode: byok
   provider: openai
-  model: gpt-4o-mini
+  model: <openai-model>
 
 providers: {}
 agents: {}
@@ -136,7 +136,7 @@ The `default` section selects the default connection path for headless runs and 
 default:
   mode: byok
   provider: openai
-  model: gpt-4o-mini
+  model: <openai-model>
 ```
 
 ### Local
@@ -181,8 +181,8 @@ providers:
     description: OpenAI API
     base_url: https://api.openai.com/v1
     recommended_models:
-      - gpt-4o-mini
-      - gpt-4o
+      - <openai-model>
+      - <openai-fast-model>
     custom_models_allowed: true
 
   ollama:
@@ -233,7 +233,7 @@ Use `custom_models` when a short name should resolve to a provider/model pair:
 custom_models:
   fast-coder:
     provider: openai
-    model: gpt-4o-mini
+    model: <openai-model>
 ```
 
 Use `model_aliases` when a short name should expand before provider inference:
@@ -241,7 +241,7 @@ Use `model_aliases` when a short name should expand before provider inference:
 ```yaml
 model_aliases:
   local-fast: qwen3:8b
-  sonnet: claude-sonnet-4
+  sonnet: <anthropic-balanced-model>
   glm52: hf.zai-org/GLM-5.2:fireworks-ai
   glm52-hf-together: hf.zai-org/GLM-5.2:together
 ```
@@ -317,14 +317,14 @@ superqode:
 default:
   mode: byok
   provider: openai
-  model: gpt-4o-mini
+  model: <openai-model>
 
 providers:
   openai:
     api_key_env: OPENAI_API_KEY
     recommended_models:
-      - gpt-4o-mini
-      - gpt-4o
+      - <openai-model>
+      - <openai-fast-model>
 
   ollama:
     base_url: http://localhost:11434

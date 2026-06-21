@@ -424,7 +424,7 @@ The workflow engine lets a harness describe more than one prompt call without re
 
 Workflow steps inherit the top-level `--provider`, `--model`, and `--runtime`
 unless the matching `agents:` entry overrides them. Agent-level `model` may be a
-plain model id (`gpt-5.5`) or a provider-qualified id (`ollama/qwen3:4b`).
+plain model id (`<openai-model>`) or a provider-qualified id (`ollama/qwen3:4b`).
 Hugging Face Inference Provider routes may also use the shorthand
 `hf.zai-org/GLM-5.2:fireworks-ai`; SuperQode resolves that to provider
 `huggingface` and model `zai-org/GLM-5.2:fireworks-ai` for the step.
@@ -524,7 +524,7 @@ flavor: coding
 runtime:
   backend: builtin
 model_policy:
-  primary: gpt-4o-mini
+  primary: <openai-model>
   fallbacks:
     - gemma4-local
     - ds4-local

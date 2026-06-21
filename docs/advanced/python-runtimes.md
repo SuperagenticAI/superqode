@@ -71,7 +71,7 @@ Parameters: `prompt`, `model`, `cwd`, `provider`, `tools`, `system_prompt`, `req
 from superqode.runtime import create_runtime
 from superqode.agent.loop import AgentConfig
 
-config = AgentConfig(model="claude-sonnet-4-6", working_directory="myproject")
+config = AgentConfig(model="<anthropic-balanced-model>", working_directory="myproject")
 runtime = create_runtime("claude-agent-sdk", config=config)
 response = await runtime.run("Explain this codebase")
 runtime.close()

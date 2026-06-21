@@ -1,7 +1,7 @@
 [project]
 name = "superqode"
-version = "0.1.46"
-description = "SuperQode: coding harness framework optimized for Open Models"
+version = "0.1.48"
+description = "SuperQode: harness engineering framework for coding agents, optimized for local and open models"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12,<3.14"

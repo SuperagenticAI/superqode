@@ -2,6 +2,12 @@
 
 SuperQode supports multiple provider types for connecting to AI models and agents.
 
+!!! note "Model names are examples"
+    Model identifiers in these provider docs, such as `<anthropic-model>` or
+    `<openai-model>`, are examples and change as providers release new models. Run
+    `superqode providers list` to see configured providers, then pick the latest
+    model your provider offers.
+
 ---
 
 ## Provider Types
@@ -73,7 +79,7 @@ SuperQode supports three execution modes:
 export ANTHROPIC_API_KEY=sk-ant-...
 
 # Connect
-superqode connect byok anthropic claude-sonnet-4
+superqode connect byok anthropic <anthropic-model>
 ```
 
 ### ACP (Coding Agents)
@@ -107,9 +113,9 @@ Full support with optimized prompts (Enterprise adds prompt packs):
 
 | Provider | Models |
 |----------|--------|
-| Anthropic | Claude Opus 4.5, Sonnet 4, Haiku 4 |
-| OpenAI | GPT-4o, o1 |
-| Google | Gemini 2.5 Pro/Flash |
+| Anthropic | Claude Opus 4.8, Sonnet 4.6, Haiku 4.5 |
+| OpenAI | GPT-5.5, GPT-5.4 |
+| Google | Gemini 3.1 Pro/Flash |
 | Deepseek | Deepseek V3, R1 |
 | Mistral | Mistral Large |
 | xAI | Grok |
@@ -162,7 +168,7 @@ superqode providers list --configured
 superqode providers test anthropic
 
 # Test with specific model
-superqode providers test anthropic -m claude-sonnet-4
+superqode providers test anthropic -m <anthropic-model>
 ```
 
 ---
@@ -175,14 +181,14 @@ superqode providers test anthropic -m claude-sonnet-4
 default:
   mode: byok
   provider: anthropic
-  model: claude-sonnet-4
+  model: <anthropic-model>
 
 providers:
   anthropic:
     api_key_env: ANTHROPIC_API_KEY
     recommended_models:
-      - claude-opus-4-5
-      - claude-sonnet-4
+      - <anthropic-model>
+      - <anthropic-balanced-model>
 
   ollama:
     base_url: http://localhost:11434

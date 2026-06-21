@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.48] - 2026-06-22
+
+### Changed
+
+- **Release verification** - Audited documented CLI examples against the real command surface, clarified CLI versus TUI connect behavior, and replaced stale model examples with placeholders or current CLI-advertised examples.
+- **Airplane Mode readiness** - Restored compatibility aliases for optional semantic search checks so `superqode local airplane doctor` reports a clear optional-dependency warning instead of an internal import warning.
+- **Release metadata** - Bumped the package version and runtime `__version__` to `0.1.48`.
+
+## [0.1.47] - 2026-06-22
+
+### Changed
+
+- **Release positioning** - Updated README and docs positioning around SuperQode as a harness engineering framework for coding agents, optimized for local and open models.
+- **Documentation launch polish** - Reworked the docs homepage CTAs, hero copy, local-first quickstart path, and CLI reference coverage for daemon, MCP, skills, SkillOpt, and tools.
+- **Provider examples** - Replaced stale hosted-model identifiers in docs with provider/model placeholders and guidance to use current provider model listings.
+
+### Removed
+
+- **Stale marketing assets** - Removed unreferenced header/screenshot images and generated `.DS_Store` files from the release tree.
+
 ## [0.1.45] - 2026-06-18
 
 ### Added
