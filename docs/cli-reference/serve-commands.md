@@ -10,6 +10,7 @@ Expose SuperQode over the network: a browser-based TUI and an MCP server for you
 |---------|---------|--------------|
 | MCP | `superqode mcp` | Any MCP client (Claude Desktop, IDEs, other agents). Exposes your HarnessSpec workflows as `list_harnesses`, `describe_harness`, and `run_harness` tools. |
 | Harness MCP alias | `superqode serve harness --spec harness.yaml` | Same MCP server, shaped around one harness file or directory. |
+| Local Session API | `superqode serve api` | Browser/mobile companions and local tools that inspect or drive the switchboard and Software Factory graph. |
 | Web TUI | `superqode serve web` | A browser, for the full TUI without a terminal emulator. |
 | A2A | `create_a2a_server()` (Python API) | Other agents and orchestrators over the Agent-to-Agent protocol. See [A2A Providers](../providers/a2a.md). |
 
@@ -57,6 +58,45 @@ superqode serve harness --dir ./harnesses --http --port 8765
 ```
 
 `--spec` serves the containing directory so relative `inherits` paths keep working; use the file stem as the harness name.
+
+---
+
+## serve api
+
+Serve the local switchboard and Software Factory graph over JSON HTTP.
+
+```bash
+superqode serve api --port 8766
+superqode serve api --host 0.0.0.0 --allow-remote --token "$SUPERQODE_API_TOKEN"
+```
+
+Options:
+
+| Option | Description |
+|--------|-------------|
+| `--host` | Bind address (default: `127.0.0.1`) |
+| `--port` | Port number (default: `8766`) |
+| `--storage-dir` | Session storage directory (default: `.superqode/sessions`) |
+| `--allow-remote` | Allow binding outside localhost |
+| `--token` | Optional bearer token |
+
+Useful endpoints:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /health` | Health check |
+| `GET /sessions` | List graph sessions |
+| `GET /sessions/graph` | Session switchboard tree |
+| `GET /sessions/{id}/history` | Recent transcript messages |
+| `POST /sessions/{id}/switch` | Mark a session active |
+| `POST /sessions/{id}/handoff` | Create or deliver a handoff |
+| `GET /factory/routes` | List Software Factory routes |
+| `GET /sessions/{id}/factory` | Factory metadata for a session |
+| `POST /sessions/{id}/factory/model` | Record a model/provider switch |
+| `POST /sessions/{id}/factory/harness` | Record a harness switch |
+| `POST /sessions/{id}/factory/mode` | Set a route such as `no-subscription` |
+
+Remote serving should use `--token` and a trusted network.
 
 ---
 

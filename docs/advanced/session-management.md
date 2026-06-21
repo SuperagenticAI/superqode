@@ -9,6 +9,8 @@ SuperQode provides comprehensive session management with JSONL-based storage, au
 Session management in SuperQode includes:
 
 - **JSONL Storage**: Fast, append-only conversation history
+- **Durable Session Graph**: Parent sessions, child agents, forks, handoffs, approvals, and share trees
+- **Software Factory Metadata**: Model, provider, runtime, harness, and route lineage for portable work
 - **Auto-summarization**: Automatic context compression when tokens exceed limit
 - **Manual Compaction**: Use `/compact` command to compress context
 - **Large Output Handling**: Saves large responses to files automatically
@@ -88,6 +90,35 @@ Resumes a previous session and reconnects to the same provider and model.
 ```
 
 Manually compresses the conversation history to reduce token usage. Keeps recent messages and summarizes older ones.
+
+---
+
+## Switchboard And Factory
+
+SuperQode stores conversation messages in `.superqode/sessions/` and graph metadata in
+`.superqode/session_graph.json`.
+
+Use the switchboard when you want to move between sessions:
+
+```text
+:switchboard
+:sw switch <id>
+:sw handoff <source> --to <target> --goal "continue this work"
+:sw share-tree <id>
+```
+
+Use the Software Factory layer when you want to move work between models, providers, runtimes, or
+harnesses without losing the session graph:
+
+```text
+:factory mode no-subscription
+:factory switch-model ollama/qwen3-coder
+:factory switch-harness review
+:factory fork-model --model local/deepseek-coder --role coder
+:factory lineage
+```
+
+See [Software Factory](software-factory.md) for the full concept and command flow.
 
 ---
 

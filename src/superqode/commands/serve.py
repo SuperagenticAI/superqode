@@ -22,7 +22,7 @@ console = Console()
 @click.pass_context
 def serve(ctx: click.Context):
     """Server commands for IDE and web integration."""
-    if ctx.invoked_subcommand == "harness":
+    if ctx.invoked_subcommand in {"api", "harness"}:
         return
     if not require_enterprise("Server integrations"):
         raise SystemExit(1)
@@ -108,6 +108,28 @@ def serve_harness(
         f"[cyan]Serving harness MCP tools from {harness_dir or 'default harness directories'}[/cyan]"
     )
     run_server("http" if http else "stdio", host, port, str(harness_dir) if harness_dir else None)
+
+
+@serve.command("api")
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8766, show_default=True, type=int)
+@click.option("--storage-dir", default=".superqode/sessions", show_default=True)
+@click.option("--allow-remote", is_flag=True, help="Allow binding to non-loopback hosts")
+@click.option("--token", default=None, help="Optional bearer token for browser/mobile clients")
+def serve_api(host: str, port: int, storage_dir: str, allow_remote: bool, token: Optional[str]):
+    """Serve the local session switchboard API."""
+    from superqode.server.api import run_session_api
+
+    if host not in {"127.0.0.1", "localhost", "::1"} and not allow_remote:
+        raise click.ClickException("Use --allow-remote to bind outside localhost.")
+    if allow_remote:
+        console.print("[yellow]Remote API serving enabled. Use --token on trusted networks.[/yellow]")
+    console.print(f"[cyan]Serving SuperQode session API on http://{host}:{port}[/cyan]")
+    console.print("[dim]Endpoints: /health, /sessions, /sessions/graph, /sessions/{id}/history[/dim]")
+    try:
+        run_session_api(host=host, port=port, storage_dir=storage_dir, token=token)
+    except KeyboardInterrupt:
+        console.print("\n[dim]Session API stopped.[/dim]")
 
 
 @serve.command("status")

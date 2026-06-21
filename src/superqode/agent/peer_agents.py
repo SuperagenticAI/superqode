@@ -57,9 +57,13 @@ class PeerAgentManager:
         self,
         loop_factory: Callable[[str, str | None], Any],
         max_agents: int = MAX_PEER_AGENTS,
+        parent_session_id: str | None = None,
+        storage_dir: str = ".superqode/sessions",
     ):
         self._loop_factory = loop_factory
         self._max_agents = max_agents
+        self._parent_session_id = parent_session_id
+        self._storage_dir = storage_dir
         self._agents: Dict[str, PeerAgent] = {}
 
     # -- lookup -----------------------------------------------------------
@@ -138,6 +142,14 @@ class PeerAgentManager:
             loop=loop,
         )
         self._agents[agent.agent_id] = agent
+        self._record_graph(
+            agent,
+            status=agent.status,
+            kind="sub_agent",
+            agent_id=task_name,
+            agent_name=task_name,
+            title=task_name,
+        )
         return agent
 
     async def _run_agent(self, agent: PeerAgent) -> None:
@@ -149,6 +161,7 @@ class PeerAgentManager:
                 break
             agent.idle_event.clear()
             agent.status = "running"
+            self._record_graph(agent, status=agent.status)
             agent.loop.reset_cancellation()
             try:
                 response = await agent.loop.run(message)
@@ -159,13 +172,26 @@ class PeerAgentManager:
             except Exception as e:  # peer crashes must not kill the parent
                 agent.last_result = f"Peer agent error: {e}"
                 agent.status = "error"
+                self._record_graph(
+                    agent,
+                    status=agent.status,
+                    last_result_preview=agent.last_result[:240],
+                    pending_approvals_count=len(agent.pending_approvals),
+                )
                 continue
             agent.status = (
                 "needs_approval"
                 if response.stopped_reason == "needs_approval" and agent.pending_approvals
                 else "idle"
             )
+            self._record_graph(
+                agent,
+                status=agent.status,
+                last_result_preview=agent.last_result[:240],
+                pending_approvals_count=len(agent.pending_approvals),
+            )
         agent.status = "closed"
+        self._record_graph(agent, status=agent.status, closed=True)
         agent.idle_event.set()
 
     async def send_input(self, target: str, message: str, interrupt: bool = False) -> str:
@@ -228,6 +254,12 @@ class PeerAgentManager:
         agent.pending_approvals = _pending_approvals(agent.loop)
         agent.last_result = response.content or response.error or ""
         agent.status = "needs_approval" if agent.pending_approvals else "idle"
+        self._record_graph(
+            agent,
+            status=agent.status,
+            last_result_preview=agent.last_result[:240],
+            pending_approvals_count=len(agent.pending_approvals),
+        )
         agent.idle_event.set()
         return {
             "agent_id": agent.agent_id,
@@ -259,6 +291,12 @@ class PeerAgentManager:
         agent.pending_approvals = _pending_approvals(agent.loop)
         agent.last_result = response.content or response.error or ""
         agent.status = "needs_approval" if agent.pending_approvals else "idle"
+        self._record_graph(
+            agent,
+            status=agent.status,
+            last_result_preview=agent.last_result[:240],
+            pending_approvals_count=len(agent.pending_approvals),
+        )
         agent.idle_event.set()
         return {
             "agent_id": agent.agent_id,
@@ -281,11 +319,38 @@ class PeerAgentManager:
             except asyncio.TimeoutError:
                 agent.runner.cancel()
         agent.status = "closed"
+        self._record_graph(agent, status=agent.status, closed=True)
         return True
 
     async def close_all(self) -> None:
         for agent_id in list(self._agents):
             await self.close(agent_id)
+
+    def update_graph_metadata(self, target: str, **updates: Any) -> None:
+        agent = self.resolve(target)
+        if agent is not None:
+            self._record_graph(agent, **updates)
+
+    def _record_graph(self, agent: PeerAgent, **updates: Any) -> None:
+        try:
+            from superqode.session.switchboard import SessionGraphStore
+
+            metadata = None
+            manager = getattr(agent.loop, "_session_manager", None)
+            if manager is not None:
+                metadata = manager.get_session_info(agent.session_id)
+            SessionGraphStore(self._storage_dir).upsert(
+                agent.session_id,
+                metadata=metadata,
+                parent_session_id=self._parent_session_id,
+                kind="sub_agent",
+                agent_id=updates.pop("agent_id", agent.task_name),
+                agent_name=updates.pop("agent_name", agent.task_name),
+                title=updates.pop("title", agent.task_name),
+                **updates,
+            )
+        except Exception:
+            pass
 
 
 def _pending_approvals(loop: Any) -> List[Dict[str, Any]]:

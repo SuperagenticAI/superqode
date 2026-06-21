@@ -67,6 +67,17 @@ superqode sessions show abc123
 superqode sessions export abc123 --format markdown --output session.md
 ```
 
+Software Factory routing and lineage:
+
+```bash
+superqode factory routes
+superqode factory mode no-subscription
+superqode factory switch-model ollama/qwen3-coder
+superqode factory switch-harness review
+superqode factory fork-model --model local/deepseek-coder --role coder
+superqode factory lineage
+```
+
 Portable session handoff:
 
 ```bash
@@ -136,7 +147,7 @@ superqode -p --provider ds4 --model deepseek-v4-flash "summarize this repo"
 
 For DS4, start `ds4-server` separately and point SuperQode at its OpenAI-compatible endpoint with `DS4_HOST` if it is not running on `http://127.0.0.1:8000/v1`.
 
-In the TUI, use `Ctrl+K` for the command palette or type `:status`, `:harness`, `:providers`, `:providers free --live openrouter`, `:recommend coding`, `:sandbox`, `:tree`, `:share`, `:trust`, `:plugins`, and `:benchmark`. Use `Ctrl+1` to open the persistent Harness sidebar tab.
+In the TUI, use `Ctrl+K` for the command palette or type `:status`, `:harness`, `:providers`, `:providers free --live openrouter`, `:recommend coding`, `:sandbox`, `:factory`, `:switchboard`, `:tree`, `:share`, `:trust`, `:plugins`, and `:benchmark`. Use `Ctrl+1` to open the persistent Harness sidebar tab.
 
 Benchmark harness:
 
@@ -275,6 +286,14 @@ superqode sandbox run e2b -- "pytest -q"
 
     [:octicons-arrow-right-24: Session Commands](sessions-commands.md)
 
+-   **Factory Commands (superqode factory)**
+
+    ---
+
+    Switch models, harnesses, and routes while preserving session graph lineage.
+
+    [:octicons-arrow-right-24: Factory Commands](factory-commands.md)
+
 -   **Share Commands (superqode share)**
 
     ---
@@ -319,6 +338,9 @@ superqode sandbox run e2b -- "pytest -q"
 |---------|-------------|
 | `superqode sessions list` | List saved sessions |
 | `superqode sessions tree` | Show session branches and forks |
+| `superqode factory routes` | List Software Factory routing presets |
+| `superqode factory switch-model <provider/model>` | Record model/provider movement on a session |
+| `superqode factory switch-harness <name>` | Record harness movement on a session |
 | `superqode share create <session-id>` | Create a portable local session artifact |
 | `superqode memory status` | Show memory provider status |
 | `superqode memory remember "..."` | Store an explicit project fact or preference |
@@ -448,6 +470,7 @@ For detailed documentation of each command group:
 - [Plugin Commands](plugins-commands.md) - Plugin lifecycle management
 - [Memory Commands](memory-commands.md) - Agent memory operations
 - [Session Commands](sessions-commands.md) - Session listing and inspection
+- [Factory Commands](factory-commands.md) - Model, harness, and route lineage
 - [Share Commands](share-commands.md) - Portable session artifact management
 - [Trust Commands](trust-commands.md) - Project trust management
 - [Sandbox Commands](sandbox-commands.md) - Sandbox provider diagnostics

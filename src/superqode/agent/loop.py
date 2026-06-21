@@ -813,7 +813,11 @@ class AgentLoop:
         if self._peer_manager is None:
             from .peer_agents import PeerAgentManager
 
-            self._peer_manager = PeerAgentManager(self._create_peer_loop)
+            self._peer_manager = PeerAgentManager(
+                self._create_peer_loop,
+                parent_session_id=self.session_id,
+                storage_dir=self.config.session_storage_dir,
+            )
         return self._peer_manager
 
     def _create_peer_loop(

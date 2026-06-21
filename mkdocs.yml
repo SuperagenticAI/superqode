@@ -200,6 +200,7 @@ nav:
     - ⚓ Harness System: advanced/harness-system.md
     - 📈 Run, Measure, Optimize: advanced/harness-optimization.md
     - 🔁 Omnigent Compatibility: advanced/omnigent-compat.md
+    - 🏭 Software Factory: advanced/software-factory.md
     - 🔌 Runtime Backends: runtimes.md
     - 📋 Session Management: advanced/session-management.md
     - 🧭 TUI Reference: advanced/tui.md
@@ -224,6 +225,7 @@ nav:
       - 🔐 Auth: cli-reference/auth-commands.md
       - 🛡️ Trust: cli-reference/trust-commands.md
       - ⏱️ Sessions: cli-reference/sessions-commands.md
+      - 🏭 Factory: cli-reference/factory-commands.md
       - 📤 Share: cli-reference/share-commands.md
       - 🧠 Memory: cli-reference/memory-commands.md
       - 🔌 Plugins: cli-reference/plugins-commands.md

@@ -74,6 +74,7 @@ class SessionStore:
             title=title,
         )
         self._save_metadata(metadata)
+        self._record_graph(metadata)
         return metadata
 
     def _save_metadata(self, metadata: SessionMetadata):
@@ -95,6 +96,16 @@ class SessionStore:
                 indent=2,
             )
         )
+
+    def _record_graph(self, metadata: SessionMetadata, **updates: Any) -> None:
+        """Best-effort update of the durable switchboard graph."""
+        try:
+            from superqode.session.switchboard import SessionGraphStore
+
+            SessionGraphStore(self.base_dir).upsert(metadata.session_id, metadata=metadata, **updates)
+        except Exception:
+            # Session JSONL is the primary store; graph recording must never break it.
+            pass
 
     def get_metadata(self, session_id: str) -> Optional[SessionMetadata]:
         """Get session metadata."""
@@ -119,6 +130,11 @@ class SessionStore:
             metadata.updated_at = datetime.now().isoformat()
             metadata.message_count += 1
             self._save_metadata(metadata)
+            self._record_graph(
+                metadata,
+                last_result_preview=(message.content or "")[:240],
+                status="idle",
+            )
 
     def append_tool_result(
         self,
@@ -177,6 +193,7 @@ class SessionStore:
             metadata.message_count = max(0, metadata.message_count - removed)
             metadata.updated_at = datetime.now().isoformat()
             self._save_metadata(metadata)
+            self._record_graph(metadata)
         return removed
 
     def get_messages(self, session_id: str, limit: Optional[int] = None) -> List[SessionMessage]:
@@ -224,6 +241,12 @@ class SessionStore:
             path.unlink()
         if meta_path.exists():
             meta_path.unlink()
+        try:
+            from superqode.session.switchboard import SessionGraphStore
+
+            SessionGraphStore(self.base_dir).close(session_id)
+        except Exception:
+            pass
 
     def get_session_size(self, session_id: str) -> int:
         """Get session file size in bytes."""
@@ -265,6 +288,7 @@ class SessionStore:
             metadata.parent_session_id = parent_session_id
             metadata.title = metadata.title or f"Fork of {parent_session_id}"
             self._save_metadata(metadata)
+            self._record_graph(metadata, kind="fork")
             return metadata
         else:
             # Create minimal metadata if missing

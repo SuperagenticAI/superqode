@@ -44,6 +44,10 @@ class AgentSessionTool(Tool):
                         "send",
                         "wait",
                         "list",
+                        "info",
+                        "history",
+                        "children",
+                        "handoff",
                         "approve",
                         "reject",
                         "close",
@@ -60,7 +64,19 @@ class AgentSessionTool(Tool):
                 },
                 "session_id": {
                     "type": "string",
-                    "description": "Stable child session id for start/resume.",
+                    "description": "Stable child session id for start/resume/info/history/handoff.",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Named child session title. start reuses the same agent+title child when available.",
+                },
+                "target_session_id": {
+                    "type": "string",
+                    "description": "For handoff: destination session id.",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "For handoff: why work is moving to the target session.",
                 },
                 "interrupt": {
                     "type": "boolean",
@@ -68,7 +84,7 @@ class AgentSessionTool(Tool):
                 },
                 "timeout_s": {
                     "type": "integer",
-                    "description": "For wait: maximum seconds to wait. Default 60.",
+                    "description": "For wait: maximum seconds to wait. For history: max messages. Default 60.",
                 },
                 "index": {
                     "type": "integer",
@@ -90,8 +106,20 @@ class AgentSessionTool(Tool):
         action = str(args.get("action") or "").strip().lower()
         if action == "list":
             return _list_sessions(ctx, manager)
+        if action == "children":
+            return _children(ctx, args)
 
         target = str(args.get("agent") or "").strip()
+        session_target = str(args.get("session_id") or target).strip()
+        if action in {"info", "history", "handoff"}:
+            if not session_target:
+                return ToolResult(success=False, output="", error="'session_id' or 'agent' is required")
+            if action == "info":
+                return _info(session_target)
+            if action == "history":
+                return _history(session_target, args.get("timeout_s"))
+            return _handoff(ctx, session_target, args)
+
         if not target:
             return ToolResult(success=False, output="", error="'agent' is required")
 
@@ -102,6 +130,7 @@ class AgentSessionTool(Tool):
                 target,
                 str(args.get("message") or ""),
                 session_id=str(args.get("session_id") or "").strip() or None,
+                title=str(args.get("title") or "").strip() or None,
             )
         if action == "resume":
             return await _resume_session(
@@ -140,7 +169,10 @@ class AgentSessionTool(Tool):
         return ToolResult(
             success=False,
             output="",
-            error="action must be one of: start, resume, send, wait, list, approve, reject, close",
+            error=(
+                "action must be one of: start, resume, send, wait, list, info, history, "
+                "children, handoff, approve, reject, close"
+            ),
         )
 
 
@@ -173,6 +205,7 @@ async def _start_session(
     message: str,
     *,
     session_id: str | None,
+    title: str | None,
 ) -> ToolResult:
     declared = _resolve_declared_agent(ctx, agent_id)
     if declared is None:
@@ -185,10 +218,18 @@ async def _start_session(
     message = message.strip()
     if not message:
         return ToolResult(success=False, output="", error="'message' is required for start")
+    if session_id is None and title:
+        from superqode.session.switchboard import SessionGraphStore
+
+        existing = SessionGraphStore().find_named_child(str(ctx.session_id), str(declared.id), title)
+        if existing is not None:
+            session_id = existing.session_id
     try:
         session = await manager.spawn(str(declared.id), message, session_id=session_id)
     except RuntimeError as exc:
         return ToolResult(success=False, output="", error=str(exc))
+    if title and hasattr(manager, "update_graph_metadata"):
+        manager.update_graph_metadata(session.session_id, title=title, agent_id=str(declared.id))
     return ToolResult(
         success=True,
         output=(
@@ -201,6 +242,7 @@ async def _start_session(
             "task_name": session.task_name,
             "session_id": session.session_id,
             "declared_agent": declared.id,
+            "title": title or session.task_name,
             "status": session.status,
         },
     )
@@ -353,12 +395,20 @@ async def _close_session(manager: Any, target: str) -> ToolResult:
 def _list_sessions(ctx: ToolContext, manager: Any) -> ToolResult:
     declared = sorted(_declared_child_agents(ctx))
     sessions = manager.list_agents()
+    from superqode.session.switchboard import SessionSwitchboard
+
+    durable_children = []
+    if getattr(ctx, "session_id", None):
+        try:
+            durable_children = SessionSwitchboard().children(str(ctx.session_id))
+        except Exception:
+            durable_children = []
     if not sessions:
         declared_text = ", ".join(declared) if declared else "none"
         return ToolResult(
             success=True,
             output=f"No active child agent sessions. Declared child agents: {declared_text}",
-            metadata={"agents": [], "declared_agents": declared},
+            metadata={"agents": [], "durable_children": durable_children, "declared_agents": declared},
         )
     rows = [
         f"{item['agent_id']}  {item['task_name']:<20}  {item['session_id']:<28}  "
@@ -368,8 +418,79 @@ def _list_sessions(ctx: ToolContext, manager: Any) -> ToolResult:
     return ToolResult(
         success=True,
         output="agent_id  task_name  session_id  status  last_result\n" + "\n".join(rows),
-        metadata={"agents": sessions, "declared_agents": declared},
+        metadata={"agents": sessions, "durable_children": durable_children, "declared_agents": declared},
     )
+
+
+def _info(session_id: str) -> ToolResult:
+    from superqode.session.switchboard import SessionSwitchboard
+
+    try:
+        payload = SessionSwitchboard().info(session_id)
+    except KeyError as exc:
+        return ToolResult(success=False, output="", error=str(exc))
+    return ToolResult(
+        success=True,
+        output=json_dumps(payload),
+        metadata=payload,
+    )
+
+
+def _history(session_id: str, limit_value: Any) -> ToolResult:
+    from superqode.session.switchboard import SessionSwitchboard
+
+    try:
+        limit = int(limit_value or 20)
+    except (TypeError, ValueError):
+        limit = 20
+    try:
+        payload = SessionSwitchboard().history(session_id, limit=limit)
+    except KeyError as exc:
+        return ToolResult(success=False, output="", error=str(exc))
+    lines = [
+        f"{item['timestamp']} {item['role']}: {str(item['content']).strip()[:240]}"
+        for item in payload["messages"]
+    ]
+    return ToolResult(success=True, output="\n".join(lines), metadata=payload)
+
+
+def _children(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
+    from superqode.session.switchboard import SessionSwitchboard
+
+    session_id = str(args.get("session_id") or getattr(ctx, "session_id", "") or "").strip()
+    if not session_id:
+        return ToolResult(success=False, output="", error="'session_id' is required")
+    try:
+        payload = SessionSwitchboard().children(session_id)
+    except KeyError as exc:
+        return ToolResult(success=False, output="", error=str(exc))
+    rows = [
+        f"{item['session_id']}  {item['agent_id'] or '-'}  {item['status']}  {item['title']}"
+        for item in payload
+    ]
+    return ToolResult(success=True, output="\n".join(rows) or "No child sessions.", metadata={"children": payload})
+
+
+def _handoff(ctx: ToolContext, source_session_id: str, args: dict[str, Any]) -> ToolResult:
+    from superqode.session.switchboard import SessionSwitchboard
+
+    try:
+        packet = SessionSwitchboard().make_handoff(
+            source_session_id,
+            target_session_id=str(args.get("target_session_id") or ""),
+            target_agent=str(args.get("agent") or ""),
+            goal=str(args.get("message") or ""),
+            reason=str(args.get("reason") or ""),
+        )
+    except KeyError as exc:
+        return ToolResult(success=False, output="", error=str(exc))
+    return ToolResult(success=True, output=packet.to_message(), metadata=packet.to_dict())
+
+
+def json_dumps(payload: Any) -> str:
+    import json
+
+    return json.dumps(payload, indent=2, ensure_ascii=False)
 
 
 def _normalize_name(value: str) -> str:

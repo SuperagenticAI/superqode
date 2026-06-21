@@ -40,6 +40,86 @@ Displays parent-child relationships between sessions created via `--fork`. Each 
 
 ---
 
+## sessions graph
+
+Show the durable switchboard graph: parent sessions, child agents, forks, handoffs, status, and titles.
+
+```bash
+superqode sessions graph [--json]
+```
+
+Use this when you want the richer graph view rather than only legacy fork lineage.
+
+---
+
+## sessions switch
+
+Set the active switchboard session.
+
+```bash
+superqode sessions switch [SESSION_ID] [--json]
+```
+
+If no session id is provided, SuperQode resolves the current active graph session when possible.
+
+---
+
+## sessions info
+
+Show graph metadata for a session.
+
+```bash
+superqode sessions info [SESSION_ID]
+```
+
+Includes parent/root ids, status, agent id, provider/model, message counts, and children.
+
+---
+
+## sessions history
+
+Show recent messages for a session.
+
+```bash
+superqode sessions history [SESSION_ID] [--limit 20] [--json]
+```
+
+---
+
+## sessions children
+
+List child/fork/agent sessions for a session.
+
+```bash
+superqode sessions children [SESSION_ID] [--json]
+```
+
+---
+
+## sessions handoff
+
+Create or deliver a cross-session handoff packet.
+
+```bash
+superqode sessions handoff [SOURCE_SESSION_ID] --agent reviewer --goal "review this patch"
+superqode sessions handoff [SOURCE_SESSION_ID] --target-session-id target --deliver --goal "continue here"
+```
+
+---
+
+## sessions fork-agent
+
+Fork a session and tag the fork for another coding agent.
+
+```bash
+superqode sessions fork-agent [SOURCE_SESSION_ID] --agent reviewer --goal "review this patch"
+```
+
+This is the lower-level graph primitive used by `superqode factory fork-model` and
+`superqode factory fork-harness`.
+
+---
+
 ## sessions show
 
 Show stored session details.

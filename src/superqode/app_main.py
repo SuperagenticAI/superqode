@@ -1676,6 +1676,22 @@ class SuperQodeApp(App):
                 "session",
             ),
             PaletteCommand(
+                "switchboard",
+                "Session Switchboard",
+                "Open durable graph, handoffs, approvals, and share tree actions",
+                "▦",
+                ":switchboard",
+                "session",
+            ),
+            PaletteCommand(
+                "factory",
+                "Software Factory",
+                "Switch models, harnesses, and routes without locking work to one vendor",
+                "▧",
+                ":factory",
+                "session",
+            ),
+            PaletteCommand(
                 "session_current",
                 "Current Session",
                 "Show active session status",
@@ -5691,8 +5707,15 @@ class SuperQodeApp(App):
             self._attach_cmd(args, log)
         elif c == "prompt":
             self._prompt_file_cmd(args, log)
+        elif c in ("switchboard", "sw"):
+            self._handle_switchboard(args, log)
+        elif c == "factory":
+            self._handle_factory(args, log)
         elif c == "sessions":
-            self._show_sessions(log)
+            if args.strip():
+                self._handle_switchboard(args, log)
+            else:
+                self._show_sessions(log)
         elif c == "ls":
             self._show_sessions(log)
         elif c == "session":
@@ -7551,6 +7574,9 @@ class SuperQodeApp(App):
             ":w": "export the current transcript",
             ":e": "view a file",
             ":ls": "list saved sessions",
+            ":switchboard": "open durable session graph, handoffs, approvals, and share tree",
+            ":sw": "alias for :switchboard",
+            ":factory": "switch models, harnesses, and routes without vendor lock-in",
             ":grep": "search the workspace",
             ":status": "show harness status",
             ":tools": "show tool profiles",
@@ -8874,62 +8900,606 @@ class SuperQodeApp(App):
         t.append(" to continue or ", style=THEME["muted"])
         t.append("/fork <optional-new-id>", style=THEME["cyan"])
         t.append(" to branch the active session.\n", style=THEME["muted"])
+        t.append("  Use ", style=THEME["muted"])
+        t.append(":switchboard", style=THEME["cyan"])
+        t.append(" for graph, handoff, approvals, and share-tree actions.\n", style=THEME["muted"])
         self._show_command_output(log, t)
 
     def _show_session_tree(self, log: ConversationLog):
         """Show saved sessions grouped by parent/fork relationship."""
-        manager = self._get_session_manager()
-        sessions = manager.list_all_sessions()
+        self._handle_switchboard("graph", log)
+
+    def _handle_switchboard(self, args: str, log: ConversationLog) -> None:
+        """TUI session switchboard over the durable graph."""
+        try:
+            tokens = shlex.split((args or "").strip())
+        except ValueError as exc:
+            log.add_error(f"Could not parse :switchboard arguments: {exc}")
+            return
+        subcommand = tokens[0].lower() if tokens else "graph"
+        rest = tokens[1:]
+
+        if subcommand in {"", "graph", "tree", "ls", "list"}:
+            self._show_switchboard_graph(log)
+        elif subcommand in {"help", "?"}:
+            self._show_switchboard_help(log)
+        elif subcommand in {"active", "current"}:
+            self._switchboard_active(log)
+        elif subcommand in {"switch", "select", "resume"}:
+            self._switchboard_switch(rest, log)
+        elif subcommand == "info":
+            self._switchboard_info(rest, log)
+        elif subcommand in {"history", "tail"}:
+            self._switchboard_history(rest, log)
+        elif subcommand in {"children", "child"}:
+            self._switchboard_children(rest, log)
+        elif subcommand in {"handoff", "send"}:
+            self._switchboard_handoff(rest, log)
+        elif subcommand in {"fork-agent", "forkagent", "fork"}:
+            self._switchboard_fork_agent(rest, log)
+        elif subcommand in {"approvals", "approval", "inbox"}:
+            self._switchboard_approval_inbox(log)
+        elif subcommand in {"share-tree", "share"}:
+            self._switchboard_share_tree(rest, log)
+        else:
+            log.add_info("Usage: :switchboard [graph|switch|info|history|children|handoff|fork-agent|approvals|share-tree]")
+
+    def _switchboard(self):
+        from superqode.session.switchboard import SessionSwitchboard
+
+        return SessionSwitchboard(storage_dir=".superqode/sessions")
+
+    def _show_switchboard_help(self, log: ConversationLog) -> None:
+        t = Text()
+        t.append("\n  Session Switchboard\n\n", style=f"bold {THEME['purple']}")
+        commands = [
+            (":switchboard", "graph cockpit with active marker, status, approvals, and previews"),
+            (":switchboard switch <id>", "mark a session active and resume it when local storage can"),
+            (":switchboard info <id>", "show graph metadata and child sessions"),
+            (":switchboard history <id> [limit]", "show recent transcript messages"),
+            (":switchboard children <id>", "list child/fork/agent sessions"),
+            (":switchboard handoff <source> --to <target> --goal \"...\"", "deliver context to another session"),
+            (":switchboard fork-agent <source> --agent reviewer --goal \"...\"", "fork to a named coding agent"),
+            (":switchboard approvals", "show cross-agent approval inbox"),
+            (":switchboard share-tree <id> [path]", "export a portable session subtree"),
+        ]
+        for command, desc in commands:
+            t.append(f"  {command:<58}", style=f"bold {THEME['cyan']}")
+            t.append(f"{desc}\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _show_switchboard_graph(self, log: ConversationLog) -> None:
+        try:
+            switchboard = self._switchboard()
+            tree = switchboard.graph_tree()
+            active = switchboard.active() or self._current_session_id()
+        except Exception as exc:
+            log.add_error(f"Could not load switchboard graph: {exc}")
+            return
 
         t = Text()
-        t.append("\n  Session Tree\n\n", style=f"bold {THEME['purple']}")
-        if not sessions:
+        t.append("\n  Session Switchboard\n\n", style=f"bold {THEME['purple']}")
+        if active:
+            t.append("  Active  ", style=THEME["muted"])
+            t.append(f"{active}\n\n", style=f"bold {THEME['cyan']}")
+        if not tree:
             t.append("  No sessions found yet.\n", style=THEME["muted"])
             t.append("  Start a conversation, then use ", style=THEME["muted"])
-            t.append(":fork", style=THEME["cyan"])
-            t.append(" to create a branch.\n", style=THEME["muted"])
+            t.append(":switchboard", style=THEME["cyan"])
+            t.append(" to control the graph.\n", style=THEME["muted"])
             self._show_command_output(log, t)
             return
 
-        by_id = {session.session_id: session for session in sessions}
-        children: dict[str, list[Any]] = {}
-        roots = []
-        for session in sessions:
-            parent = session.parent_session_id or ""
-            if parent and parent in by_id:
-                children.setdefault(parent, []).append(session)
-            else:
-                roots.append(session)
-        roots.sort(key=lambda item: item.updated_at, reverse=True)
-        for branch in children.values():
-            branch.sort(key=lambda item: item.updated_at, reverse=True)
-
-        current_id = self._current_session_id()
-
-        def add_node(session, prefix: str = "", depth: int = 0) -> None:
-            marker = "* " if session.session_id == current_id else "  "
-            title = session.title or "(unnamed)"
-            model = session.model or "unknown"
-            provider = session.provider or "-"
+        def add_node(node: dict[str, Any], prefix: str = "", depth: int = 0) -> None:
+            session_id = str(node.get("session_id") or "")
+            status = str(node.get("status") or "idle")
+            marker = "* " if session_id == active else "  "
             connector = "+- " if depth else ""
+            title = str(node.get("title") or "(unnamed)")
+            kind = str(node.get("kind") or "session")
+            agent = str(node.get("agent_id") or "")
+            provider = str(node.get("provider") or "-")
+            model = str(node.get("model") or "unknown")
+            approvals = int(node.get("pending_approvals_count") or 0)
+            preview = " ".join(str(node.get("last_result_preview") or "").split())
+            status_style = {
+                "running": THEME["warning"],
+                "needs_approval": THEME["orange"],
+                "error": THEME["error"],
+                "closed": THEME["dim"],
+            }.get(status, THEME["success"])
             t.append(f"  {prefix}{connector}{marker}", style=THEME["dim"])
-            t.append(f"{session.session_id[:8]}", style=f"bold {THEME['cyan']}")
+            t.append(f"{session_id[:10]:<10}", style=f"bold {THEME['cyan']}")
+            t.append(f" {status:<14}", style=f"bold {status_style}")
+            t.append(f" {kind:<10}", style=THEME["muted"])
+            if agent:
+                t.append(f" agent={agent:<12}", style=THEME["purple"])
+            if approvals:
+                t.append(f" approvals={approvals}", style=f"bold {THEME['orange']}")
             t.append(f"  {title}\n", style=THEME["text"])
             t.append(f"  {prefix}{'   ' if depth else ''}   ", style=THEME["dim"])
             t.append(f"{provider}/{model}", style=THEME["muted"])
-            t.append(f"  {session.message_count} msgs", style=THEME["muted"])
-            t.append(f"  updated {session.updated_at[:19]}\n", style=THEME["dim"])
-            for child in children.get(session.session_id, []):
+            t.append(f"  updated {str(node.get('updated_at') or '')[:19]}", style=THEME["dim"])
+            if preview:
+                t.append(f"  {preview[:120]}", style=THEME["dim"])
+            t.append("\n")
+            for child in node.get("children") or []:
                 add_node(child, prefix + ("   " if depth else ""), depth + 1)
 
-        for root in roots:
+        for root in tree:
             add_node(root)
 
-        t.append("\n  * = current session. Use ", style=THEME["muted"])
-        t.append(":resume <id>", style=THEME["cyan"])
-        t.append(" or ", style=THEME["muted"])
-        t.append(":fork <new-id>", style=THEME["cyan"])
-        t.append(" to continue branching.\n", style=THEME["muted"])
+        t.append("\n  Keys-as-commands: ", style=THEME["muted"])
+        t.append(":sw switch <id>", style=THEME["cyan"])
+        t.append("  ", style=THEME["dim"])
+        t.append(":sw fork-agent <id> --agent reviewer", style=THEME["cyan"])
+        t.append("  ", style=THEME["dim"])
+        t.append(":sw approvals", style=THEME["cyan"])
+        t.append("\n", style="")
+        self._show_command_output(log, t)
+
+    def _switchboard_active(self, log: ConversationLog) -> None:
+        active = self._switchboard().active() or self._current_session_id()
+        if not active:
+            log.add_info("No active switchboard session yet.")
+            return
+        self._switchboard_info([active], log)
+
+    def _switchboard_switch(self, tokens: list[str], log: ConversationLog) -> None:
+        if not tokens:
+            self._show_switchboard_graph(log)
+            return
+        target = tokens[0]
+        try:
+            record = self._switchboard().switch(target)
+        except Exception as exc:
+            log.add_error(f"Could not switch session: {exc}")
+            return
+        log.add_success(f"Active switchboard session -> {record['session_id']}")
+        try:
+            self._handle_resume_session(record["session_id"], log)
+        except Exception:
+            pass
+
+    def _switchboard_info(self, tokens: list[str], log: ConversationLog) -> None:
+        target = tokens[0] if tokens else ""
+        try:
+            payload = self._switchboard().info(target)
+        except Exception as exc:
+            log.add_error(f"Could not load session info: {exc}")
+            return
+        t = Text()
+        t.append("\n  Session Info\n\n", style=f"bold {THEME['purple']}")
+        for key in (
+            "session_id",
+            "title",
+            "kind",
+            "status",
+            "agent_id",
+            "parent_session_id",
+            "root_session_id",
+            "provider",
+            "model",
+            "message_count",
+            "pending_approvals_count",
+            "updated_at",
+        ):
+            value = payload.get(key)
+            if value in (None, ""):
+                continue
+            t.append(f"  {key:<24}", style=THEME["muted"])
+            t.append(f"{value}\n", style=THEME["text"])
+        children = payload.get("children") or []
+        if children:
+            t.append("\n  Children\n", style=f"bold {THEME['text']}")
+            for child in children:
+                t.append(f"    {child['session_id'][:10]:<12}", style=f"bold {THEME['cyan']}")
+                t.append(f"{child.get('status') or '-':<14}", style=THEME["muted"])
+                t.append(f"{child.get('agent_id') or '-':<16}", style=THEME["purple"])
+                t.append(f"{child.get('title') or ''}\n", style=THEME["text"])
+        self._show_command_output(log, t)
+
+    def _switchboard_history(self, tokens: list[str], log: ConversationLog) -> None:
+        target = tokens[0] if tokens else ""
+        limit = 12
+        if len(tokens) > 1:
+            try:
+                limit = int(tokens[1])
+            except ValueError:
+                pass
+        try:
+            payload = self._switchboard().history(target, limit=limit)
+        except Exception as exc:
+            log.add_error(f"Could not load session history: {exc}")
+            return
+        t = Text()
+        t.append(f"\n  History {payload['session_id']}\n\n", style=f"bold {THEME['purple']}")
+        for message in payload.get("messages") or []:
+            role = str(message.get("role") or "?")
+            content = " ".join(str(message.get("content") or "").split())
+            t.append(f"  {role:<10}", style=f"bold {THEME['cyan']}")
+            t.append(f"{content[:220]}\n", style=THEME["text"])
+        self._show_command_output(log, t)
+
+    def _switchboard_children(self, tokens: list[str], log: ConversationLog) -> None:
+        target = tokens[0] if tokens else ""
+        try:
+            children = self._switchboard().children(target)
+        except Exception as exc:
+            log.add_error(f"Could not load child sessions: {exc}")
+            return
+        if not children:
+            log.add_info("No child sessions.")
+            return
+        t = Text()
+        t.append("\n  Child Sessions\n\n", style=f"bold {THEME['purple']}")
+        for child in children:
+            t.append(f"  {child['session_id'][:10]:<12}", style=f"bold {THEME['cyan']}")
+            t.append(f"{child.get('status') or '-':<14}", style=THEME["muted"])
+            t.append(f"{child.get('agent_id') or '-':<16}", style=THEME["purple"])
+            t.append(f"{child.get('title') or ''}\n", style=THEME["text"])
+        self._show_command_output(log, t)
+
+    @staticmethod
+    def _parse_switchboard_options(tokens: list[str]) -> tuple[list[str], dict[str, str | bool]]:
+        positionals: list[str] = []
+        options: dict[str, str | bool] = {}
+        i = 0
+        while i < len(tokens):
+            token = tokens[i]
+            if token.startswith("--"):
+                key = token[2:].replace("-", "_")
+                if i + 1 < len(tokens) and not tokens[i + 1].startswith("--"):
+                    options[key] = tokens[i + 1]
+                    i += 2
+                else:
+                    options[key] = True
+                    i += 1
+            else:
+                positionals.append(token)
+                i += 1
+        return positionals, options
+
+    def _switchboard_handoff(self, tokens: list[str], log: ConversationLog) -> None:
+        positionals, options = self._parse_switchboard_options(tokens)
+        source = positionals[0] if positionals else ""
+        target = str(options.get("to") or options.get("target") or options.get("target_session_id") or "")
+        goal = str(options.get("goal") or " ".join(positionals[1:]) or "")
+        reason = str(options.get("reason") or "")
+        try:
+            if target:
+                payload = self._switchboard().handoff_to_session(source, target, goal=goal, reason=reason)
+                log.add_success(f"Delivered handoff {payload['id']} to {payload['target_session_id']}")
+            else:
+                packet = self._switchboard().make_handoff(
+                    source,
+                    target_agent=str(options.get("agent") or ""),
+                    goal=goal,
+                    reason=reason,
+                )
+                self._show_command_output(log, Text(packet.to_message()))
+        except Exception as exc:
+            log.add_error(f"Could not create handoff: {exc}")
+
+    def _switchboard_fork_agent(self, tokens: list[str], log: ConversationLog) -> None:
+        positionals, options = self._parse_switchboard_options(tokens)
+        source = positionals[0] if positionals else ""
+        agent = str(options.get("agent") or (positionals[1] if len(positionals) > 1 else ""))
+        if not agent:
+            log.add_info('Usage: :switchboard fork-agent [source] --agent reviewer --goal "review this"')
+            return
+        try:
+            payload = self._switchboard().fork_to_agent(
+                source,
+                agent=agent,
+                new_session_id=str(options.get("session_id") or ""),
+                title=str(options.get("title") or ""),
+                goal=str(options.get("goal") or ""),
+            )
+        except Exception as exc:
+            log.add_error(f"Could not fork to agent: {exc}")
+            return
+        log.add_success(
+            f"Forked to {payload['session']['session_id']} for {agent}; handoff {payload['handoff']['id']}"
+        )
+
+    def _switchboard_approval_inbox(self, log: ConversationLog) -> None:
+        try:
+            sessions = self._switchboard().list_sessions()
+        except Exception as exc:
+            log.add_error(f"Could not load approval inbox: {exc}")
+            return
+        blocked = [
+            item
+            for item in sessions
+            if item.get("status") == "needs_approval" or int(item.get("pending_approvals_count") or 0) > 0
+        ]
+        t = Text()
+        t.append("\n  Approval Inbox\n\n", style=f"bold {THEME['orange']}")
+        if not blocked:
+            t.append("  No child sessions are waiting for approval.\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+        for item in blocked:
+            t.append(f"  {item['session_id'][:10]:<12}", style=f"bold {THEME['cyan']}")
+            t.append(f"{item.get('status') or '-':<16}", style=f"bold {THEME['orange']}")
+            t.append(f"approvals={item.get('pending_approvals_count') or 0:<3}", style=THEME["muted"])
+            t.append(f" {item.get('agent_id') or '-'}", style=THEME["purple"])
+            t.append(f"  {item.get('title') or ''}\n", style=THEME["text"])
+        t.append("\n  Use the parent session's ", style=THEME["muted"])
+        t.append(":approve", style=THEME["cyan"])
+        t.append(" / ", style=THEME["muted"])
+        t.append(":reject", style=THEME["cyan"])
+        t.append(" controls, or switch to the parent session first.\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _switchboard_share_tree(self, tokens: list[str], log: ConversationLog) -> None:
+        session_arg, path_arg = self._parse_share_session_and_path(tokens)
+        try:
+            session_id = self._resolve_share_session_id(session_arg)
+            artifact_path = self._write_share_artifact(session_id, path_arg, include_tree=True)
+        except Exception as exc:
+            log.add_error(f"Could not share session tree: {exc}")
+            return
+        log.add_success(f"Created share-tree artifact -> {artifact_path}")
+
+    def _handle_factory(self, args: str, log: ConversationLog) -> None:
+        """Software Factory commands for model/harness/provider independence."""
+        try:
+            tokens = shlex.split((args or "").strip())
+        except ValueError as exc:
+            log.add_error(f"Could not parse :factory arguments: {exc}")
+            return
+        subcommand = tokens[0].lower() if tokens else "status"
+        rest = tokens[1:]
+        if subcommand in {"", "status"}:
+            self._factory_status(rest, log)
+        elif subcommand in {"help", "?"}:
+            self._factory_help(log)
+        elif subcommand in {"policy"}:
+            self._factory_policy(log)
+        elif subcommand in {"init-policy", "init"}:
+            self._factory_init_policy(rest, log)
+        elif subcommand in {"routes", "route", "models"}:
+            self._factory_routes(log)
+        elif subcommand in {"mode", "policy"}:
+            self._factory_mode(rest, log)
+        elif subcommand in {"switch-model", "model"}:
+            self._factory_switch_model(rest, log)
+        elif subcommand in {"switch-harness", "harness"}:
+            self._factory_switch_harness(rest, log)
+        elif subcommand in {"fork-model"}:
+            self._factory_fork_model(rest, log)
+        elif subcommand in {"fork-harness"}:
+            self._factory_fork_harness(rest, log)
+        elif subcommand in {"lineage", "timeline"}:
+            self._factory_lineage(rest, log)
+        else:
+            log.add_info("Usage: :factory [status|routes|mode|switch-model|switch-harness|fork-model|fork-harness|lineage]")
+
+    def _factory(self):
+        from superqode.session.factory import SoftwareFactory
+
+        return SoftwareFactory(storage_dir=".superqode/sessions")
+
+    def _factory_help(self, log: ConversationLog) -> None:
+        t = Text()
+        t.append("\n  Software Factory\n\n", style=f"bold {THEME['purple']}")
+        commands = [
+            (":factory", "show current model/harness/route lineage"),
+            (":factory init-policy", "create .superqode/factory.yaml with local-first defaults"),
+            (":factory policy", "show merged factory policy and policy path"),
+            (":factory routes", "list private, cheap, best, review, long-context, no-subscription routes"),
+            (":factory mode no-subscription", "prefer local OSS/BYOK and avoid subscription-only paths"),
+            (":factory switch-model local/qwen3-coder", "record model/provider switch on the active session"),
+            (":factory switch-harness coding", "record harness/orchestration switch on the active session"),
+            (":factory fork-model --model local/deepseek --role coder", "fork work to another model worker"),
+            (":factory fork-harness --harness review --role reviewer", "fork work to another harness worker"),
+            (":factory lineage", "show model/harness/mode changes over time"),
+        ]
+        for command, desc in commands:
+            t.append(f"  {command:<62}", style=f"bold {THEME['cyan']}")
+            t.append(f"{desc}\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _factory_status(self, tokens: list[str], log: ConversationLog) -> None:
+        target = tokens[0] if tokens else ""
+        try:
+            payload = self._factory().status(target)
+        except Exception as exc:
+            log.add_error(f"Could not load factory status: {exc}")
+            return
+        factory_meta = payload.get("factory") or {}
+        t = Text()
+        t.append("\n  Software Factory\n\n", style=f"bold {THEME['purple']}")
+        t.append("  Session  ", style=THEME["muted"])
+        t.append(f"{payload['session_id']}\n", style=f"bold {THEME['cyan']}")
+        for label, key in (
+            ("Mode", "mode"),
+            ("Route", "route"),
+            ("Model", "model_ref"),
+            ("Provider", "provider"),
+            ("Runtime", "runtime"),
+            ("Harness", "harness"),
+        ):
+            value = factory_meta.get(key)
+            if value:
+                t.append(f"  {label:<8}", style=THEME["muted"])
+                t.append(f"{value}\n", style=THEME["text"])
+        next_turn = factory_meta.get("next_turn") or {}
+        if next_turn:
+            t.append("\n  Next turn intent\n", style=f"bold {THEME['text']}")
+            for key in ("route", "model_ref", "harness", "runtime"):
+                value = next_turn.get(key)
+                if value:
+                    t.append(f"    {key:<10}", style=THEME["muted"])
+                    t.append(f"{value}\n", style=THEME["text"])
+        warnings = factory_meta.get("privacy_warnings") or []
+        if warnings:
+            t.append("\n  Privacy warnings\n", style=f"bold {THEME['orange']}")
+            for warning in warnings:
+                t.append(f"    {warning}\n", style=THEME["warning"])
+        lineage = payload.get("lineage") or []
+        t.append("  Lineage ", style=THEME["muted"])
+        t.append(f"{len(lineage)} event(s)\n\n", style=THEME["text"])
+        t.append("  Use ", style=THEME["muted"])
+        t.append(":factory routes", style=THEME["cyan"])
+        t.append(", ", style=THEME["muted"])
+        t.append(":factory switch-model", style=THEME["cyan"])
+        t.append(", or ", style=THEME["muted"])
+        t.append(":factory switch-harness", style=THEME["cyan"])
+        t.append(".\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _factory_policy(self, log: ConversationLog) -> None:
+        try:
+            factory_obj = self._factory()
+            policy = factory_obj.policy()
+        except Exception as exc:
+            log.add_error(f"Could not load factory policy: {exc}")
+            return
+        t = Text()
+        t.append("\n  Factory Policy\n\n", style=f"bold {THEME['purple']}")
+        t.append("  Path  ", style=THEME["muted"])
+        t.append(f"{factory_obj.policy_path}\n", style=f"bold {THEME['cyan']}")
+        t.append("  Default route  ", style=THEME["muted"])
+        t.append(f"{policy.get('default_route') or '-'}\n\n", style=THEME["text"])
+        for name, route in (policy.get("routes") or {}).items():
+            t.append(f"  {name:<16}", style=f"bold {THEME['cyan']}")
+            t.append(f"allow_cloud={route.get('allow_cloud')}", style=THEME["muted"])
+            prefer = ", ".join(route.get("prefer") or [])
+            if prefer:
+                t.append(f"  prefer={prefer}", style=THEME["dim"])
+            t.append("\n")
+        self._show_command_output(log, t)
+
+    def _factory_init_policy(self, tokens: list[str], log: ConversationLog) -> None:
+        force = any(token.lower() == "--force" for token in tokens)
+        try:
+            path = self._factory().init_policy(force=force)
+        except Exception as exc:
+            log.add_error(f"Could not initialize factory policy: {exc}")
+            return
+        log.add_success(f"Factory policy ready: {path}")
+
+    def _factory_routes(self, log: ConversationLog) -> None:
+        try:
+            routes = self._factory().routes()
+        except Exception as exc:
+            log.add_error(f"Could not load factory routes: {exc}")
+            return
+        t = Text()
+        t.append("\n  Factory Routes\n\n", style=f"bold {THEME['purple']}")
+        for name, route in routes.items():
+            tags = ", ".join(route.get("tags") or [])
+            t.append(f"  {name:<16}", style=f"bold {THEME['cyan']}")
+            t.append(f"{route.get('policy'):<18}", style=THEME["muted"])
+            t.append(f"{tags}\n", style=THEME["purple"])
+            t.append(f"    {route.get('description')}\n", style=THEME["muted"])
+        self._show_command_output(log, t)
+
+    def _factory_mode(self, tokens: list[str], log: ConversationLog) -> None:
+        if not tokens:
+            self._factory_routes(log)
+            return
+        mode = tokens[0]
+        reason = " ".join(tokens[1:])
+        try:
+            payload = self._factory().set_mode(mode, reason=reason)
+        except Exception as exc:
+            log.add_error(f"Could not set factory mode: {exc}")
+            return
+        log.add_success(f"Factory mode for {payload['session_id']} -> {mode}")
+
+    def _factory_switch_model(self, tokens: list[str], log: ConversationLog) -> None:
+        if not tokens:
+            log.add_info("Usage: :factory switch-model <provider/model> [session-id]")
+            return
+        model_ref = tokens[0]
+        session_id = tokens[1] if len(tokens) > 1 else ""
+        try:
+            payload = self._factory().switch_model(model_ref, session_id=session_id)
+        except Exception as exc:
+            log.add_error(f"Could not switch model: {exc}")
+            return
+        log.add_success(f"Session {payload['session']['session_id']} model -> {model_ref}")
+        log.add_info("Factory intent recorded for the next turn. Use :factory to inspect it.")
+        for warning in payload.get("privacy_warnings") or []:
+            log.add_warning(warning)
+
+    def _factory_switch_harness(self, tokens: list[str], log: ConversationLog) -> None:
+        if not tokens:
+            log.add_info("Usage: :factory switch-harness <harness> [session-id]")
+            return
+        harness = tokens[0]
+        session_id = tokens[1] if len(tokens) > 1 else ""
+        try:
+            payload = self._factory().switch_harness(harness, session_id=session_id)
+        except Exception as exc:
+            log.add_error(f"Could not switch harness: {exc}")
+            return
+        log.add_success(f"Session {payload['session']['session_id']} harness -> {harness}")
+        log.add_info("Factory harness intent recorded for the next turn.")
+
+    def _factory_fork_model(self, tokens: list[str], log: ConversationLog) -> None:
+        positionals, options = self._parse_switchboard_options(tokens)
+        source = positionals[0] if positionals else ""
+        model_ref = str(options.get("model") or options.get("model_ref") or "")
+        if not model_ref:
+            log.add_info("Usage: :factory fork-model [source] --model local/qwen --role coder")
+            return
+        try:
+            payload = self._factory().fork_model(
+                source,
+                model_ref=model_ref,
+                role=str(options.get("role") or ""),
+                title=str(options.get("title") or ""),
+                goal=str(options.get("goal") or ""),
+                new_session_id=str(options.get("session_id") or ""),
+            )
+        except Exception as exc:
+            log.add_error(f"Could not fork model worker: {exc}")
+            return
+        log.add_success(f"Forked model worker -> {payload['fork']['session']['session_id']}")
+
+    def _factory_fork_harness(self, tokens: list[str], log: ConversationLog) -> None:
+        positionals, options = self._parse_switchboard_options(tokens)
+        source = positionals[0] if positionals else ""
+        harness = str(options.get("harness") or "")
+        if not harness:
+            log.add_info("Usage: :factory fork-harness [source] --harness review --role reviewer")
+            return
+        try:
+            payload = self._factory().fork_harness(
+                source,
+                harness=harness,
+                role=str(options.get("role") or ""),
+                title=str(options.get("title") or ""),
+                goal=str(options.get("goal") or ""),
+                new_session_id=str(options.get("session_id") or ""),
+            )
+        except Exception as exc:
+            log.add_error(f"Could not fork harness worker: {exc}")
+            return
+        log.add_success(f"Forked harness worker -> {payload['fork']['session']['session_id']}")
+
+    def _factory_lineage(self, tokens: list[str], log: ConversationLog) -> None:
+        target = tokens[0] if tokens else ""
+        try:
+            events = self._factory().lineage(target)
+        except Exception as exc:
+            log.add_error(f"Could not load factory lineage: {exc}")
+            return
+        t = Text()
+        t.append("\n  Factory Lineage\n\n", style=f"bold {THEME['purple']}")
+        if not events:
+            t.append("  No model/harness/mode changes recorded yet.\n", style=THEME["muted"])
+            self._show_command_output(log, t)
+            return
+        for event in events:
+            t.append(f"  {event.get('created_at')}  ", style=THEME["dim"])
+            t.append(f"{event.get('kind'):<8}", style=f"bold {THEME['cyan']}")
+            t.append(f"{event.get('previous')} -> {event.get('new')}\n", style=THEME["text"])
         self._show_command_output(log, t)
 
     def _handle_share(self, args: str, log: ConversationLog) -> None:
@@ -8973,7 +9543,7 @@ class SuperQodeApp(App):
         t.append("  Artifacts ", style=THEME["muted"])
         t.append(f"{share_count} in .superqode/shares\n\n", style=THEME["text"])
         t.append("  Commands:\n", style=THEME["muted"])
-        t.append("    :share create [session] [path]\n", style=THEME["cyan"])
+        t.append("    :share create [--tree] [session] [path]\n", style=THEME["cyan"])
         t.append("    :share export [session] [path] [--json|--markdown]\n", style=THEME["cyan"])
         t.append("    :share import <artifact> [new-session-id]\n", style=THEME["cyan"])
         t.append("    :share list  |  :share revoke <artifact>\n", style=THEME["cyan"])
@@ -8991,14 +9561,26 @@ class SuperQodeApp(App):
         return resolve_session_id(current_id, ".superqode/sessions")
 
     def _share_create(self, tokens: list[str], log: ConversationLog) -> None:
-        session_arg, path_arg = self._parse_share_session_and_path(tokens)
+        include_tree = False
+        cleaned: list[str] = []
+        for token in tokens:
+            if token.lower() in {"--tree", "tree"}:
+                include_tree = True
+            else:
+                cleaned.append(token)
+        session_arg, path_arg = self._parse_share_session_and_path(cleaned)
         try:
             session_id = self._resolve_share_session_id(session_arg)
-            artifact_path = self._write_share_artifact(session_id, path_arg)
+            artifact_path = self._write_share_artifact(
+                session_id,
+                path_arg,
+                include_tree=include_tree,
+            )
         except Exception as exc:
             log.add_error(f"Could not create share artifact: {exc}")
             return
-        log.add_success(f"Created share artifact -> {artifact_path}")
+        label = "share-tree" if include_tree else "share"
+        log.add_success(f"Created {label} artifact -> {artifact_path}")
         log.add_info(
             "Send this file to another SuperQode user; they can import it with :share import."
         )
@@ -9041,13 +9623,20 @@ class SuperQodeApp(App):
             return token, ""
         return tokens[0], tokens[1]
 
-    def _write_share_artifact(self, session_id: str, path_arg: str = "") -> Path:
+    def _write_share_artifact(
+        self,
+        session_id: str,
+        path_arg: str = "",
+        *,
+        include_tree: bool = False,
+    ) -> Path:
         from superqode.session.share_artifacts import create_share_artifact
 
         return create_share_artifact(
             session_id,
             output=path_arg or None,
             storage_dir=".superqode/sessions",
+            include_tree=include_tree,
         )
 
     def _share_output_path(
@@ -27790,6 +28379,18 @@ memory:
                 "🧰 Developer Workflows",
                 THEME["success"],
                 [
+                    (":switchboard", "Open durable session graph cockpit"),
+                    (":sw switch <id>", "Switch active graph session"),
+                    (":sw fork-agent <id> --agent reviewer", "Fork work to another coding agent"),
+                    (":sw handoff <id> --to <target>", "Send context from one session to another"),
+                    (":sw approvals", "Show cross-agent approval inbox"),
+                    (":sw share-tree <id>", "Export a portable session subtree"),
+                    (":factory", "Show Software Factory status for current work"),
+                    (":factory routes", "List private, cheap, best, review, and no-subscription routes"),
+                    (":factory switch-model <provider/model>", "Move a session between model providers"),
+                    (":factory switch-harness <name>", "Move a session between harnesses"),
+                    (":factory fork-model --model local/qwen", "Fork work to another model worker"),
+                    (":factory fork-harness --harness review", "Fork work to another harness worker"),
                     (":tree", "Show saved session branches and forks"),
                     (":share", "Show local/offline session sharing options"),
                     (":share create [id]", "Create a portable superqode-share-v1 artifact"),
