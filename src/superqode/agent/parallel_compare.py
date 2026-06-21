@@ -17,6 +17,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 
+from ..providers.model_specs import split_provider_model_ref
+
 
 @dataclass(frozen=True)
 class CompareSpec:
@@ -59,11 +61,8 @@ def parse_compare_specs(tokens: list[str], default_provider: str = "") -> list[C
         token = token.strip()
         if not token:
             continue
-        if "/" in token:
-            provider, model = token.split("/", 1)
-        else:
-            provider, model = default_provider, token
-        provider, model = provider.strip(), model.strip()
+        parsed = split_provider_model_ref(token, default_provider=default_provider)
+        provider, model = parsed.provider, parsed.model
         if not model or (provider, model) in seen:
             continue
         seen.add((provider, model))

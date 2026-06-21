@@ -132,6 +132,46 @@ superqode connect byok openrouter anthropic/claude-sonnet-4
 
 **Documentation**: [openrouter.ai](https://openrouter.ai)
 
+#### Hugging Face Inference Providers
+
+Hugging Face routes many open models through partner inference providers using
+one model id plus a provider suffix. SuperQode accepts the same route in the
+regular BYOK provider/model fields:
+
+```bash
+export HF_TOKEN=hf_...
+
+# Full provider/model form
+superqode connect byok huggingface zai-org/GLM-5.2:fireworks-ai
+
+# Shorthand form, useful in config and command history
+superqode connect byok hf.zai-org/GLM-5.2:fireworks-ai
+```
+
+SuperQode normalizes all of these forms to the Hugging Face provider:
+
+| Form | Resolves To |
+|------|-------------|
+| `hf.zai-org/GLM-5.2:fireworks-ai` | `huggingface` + `zai-org/GLM-5.2:fireworks-ai` |
+| `hf/zai-org/GLM-5.2:fireworks-ai` | `huggingface` + `zai-org/GLM-5.2:fireworks-ai` |
+| `huggingface/zai-org/GLM-5.2:fireworks-ai` | `huggingface` + `zai-org/GLM-5.2:fireworks-ai` |
+
+Current GLM-5.2 routes exposed in the default config:
+
+| Alias | Hugging Face Route |
+|-------|--------------------|
+| `glm52` | `hf.zai-org/GLM-5.2:fireworks-ai` |
+| `glm52-hf-fireworks` | `hf.zai-org/GLM-5.2:fireworks-ai` |
+| `glm52-hf-together` | `hf.zai-org/GLM-5.2:together` |
+| `glm52-hf-novita` | `hf.zai-org/GLM-5.2:novita` |
+| `glm52-hf-zai` | `hf.zai-org/GLM-5.2:zai-org` |
+| `glm52-hf-deepinfra` | `hf.zai-org/GLM-5.2:deepinfra` |
+
+The `:provider` suffix is generic, so other Hugging Face Inference Provider
+routes work the same way when Hugging Face advertises them.
+
+**Documentation**: [huggingface.co/inference](https://huggingface.co/inference)
+
 #### Together AI
 
 ```bash
@@ -169,6 +209,7 @@ superqode connect byok fireworks accounts/fireworks/models/llama-v3p3-70b-instru
 | Google | `GOOGLE_API_KEY` | Required |
 | Deepseek | `DEEPSEEK_API_KEY` | Required |
 | OpenRouter | `OPENROUTER_API_KEY` | Required |
+| Hugging Face | `HF_TOKEN` or `HUGGINGFACE_API_KEY` | Required for HF Inference Providers |
 | Together | `TOGETHER_API_KEY` | Required |
 | Groq | `GROQ_API_KEY` | Required |
 | Mistral | `MISTRAL_API_KEY` | Required |
@@ -200,6 +241,20 @@ providers:
     recommended_models:
       - deepseek-v3
       - deepseek-r1
+
+  huggingface:
+    api_key_env: HF_TOKEN
+    recommended_models:
+      - zai-org/GLM-5.2:fireworks-ai
+      - zai-org/GLM-5.2:together
+      - zai-org/GLM-5.2:novita
+      - zai-org/GLM-5.2:zai-org
+      - zai-org/GLM-5.2:deepinfra
+
+model_aliases:
+  glm52: hf.zai-org/GLM-5.2:fireworks-ai
+  glm52-hf-together: hf.zai-org/GLM-5.2:together
+  glm52-hf-novita: hf.zai-org/GLM-5.2:novita
 ```
 
 ---

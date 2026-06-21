@@ -716,6 +716,8 @@ def test_utility_route_parsing(monkeypatch):
     assert utility_route() == ("apple-fm", "")
     monkeypatch.setenv("SUPERQODE_UTILITY_PROVIDER", "ollama/gemma4:e4b")
     assert utility_route() == ("ollama", "gemma4:e4b")
+    monkeypatch.setenv("SUPERQODE_UTILITY_PROVIDER", "hf.zai-org/GLM-5.2:fireworks-ai")
+    assert utility_route() == ("huggingface", "zai-org/GLM-5.2:fireworks-ai")
     monkeypatch.delenv("SUPERQODE_UTILITY_PROVIDER")
     assert utility_route() is None
 

@@ -375,11 +375,16 @@ PROVIDERS: Dict[str, ProviderDef] = {
         litellm_prefix="huggingface/",
         docs_url="https://huggingface.co/inference-api",
         example_models=[
+            "zai-org/GLM-5.2:fireworks-ai",
+            "zai-org/GLM-5.2:together",
+            "zai-org/GLM-5.2:novita",
+            "zai-org/GLM-5.2:zai-org",
+            "zai-org/GLM-5.2:deepinfra",
             "meta-llama/Llama-3.3-70B-Instruct",
             "Qwen/Qwen2.5-72B-Instruct",
             "mistralai/Mistral-7B-Instruct-v0.3",
         ],
-        notes="Inference API. Access to most open models.",
+        notes="Inference Providers via the HF router. Supports provider suffixes like :fireworks-ai.",
     ),
     "cerebras": ProviderDef(
         id="cerebras",

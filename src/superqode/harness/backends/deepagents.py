@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from ...agent.loop import AgentMessage, AgentResponse
+from ...providers.model_specs import normalize_model_for_provider, normalize_provider_id
 from ..compiler import compile_to_headless_profile
 from ..events import HarnessEvent
 from ..model_policy import resolve_harness_model_policy
@@ -134,6 +135,10 @@ def _create_agent_for_request(request: HarnessBackendRequest) -> tuple[Any, dict
 
 
 def _model_spec(provider: str, model: str) -> str:
+    provider = normalize_provider_id(provider)
+    model = normalize_model_for_provider(provider, model)
+    if provider == "huggingface":
+        return f"{provider}:{model}"
     if ":" in model:
         return model
     return f"{provider}:{model}" if provider else model

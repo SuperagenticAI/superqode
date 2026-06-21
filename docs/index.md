@@ -11,9 +11,9 @@ hide:
 
 # SuperQode
 
-<p class="sq-kicker">Your Portable Local Agentic Coding Harness</p>
+<p class="sq-kicker">Coding Harness Framework Optimized for Open Models</p>
 
-<p class="sq-tagline">Turn open models into serious coding agents. Your harness, your models, your memory. Built for Local Agentic Coding, connected to everything else through BYOK, ACP, agent SDKs, MCP, and A2A.</p>
+<p class="sq-tagline">Model independence is not enough if the harness is fixed. SuperQode gives teams a coding harness they can own in the repo, optimized for Open Models and portable across closed models, local endpoints, and remote runtimes.</p>
 
 <p class="sq-badges">
   <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/v/superqode?style=flat-square&color=7c3aed" alt="PyPI version"></a>
@@ -22,8 +22,8 @@ hide:
   <a href="https://github.com/SuperagenticAI/superqode"><img src="https://img.shields.io/github/stars/SuperagenticAI/superqode?style=flat-square&color=64748b" alt="GitHub stars"></a>
 </p>
 
-[Get Started](getting-started/installation.md){ .md-button .md-button--primary }
-[Inside the Agent Loop](advanced/agent-loop.md){ .md-button }
+[Harness Guide](getting-started/bring-your-own-harness.md){ .md-button .md-button--primary }
+[Optimization Guide](advanced/optimization.md){ .md-button }
 [View on GitHub](https://github.com/SuperagenticAI/superqode){ .md-button }
 
 </div>
@@ -48,81 +48,89 @@ superqode --print "inspect this repository and suggest the smallest safe cleanup
 
 ---
 
-## Why teams pick SuperQode
+## Overview
+
+SuperQode is a coding harness framework optimized for Open Models. It turns the harness around a coding agent into a repository artifact: model routing, tools, memory, context, search, approvals, sandboxing, workflows, evals, and optimization.
+
+Most coding products ship a finished agent loop. SuperQode gives teams the framework to define that loop, run it local first, and connect any model route without giving up the harness.
+
+---
+
+## Main Capabilities
 
 <div class="grid cards" markdown>
 
--   :octicons-package-16:{ .lg .middle } **Built-in harness, or define your own**
+-   :octicons-package-16:{ .lg .middle } **Harness specification**
 
     ---
 
-    Start coding immediately with the built-in harness, or write a `harness.yaml` that pins runtime, model policy, tools, sandbox, approvals, and workflow. Validate it with `harness doctor`, commit it, and run the same contract anywhere.
+    Write a `harness.yaml` that pins runtime, model policy, tools, memory, search, sandbox, approvals, and workflow. Validate it with `harness doctor`, commit it, and run the same contract anywhere.
 
-    [:octicons-arrow-right-24: Configuration vs Harness](concepts/configuration-vs-harness.md)
+    [:octicons-arrow-right-24: Bring Your Own Harness](getting-started/bring-your-own-harness.md)
 
--   :octicons-cpu-16:{ .lg .middle } **Local Agentic Coding, first-class**
-
-    ---
-
-    `superqode local doctor` recommends the right engine and model for your machine and generates a tuned harness. `superqode local optimize` benchmarks local/open candidates and generates per-role routing for planner, implementer, reviewer, and utility agents. Underneath: live context-window detection, adaptive compaction, model policy packs, tool-call repair, doom-loop guards, and prompt-based tool calling for models without a tool head.
-
-    [:octicons-arrow-right-24: Local Agentic Coding](local-agentic-coding.md)
-
--   :octicons-tools-16:{ .lg .middle } **35+ policy-controlled tools**
+-   :octicons-cpu-16:{ .lg .middle } **Model routing**
 
     ---
 
-    Bounded reads, spill-to-disk shell output, interactive PTY sessions, patch-envelope edits, vision attachments, and web access. Every tool gated by permissions, exec-policy rules, and sandboxing.
-
-    [:octicons-arrow-right-24: Tools Catalog](advanced/tools-catalog.md)
-
--   :octicons-plug-16:{ .lg .middle } **All three protocols**
-
-    ---
-
-    MCP client and server, ACP agent connections, and A2A serving and calling, in one product. Expose your harnesses as MCP tools with a single command.
-
-    [:octicons-arrow-right-24: Serve Commands](cli-reference/serve-commands.md)
-
--   :octicons-stack-16:{ .lg .middle } **Pluggable runtimes**
-
-    ---
-
-    Run the same harness on the builtin engine, OpenAI Agents SDK, Google ADK, Codex SDK, Claude Agent SDK, DeepAgents, or PydanticAI. Swap engines without rewriting workflows.
+    Use Open Models or closed models, local endpoints or remote providers, small utility models or large coding models. The harness remains the portable configuration layer.
 
     [:octicons-arrow-right-24: Runtime Backends](runtimes.md)
 
--   :octicons-people-16:{ .lg .middle } **Multi-agent, supervised**
+-   :octicons-cpu-16:{ .lg .middle } **Local first Open Model support**
 
     ---
 
-    One-shot sub-agents, long-lived peer agents you can steer mid-run, external A2A agents, and rubric self-grading to hold unattended work to a standard.
+    Detect local engines, probe real context windows, generate starter harnesses, smoke test readiness, repair weak tool calls, and benchmark local candidates.
 
-    [:octicons-arrow-right-24: Multi-Agent Workflows](advanced/multi-agent.md)
+    [:octicons-arrow-right-24: Local Agentic Coding](local-agentic-coding.md)
 
--   :octicons-shield-check-16:{ .lg .middle } **Safety as policy, not hope**
-
-    ---
-
-    Declarative allow/deny/ask rules for shell commands, secret filtering for spawned processes, OS sandboxing, permission escalation with consent, and hard denies nothing can override.
-
-    [:octicons-arrow-right-24: Policies & Safety](advanced/policies.md)
-
--   :octicons-terminal-16:{ .lg .middle } **Headless and CI-ready**
+-   :octicons-graph-16:{ .lg .middle } **Evaluation and optimization**
 
     ---
 
-    JSON event output, schema-validated answers with automatic correction, rubric quality gates, session exports to Markdown, JSON, or shareable HTML, and disposable worktree isolation.
+    Use harness tests, eval scorecards, local route optimization, harness optimization, and skill optimization. Stage changes and adopt them only after regression gates pass.
 
-    [:octicons-arrow-right-24: Headless & CI](advanced/headless-ci.md)
+    [:octicons-arrow-right-24: Optimization Story](advanced/optimization.md)
 
--   :octicons-database-16:{ .lg .middle } **Memory that stays yours**
+-   :octicons-search-16:{ .lg .middle } **Local code intelligence**
 
     ---
 
-    Local-first agent memory with explicit control: remember, search, forget, export. Plug in mem0, Cognee, Supermemory, or SpecMem when you want more, and opt in to the full loop: automatic capture of durable facts from completed runs, and automatic recall when they matter again.
+    Give models the right context with bounded reads, local code search, multi repo search, semantic search, offline indexes, and post edit verification.
+
+    [:octicons-arrow-right-24: Multi-Repo Search & Edit Safety](advanced/multi-repo-search.md)
+
+-   :octicons-shield-lock-16:{ .lg .middle } **Airplane Mode**
+
+    ---
+
+    Prepare a strict offline harness with local repositories, local model servers, local indexes, cached metadata, and network tools removed.
+
+    [:octicons-arrow-right-24: Airplane Mode](advanced/airplane-mode.md)
+
+-   :octicons-database-16:{ .lg .middle } **Configurable memory**
+
+    ---
+
+    Local first agent memory supports remember, search, forget, and export operations. Connect provider neutral memory systems when needed.
 
     [:octicons-arrow-right-24: Memory & Learning](advanced/memory.md)
+
+-   :octicons-tools-16:{ .lg .middle } **Policy controlled tools**
+
+    ---
+
+    Bounded reads, shell sessions, patch edits, vision attachments, MCP tools, web tools, and verification hooks are gated by explicit permissions and sandbox policy.
+
+    [:octicons-arrow-right-24: Tools Catalog](advanced/tools-catalog.md)
+
+-   :octicons-plug-16:{ .lg .middle } **Runtime and protocol integrations**
+
+    ---
+
+    Connect to existing runtimes, SDKs, MCP tools, ACP agents, and A2A workflows while keeping the harness as the portable contract.
+
+    [:octicons-arrow-right-24: Connection Modes](concepts/modes.md)
 
 </div>
 
@@ -137,7 +145,7 @@ superqode --print "inspect this repository and suggest the smallest safe cleanup
     :plan fix the tests     # review the plan before tools run
     :plan approve           # execute it
     :context                # check the detected context window
-    :compare gpt-5.4 gemma4 # same prompt, two models, side by side
+    :local optimize         # benchmark candidates and generate role routes
     ```
 
     Type while the agent works and your message steers the current run between tool calls.
@@ -216,6 +224,6 @@ Each step builds on the previous one.
 
 <div class="sq-footer-cta" markdown>
 
-**Ready?** [Install SuperQode](getting-started/installation.md){ .md-button .md-button--primary } or watch the [demo video](https://www.youtube.com/watch?v=x2V323HgXRk).
+**Ready?** [Install SuperQode](getting-started/installation.md){ .md-button .md-button--primary } or start with the [Harness Guide](getting-started/bring-your-own-harness.md).
 
 </div>

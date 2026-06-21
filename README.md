@@ -8,8 +8,8 @@
 <h1 align="center">SuperQode</h1>
 
 <p align="center">
-  <strong>Your Portable Local Agentic Coding Harness</strong><br>
-  <em>Turn open models into serious coding agents. Your harness, your models, your memory. Built for Local Agentic Coding, connected to everything else through BYOK, ACP, agent SDKs, MCP, and A2A.</em>
+  <strong>Coding Harness Framework Optimized for Open Models</strong><br>
+  <em>Model independence is not enough if the harness is fixed. SuperQode gives teams a coding harness they can own in the repo, optimized for Open Models and portable across closed models, local endpoints, and remote runtimes.</em>
 </p>
 
 <p align="center">
@@ -35,11 +35,15 @@
 
 ## What is SuperQode?
 
-SuperQode is **Your Portable Local Agentic Coding Harness**, built to be the first choice for **Local Agentic Coding**: agentic software engineering on open models running on your own hardware. Define your own harness, connect any agent: local models, BYOK providers, ACP agents, or A2A workflows. It is the only harness that supports all major protocols (ACP + MCP + A2A) with deep local model optimization.
+SuperQode is a **coding harness framework optimized for Open Models**. It turns the harness around a coding agent into a repository artifact: model routing, tools, memory, context, search, approvals, sandboxing, workflows, evals, and optimization.
 
-Run `superqode` for the terminal workbench, then `:local init` to detect your hardware, pick trusted model routes, generate a tuned harness, and run a readiness smoke test. The CLI mirrors the same path with `superqode local init --repo .`. Run `superqode local optimize` when you want to benchmark local/open candidates and generate per-role routing for planner, implementer, reviewer, and utility agents.
+Most coding products ship a finished agent loop. SuperQode gives teams the framework to define that loop, run it local first, and connect any model route without giving up the harness.
 
-One TUI and CLI, consistent tool policies, event logging, and session management across every agent type. Define your harness once as a portable spec. Swap runtimes, models, or tools without changing your workflow. Run the same contract locally, on a team machine, or in CI.
+Use SuperQode when you want harness independence: the ability to inspect, version, measure, extend, and optimize the system that makes a model useful on your codebase.
+
+Run `superqode` for the terminal workbench, then `:local init` to detect your hardware, generate a local first starter harness, and run a readiness smoke test. The CLI mirrors the same path with `superqode local init --repo .`. Run `superqode local optimize` to benchmark candidates and generate role specific routing for planner, implementer, reviewer, and utility agents.
+
+One TUI and CLI, consistent tool policies, event logging, and session management across every agent type. Define your harness once as a portable spec. Swap runtimes, models, memory, search, or tools without changing your workflow. Run the same contract locally, on a team machine, through remote runtimes, or in CI.
 
 ```bash
 cd your-project && superqode
@@ -47,11 +51,7 @@ cd your-project && superqode
 
 ## Core Concepts
 
-SuperQode separates agent systems into interchangeable pieces: the **harness** (run contract: runtime, tools, sandbox, model policy), the **runtime** (execution engine: builtin, ADK, OpenAI Agents SDK, Codex SDK, DeepAgents, or PydanticAI), **tools** (file/search/edit/shell/MCP under policy), and **model policy** (temperature, reasoning, iteration limits). Change any piece without rewriting the rest.
-
-## Demo Video
-
-Watch the demo: [SuperQode Demo](https://www.youtube.com/watch?v=x2V323HgXRk)
+SuperQode separates agent systems into interchangeable pieces: the **harness** controls runtime, tools, sandbox, memory, search, workflow, approvals, and model policy; the **runtime** executes the work; **tools** expose file, search, edit, shell, MCP, and verification capabilities under policy; and **model policy** controls routing, temperature, reasoning, context, and iteration limits. Change any piece without rewriting the rest.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/SuperagenticAI/superqode/main/assets/superqode.png" alt="SuperQode TUI">
@@ -131,15 +131,8 @@ Use `doctor` before sharing a harness with a team. It checks backend availabilit
 |------|------------|
 | Let SuperQode edit, search, and run shell commands under policy | `superqode harness init app --template coding` |
 | Bet on model capability without tools or repository access | `superqode harness init reasoner --template no-tool` |
-| Optimize for local Gemma4 coding | `superqode harness init local --template gemma4-coding` |
-| Optimize for fast DS4 local iteration | `superqode harness init fast --template ds4-fast-local` |
-
-For DeepSeek V4 Flash on local hardware, prefer the DS4 provider over a generic MLX server:
-
-```bash
-superqode providers ds4 server
-superqode -p --provider ds4 --model deepseek-v4-flash "review this repo"
-```
+| Start from an Open Model family pack | `superqode harness list-templates` |
+| Generate a local first harness for this machine | `superqode local init --repo .` |
 
 ### Optional Runtime Backends
 
@@ -163,29 +156,29 @@ superqode harness run --spec harness.yaml --runtime codex-sdk --prompt "summariz
 
 ## Key Features
 
-- **Universal harness** — One portable spec controls runtime, model, tools, sandbox, approvals, and output for any agent
-- **Pluggable runtimes** — Swap between builtin, Google ADK, OpenAI Agents SDK, Codex SDK, DeepAgents, or PydanticAI
-- **Agent-agnostic TUI** — Same interface for Claude Code, Codex, opencode, local models, or BYOK providers
-- **Event graph** — Normalized model, tool, approval, sandbox, and subagent events across all runtimes
-- **Sandbox policy** — Granular read/write/shell/command access control per project
-- **Harness doctor** — Preflight backend installation, spec compatibility, sandbox policy, MCP config, and graph readiness
-- **Portable specs** — Share `harness.yaml` with your team — run the same contract everywhere
-- **Headless CLI** — Run coding tasks and provider checks from scripts or CI
-- **Developer workflows** — Session tree, share artifacts, project trust, plugins, memory, and transcript export
+- **Harness specification**: One portable spec controls runtime, model policy, tools, memory, search, sandbox, approvals, workflow, and output.
+- **Model routing**: Use Open Models or closed models, local endpoints or remote providers, small utility models or large coding models.
+- **Local first Open Model support**: Detect local engines, probe context windows, generate starter harnesses, run smoke checks, and benchmark local candidates.
+- **Measure and optimize**: Use harness tests, eval scorecards, local route optimization, harness optimization, and skill optimization with regression gates.
+- **Local code intelligence**: Use bounded reads, local code search, multi repo search, semantic search, offline indexes, and post edit verification.
+- **Configurable memory**: Keep local memory by default, then connect provider neutral memory systems when needed.
+- **Pluggable runtimes**: Run the same harness on the builtin engine, ADK, OpenAI Agents SDK, Codex SDK, Claude Agent SDK, DeepAgents, or PydanticAI.
+- **Policy and safety**: Gate file access, shell commands, network access, approvals, sandboxing, plugins, MCP, and project trust through explicit policy.
+- **Headless and CI ready**: Run coding tasks, provider checks, evals, schema validated outputs, event exports, and change summaries from scripts.
 
-### Optimized for local models
+### Built for Open Models and local execution
 
-SuperQode is tuned to get the best out of local models (≈10B–120B), where context is the usual breaking point:
+SuperQode is tuned for local and Open Models, where context, tool calling, memory, and search usually decide whether an agent works:
 
-- **Auto context management** — detects each local model's *real loaded* context window (Ollama, llama.cpp, LM Studio, vLLM, DS4) and compacts the conversation before it overflows, automatically. Inspect or pin it with `:context`.
-- **Context-economy tools** — reads are bounded and line-numbered with explicit continue-from hints; oversized command output is spilled to disk in full and the model gets a head/tail preview plus the path (nothing is ever lost to truncation); stale tool outputs are pruned for free before any LLM summarization.
-- **Multi-repo search** — register repos with `:workspace add` and search across all of them in one fast ripgrep pass; grep/glob use structured output and report truncation. Absolute paths are permission-gated.
-- **Post-edit verification** — after the agent edits a file, fast per-file checks (ruff, eslint, gofmt, JSON/YAML) feed findings back so it self-corrects before moving on.
-- **Resilient tool calls** — dangling, malformed, or badly-encoded tool calls (common on smaller local models) are repaired; unparseable arguments return corrective feedback instead of executing with empty args; a doom-loop guard blocks repeated identical calls and stops runs that refuse to move on.
-- **Native model dialects** — models edit in the format they were trained on: string-replacement edits with 10 fallback strategies, unified diffs, or codex-style `apply_patch` envelopes (GPT-5.x / local gpt-oss) — including `apply_patch` heredocs typed into bash. `shell_session` drives REPLs, dev servers, and interactive prompts across turns; `view_image` feeds screenshots to vision-capable local models like Gemma 4.
-- **Safe parallelism** — read-only tool batches run concurrently; anything that mutates (edit, write, shell) runs strictly in call order, so parallel tool calls can never race your files.
-- **Calm by default** — `:thinking` (Ctrl+T) folds noisy per-iteration logs into a live status with a tidy per-tool trace; flip to verbose anytime.
-- **Harness over MCP** — `superqode mcp` exposes your HarnessSpec workflows as MCP tools for any MCP client, alongside the A2A and ACP servers.
+- **Auto context management**: Detects each local model's real loaded context window and compacts before overflow. Inspect or pin it with `:context`.
+- **Context economy tools**: Bounded reads, line numbered output, continue hints, output spill files, stale output pruning, and compact previews for long commands.
+- **Local search stack**: Register repos with `:workspace add`, search across repos with ripgrep, add local code search, and enable semantic search when needed.
+- **Airplane Mode**: Prepare a strict offline harness with local repositories, local model servers, local indexes, cached metadata, and network tools removed.
+- **Post edit verification**: Feed fast per file checks back into the agent so it can correct mistakes before moving on.
+- **Resilient tool calls**: Repair malformed tool calls, return corrective argument feedback, and block repeated no progress loops.
+- **Model aware edit formats**: Support string replacement edits, unified diffs, patch envelopes, shell sessions, and vision attachments where the selected model supports them.
+- **Safe parallelism**: Run read only tool batches concurrently while preserving strict order for edits, writes, and shell commands.
+- **Harness over MCP**: Expose your HarnessSpec workflows as MCP tools for any MCP client, alongside A2A and ACP servers.
 
 ## Developer Workflows
 
@@ -282,9 +275,9 @@ For complete guides, configuration options, and API reference:
 
 Highlights:
 
-- [Local Context & Compaction](docs/advanced/local-context.md) — context-window detection, adaptive compaction, `:context`
-- [Multi-Repo Search & Edit Safety](docs/advanced/multi-repo-search.md) — `:workspace`, cross-repo search, post-edit verification
-- [Harness System](docs/advanced/harness-system.md) — HarnessSpec, checks, and exposing harnesses over MCP
+- [Local Context & Compaction](docs/advanced/local-context.md): context-window detection, adaptive compaction, `:context`
+- [Multi-Repo Search & Edit Safety](docs/advanced/multi-repo-search.md): `:workspace`, cross-repo search, post-edit verification
+- [Harness System](docs/advanced/harness-system.md): HarnessSpec, checks, and exposing harnesses over MCP
 
 ## Contributing
 

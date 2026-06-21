@@ -1568,6 +1568,22 @@ def test_prompt_completion_prioritizes_full_connect_and_quit_commands():
     assert SuperQodeApp._should_submit_prompt_without_completion(":connect local") is True
 
 
+def test_connect_completion_enter_accepts_selected_subcommand():
+    app = make_app()
+
+    app._prompt_completion_candidates = app._prompt_completion_candidates_for(":connect")
+    assert [candidate.value for candidate in app._prompt_completion_candidates[:2]] == [
+        ":connect",
+        ":connect acp",
+    ]
+
+    app._prompt_completion_index = 0
+    assert app._prompt_completion_enter_action(":connect") == "submit"
+
+    app._prompt_completion_index = 1
+    assert app._prompt_completion_enter_action(":connect") == "accept"
+
+
 def test_command_suggester_prioritizes_full_connect_and_quit_commands():
     from superqode.app.suggester import CommandSuggester
 

@@ -36,6 +36,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 from ..agent.loop import AgentConfig, AgentMessage, AgentResponse, _cached_system_prompt
 from ..harness.events import HarnessEvent
 from ..providers.gateway.base import GatewayInterface, ToolDefinition
+from ..providers.model_specs import normalize_model_for_provider, normalize_provider_id
 from ..providers.profiles import resolve_model_profile, run_pre_init_once
 from ..tools.base import Tool, ToolContext, ToolRegistry, ToolResult
 from ..tools.permissions import (
@@ -77,6 +78,8 @@ def _build_model(provider: str, model: str):
     ``LitellmModel`` so the same model name works across providers.
     """
     _require_sdk()
+    provider = normalize_provider_id(provider)
+    model = normalize_model_for_provider(provider, model)
     if (provider or "").strip().lower() in {"openai", "openai-compatible"}:
         return model
     try:

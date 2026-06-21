@@ -33,6 +33,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 
 from ..agent.loop import AgentConfig, AgentMessage, AgentResponse, _cached_system_prompt
 from ..providers.gateway.base import GatewayInterface, ToolDefinition
+from ..providers.model_specs import normalize_model_for_provider, normalize_provider_id
 from ..providers.profiles import resolve_model_profile, run_pre_init_once
 from ..tools.base import Tool, ToolContext, ToolRegistry, ToolResult
 from ..tools.permissions import (
@@ -67,6 +68,8 @@ def _build_model(provider: str, model: str):
     google.adk.models.lite_llm.LiteLlm so ADK routes via LiteLLM.
     """
     _require_adk()
+    provider = normalize_provider_id(provider)
+    model = normalize_model_for_provider(provider, model)
     if provider.lower() in {"gemini", "google", "google-gemini"}:
         return model
     from google.adk.models.lite_llm import LiteLlm

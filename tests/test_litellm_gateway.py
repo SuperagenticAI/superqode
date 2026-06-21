@@ -47,6 +47,19 @@ def test_openai_gpt53_codex_fallback_candidates():
     ]
 
 
+def test_huggingface_hf_prefix_routes_to_litellm_huggingface_provider():
+    gateway = LiteLLMGateway()
+
+    assert (
+        gateway.get_model_string("huggingface", "hf.zai-org/GLM-5.2:fireworks-ai")
+        == "huggingface/zai-org/GLM-5.2:fireworks-ai"
+    )
+    assert (
+        gateway.get_model_string("hf", "zai-org/GLM-5.2:fireworks-ai")
+        == "huggingface/zai-org/GLM-5.2:fireworks-ai"
+    )
+
+
 @pytest.mark.asyncio
 async def test_ds4_uses_direct_local_gateway(monkeypatch):
     """DS4 must bypass LiteLLM and call the local /v1/messages endpoint directly."""

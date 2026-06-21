@@ -73,6 +73,35 @@ from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
         ("openai", "gpt-5", "max", {"reasoning_effort": "high"}),
         # OpenRouter passes through.
         ("openrouter", "anthropic/claude-sonnet-4", "medium", {"reasoning_effort": "medium"}),
+        # GLM-5.2 over Hugging Face Inference Providers uses route-specific
+        # reasoning fields.
+        ("huggingface", "zai-org/GLM-5.2:fireworks-ai", "max", {"reasoning_effort": "max"}),
+        ("huggingface", "hf.zai-org/GLM-5.2:fireworks-ai", "off", {"reasoning_effort": "none"}),
+        ("huggingface", "zai-org/GLM-5.2:deepinfra", "max", {"reasoning_effort": "xhigh"}),
+        (
+            "huggingface",
+            "zai-org/GLM-5.2:zai-org",
+            "high",
+            {
+                "extra_body": {"thinking": {"type": "enabled", "clear_thinking": False}},
+                "reasoning_effort": "high",
+            },
+        ),
+        (
+            "huggingface",
+            "zai-org/GLM-5.2:novita",
+            "high",
+            {
+                "extra_body": {"thinking": {"type": "enabled", "clear_thinking": False}},
+                "reasoning_effort": "high",
+            },
+        ),
+        (
+            "huggingface",
+            "zai-org/GLM-5.2:together",
+            "off",
+            {"extra_body": {"thinking": {"type": "disabled"}}},
+        ),
         # Pi-style model-only runs can explicitly disable Anthropic-shape thinking.
         ("anthropic", "claude-sonnet-4", "off", {"thinking": {"type": "disabled"}}),
         ("ds4", "deepseek-v4-flash", "off", {"thinking": {"type": "disabled"}}),
@@ -206,6 +235,47 @@ async def test_chat_completion_translates_reasoning_effort(monkeypatch):
         "type": "enabled",
         "budget_tokens": 16000,
     }
+
+
+@pytest.mark.asyncio
+async def test_chat_completion_shapes_hf_glm52_fireworks_reasoning(monkeypatch):
+    gw = LiteLLMGateway()
+    captured: dict = {}
+
+    class _Choice:
+        finish_reason = "stop"
+
+        class message:
+            role = "assistant"
+            content = "ok"
+            tool_calls = None
+
+    class _FakeResponse:
+        choices = [_Choice()]
+        model = "huggingface/zai-org/GLM-5.2:fireworks-ai"
+        usage = type("U", (), {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2})()
+        _hidden_params = {}
+
+    class _FakeLiteLLM:
+        async def acompletion(self, **kwargs):
+            captured.update(kwargs)
+            return _FakeResponse()
+
+        AuthenticationError = type("AuthenticationError", (Exception,), {})
+        RateLimitError = type("RateLimitError", (Exception,), {})
+        NotFoundError = type("NotFoundError", (Exception,), {})
+        BadRequestError = type("BadRequestError", (Exception,), {})
+
+    monkeypatch.setattr(gw, "_get_litellm", lambda: _FakeLiteLLM())
+
+    await gw.chat_completion(
+        messages=[Message(role="user", content="hi")],
+        model="hf.zai-org/GLM-5.2:fireworks-ai",
+        reasoning_effort="off",
+    )
+
+    assert captured["model"] == "huggingface/zai-org/GLM-5.2:fireworks-ai"
+    assert captured["reasoning_effort"] == "none"
 
 
 @pytest.mark.asyncio

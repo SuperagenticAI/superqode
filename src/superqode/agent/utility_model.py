@@ -17,6 +17,8 @@ from __future__ import annotations
 import os
 from typing import Any, Optional, Tuple
 
+from ..providers.model_specs import split_provider_model_ref
+
 UTILITY_PROVIDER_ENV = "SUPERQODE_UTILITY_PROVIDER"
 
 
@@ -31,9 +33,9 @@ def utility_route() -> Optional[Tuple[str, str]]:
         return None
     if raw.lower() in ("apple-fm", "apple_fm", "applefm"):
         return ("apple-fm", "")
-    if "/" in raw:
-        provider, model = raw.split("/", 1)
-        return (provider.strip(), model.strip())
+    if "/" in raw or raw.startswith("hf."):
+        parsed = split_provider_model_ref(raw)
+        return (parsed.provider, parsed.model)
     return (raw, "")
 
 

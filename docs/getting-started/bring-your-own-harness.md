@@ -1,23 +1,23 @@
 # Bring Your Own Harness
 
-A harness is a single YAML file that decides how your coding agent behaves: which model it uses, which tools it can call, whether it can write files or run shell commands, how memory is restored, and how it asks for approval. You own this file. It lives in your repo, you can read it, edit it, and check it into git. Nothing about your agent is hidden "SuperQode magic". When a run does something you did not expect, the harness tells you why.
+A harness is a single YAML file that defines how a coding agent behaves: which model route it uses, which tools it can call, whether it can write files or run shell commands, how memory is restored, and how it asks for approval. The file lives in the repository, can be reviewed in code review, and can be checked into version control.
 
-This guide shows you how to create one, understand it in plain English, customize it, and run it against a local model.
+This guide shows how to create a harness, inspect the resolved policy, customize it, measure it, and run it against the selected model route.
 
-## Why This Matters For Local Models
+## Why This Matters
 
-With a frontier API you mostly trust the provider's defaults. With a local model you are the operator. You choose the model, the context size, and how much the agent is allowed to do on your machine. A harness makes those choices explicit and repeatable:
+Many coding agents ship with a fixed harness. The model route, tool loop, memory, context strategy, approvals, search, workflow, and optimization assumptions are controlled by the product.
 
-- You pay once in hardware, not forever in token bills.
-- The same harness file gives you the same behavior every time.
-- If a small local model is unreliable with native tool calls, you can switch it to prompt tool-call format in one line.
-- A read-only "reviewer" harness can never edit your files, no matter what the model decides.
+SuperQode makes those settings explicit in a project file. Teams can review the harness, run evals against it, and update it as model routes, repositories, and workflows change.
 
-The rule of thumb is: do not rely on someone else's harness as your product
-boundary, including SuperQode's shipped starters. Use a starter when it saves
-time, then inspect it, fork it, and make it yours. Pick your model, pick your
-harness, pick your memory and permissions, and extend the behavior for your
-project.
+With Open Models and local models, these settings have a direct effect on reliability. The harness records the model, context size, prompt shape, tool format, memory behavior, and local permissions:
+
+- Local execution can avoid recurring API usage for agent loops that resend repository context.
+- A committed harness gives teams a repeatable configuration for coding runs.
+- If a local model is unreliable with native tool calls, the harness can switch it to prompt tool-call format.
+- A read-only reviewer harness can deny write and shell access at the policy layer.
+
+SuperQode's shipped templates are starting points. Review the generated harness before giving broad write or shell access, then adjust model policy, memory, permissions, search, and workflow settings for the repository.
 
 ## Step 1: Get A Harness
 
@@ -93,9 +93,9 @@ All paths produce the same kind of file. Whichever you use, the next steps are i
     repository. Run smoke checks, explain the harness, and adapt the pack for
     your own project before giving broad write or shell access.
 
-## Step 2: Understand It In Plain English
+## Step 2: Inspect The Resolved Policy
 
-This is the command that makes the harness transparent. It reads the resolved policy (the exact same policy the runtime uses) and explains it in words:
+This command reads the resolved policy used by the runtime and returns a human-readable summary:
 
 ```bash
 superqode harness explain --spec harness.yaml --provider ollama --model qwen3-coder

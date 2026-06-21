@@ -284,14 +284,20 @@ class ChannelService:
         elif command == "/deny":
             await self._decide(session, replier, thread_id, approve=False, reason=argument or None)
         elif command == "/model":
-            if "/" not in argument:
+            from superqode.providers.model_specs import split_provider_model_ref
+
+            if "/" not in argument and not argument.startswith("hf."):
                 replier.send(session.chat_id, "Usage: /model <provider/model>", thread_id=thread_id)
                 return
-            provider, model = argument.split("/", 1)
-            session.pure.connect(provider.strip(), model.strip(), working_directory=self._cwd())
+            parsed = split_provider_model_ref(argument)
+            provider, model = parsed.provider, parsed.model
+            if not provider or not model:
+                replier.send(session.chat_id, "Usage: /model <provider/model>", thread_id=thread_id)
+                return
+            session.pure.connect(provider, model, working_directory=self._cwd())
             replier.send(
                 session.chat_id,
-                f"🧠 Model set to {provider.strip()}/{model.strip()}.",
+                f"🧠 Model set to {provider}/{model}.",
                 thread_id=thread_id,
             )
         elif command == "/cd":

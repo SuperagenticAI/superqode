@@ -242,7 +242,14 @@ Use `model_aliases` when a short name should expand before provider inference:
 model_aliases:
   local-fast: qwen3:8b
   sonnet: claude-sonnet-4
+  glm52: hf.zai-org/GLM-5.2:fireworks-ai
+  glm52-hf-together: hf.zai-org/GLM-5.2:together
 ```
+
+Hugging Face Inference Provider routes may use `hf.<repo>:<provider>`,
+`hf/<repo>:<provider>`, or `huggingface/<repo>:<provider>`. For example,
+`hf.zai-org/GLM-5.2:novita` resolves to provider `huggingface` and model
+`zai-org/GLM-5.2:novita`.
 
 ---
 

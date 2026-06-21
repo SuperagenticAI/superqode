@@ -55,6 +55,12 @@ from rich.rule import Rule
 from rich.console import Group
 from rich.box import ROUNDED, DOUBLE, HEAVY
 
+from superqode.providers.model_specs import (
+    normalize_model_for_provider,
+    normalize_provider_id,
+    split_provider_model_ref,
+)
+
 
 @dataclass
 class PromptCompletionCandidate:
@@ -442,10 +448,18 @@ class SelectionAwareInput(TextArea):
 
         if getattr(app, "_prompt_completion_visible", False):
             if event.key == "enter":
-                should_submit = getattr(app, "_should_submit_prompt_without_completion", None)
-                if callable(should_submit) and should_submit(self.value):
+                enter_action = getattr(app, "_prompt_completion_enter_action", None)
+                action = enter_action(self.value) if callable(enter_action) else "accept"
+                if action == "submit":
                     self._submit_current_value(event)
                     return
+                if action == "accept":
+                    if hasattr(app, "_accept_prompt_completion") and app._accept_prompt_completion(
+                        self
+                    ):
+                        event.stop()
+                        event.prevent_default()
+                        return
             if event.key == "up":
                 if hasattr(app, "_move_prompt_completion"):
                     app._move_prompt_completion(-1)
@@ -458,7 +472,7 @@ class SelectionAwareInput(TextArea):
                 event.stop()
                 event.prevent_default()
                 return
-            if event.key in ("tab", "right", "enter"):
+            if event.key in ("tab", "right"):
                 if hasattr(app, "_accept_prompt_completion") and app._accept_prompt_completion(
                     self
                 ):
@@ -7247,6 +7261,30 @@ class SuperQodeApp(App):
             return True
         return lowered in {candidate.lower() for candidate in COMMANDS}
 
+    def _selected_prompt_completion_value(self) -> str:
+        """Return the currently highlighted completion value, if any."""
+        if not self._prompt_completion_candidates:
+            return ""
+        index = max(
+            0,
+            min(self._prompt_completion_index, len(self._prompt_completion_candidates) - 1),
+        )
+        return self._prompt_completion_candidates[index].value
+
+    def _prompt_completion_enter_action(self, value: str) -> str:
+        """Choose whether Enter accepts a completion or submits the prompt.
+
+        Exact command rows such as ``:connect`` still submit when they are the
+        highlighted row. If the user has moved the highlight to a different row
+        such as ``:connect acp``, Enter accepts that completion first.
+        """
+        selected = self._selected_prompt_completion_value()
+        if selected and selected != value:
+            return "accept"
+        if self._should_submit_prompt_without_completion(value):
+            return "submit"
+        return "accept"
+
     def _update_prompt_completion_panel(self, value: str) -> None:
         """Refresh the visible prompt completion panel as the prompt changes."""
         candidates = self._prompt_completion_candidates_for(value)
@@ -7502,7 +7540,7 @@ class SuperQodeApp(App):
                 for command in commands
                 if command != value
             ]
-        return [
+        matches = [
             PromptCompletionCandidate(
                 value=command,
                 label=command,
@@ -7514,7 +7552,18 @@ class SuperQodeApp(App):
                 key=lambda command: SuperQodeApp._command_completion_sort_key(lowered, command),
             )
             if command.lower().startswith(lowered) and command != value
-        ][:8]
+        ]
+        if value in COMMANDS and matches:
+            matches.insert(
+                0,
+                PromptCompletionCandidate(
+                    value=value,
+                    label=value,
+                    description=SuperQodeApp._command_description(value),
+                    kind="command",
+                ),
+            )
+        return matches[:8]
 
     @staticmethod
     def _command_completion_sort_key(lowered_input: str, command: str) -> tuple[int, str]:
@@ -7642,8 +7691,10 @@ class SuperQodeApp(App):
             return None
         model = str(recipe_data.get("model") or "").strip()
         provider = str(recipe_data.get("provider") or "").strip()
-        if not provider and "/" in model:
-            provider, model = model.split("/", 1)
+        if not provider and model:
+            parsed_model = split_provider_model_ref(model)
+            if parsed_model.provider:
+                provider, model = parsed_model.provider, parsed_model.model
         variables = recipe_data.get("variables") or ()
         if isinstance(variables, dict):
             variables = tuple(str(key) for key in variables)
@@ -11662,8 +11713,9 @@ class SuperQodeApp(App):
         primary = getattr(getattr(spec, "model_policy", None), "primary", None)
         if (not provider or not model) and primary:
             primary_text = str(primary)
-            if "/" in primary_text:
-                inferred_provider, inferred_model = primary_text.split("/", 1)
+            parsed_primary = split_provider_model_ref(primary_text)
+            if parsed_primary.provider:
+                inferred_provider, inferred_model = parsed_primary.provider, parsed_primary.model
                 provider = provider or inferred_provider
                 model = model or inferred_model
             else:
@@ -20726,6 +20778,9 @@ memory:
         from superqode.providers.usage import get_usage_tracker
         import os
 
+        provider = normalize_provider_id(provider)
+        model = normalize_model_for_provider(provider, model)
+
         # Get provider info. Use the resolver so models.dev-synthesized providers
         # (not in the curated registry) still get the API-key check below.
         provider_def = resolve_provider_def(provider)
@@ -21214,6 +21269,11 @@ memory:
             if args.lower().strip() in ("byok", "acp", "local"):
                 # This shouldn't happen if parsing is correct, but be defensive
                 self._show_connect_picker(log)
+                return
+
+            parsed = split_provider_model_ref(args)
+            if parsed.provider and parsed.model:
+                self._connect_byok_mode(parsed.provider, parsed.model, log)
                 return
 
             # Support provider/model syntax
@@ -23568,13 +23628,8 @@ memory:
             if not value:
                 log.add_info("Usage: :model switch <provider>/<model> or :model switch <model>")
                 return
-            if "/" in value:
-                provider, model = value.split("/", 1)
-                provider = provider.strip()
-                model = model.strip()
-            else:
-                provider = self.current_provider
-                model = value
+            parsed = split_provider_model_ref(value, default_provider=self.current_provider)
+            provider, model = parsed.provider, parsed.model
             if not provider or not model:
                 log.add_error(
                     "No provider/model selected. Use :connect byok or :connect local first."

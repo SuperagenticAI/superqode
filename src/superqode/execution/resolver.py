@@ -15,6 +15,11 @@ from .modes import (
     ExecutionMode,
     GatewayType,
 )
+from ..providers.model_specs import (
+    normalize_model_for_provider,
+    normalize_provider_id,
+    split_provider_model_ref,
+)
 from ..providers.registry import PROVIDERS, ProviderDef
 from ..agents.registry import AGENTS, AgentDef, AgentStatus
 from ..auth import get as get_local_auth, exists as has_local_auth, ApiAuth
@@ -117,8 +122,14 @@ class ExecutionResolver:
         validate_env: bool,
     ) -> ExecutionConfig:
         """Resolve BYOK mode configuration."""
-        provider_id = role_config.get("provider")
+        provider_id = normalize_provider_id(role_config.get("provider"))
         model = role_config.get("model")
+        if not provider_id and model:
+            parsed = split_provider_model_ref(str(model))
+            provider_id = parsed.provider
+            model = parsed.model
+        else:
+            model = normalize_model_for_provider(provider_id, model)
 
         if not provider_id:
             raise ExecutionResolverError("BYOK mode requires 'provider'")
@@ -171,12 +182,20 @@ class ExecutionResolver:
 
         # Get agent config (provider/model for the agent to use)
         agent_config = role_config.get("agent_config", {})
+        agent_provider = normalize_provider_id(agent_config.get("provider"))
+        agent_model = agent_config.get("model")
+        if not agent_provider and agent_model:
+            parsed = split_provider_model_ref(str(agent_model))
+            agent_provider = parsed.provider or None
+            agent_model = parsed.model
+        else:
+            agent_model = normalize_model_for_provider(agent_provider, agent_model)
 
         # Build ACP config
         acp_config = ACPConfig(
             agent=agent_id,
-            agent_provider=agent_config.get("provider"),
-            agent_model=agent_config.get("model"),
+            agent_provider=agent_provider or None,
+            agent_model=agent_model,
             connection_type=role_config.get("connection_type", "stdio"),
             command=role_config.get("command", agent_def.command),
             host=role_config.get("host"),

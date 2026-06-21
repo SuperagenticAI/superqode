@@ -12,6 +12,7 @@ from ..agent.loop import AgentConfig, AgentResponse, _cached_system_prompt
 from ..harness.events import HarnessEvent
 from ..harness.spec import HarnessSpec
 from ..providers.gateway.base import GatewayInterface, ToolDefinition
+from ..providers.model_specs import normalize_model_for_provider, normalize_provider_id
 from ..providers.profiles import resolve_model_profile, run_pre_init_once
 from ..tools.base import ToolContext, ToolRegistry, ToolResult
 from ..tools.permissions import Permission, PermissionConfig, PermissionManager
@@ -33,6 +34,10 @@ def _require_pydanticai():
 
 
 def _model_name(provider: str, model: str) -> str:
+    provider = normalize_provider_id(provider)
+    model = normalize_model_for_provider(provider, model)
+    if provider == "huggingface":
+        return f"{provider}:{model}"
     if ":" in model:
         return model
     provider = provider.strip().lower()

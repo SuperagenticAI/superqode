@@ -127,6 +127,15 @@ def test_create_harness_backend_returns_runtime_adapter():
     assert backend.name == "builtin"
 
 
+def test_deepagents_model_spec_normalizes_hf_shorthand():
+    from superqode.harness.backends.deepagents import _model_spec
+
+    assert (
+        _model_spec("hf", "hf.zai-org/GLM-5.2:fireworks-ai")
+        == "huggingface:zai-org/GLM-5.2:fireworks-ai"
+    )
+
+
 def test_create_harness_backend_returns_deepagents_adapter():
     backend = create_harness_backend("deepagents")
 

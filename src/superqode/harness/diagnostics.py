@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from superqode.mcp.config import MCPHttpConfig, MCPSSEConfig, MCPStdioConfig, load_mcp_config
+from superqode.providers.model_specs import split_provider_model_ref
 from superqode.providers.registry import PROVIDERS, ProviderCategory
 from superqode.tools.base import ToolRegistry
 
@@ -1906,6 +1907,9 @@ def _inspect_mcp_config(config_path: Path, root: Path) -> tuple[list[str], list[
 
 
 def _provider_from_model(model: str) -> str:
+    parsed = split_provider_model_ref(model)
+    if parsed.provider in PROVIDERS:
+        return parsed.provider
     if "/" not in model:
         return ""
     prefix = model.split("/", 1)[0].strip().lower()
@@ -1920,6 +1924,9 @@ def _provider_from_model(model: str) -> str:
 
 
 def _model_without_provider(model: str) -> str:
+    parsed = split_provider_model_ref(model)
+    if parsed.provider == "huggingface":
+        return parsed.model
     return model.split("/", 1)[1] if "/" in model else model
 
 

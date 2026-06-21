@@ -120,13 +120,28 @@ def build_steps_from_spec(spec, prompt: str):
 
 
 def _resolve_provider_model(spec, provider: str, model: str) -> tuple[str, str]:
+    from superqode.providers.model_specs import (
+        normalize_model_for_provider,
+        normalize_provider_id,
+        split_provider_model_ref,
+    )
+
     provider = provider or os.environ.get("SUPERQODE_MCP_PROVIDER", "").strip()
     model = model or os.environ.get("SUPERQODE_MCP_MODEL", "").strip()
+    provider = normalize_provider_id(provider)
+    if provider:
+        model = normalize_model_for_provider(provider, model)
+    elif model:
+        parsed_model = split_provider_model_ref(model)
+        if parsed_model.provider:
+            provider, model = parsed_model.provider, parsed_model.model
+
     primary = getattr(getattr(spec, "model_policy", None), "primary", None)
     if (not provider or not model) and primary:
         primary_text = str(primary)
-        if "/" in primary_text:
-            inferred_provider, inferred_model = primary_text.split("/", 1)
+        parsed_primary = split_provider_model_ref(primary_text)
+        if parsed_primary.provider:
+            inferred_provider, inferred_model = parsed_primary.provider, parsed_primary.model
             provider = provider or inferred_provider
             model = model or inferred_model
         else:

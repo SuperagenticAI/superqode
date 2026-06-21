@@ -192,12 +192,22 @@ superqode connect byok [PROVIDER] [MODEL]
 # Full inline specification
 superqode connect byok anthropic claude-sonnet-4
 
+# Hugging Face Inference Provider route
+superqode connect byok huggingface zai-org/GLM-5.2:fireworks-ai
+superqode connect byok hf.zai-org/GLM-5.2:together
+
 # Provider only; picker for model
 superqode connect byok anthropic
 
 # Both missing; pickers for provider and model
 superqode connect byok
 ```
+
+For Hugging Face Inference Providers, `hf.<repo>:<provider>`,
+`hf/<repo>:<provider>`, and `huggingface/<repo>:<provider>` are accepted and
+normalize to the `huggingface` provider. GLM-5.2 aliases include `glm52`,
+`glm52-hf-fireworks`, `glm52-hf-together`, `glm52-hf-novita`,
+`glm52-hf-zai`, and `glm52-hf-deepinfra`.
 
 ---
 

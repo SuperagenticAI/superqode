@@ -13,13 +13,20 @@ from superqode.agent.parallel_compare import (
 
 def test_parse_specs_handles_provider_model_and_bare_model():
     specs = parse_compare_specs(
-        ["openai/gpt-4o", "claude-3-5-sonnet", "  ", "anthropic/claude-3-5-sonnet"],
+        [
+            "openai/gpt-4o",
+            "claude-3-5-sonnet",
+            "  ",
+            "anthropic/claude-3-5-sonnet",
+            "hf.zai-org/GLM-5.2:fireworks-ai",
+        ],
         default_provider="ollama",
     )
     assert specs == [
         CompareSpec("openai", "gpt-4o"),
         CompareSpec("ollama", "claude-3-5-sonnet"),
         CompareSpec("anthropic", "claude-3-5-sonnet"),
+        CompareSpec("huggingface", "zai-org/GLM-5.2:fireworks-ai"),
     ]
 
 

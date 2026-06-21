@@ -4258,13 +4258,14 @@ def _harness_model_registry_check(spec) -> dict:
 
 
 def _normalize_harness_model_id(model: str) -> str:
+    from superqode.providers.model_specs import split_provider_model_ref
+
     value = str(model).strip()
     if ":" in value and "/" not in value.split(":", 1)[0]:
         value = value.split(":", 1)[1]
-    if "/" in value:
-        prefix, rest = value.split("/", 1)
-        if prefix in {"openai", "anthropic", "google", "gemini", "ollama"}:
-            return rest
+    parsed = split_provider_model_ref(value)
+    if parsed.provider in {"openai", "anthropic", "google", "gemini", "ollama", "huggingface"}:
+        return parsed.model
     return value
 
 
@@ -4763,12 +4764,14 @@ def models_show(model_ref):
     """Show details for a model. MODEL_REF is `provider/model` or a model id."""
     import asyncio as _asyncio
     from superqode.providers.catalog import load_models_catalog, caps_str
+    from superqode.providers.model_specs import split_provider_model_ref
 
     all_models = _asyncio.run(load_models_catalog())
     provider_hint = None
     needle = model_ref
-    if "/" in model_ref:
-        provider_hint, needle = model_ref.split("/", 1)
+    parsed_model_ref = split_provider_model_ref(model_ref)
+    if parsed_model_ref.provider:
+        provider_hint, needle = parsed_model_ref.provider, parsed_model_ref.model
 
     matches = [
         m

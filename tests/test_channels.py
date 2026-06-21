@@ -284,6 +284,22 @@ def test_model_command_switches():
     assert fake.session.model == "some-model"
 
 
+def test_model_command_accepts_hf_shorthand():
+    service, fake = _service_with_fake_session()
+    replier = FakeReplier()
+    _run(
+        service,
+        InboundMessage(
+            platform="telegram",
+            chat_id="100",
+            text="/model hf.zai-org/GLM-5.2:fireworks-ai",
+        ),
+        replier,
+    )
+    assert fake.session.provider == "huggingface"
+    assert fake.session.model == "zai-org/GLM-5.2:fireworks-ai"
+
+
 def test_new_command_resets_session():
     service, fake = _service_with_fake_session()
     replier = FakeReplier()

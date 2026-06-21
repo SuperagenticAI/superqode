@@ -35,6 +35,12 @@ from .base import (
     Usage,
 )
 from ..credentials import provider_api_key, sync_provider_env
+from ..model_specs import (
+    normalize_model_for_provider,
+    normalize_provider_id,
+    split_hf_provider_suffix,
+    split_provider_model_ref,
+)
 from ..registry import PROVIDERS, ProviderCategory, ProviderDef
 
 logger = logging.getLogger(__name__)
@@ -192,6 +198,9 @@ class LiteLLMGateway(GatewayInterface):
         Returns:
             Full model string for LiteLLM (e.g., "anthropic/claude-opus-4-8")
         """
+        provider = normalize_provider_id(provider)
+        model = normalize_model_for_provider(provider, model)
+
         # LiteLLM exposes two Ollama backends:
         #   ollama/X      -> POST /api/generate (no tool support)
         #   ollama_chat/X -> POST /api/chat     (full tool support)
@@ -594,6 +603,8 @@ class LiteLLMGateway(GatewayInterface):
     # o-series convention so users don't have to learn a new vocabulary per
     # backend.
     _REASONING_LEVELS = ("off", "low", "medium", "high", "max")
+    _HF_GLM52_THINKING_PROVIDERS = {"zai-org", "novita", "together"}
+    _HF_GLM52_REASONING_EFFORT_PROVIDERS = {"fireworks-ai", "deepinfra"}
 
     # Per-level thinking budgets for Anthropic-shape APIs (Claude
     # extended thinking, DS4's /v1/messages). Values mirror what DS4's
@@ -645,6 +656,10 @@ class LiteLLMGateway(GatewayInterface):
         if level not in self._REASONING_LEVELS:
             return {}
 
+        hf_glm52 = self._resolve_hf_glm52_reasoning_effort(provider, model, level)
+        if hf_glm52 is not None:
+            return hf_glm52
+
         model_lower = (model or "").lower()
         is_anthropic_shape = (
             provider == "anthropic" or provider == "ds4" or "deepseek-v4" in model_lower
@@ -663,6 +678,38 @@ class LiteLLMGateway(GatewayInterface):
         if provider in {"openai", "openrouter"}:
             # o-series/GPT-5 doesn't expose a "max" tier on this field.
             return {"reasoning_effort": "high" if level == "max" else level}
+        return {}
+
+    def _resolve_hf_glm52_reasoning_effort(
+        self,
+        provider: str,
+        model: str,
+        level: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Map GLM-5.2 over HF Inference Providers to route-specific knobs."""
+        if provider != "huggingface":
+            return None
+
+        base_model, hf_provider = split_hf_provider_suffix(model)
+        if base_model.lower() != "zai-org/glm-5.2":
+            return None
+        if not hf_provider:
+            return {}
+
+        if hf_provider in self._HF_GLM52_REASONING_EFFORT_PROVIDERS:
+            effort = "none" if level == "off" else level
+            if hf_provider == "deepinfra" and effort == "max":
+                effort = "xhigh"
+            return {"reasoning_effort": effort}
+
+        if hf_provider in self._HF_GLM52_THINKING_PROVIDERS:
+            if level == "off":
+                return {"extra_body": {"thinking": {"type": "disabled"}}}
+            return {
+                "extra_body": {"thinking": {"type": "enabled", "clear_thinking": False}},
+                "reasoning_effort": level,
+            }
+
         return {}
 
     # Structured-output mode. Two values are supported:
@@ -2138,10 +2185,14 @@ class LiteLLMGateway(GatewayInterface):
     ) -> GatewayResponse:
         """Make a chat completion request via LiteLLM."""
 
-        # Determine provider from model string if not specified
-        if not provider and "/" in model:
-            provider = model.split("/")[0]
-        provider = provider or "unknown"
+        # Determine provider from model string if not specified.
+        if provider:
+            provider = normalize_provider_id(provider)
+            model = normalize_model_for_provider(provider, model)
+        else:
+            parsed = split_provider_model_ref(model)
+            provider = parsed.provider or "unknown"
+            model = parsed.model
 
         # Per-task budget pre-check. Done before any provider dispatch so
         # DS4 / MLX / LMStudio all share the fail-fast behavior; the
@@ -2405,10 +2456,14 @@ class LiteLLMGateway(GatewayInterface):
     ) -> AsyncIterator[StreamChunk]:
         """Make a streaming chat completion request via LiteLLM."""
 
-        # Determine provider from model string if not specified
-        if not provider and "/" in model:
-            provider = model.split("/")[0]
-        provider = provider or "unknown"
+        # Determine provider from model string if not specified.
+        if provider:
+            provider = normalize_provider_id(provider)
+            model = normalize_model_for_provider(provider, model)
+        else:
+            parsed = split_provider_model_ref(model)
+            provider = parsed.provider or "unknown"
+            model = parsed.model
 
         # Per-task budget pre-check (mirrors chat_completion).
         task_budget: Optional[TaskTokenBudget] = kwargs.get("task_budget")

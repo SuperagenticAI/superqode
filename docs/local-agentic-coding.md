@@ -58,18 +58,18 @@ superqode --harness harness.yaml -p "your task"
 
 The generated harness routes to the right provider for where the model lives,
 references the matching model policy pack when one is available, and switches
-small machines to prompt-based tool calling. It is a starting point you can
-read and edit, not a hidden SuperQode behavior bundle.
+small machines to prompt-based tool calling. It is generated as YAML so it can
+be reviewed and edited before use.
 
 The smoke test verifies server reachability, chat model availability,
 context-window detection, TTFT, read-file tool calls, patch-format behavior,
 shell tool calls, and long-context recall.
 
-The principle is simple: do not depend on someone else's harness as your
-product boundary. Pick your model, pick or generate a harness, choose memory
-and permissions, then customize it until it matches your repo. SuperQode ships
-starter packs, but they are scaffolds. Use them, inspect them, fork them, and
-make the harness yours.
+Treat the generated harness as an editable project file. Select the model
+route, memory provider, permissions, search tools, and workflow settings that
+match the repository. SuperQode ships starter packs, but they are not final
+configurations for every model, quantization, serving engine, hardware tier, or
+codebase.
 
 ### Add local semantic code search
 

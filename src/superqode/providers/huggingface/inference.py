@@ -42,12 +42,22 @@ class InferenceResponse:
 # Recommended models for different use cases
 RECOMMENDED_MODELS = {
     "general": [
+        "zai-org/GLM-5.2:fireworks-ai",
+        "zai-org/GLM-5.2:together",
+        "zai-org/GLM-5.2:novita",
+        "zai-org/GLM-5.2:zai-org",
+        "zai-org/GLM-5.2:deepinfra",
         "meta-llama/Llama-3.3-70B-Instruct",
         "Qwen/Qwen2.5-72B-Instruct",
         "mistralai/Mixtral-8x7B-Instruct-v0.1",
         "microsoft/Phi-3.5-mini-instruct",
     ],
     "coding": [
+        "zai-org/GLM-5.2:fireworks-ai",
+        "zai-org/GLM-5.2:together",
+        "zai-org/GLM-5.2:novita",
+        "zai-org/GLM-5.2:zai-org",
+        "zai-org/GLM-5.2:deepinfra",
         "Qwen/Qwen2.5-Coder-32B-Instruct",
         "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
         "codellama/CodeLlama-34b-Instruct-hf",

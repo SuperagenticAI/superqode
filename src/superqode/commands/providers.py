@@ -27,6 +27,11 @@ from ..providers.registry import (
 from ..providers.models import get_models_for_provider
 from ..providers.gateway import LiteLLMGateway
 from ..providers.local.mlx import get_mlx_client
+from ..providers.model_specs import (
+    normalize_model_for_provider,
+    normalize_provider_id,
+    split_provider_model_ref,
+)
 
 
 console = Console()
@@ -854,6 +859,16 @@ def connect_provider(provider: Optional[str] = None, model: Optional[str] = None
     from ..providers.manager import ProviderManager
 
     manager = ProviderManager()
+
+    if provider and not model:
+        parsed = split_provider_model_ref(provider)
+        if parsed.provider and parsed.model:
+            provider, model = parsed.provider, parsed.model
+        else:
+            provider = normalize_provider_id(provider)
+    elif provider:
+        provider = normalize_provider_id(provider)
+        model = normalize_model_for_provider(provider, model)
 
     # If both provider and model are provided, try direct connection
     if provider and model:

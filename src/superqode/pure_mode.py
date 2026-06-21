@@ -22,6 +22,7 @@ from .agent.system_prompts import SystemPromptLevel
 from .agent.session_manager import SessionManager, SessionMetadata
 from .tools.base import ToolRegistry, ToolResult
 from .providers.gateway.litellm_gateway import LiteLLMGateway
+from .providers.model_specs import normalize_model_for_provider, normalize_provider_id
 from .providers.registry import PROVIDERS, ProviderTier, ProviderCategory
 from .runtime import AgentRuntime, create_runtime, resolve_runtime_name
 
@@ -176,6 +177,8 @@ class PureMode:
             job_description: Optional job description for role-based connections
             role_config: Optional ResolvedRole config for role context
         """
+        provider = normalize_provider_id(provider)
+        model = normalize_model_for_provider(provider, model)
         self.session.provider = provider
         self.session.model = model
         self.session.system_level = system_level

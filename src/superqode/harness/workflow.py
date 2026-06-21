@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..agent.system_prompts import SystemPromptLevel
+from ..providers.model_specs import (
+    normalize_model_for_provider,
+    normalize_provider_id,
+    split_provider_model_ref,
+)
 from ..workspace.change_summary import capture_workspace_changes, summarize_workspace_changes
 from .events import HarnessEvent
 from .kernel import HarnessKernel, HarnessRunResult
@@ -784,12 +789,17 @@ def _kwargs_for_step(kwargs: dict[str, Any], step: WorkflowStep) -> dict[str, An
         out["provider"] = step.metadata["agent_provider"]
     if step.metadata.get("agent_model"):
         model_ref = str(step.metadata["agent_model"])
-        if "/" in model_ref and not step.metadata.get("agent_provider"):
-            provider, model = model_ref.split("/", 1)
-            out["provider"] = provider
-            out["model"] = model
+        if not step.metadata.get("agent_provider"):
+            parsed = split_provider_model_ref(model_ref)
+            if parsed.provider:
+                out["provider"] = parsed.provider
+                out["model"] = parsed.model
+            else:
+                out["model"] = model_ref
         else:
-            out["model"] = model_ref
+            provider = normalize_provider_id(str(out.get("provider") or ""))
+            out["provider"] = provider
+            out["model"] = normalize_model_for_provider(provider, model_ref)
     if step.metadata.get("agent_runtime"):
         out["runtime"] = step.metadata["agent_runtime"]
     return out

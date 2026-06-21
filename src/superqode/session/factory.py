@@ -67,16 +67,33 @@ def _safe_id(value: str) -> str:
 
 def classify_model_ref(model_ref: str) -> dict[str, Any]:
     """Return provider/model/runtime tags for a factory model reference."""
+    from superqode.providers.model_specs import split_provider_model_ref
+
     raw = (model_ref or "").strip()
-    provider = ""
-    model = raw
-    if "/" in raw:
-        provider, model = raw.split("/", 1)
+    parsed = split_provider_model_ref(raw)
+    provider = parsed.provider
+    model = parsed.model or raw
     provider_lower = provider.lower()
     tags: list[str] = []
-    if provider_lower in {"local", "ollama", "lmstudio", "lm-studio", "vllm", "llamacpp", "llama.cpp"}:
+    if provider_lower in {
+        "local",
+        "ollama",
+        "lmstudio",
+        "lm-studio",
+        "vllm",
+        "llamacpp",
+        "llama.cpp",
+    }:
         tags.extend(["LOCAL", "OSS", "PRIVATE"])
-    elif provider_lower in {"byok", "openai", "anthropic", "google", "gemini", "openrouter"}:
+    elif provider_lower in {
+        "byok",
+        "openai",
+        "anthropic",
+        "google",
+        "gemini",
+        "openrouter",
+        "huggingface",
+    }:
         tags.extend(["BYOK", "CLOUD"])
     elif provider_lower in {"codex", "claude", "gemini-cli", "acp"}:
         tags.extend(["RUNTIME", "CLOUD_OR_LOCAL"])

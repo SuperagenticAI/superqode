@@ -24,6 +24,7 @@ from .schema import (
     ErrorConfig,
 )
 from ..providers.models import LATEST_GOOGLE_FLASH_MODEL, LATEST_GOOGLE_PRO_MODEL
+from ..providers.model_specs import split_provider_model_ref
 
 
 class ConfigError(Exception):
@@ -358,6 +359,10 @@ def resolve_model_spec(model_spec: str, config: Config) -> tuple[str, str]:
     if model_spec in config.custom_models:
         custom_def = config.custom_models[model_spec]
         return custom_def["provider"], custom_def["model"]
+
+    parsed = split_provider_model_ref(model_spec)
+    if parsed.provider == "huggingface":
+        return parsed.provider, parsed.model
 
     # Auto-detect provider from model name patterns
     provider_patterns = {
@@ -732,6 +737,18 @@ Critique and improve code quality from development.""",
             ],
             custom_models_allowed=True,
         ),
+        "huggingface": ProviderConfig(
+            api_key_env="HF_TOKEN",
+            description="Hugging Face Inference Providers via the HF router",
+            recommended_models=[
+                "zai-org/GLM-5.2:fireworks-ai",
+                "zai-org/GLM-5.2:together",
+                "zai-org/GLM-5.2:novita",
+                "zai-org/GLM-5.2:zai-org",
+                "zai-org/GLM-5.2:deepinfra",
+            ],
+            custom_models_allowed=True,
+        ),
         "ollama": ProviderConfig(
             base_url="http://localhost:11434",
             description="Local Ollama models",
@@ -839,6 +856,12 @@ Critique and improve code quality from development.""",
         "latest-gemini": LATEST_GOOGLE_PRO_MODEL,
         "latest-gemini-flash": LATEST_GOOGLE_FLASH_MODEL,
         "latest-glm": "glm-4.7",
+        "glm52": "hf.zai-org/GLM-5.2:fireworks-ai",
+        "glm52-hf-fireworks": "hf.zai-org/GLM-5.2:fireworks-ai",
+        "glm52-hf-together": "hf.zai-org/GLM-5.2:together",
+        "glm52-hf-novita": "hf.zai-org/GLM-5.2:novita",
+        "glm52-hf-zai": "hf.zai-org/GLM-5.2:zai-org",
+        "glm52-hf-deepinfra": "hf.zai-org/GLM-5.2:deepinfra",
         "fast": "claude-haiku-4-5-20251001",
         "balanced": "claude-sonnet-4-5-20250929",
         "powerful": "claude-opus-4-6",

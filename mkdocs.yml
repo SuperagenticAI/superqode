@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
-site_description: "Turn open models into serious coding agents. Your harness, your models, your memory. Built for Local Agentic Coding, connected to everything else through BYOK, ACP, agent SDKs, MCP, and A2A."
+site_description: "Coding harness framework optimized for Open Models. Own the harness around local models, closed models, local endpoints, and remote runtimes."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode
@@ -156,6 +156,7 @@ nav:
 
   - 🖥️ Local Agentic Coding:
     - local-agentic-coding.md
+    - ✈️ Airplane Mode: advanced/airplane-mode.md
     - 🔁 Recursive Dynamic Coding: local-recursive-dynamic-coding.md
 
   - 📚 Concepts:
@@ -198,7 +199,9 @@ nav:
     - 🔧 Tools System: advanced/tools-system.md
     - 🐍 Monty Python REPL: advanced/monty-python-repl.md
     - ⚓ Harness System: advanced/harness-system.md
+    - 📈 Optimization Story: advanced/optimization.md
     - 📈 Run, Measure, Optimize: advanced/harness-optimization.md
+    - 🧪 Skill Optimization: advanced/skill-optimization.md
     - 🔁 Omnigent Compatibility: advanced/omnigent-compat.md
     - 🏭 Software Factory: advanced/software-factory.md
     - 🔌 Runtime Backends: runtimes.md
