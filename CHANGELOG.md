@@ -7,13 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.50] - 2026-06-23
+## [0.2.0b1] - 2026-06-23
 
 ### Changed
 
+- **Beta launch** - Marked this release as the first public beta for the SuperQode harness engineering framework.
 - **uv-first project workflow** - Updated contributor docs and GitHub Actions to install, lint, test, build, and deploy through uv.
 - **Documentation homepage polish** - Reduced the homepage title scale, added a feature reference map, documented Harness Independence and Local Dynamic Workflows with RLM in feature lists, and added a CLI reference coverage test for top-level command groups.
-- **Release metadata** - Bumped the package version and runtime `__version__` to `0.1.50`.
+- **Release metadata** - Bumped the package version and runtime `__version__` to `0.2.0b1`.
 
 ## [0.1.49] - 2026-06-22
 

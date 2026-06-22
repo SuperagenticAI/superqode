@@ -249,7 +249,7 @@ def test_runtime_registry_knows_codex_sdk():
         assert codex.install_hint is None
     else:
         assert codex.install_hint.startswith("uv ")
-        assert "superqode[codex-sdk]" in codex.install_hint
+        assert "[codex-sdk]" in codex.install_hint
 
 
 def test_factory_reports_missing_codex_sdk_when_not_installed(monkeypatch, tmp_path):

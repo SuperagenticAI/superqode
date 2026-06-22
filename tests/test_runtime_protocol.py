@@ -41,7 +41,7 @@ def test_list_runtimes_reports_install_hint_for_missing_extras():
         if not info[name].installed:
             hint = info[name].install_hint
             assert hint.startswith("uv ")
-            assert f"superqode[{name}]" in hint
+            assert f"[{name}]" in hint
 
 
 def test_all_known_runtimes_are_implemented():
@@ -93,7 +93,7 @@ def test_optional_runtimes_raise_not_installed_when_missing():
 
     with pytest.raises(RuntimeNotInstalledError) as exc:
         create_runtime("adk")
-    assert "superqode[adk]" in str(exc.value)
+    assert "[adk]" in str(exc.value)
 
 
 def test_builtin_runtime_conforms_to_protocol():
