@@ -2684,7 +2684,7 @@ class TestInitCommand:
             show = runner.invoke(cli_main, ["config", "show"])
             assert show.exit_code == 0
             assert "superqode:" in show.output
-            assert "gpt-4o-mini" in show.output
+            assert "qwen3:8b" in show.output
             validate = runner.invoke(cli_main, ["config", "validate"])
             assert validate.exit_code == 0
             from superqode.config.loader import load_config
@@ -2692,9 +2692,16 @@ class TestInitCommand:
             cfg = load_config(Path("superqode.yaml"))
             assert cfg.superqode.team_name == "My SuperQode Project"
             assert cfg.default is not None
-            assert cfg.default.provider == "openai"
-            assert cfg.default.model == "gpt-4o-mini"
-            assert cfg.providers["openai"].api_key_env == "OPENAI_API_KEY"
+            assert cfg.default.mode == "local"
+            assert cfg.default.provider == "ollama"
+            assert cfg.default.model == "qwen3:8b"
+            assert cfg.providers["ollama"].base_url == "http://localhost:11434"
+            assert "qwen3-coder:30b-a3b" in cfg.providers["ollama"].recommended_models
+            harness = Path(".superqode/harnesses/coding.yaml").read_text()
+            assert "primary: ollama/qwen3:8b" in harness
+            assert "provider: ollama" in harness
+            assert "gpt-4o-mini" not in harness
+            assert "openai" not in harness.lower()
 
     def test_init_force(self, runner, tmp_path):
         """Test init --force overwrites existing config."""

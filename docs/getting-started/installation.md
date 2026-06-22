@@ -142,9 +142,19 @@ cd /path/to/your/project
 superqode config init
 ```
 
-This creates `superqode.yaml` in the current directory (project-level config).
+This creates `superqode.yaml` in the current directory with local-first defaults for Ollama and `qwen3:8b`.
 
-### 2. Set Up API Keys (BYOK Mode)
+### 2. Set Up Local Models
+
+For the local-first path, start Ollama and pull a starter model:
+
+```bash
+ollama pull qwen3:8b
+```
+
+Then run `superqode`, use `:local init`, `:connect local`, and select `superqode.local.yaml` with `:harness superqode.local.yaml`.
+
+### 3. Set Up API Keys (BYOK Mode)
 
 For cloud providers, set your API keys as environment variables:
 

@@ -1,19 +1,21 @@
 superqode:
   version: "1.0"
   team_name: "My SuperQode Project"
-  description: "Portable coding agent harness"
+  description: "Local-first coding agent harness"
 
 default:
-  description: "Default coding model"
-  mode: byok
-  provider: openai
-  model: gpt-4o-mini
+  description: "Local-first coding model"
+  mode: local
+  provider: ollama
+  model: qwen3:8b
 
 providers:
-  openai:
-    api_key_env: OPENAI_API_KEY
-    description: "OpenAI API"
+  ollama:
+    description: "Local Ollama runtime"
+    base_url: http://localhost:11434
     recommended_models:
-      - gpt-4o-mini
+      - qwen3:8b
+      - qwen3-coder:30b-a3b
+      - gemma4:e4b
 
 mcp_servers: {}

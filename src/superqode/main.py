@@ -948,7 +948,7 @@ def _scaffold_project_config(force: bool = False) -> tuple[Path, list[Path]]:
     import shutil
     from dataclasses import replace
 
-    from superqode.harness import get_harness_template, save_harness_spec
+    from superqode.harness import ModelPolicySpec, get_harness_template, save_harness_spec
 
     config_path = Path.cwd() / "superqode.yaml"
     if config_path.exists() and not force:
@@ -963,24 +963,47 @@ def _scaffold_project_config(force: bool = False) -> tuple[Path, list[Path]]:
         config_path.write_text(
             'superqode:\n  version: "1.0"\n'
             '  team_name: "My SuperQode Project"\n'
-            '  description: "Portable coding agent harness"\n\n'
-            'default:\n  description: "Default coding model"\n'
-            "  mode: byok\n  provider: openai\n  model: gpt-4o-mini\n\n"
+            '  description: "Local-first coding agent harness"\n\n'
+            'default:\n  description: "Local-first coding model"\n'
+            "  mode: local\n  provider: ollama\n  model: qwen3:8b\n\n"
             "providers:\n"
-            "  openai:\n"
-            "    api_key_env: OPENAI_API_KEY\n"
-            '    description: "OpenAI API"\n'
+            "  ollama:\n"
+            '    description: "Local Ollama runtime"\n'
+            "    base_url: http://localhost:11434\n"
             "    recommended_models:\n"
-            "      - gpt-4o-mini\n\n"
+            "      - qwen3:8b\n"
+            "      - qwen3-coder:30b-a3b\n"
+            "      - gemma4:e4b\n\n"
             "mcp_servers: {}\n",
             encoding="utf-8",
         )
 
     harness_dir = Path(".superqode") / "harnesses"
+    local_model_policy = ModelPolicySpec(
+        primary="ollama/qwen3:8b",
+        fallbacks=("ollama/qwen3-coder:30b-a3b", "ollama/gemma4:e4b"),
+        profile="qwen-coding",
+        temperature=0.2,
+        tool_call_format="prompt",
+        pack="qwen-coder",
+        config={"provider": "ollama"},
+    )
     harness_specs = {
-        "coding": replace(get_harness_template("coding"), name="coding"),
-        "planning": replace(get_harness_template("no-tool"), name="planning"),
-        "review": replace(get_harness_template("no-tool"), name="review"),
+        "coding": replace(
+            get_harness_template("coding"),
+            name="coding",
+            model_policy=local_model_policy,
+        ),
+        "planning": replace(
+            get_harness_template("no-tool"),
+            name="planning",
+            model_policy=local_model_policy,
+        ),
+        "review": replace(
+            get_harness_template("no-tool"),
+            name="review",
+            model_policy=local_model_policy,
+        ),
     }
     created_harnesses: list[Path] = []
     for name, spec in harness_specs.items():
@@ -5089,9 +5112,9 @@ def models_rm(pattern, yes):
 @config.command("init")
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing configuration")
 def config_init(force):
-    """Initialize default SuperQode configuration."""
+    """Initialize local-first SuperQode configuration."""
     config_path, harness_paths = _scaffold_project_config(force=force)
-    click.echo(f"Created default configuration at {config_path}")
+    click.echo(f"Created local-first configuration at {config_path}")
     for path in harness_paths:
         click.echo(f"Created harness spec at {path}")
     click.echo("Created .agents/skills and .agents/roles")

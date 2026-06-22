@@ -2,6 +2,8 @@
 
 The `superqode harness` command group creates, inspects, runs, and debugs harness specs. A harness spec is a portable YAML file that defines what a coding agent is allowed to do: model policy, tools, permissions, workflow, context, and observability.
 
+Harness specs are separate from `superqode.yaml`. `superqode.yaml` configures the project environment. A harness file such as `harness.yaml` or `superqode.local.yaml` configures one repeatable agent run. You can keep many harness files in a repository and load the one you want with `--harness` or `:harness`.
+
 New to harnesses? Start with [Bring Your Own Harness](../getting-started/bring-your-own-harness.md) for a guided walkthrough, then use this page as the command reference. The deep-dive on every spec field lives in [Harness System](../advanced/harness-system.md).
 
 ```bash

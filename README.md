@@ -93,6 +93,8 @@ Inside the TUI, the local-first MVP path is:
 :harness superqode.local.yaml
 ```
 
+`superqode.yaml` and `superqode.local.yaml` have different jobs. `superqode.yaml` is project configuration: provider hints, endpoints, MCP servers, memory providers, aliases, and default connection settings. `superqode.local.yaml` is a HarnessSpec: the repeatable run contract for runtime, model policy, tools, sandbox, approvals, checks, workflow, and events. Generate project config with `superqode config init`; generate a harness with `:local init`, `superqode local init --repo .`, or `superqode harness init ...`.
+
 **Headless coding harness**
 ```bash
 cd your-project

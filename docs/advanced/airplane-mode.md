@@ -19,6 +19,15 @@ superqode local airplane prepare \
 superqode --harness superqode.airplane.yaml -p "implement the feature"
 ```
 
+The same setup can run from the TUI command prompt:
+
+```text
+:local airplane doctor --repo . --ref ~/src/reference-api
+:local airplane prepare --repo . --ref ~/src/reference-api --model ollama/qwen3:8b --force
+:local airplane smoke --repo . --ref ~/src/reference-api
+:harness superqode.airplane.yaml
+```
+
 `prepare` writes two files and, by default, builds one local index:
 
 - `superqode.airplane.yaml`: a strict no-network harness.
@@ -38,6 +47,17 @@ superqode local airplane index --repo . --ref ~/src/reference
 superqode local airplane smoke --repo . --ref ~/src/reference
 superqode local airplane models
 superqode local airplane health
+```
+
+TUI equivalents use the same arguments:
+
+```text
+:local airplane doctor --repo . --ref ~/src/reference
+:local airplane prepare --repo . --ref ~/src/reference
+:local airplane index --repo . --ref ~/src/reference
+:local airplane smoke --repo . --ref ~/src/reference
+:local airplane models
+:local airplane health
 ```
 
 - `doctor` checks local search roots, ripgrep, semantic-search availability,

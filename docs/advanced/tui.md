@@ -104,6 +104,8 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:connect byok` - Open the BYOK provider picker
 - `:local setup <name>` - TUI-first guide for model download, serving, context, harness, and smoke
 - `:local init` - Generate `superqode.local.yaml` and run local readiness checks
+- `:local airplane prepare` - Create a strict no-network local harness
+- `:local airplane smoke` - Verify offline harness and local search readiness
 - `:local smoke` - Run non-destructive local coding readiness checks
 - `:local search <name>` - Find a model + how to get it on every engine (size + fit)
 - `:hub` - Model-search mode: just type a model name (off by default)

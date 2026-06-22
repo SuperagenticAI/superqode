@@ -1,4 +1,5 @@
 from rich.console import Console
+from pathlib import Path
 from types import SimpleNamespace
 import asyncio
 import concurrent.futures
@@ -52,6 +53,9 @@ class FakeLog:
         self.items.append(text)
 
     def add_error(self, text):
+        self.items.append(text)
+
+    def add_system(self, text):
         self.items.append(text)
 
     def add_tool_call(
@@ -109,6 +113,26 @@ class FakeACPLoopRunner:
     def run(self, coro, timeout=None):
         self.cancel_called = True
         return asyncio.run(coro)
+
+
+def test_tui_init_creates_local_first_config_and_harness(monkeypatch, tmp_path):
+    app = make_app()
+    log = FakeLog()
+    monkeypatch.chdir(tmp_path)
+
+    app._init_config("", log)
+
+    config = Path("superqode.yaml").read_text(encoding="utf-8")
+    harness = Path(".superqode/harnesses/coding.yaml").read_text(encoding="utf-8")
+    rendered = "\n".join(str(item) for item in log.items)
+
+    assert "provider: ollama" in config
+    assert "model: qwen3:8b" in config
+    assert "primary: ollama/qwen3:8b" in harness
+    assert "provider: ollama" in harness
+    assert "gpt-4o-mini" not in config
+    assert "gpt-4o-mini" not in harness
+    assert "Created local-first harness" in rendered
 
 
 class FakeACPClient:
@@ -3374,6 +3398,47 @@ def test_tui_local_pack_init_dry_run(monkeypatch, tmp_path):
     assert "minimax-m1" in rendered
     assert "Dry run only" in rendered
     assert not (tmp_path / "minimax-m1.yaml").exists()
+
+
+def test_tui_local_airplane_dispatches_cli():
+    app = make_app()
+    log = FakeLog()
+    calls = []
+
+    async def fake_cli(command_parts, target_log, label):
+        calls.append((command_parts, target_log, label))
+
+    app._superqode_cli_cmd = fake_cli
+    app.run_worker = lambda coro: asyncio.run(coro)
+
+    app._local_cmd("airplane prepare --repo . --model ollama/qwen3:8b --force", log)
+
+    assert calls == [
+        (
+            [
+                "local",
+                "airplane",
+                "prepare",
+                "--repo",
+                ".",
+                "--model",
+                "ollama/qwen3:8b",
+                "--force",
+            ],
+            log,
+            "Airplane Mode",
+        )
+    ]
+
+
+def test_tui_local_airplane_requires_subcommand():
+    app = make_app()
+    log = FakeLog()
+
+    app._local_cmd("airplane", log)
+
+    rendered = "\n".join(str(item) for item in log.items)
+    assert ":local airplane <doctor|prepare|index|smoke|models|health>" in rendered
 
 
 def test_tui_local_build(monkeypatch, tmp_path):

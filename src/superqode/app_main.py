@@ -12516,8 +12516,10 @@ class SuperQodeApp(App):
         log.write(t)
 
     def _init_config(self, args: str, log: ConversationLog):
-        """Initialize superqode.yaml in current directory."""
+        """Initialize superqode.yaml and local-first starter harnesses."""
         from pathlib import Path
+
+        from superqode.main import _scaffold_project_config
 
         force = args.strip() == "--force" or args.strip() == "-f"
         config_path = Path.cwd() / "superqode.yaml"
@@ -12527,49 +12529,27 @@ class SuperQodeApp(App):
             log.add_system("Use :init --force to overwrite")
             return
 
-        # Use the packaged template
-        template_path = Path(__file__).parent / "data" / "superqode-template.yaml"
-        if template_path.exists():
-            import shutil
+        try:
+            created_config, harness_paths = _scaffold_project_config(force=force)
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not initialize project config: {exc}")
+            return
 
-            shutil.copy2(template_path, config_path)
-            log.add_success(f"Created {config_path} with harness defaults")
-            log.add_info(
-                "💡 Use :connect to choose a runtime, or edit harnesses under .superqode/."
-            )
-        else:
-            # Fallback: create basic config if template not found
-            default_config = """version: 2
-
-project:
-  name: My SuperQode Project
-  root: .
-
-defaults:
-  harness: coding
-  runtime: builtin
-
-harnesses:
-  coding: .superqode/harnesses/coding.yaml
-
-memory:
-  enabled: true
-  provider: local
-"""
-
-            with open(config_path, "w") as f:
-                f.write(default_config)
-            log.add_success(f"Created {config_path} with harness defaults")
-            log.add_info("💡 Use superqode harness init coding to create a harness spec.")
+        log.add_success(f"Created local-first config at {created_config}")
+        for path in harness_paths:
+            log.add_success(f"Created local-first harness at {path}")
+        log.add_info(
+            "💡 Defaults use Ollama and qwen3:8b. Use :connect local and :harness .superqode/harnesses/coding.yaml."
+        )
 
         t = Text()
         t.append("\n  Quick start:\n", style=THEME["muted"])
-        t.append("    :connect acp <name> ", style=f"bold {THEME['success']}")
-        t.append("Connect an ACP agent\n", style=THEME["dim"])
-        t.append("    :connect            ", style=f"bold {THEME['cyan']}")
-        t.append("Open the connection picker\n", style=THEME["dim"])
-        t.append("    superqode harness init coding\n", style=f"bold {THEME['purple']}")
-        t.append("Create a reusable harness spec\n", style=THEME["dim"])
+        t.append("    :connect local          ", style=f"bold {THEME['cyan']}")
+        t.append("Connect Ollama, LM Studio, MLX, or DS4\n", style=THEME["dim"])
+        t.append("    :harness .superqode/harnesses/coding.yaml\n", style=f"bold {THEME['purple']}")
+        t.append("Use the generated local-first harness\n", style=THEME["dim"])
+        t.append("    :local init --yes       ", style=f"bold {THEME['success']}")
+        t.append("Generate a hardware-tuned local harness when ready\n", style=THEME["dim"])
         t.append("\n", style="")
         log.write(t)
 
@@ -24991,6 +24971,27 @@ memory:
             self.run_worker(
                 self._superqode_cli_cmd(["local", "optimize", *tokens], log, "Local optimization")
             )
+        elif sub == "airplane":
+            try:
+                tokens = shlex.split(subargs or "")
+            except ValueError as exc:
+                log.add_error(f"Could not parse :local airplane arguments: {exc}")
+                return
+            if not tokens:
+                log.add_info(
+                    "Usage: :local airplane <doctor|prepare|index|smoke|models|health> [options]"
+                )
+                log.add_system(
+                    "e.g. :local airplane prepare --repo . --model ollama/qwen3:8b --force"
+                )
+                return
+            self.run_worker(
+                self._superqode_cli_cmd(
+                    ["local", "airplane", *tokens],
+                    log,
+                    "Airplane Mode",
+                )
+            )
         elif sub == "build":
             self.run_worker(self._local_build(subargs, log))
         elif sub == "migrate":
@@ -25050,7 +25051,8 @@ memory:
             log.add_info(f"Unknown subcommand: {sub}")
             log.add_system(
                 "Available: init, smoke, labs, search, warm, status, scan, models, test, "
-                "info, recommend, serve, servers, stop, optimize, build, setup, migrate, pack init"
+                "info, recommend, serve, servers, stop, optimize, airplane, build, setup, "
+                "migrate, pack init"
             )
 
     @staticmethod
@@ -28297,6 +28299,8 @@ memory:
                     (":local migrate", "Plan prompt/skill migration to local models"),
                     (":local pack init", "Create a project-owned model policy pack"),
                     (":local optimize", "Benchmark local model candidates and role routing"),
+                    (":local airplane prepare", "Create a strict no-network local harness"),
+                    (":local airplane smoke", "Verify offline harness and local search readiness"),
                     (":local smoke", "Run non-destructive local coding readiness checks"),
                     (
                         ":local search <query>",

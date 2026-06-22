@@ -70,6 +70,15 @@ superqode local airplane models
 superqode local airplane health
 ```
 
+Inside the TUI, use the same subcommands after `:local`:
+
+```text
+:local airplane doctor --repo . --ref ~/src/reference
+:local airplane prepare --repo . --ref ~/src/reference --model ollama/qwen3:8b --force
+:local airplane smoke --repo . --ref ~/src/reference
+:harness superqode.airplane.yaml
+```
+
 `prepare` writes `superqode.airplane.yaml`,
 `.superqode/airplane/manifest.json`, and by default
 `.superqode/code-search.sqlite3`. The harness sets `allow_network: false`,

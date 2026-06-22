@@ -43,8 +43,10 @@ See [BYOK providers](../providers/byok.md) or [Local providers](../providers/loc
 
 !!! tip "No config file needed"
     SuperQode runs without a `superqode.yaml`. Just connect a model and start asking.
-    The harness file, project defaults, and MCP servers are all optional extras you
-    add with `superqode init` when you need them.
+    Project defaults and MCP servers live in `superqode.yaml`. Repeatable run
+    behavior lives in a HarnessSpec such as `harness.yaml` or
+    `superqode.local.yaml`. Add them when you need durable project configuration
+    or a run contract you can inspect, version, and reuse.
 
 ---
 
@@ -95,6 +97,11 @@ non-destructive smoke check when a local server is available. Use `:local build`
 or `superqode local build` when you already know the model, endpoint, or pack
 you want to target. The pack is only the starting point; inspect the generated
 YAML and customize model policy, memory, tools, and approvals for your project.
+
+`superqode.local.yaml` is a harness file, not project configuration. Load it
+with `superqode --harness superqode.local.yaml` or `:harness
+superqode.local.yaml`. Use `superqode config init` separately when you want a
+project-level `superqode.yaml`.
 
 You can also ask directly in natural language:
 
