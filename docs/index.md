@@ -123,6 +123,14 @@ Harness engineering is the discipline after prompt engineering and context engin
 
     [:octicons-arrow-right-24: Bring Your Own Harness](getting-started/bring-your-own-harness.md)
 
+-   :octicons-git-branch-16:{ .lg .middle } **Harness independence**
+
+    ---
+
+    Keep the agent loop inspectable and versioned in your repo. SuperQode lets teams measure, change, and improve the harness itself instead of depending on a locked product harness.
+
+    [:octicons-arrow-right-24: What Is Harness Engineering](harness-engineering.md)
+
 -   :octicons-cpu-16:{ .lg .middle } **Model routing**
 
     ---
@@ -138,6 +146,14 @@ Harness engineering is the discipline after prompt engineering and context engin
     Detect local engines, probe real context windows, generate starter harnesses, smoke test readiness, repair weak tool calls, and benchmark local candidates.
 
     [:octicons-arrow-right-24: Local Agentic Coding](local-agentic-coding.md)
+
+-   :octicons-workflow-16:{ .lg .middle } **Local dynamic workflows with RLM**
+
+    ---
+
+    Use local recursive language-model runs for large logs, traces, diffs, and repo-slice audits. `context_handle`, `spawn_harness`, and bounded dynamic workflow scripts keep evidence outside the prompt while preserving replayable lineage.
+
+    [:octicons-arrow-right-24: Local Recursive Dynamic Coding](local-recursive-dynamic-coding.md)
 
 -   :octicons-graph-16:{ .lg .middle } **Evaluation and optimization**
 
@@ -188,6 +204,31 @@ Harness engineering is the discipline after prompt engineering and context engin
     [:octicons-arrow-right-24: Connection Modes](concepts/modes.md)
 
 </div>
+
+---
+
+## Feature Reference Map
+
+Every major product surface has a dedicated reference page. Start with the area
+you are changing, then use the CLI reference when you need exact flags.
+
+| Area | Documentation |
+| --- | --- |
+| CLI commands | [CLI Reference](cli-reference/index.md) |
+| TUI commands | [TUI Reference](advanced/tui.md) |
+| Harness specs, workflows, evals, and events | [Harness System](advanced/harness-system.md) |
+| Runtime backends and SDK adapters | [Runtime Backends](runtimes.md) |
+| Providers, model catalog, and connection profiles | [Models & Providers](providers/index.md) |
+| Local and Open Model workflows | [Local Agentic Coding](local-agentic-coding.md) |
+| Tools, search, MCP, and permissions | [Tools Catalog](advanced/tools-catalog.md) |
+| Safety, sandboxing, and approvals | [Safety & Permissions](advanced/safety-permissions.md) |
+| Sessions, sharing, memory, and logging | [Session Management](advanced/session-management.md) |
+| Plugins, skills, and optimization | [Plugin Authoring](advanced/plugin-authoring.md) |
+| Automation, channels, MCP, ACP, and A2A | [Advanced Workflows](advanced/index.md) |
+| Environment variables and YAML config | [Configuration](configuration/index.md) |
+
+The release checks include a CLI documentation coverage test so new command
+groups are not added without a reference page.
 
 ---
 

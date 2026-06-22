@@ -14,15 +14,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+        run: uv sync --extra dev
       - name: Ruff lint
-        run: ruff check .
+        run: uv run ruff check .
       - name: Ruff format check
-        run: ruff format --check .
+        run: uv run ruff format --check .
 
   test:
     runs-on: ubuntu-latest
@@ -33,19 +32,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+        run: uv sync --extra dev
       - name: Pytest
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        run: pytest -p pytest_asyncio.plugin
+        run: uv run pytest -p pytest_asyncio.plugin
       - name: Harness example doctor
         run: |
           for spec in examples/harnesses/*.yaml; do
-            superqode harness doctor --spec "$spec" --runtime builtin --json >/dev/null
+            uv run superqode harness doctor --spec "$spec" --runtime builtin --json >/dev/null
           done
 
   build:
@@ -57,10 +55,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
-      - name: Install build tooling
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install build
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
       - name: Build package
-        run: python -m build
+        run: uv build

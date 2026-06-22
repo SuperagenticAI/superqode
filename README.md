@@ -66,8 +66,8 @@ SuperQode separates agent systems into interchangeable pieces: the **harness** c
 # Using uv (best performance)
 uv tool install superqode
 
-# Or using pip
-uv tool install superqode
+# Or run without installing
+uvx superqode
 ```
 
 **Alternate (No Python Required, SuperQode TUI Only)**
@@ -165,8 +165,10 @@ superqode harness run --spec harness.yaml --runtime codex-sdk --prompt "summariz
 ## Key Features
 
 - **Harness specification**: One portable spec controls runtime, model policy, tools, memory, search, sandbox, approvals, workflow, and output.
+- **Harness independence**: Inspect, version, measure, and improve the agent loop as your own repository artifact instead of depending on a locked product harness.
 - **Model routing**: Use Open Models or closed models, local endpoints or remote providers, small utility models or large coding models.
 - **Local first Open Model support**: Detect local engines, probe context windows, generate starter harnesses, run smoke checks, and benchmark local candidates.
+- **Local dynamic workflows with RLM**: Run recursive local-model analysis over large logs, traces, diffs, and repo slices with `context_handle`, `spawn_harness`, and bounded dynamic workflow scripts.
 - **Measure and optimize**: Use harness tests, eval scorecards, local route optimization, harness optimization, and skill optimization with regression gates.
 - **Local code intelligence**: Use bounded reads, local code search, multi repo search, semantic search, offline indexes, and post edit verification.
 - **Configurable memory**: Keep local memory by default, then connect provider neutral memory systems when needed.
@@ -294,8 +296,8 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ```bash
 git clone https://github.com/SuperagenticAI/superqode
 cd superqode
-uv pip install -e ".[dev]"
-pytest
+uv sync --extra dev --extra docs
+uv run pytest
 ```
 
 ## License

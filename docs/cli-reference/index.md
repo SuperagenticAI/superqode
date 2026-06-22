@@ -15,6 +15,37 @@ SuperQode provides a CLI for your portable coding agent harness: coding sessions
 superqode [OPTIONS] COMMAND [ARGS]...
 ```
 
+## Command Group References
+
+| Group | Reference |
+| --- | --- |
+| `agents` | [Agent Commands](agents-commands.md) |
+| `auth` | [Auth Commands](auth-commands.md) |
+| `benchmark` | [Benchmark Commands](benchmark-commands.md) |
+| `config` | [Config Commands](config-commands.md) |
+| `connect` | [Connect Commands](connect-commands.md) |
+| `daemon` | [Daemon Command](daemon-command.md) |
+| `doctor` | [Doctor Command](doctor-command.md) |
+| `factory` | [Factory Commands](factory-commands.md) |
+| `harness` | [Harness Commands](harness-commands.md) |
+| `init` | [Init Commands](init-commands.md) |
+| `local` | [Local Commands](local-commands.md) |
+| `mcp` | [MCP Command](mcp-command.md) |
+| `memory` | [Memory Commands](memory-commands.md) |
+| `models` | [Models Commands](models-commands.md) |
+| `plugins` | [Plugins Commands](plugins-commands.md) |
+| `profiles` | [Profiles and Tools Commands](profiles-commands.md) |
+| `providers` | [Provider Commands](provider-commands.md) |
+| `runtime` | [Runtime Commands](runtime-commands.md) |
+| `sandbox` | [Sandbox Commands](sandbox-commands.md) |
+| `serve` | [Serve Commands](serve-commands.md) |
+| `sessions` | [Sessions Commands](sessions-commands.md) |
+| `share` | [Share Commands](share-commands.md) |
+| `skillopt` | [SkillOpt Commands](skillopt-commands.md) |
+| `skills` | [Skills Commands](skills-commands.md) |
+| `tools` | [Tools Commands](tools-commands.md) |
+| `trust` | [Trust Commands](trust-commands.md) |
+
 ### Global Options
 
 | Option | CLI | Description |

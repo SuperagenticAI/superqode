@@ -188,6 +188,7 @@ class MLXClient(LocalProviderClient):
     @staticmethod
     def get_available_models() -> List[LocalModel]:
         """Get MLX models currently available from a running server."""
+
         async def get_server_models():
             try:
                 client = MLXClient()

@@ -12,10 +12,10 @@ This guide covers SuperQode installation, including prerequisites, verification,
 uv tool install superqode
 ```
 
-Or using pip:
+Or run once without installing:
 
 ```bash
-uv tool install superqode
+uvx superqode
 ```
 
 That's it! Verify with:
@@ -85,16 +85,12 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv tool install superqode
 ```
 
-### Method 2: pip (Primary Recommendation)
+### Method 2: uvx (No Persistent Install)
 
-Standard installation via PyPI.
+Run SuperQode directly through uv when you want a temporary command.
 
 ```bash
-# Install SuperQode
-uv tool install superqode
-
-# Verify installation
-superqode --version
+uvx superqode --version
 ```
 
 ---
@@ -124,13 +120,10 @@ git clone https://github.com/SuperagenticAI/superqode.git
 cd superqode
 
 # Install using uv (recommended for dev)
-uv sync
-
-# Or, editable install into the active venv
-uv pip install -e ".[dev]"
+uv sync --extra dev --extra docs
 
 # Verify installation
-superqode --version
+uv run superqode --version
 ```
 
 ### Environment-Aware Extras

@@ -67,7 +67,7 @@ This guide gets you from install to a useful first run.
 | Requirement | Version | Notes |
 | --- | --- | --- |
 | Python | 3.12+ | Required for the Python package |
-| pip or uv | latest recommended | `uv tool install superqode` gives an isolated install |
+| uv | latest recommended | `uv tool install superqode` gives an isolated install |
 | Git | 2.25+ | Recommended for repository work and reviewing changes |
 
 Optional tools depend on your workflow:
@@ -89,11 +89,10 @@ Optional tools depend on your workflow:
     superqode --version
     ```
 
-=== "pip"
+=== "uvx"
 
     ```bash
-    uv tool install superqode
-    superqode --version
+    uvx superqode --version
     ```
 
 === "source"
@@ -101,8 +100,8 @@ Optional tools depend on your workflow:
     ```bash
     git clone https://github.com/SuperagenticAI/superqode.git
     cd superqode
-    uv pip install -e .
-    superqode --version
+    uv sync --extra dev
+    uv run superqode --version
     ```
 
 ---

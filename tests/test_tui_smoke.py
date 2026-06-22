@@ -476,9 +476,7 @@ def test_runtime_missing_message_includes_environment_context(monkeypatch):
         ),
     )
 
-    message = SuperQodeApp._runtime_install_message(
-        "pydanticai", 'uv add "superqode[pydanticai]"'
-    )
+    message = SuperQodeApp._runtime_install_message("pydanticai", 'uv add "superqode[pydanticai]"')
 
     assert "Runtime 'pydanticai' is not installed." in message
     assert "SuperQode is running from: project virtual environment" in message

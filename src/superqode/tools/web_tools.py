@@ -671,7 +671,9 @@ Useful for reading documentation, API responses, web pages, etc."""
         except Exception as e:
             return ToolResult(success=False, output="", error=f"Fetch error: {str(e)}")
 
-    def _sync_fetch(self, url: str, timeout: int | float | None = None, max_size: int | None = None) -> Dict[str, Any]:
+    def _sync_fetch(
+        self, url: str, timeout: int | float | None = None, max_size: int | None = None
+    ) -> Dict[str, Any]:
         """Synchronous fetch implementation."""
         timeout = timeout or self.DEFAULT_TIMEOUT
         max_size = max_size or self.MAX_SIZE

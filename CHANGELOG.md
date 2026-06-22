@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.50] - 2026-06-23
+
+### Changed
+
+- **uv-first project workflow** - Updated contributor docs and GitHub Actions to install, lint, test, build, and deploy through uv.
+- **Documentation homepage polish** - Reduced the homepage title scale, added a feature reference map, documented Harness Independence and Local Dynamic Workflows with RLM in feature lists, and added a CLI reference coverage test for top-level command groups.
+- **Release metadata** - Bumped the package version and runtime `__version__` to `0.1.50`.
+
+## [0.1.49] - 2026-06-22
+
+### Fixed
+
+- **Installation docs** - Corrected the pip installation examples in the README and getting-started guide so they no longer repeat the `uv tool install` command.
+
+### Changed
+
+- **Release metadata** - Bumped the package version and runtime `__version__` to `0.1.49`.
+
 ## [0.1.48] - 2026-06-22
 
 ### Changed

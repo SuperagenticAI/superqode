@@ -5,31 +5,29 @@ Thanks for your interest in improving SuperQode. This guide keeps contributions 
 ## Development Setup
 
 1. Ensure Python 3.12+ is installed.
-2. Clone the repo and create a virtual environment.
+2. Clone the repo and install dependencies with uv.
 
 ```bash
 git clone https://github.com/SuperagenticAI/superqode.git
 cd superqode
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+uv sync --extra dev --extra docs
 ```
 
 ## Common Commands
 
 ```bash
 # Run tests
-pytest
+uv run pytest
 
 # Lint and format
-ruff check .
-ruff format .
+uv run ruff check .
+uv run ruff format .
 
 # Type checks
-mypy src/superqode
+uv run mypy src/superqode
 
 # Build docs locally
-mkdocs serve
+uv run mkdocs serve
 ```
 
 ## Coding Standards

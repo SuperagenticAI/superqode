@@ -9210,9 +9210,7 @@ class SuperQodeApp(App):
 
         log.add_info("Usage: :sessions [resume [id]|list|graph]")
 
-    def _show_session_resume_picker(
-        self, log: ConversationLog, clear_log: bool = True
-    ) -> None:
+    def _show_session_resume_picker(self, log: ConversationLog, clear_log: bool = True) -> None:
         """Show a keyboard-navigable picker for resuming local sessions."""
         manager = self._get_session_manager()
         sessions = manager.list_all_sessions()[:12]
@@ -13944,7 +13942,9 @@ class SuperQodeApp(App):
             self._plan_mode_enabled = True
             self._refresh_plan_status_badge()
             log.add_success("Plan mode ON. New prompts will plan before native tools run.")
-            log.add_info("Use :mode build to return to the coding harness, or :plan run to execute.")
+            log.add_info(
+                "Use :mode build to return to the coding harness, or :plan run to execute."
+            )
         else:
             log.add_info("Usage: :mode [chat|build|plan]")
 
@@ -22272,7 +22272,15 @@ class SuperQodeApp(App):
             return shlex.join(cmd)
 
         if engine == "llama.cpp":
-            cmd = ["llama-server", "-m", model or "/path/to/model.gguf", "--host", host, "--port", str(port)]
+            cmd = [
+                "llama-server",
+                "-m",
+                model or "/path/to/model.gguf",
+                "--host",
+                host,
+                "--port",
+                str(port),
+            ]
             if ctx:
                 cmd += ["-c", str(ctx)]
             return shlex.join(cmd)
@@ -22301,11 +22309,16 @@ class SuperQodeApp(App):
         t.append("\n  🟡 ", style=THEME["warning"])
         t.append(f"{engine} is not running", style=f"bold {THEME['text']}")
         t.append(f" for {label}\n", style=THEME["cyan"])
-        t.append("  Recommended: start the server yourself with the native command:\n", style=THEME["muted"])
+        t.append(
+            "  Recommended: start the server yourself with the native command:\n",
+            style=THEME["muted"],
+        )
         t.append("      ", style="")
         t.append(native_command, style=THEME["cyan"])
         t.append("\n", style="")
-        t.append("      Edit the model, port, or context if your setup needs it.\n", style=THEME["dim"])
+        t.append(
+            "      Edit the model, port, or context if your setup needs it.\n", style=THEME["dim"]
+        )
         t.append("      SuperQode managed fallback: ", style=THEME["muted"])
         t.append(command, style=THEME["cyan"])
         t.append("\n", style="")
@@ -22506,7 +22519,9 @@ class SuperQodeApp(App):
         t.append(" when you want the repo-aware coding harness and tools.\n", style=THEME["muted"])
         t.append("  Use ", style=THEME["muted"])
         t.append(":plan on", style=f"bold {THEME['cyan']}")
-        t.append(" to reason first before any edits or native tool execution.\n", style=THEME["muted"])
+        t.append(
+            " to reason first before any edits or native tool execution.\n", style=THEME["muted"]
+        )
         t.append("  Toggle modes anytime with ", style=THEME["muted"])
         t.append(":mode", style=f"bold {THEME['cyan']}")
         t.append(" (Chat / Build / Plan).\n", style=THEME["muted"])
@@ -24197,19 +24212,29 @@ class SuperQodeApp(App):
                         style=THEME["muted"],
                     )
                     first_path = gguf[0]["path"]
-                    t.append("  Start llama.cpp with one of them, for example:\n", style=THEME["muted"])
+                    t.append(
+                        "  Start llama.cpp with one of them, for example:\n", style=THEME["muted"]
+                    )
                     t.append("      ", style="")
                     t.append(
                         self._native_local_server_command("llama.cpp", model=first_path),
                         style=THEME["cyan"],
                     )
                     t.append("\n", style="")
-                    t.append("      Edit the model path, port, or context if needed.\n", style=THEME["dim"])
+                    t.append(
+                        "      Edit the model path, port, or context if needed.\n",
+                        style=THEME["dim"],
+                    )
                 else:
-                    t.append("  No cached GGUF models found. Download one, e.g.:\n", style=THEME["muted"])
+                    t.append(
+                        "  No cached GGUF models found. Download one, e.g.:\n", style=THEME["muted"]
+                    )
                     t.append("      hf download <repo> <file>.gguf\n", style=THEME["cyan"])
                     t.append("  or point at a running server:\n", style=THEME["muted"])
-                    t.append("      llama-server -m /path/to/model.gguf --port 8081\n", style=THEME["cyan"])
+                    t.append(
+                        "      llama-server -m /path/to/model.gguf --port 8081\n",
+                        style=THEME["cyan"],
+                    )
                 t.append("\n  Then ", style=THEME["muted"])
                 t.append(":connect", style=f"bold {THEME['cyan']}")
                 t.append(" again and pick llama.cpp.\n", style=THEME["muted"])
@@ -26650,7 +26675,10 @@ class SuperQodeApp(App):
                         "  LM Studio is open and the lms CLI is available.\n",
                         style=THEME["success"],
                     )
-                    t.append("  Recommended: start the Local Server in LM Studio, or run:\n", style=THEME["muted"])
+                    t.append(
+                        "  Recommended: start the Local Server in LM Studio, or run:\n",
+                        style=THEME["muted"],
+                    )
                     t.append("      ", style="")
                     t.append("lms server start -p 1234", style=THEME["cyan"])
                     t.append("\n", style="")
@@ -26670,7 +26698,9 @@ class SuperQodeApp(App):
                     t.append("  Optional CLI after the app is open: ", style=THEME["muted"])
                     t.append("lms server start -p 1234", style=THEME["cyan"])
                     t.append("\n", style="")
-                t.append("  If you load by CLI, adjust model/context as needed: ", style=THEME["muted"])
+                t.append(
+                    "  If you load by CLI, adjust model/context as needed: ", style=THEME["muted"]
+                )
                 t.append("lms load <model-key> -c <ctx>", style=THEME["cyan"])
                 t.append("\n", style="")
                 if not readiness.startable and not getattr(readiness, "cli_available", False):
@@ -26710,7 +26740,10 @@ class SuperQodeApp(App):
                 t.append("      ", style="")
                 t.append(native_command, style=THEME["cyan"])
                 t.append(f"  # default port {default_port}\n", style=THEME["dim"])
-                t.append("      Edit the model, port, or context if your setup needs it.\n", style=THEME["dim"])
+                t.append(
+                    "      Edit the model, port, or context if your setup needs it.\n",
+                    style=THEME["dim"],
+                )
                 t.append("      SuperQode managed fallback: ", style=THEME["muted"])
                 t.append(managed_command, style=THEME["cyan"])
                 t.append("\n", style="")
@@ -26748,7 +26781,10 @@ class SuperQodeApp(App):
             t.append("      ", style="")
             t.append(native_command, style=THEME["cyan"])
             t.append("\n", style="")
-            t.append("      Replace <model-id> with the model id/path you actually have.\n", style=THEME["dim"])
+            t.append(
+                "      Replace <model-id> with the model id/path you actually have.\n",
+                style=THEME["dim"],
+            )
             t.append("      SuperQode managed fallback: ", style=THEME["muted"])
             t.append(f"{readiness.start_hint}", style=f"bold {THEME['success']}")
             t.append(" --port <N>\n", style=THEME["cyan"])

@@ -821,6 +821,7 @@ class ServerManager:
         )
 
         if wait:
+
             class _NoOwnedProcess:
                 def poll(self):
                     return None

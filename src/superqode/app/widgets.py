@@ -226,9 +226,7 @@ class ColorfulStatusBar(Static):
 
         mode = (self.interaction_mode or "").strip().lower()
         if mode:
-            mode_label = {"chat": "CHAT", "plan": "PLAN", "build": "BUILD"}.get(
-                mode, mode.upper()
-            )
+            mode_label = {"chat": "CHAT", "plan": "PLAN", "build": "BUILD"}.get(mode, mode.upper())
             mode_color = {
                 "chat": "#06b6d4",
                 "plan": "#fbbf24",
