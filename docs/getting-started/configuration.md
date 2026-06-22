@@ -30,6 +30,14 @@ superqode local init --repo .
 
 The files compose at runtime. A harness can say which model family, runtime, tools, and approval policy to use. `superqode.yaml` supplies the project environment around it, such as provider endpoints, MCP servers, memory configuration, and project defaults. A harness is not active just because it exists. Load one with `superqode --harness harness.yaml`, `superqode --harness superqode.local.yaml`, or `:harness <path>` inside the TUI.
 
+| File | Purpose | Created by |
+| --- | --- | --- |
+| `superqode.yaml` | Project or machine configuration | `superqode config init`, `:init` |
+| `.superqode/harnesses/coding.yaml` | Starter local-first coding harness created with project config | `superqode config init`, `:init` |
+| `harness.yaml` | Portable run contract you create and version | `superqode harness init ...`, `superqode harness wizard` |
+| `superqode.local.yaml` | Hardware-tuned local model harness | `superqode local init --repo .`, `:local init` |
+| `superqode.airplane.yaml` | No-network local harness for offline work | `superqode local airplane prepare`, `:local airplane prepare` |
+
 ---
 
 ## Create Project Config

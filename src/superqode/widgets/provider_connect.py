@@ -474,33 +474,16 @@ class ProviderConnectWidget(Container):
             client = client_class()
 
             if provider_id == "mlx":
-                # MLX server can be slow to respond during model load.
-                # Try listing models directly before falling back to cache.
+                # Only show models reported by a running MLX server. Hugging
+                # Face cache entries are not chat-ready until the user starts
+                # mlx_lm.server with that model, so listing them here is
+                # misleading and can lead to 404s after selection.
                 models = []
                 try:
                     models = await client.list_models()
                 except Exception:
                     models = []
 
-                if not models:
-                    try:
-                        models = MLXClient.get_available_models()
-                    except Exception:
-                        models = []
-
-                cached = []
-                try:
-                    cache_models = MLXClient.discover_huggingface_models()
-                    for model_info in cache_models:
-                        model_id = model_info["id"]
-                        if any(m.id == model_id for m in models):
-                            continue
-                        cached.append(MLXClient._model_from_cache(model_info, running=False))
-                except Exception:
-                    cached = []
-
-                # Running models first, then cached models
-                models = models + cached
                 models_sorted = sorted(models, key=lambda m: (not m.running, m.name))
 
                 self._models = [m.id for m in models_sorted]

@@ -9,7 +9,7 @@ import subprocess
 import pytest
 
 from superqode.app_main import SelectionAwareInput, SuperQodeApp, render_welcome
-from superqode.app.widgets import ConversationLog
+from superqode.app.widgets import ConversationLog, HintsBar, StreamingThinkingIndicator
 from superqode.harness import (
     AgentSpec,
     FileHarnessStore,
@@ -53,6 +53,9 @@ class FakeLog:
         self.items.append(text)
 
     def add_error(self, text):
+        self.items.append(text)
+
+    def add_warning(self, text):
         self.items.append(text)
 
     def add_system(self, text):
@@ -158,14 +161,230 @@ def make_app() -> SuperQodeApp:
     return app
 
 
-def test_welcome_positions_superqode_as_coding_harness():
+def test_streaming_indicator_uses_single_slow_rotating_phrase(monkeypatch):
+    import superqode.app.widgets as widgets
+
+    monkeypatch.setattr(widgets, "monotonic", lambda: 0)
+    indicator = StreamingThinkingIndicator()
+    indicator.is_active = True
+
+    text = render_plain(indicator.render())
+
+    assert "◌ 🧠 Thinking deeply" in text
+    assert text.count("Thinking deeply") == 1
+
+    monkeypatch.setattr(widgets, "monotonic", lambda: 128)
+    text = render_plain(indicator.render())
+
+    assert "🍕 Serving hot code" in text
+    assert text.count("Serving hot code") == 1
+
+
+def test_streaming_indicator_status_overrides_rotating_phrase(monkeypatch):
+    import superqode.app.widgets as widgets
+
+    monkeypatch.setattr(widgets, "monotonic", lambda: 128)
+    indicator = StreamingThinkingIndicator()
+    indicator.is_active = True
+    indicator.status = "Working… (step 2)"
+
+    text = render_plain(indicator.render())
+
+    assert "Working… (step 2)" in text
+    assert "Serving hot code" not in text
+
+
+def test_welcome_positions_superqode_as_harness_engineering_frameworks():
     welcome = render_welcome([])
 
     text = render_plain(welcome)
 
-    assert "Your Portable Local Agentic Coding Harness" in text
-    assert ":connect local" in text
+    assert "Harness Engineering frameworks for Coding Agents" in text
+    assert ":connect" in text
+    assert ":mode" in text
+    assert ":help" in text
+    assert ":init" not in text
+    assert "Explore the possibilities of SuperQode" in text
+    assert "Optimized for Local and Open Models" in text
+    assert "Build and Optimize Your Harness" in text
+    assert "Connect Anything" in text
+    assert "Local · ACP · MCP · A2A · BYOK · SDKs" in text
+    assert "Local/open models · Harnesses · ACP/MCP/A2A · BYOK/SDKs" not in text
     assert "Agentic Code Needs Super Quality Engineering" not in text
+
+
+def test_hints_bar_surfaces_mode_switcher():
+    text = render_plain(HintsBar().render())
+
+    assert ":connect" in text
+    assert ":init" not in text
+    assert ":mode" in text
+    assert ":harness" in text
+    assert ":memory" in text
+
+
+def test_lmstudio_app_only_prompt_does_not_arm_enter_start(monkeypatch):
+    import superqode.local.servers as servers
+    from superqode.local.servers import LocalReadiness
+
+    class _Manager:
+        def precheck(self, engine):
+            assert engine == "lmstudio"
+            return LocalReadiness(
+                engine="lmstudio",
+                installed=True,
+                running=False,
+                base_url="http://127.0.0.1:1234/v1",
+                state="stopped",
+                start_hint="Open LM Studio and start the Local Server on port 1234",
+                needs_model=False,
+                startable=False,
+                cli_available=False,
+            )
+
+    monkeypatch.setattr(servers, "get_manager", lambda: _Manager())
+
+    app = SuperQodeApp.__new__(SuperQodeApp)
+    pinned = []
+    app._pin_local_prompt_to_input = lambda placeholder, log, **kwargs: pinned.append(
+        (placeholder, kwargs)
+    )
+    log = FakeLog()
+
+    handled = asyncio.run(SuperQodeApp._render_local_server_state(app, "lmstudio", log))
+    text = "\n".join(render_plain(item) for item in log.items)
+
+    assert handled is True
+    assert getattr(app, "_awaiting_local_server_start", None) is None
+    assert "First open LM Studio" in text
+    assert 'open -a "LM Studio"' in text
+    assert "lms server start -p 1234" in text
+    assert "npx lmstudio install-cli" in text
+    assert pinned
+
+
+def test_lmstudio_cli_but_app_closed_prompt_asks_user_to_open_app_first(monkeypatch):
+    import superqode.local.servers as servers
+    from superqode.local.servers import LocalReadiness
+
+    class _Manager:
+        def precheck(self, engine):
+            assert engine == "lmstudio"
+            return LocalReadiness(
+                engine="lmstudio",
+                installed=True,
+                running=False,
+                base_url="http://127.0.0.1:1234/v1",
+                state="stopped",
+                start_hint=":local serve lmstudio",
+                needs_model=False,
+                startable=False,
+                cli_available=True,
+            )
+
+    monkeypatch.setattr(servers, "get_manager", lambda: _Manager())
+
+    app = SuperQodeApp.__new__(SuperQodeApp)
+    pinned = []
+    app._pin_local_prompt_to_input = lambda placeholder, log, **kwargs: pinned.append(
+        (placeholder, kwargs)
+    )
+    log = FakeLog()
+
+    handled = asyncio.run(SuperQodeApp._render_local_server_state(app, "lmstudio", log))
+    text = "\n".join(render_plain(item) for item in log.items)
+
+    assert handled is True
+    assert getattr(app, "_awaiting_local_server_start", None) is None
+    assert "First open LM Studio" in text
+    assert 'open -a "LM Studio"' in text
+    assert "lms server start -p 1234" in text
+    assert "Need SuperQode to run that command? Press Enter" not in text
+    assert "npx lmstudio install-cli" not in text
+    assert pinned
+
+
+def test_lmstudio_open_with_cli_offers_enter_start(monkeypatch):
+    import superqode.local.servers as servers
+    from superqode.local.servers import LocalReadiness
+
+    class _Manager:
+        def precheck(self, engine):
+            assert engine == "lmstudio"
+            return LocalReadiness(
+                engine="lmstudio",
+                installed=True,
+                running=False,
+                base_url="http://127.0.0.1:1234/v1",
+                state="stopped",
+                start_hint=":local serve lmstudio",
+                needs_model=False,
+                startable=True,
+                app_running=True,
+                cli_available=True,
+            )
+
+    monkeypatch.setattr(servers, "get_manager", lambda: _Manager())
+
+    app = SuperQodeApp.__new__(SuperQodeApp)
+    pinned = []
+    app._pin_local_prompt_to_input = lambda placeholder, log, **kwargs: pinned.append(
+        (placeholder, kwargs)
+    )
+    log = FakeLog()
+
+    handled = asyncio.run(SuperQodeApp._render_local_server_state(app, "lmstudio", log))
+    text = "\n".join(render_plain(item) for item in log.items)
+
+    assert handled is True
+    assert app._awaiting_local_server_start == "lmstudio"
+    assert "LM Studio is open and the lms CLI is available" in text
+    assert "Need SuperQode to run that command? Press Enter" in text
+    assert "lms server start -p 1234" in text
+    assert 'open -a "LM Studio"' not in text
+    assert pinned
+
+
+def test_startable_local_server_prompt_is_manual_first(monkeypatch):
+    import superqode.local.servers as servers
+    from superqode.local.servers import LocalReadiness
+
+    class _Manager:
+        def precheck(self, engine):
+            assert engine == "ollama"
+            return LocalReadiness(
+                engine="ollama",
+                installed=True,
+                running=False,
+                base_url="http://127.0.0.1:11434/v1",
+                state="stopped",
+                start_hint=":local serve ollama",
+                needs_model=False,
+                startable=True,
+            )
+
+    monkeypatch.setattr(servers, "get_manager", lambda: _Manager())
+
+    app = SuperQodeApp.__new__(SuperQodeApp)
+    pinned = []
+    app._pin_local_prompt_to_input = lambda placeholder, log, **kwargs: pinned.append(
+        (placeholder, kwargs)
+    )
+    log = FakeLog()
+
+    handled = asyncio.run(SuperQodeApp._render_local_server_state(app, "ollama", log))
+    text = "\n".join(render_plain(item) for item in log.items)
+
+    assert handled is True
+    assert app._awaiting_local_server_start == "ollama"
+    assert "Recommended: start it yourself" in text
+    assert "OLLAMA_HOST=127.0.0.1:11434 ollama serve" in text
+    assert ":local serve ollama" in text
+    assert "Edit the model, port, or context if your setup needs it." in text
+    assert "Need SuperQode to start a managed server? Press Enter" in text
+    assert "to start it now" not in text
+    assert pinned
+    assert "Start ollama yourself" in pinned[-1][0]
 
 
 def test_opencode_acp_model_normalization_preserves_provider_ids():
@@ -198,9 +417,143 @@ def test_connect_local_picker_lists_ds4():
     app._show_local_provider_picker(log)
 
     text = render_plain(log.items[-1])
+    assert "Local Model Lab" in text
+    assert ":chat on" in text
+    assert "no repo context or tools" in text
+    assert ":build" in text
+    assert "repo-aware coding harness" in text
+    assert ":plan on" in text
+    assert ":local doctor" in text
+    assert ":local optimize" in text
     assert "DwarfStar 4" in text
     assert "ds4" in text
     assert "recommended" in text
+
+
+def test_prompt_mode_label_tracks_chat_build_and_plan(monkeypatch):
+    app = make_app()
+    log = FakeLog()
+
+    class FakeLabel:
+        def __init__(self):
+            self.value = ""
+
+        def update(self, value):
+            self.value = value
+
+    class FakePrompt:
+        placeholder = SelectionAwareInput.DEFAULT_PLACEHOLDER
+
+    class FakeStatus:
+        plan_state = ""
+        interaction_mode = ""
+
+    label = FakeLabel()
+    prompt = FakePrompt()
+    status = FakeStatus()
+
+    def query_one(selector, *args, **kwargs):
+        if selector == "#prompt-symbol":
+            return label
+        if selector == "#prompt-input":
+            return prompt
+        if selector == "#status-bar":
+            return status
+        raise LookupError(selector)
+
+    monkeypatch.setattr(app, "query_one", query_one)
+    app.current_mode = "local"
+    app._pure_mode = SimpleNamespace(
+        session=SimpleNamespace(provider="ollama", model="qwen", connected=True)
+    )
+
+    app._chat_cmd("on", log)
+    assert label.value == "<>"
+    assert status.interaction_mode == "chat"
+    assert "No repo context or tools" in prompt.placeholder
+
+    app._build_cmd("", log)
+    assert label.value == "<>"
+    assert status.interaction_mode == "build"
+    assert prompt.placeholder == SelectionAwareInput.DEFAULT_PLACEHOLDER
+    assert app._chat_mode is False
+    assert app._plan_mode_enabled is False
+
+    app._handle_plan("on", log)
+    assert label.value == "<>"
+    assert status.interaction_mode == "plan"
+    assert "Plan first" in prompt.placeholder
+    assert status.plan_state == "ON"
+
+
+def test_prompt_border_title_uses_code_not_build(monkeypatch):
+    app = make_app()
+
+    class FakeInputBox:
+        border_title = ""
+
+    input_box = FakeInputBox()
+    monkeypatch.setattr(
+        app,
+        "query_one",
+        lambda selector, *args, **kwargs: input_box
+        if selector == "#input-box"
+        else (_ for _ in ()).throw(LookupError(selector)),
+    )
+
+    app._set_prompt_border_title()
+
+    assert input_box.border_title == "✎ Code"
+
+
+def test_mode_picker_switches_with_keyboard(monkeypatch):
+    app = make_app()
+    log = FakeLog()
+
+    class FakeSymbol:
+        def update(self, value):
+            self.value = value
+
+    class FakePrompt:
+        placeholder = SelectionAwareInput.DEFAULT_PLACEHOLDER
+
+    class FakeStatus:
+        plan_state = ""
+        interaction_mode = ""
+
+    symbol = FakeSymbol()
+    prompt = FakePrompt()
+    status = FakeStatus()
+
+    def query_one(selector, *args, **kwargs):
+        if selector == "#log":
+            return log
+        if selector == "#prompt-symbol":
+            return symbol
+        if selector == "#prompt-input":
+            return prompt
+        if selector == "#status-bar":
+            return status
+        raise LookupError(selector)
+
+    monkeypatch.setattr(app, "query_one", query_one)
+    app.set_timer = lambda *args, **kwargs: None
+
+    app._mode_cmd("", log)
+    text = render_plain(log.items[-1])
+    assert "Mode Switcher" in text
+    assert "CHAT" in text
+    assert "BUILD" in text
+    assert "PLAN" in text
+
+    app.action_navigate_mode_down()
+    app.action_navigate_mode_down()
+    app.action_select_highlighted_mode()
+
+    assert app._awaiting_mode_selection is False
+    assert app._plan_mode_enabled is True
+    assert app._chat_mode is False
+    assert status.interaction_mode == "plan"
 
 
 def test_connection_summary_renders_compact_local_card():
@@ -232,10 +585,12 @@ def test_colorful_status_bar_shows_local_provider_and_full_model():
 
     bar = ColorfulStatusBar()
     bar.update_byok_status("ollama", "gemma4:12b-mlx")
+    bar.interaction_mode = "chat"
 
     plain = bar.render().plain
     assert "ollama" in plain
     assert "gemma4:12b-mlx" in plain
+    assert "CHAT" in plain
 
 
 def test_work_command_renders_last_run_trace():
@@ -563,6 +918,12 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":connect acp" in COMMANDS
     assert ":connect byok" in COMMANDS
     assert ":connect local" in COMMANDS
+    assert ":chat" in COMMANDS
+    assert ":build" in COMMANDS
+    assert ":mode" in COMMANDS
+    assert ":mode chat" in COMMANDS
+    assert ":mode build" in COMMANDS
+    assert ":mode plan" in COMMANDS
     assert ":exit" in COMMANDS
     assert ":quit" in COMMANDS
     assert ":vim" in COMMANDS
@@ -574,6 +935,11 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":diff files" in COMMANDS
     assert ":timeline" in COMMANDS
     assert ":tree" in COMMANDS
+    assert ":sidebar" in COMMANDS
+    assert ":sodebar" in COMMANDS
+    assert ":sessions" in COMMANDS
+    assert ":sessions resume" in COMMANDS
+    assert ":resume" in COMMANDS
     assert ":share" in COMMANDS
     assert ":share create" in COMMANDS
     assert ":share import" in COMMANDS
@@ -604,6 +970,12 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":harness events" in slash_values
     assert ":connect" in slash_values
     assert ":connect acp" in slash_values
+    assert ":chat" in slash_values
+    assert ":build" in slash_values
+    assert ":mode" in slash_values
+    assert ":mode chat" in slash_values
+    assert ":mode build" in slash_values
+    assert ":mode plan" in slash_values
     assert ":skills optimize" in slash_values
     assert ":skillopt export" in slash_values
     assert ":skillopt check" in slash_values
@@ -625,6 +997,11 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":diff files" in slash_values
     assert ":timeline" in slash_values
     assert ":tree" in slash_values
+    assert ":sidebar" in slash_values
+    assert ":sodebar" in slash_values
+    assert ":sessions" in slash_values
+    assert ":sessions resume" in slash_values
+    assert ":resume" in slash_values
     assert "/tree" in slash_values
     assert ":share" in slash_values
     assert ":share create" in slash_values
@@ -707,6 +1084,19 @@ def test_vim_aliases_route_to_existing_handlers(monkeypatch):
     ]
 
 
+def test_sidebar_commands_toggle_sidebar(monkeypatch):
+    app = make_app()
+    log = FakeLog()
+    calls = []
+
+    monkeypatch.setattr(app, "action_toggle_sidebar", lambda: calls.append("sidebar"))
+
+    app._handle_command(":sidebar", log)
+    app._handle_command(":sodebar", log)
+
+    assert calls == ["sidebar", "sidebar"]
+
+
 def test_export_writes_markdown_and_json_transcripts(tmp_path, monkeypatch):
     app = make_app()
     app.current_runtime = "codex-sdk"
@@ -772,6 +1162,50 @@ def test_session_tree_renders_forks(tmp_path, monkeypatch):
     assert child_id[:8] in text
     assert "Forked idea" in text
     assert "+-" in text
+
+
+def test_sessions_resume_opens_keyboard_picker_and_selects(tmp_path, monkeypatch):
+    from superqode.agent.session_manager import SessionManager
+
+    monkeypatch.chdir(tmp_path)
+    manager = SessionManager(storage_dir=".superqode/sessions")
+    manager.start_session("first-session", provider="ollama", model="qwen")
+    manager.start_session("second-session", provider="openai", model="gpt")
+
+    app = make_app()
+    log = FakeLog()
+    resumed = []
+
+    class FakePureMode:
+        def __init__(self):
+            self.current = ""
+
+        def resume_session(self, session_id):
+            self.current = session_id
+            resumed.append(session_id)
+            return [{"role": "user", "content": "hello from saved session"}]
+
+        def get_current_session_id(self):
+            return self.current
+
+    pure = FakePureMode()
+    monkeypatch.setattr(app, "_ensure_pure_mode", lambda: pure)
+    monkeypatch.setattr(app, "query_one", lambda *_args, **_kwargs: log)
+
+    app._handle_command(":sessions resume", log)
+
+    assert app._awaiting_session_resume is True
+    rendered = render_plain(log.items[-1])
+    assert "Resume Session" in rendered
+    assert ":sessions resume <id>" in rendered
+
+    app.action_navigate_session_resume_down()
+    expected_id = app._session_resume_list[app._session_resume_highlighted_index].session_id
+    app.action_select_highlighted_session_resume()
+
+    assert resumed == [expected_id]
+    assert app._awaiting_session_resume is False
+    assert any("Resumed session" in str(item) for item in log.items)
 
 
 def test_share_create_import_list_and_revoke(tmp_path, monkeypatch):
@@ -2204,11 +2638,44 @@ def test_conversation_log_streaming_renders_final_markdown_once():
     log.end_agent_session(True)
 
     rendered = "\n".join(render_plain(item) for item in writes)
-    assert "generating response" in rendered
+    assert "generating response" not in rendered
     assert "| --- | --- |" not in rendered
     assert "TUI" in rendered
     assert log.get_last_response().count("| Item | Status |") == 1
     assert "Assistant:" in log.get_all_text()
+
+
+def test_conversation_log_clearly_separates_question_and_answer():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.add_user("How does chat mode differ from build mode?")
+    log.reset_response_stream("ollama/qwen")
+    log.add_response_chunk("Chat skips repo context.\n\n")
+    log.write_final_response("Chat skips repo context.\n\nBuild uses tools.", agent="ollama/qwen")
+
+    rendered = "\n".join(render_plain(item) for item in writes)
+    assert "YOU" in rendered
+    assert "How does chat mode differ from build mode?" in rendered
+    assert "AGENT" in rendered
+    assert "ollama/qwen" in rendered
+    assert rendered.count("Chat skips repo context.") == 1
+    assert "Build uses tools." in rendered
+
+
+def test_final_response_does_not_duplicate_fully_streamed_answer():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.reset_response_stream("Assistant")
+    log.add_response_chunk("Already shown.\n\n")
+    log.write_final_response("Already shown.\n\n", agent="Assistant")
+
+    rendered = "\n".join(render_plain(item) for item in writes)
+    assert rendered.count("Already shown.") == 1
+    assert rendered.count("AGENT") == 1
 
 
 def test_streaming_renders_completed_paragraphs_live():
@@ -2233,6 +2700,66 @@ def test_streaming_renders_completed_paragraphs_live():
     assert "Now the second part is done." in rendered_final
     # The first paragraph must not be rendered twice.
     assert rendered_final.count("Here is the plan.") == 1
+
+
+def test_chat_stream_reset_prevents_previous_reply_in_latest_response():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.reset_response_stream()
+    log.add_response_chunk("first reply")
+    log.write_final_response("first reply", agent="ollama/qwen")
+
+    log.reset_response_stream()
+    log.add_response_chunk("second reply")
+    log.write_final_response("second reply", agent="ollama/qwen")
+
+    rendered_items = [render_plain(item) for item in writes]
+    second_reply_items = [text for text in rendered_items if "second reply" in text]
+
+    assert second_reply_items
+    assert all("first reply" not in text for text in second_reply_items)
+    assert log.get_last_response() == "second reply"
+
+
+def test_chat_worker_resets_stream_between_turns(monkeypatch):
+    from types import SimpleNamespace
+    from superqode.providers.gateway.base import StreamChunk
+    import superqode.providers.gateway.litellm_gateway as gateway_mod
+
+    replies = [["first reply"], ["second reply"]]
+
+    class FakeGateway:
+        async def stream_completion(self, **kwargs):
+            for piece in replies.pop(0):
+                yield StreamChunk(content=piece)
+
+    app = make_app()
+    app._pure_mode = SimpleNamespace(
+        session=SimpleNamespace(provider="ollama", model="qwen", connected=True)
+    )
+    app._chat_history = []
+    app._cancel_requested = False
+    app.call_from_thread = lambda func, *args: func(*args)
+    app._start_thinking = lambda *args, **kwargs: None
+    app._stop_thinking = lambda *args, **kwargs: None
+    app._write_chat_stats = lambda *args, **kwargs: None
+    monkeypatch.setattr(gateway_mod, "LiteLLMGateway", FakeGateway)
+
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    asyncio.run(app._send_chat_message("one", log))
+    asyncio.run(app._send_chat_message("two", log))
+
+    rendered_items = [render_plain(item) for item in writes]
+    second_reply_items = [text for text in rendered_items if "second reply" in text]
+
+    assert second_reply_items
+    assert all("first reply" not in text for text in second_reply_items)
+    assert app._chat_history[-1].content == "second reply"
 
 
 def test_streaming_holds_unterminated_code_fence():
@@ -3094,8 +3621,11 @@ def test_smart_cancel_resets_local_byok_busy_state():
     app = make_app()
     log = FakeLog()
     pure = FakePureMode()
+    pure.session = SimpleNamespace(provider="ollama", model="qwen3.6:35b-mlx")
     app._pure_mode = pure
     app.is_busy = True
+    torn_down = []
+    app._teardown_local_model_runtime = lambda provider, model: torn_down.append((provider, model))
     app._stop_thinking = lambda *args, **kwargs: setattr(app, "_stopped_thinking", True)
     app._stop_stream_animation = lambda *args, **kwargs: setattr(app, "is_busy", False)
     app.query_one = lambda *args, **kwargs: log
@@ -3105,6 +3635,7 @@ def test_smart_cancel_resets_local_byok_busy_state():
     assert pure.cancelled is True
     assert app._cancel_requested is True
     assert app.is_busy is False
+    assert torn_down == [("ollama", "qwen3.6:35b-mlx")]
     assert any("cancelled" in str(item).lower() for item in log.items)
 
 
@@ -3129,6 +3660,21 @@ def test_smart_cancel_prioritizes_active_acp_client_over_stale_byok_session():
     assert pure.cancelled is False
     assert app._cancel_requested is True
     assert any("ACP agent operation" in str(item) for item in log.items)
+
+
+def test_cleanup_on_exit_cancels_and_tears_down_local_runtime():
+    app = make_app()
+    pure = FakePureMode()
+    pure.session = SimpleNamespace(provider="ollama", model="qwen3.6:35b-mlx")
+    app._pure_mode = pure
+    torn_down = []
+    app._teardown_local_model_runtime = lambda provider, model: torn_down.append((provider, model))
+
+    app._cleanup_on_exit()
+
+    assert pure.cancelled is True
+    assert app._cancel_requested is True
+    assert torn_down == [("ollama", "qwen3.6:35b-mlx")]
 
 
 def test_recommend_command_renders_actionable_picker(monkeypatch):
@@ -3441,6 +3987,31 @@ def test_tui_local_airplane_requires_subcommand():
     assert ":local airplane <doctor|prepare|index|smoke|models|health>" in rendered
 
 
+def test_tui_local_warmup_sends_tiny_generation(monkeypatch):
+    from superqode.providers.gateway.base import GatewayResponse
+    import superqode.providers.gateway.litellm_gateway as gateway_mod
+
+    app = make_app()
+    log = FakeLog()
+    calls = []
+
+    class FakeGateway:
+        async def chat_completion(self, **kwargs):
+            calls.append(kwargs)
+            return GatewayResponse(content="ok")
+
+    monkeypatch.setattr(gateway_mod, "LiteLLMGateway", FakeGateway)
+
+    asyncio.run(app._warmup_local_generation("ollama", "qwen3:8b", log))
+
+    assert calls
+    assert calls[0]["provider"] == "ollama"
+    assert calls[0]["model"] == "qwen3:8b"
+    assert calls[0]["max_tokens"] == 4
+    rendered = "\n".join(str(item) for item in log.items)
+    assert "Local model warm" in rendered
+
+
 def test_tui_local_build(monkeypatch, tmp_path):
     from superqode.local import build as build_mod
     from superqode.local.doctor import DoctorReport
@@ -3682,9 +4253,11 @@ def test_colorful_status_bar_shows_full_runtime_and_model():
     bar = ColorfulStatusBar()
     bar.active_runtime = "codex-sdk"
     bar.active_model = "gpt-5.5"
+    bar.interaction_mode = "plan"
     plain = bar.render().plain
     assert "codex-sdk" in plain
     assert "gpt-5.5" in plain  # full, not shortened to "gpt"
+    assert "PLAN" in plain
 
 
 def test_colorful_status_bar_no_badge_when_unset():

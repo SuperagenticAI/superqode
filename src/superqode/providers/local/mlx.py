@@ -187,10 +187,7 @@ class MLXClient(LocalProviderClient):
 
     @staticmethod
     def get_available_models() -> List[LocalModel]:
-        """Get all available MLX models (both from server and cache)."""
-        models = []
-
-        # First try to get models from running server
+        """Get MLX models currently available from a running server."""
         async def get_server_models():
             try:
                 client = MLXClient()
@@ -200,55 +197,12 @@ class MLXClient(LocalProviderClient):
                 pass
             return []
 
-        # Run async function in sync context
         import asyncio
 
         try:
-            server_models = asyncio.run(get_server_models())
-            models.extend(server_models)
+            return asyncio.run(get_server_models())
         except Exception:
-            pass
-
-        # Add models from HuggingFace cache (only supported ones)
-        cache_models = MLXClient.discover_huggingface_models()
-        for model_info in cache_models:
-            model_id = model_info["id"]
-
-            # Only include supported models
-            if not MLXClient.is_model_supported(model_id):
-                continue
-
-            # Check if we already have this model from server
-            if not any(m.id == model_id for m in models):
-                # Add note about supported formats
-                format_note = ""
-                if "mlx" in model_id.lower():
-                    format_note = " (MLX format)"
-                elif "4bit" in model_id.lower() or "8bit" in model_id.lower():
-                    format_note = " (quantized)"
-
-                models.append(
-                    LocalModel(
-                        id=model_id,
-                        name=f"{model_id.split('/')[-1]} (cached){format_note}",
-                        size_bytes=model_info["size_bytes"],
-                        quantization=detect_quantization(model_id),
-                        context_window=4096,  # Default, would need model config
-                        supports_tools=likely_supports_tools(model_id),
-                        supports_vision=False,  # MLX vision support varies
-                        family=detect_model_family(model_id),
-                        running=False,  # Not running unless server says so
-                        modified_at=model_info["modified"],
-                        details={
-                            "cached_path": model_info["path"],
-                            "source": "huggingface_cache",
-                            "supported_formats": ["MLX", "safetensors"],
-                            "notes": "Works with mlx_lm.convert and mlx_lm.server",
-                        },
-                    )
-                )
-
-        return models
+            return []
 
     def __init__(self, host: Optional[str] = None):
         """Initialize MLX client.

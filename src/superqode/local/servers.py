@@ -34,6 +34,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import shlex
 import shutil
 import signal
 import subprocess
@@ -320,6 +321,9 @@ class LocalReadiness:
     state: str  # "running" | "stopped" | "missing"
     start_hint: str  # one-line actionable command for the "stopped" case
     needs_model: bool
+    startable: bool = True
+    app_running: bool = False
+    cli_available: bool = False
     install_guide: List[str] = field(default_factory=list)
 
 
@@ -461,6 +465,7 @@ class ServerManager:
         port = port or spec.default_port
         running = self.is_running(engine, host, port)
         installed = running or self.is_installed(engine)
+        cli_available = shutil.which("lms") is not None if engine == "lmstudio" else False
 
         if running:
             state = "running"
@@ -469,8 +474,13 @@ class ServerManager:
         else:
             state = "missing"
 
+        app_running = self.app_running(engine)
+        startable = running or self.can_start(engine)
+
         if spec.needs_model:
             start_hint = f":local serve {engine} --model <model-id>"
+        elif engine == "lmstudio" and not startable:
+            start_hint = "Open LM Studio and start the Local Server on port 1234"
         else:
             start_hint = f":local serve {engine}"
 
@@ -482,10 +492,45 @@ class ServerManager:
             state=state,
             start_hint=start_hint,
             needs_model=spec.needs_model,
+            startable=startable,
+            app_running=app_running,
+            cli_available=cli_available,
             install_guide=install_guide(engine),
         )
 
     # -- installed check -------------------------------------------------
+
+    def app_running(self, engine: str) -> bool:
+        """True when an engine's companion GUI/backend app is already open."""
+        if engine != "lmstudio":
+            return False
+        try:
+            result = subprocess.run(  # noqa: S603
+                ["pgrep", "-x", "LM Studio"],
+                capture_output=True,
+                timeout=1,
+                check=False,
+            )
+            if result.returncode == 0:
+                return True
+            result = subprocess.run(  # noqa: S603
+                ["pgrep", "-f", "LM Studio"],
+                capture_output=True,
+                timeout=1,
+                check=False,
+            )
+            return result.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            return False
+
+    def can_start(self, engine: str) -> bool:
+        """True when SuperQode can launch the server process itself."""
+        if engine == "lmstudio":
+            # The GUI app alone is enough to be "installed", but starting the
+            # local server from SuperQode needs both the CLI and an already-open
+            # LM Studio backend.
+            return shutil.which("lms") is not None and self.app_running(engine)
+        return self.is_installed(engine)
 
     def is_installed(self, engine: str) -> bool:
         if engine == "ollama":
@@ -655,9 +700,24 @@ class ServerManager:
 
         self.registry_dir.mkdir(parents=True, exist_ok=True)
         log_path = self.registry_dir / f"{engine}.log"
-        log_handle = open(log_path, "ab")  # noqa: SIM115 (lives with the daemon)
         env = {**os.environ, **env_overrides}
 
+        if engine == "lmstudio":
+            handle = self._start_lmstudio(
+                cmd,
+                env=env,
+                host=host,
+                port=port,
+                model=model,
+                ctx=ctx,
+                log_path=log_path,
+                wait=wait,
+                timeout=timeout,
+            )
+            self._save(handle)
+            return handle
+
+        log_handle = open(log_path, "ab")  # noqa: SIM115 (lives with the daemon)
         try:
             proc = subprocess.Popen(  # noqa: S603
                 cmd,
@@ -702,6 +762,78 @@ class ServerManager:
                 handle.notes.extend(self._lms_load(model, ctx))
 
         self._save(handle)
+        return handle
+
+    def _start_lmstudio(
+        self,
+        cmd: List[str],
+        *,
+        env: Dict[str, str],
+        host: str,
+        port: int,
+        model: Optional[str],
+        ctx: Optional[int],
+        log_path: Path,
+        wait: bool,
+        timeout: float,
+    ) -> ServerHandle:
+        """Run the LM Studio CLI handoff and surface its output immediately."""
+        try:
+            result = subprocess.run(  # noqa: S603
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+                env=env,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise ServerError(f"Failed to launch lmstudio: {exc}") from exc
+
+        output = "\n".join(part.strip() for part in (result.stdout, result.stderr) if part.strip())
+        log_path.write_text(output + ("\n" if output else ""), encoding="utf-8")
+        if result.returncode != 0:
+            detail = output or f"lms exited with status {result.returncode}"
+            raise ServerError(
+                "LM Studio did not accept the server start command.\n"
+                f"Command: {shlex.join(cmd)}\n"
+                f"{detail}\n"
+                "Open LM Studio, load a chat model, then start the Local Server "
+                "from the app or try the command again."
+            )
+
+        handle = ServerHandle(
+            engine="lmstudio",
+            host=host,
+            port=port,
+            base_url=self.base_url("lmstudio", host, port),
+            cmd=cmd,
+            pid=None,
+            log_path=str(log_path),
+            started_at=time.time(),
+            model=model,
+            ctx=ctx,
+            notes=self._ctx_notes("lmstudio", ctx, model),
+        )
+
+        if wait:
+            class _NoOwnedProcess:
+                def poll(self):
+                    return None
+
+            ready = self._wait_ready("lmstudio", host, port, timeout, _NoOwnedProcess(), None)
+            if not ready:
+                tail = _tail(log_path)
+                raise ServerError(
+                    "LM Studio accepted the command, but the local server did not "
+                    f"answer at {handle.base_url} within {timeout:.0f}s.\n"
+                    f"Command: {shlex.join(cmd)}\n"
+                    f"Last log lines:\n{tail}\n"
+                    "Check LM Studio's Local Server tab, then run :connect local again."
+                )
+            if model:
+                handle.notes.extend(self._lms_load(model, ctx))
+
         return handle
 
     def _ctx_notes(self, engine: str, ctx: Optional[int], model: Optional[str]) -> List[str]:

@@ -1,4 +1,5 @@
 from superqode.providers import models as model_db
+from superqode.providers.manager import ProviderManager
 from superqode.providers.models import ModelInfo, get_models_for_provider, set_live_models
 
 
@@ -89,3 +90,35 @@ def test_live_hosted_models_prefer_latest_aliases():
     models = get_models_for_provider("openai")
 
     assert list(models) == ["gpt-new-latest"]
+
+
+def test_provider_manager_mlx_models_do_not_fall_back_to_cache(monkeypatch):
+    import superqode.providers.local.mlx as mlx
+
+    class _Client:
+        async def is_available(self):
+            return False
+
+        async def list_models(self):
+            raise AssertionError("server is not available")
+
+    async def _get_client():
+        return _Client()
+
+    monkeypatch.setattr(mlx, "get_mlx_client", _get_client)
+    monkeypatch.setattr(
+        mlx.MLXClient,
+        "discover_huggingface_models",
+        staticmethod(
+            lambda: [
+                {
+                    "id": "mlx-community/not-running",
+                    "size_bytes": 123,
+                    "path": "/cache/not-running",
+                    "modified": 0,
+                }
+            ]
+        ),
+    )
+
+    assert ProviderManager()._get_mlx_models() == []

@@ -138,4 +138,18 @@ def get_mlx_engine() -> MlxEngine:
     return _engine
 
 
-__all__ = ["MlxEngine", "MlxResult", "MlxUnavailableError", "get_mlx_engine"]
+def shutdown_mlx_engine() -> None:
+    """Close the process-wide MLX worker if it exists."""
+    global _engine
+    if _engine is not None:
+        _engine.close()
+        _engine = None
+
+
+__all__ = [
+    "MlxEngine",
+    "MlxResult",
+    "MlxUnavailableError",
+    "get_mlx_engine",
+    "shutdown_mlx_engine",
+]

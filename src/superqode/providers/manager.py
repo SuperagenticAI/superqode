@@ -272,7 +272,7 @@ class ProviderManager:
         ]
 
     def _get_mlx_models(self) -> List[ModelInfo]:
-        """Get available MLX models from server and cache."""
+        """Get MLX models currently reported by a running server."""
         models = []
 
         # Try to get models from running MLX server
@@ -300,46 +300,10 @@ class ProviderManager:
             server_models = asyncio.run(get_mlx_server_models())
             models.extend(server_models)
         except Exception:
-            # If MLX client fails, continue with cached models
+            # If MLX is not answering, do not fall back to cache or example
+            # models. Cached weights are not available for chat until a server
+            # is started with them.
             pass
-
-        # Add cached models if no server models found
-        if not models:
-            try:
-                from ..providers.local.mlx import MLXClient
-
-                cache_models = MLXClient.discover_huggingface_models()
-                for model_info in cache_models[:5]:  # Limit to 5 cached models
-                    model_id = model_info["id"]
-                    size_mb = model_info["size_bytes"] / (1024 * 1024)
-                    models.append(
-                        ModelInfo(
-                            id=model_id,
-                            name=f"{model_id.split('/')[-1]} (cached)",
-                            provider_id="mlx",
-                            description=".1f",
-                            context_size=4096,
-                        )
-                    )
-            except Exception:
-                pass
-
-        # Fallback to registry models if nothing found
-        if not models:
-            from ..providers.registry import PROVIDERS
-
-            mlx_provider = PROVIDERS.get("mlx")
-            if mlx_provider and mlx_provider.example_models:
-                for model_id in mlx_provider.example_models[:3]:
-                    models.append(
-                        ModelInfo(
-                            id=model_id,
-                            name=model_id.split("/")[-1],
-                            provider_id="mlx",
-                            description="Example MLX model",
-                            context_size=4096,
-                        )
-                    )
 
         return models
 

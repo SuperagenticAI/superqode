@@ -93,7 +93,16 @@ Inside the TUI, the local-first MVP path is:
 :harness superqode.local.yaml
 ```
 
+> **Local model safety:** Local inference can use substantial CPU, GPU, memory, battery, and disk bandwidth. Do not run local models on hardware that cannot safely support them. Monitor temperature, memory pressure, fan noise, battery, and system responsiveness. Use smaller models, lower context, or hosted/BYOK providers when your machine is constrained. SuperQode provides hardware checks and guardrails, but you are responsible for running local models responsibly on your own hardware.
+
 `superqode.yaml` and `superqode.local.yaml` have different jobs. `superqode.yaml` is project configuration: provider hints, endpoints, MCP servers, memory providers, aliases, and default connection settings. `superqode.local.yaml` is a HarnessSpec: the repeatable run contract for runtime, model policy, tools, sandbox, approvals, checks, workflow, and events. Generate project config with `superqode config init`; generate a harness with `:local init`, `superqode local init --repo .`, or `superqode harness init ...`.
+
+| File | Purpose | Created by |
+| --- | --- | --- |
+| `superqode.yaml` | Project configuration: providers, endpoints, MCP, memory, defaults | `superqode config init` or `:init` |
+| `harness.yaml` | Portable agent run contract | `superqode harness init ...` |
+| `superqode.local.yaml` | Local-first HarnessSpec generated for this machine | `:local init` or `superqode local init --repo .` |
+| `superqode.airplane.yaml` | Strict no-network HarnessSpec for offline local work | `:local airplane prepare` or `superqode local airplane prepare` |
 
 **Headless coding harness**
 ```bash

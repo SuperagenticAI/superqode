@@ -2,6 +2,7 @@
 Tests for the minimal tool system.
 """
 
+import asyncio
 import pytest
 import tempfile
 from pathlib import Path
@@ -16,6 +17,7 @@ from superqode.tools.file_tools import (
 from superqode.tools.edit_tools import EditFileTool, InsertTextTool, MultiEditTool, PatchTool
 from superqode.tools.search_tools import GlobTool, LocalCodeSearchTool, RepoSearchTool
 from superqode.tools.shell_tools import BashTool
+from superqode.tools.web_tools import WebFetchTool, WebSearchTool
 
 
 @pytest.fixture
@@ -117,6 +119,46 @@ class TestToolRegistry:
 
         assert registry.list() == []
         assert registry.to_openai_format() == []
+
+
+class TestWebTools:
+    def test_web_search_rejects_direct_url(self, tool_context):
+        tool = WebSearchTool()
+
+        result = asyncio.run(tool.execute({"query": "https://example.com/docs"}, tool_context))
+
+        assert result.success is False
+        assert "direct URL" in result.error
+        assert result.metadata["looks_like_url"] is True
+
+    def test_web_fetch_caps_local_model_output(self, tmp_path, monkeypatch):
+        tool = WebFetchTool()
+        calls = []
+
+        def fake_fetch(url, timeout=None, max_size=None):
+            calls.append((url, timeout, max_size))
+            return {
+                "content": "x" * 30_000,
+                "content_type": "text/plain",
+            }
+
+        monkeypatch.setattr(tool, "_sync_fetch", fake_fetch)
+        ctx = ToolContext(
+            session_id="test-session",
+            working_directory=tmp_path,
+            harness_provider="ollama",
+            harness_model="qwen:35b",
+        )
+
+        result = asyncio.run(
+            tool.execute({"url": "https://example.com/page", "max_length": 50_000}, ctx)
+        )
+
+        assert result.success is True
+        assert len(result.output) < 13_000
+        assert "[Content truncated at 12000 characters]" in result.output
+        assert result.metadata["local_model_caps"] is True
+        assert calls == [("https://example.com/page", 10, 256 * 1024)]
 
 
 @pytest.mark.asyncio

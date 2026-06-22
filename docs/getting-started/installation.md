@@ -28,6 +28,9 @@ superqode --version
 
 ## System Requirements
 
+!!! warning "Local Model Hardware"
+    The SuperQode CLI is lightweight, but local model serving is not. Running Ollama, LM Studio, MLX, vLLM, SGLang, DS4, or llama.cpp can use significant CPU, GPU, memory, battery, and cooling capacity. Use local models only on hardware that can safely support the selected model and context size.
+
 ### Minimum Requirements
 
 | Component | Requirement |

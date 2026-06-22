@@ -69,6 +69,34 @@ uv tool list
 
 ---
 
+## Local Model Issues
+
+### First Local Response Is Slow
+
+Local servers often pay a cold-start cost on the first generation. They may need to load model weights, allocate KV cache, or initialize runtime kernels. SuperQode warms local models automatically when you connect from the TUI, but the first prompt can still be slow if the model is large or the machine is under memory pressure.
+
+Manual warmup:
+
+```bash
+superqode local warm ollama --model qwen3:8b
+```
+
+Disable automatic TUI warmup:
+
+```bash
+SUPERQODE_LOCAL_WARMUP=0 superqode
+```
+
+Give large models more warmup time:
+
+```bash
+SUPERQODE_LOCAL_WARMUP_TIMEOUT=60 superqode
+```
+
+If warmup or first-token latency stays high, use a smaller model, reduce context, reduce concurrency, or check `superqode local guardrails --repo .`.
+
+---
+
 ## TUI Connection Problems
 
 ### The TUI starts but no model is connected

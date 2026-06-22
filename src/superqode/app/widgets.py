@@ -148,6 +148,7 @@ class ColorfulStatusBar(Static):
     # in full (no shortening) so the user can see exactly what's selected.
     active_runtime: reactive[str] = reactive("")
     active_model: reactive[str] = reactive("")
+    interaction_mode: reactive[str] = reactive("build")
     plan_state: reactive[str] = reactive("")
 
     @staticmethod
@@ -172,7 +173,7 @@ class ColorfulStatusBar(Static):
             result.append(char, style=f"bold {color}")
         result.append(" ✨", style="bold #fbbf24")
         result.append(" ", style="")
-        result.append("Your Portable Local Agentic Coding Harness", style="")
+        result.append("Harness Engineering frameworks for Coding Agents", style="")
 
         # BYOK status (if connected)
         if self.byok_provider:
@@ -222,6 +223,19 @@ class ColorfulStatusBar(Static):
             if self.active_model:
                 sep = " · " if self.active_runtime else ""
                 result.append(f"{sep}{self.active_model}", style="#a1a1aa")
+
+        mode = (self.interaction_mode or "").strip().lower()
+        if mode:
+            mode_label = {"chat": "CHAT", "plan": "PLAN", "build": "BUILD"}.get(
+                mode, mode.upper()
+            )
+            mode_color = {
+                "chat": "#06b6d4",
+                "plan": "#fbbf24",
+                "build": "#22c55e",
+            }.get(mode, "#a855f7")
+            result.append("  │  ", style="#3f3f46")
+            result.append(mode_label, style=f"bold {mode_color} reverse")
 
         if self.plan_state:
             state = self.plan_state.strip()
@@ -510,7 +524,7 @@ class StreamingThinkingIndicator(Static):
     # When set (normal thinking mode), shows this steady status instead of the
     # cycling whimsical phrases - e.g. "Working… (step 2)".
     status = reactive("")
-    SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    SPINNER_FRAMES = ["◌", "◔", "◑", "◕"]
 
     THINKING_PHRASES = [
         "🧠 Thinking deeply",
@@ -564,7 +578,7 @@ class StreamingThinkingIndicator(Static):
     ]
 
     def on_mount(self):
-        self.auto_refresh = 1 / 15
+        self.auto_refresh = 1 / 2
 
     def render(self) -> Text:
         if not self.is_active:
@@ -573,44 +587,18 @@ class StreamingThinkingIndicator(Static):
         t = monotonic()
         result = Text()
 
-        spinner_idx = int(t * 10) % len(self.SPINNER_FRAMES)
-        phrase_idx = int(t / 1.5) % len(self.THINKING_PHRASES)
-
-        colors = [
-            "#a855f7",
-            "#c026d3",
-            "#d946ef",
-            "#ec4899",
-            "#f97316",
-            "#fbbf24",
-            "#22c55e",
-            "#06b6d4",
-        ]
-        color = colors[int(t * 4) % len(colors)]
+        spinner_idx = int(t * 2) % len(self.SPINNER_FRAMES)
+        color = "#a855f7"
 
         spinner = self.SPINNER_FRAMES[spinner_idx]
-        phrase = self.THINKING_PHRASES[phrase_idx]
-
-        dot_count = int(t * 3) % 4
-        dots = "." * dot_count
-
-        sparkles = ["✨", "⭐", "💫", "🌟"]
-        sparkle = sparkles[int(t * 2) % len(sparkles)]
+        if self.status:
+            label = self.status.strip()
+        else:
+            phrase_idx = int(t / 4) % len(self.THINKING_PHRASES)
+            label = self.THINKING_PHRASES[phrase_idx]
 
         result.append(f"  {spinner} ", style=f"bold {color}")
-
-        # Steady status (e.g. "Working… (step 2)") leads when set, but the
-        # rotating whimsical phrase + sparkle still ride alongside it so the
-        # agent path animates like chat mode does.
-        if self.status:
-            status_color = "#a855f7"
-            result.append(self.status, style=f"bold {status_color}")
-            result.append("." * (int(t * 2) % 4), style=status_color)
-            result.append("  ·  ", style="#52525b")
-
-        result.append(phrase, style=f"bold {color}")
-        result.append(dots, style=color)
-        result.append(f" {sparkle}", style=color)
+        result.append(label, style=f"bold {color}")
         result.append("   ", style="")
 
         return result
@@ -731,7 +719,7 @@ class HintsBar(Static):
 
         hints = [
             ("🔌 :connect", THEME["pink"]),
-            ("🚀 :init", THEME["success"]),
+            ("⚙️ :mode", THEME["gold"]),
             ("🧩 :harness", THEME["purple"]),
             ("🧠 :memory", THEME["cyan"]),
             ("🏠 :home", THEME["cyan"]),
@@ -993,6 +981,9 @@ class ConversationLog(RichLog):
         self._session_tool_calls: list[dict] = []
         self._streaming_response: str = ""
         self._streaming_notice_shown: bool = False
+        self._answer_header_shown: bool = False
+        self._active_response_agent: str = "Assistant"
+        self._rendered_response_text: str = ""
         # Characters of `_streaming_response` already rendered as finished
         # markdown during progressive streaming (block-wise live rendering).
         self._streamed_offset: int = 0
@@ -1096,18 +1087,18 @@ class ConversationLog(RichLog):
 
     def add_user(self, text: str):
         self._messages.append(("user", text, ""))
-        # Clean, professional prompt echo: a subtle left accent bar and a small
-        # "you" tag, no panel box or emoji. Mirrors the restrained response
-        # styling and reads well while the answer is being generated.
-        body = Text()
-        body.append("\n")
-        body.append("  ▌ ", style=f"bold {THEME['cyan']}")
-        body.append("you\n", style=f"bold {THEME['muted']}")
-        for line in str(text).split("\n"):
-            body.append("  ▌ ", style=THEME["cyan"])
-            body.append(line, style=THEME["text"])
-            body.append("\n", style="")
-        self.write(body)
+        question = Text()
+        question.append(str(text).strip() or "(empty)", style=THEME["text"])
+        panel = Panel(
+            question,
+            title=f"[bold {THEME['cyan']}]YOU[/]",
+            border_style=THEME["cyan"],
+            box=ROUNDED,
+            padding=(0, 1),
+            width=None,
+        )
+        self.write(Text("\n"))
+        self.write(panel)
 
     def add_agent(self, text: str, agent: str = "Agent"):
         color = AGENT_COLORS.get(agent.lower(), THEME["purple"])
@@ -1348,6 +1339,9 @@ class ConversationLog(RichLog):
         self._streaming_response = ""
         self._streaming_notice_shown = False
         self._streamed_offset = 0
+        self._answer_header_shown = False
+        self._active_response_agent = agent_name or "Assistant"
+        self._rendered_response_text = ""
         self._streaming_thinking = ""
         self._thinking_lines = []
         self._tool_calls = []
@@ -1402,6 +1396,20 @@ class ConversationLog(RichLog):
         header.append(app_label, style=f"bold {app_color}")
         header.append("\n")
 
+        self.write(header)
+
+    def _write_answer_header(self, agent: str = "Assistant") -> None:
+        """Render a stable answer divider before assistant content."""
+        if self._answer_header_shown:
+            return
+        self._answer_header_shown = True
+        header = Text()
+        header.append("\n  ")
+        header.append("AGENT", style=f"bold {THEME['success']} reverse")
+        if agent:
+            header.append("  ", style="")
+            header.append(str(agent), style=f"bold {THEME['muted']}")
+        header.append("\n", style="")
         self.write(header)
 
     def add_thinking(self, text: str, category: str = "general"):
@@ -1526,14 +1534,13 @@ class ConversationLog(RichLog):
 
         self._streaming_response += text
         self.auto_scroll = True
+        self._write_answer_header(getattr(self, "_active_response_agent", "Assistant"))
 
-        if not self._streaming_notice_shown:
-            notice = Text()
-            notice.append("  ◌ ", style=f"bold {THEME['purple']}")
-            notice.append("generating response…", style=THEME["muted"])
-            notice.append("\n")
-            self.write(notice)
-            self._streaming_notice_shown = True
+        # The animated TUI indicator already shows live generation state.
+        # RichLog is append-only, so a textual "generating response" line would
+        # remain in the transcript after the final answer. Keep the transcript
+        # clean and only render actual response content here.
+        self._streaming_notice_shown = True
 
         # Progressive markdown: flush completed blocks as they stabilize so the
         # user sees formatted output live instead of waiting for the full
@@ -1542,10 +1549,21 @@ class ConversationLog(RichLog):
         pending = self._streaming_response[self._streamed_offset :]
         flush_len = self._stable_markdown_split(pending)
         if flush_len:
-            block = pending[:flush_len].strip("\n")
+            flushed = pending[:flush_len]
+            block = flushed.strip("\n")
             self._streamed_offset += flush_len
             if block:
+                self._rendered_response_text += flushed
                 self.write(render_agent_markdown(block))
+
+    def reset_response_stream(self, agent: str = "Assistant") -> None:
+        """Reset per-response streaming buffers before a new streamed answer."""
+        self._streaming_response = ""
+        self._streaming_notice_shown = False
+        self._streamed_offset = 0
+        self._answer_header_shown = False
+        self._active_response_agent = agent or "Assistant"
+        self._rendered_response_text = ""
 
     @staticmethod
     def _stable_markdown_split(buffer: str) -> int:
@@ -1607,16 +1625,19 @@ class ConversationLog(RichLog):
             # If blocks were already rendered live during streaming, only render
             # the remaining tail to avoid duplicating earlier paragraphs.
             remaining = text
-            if self._streamed_offset > 0:
-                flushed = self._streaming_response[: self._streamed_offset]
-                remaining = text[len(flushed) :] if text.startswith(flushed) else text
+            rendered = getattr(self, "_rendered_response_text", "")
+            if rendered:
+                if text.startswith(rendered):
+                    remaining = text[len(rendered) :]
+                elif text.strip() == rendered.strip():
+                    remaining = ""
             remaining = remaining.strip("\n")
             if remaining:
+                self._write_answer_header(agent)
                 self.write(render_agent_markdown(remaining))
+                self._rendered_response_text = text
         else:
             self.write(Text(f"  ✕ {text}\n", style=THEME["error"], overflow="fold"))
-        # Reset so a subsequent (non-streamed) response renders in full.
-        self._streamed_offset = 0
         if trailing_newline:
             self.write(Text("\n"))
 

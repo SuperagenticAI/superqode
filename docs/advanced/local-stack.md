@@ -124,6 +124,9 @@ memory/VRAM headroom. The report includes recommended worker concurrency,
 context cap, memory headroom, power-source state when detectable, current load,
 warnings, and notes.
 
+!!! warning "Hardware Responsibility"
+    SuperQode can recommend conservative local settings, but it cannot guarantee that a model is safe for every machine. Monitor temperature, battery, memory pressure, swap, and responsiveness during local inference. Stop the server or reduce model size, context, and concurrency if the machine becomes hot or unstable.
+
 ---
 
 ## Hardware tiers and the matrix

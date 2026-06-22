@@ -4,6 +4,9 @@ The `superqode local` command group is the local-first toolkit: detect hardware,
 
 New to local models? Start with the [Local Providers](../providers/local.md) guide, then use this page as the command reference.
 
+!!! warning "Local Model Safety"
+    Local model servers can put sustained load on CPU, GPU, memory, battery, disk, and cooling systems. Use local models responsibly. If your hardware is constrained, choose a smaller model, reduce context, reduce concurrency, or use a hosted/BYOK provider. Run `superqode local doctor`, `superqode local guardrails`, and `superqode local health` where available before long sessions.
+
 ```bash
 superqode local COMMAND [OPTIONS]
 ```
@@ -348,6 +351,8 @@ superqode local models ollama
 
 Preload a model and report first-token latency. Run it before a session so the first real prompt does not pay the model-load cost. A high TTFT here usually means the context window is too large for the hardware.
 
+When you connect a local model from the TUI, SuperQode also sends a tiny best-effort warmup request automatically. This keeps the first real prompt from paying the cold model load when the local server supports it. The connection still succeeds if warmup fails or times out.
+
 ```bash
 superqode local warm ollama --model qwen3:8b
 ```
@@ -356,6 +361,13 @@ superqode local warm ollama --model qwen3:8b
 | --- | --- |
 | `-m, --model TEXT` | Model id to preload (default: first served model) |
 | `--max-tokens INTEGER` | Tokens to generate (default `8`) |
+
+Warmup environment variables:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SUPERQODE_LOCAL_WARMUP` | `1` | Set to `0`, `false`, `no`, or `off` to disable automatic TUI warmup |
+| `SUPERQODE_LOCAL_WARMUP_TIMEOUT` | `45` | Seconds to wait before warmup is skipped |
 
 ### `local smoke`
 

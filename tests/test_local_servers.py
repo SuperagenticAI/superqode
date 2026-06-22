@@ -171,6 +171,48 @@ def test_start_launches_and_waits_for_readiness(manager, monkeypatch, tmp_path):
     assert manager._registry_path("mlx").exists()
 
 
+def test_start_lmstudio_runs_cli_and_captures_output(manager, monkeypatch):
+    monkeypatch.setattr(manager, "is_running", lambda *a, **k: False)
+    monkeypatch.setattr(manager, "is_installed", lambda e: True)
+    calls = []
+
+    class Result:
+        returncode = 0
+        stdout = "server started"
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return Result()
+
+    monkeypatch.setattr(servers.subprocess, "run", fake_run)
+    monkeypatch.setattr(servers, "_probe", lambda url, timeout=1.5: True)
+
+    handle = manager.start("lmstudio", wait=True, timeout=1)
+
+    assert handle.engine == "lmstudio"
+    assert handle.pid is None
+    assert handle.base_url == "http://127.0.0.1:1234/v1"
+    assert calls[0][0] == ["lms", "server", "start", "-p", "1234"]
+    assert calls[0][1]["capture_output"] is True
+    assert "server started" in Path(handle.log_path).read_text()
+
+
+def test_start_lmstudio_surfaces_cli_failure(manager, monkeypatch):
+    monkeypatch.setattr(manager, "is_running", lambda *a, **k: False)
+    monkeypatch.setattr(manager, "is_installed", lambda e: True)
+
+    class Result:
+        returncode = 1
+        stdout = ""
+        stderr = "LM Studio backend is not ready"
+
+    monkeypatch.setattr(servers.subprocess, "run", lambda *a, **k: Result())
+
+    with pytest.raises(ServerError, match="LM Studio backend is not ready"):
+        manager.start("lmstudio", wait=True, timeout=1)
+
+
 def test_start_times_out_when_never_ready(manager, monkeypatch):
     monkeypatch.setattr(manager, "is_installed", lambda e: True)
     monkeypatch.setattr(manager, "is_running", lambda *a, **k: False)
@@ -356,10 +398,80 @@ def test_precheck_running(manager, monkeypatch):
 def test_precheck_installed_but_stopped(manager, monkeypatch):
     monkeypatch.setattr(manager, "is_running", lambda *a, **k: False)
     monkeypatch.setattr(manager, "is_installed", lambda e: True)
+    monkeypatch.setattr(manager, "can_start", lambda e: True)
+    monkeypatch.setattr(manager, "app_running", lambda e: True)
     r = manager.precheck("lmstudio")
     assert r.state == "stopped"
     assert r.installed and not r.running
+    assert r.startable is True
+    assert r.app_running is True
     assert r.start_hint == ":local serve lmstudio"
+
+
+def test_precheck_lmstudio_app_only_is_not_startable(manager, monkeypatch):
+    monkeypatch.setattr(manager, "is_running", lambda *a, **k: False)
+    monkeypatch.setattr(servers.shutil, "which", lambda name: None)
+    monkeypatch.setattr(
+        servers.Path,
+        "exists",
+        lambda self: str(self) == "/Applications/LM Studio.app",
+    )
+
+    r = manager.precheck("lmstudio")
+
+    assert r.state == "stopped"
+    assert r.installed and not r.running
+    assert r.startable is False
+    assert r.cli_available is False
+    assert "Open LM Studio" in r.start_hint
+
+
+def test_precheck_lmstudio_cli_but_app_closed_is_not_startable(manager, monkeypatch):
+    monkeypatch.setattr(manager, "is_running", lambda *a, **k: False)
+    monkeypatch.setattr(servers.shutil, "which", lambda name: "/usr/local/bin/lms")
+    monkeypatch.setattr(manager, "app_running", lambda e: False)
+
+    r = manager.precheck("lmstudio")
+
+    assert r.state == "stopped"
+    assert r.installed and not r.running
+    assert r.cli_available is True
+    assert r.app_running is False
+    assert r.startable is False
+
+
+def test_lmstudio_app_running_detects_process(manager, monkeypatch):
+    calls = []
+
+    class Result:
+        def __init__(self, returncode):
+            self.returncode = returncode
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return Result(0 if cmd == ["pgrep", "-x", "LM Studio"] else 1)
+
+    monkeypatch.setattr(servers.subprocess, "run", fake_run)
+
+    assert manager.app_running("lmstudio") is True
+    assert calls == [["pgrep", "-x", "LM Studio"]]
+
+
+def test_lmstudio_app_running_falls_back_to_pattern(manager, monkeypatch):
+    calls = []
+
+    class Result:
+        def __init__(self, returncode):
+            self.returncode = returncode
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return Result(0 if cmd == ["pgrep", "-f", "LM Studio"] else 1)
+
+    monkeypatch.setattr(servers.subprocess, "run", fake_run)
+
+    assert manager.app_running("lmstudio") is True
+    assert calls == [["pgrep", "-x", "LM Studio"], ["pgrep", "-f", "LM Studio"]]
 
 
 def test_precheck_missing_includes_install_guide(manager, monkeypatch):

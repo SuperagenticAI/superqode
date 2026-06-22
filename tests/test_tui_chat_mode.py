@@ -36,6 +36,9 @@ class _StubLog:
     def add_response_chunk(self, t):
         self.buf.append(f"[chunk]{t}")
 
+    def reset_response_stream(self, agent="Assistant"):
+        self.buf.append(f"[reset:{agent}]")
+
     def write_final_response(self, t, agent="Assistant", **k):
         self.buf.append(f"[final:{agent}]{t}")
 
@@ -62,6 +65,7 @@ def _app(connected=True):
     app._chat_history = None
     app._cancel_requested = False
     app.is_busy = False
+    app.__dict__["current_mode"] = "local"
     app._pure_mode = _PureMode(connected)
     app._call_ui = lambda func, *a: func(*a)
     app._update_terminal_title = lambda t: None
@@ -82,6 +86,18 @@ def test_chat_cmd_toggles_mode():
     assert app._chat_mode is True
     SuperQodeApp._chat_cmd(app, "off", log)
     assert app._chat_mode is False
+
+
+def test_chat_cmd_refuses_acp_connections():
+    app = _app()
+    app.__dict__["current_mode"] = "acp"
+    log = _StubLog()
+
+    SuperQodeApp._chat_cmd(app, "on", log)
+
+    assert app._chat_mode is False
+    assert "Local/BYOK direct model sessions" in log.text
+    assert "ACP connections are full coding agents" in log.text
 
 
 def test_chat_cmd_clear_resets_history():

@@ -57,7 +57,7 @@ def test_llamacpp_no_server_no_gguf_shows_stable_guidance_no_flash(monkeypatch):
     assert ":connect" in log.text
 
 
-def test_llamacpp_no_server_lists_cached_gguf_for_autolaunch(monkeypatch):
+def test_llamacpp_no_server_shows_cached_gguf_as_start_hint_not_picker(monkeypatch):
     import superqode.local.servers as servers
 
     monkeypatch.setattr(bench, "list_endpoint_models", lambda *a, **k: [])
@@ -70,15 +70,21 @@ def test_llamacpp_no_server_lists_cached_gguf_for_autolaunch(monkeypatch):
         ],
     )
     app = _app()
+    pinned = []
+    app._pin_local_prompt_to_input = lambda placeholder, log, **kwargs: pinned.append(
+        (placeholder, kwargs)
+    )
     log = _Log()
     asyncio.run(SuperQodeApp._show_openai_compatible_models(app, "llamacpp", log))
-    # The picker arms selection with GGUF PATHS so selecting one asks before launch.
-    assert app._local_model_list == ["/cache/qwen2.5-0.5b.gguf", "/cache/gemma.gguf"]
-    assert app._awaiting_local_model is True
-    assert app._local_selected_provider == "llamacpp"
-    assert "ask before starting llama-server" in log.text
-    # Display uses basenames, not full paths.
+    # Cached files are useful hints, but they are not selectable chat-ready
+    # models until llama-server is actually serving one.
+    assert getattr(app, "_local_model_list", []) == []
+    assert app._awaiting_local_model is False
+    assert "cached GGUF file" in log.text
+    assert "llama-server -m /cache/qwen2.5-0.5b.gguf" in log.text
     assert "qwen2.5-0.5b.gguf" in log.text
+    assert pinned
+    assert "Start llama.cpp first" in pinned[-1][0]
 
 
 def test_selecting_gguf_prompts_before_launch(monkeypatch):
@@ -99,16 +105,23 @@ def test_selecting_gguf_prompts_before_launch(monkeypatch):
     app.run_worker = lambda coro: app._started.append(coro)
     app._connect_byok_mode = lambda p, m, log: app._connected.append((p, m))
     app._show_local_provider_picker = lambda log, **k: None
+    app._pin_local_prompt_to_input = lambda placeholder, log, **kwargs: setattr(
+        app, "_pinned_placeholder", placeholder
+    )
+    app._reset_input_placeholder = lambda: setattr(app, "_placeholder_reset", True)
     log = _Log()
 
     SuperQodeApp._connect_local_mode(app, "llamacpp", "/cache/qwen.gguf", log)
     assert app._started == []
     assert app._connected == []
     assert app._awaiting_local_connect_start["engine"] == "llama.cpp"
+    assert "llama-server -m /cache/qwen.gguf --host 127.0.0.1 --port 8081" in log.text
     assert ":local serve llama.cpp --model /cache/qwen.gguf" in log.text
+    assert "Start llama.cpp yourself" in app._pinned_placeholder
 
     assert SuperQodeApp._handle_local_connect_start_input(app, "", log) is True
     assert len(app._started) == 1
+    assert app._placeholder_reset is True
     app._started[0].close()
 
 

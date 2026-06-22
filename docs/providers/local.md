@@ -13,6 +13,11 @@ Local providers offer:
 - **Offline use**: Work without internet
 - **Full control**: Model selection and tuning
 
+!!! warning "Run Local Models Responsibly"
+    Local inference can put sustained load on CPU, GPU, memory, battery, storage, and cooling systems. Do not run local models on hardware that cannot safely support them. Watch temperature, memory pressure, fan noise, battery state, and system responsiveness. If the machine becomes hot, unstable, or starts swapping heavily, stop the server and use a smaller model, lower context, lower concurrency, or a hosted/BYOK provider.
+
+    SuperQode's local doctor, guardrails, smoke tests, and health checks are guidance. They do not replace your operating system's thermal controls or your own hardware judgment.
+
 ---
 
 ## Quick Start: Zero To Local Coding
@@ -44,6 +49,28 @@ Once `init` reports the harness is ready, start coding:
 
 ```bash
 superqode --harness superqode.local.yaml
+```
+
+### Warmup And First Response Latency
+
+The first generation from a local model can be slow because the server may need to load weights, allocate KV cache, or initialize runtime paths. When you connect a local model from the TUI, SuperQode sends a tiny best-effort warmup request before your first real prompt. If warmup fails or times out, the connection still succeeds and the first prompt may pay the cold-start cost.
+
+Disable automatic TUI warmup when you want full manual control:
+
+```bash
+SUPERQODE_LOCAL_WARMUP=0 superqode
+```
+
+Increase the timeout for large local models:
+
+```bash
+SUPERQODE_LOCAL_WARMUP_TIMEOUT=60 superqode
+```
+
+You can also warm a running server explicitly:
+
+```bash
+superqode local warm ollama --model qwen3:8b
 ```
 
 Do not treat any shipped harness pack as sacred. Pick your model, pick or

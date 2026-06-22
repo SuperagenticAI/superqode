@@ -210,7 +210,15 @@ def create_builtin_commands(handlers: dict) -> list[SlashCommand]:
             name="sessions",
             description="List session history",
             handler=handlers.get("sessions", lambda _: None),
-            aliases=["session"],
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="sidebar",
+            description="Toggle the sidebar",
+            handler=handlers.get("sidebar", lambda _: None),
+            aliases=["sodebar"],
             category="session",
         )
     )
@@ -304,6 +312,30 @@ def create_builtin_commands(handlers: dict) -> list[SlashCommand]:
             name="usage",
             description="Show latest run latency and token usage when available",
             handler=handlers.get("usage", lambda _: None),
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="chat",
+            description="Direct model chat without repo context or tools",
+            handler=handlers.get("chat", lambda _: None),
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="build",
+            description="Use the repo-aware coding harness",
+            handler=handlers.get("build", lambda _: None),
+            category="session",
+        )
+    )
+    commands.append(
+        SlashCommand(
+            name="mode",
+            description="Pick Chat, Build, or Plan mode",
+            handler=handlers.get("mode", lambda _: None),
             category="session",
         )
     )

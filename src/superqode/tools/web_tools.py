@@ -58,6 +58,32 @@ def _is_network_error(exc: BaseException) -> bool:
     )
 
 
+def _context_uses_local_model(ctx: ToolContext) -> bool:
+    """Return True when a tool call is running under a local provider."""
+    provider = (getattr(ctx, "harness_provider", "") or "").strip().lower()
+    runtime = (getattr(ctx, "harness_runtime", "") or "").strip().lower()
+    model = (getattr(ctx, "harness_model", "") or "").strip().lower()
+    local_markers = (
+        "local",
+        "ollama",
+        "lmstudio",
+        "ds4",
+        "mlx",
+        "llamacpp",
+        "llama.cpp",
+        "vllm",
+        "sglang",
+        "tgi",
+        "transformers",
+    )
+    return any(marker in value for value in (provider, runtime, model) for marker in local_markers)
+
+
+def _looks_like_url(text: str) -> bool:
+    parsed = urllib.parse.urlparse(text.strip())
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
 # ============================================================================
 # HTML Processing Utilities
 # ============================================================================
@@ -270,12 +296,24 @@ Useful for finding documentation, examples, recent information, etc."""
 
     async def execute(self, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
         query = args.get("query", "")
-        num_results = min(args.get("num_results", 5), self.MAX_RESULTS)
+        max_results = 3 if _context_uses_local_model(ctx) else self.MAX_RESULTS
+        num_results = min(args.get("num_results", 5), max_results)
         search_type = args.get("search_type", "auto")
         provider = args.get("provider", "auto")
 
         if not query:
             return ToolResult(success=False, output="", error="Search query is required")
+
+        if _looks_like_url(query):
+            return ToolResult(
+                success=False,
+                output="",
+                error=(
+                    "web_search received a direct URL. Use web_fetch for that URL instead "
+                    "and keep max_length small, especially with local models."
+                ),
+                metadata={"query": query, "looks_like_url": True},
+            )
 
         try:
             # Determine which provider to use
@@ -521,6 +559,9 @@ class WebFetchTool(Tool):
     )
     DEFAULT_TIMEOUT = 30
     MAX_SIZE = 2 * 1024 * 1024  # 2MB
+    LOCAL_TIMEOUT = 10
+    LOCAL_MAX_SIZE = 256 * 1024
+    LOCAL_MAX_LENGTH = 12_000
 
     @property
     def name(self) -> str:
@@ -570,6 +611,13 @@ Useful for reading documentation, API responses, web pages, etc."""
         extract_main = args.get("extract_main", True)
         max_length = args.get("max_length", 50000)
         selector = args.get("selector", "")
+        local_model = _context_uses_local_model(ctx)
+        timeout = self.LOCAL_TIMEOUT if local_model else self.DEFAULT_TIMEOUT
+        max_size = self.LOCAL_MAX_SIZE if local_model else self.MAX_SIZE
+        if local_model:
+            max_length = min(max_length, self.LOCAL_MAX_LENGTH)
+        if ctx.max_output_bytes:
+            max_length = min(max_length, max(1000, ctx.max_output_bytes))
 
         if not url:
             return ToolResult(success=False, output="", error="URL is required")
@@ -582,8 +630,8 @@ Useful for reading documentation, API responses, web pages, etc."""
         try:
             loop = asyncio.get_event_loop()
             result = await asyncio.wait_for(
-                loop.run_in_executor(None, lambda: self._sync_fetch(url)),
-                timeout=self.DEFAULT_TIMEOUT + 5,
+                loop.run_in_executor(None, lambda: self._sync_fetch(url, timeout, max_size)),
+                timeout=timeout + 5,
             )
 
             if result.get("error"):
@@ -610,6 +658,7 @@ Useful for reading documentation, API responses, web pages, etc."""
                     "original_size": len(content),
                     "output_size": len(output),
                     "format": format_type,
+                    "local_model_caps": local_model,
                 },
             )
 
@@ -617,13 +666,15 @@ Useful for reading documentation, API responses, web pages, etc."""
             return ToolResult(
                 success=False,
                 output="",
-                error=f"Request timed out after {self.DEFAULT_TIMEOUT} seconds",
+                error=f"Request timed out after {timeout} seconds",
             )
         except Exception as e:
             return ToolResult(success=False, output="", error=f"Fetch error: {str(e)}")
 
-    def _sync_fetch(self, url: str) -> Dict[str, Any]:
+    def _sync_fetch(self, url: str, timeout: int | float | None = None, max_size: int | None = None) -> Dict[str, Any]:
         """Synchronous fetch implementation."""
+        timeout = timeout or self.DEFAULT_TIMEOUT
+        max_size = max_size or self.MAX_SIZE
         try:
             req = urllib.request.Request(url)
             req.add_header("User-Agent", self.USER_AGENT)
@@ -635,11 +686,11 @@ Useful for reading documentation, API responses, web pages, etc."""
 
             ctx = ssl.create_default_context()
 
-            with urllib.request.urlopen(req, timeout=self.DEFAULT_TIMEOUT, context=ctx) as response:
+            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as response:
                 content_type = response.headers.get("Content-Type", "")
 
                 # Read with size limit
-                content = response.read(self.MAX_SIZE)
+                content = response.read(max_size)
                 content = self._decode_body(content, response.headers.get("Content-Encoding", ""))
 
                 # Check for truncation
@@ -654,7 +705,7 @@ Useful for reading documentation, API responses, web pages, etc."""
                     text = content.decode("utf-8", errors="replace")
 
                 if truncated:
-                    text += f"\n\n[Content truncated at {self.MAX_SIZE} bytes]"
+                    text += f"\n\n[Content truncated at {max_size} bytes]"
 
                 return {"content": text, "content_type": content_type, "truncated": truncated}
 
