@@ -55,10 +55,10 @@ superqode harness list-backends
 Install the backend you need:
 
 ```bash
-pip install "superqode[pydanticai]"
-pip install "superqode[deepagents]"
-pip install "superqode[openai-agents]"
-pip install "superqode[adk]"
+uv tool install "superqode[pydanticai]"
+uv tool install "superqode[deepagents]"
+uv tool install "superqode[openai-agents]"
+uv tool install "superqode[adk]"
 ```
 
 Run `doctor` after installing:

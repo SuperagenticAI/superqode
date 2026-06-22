@@ -12,7 +12,7 @@ custom optimizers, see [Optimization Story](optimization.md).
 GEPA is optional:
 
 ```bash
-pip install "superqode[optimization]"
+uv tool install "superqode[optimization]"
 ```
 
 The base SuperQode install does not include optimization dependencies.

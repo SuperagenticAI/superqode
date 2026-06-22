@@ -587,7 +587,7 @@ superqode connect local ollama qwen3:8b
 
 ```bash
 # 1. Install MLX
-pip install mlx-lm
+uv pip install mlx-lm
 
 # 2. Download model
 mlx_lm.download mlx-community/Qwen2.5-Coder-3B-4bit

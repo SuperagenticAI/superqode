@@ -33,7 +33,7 @@ hide:
 ## Up and running in 60 seconds
 
 ```bash
-uv tool install superqode    # or: pip install superqode
+uv tool install superqode    # or run without installing: uvx superqode
 cd your-project
 superqode
 ```

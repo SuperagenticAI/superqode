@@ -66,7 +66,7 @@ def _require_sdk():
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "OpenAI Agents runtime requires the 'openai-agents' extra. "
-            "Install with: pip install superqode[openai-agents]"
+            "Install with: uv tool install 'superqode[openai-agents]'"
         ) from exc
 
 

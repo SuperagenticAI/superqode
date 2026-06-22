@@ -197,7 +197,7 @@ SDK.
 Install:
 
 ```bash
-pip install "superqode[mem0]"
+uv tool install "superqode[mem0]"
 ```
 
 Configure:
@@ -231,7 +231,7 @@ Install Cognee separately in an environment compatible with Cognee's dependency
 tree, or expose `cognee-cli` on `PATH`:
 
 ```bash
-pip install "cognee>=1.1.2,<2.0.0"
+uv pip install "cognee>=1.1.2,<2.0.0"
 ```
 
 Current note: Cognee `1.1.2` depends through `instructor` on `rich<15`, while
@@ -268,7 +268,7 @@ Supermemory is available as an optional hosted provider through the current
 Install:
 
 ```bash
-pip install "superqode[supermemory]"
+uv tool install "superqode[supermemory]"
 ```
 
 Configure:
@@ -296,7 +296,7 @@ superqode memory search "API contract" --provider supermemory
 ### Install All Optional Providers
 
 ```bash
-pip install "superqode[memory-providers]"
+uv tool install "superqode[memory-providers]"
 ```
 
 `memory-providers` installs Mem0 and Supermemory. Install Cognee separately

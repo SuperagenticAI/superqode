@@ -15,7 +15,7 @@ uv tool install superqode
 Or using pip:
 
 ```bash
-pip install superqode
+uv tool install superqode
 ```
 
 That's it! Verify with:
@@ -91,7 +91,7 @@ Standard installation via PyPI.
 
 ```bash
 # Install SuperQode
-pip install superqode
+uv tool install superqode
 
 # Verify installation
 superqode --version
@@ -126,11 +126,33 @@ cd superqode
 # Install using uv (recommended for dev)
 uv sync
 
-# Or standard pip install
-pip install -e ".[dev]"
+# Or, editable install into the active venv
+uv pip install -e ".[dev]"
 
 # Verify installation
 superqode --version
+```
+
+### Environment-Aware Extras
+
+Optional extras must be installed into the same Python environment that is running
+SuperQode. The TUI shows that environment before offering any one-click install,
+then prints the exact command it will run and waits for your confirmation.
+
+Use the command that matches how you launched SuperQode:
+
+| Running from | Command shape |
+| --- | --- |
+| `uv tool install superqode` | `uv tool install "superqode[<extra>]"` |
+| SuperQode source checkout | `uv pip install -e ".[<extra>]"` |
+| Another project venv | `uv add "superqode[<extra>]"` |
+| Plain virtualenv | `uv pip install "superqode[<extra>]"` |
+
+For direct package installs such as MLX, SuperQode targets the running interpreter
+explicitly:
+
+```bash
+uv pip install --python /path/to/superqode/python "mlx-lm>=0.31.0,<0.32.0"
 ```
 
 ---
@@ -236,7 +258,7 @@ superqode providers test anthropic
 === "vLLM"
 
     ```bash
-    pip install vllm
+    uv pip install vllm
     ```
 
 ### For ACP Agents
@@ -257,7 +279,7 @@ Install language-specific linters for code analysis in harness runs:
 === "Python"
 
     ```bash
-    pip install ruff mypy pyright
+    uv pip install ruff mypy pyright
     ```
 
 === "JavaScript/TypeScript"
@@ -364,7 +386,7 @@ $ superqode auth info
     **Solution:** Use `--user` flag or install via uv:
 
     ```bash
-    pip install --user superqode
+    uv tool install superqode
     # or use uv
     uv tool install superqode
     ```
@@ -405,7 +427,7 @@ If you encounter issues not covered here:
 === "pip"
 
     ```bash
-    pip install --upgrade superqode
+    uv tool upgrade superqode
     ```
 
 === "uv"

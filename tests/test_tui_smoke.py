@@ -4,7 +4,9 @@ from types import SimpleNamespace
 import asyncio
 import concurrent.futures
 import json
+import platform
 import subprocess
+import sys
 
 import pytest
 
@@ -180,7 +182,7 @@ def test_streaming_indicator_uses_single_slow_rotating_phrase(monkeypatch):
     assert text.count("Serving hot code") == 1
 
 
-def test_streaming_indicator_status_overrides_rotating_phrase(monkeypatch):
+def test_streaming_indicator_status_shows_alongside_rotating_phrase(monkeypatch):
     import superqode.app.widgets as widgets
 
     monkeypatch.setattr(widgets, "monotonic", lambda: 128)
@@ -190,8 +192,25 @@ def test_streaming_indicator_status_overrides_rotating_phrase(monkeypatch):
 
     text = render_plain(indicator.render())
 
+    # The whimsical phrase keeps cycling in every mode; the concrete live
+    # status appears beside it rather than replacing it.
     assert "Working… (step 2)" in text
-    assert "Serving hot code" not in text
+    assert "Serving hot code" in text
+
+
+def test_streaming_indicator_skips_generic_thinking_status(monkeypatch):
+    import superqode.app.widgets as widgets
+
+    monkeypatch.setattr(widgets, "monotonic", lambda: 128)
+    indicator = StreamingThinkingIndicator()
+    indicator.is_active = True
+    indicator.status = "💭 Thinking…"
+
+    text = render_plain(indicator.render())
+
+    # A generic "thinking" status is redundant with the phrase, so it's hidden.
+    assert "🍕 Serving hot code" in text
+    assert "💭 Thinking…" not in text
 
 
 def test_welcome_positions_superqode_as_harness_engineering_frameworks():
@@ -385,6 +404,86 @@ def test_startable_local_server_prompt_is_manual_first(monkeypatch):
     assert "to start it now" not in text
     assert pinned
     assert "Start ollama yourself" in pinned[-1][0]
+
+
+def test_missing_mlx_prompt_shows_environment_and_exact_command(monkeypatch):
+    import superqode.local.servers as servers
+    import superqode.providers.env_introspect as env_introspect
+    from superqode.local.servers import LocalReadiness
+
+    class _Manager:
+        def precheck(self, engine):
+            assert engine == "mlx"
+            return LocalReadiness(
+                engine="mlx",
+                installed=False,
+                running=False,
+                base_url="http://127.0.0.1:8080/v1",
+                state="missing",
+                start_hint=":local serve mlx",
+                needs_model=False,
+                startable=False,
+            )
+
+    monkeypatch.setattr(servers, "get_manager", lambda: _Manager())
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(platform, "machine", lambda: "arm64")
+    monkeypatch.setattr(
+        env_introspect,
+        "environment_info",
+        lambda: SimpleNamespace(
+            label="SuperQode dev checkout",
+            python="/tmp/superqode/.venv/bin/python",
+            target="the SuperQode checkout at /tmp/superqode",
+        ),
+    )
+    monkeypatch.setattr(
+        servers,
+        "mlx_install_command",
+        lambda python=None: "uv pip install --python /tmp/superqode/.venv/bin/python 'mlx-lm>=0.31.0,<0.32.0'",
+    )
+
+    app = SuperQodeApp.__new__(SuperQodeApp)
+    pinned = []
+    app._pin_local_prompt_to_input = lambda placeholder, log, **kwargs: pinned.append(
+        (placeholder, kwargs)
+    )
+    log = FakeLog()
+
+    handled = asyncio.run(SuperQodeApp._render_local_server_state(app, "mlx", log))
+    text = "\n".join(render_plain(item) for item in log.items)
+
+    assert handled is True
+    assert app._awaiting_local_dep_install == "mlx"
+    assert "SuperQode is running from: SuperQode dev checkout" in text
+    assert "This will modify: the SuperQode checkout at /tmp/superqode" in text
+    assert "Exact command:" in text
+    assert "uv pip install --python /tmp/superqode/.venv/bin/python" in text
+    assert "Press Enter to run that exact command" in text
+    assert pinned
+
+
+def test_runtime_missing_message_includes_environment_context(monkeypatch):
+    import superqode.providers.env_introspect as env_introspect
+
+    monkeypatch.setattr(
+        env_introspect,
+        "environment_info",
+        lambda: SimpleNamespace(
+            label="project virtual environment",
+            python="/tmp/project/.venv/bin/python",
+            target="the current project environment at /tmp/project",
+        ),
+    )
+
+    message = SuperQodeApp._runtime_install_message(
+        "pydanticai", 'uv add "superqode[pydanticai]"'
+    )
+
+    assert "Runtime 'pydanticai' is not installed." in message
+    assert "SuperQode is running from: project virtual environment" in message
+    assert "This command modifies: the current project environment at /tmp/project" in message
+    assert 'Run: uv add "superqode[pydanticai]"' in message
 
 
 def test_opencode_acp_model_normalization_preserves_provider_ids():

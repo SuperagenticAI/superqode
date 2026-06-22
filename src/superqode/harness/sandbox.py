@@ -536,7 +536,7 @@ def build_openai_sandbox_client(name: str) -> Any:
     try:
         module = importlib.import_module(module_path)
     except ImportError as exc:
-        hint = f"pip install {extra}" if extra else "pip install superqode[openai-agents]"
+        hint = f"uv pip install {extra}" if extra else 'uv tool install "superqode[openai-agents]"'
         raise RuntimeNotInstalledError(
             f"Sandbox backend '{name}' requires '{module_path}'. Install with: {hint}"
         ) from exc
@@ -564,7 +564,7 @@ def build_openai_sandbox_manifest(config: Any) -> Any:
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "openai-agents 0.14+ is required for sandbox manifests. "
-            "Install with: pip install 'superqode[openai-agents]'"
+            "Install with: uv tool install 'superqode[openai-agents]'"
         ) from exc
 
     working_directory = Path(config.working_directory)
@@ -592,7 +592,7 @@ def build_openai_sandbox_agent(
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "openai-agents 0.14+ is required for SandboxAgent. "
-            "Install with: pip install 'superqode[openai-agents]'"
+            "Install with: uv tool install 'superqode[openai-agents]'"
         ) from exc
 
     return SandboxAgent(
@@ -632,7 +632,7 @@ def build_openai_sandbox_run_config(client: Any, base_run_config: Any) -> Any:
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "openai-agents 0.14+ is required for SandboxRunConfig. "
-            "Install with: pip install 'superqode[openai-agents]'"
+            "Install with: uv tool install 'superqode[openai-agents]'"
         ) from exc
 
     return RunConfig(

@@ -64,7 +64,7 @@ def _require_sdk() -> None:
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "Claude Agent SDK runtime requires the 'claude-agent-sdk' extra. "
-            "Install with: pip install superqode[claude-agent-sdk] (and the Claude Code CLI), "
+            "Install with: uv tool install 'superqode[claude-agent-sdk]' (and the Claude Code CLI), "
             "then set ANTHROPIC_API_KEY."
         ) from exc
 

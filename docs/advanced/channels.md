@@ -6,7 +6,7 @@ run that takes an hour on your workstation can be supervised from your
 phone: progress, tool approvals, mid-run steering, and session control.
 
 ```bash
-pip install superqode[channels]   # Telegram alone needs no extra
+uv tool install "superqode[channels]"   # Telegram alone needs no extra
 superqode daemon
 ```
 

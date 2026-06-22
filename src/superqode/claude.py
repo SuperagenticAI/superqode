@@ -6,7 +6,7 @@ so you can run Claude Code programmatically without hand-building an
 
 Requires the extra and a key::
 
-    pip install superqode[claude-agent-sdk]   # + the Claude Code CLI
+    uv tool install 'superqode[claude-agent-sdk]'   # + the Claude Code CLI
     export ANTHROPIC_API_KEY=...
 
 Quick start::

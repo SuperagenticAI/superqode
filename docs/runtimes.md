@@ -16,15 +16,22 @@ A harness describes what should happen. A runtime performs it.
 This distinction matters because users should be able to keep the same harness behavior while changing the
 execution engine. When an engine cannot honor a policy, SuperQode reports that clearly.
 
+The install commands below show the normal `uv tool install superqode` case. In
+the TUI and runtime doctor, SuperQode adjusts the hint to the environment that is
+actually running: source checkouts use `uv pip install -e ".[<extra>]"`, project
+virtualenvs use `uv add "superqode[<extra>]"`, and plain virtualenvs use
+`uv pip install "superqode[<extra>]"`. Any one-click install prompt prints the
+exact command first and waits for confirmation.
+
 | Runtime | Install | Notes |
 | --- | --- | --- |
 | `builtin` | included | SuperQode's native loop. This is the default and the canonical path for local-model and no-tool policy. |
-| `adk` | `pip install superqode[adk]` | Google Agent Development Kit. Uses ADK's `Runner` and `LlmAgent`. |
-| `openai-agents` | `pip install superqode[openai-agents]` | OpenAI Agents SDK v0.17+. Includes SDK sessions, tool bridging, and HITL support. |
-| `codex-sdk` | `pip install superqode[codex-sdk]` | Official OpenAI Codex Python SDK runtime. Drives the published `openai-codex` package and its local app-server. |
-| `claude-agent-sdk` | `pip install superqode[claude-agent-sdk]` | Anthropic Claude Agent SDK runtime (API key via `ANTHROPIC_API_KEY`). Drives `claude-agent-sdk` + the local Claude Code CLI; `:claude` exposes model/permission/sessions/slash-commands. |
-| `deepagents` | `pip install superqode[deepagents]` | Optional DeepAgents 0.6 runtime for graph and middleware-heavy coding harnesses. |
-| `pydanticai` | `pip install superqode[pydanticai]` | Optional PydanticAI runtime with SuperQode JSON-schema tool bridging, approval resume, native MCP config loading, fallback chains, and typed-output-friendly harness support. |
+| `adk` | `uv tool install "superqode[adk]"` | Google Agent Development Kit. Uses ADK's `Runner` and `LlmAgent`. |
+| `openai-agents` | `uv tool install "superqode[openai-agents]"` | OpenAI Agents SDK v0.17+. Includes SDK sessions, tool bridging, and HITL support. |
+| `codex-sdk` | `uv tool install "superqode[codex-sdk]"` | Official OpenAI Codex Python SDK runtime. Drives the published `openai-codex` package and its local app-server. |
+| `claude-agent-sdk` | `uv tool install "superqode[claude-agent-sdk]"` | Anthropic Claude Agent SDK runtime (API key via `ANTHROPIC_API_KEY`). Drives `claude-agent-sdk` + the local Claude Code CLI; `:claude` exposes model/permission/sessions/slash-commands. |
+| `deepagents` | `uv tool install "superqode[deepagents]"` | Optional DeepAgents 0.6 runtime for graph and middleware-heavy coding harnesses. |
+| `pydanticai` | `uv tool install "superqode[pydanticai]"` | Optional PydanticAI runtime with SuperQode JSON-schema tool bridging, approval resume, native MCP config loading, fallback chains, and typed-output-friendly harness support. |
 
 Runtime backends implement the same SuperQode harness contract where their underlying framework can honor it. If a backend cannot support a harness policy, it should fail clearly rather than silently degrading the run.
 
@@ -248,7 +255,7 @@ Current limits:
 Example:
 
 ```bash
-pip install "superqode[codex-sdk]"
+uv tool install "superqode[codex-sdk]"
 superqode --runtime codex-sdk --print "summarize this repository"
 ```
 

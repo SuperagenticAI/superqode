@@ -24,7 +24,7 @@ def _require_pydanticai():
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "PydanticAI runtime requires the 'pydanticai' extra. "
-            "Install with: pip install superqode[pydanticai]"
+            "Install with: uv tool install 'superqode[pydanticai]'"
         ) from exc
 
 

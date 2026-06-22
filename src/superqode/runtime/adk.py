@@ -57,7 +57,7 @@ def _require_adk():
         from google.genai import types  # noqa: F401
     except ImportError as exc:
         raise RuntimeNotInstalledError(
-            "ADK runtime requires the 'adk' extra. Install with: pip install superqode[adk]"
+            "ADK runtime requires the 'adk' extra. Install with: uv tool install 'superqode[adk]'"
         ) from exc
 
 

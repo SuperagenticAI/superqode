@@ -12,7 +12,7 @@ SuperQode is your portable coding agent harness. A harness defines the run contr
 ## 1. Install
 
 ```bash
-pip install superqode
+uv tool install superqode
 ```
 
 Or with `uv`:
@@ -24,10 +24,10 @@ uv tool install superqode
 Optional runtime backends are installed only when you need them:
 
 ```bash
-pip install "superqode[openai-agents]"
-pip install "superqode[pydanticai]"
-pip install "superqode[deepagents]"
-pip install "superqode[adk]"
+uv tool install "superqode[openai-agents]"
+uv tool install "superqode[pydanticai]"
+uv tool install "superqode[deepagents]"
+uv tool install "superqode[adk]"
 ```
 
 ---

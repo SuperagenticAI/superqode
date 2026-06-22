@@ -22,7 +22,7 @@ uv sync --extra monty
 For installed packages:
 
 ```bash
-pip install 'superqode[monty]'
+uv tool install "superqode[monty]"
 ```
 
 Verify the dependency:

@@ -35,14 +35,13 @@ def test_list_runtimes_marks_builtin_installed():
 
 def test_list_runtimes_reports_install_hint_for_missing_extras():
     info = {r.name: r for r in list_runtimes()}
-    # In the dev env neither adk nor openai-agents are installed.
-    # The install_hint must mention the exact extra name.
-    if not info["adk"].installed:
-        assert info["adk"].install_hint == "pip install superqode[adk]"
-    if not info["openai-agents"].installed:
-        assert info["openai-agents"].install_hint == "pip install superqode[openai-agents]"
-    if not info["pydanticai"].installed:
-        assert info["pydanticai"].install_hint == "pip install superqode[pydanticai]"
+    # In the dev env neither adk nor openai-agents are installed. The hint is an
+    # env-aware uv command (uv tool install / uv add) naming the exact extra.
+    for name in ("adk", "openai-agents", "pydanticai"):
+        if not info[name].installed:
+            hint = info[name].install_hint
+            assert hint.startswith("uv ")
+            assert f"superqode[{name}]" in hint
 
 
 def test_all_known_runtimes_are_implemented():

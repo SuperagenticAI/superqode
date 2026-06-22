@@ -324,7 +324,7 @@ superqode serve web -h 0.0.0.0 --allow-remote
 Install the optional web server dependency with:
 
 ```bash
-pip install "superqode[web]"
+uv tool install "superqode[web]"
 ```
 
 ---

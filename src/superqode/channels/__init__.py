@@ -9,7 +9,7 @@ Design:
 - Transports (`telegram`, `slack`, `discord`) speak each platform's API and
   run in worker threads. Telegram is stdlib-only; Slack Socket Mode and the
   Discord Gateway need the optional ``websocket-client`` package
-  (``pip install superqode[channels]``).
+  (``uv tool install 'superqode[channels]'``).
 - :class:`superqode.channels.service.ChannelService` owns the asyncio side:
   one agent session per chat, command handling, and the approval relay.
 - Security is allowlist-first: chats not explicitly allowed get pairing

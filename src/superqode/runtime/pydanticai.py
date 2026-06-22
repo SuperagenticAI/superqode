@@ -29,7 +29,7 @@ def _require_pydanticai():
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "PydanticAI runtime requires the 'pydanticai' extra. "
-            "Install with: pip install superqode[pydanticai]"
+            "Install with: uv tool install 'superqode[pydanticai]'"
         ) from exc
 
 
@@ -137,7 +137,7 @@ def _native_mcp_toolsets(spec: HarnessSpec | None) -> list[Any]:
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "PydanticAI native MCP requires pydantic_ai.mcp. "
-            "Install with: pip install superqode[pydanticai]"
+            "Install with: uv tool install 'superqode[pydanticai]'"
         ) from exc
     return list(load_mcp_toolsets(config_path))
 

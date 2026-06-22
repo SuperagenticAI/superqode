@@ -25,9 +25,11 @@ def _require_sdk():
         from openai_codex import ApprovalMode, CodexConfig, Sandbox, Thread  # noqa: F401
         from openai_codex.client import CodexClient  # noqa: F401
     except ImportError as exc:
+        from superqode.providers.env_introspect import install_command
+
         raise RuntimeNotInstalledError(
             "Codex SDK runtime requires the 'codex-sdk' extra. "
-            "Install with: pip install superqode[codex-sdk]"
+            f"Install with: {install_command('codex-sdk')}"
         ) from exc
 
 

@@ -244,11 +244,12 @@ def test_runtime_registry_knows_codex_sdk():
     assert "codex-sdk" in known_runtime_names()
     info = {item.name: item for item in list_runtimes()}
     codex = info["codex-sdk"]
-    # install_hint is the pip extra when the SDK is absent, None when present.
+    # install_hint is an env-aware uv command when the SDK is absent, None when present.
     if codex.installed:
         assert codex.install_hint is None
     else:
-        assert codex.install_hint == "pip install superqode[codex-sdk]"
+        assert codex.install_hint.startswith("uv ")
+        assert "superqode[codex-sdk]" in codex.install_hint
 
 
 def test_factory_reports_missing_codex_sdk_when_not_installed(monkeypatch, tmp_path):

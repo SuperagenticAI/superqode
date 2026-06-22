@@ -13,7 +13,7 @@ talks to that daemon over a local socket via ``cocoindex_code.client``.
 
 Install the integration with::
 
-    pip install 'superqode[semantic]'
+    uv tool install 'superqode[semantic]'
 
 then index a project once (the daemon starts automatically)::
 
@@ -49,7 +49,7 @@ def is_semantic_search_available() -> bool:
 
 _INSTALL_HINT = (
     "Semantic search needs the optional 'cocoindex-code' package. Install it with "
-    "`pip install 'superqode[semantic]'`, then run "
+    "`uv tool install 'superqode[semantic]'`, then run "
     "`ccc init --litellm-model ollama/nomic-embed-text && ccc index` once in this project. "
     "For sentence-transformers instead of Ollama/LiteLLM, install `cocoindex-code[full]`."
 )

@@ -29,7 +29,7 @@ def _require_adk():
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "google-adk is required for the ADK tool bridge. "
-            "Install with: pip install superqode[adk]"
+            "Install with: uv tool install 'superqode[adk]'"
         ) from exc
 
 

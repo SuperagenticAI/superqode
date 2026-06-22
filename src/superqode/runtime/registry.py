@@ -38,12 +38,19 @@ def _builtin_factory(**kwargs) -> AgentRuntime:
     return BuiltinRuntime(**kwargs)
 
 
+def _extra_install(extra: str) -> str:
+    """uv install command for ``superqode[extra]`` targeting SuperQode's env."""
+    from superqode.providers.env_introspect import install_command
+
+    return install_command(extra)
+
+
 def _adk_factory(**kwargs) -> AgentRuntime:
     try:
         module = importlib.import_module("superqode.runtime.adk")
     except ImportError as exc:
         raise RuntimeNotInstalledError(
-            "ADK runtime requires the 'adk' extra. Install with: pip install superqode[adk]"
+            f"ADK runtime requires the 'adk' extra. Install with: {_extra_install('adk')}"
         ) from exc
     return module.ADKRuntime(**kwargs)
 
@@ -54,7 +61,7 @@ def _openai_agents_factory(**kwargs) -> AgentRuntime:
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "OpenAI Agents runtime requires the 'openai-agents' extra. "
-            "Install with: pip install superqode[openai-agents]"
+            f"Install with: {_extra_install('openai-agents')}"
         ) from exc
     return module.OpenAIAgentsRuntime(**kwargs)
 
@@ -65,7 +72,7 @@ def _pydanticai_factory(**kwargs) -> AgentRuntime:
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "PydanticAI runtime requires the 'pydanticai' extra. "
-            "Install with: pip install superqode[pydanticai]"
+            f"Install with: {_extra_install('pydanticai')}"
         ) from exc
     return module.PydanticAIRuntime(**kwargs)
 
@@ -76,7 +83,7 @@ def _codex_sdk_factory(**kwargs) -> AgentRuntime:
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "Codex SDK runtime requires the 'codex-sdk' extra. "
-            "Install with: pip install superqode[codex-sdk]"
+            f"Install with: {_extra_install('codex-sdk')}"
         ) from exc
     return module.CodexSDKRuntime(**kwargs)
 
@@ -87,7 +94,7 @@ def _claude_agent_sdk_factory(**kwargs) -> AgentRuntime:
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "Claude Agent SDK runtime requires the 'claude-agent-sdk' extra. "
-            "Install with: pip install superqode[claude-agent-sdk]"
+            f"Install with: {_extra_install('claude-agent-sdk')}"
         ) from exc
     return module.ClaudeAgentSDKRuntime(**kwargs)
 
@@ -150,7 +157,7 @@ def list_runtimes() -> list[RuntimeInfo]:
                 installed = True
             except ImportError:
                 installed = False
-            install_hint = None if installed else f"pip install {extra}"
+            install_hint = None if installed else _extra_install(name)
             implemented = True
         out.append(
             RuntimeInfo(

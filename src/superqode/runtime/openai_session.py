@@ -27,7 +27,7 @@ def _require_sdk():
         from agents.memory.session import SessionABC  # noqa: F401
     except ImportError as exc:
         raise RuntimeNotInstalledError(
-            "openai-agents is required. Install with: pip install superqode[openai-agents]"
+            "openai-agents is required. Install with: uv tool install 'superqode[openai-agents]'"
         ) from exc
 
 

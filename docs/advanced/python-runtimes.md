@@ -9,11 +9,11 @@ SuperQode provides a Python API to embed the agent runtime directly in your appl
 | Name | Backend | Install |
 |------|---------|---------|
 | builtin | SuperQode native loop | always available |
-| openai-agents | OpenAI Agents SDK | pip install superqode[openai-agents] |
-| adk | Google Agent Development Kit | pip install superqode[adk] |
-| pydanticai | PydanticAI agent framework | pip install superqode[pydanticai] |
-| codex-sdk | OpenAI Codex Python SDK | pip install superqode[codex-sdk] |
-| claude-agent-sdk | Anthropic Claude Agent SDK | pip install superqode[claude-agent-sdk] |
+| openai-agents | OpenAI Agents SDK | uv tool install "superqode[openai-agents]" |
+| adk | Google Agent Development Kit | uv tool install "superqode[adk]" |
+| pydanticai | PydanticAI agent framework | uv tool install "superqode[pydanticai]" |
+| codex-sdk | OpenAI Codex Python SDK | uv tool install "superqode[codex-sdk]" |
+| claude-agent-sdk | Anthropic Claude Agent SDK | uv tool install "superqode[claude-agent-sdk]" |
 
 ## create_runtime()
 

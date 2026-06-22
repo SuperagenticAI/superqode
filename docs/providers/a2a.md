@@ -22,7 +22,7 @@ SuperQode implements both A2A client and server capabilities, allowing you to ca
 ### Install A2A Dependencies
 
 ```bash
-pip install superqode[a2a]
+uv tool install "superqode[a2a]"
 ```
 
 ### Connect to an A2A Agent
@@ -277,7 +277,7 @@ a2a = [
 Install with:
 
 ```bash
-pip install superqode[a2a]
+uv tool install "superqode[a2a]"
 ```
 
 ---

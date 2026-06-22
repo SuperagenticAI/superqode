@@ -33,7 +33,7 @@ superqode harness doctor --spec harness.yaml --json
 Reinstall SuperQode in the environment you are using:
 
 ```bash
-python -m pip install --upgrade superqode
+uv tool upgrade superqode
 python -c "import superqode; print(superqode.__version__)"
 ```
 
@@ -49,7 +49,7 @@ For source installs:
 ```bash
 git clone https://github.com/SuperagenticAI/superqode.git
 cd superqode
-python -m pip install -e .
+uv pip install -e .
 ```
 
 ### The `superqode` command is not found
@@ -58,7 +58,7 @@ Check that the Python scripts directory is on `PATH`:
 
 ```bash
 python -m site --user-base
-python -m pip show superqode
+uv tool list
 ```
 
 If you installed with `uv`, check:
@@ -191,11 +191,11 @@ superqode runtime doctor pydanticai
 Install only the backend you need:
 
 ```bash
-python -m pip install "superqode[pydanticai]"
-python -m pip install "superqode[deepagents]"
-python -m pip install "superqode[openai-agents]"
-python -m pip install "superqode[adk]"
-python -m pip install "superqode[codex-sdk]"
+uv tool install "superqode[pydanticai]"
+uv tool install "superqode[deepagents]"
+uv tool install "superqode[openai-agents]"
+uv tool install "superqode[adk]"
+uv tool install "superqode[codex-sdk]"
 ```
 
 ### A run did something unexpected

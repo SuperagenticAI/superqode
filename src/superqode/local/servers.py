@@ -141,8 +141,8 @@ INSTALL_GUIDES: Dict[str, List[str]] = {
     "mlx": [
         "MLX runs on Apple Silicon. Install mlx-lm into the SAME environment",
         "that runs superqode (not miniconda):",
-        "  if you launch via 'superqode':  uv tool install superqode --reinstall --with mlx-lm",
-        "  if you run from a source venv:   uv pip install 'superqode[mlx]'",
+        "  if you launch via 'superqode':  uv tool install 'superqode[mlx]'",
+        "  if you run from a source checkout:  uv pip install -e '.[mlx]'",
         "Then pick a model already in your Hugging Face cache (no surprise download).",
     ],
     "ds4": [
@@ -165,6 +165,13 @@ def install_guide(engine: str) -> List[str]:
 
 
 MLX_REQUIREMENT = "mlx-lm>=0.31.0,<0.32.0"
+
+
+def mlx_install_command(python: Optional[str] = None) -> str:
+    """Exact command used by the one-click MLX installer."""
+    from superqode.providers.env_introspect import python_package_install_command
+
+    return python_package_install_command(MLX_REQUIREMENT, python=python or sys.executable)
 
 
 def _has_extra_arg(extra_args: List[str], flag: str) -> bool:
@@ -228,10 +235,7 @@ def install_mlx(python: Optional[str] = None, timeout: int = 1200) -> tuple[bool
     import importlib
 
     python = python or sys.executable
-    if shutil.which("uv"):
-        cmd = ["uv", "pip", "install", "--python", python, MLX_REQUIREMENT]
-    else:
-        cmd = [python, "-m", "pip", "install", MLX_REQUIREMENT]
+    cmd = shlex.split(mlx_install_command(python))
 
     try:
         result = subprocess.run(  # noqa: S603

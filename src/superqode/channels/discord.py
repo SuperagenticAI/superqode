@@ -166,7 +166,7 @@ class DiscordRunner:
         except ImportError as exc:
             raise DiscordUnavailableError(
                 "Discord Gateway requires the websocket-client package: "
-                "pip install superqode[channels]"
+                "uv tool install 'superqode[channels]'"
             ) from exc
         discord_api_call(self.config.bot_token, "GET", "/gateway/bot")
 

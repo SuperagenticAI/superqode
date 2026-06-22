@@ -574,9 +574,10 @@ def test_start_mlx_allows_download_when_permitted(manager, monkeypatch):
 
 def test_install_mlx_prefers_uv(monkeypatch):
     from superqode.local import servers
+    import superqode.providers.env_introspect as env_introspect
 
     monkeypatch.setattr(
-        servers.shutil, "which", lambda name: "/usr/bin/uv" if name == "uv" else None
+        env_introspect.shutil, "which", lambda name: "/usr/bin/uv" if name == "uv" else None
     )
     captured = {}
 
@@ -599,8 +600,9 @@ def test_install_mlx_prefers_uv(monkeypatch):
 
 def test_install_mlx_reports_failure_when_still_not_importable(monkeypatch):
     from superqode.local import servers
+    import superqode.providers.env_introspect as env_introspect
 
-    monkeypatch.setattr(servers.shutil, "which", lambda name: None)  # no uv -> pip
+    monkeypatch.setattr(env_introspect.shutil, "which", lambda name: None)  # no uv -> pip
 
     class R:
         returncode = 1

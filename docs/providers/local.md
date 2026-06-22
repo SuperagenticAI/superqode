@@ -485,7 +485,7 @@ Optimized for M1/M2/M3 Macs.
 ### Installation
 
 ```bash
-pip install mlx-lm
+uv pip install mlx-lm
 ```
 
 ### Quick Start
@@ -561,7 +561,7 @@ High-performance inference for production.
 ### Installation
 
 ```bash
-pip install vllm
+uv pip install vllm
 ```
 
 ### Quick Start
@@ -600,7 +600,7 @@ Fast structured generation framework optimized for complex prompts.
 ### Installation
 
 ```bash
-pip install "sglang[all]"
+uv pip install "sglang[all]"
 ```
 
 ### Quick Start
@@ -660,7 +660,7 @@ docker run --gpus all \
   --model-id Qwen/Qwen2.5-Coder-7B-Instruct
 
 # Or using Python
-pip install text-generation
+uv pip install text-generation
 ```
 
 ### Quick Start

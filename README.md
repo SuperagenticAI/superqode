@@ -67,7 +67,7 @@ SuperQode separates agent systems into interchangeable pieces: the **harness** c
 uv tool install superqode
 
 # Or using pip
-pip install superqode
+uv tool install superqode
 ```
 
 **Alternate (No Python Required, SuperQode TUI Only)**
@@ -147,11 +147,11 @@ Use `doctor` before sharing a harness with a team. It checks backend availabilit
 Install only the runtimes you need:
 
 ```bash
-pip install "superqode[adk]"
-pip install "superqode[openai-agents]"
-pip install "superqode[codex-sdk]"
-pip install "superqode[deepagents]"
-pip install "superqode[pydanticai]"
+uv tool install "superqode[adk]"
+uv tool install "superqode[openai-agents]"
+uv tool install "superqode[codex-sdk]"
+uv tool install "superqode[deepagents]"
+uv tool install "superqode[pydanticai]"
 ```
 
 Then select a backend in a spec or at run time:

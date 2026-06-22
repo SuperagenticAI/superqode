@@ -92,7 +92,7 @@ Optional tools depend on your workflow:
 === "pip"
 
     ```bash
-    python -m pip install superqode
+    uv tool install superqode
     superqode --version
     ```
 
@@ -101,7 +101,7 @@ Optional tools depend on your workflow:
     ```bash
     git clone https://github.com/SuperagenticAI/superqode.git
     cd superqode
-    python -m pip install -e .
+    uv pip install -e .
     superqode --version
     ```
 

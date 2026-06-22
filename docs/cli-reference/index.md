@@ -467,7 +467,7 @@ superqode skills optimize review \
   --max-metric-calls 20
 ```
 
-Install the optional dependency with `pip install "superqode[optimization]"`.
+Install the optional dependency with `uv tool install "superqode[optimization]"`.
 The command writes `staged/best_skill.md` and a report; it does not overwrite
 the live skill. See [Skill Optimization](../advanced/skill-optimization.md).
 

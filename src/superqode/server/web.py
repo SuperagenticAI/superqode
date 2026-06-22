@@ -157,7 +157,7 @@ class WebServer:
         if not TEXTUAL_SERVE_AVAILABLE:
             raise ImportError(
                 "textual-serve is required for web server mode. "
-                'Install with: pip install "superqode[web]"'
+                'Install with: uv tool install "superqode[web]"'
             )
 
         self.config = config or WebServerConfig()
@@ -192,7 +192,7 @@ class WebServer:
         if not TEXTUAL_SERVE_AVAILABLE or Server is None:
             raise ImportError(
                 "textual-serve is required for web server mode. "
-                'Install with: pip install "superqode[web]"'
+                'Install with: uv tool install "superqode[web]"'
             )
 
         config = self.config
@@ -346,7 +346,7 @@ def add_server_command():
         if not TEXTUAL_SERVE_AVAILABLE:
             click.echo(
                 "Error: textual-serve is required for web server mode.\n"
-                'Install with: pip install "superqode[web]"'
+                'Install with: uv tool install "superqode[web]"'
             )
             sys.exit(1)
 

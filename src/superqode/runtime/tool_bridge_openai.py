@@ -7,7 +7,7 @@ interrupts the run for HITL), DENY returns an error string immediately, ALLOW
 runs the tool.
 
 The SDK is imported lazily; this module is safe to load without
-``pip install superqode[openai-agents]``.
+``uv tool install 'superqode[openai-agents]'``.
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ def _require_sdk():
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "openai-agents is required for the OpenAI Agents tool bridge. "
-            "Install with: pip install superqode[openai-agents]"
+            "Install with: uv tool install 'superqode[openai-agents]'"
         ) from exc
 
 

@@ -495,8 +495,8 @@ def monty_command(action: str):
         else:
             console.print("[red]❌ pydantic-monty is not installed[/red]")
             console.print("Install with:")
-            console.print("  [cyan]uv sync --extra monty[/cyan]")
-            console.print("  [cyan]pip install 'superqode\\[monty]'[/cyan]")
+            console.print("  [cyan]uv tool install 'superqode\\[monty]'[/cyan]")
+            console.print("  [cyan]# or, from a source checkout: uv sync --extra monty[/cyan]")
         return
 
     if action == "setup":
@@ -504,8 +504,8 @@ def monty_command(action: str):
         console.print("Monty enables a safe, fast Python REPL tool for agent-written snippets.")
         console.print()
         console.print("[bold]Install optional dependency:[/bold]")
-        console.print("  [cyan]uv sync --extra monty[/cyan]")
-        console.print("  [cyan]# or: pip install 'superqode\\[monty]'[/cyan]")
+        console.print("  [cyan]uv tool install 'superqode\\[monty]'[/cyan]")
+        console.print("  [cyan]# or, from a source checkout: uv sync --extra monty[/cyan]")
         console.print()
         console.print("[bold]Verify:[/bold]")
         console.print("  [cyan]superqode providers monty check[/cyan]")

@@ -87,7 +87,7 @@ Skill optimization improves one markdown skill while leaving the harness
 contract stable. SuperQode uses GEPA for this path.
 
 ```bash
-pip install "superqode[optimization]"
+uv tool install "superqode[optimization]"
 
 superqode skills optimize review \
   --engine gepa \

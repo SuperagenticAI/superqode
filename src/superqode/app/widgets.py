@@ -591,14 +591,24 @@ class StreamingThinkingIndicator(Static):
         color = "#a855f7"
 
         spinner = self.SPINNER_FRAMES[spinner_idx]
-        if self.status:
-            label = self.status.strip()
-        else:
-            phrase_idx = int(t / 4) % len(self.THINKING_PHRASES)
-            label = self.THINKING_PHRASES[phrase_idx]
+
+        # Always cycle the whimsical phrases so there's lively, ever-changing
+        # text whenever the agent is working - in every mode, not just chat.
+        phrase_idx = int(t / 4) % len(self.THINKING_PHRASES)
+        phrase = self.THINKING_PHRASES[phrase_idx]
 
         result.append(f"  {spinner} ", style=f"bold {color}")
-        result.append(label, style=f"bold {color}")
+        result.append(phrase, style=f"bold {color}")
+
+        # When the agent loop has a concrete live status (e.g. "📄 Read foo.py…"
+        # or "Working… (step 2)") show it as a secondary detail beside the
+        # cycling phrase. Generic "thinking" statuses are skipped since the
+        # phrase already conveys that.
+        status = (self.status or "").strip()
+        if status and "thinking" not in status.lower():
+            result.append("  ·  ", style="#52525b")
+            result.append(status, style="#a1a1aa")
+
         result.append("   ", style="")
 
         return result

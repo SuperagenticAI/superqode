@@ -148,15 +148,18 @@ def backend_capabilities(name: str | None):
 def _with_availability(capabilities: HarnessBackendCapabilities) -> HarnessBackendCapabilities:
     if capabilities.backend in {"google-agent-engine", "anthropic-managed"}:
         return capabilities
+    from superqode.providers.env_introspect import install_command
+
     packages = {
         "builtin": (None, None),
-        "adk": ("google.adk", "pip install superqode[adk]"),
-        "openai-agents": ("agents", "pip install superqode[openai-agents]"),
-        "codex-sdk": ("openai_codex", "pip install superqode[codex-sdk]"),
-        "deepagents": ("deepagents", "pip install superqode[deepagents]"),
-        "pydanticai": ("pydantic_ai", "pip install superqode[pydanticai]"),
+        "adk": ("google.adk", "adk"),
+        "openai-agents": ("agents", "openai-agents"),
+        "codex-sdk": ("openai_codex", "codex-sdk"),
+        "deepagents": ("deepagents", "deepagents"),
+        "pydanticai": ("pydantic_ai", "pydanticai"),
     }
-    module_name, hint = packages.get(capabilities.backend, (None, None))
+    module_name, extra = packages.get(capabilities.backend, (None, None))
+    hint = install_command(extra) if extra else None
     if module_name is None:
         return replace(capabilities, availability="available", install_hint=None)
     available = _optional_module_available(module_name)

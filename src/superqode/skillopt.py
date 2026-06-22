@@ -271,7 +271,7 @@ def optimize_skill_with_gepa(
             )
         except ImportError as exc:
             raise RuntimeError(
-                "GEPA is not installed. Install it with `pip install 'superqode[optimization]'` "
+                "GEPA is not installed. Install it with `uv tool install 'superqode[optimization]'` "
                 "or `pip install gepa`."
             ) from exc
 

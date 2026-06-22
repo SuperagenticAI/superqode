@@ -138,7 +138,7 @@ class MontyPythonReplTool(Tool):
                 output="",
                 error=(
                     "Monty is not installed. Install optional support with "
-                    "`pip install superqode[monty]` or `uv sync --extra monty`."
+                    "`uv tool install 'superqode[monty]'` or `uv sync --extra monty`."
                 ),
                 metadata={"missing_dependency": "pydantic-monty"},
             )

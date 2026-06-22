@@ -69,7 +69,7 @@ diags = asyncio.run(get_file_diagnostics(Path("~/myproject"), "src/lib.rs"))
 
 Each language needs its language server on PATH:
 
-- **Python**: `pyright-langserver` (`npm install -g pyright` or `pip install pyright`)
+- **Python**: `pyright-langserver` (`npm install -g pyright` or `uv pip install pyright`)
 - **TypeScript/JavaScript**: `typescript-language-server` (`npm install -g typescript-language-server`)
 - **Go**: `gopls` (`go install golang.org/x/tools/gopls@latest`)
 - **Rust**: `rust-analyzer` (`rustup component add rust-analyzer`)

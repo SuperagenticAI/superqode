@@ -25,6 +25,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, List, Optional
 
+from .env_introspect import missing_extra_hint
+
 
 @dataclass(frozen=True)
 class ConnectionProfile:
@@ -125,7 +127,7 @@ _PROFILES: List[ConnectionProfile] = [
         runtime="codex-sdk",
         self_contained=True,
         detect=_codex_ready,
-        unavailable_hint='pip install "superqode[codex-sdk]" and run `codex login`',
+        unavailable_hint=missing_extra_hint("codex-sdk", suffix="then run `codex login`"),
     ),
     ConnectionProfile(
         id="claude",
@@ -136,7 +138,9 @@ _PROFILES: List[ConnectionProfile] = [
         runtime="claude-agent-sdk",
         self_contained=True,
         detect=_claude_agent_ready,
-        unavailable_hint='pip install "superqode[claude-agent-sdk]" (+ Claude Code) and set ANTHROPIC_API_KEY',
+        unavailable_hint=missing_extra_hint(
+            "claude-agent-sdk", suffix="add the Claude Code CLI, then set ANTHROPIC_API_KEY"
+        ),
     ),
     ConnectionProfile(
         id="antigravity",

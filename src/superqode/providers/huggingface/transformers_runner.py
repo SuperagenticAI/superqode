@@ -5,7 +5,7 @@ using the transformers library without requiring Ollama or other
 external servers.
 
 Requires optional dependencies:
-    pip install superqode[transformers]
+    uv tool install 'superqode[transformers]'
 
 Or manually:
     pip install transformers accelerate torch

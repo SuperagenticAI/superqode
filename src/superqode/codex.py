@@ -5,7 +5,7 @@ hand-building an :class:`AgentConfig` or calling :func:`create_runtime` yourself
 
 Requires the extra::
 
-    pip install superqode[codex-sdk]
+    uv tool install 'superqode[codex-sdk]'
 
 Quick start::
 

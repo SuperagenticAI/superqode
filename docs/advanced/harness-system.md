@@ -692,7 +692,7 @@ Ensure tools are installed:
 
 ```bash
 # Python tools
-pip install mypy ruff pyright
+uv pip install mypy ruff pyright
 
 # TypeScript tools
 npm install -g typescript eslint

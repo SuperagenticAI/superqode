@@ -108,7 +108,7 @@ Examples:
                 log.add_warning(f"⚠️ Added but not verified: {url}")
 
         except ImportError:
-            log.add_error("A2A not installed. Run: pip install superqode[a2a]")
+            log.add_error("A2A not installed. Run: uv tool install 'superqode[a2a]'")
         except Exception as e:
             log.add_error(f"Failed to connect: {e}")
 

@@ -771,28 +771,43 @@ def render_welcome(
     # QUICK START + KEYS - centered, one entry per line (no column padding so
     # justify=center keeps every row visually centered). Local connection leads.
     # ═══════════════════════════════════════════════════════════════════════
-    commands_text = Text(justify=align)
-    commands_text.append("Quick Start\n", style=f"bold {THEME['text']}")
+    # Header - centered above the rows.
+    header_text = Text(justify=align)
+    header_text.append("Quick Start", style=f"bold {THEME['text']}")
+    items.append(place(header_text))
+
+    # Rows - left-justified as ONE block so the [n], command and → columns line
+    # up; place() then centers the whole block. Pad the command column to a
+    # fixed width so every arrow aligns vertically (center-justifying each row
+    # independently is what made these drift out of alignment).
     starts = [
         ("1", ":connect", "choose local, BYOK, or an agent", THEME["cyan"]),
         ("2", ":mode", "switch chat / build / plan", THEME["success"]),
         ("3", ":help", "Explore the possibilities of SuperQode", THEME["purple"]),
     ]
-    for num, cmd, desc, color in starts:
-        commands_text.append(f"[{num}] ", style=THEME["dim"])
-        commands_text.append(cmd, style=f"bold {color}")
-        commands_text.append("  →  ", style=THEME["dim"])
-        commands_text.append(f"{desc}\n", style=THEME["muted"])
-    commands_text.append("\n", style="")
-    commands_text.append("Keys: ", style=THEME["muted"])
-    commands_text.append("Ctrl+K", style=f"bold {THEME['cyan']}")
-    commands_text.append(" commands  •  ", style=THEME["muted"])
-    commands_text.append("Ctrl+B", style=f"bold {THEME['cyan']}")
-    commands_text.append(" sidebar  •  ", style=THEME["muted"])
-    commands_text.append(":help", style=f"bold {THEME['cyan']}")
-    commands_text.append(" reference\n", style=THEME["muted"])
+    cmd_width = max(len(cmd) for _, cmd, _, _ in starts)
+    rows_text = Text(justify="left")
+    for idx, (num, cmd, desc, color) in enumerate(starts):
+        rows_text.append(f"[{num}] ", style=THEME["dim"])
+        rows_text.append(cmd, style=f"bold {color}")
+        rows_text.append(" " * (cmd_width - len(cmd)), style="")
+        rows_text.append("  →  ", style=THEME["dim"])
+        rows_text.append(desc, style=THEME["muted"])
+        if idx < len(starts) - 1:
+            rows_text.append("\n", style="")
+    items.append(place(rows_text))
+    items.append(Text("\n\n", style=""))
 
-    items.append(place(commands_text))
+    # Keys hint - centered.
+    keys_text = Text(justify=align)
+    keys_text.append("Keys: ", style=THEME["muted"])
+    keys_text.append("Ctrl+K", style=f"bold {THEME['cyan']}")
+    keys_text.append(" commands  •  ", style=THEME["muted"])
+    keys_text.append("Ctrl+B", style=f"bold {THEME['cyan']}")
+    keys_text.append(" sidebar  •  ", style=THEME["muted"])
+    keys_text.append(":help", style=f"bold {THEME['cyan']}")
+    keys_text.append(" reference", style=THEME["muted"])
+    items.append(place(keys_text))
 
     return Group(*items)
 
@@ -2420,13 +2435,13 @@ class SuperQodeApp(App):
         """Map common Codex SDK/app-server failures to user-facing recovery hints."""
         lowered = (message or "").lower()
         if "codex-sdk" in lowered and "install" in lowered:
-            return 'Install the SDK extra: pip install "superqode[codex-sdk]".'
+            return 'Install the SDK extra: uv tool install "superqode[codex-sdk]".'
         if "not logged" in lowered or "login" in lowered or "auth" in lowered:
             return "Run `codex login`, then retry from SuperQode."
         if "auth.json" in lowered:
             return "Run `codex login`; SuperQode uses your ~/.codex auth."
         if "openai-codex-cli-bin" in lowered or "codex process" in lowered:
-            return 'Reinstall the SDK extra so the app-server binary is present: pip install -U "superqode[codex-sdk]".'
+            return 'Reinstall the SDK extra so the app-server binary is present: uv tool install --reinstall "superqode[codex-sdk]".'
         if "untrusted" in lowered or "trust" in lowered:
             return "Trust this project or adjust policy in ~/.codex, then retry."
         if "model" in lowered and ("unavailable" in lowered or "not found" in lowered):
@@ -3358,6 +3373,19 @@ class SuperQodeApp(App):
         """Add a Textual/Rich link target to a picker style."""
         return f"{style} link superqode://pick/{number}"
 
+    @staticmethod
+    def _runtime_install_message(runtime_name: str, install_hint: str | None) -> str:
+        from superqode.providers.env_introspect import environment_info
+
+        env = environment_info()
+        command = install_hint or "uv tool install ..."
+        return (
+            f"Runtime '{runtime_name}' is not installed.\n"
+            f"SuperQode is running from: {env.label} ({env.python})\n"
+            f"This command modifies: {env.target}\n"
+            f"Run: {command}"
+        )
+
     def _select_by_number_universal(self, num: int):
         """Universal number selection handler for all selection modes.
 
@@ -3413,9 +3441,7 @@ class SuperQodeApp(App):
             if runtimes and 1 <= num <= len(runtimes):
                 info = runtimes[num - 1]
                 if not info.installed:
-                    log.add_error(
-                        f"Runtime '{info.name}' is not installed. Run: {info.install_hint or 'pip install ...'}"
-                    )
+                    log.add_error(self._runtime_install_message(info.name, info.install_hint))
                     return True
                 if not info.implemented:
                     log.add_error(f"Runtime '{info.name}' is a stub and not yet usable.")
@@ -4529,9 +4555,7 @@ class SuperQodeApp(App):
         info = runtimes[idx]
         if not info.installed:
             log = self.query_one("#log", ConversationLog)
-            log.add_error(
-                f"Runtime '{info.name}' is not installed. Run: {info.install_hint or 'pip install ...'}"
-            )
+            log.add_error(self._runtime_install_message(info.name, info.install_hint))
             return
         if not info.implemented:
             log = self.query_one("#log", ConversationLog)
@@ -5328,9 +5352,7 @@ class SuperQodeApp(App):
                             break
                 if info is not None:
                     if not info.installed:
-                        log.add_error(
-                            f"Runtime '{info.name}' is not installed. Run: {info.install_hint or 'pip install ...'}"
-                        )
+                        log.add_error(self._runtime_install_message(info.name, info.install_hint))
                         return
                     if not info.implemented:
                         log.add_error(f"Runtime '{info.name}' is a stub and not yet usable.")
@@ -9086,7 +9108,7 @@ class SuperQodeApp(App):
             t.append("  Upgrade with ", style=THEME["muted"])
             t.append("uv tool upgrade superqode", style=f"bold {THEME['cyan']}")
             t.append(" or ", style=THEME["muted"])
-            t.append("pip install -U superqode", style=f"bold {THEME['cyan']}")
+            t.append("uv tool upgrade superqode", style=f"bold {THEME['cyan']}")
             t.append("\n", style="")
             self._call_ui(log.write, t)
         else:
@@ -10436,7 +10458,16 @@ class SuperQodeApp(App):
         sub = args.strip().lower()
 
         if sub == "list":
-            for info in list_runtimes():
+            runtimes = list_runtimes()
+            if any(not info.installed and info.install_hint for info in runtimes):
+                from superqode.providers.env_introspect import environment_info
+
+                env = environment_info()
+                log.add_info(
+                    f"SuperQode is running from: {env.label} ({env.python}); "
+                    f"install commands target {env.target}."
+                )
+            for info in runtimes:
                 marker = "▸" if info.name == resolve_runtime_name() else " "
                 if not info.installed:
                     status = f"missing — {info.install_hint or ''}"
@@ -10459,9 +10490,7 @@ class SuperQodeApp(App):
             return
         info = info_by_name[sub]
         if not info.installed:
-            log.add_error(
-                f"Runtime '{sub}' is not installed. Run: {info.install_hint or 'pip install ...'}"
-            )
+            log.add_error(self._runtime_install_message(sub, info.install_hint))
             return
         if not info.implemented:
             log.add_error(f"Runtime '{sub}' is a stub and not yet usable.")
@@ -10863,7 +10892,7 @@ class SuperQodeApp(App):
             text.append(f"{len(cmds)} available\n", style=THEME["text"])
         if not (sdk_ok and key_ok):
             text.append("\n  Setup: ", style=THEME["muted"])
-            text.append('pip install "superqode[claude-agent-sdk]"', style=THEME["cyan"])
+            text.append('uv tool install "superqode[claude-agent-sdk]"', style=THEME["cyan"])
             text.append(" + install Claude Code + export ANTHROPIC_API_KEY\n", style=THEME["muted"])
         log.write(text)
 
@@ -11477,7 +11506,7 @@ class SuperQodeApp(App):
 
         if not installed:
             text.append("\n  Install     ", style=THEME["muted"])
-            text.append('pip install "superqode[codex-sdk]"\n', style=THEME["cyan"])
+            text.append('uv tool install "superqode[codex-sdk]"\n', style=THEME["cyan"])
             log.write(text)
             return
 
@@ -26746,28 +26775,37 @@ class SuperQodeApp(App):
 
         apple_silicon = sys.platform == "darwin" and _platform.machine() == "arm64"
         if engine == "mlx" and apple_silicon:
-            from superqode.local.servers import MLX_REQUIREMENT
+            from superqode.local.servers import mlx_install_command
+            from superqode.providers.env_introspect import environment_info
 
             self._awaiting_local_dep_install = "mlx"
             self._awaiting_local_model = False
+            env = environment_info()
+            command = mlx_install_command(sys.executable)
             t.append("\n  🔴 ", style=THEME["error"])
             t.append(
                 "MLX (mlx-lm) is not installed in this environment\n", style=f"bold {THEME['text']}"
             )
+            t.append("    SuperQode is running from: ", style=THEME["muted"])
+            t.append(env.label, style=f"bold {THEME['text']}")
+            t.append(f" ({env.python})\n", style=THEME["dim"])
+            t.append("    This will modify: ", style=THEME["muted"])
+            t.append(f"{env.target}\n", style=THEME["dim"])
+            t.append("    Exact command:\n", style=THEME["muted"])
+            t.append("      ", style="")
+            t.append(command, style=THEME["cyan"])
+            t.append("\n", style="")
             t.append("  ▶ Press ", style=THEME["muted"])
             t.append("Enter", style=f"bold {THEME['success']}")
-            t.append(" to install it now", style=THEME["muted"])
+            t.append(" to run that exact command", style=THEME["muted"])
             t.append("   ·   ", style=THEME["dim"])
             t.append("'n'", style=THEME["warning"])
             t.append(" to skip\n", style=THEME["muted"])
-            t.append("    Runs: ", style=THEME["muted"])
-            t.append(f"uv pip install '{MLX_REQUIREMENT}'", style=THEME["cyan"])
-            t.append(f"  into {sys.executable}\n", style=THEME["dim"])
             log.write(t)
             self._pin_local_prompt_to_input(
-                "Install MLX: Enter installs mlx-lm, n skips",
+                "Install MLX: Enter runs the shown command, n skips",
                 log,
-                notify="MLX support is missing. Press Enter to install or n to skip.",
+                notify="MLX support is missing. Review the shown command, then press Enter to install or n to skip.",
             )
             return True
 
@@ -26842,17 +26880,18 @@ class SuperQodeApp(App):
             t.append("\n  ⏭  ", style=THEME["warning"])
             t.append(f"Skipped installing {engine}.", style=f"bold {THEME['text']}")
             t.append(" Pick another provider below, or install later with:\n", style=THEME["muted"])
-            t.append(
-                "      uv tool install superqode --reinstall --with mlx-lm\n", style=THEME["cyan"]
-            )
+            if engine == "mlx":
+                from superqode.local.servers import mlx_install_command
+
+                t.append(f"      {mlx_install_command()}\n", style=THEME["cyan"])
             log.write(t)
             # Re-open the provider picker so this is not a dead end.
             self._show_local_provider_picker(log)
             return True
         if low not in ("", "y", "yes", "install", "ok"):
-            log.add_error("Press Enter to install, or 'n' to skip.")
+            log.add_error("Press Enter to run the shown install command, or 'n' to skip.")
             self._pin_local_prompt_to_input(
-                "Install MLX: Enter installs mlx-lm, n skips",
+                "Install MLX: Enter runs the shown command, n skips",
                 log,
             )
             return True  # keep the prompt active
@@ -26885,7 +26924,9 @@ class SuperQodeApp(App):
 
         if not ok:
             log.add_error(f"Could not install mlx-lm: {message}")
-            log.add_system("Install manually: uv tool install superqode --reinstall --with mlx-lm")
+            from superqode.local.servers import mlx_install_command
+
+            log.add_system(f"Install manually: {mlx_install_command()}")
             return
 
         t = Text()
@@ -28995,7 +29036,7 @@ class SuperQodeApp(App):
 
                 self._a2a_commands = create_a2a_commands()
             except ImportError:
-                log.add_error("A2A not installed. Run: pip install superqode[a2a]")
+                log.add_error("A2A not installed. Run: uv tool install 'superqode[a2a]'")
                 return
 
         await self._a2a_commands.handle_command(subcommand, subargs, log)

@@ -515,9 +515,9 @@ superqode harness run --spec harness.yaml --prompt "analyze this codebase"
 The TUI requires:
 
 ```bash
-pip install superqode[tui]
+uv tool install "superqode[tui]"
 # or
-pip install textual rich
+uv pip install textual rich
 ```
 
 ## Troubleshooting
