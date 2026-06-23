@@ -11,7 +11,7 @@ hide:
 
 # SuperQode
 
-<p class="sq-kicker">The harness engineering framework for coding agents, optimized for local and open models</p>
+<p class="sq-kicker">The <span class="sq-gradient-text">harness engineering</span> framework for coding agents, optimized for local and <span class="sq-gradient-text">open</span> models</p>
 
 <p class="sq-tagline">Build your own coding harness. Measure it. Extend it. Optimize it. Use any model, open or closed, small or large, local or remote, without giving up control of the agent loop.</p>
 
@@ -25,6 +25,8 @@ hide:
 [Build Your First Harness](getting-started/bring-your-own-harness.md){ .md-button .md-button--primary }
 [Optimize Local Models](local-agentic-coding.md){ .md-button }
 [Read Harness Engineering](harness-engineering.md){ .md-button }
+
+<img src="assets/superqode-hero.png" alt="SuperQode harness engineering workbench" class="sq-hero-image" />
 
 </div>
 

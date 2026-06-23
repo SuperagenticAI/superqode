@@ -28,6 +28,10 @@
   <a href="https://github.com/SuperagenticAI/superqode/discussions">💬 Discussions</a>
 </p>
 
+<p align="center">
+  <img src="assets/superqode-hero.png" alt="SuperQode harness engineering workbench" width="920">
+</p>
+
 ---
 
 ## What is SuperQode?
