@@ -14,7 +14,8 @@ python<span class=w> </span>-c<span class=w> </span><span class=s2>&quot;import 
 superqode<span class=w> </span>--version
 </code></pre></div> <p>For source installs:</p> <div class=highlight><pre><span></span><code>git<span class=w> </span>clone<span class=w> </span>https://github.com/SuperagenticAI/superqode.git
 <span class=nb>cd</span><span class=w> </span>superqode
-uv<span class=w> </span>pip<span class=w> </span>install<span class=w> </span>-e<span class=w> </span>.
+uv<span class=w> </span>sync<span class=w> </span>--extra<span class=w> </span>dev<span class=w> </span>--extra<span class=w> </span>docs
+uv<span class=w> </span>run<span class=w> </span>superqode<span class=w> </span>--version
 </code></pre></div> <h3 id=the-superqode-command-is-not-found>The <code>superqode</code> command is not found<a class=headerlink href=#the-superqode-command-is-not-found title="Permanent link">&para;</a></h3> <p>Check that the Python scripts directory is on <code>PATH</code>:</p> <div class=highlight><pre><span></span><code>python<span class=w> </span>-m<span class=w> </span>site<span class=w> </span>--user-base
 uv<span class=w> </span>tool<span class=w> </span>list
 </code></pre></div> <p>If you installed with <code>uv</code>, check:</p> <div class=highlight><pre><span></span><code>uv<span class=w> </span>tool<span class=w> </span>list
