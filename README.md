@@ -70,12 +70,6 @@ uv tool install superqode
 uvx superqode
 ```
 
-**Alternate (No Python Required, SuperQode TUI Only)**
-```bash
-# Using Curl script
-curl -fsSL https://super-agentic.ai/install.sh | bash
-```
-
 ### Run SuperQode
 
 **Interactive TUI (Explore)**

@@ -18,7 +18,7 @@ Or run once without installing:
 uvx superqode
 ```
 
-That's it! Verify with:
+That's it. If you installed the tool, verify with:
 
 ```bash
 superqode --version
@@ -92,23 +92,6 @@ Run SuperQode directly through uv when you want a temporary command.
 ```bash
 uvx superqode --version
 ```
-
----
-
-## Alternate Installation Method (No Python Required)
-
-This method provides a pre-compiled binary for the SuperQode TUI. Validation workflows require
-the Python install (uv or pip). It is convenient for users who do not want to manage a
-Python environment, but may have a slightly slower startup time (~1-2 seconds) compared to the
-primary methods.
-
-### Method 3: Installer Script
-
-```bash
-curl -fsSL https://super-agentic.ai/install.sh | bash
-```
-
----
 
 ## Installation for Developers
 
