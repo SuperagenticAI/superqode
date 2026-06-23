@@ -1661,6 +1661,14 @@ class SuperQodeApp(App):
                 "harness",
             ),
             PaletteCommand(
+                "harness_wizard",
+                "Harness Wizard",
+                "Create a HarnessSpec from TUI-friendly wizard defaults",
+                "✦",
+                ":harness wizard ",
+                "harness",
+            ),
+            PaletteCommand(
                 "harness_replay",
                 "Harness Replay",
                 "Prefill replay plan command for a persisted run",
@@ -3087,6 +3095,12 @@ class SuperQodeApp(App):
             log = self.query_one("#log", ConversationLog)
             log.add_info("Recommendation selection cancelled.")
             return
+        if getattr(self, "_awaiting_harness_wizard", False):
+            self._awaiting_harness_wizard = False
+            self._harness_wizard_state = None
+            log = self.query_one("#log", ConversationLog)
+            log.add_info("Harness wizard cancelled.")
+            return
 
         # Then check if agent is running (ACP or BYOK)
         log = self.query_one("#log", ConversationLog)
@@ -3411,6 +3425,7 @@ class SuperQodeApp(App):
             or getattr(self, "_awaiting_codex_effort", False)
             or getattr(self, "_awaiting_session_resume", False)
             or getattr(self, "_awaiting_mode_selection", False)
+            or getattr(self, "_awaiting_harness_wizard", False)
         ):
             try:
                 prompt_input = self.query_one("#prompt-input", SelectionAwareInput)
@@ -5150,6 +5165,11 @@ class SuperQodeApp(App):
                 event.input.value = ""
                 return
 
+            if getattr(self, "_awaiting_harness_wizard", False):
+                self._handle_harness_wizard_input(text, log)
+                event.input.value = ""
+                return
+
             # Check if awaiting ACP agent selection
             if getattr(self, "_awaiting_acp_agent_selection", False):
                 self.action_select_highlighted_acp_agent()
@@ -5224,6 +5244,10 @@ class SuperQodeApp(App):
             if self._handle_agent_question_input(text, log):
                 return
 
+        if getattr(self, "_awaiting_harness_wizard", False):
+            if self._handle_harness_wizard_input(text, log):
+                return
+
         # Check for commands FIRST (before selection handlers) so :home, :back, :cancel work
         # Supports both : (vim-style) and / prefix
         if self._vim_enabled() and text in {"q:", "@:"}:
@@ -5255,6 +5279,7 @@ class SuperQodeApp(App):
                 or getattr(self, "_awaiting_local_dep_install", None)
                 or getattr(self, "_awaiting_session_resume", False)
                 or getattr(self, "_awaiting_mode_selection", False)
+                or getattr(self, "_awaiting_harness_wizard", False)
             ):
                 # Cancel selection mode
                 self._awaiting_connect_type = False
@@ -5265,6 +5290,8 @@ class SuperQodeApp(App):
                 self._awaiting_local_provider = False
                 self._awaiting_session_resume = False
                 self._awaiting_mode_selection = False
+                self._awaiting_harness_wizard = False
+                self._harness_wizard_state = None
                 self._awaiting_local_server_start = None
                 self._awaiting_local_dep_install = None
                 # Clear selection state
@@ -5284,7 +5311,7 @@ class SuperQodeApp(App):
                 if cmd == "home":
                     self._go_home(log)
                 elif cmd in ("back", "cancel"):
-                    log.add_info("Selection cancelled. Use :connect to try again.")
+                    log.add_info("Selection cancelled.")
                 return
 
             # Record command in history
@@ -5805,6 +5832,16 @@ class SuperQodeApp(App):
             self._do_exit(log)
         elif c == "init":
             self._init_config(args, log)
+        elif c == "config":
+            self._run_cli_group("config", args or "show", log, "Config command")
+        elif c == "auth":
+            self._run_cli_group("auth", args or "info", log, "Auth command")
+        elif c == "serve":
+            self._run_cli_group("serve", args or "status", log, "Serve command")
+        elif c == "daemon":
+            self._run_cli_group("daemon", args, log, "Daemon command")
+        elif c == "profiles":
+            self._run_cli_group("profiles", args or "list", log, "Profiles command")
         elif c in ("home", "disconnect"):
             self._go_home(log)
         elif c == "acp":
@@ -5979,6 +6016,17 @@ class SuperQodeApp(App):
                 elif subcmd == "local":
                     # Route to LOCAL connection
                     self._connect_local_cmd(subargs, log)
+                elif subcmd == "setup":
+                    try:
+                        setup_tokens = shlex.split(subargs or "")
+                    except ValueError as exc:
+                        log.add_error(f"Could not parse :connect setup arguments: {exc}")
+                        return
+                    self._run_cli_passthrough(
+                        ["connect", "setup", *setup_tokens],
+                        log,
+                        "Connect setup",
+                    )
                 elif subcmd in ("codex", "claude", "antigravity"):
                     # Product/runtime connection profiles (Codex, Claude, …).
                     from superqode.providers.connection_profiles import get_connection_profile
@@ -6863,6 +6911,24 @@ class SuperQodeApp(App):
             log.add_error(f"{label} failed with exit code {completed.returncode}.")
             if output:
                 log.write(Text(output + "\n", style=THEME["error"], overflow="fold"))
+
+    def _run_cli_passthrough(
+        self,
+        command_parts: list[str],
+        log: ConversationLog,
+        label: str,
+    ) -> None:
+        """Run a CLI-backed command from the TUI."""
+        self.run_worker(self._superqode_cli_cmd(command_parts, log, label))
+
+    def _run_cli_group(self, group: str, args: str, log: ConversationLog, label: str) -> None:
+        """Run `superqode <group> ...` from a TUI command handler."""
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :{group} arguments: {exc}")
+            return
+        self._run_cli_passthrough([group, *tokens], log, label)
 
     def _find_skill_file(self, skills_root: Path, name: str) -> Path | None:
         """Find a local skill file by directory, file stem, or frontmatter name."""
@@ -9208,7 +9274,7 @@ class SuperQodeApp(App):
             self._handle_switchboard(" ".join(tokens), log)
             return
 
-        log.add_info("Usage: :sessions [resume [id]|list|graph]")
+        self._run_cli_passthrough(["sessions", *tokens], log, "Sessions command")
 
     def _show_session_resume_picker(self, log: ConversationLog, clear_log: bool = True) -> None:
         """Show a keyboard-navigable picker for resuming local sessions."""
@@ -9737,9 +9803,7 @@ class SuperQodeApp(App):
         elif subcommand in {"lineage", "timeline"}:
             self._factory_lineage(rest, log)
         else:
-            log.add_info(
-                "Usage: :factory [status|routes|mode|switch-model|switch-harness|fork-model|fork-harness|lineage]"
-            )
+            self._run_cli_passthrough(["factory", *tokens], log, "Factory command")
 
     def _factory(self):
         from superqode.session.factory import SoftwareFactory
@@ -10454,6 +10518,10 @@ class SuperQodeApp(App):
         from superqode.runtime import list_runtimes, resolve_runtime_name
 
         sub = args.strip().lower()
+
+        if sub.startswith("doctor"):
+            self._run_cli_group("runtime", args, log, "Runtime command")
+            return
 
         if sub == "list":
             runtimes = list_runtimes()
@@ -11587,6 +11655,10 @@ class SuperQodeApp(App):
                 )
             return
 
+        if sub in ("wizard", "init", "create"):
+            self._harness_wizard_cmd(subargs, log)
+            return
+
         if sub in ("inspect", "show", "summary"):
             self._show_harness_inspect(log)
             return
@@ -11650,6 +11722,34 @@ class SuperQodeApp(App):
             )
             return
 
+        cli_backed_harness_subcommands = {
+            "auto-bench",
+            "compile",
+            "diff",
+            "drain",
+            "eval",
+            "eval-packs",
+            "explain",
+            "import-agent",
+            "import-omnigent",
+            "inbox",
+            "list-backends",
+            "registry",
+            "run",
+            "test",
+            "validate",
+            "worker",
+            "observability",
+        }
+        if sub in cli_backed_harness_subcommands:
+            try:
+                tokens = shlex.split(subargs or "")
+            except ValueError as exc:
+                log.add_error(f"Could not parse :harness {sub} arguments: {exc}")
+                return
+            self._run_cli_passthrough(["harness", sub, *tokens], log, "Harness command")
+            return
+
         if sub in ("off", "disable", "none"):
             _os.environ.pop("SUPERQODE_HARNESS", None)
             if hasattr(self, "_pure_mode") and self._pure_mode is not None:
@@ -11667,7 +11767,7 @@ class SuperQodeApp(App):
 
         if not path:
             log.add_info(
-                "Usage: :harness <spec.yaml> | :harness inspect | :harness doctor | :harness graph | :harness replay <run_id> | :harness fork <run_id> | :harness evidence <run_id> | :harness runs | :harness optimize --spec <path> --tasks <path> | :harness optimize-inspect <run_dir> | :harness optimize-ledger <run_dir> | :harness templates | :harness off"
+                "Usage: :harness <spec.yaml> | :harness wizard [name] --starter <template> --output <path> [--load] | :harness inspect | :harness doctor | :harness graph | :harness replay <run_id> | :harness fork <run_id> | :harness evidence <run_id> | :harness runs | :harness optimize --spec <path> --tasks <path> | :harness optimize-inspect <run_dir> | :harness optimize-ledger <run_dir> | :harness templates | :harness off"
             )
             return
 
@@ -11690,6 +11790,593 @@ class SuperQodeApp(App):
         log.add_info(
             "Reconnect with :connect byok or :connect local to run the TUI through this spec."
         )
+
+    def _harness_wizard_cmd(self, args: str, log) -> None:
+        """Create a HarnessSpec from wizard answers supplied as TUI flags."""
+        try:
+            from superqode.harness import (
+                APPROVAL_PROFILES,
+                TOOL_CALL_FORMATS,
+                WIZARD_STARTERS,
+                WizardAnswers,
+                build_wizard_spec,
+                explain_harness,
+                render_explanation,
+                save_harness_spec,
+            )
+        except Exception as exc:
+            log.add_error(f"Harness wizard is unavailable: {exc}")
+            return
+
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :harness wizard arguments: {exc}")
+            return
+
+        if not tokens:
+            self._start_harness_wizard_flow(log)
+            return
+
+        starter_keys = {key for key, _label in WIZARD_STARTERS}
+        approval_keys = {key for key, _label in APPROVAL_PROFILES}
+        tool_format_keys = {key for key, _label in TOOL_CALL_FORMATS}
+        workflow_keys = {
+            "single",
+            "plan-implement-review",
+            "fix-and-verify",
+            "parallel-review",
+            "security-review",
+        }
+        output = Path("harness.yaml")
+        force = False
+        load_after_write = False
+        answers_kwargs: dict[str, Any] = {
+            "name": "my-harness",
+            "starter": "qwen-coding",
+            "provider": "",
+            "model": "",
+            "allow_write": True,
+            "allow_shell": True,
+            "allow_network": False,
+            "approval_profile": "balanced",
+            "tool_call_format": "auto",
+            "workflow_preset": "single",
+        }
+
+        def _require_value(index: int, flag: str) -> str:
+            if index + 1 >= len(tokens) or tokens[index + 1].startswith("--"):
+                raise ValueError(f"{flag} requires a value")
+            return tokens[index + 1]
+
+        i = 0
+        positional: list[str] = []
+        try:
+            while i < len(tokens):
+                token = tokens[i]
+                if token in {"--help", "-h"}:
+                    self._show_harness_wizard_help(log)
+                    return
+                if token in {"--starter", "-t"}:
+                    answers_kwargs["starter"] = _require_value(i, token)
+                    i += 2
+                    continue
+                if token in {"--output", "-o"}:
+                    output = Path(_require_value(i, token)).expanduser()
+                    i += 2
+                    continue
+                if token == "--provider":
+                    answers_kwargs["provider"] = _require_value(i, token)
+                    i += 2
+                    continue
+                if token == "--model":
+                    answers_kwargs["model"] = _require_value(i, token)
+                    i += 2
+                    continue
+                if token in {"--workflow", "--workflow-preset"}:
+                    answers_kwargs["workflow_preset"] = _require_value(i, token)
+                    i += 2
+                    continue
+                if token in {"--approval", "--approval-profile"}:
+                    answers_kwargs["approval_profile"] = _require_value(i, token)
+                    i += 2
+                    continue
+                if token in {"--tool-format", "--tool-call-format"}:
+                    answers_kwargs["tool_call_format"] = _require_value(i, token)
+                    i += 2
+                    continue
+                if token in {"--read-only", "--no-write"}:
+                    answers_kwargs["allow_write"] = False
+                    i += 1
+                    continue
+                if token == "--no-shell":
+                    answers_kwargs["allow_shell"] = False
+                    i += 1
+                    continue
+                if token == "--allow-network":
+                    answers_kwargs["allow_network"] = True
+                    i += 1
+                    continue
+                if token == "--no-network":
+                    answers_kwargs["allow_network"] = False
+                    i += 1
+                    continue
+                if token == "--force":
+                    force = True
+                    i += 1
+                    continue
+                if token == "--load":
+                    load_after_write = True
+                    i += 1
+                    continue
+                if token.startswith("-"):
+                    raise ValueError(f"Unknown option {token}")
+                positional.append(token)
+                i += 1
+        except ValueError as exc:
+            log.add_error(str(exc))
+            self._show_harness_wizard_help(log)
+            return
+
+        if positional:
+            answers_kwargs["name"] = positional[0]
+        if len(positional) > 1:
+            log.add_error(f"Unexpected extra argument: {positional[1]}")
+            self._show_harness_wizard_help(log)
+            return
+
+        if answers_kwargs["starter"] not in starter_keys:
+            log.add_error(
+                f"Unknown starter {answers_kwargs['starter']!r}. Try: {', '.join(sorted(starter_keys))}"
+            )
+            return
+        if answers_kwargs["approval_profile"] not in approval_keys:
+            log.add_error(
+                f"Unknown approval profile {answers_kwargs['approval_profile']!r}. Try: {', '.join(sorted(approval_keys))}"
+            )
+            return
+        if answers_kwargs["tool_call_format"] not in tool_format_keys:
+            log.add_error(
+                f"Unknown tool-call format {answers_kwargs['tool_call_format']!r}. Try: {', '.join(sorted(tool_format_keys))}"
+            )
+            return
+        if answers_kwargs["workflow_preset"] not in workflow_keys:
+            log.add_error(
+                f"Unknown workflow {answers_kwargs['workflow_preset']!r}. Try: {', '.join(sorted(workflow_keys))}"
+            )
+            return
+
+        if output.exists() and not force:
+            log.add_error(f"{output} already exists. Add --force to overwrite it.")
+            return
+
+        try:
+            answers = WizardAnswers(**answers_kwargs)
+            spec = build_wizard_spec(answers)
+            path = save_harness_spec(spec, output)
+            (Path(".agents") / "skills").mkdir(parents=True, exist_ok=True)
+            (Path(".agents") / "roles").mkdir(parents=True, exist_ok=True)
+        except Exception as exc:
+            log.add_error(f"Could not create harness: {exc}")
+            return
+
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Harness Wizard\n\n", style=f"bold {THEME['text']}")
+        t.append("  Wrote       ", style=THEME["muted"])
+        t.append(str(path), style=f"bold {THEME['cyan']}")
+        t.append("\n  Starter     ", style=THEME["muted"])
+        t.append(answers.starter, style=THEME["text"])
+        t.append("\n  Runtime     ", style=THEME["muted"])
+        t.append(spec.runtime.backend, style=THEME["text"])
+        t.append("\n  Model       ", style=THEME["muted"])
+        t.append(spec.model_policy.primary or "active connection", style=THEME["text"])
+        t.append("\n\n")
+        explanation = render_explanation(
+            explain_harness(spec, provider=answers.provider, model=answers.model)
+        )
+        for line in explanation.splitlines()[:18]:
+            t.append("  ", style="")
+            t.append(line, style=THEME["text"])
+            t.append("\n")
+        t.append("\n  Next        ", style=THEME["muted"])
+        t.append(f":harness {path}", style=THEME["cyan"])
+        t.append("  ", style="")
+        t.append(f":harness doctor", style=THEME["cyan"])
+        t.append("\n")
+        self._show_command_output(log, t)
+
+        if load_after_write:
+            self._harness_cmd(f"load {path}", log)
+
+    def _start_harness_wizard_flow(self, log) -> None:
+        """Start the step-by-step HarnessSpec wizard in the TUI."""
+        self._awaiting_harness_wizard = True
+        self._harness_wizard_state = {
+            "step": "name",
+            "history": [],
+            "answers": {
+                "name": "my-harness",
+                "starter": "qwen-coding",
+                "provider": "",
+                "model": "",
+                "allow_write": True,
+                "allow_shell": True,
+                "allow_network": False,
+                "approval_profile": "balanced",
+                "tool_call_format": "auto",
+                "workflow_preset": "single",
+            },
+            "output": "harness.yaml",
+            "load": True,
+            "force": False,
+        }
+        self._render_harness_wizard_step(log)
+
+    def _handle_harness_wizard_input(self, text: str, log) -> bool:
+        """Advance the guided HarnessSpec wizard."""
+        state = getattr(self, "_harness_wizard_state", None)
+        if not getattr(self, "_awaiting_harness_wizard", False) or not state:
+            return False
+
+        raw = (text or "").strip()
+        lowered = raw.lower()
+        if lowered in {"cancel", ":cancel", "/cancel", "quit", "exit"}:
+            self._awaiting_harness_wizard = False
+            self._harness_wizard_state = None
+            log.add_info("Harness wizard cancelled.")
+            return True
+        if lowered in {"back", ":back", "/back"}:
+            history = state.get("history", [])
+            if history:
+                state["step"] = history.pop()
+            self._render_harness_wizard_step(log)
+            return True
+
+        step = state["step"]
+        answers = state["answers"]
+
+        try:
+            if step == "name":
+                if raw:
+                    answers["name"] = raw
+                self._harness_wizard_next(state, "starter")
+            elif step == "starter":
+                starter = self._harness_wizard_choice(raw, [key for key, _ in self._wizard_starters()])
+                if starter is None:
+                    log.add_error("Choose a starter by number or name.")
+                    self._render_harness_wizard_step(log)
+                    return True
+                answers["starter"] = starter
+                if starter == "no-tool":
+                    answers["allow_write"] = False
+                    answers["allow_shell"] = False
+                self._harness_wizard_next(state, "provider")
+            elif step == "provider":
+                answers["provider"] = raw
+                self._harness_wizard_next(state, "model")
+            elif step == "model":
+                answers["model"] = raw
+                self._harness_wizard_next(state, "tools")
+            elif step == "tools":
+                choice = self._harness_wizard_choice(
+                    raw,
+                    ["full", "read-only", "no-shell", "no-tools"],
+                    default="full",
+                )
+                if choice is None:
+                    log.add_error("Choose tools by number or name.")
+                    self._render_harness_wizard_step(log)
+                    return True
+                if choice == "full":
+                    answers["allow_write"] = True
+                    answers["allow_shell"] = True
+                elif choice == "read-only":
+                    answers["allow_write"] = False
+                    answers["allow_shell"] = False
+                elif choice == "no-shell":
+                    answers["allow_write"] = True
+                    answers["allow_shell"] = False
+                elif choice == "no-tools":
+                    answers["starter"] = "no-tool"
+                    answers["allow_write"] = False
+                    answers["allow_shell"] = False
+                self._harness_wizard_next(state, "permissions")
+            elif step == "permissions":
+                choice = self._harness_wizard_choice(
+                    raw,
+                    ["balanced", "careful", "yolo", "balanced-network"],
+                    default="balanced",
+                )
+                if choice is None:
+                    log.add_error("Choose permissions by number or name.")
+                    self._render_harness_wizard_step(log)
+                    return True
+                answers["allow_network"] = choice == "balanced-network"
+                answers["approval_profile"] = "balanced" if choice == "balanced-network" else choice
+                self._harness_wizard_next(state, "tool_format")
+            elif step == "tool_format":
+                choice = self._harness_wizard_choice(
+                    raw,
+                    ["auto", "native", "prompt"],
+                    default="auto",
+                )
+                if choice is None:
+                    log.add_error("Choose a tool-call format by number or name.")
+                    self._render_harness_wizard_step(log)
+                    return True
+                answers["tool_call_format"] = choice
+                self._harness_wizard_next(state, "workflow")
+            elif step == "workflow":
+                choice = self._harness_wizard_choice(
+                    raw,
+                    [
+                        "single",
+                        "plan-implement-review",
+                        "fix-and-verify",
+                        "parallel-review",
+                        "security-review",
+                    ],
+                    default="single",
+                )
+                if choice is None:
+                    log.add_error("Choose a workflow by number or name.")
+                    self._render_harness_wizard_step(log)
+                    return True
+                answers["workflow_preset"] = choice
+                self._harness_wizard_next(state, "output")
+            elif step == "output":
+                if raw:
+                    state["output"] = raw
+                self._harness_wizard_next(state, "load")
+            elif step == "load":
+                if raw:
+                    load = self._parse_yes_no(raw)
+                    if load is None:
+                        log.add_error("Answer yes or no.")
+                        self._render_harness_wizard_step(log)
+                        return True
+                    state["load"] = load
+                self._finish_harness_wizard_flow(log)
+                return True
+            else:
+                log.add_error("Harness wizard state was invalid; restarting.")
+                self._start_harness_wizard_flow(log)
+                return True
+        except Exception as exc:
+            log.add_error(f"Harness wizard failed: {exc}")
+            self._awaiting_harness_wizard = False
+            self._harness_wizard_state = None
+            return True
+
+        self._render_harness_wizard_step(log)
+        return True
+
+    @staticmethod
+    def _harness_wizard_next(state: dict[str, Any], next_step: str) -> None:
+        state.setdefault("history", []).append(state["step"])
+        state["step"] = next_step
+
+    @staticmethod
+    def _parse_yes_no(raw: str) -> bool | None:
+        lowered = raw.strip().lower()
+        if lowered in {"y", "yes", "true", "1"}:
+            return True
+        if lowered in {"n", "no", "false", "0"}:
+            return False
+        return None
+
+    @staticmethod
+    def _harness_wizard_choice(
+        raw: str,
+        keys: list[str],
+        *,
+        default: str | None = None,
+    ) -> str | None:
+        value = raw.strip().lower()
+        if not value and default:
+            return default
+        if value.isdigit():
+            index = int(value) - 1
+            return keys[index] if 0 <= index < len(keys) else None
+        for key in keys:
+            if value == key.lower():
+                return key
+        matches = [key for key in keys if key.lower().startswith(value)]
+        return matches[0] if len(matches) == 1 else None
+
+    @staticmethod
+    def _wizard_starters() -> tuple[tuple[str, str], ...]:
+        from superqode.harness import WIZARD_STARTERS
+
+        return WIZARD_STARTERS
+
+    def _render_harness_wizard_step(self, log) -> None:
+        state = getattr(self, "_harness_wizard_state", None)
+        if not state:
+            return
+        step = state["step"]
+        answers = state["answers"]
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Harness Wizard\n", style=f"bold {THEME['text']}")
+        t.append("  Type ", style=THEME["muted"])
+        t.append("back", style=THEME["cyan"])
+        t.append(" or ", style=THEME["muted"])
+        t.append("cancel", style=THEME["cyan"])
+        t.append(" anytime. Press Enter for defaults.\n\n", style=THEME["muted"])
+
+        if step == "name":
+            t.append("  Step 1/9  Harness name\n", style=f"bold {THEME['cyan']}")
+            t.append(f"  Default: {answers['name']}\n", style=THEME["muted"])
+            t.append("  Example: my-coder\n", style=THEME["text"])
+        elif step == "starter":
+            t.append("  Step 2/9  Choose starting point\n", style=f"bold {THEME['cyan']}")
+            for index, (key, label) in enumerate(self._wizard_starters(), 1):
+                marker = " (default)" if key == answers["starter"] else ""
+                t.append(f"  {index}. {key:<18} {label}{marker}\n", style=THEME["text"])
+        elif step == "provider":
+            t.append("  Step 3/9  Provider\n", style=f"bold {THEME['cyan']}")
+            t.append("  Leave blank to keep the template default.\n", style=THEME["muted"])
+            t.append("  Examples: ollama, lmstudio, mlx, ds4, openai, anthropic\n", style=THEME["text"])
+        elif step == "model":
+            t.append("  Step 4/9  Model\n", style=f"bold {THEME['cyan']}")
+            t.append("  Leave blank to keep the template model.\n", style=THEME["muted"])
+            t.append("  Example: qwen3-coder\n", style=THEME["text"])
+        elif step == "tools":
+            t.append("  Step 5/9  Tools\n", style=f"bold {THEME['cyan']}")
+            options = (
+                ("full", "file read/edit, search, shell, todos"),
+                ("read-only", "read/search/review only"),
+                ("no-shell", "file edits allowed, shell blocked"),
+                ("no-tools", "model-only reasoning/review"),
+            )
+            for index, (key, label) in enumerate(options, 1):
+                default = " (default)" if key == "full" else ""
+                t.append(f"  {index}. {key:<10} {label}{default}\n", style=THEME["text"])
+        elif step == "permissions":
+            t.append("  Step 6/9  Permissions\n", style=f"bold {THEME['cyan']}")
+            options = (
+                ("balanced", "auto safe reads/searches; ask before writes and shell"),
+                ("careful", "ask before most actions"),
+                ("yolo", "auto-approve actions allowed by the harness"),
+                ("balanced-network", "balanced approvals plus network access"),
+            )
+            for index, (key, label) in enumerate(options, 1):
+                default = " (default)" if key == "balanced" else ""
+                t.append(f"  {index}. {key:<18} {label}{default}\n", style=THEME["text"])
+        elif step == "tool_format":
+            t.append("  Step 7/9  Tool-call format\n", style=f"bold {THEME['cyan']}")
+            for index, (key, label) in enumerate(
+                (
+                    ("auto", "use template/runtime default"),
+                    ("native", "model-native tool calling"),
+                    ("prompt", "prompt-described tools for weaker local models"),
+                ),
+                1,
+            ):
+                default = " (default)" if key == "auto" else ""
+                t.append(f"  {index}. {key:<8} {label}{default}\n", style=THEME["text"])
+        elif step == "workflow":
+            t.append("  Step 8/9  Workflow\n", style=f"bold {THEME['cyan']}")
+            options = (
+                ("single", "one agent handles the task"),
+                ("plan-implement-review", "planner, implementer, reviewer chain"),
+                ("fix-and-verify", "fix then verify with checks"),
+                ("parallel-review", "multiple reviewers in parallel"),
+                ("security-review", "security-focused review chain"),
+            )
+            for index, (key, label) in enumerate(options, 1):
+                default = " (default)" if key == "single" else ""
+                t.append(f"  {index}. {key:<22} {label}{default}\n", style=THEME["text"])
+        elif step == "output":
+            t.append("  Step 9/9  Output file\n", style=f"bold {THEME['cyan']}")
+            t.append(f"  Default: {state['output']}\n", style=THEME["muted"])
+            t.append("  Example: harness.yaml\n", style=THEME["text"])
+        elif step == "load":
+            t.append("  Final  Load this harness now?\n", style=f"bold {THEME['cyan']}")
+            t.append("  Default: yes\n", style=THEME["muted"])
+            t.append("  Answer: yes or no\n", style=THEME["text"])
+
+        self._show_command_output(log, t)
+
+    def _finish_harness_wizard_flow(self, log) -> None:
+        state = getattr(self, "_harness_wizard_state", None)
+        if not state:
+            return
+        answers_kwargs = dict(state["answers"])
+        output = Path(state["output"]).expanduser()
+        load_after_write = bool(state.get("load", True))
+
+        if output.exists() and not state.get("force", False):
+            log.add_error(f"{output} already exists. Type a different output path or cancel.")
+            state["step"] = "output"
+            self._render_harness_wizard_step(log)
+            return
+
+        try:
+            from superqode.harness import (
+                WizardAnswers,
+                build_wizard_spec,
+                explain_harness,
+                render_explanation,
+                save_harness_spec,
+            )
+
+            answers = WizardAnswers(**answers_kwargs)
+            spec = build_wizard_spec(answers)
+            path = save_harness_spec(spec, output)
+            (Path(".agents") / "skills").mkdir(parents=True, exist_ok=True)
+            (Path(".agents") / "roles").mkdir(parents=True, exist_ok=True)
+        except Exception as exc:
+            log.add_error(f"Could not create harness: {exc}")
+            self._awaiting_harness_wizard = False
+            self._harness_wizard_state = None
+            return
+
+        self._awaiting_harness_wizard = False
+        self._harness_wizard_state = None
+
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Harness Created\n\n", style=f"bold {THEME['text']}")
+        t.append("  Wrote       ", style=THEME["muted"])
+        t.append(str(path), style=f"bold {THEME['cyan']}")
+        t.append("\n  Name        ", style=THEME["muted"])
+        t.append(spec.name, style=THEME["text"])
+        t.append("\n  Runtime     ", style=THEME["muted"])
+        t.append(spec.runtime.backend, style=THEME["text"])
+        t.append("\n  Model       ", style=THEME["muted"])
+        t.append(spec.model_policy.primary or "active connection", style=THEME["text"])
+        t.append("\n\n")
+        explanation = render_explanation(
+            explain_harness(
+                spec,
+                provider=answers.provider,
+                model=answers.model,
+            )
+        )
+        for line in explanation.splitlines()[:14]:
+            t.append("  ", style="")
+            t.append(line, style=THEME["text"])
+            t.append("\n")
+        t.append("\n  Next        ", style=THEME["muted"])
+        t.append(f":harness {path}", style=THEME["cyan"])
+        t.append("  ", style="")
+        t.append(":harness doctor", style=THEME["cyan"])
+        t.append("\n")
+        self._show_command_output(log, t)
+
+        if load_after_write:
+            self._harness_cmd(f"load {path}", log)
+
+    def _show_harness_wizard_help(self, log) -> None:
+        t = Text()
+        t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
+        t.append("Harness Wizard Usage\n\n", style=f"bold {THEME['text']}")
+        t.append("  :harness wizard [name] [options]\n\n", style=THEME["cyan"])
+        t.append("  Common:\n", style=f"bold {THEME['text']}")
+        t.append(
+            "    :harness wizard my-coder --starter qwen-coding --output harness.yaml --load\n",
+            style=THEME["text"],
+        )
+        t.append(
+            "    :harness wizard reviewer --starter no-tool --output reviewer.yaml\n",
+            style=THEME["text"],
+        )
+        t.append("\n  Options:\n", style=f"bold {THEME['text']}")
+        for line in (
+            "--starter/-t <template>",
+            "--output/-o <path>",
+            "--provider <id> --model <id>",
+            "--workflow <single|plan-implement-review|fix-and-verify|parallel-review|security-review>",
+            "--approval <balanced|careful|yolo>",
+            "--tool-format <auto|native|prompt>",
+            "--read-only, --no-shell, --allow-network",
+            "--force, --load",
+        ):
+            t.append("    " + line + "\n", style=THEME["text"])
+        self._show_command_output(log, t)
 
     def _show_harness_inspect(self, log) -> None:
         """Show a readable summary for the active HarnessSpec."""
@@ -24645,6 +25332,10 @@ class SuperQodeApp(App):
             self._doctor_cmd(subargs, log)
             return
 
+        if sub in {"list", "models", "guide", "recommend", "scan-free", "test", "monty", "ds4", "mlx"}:
+            self._run_cli_group("providers", args, log, "Providers command")
+            return
+
         if sub in ("smoke", "test"):
             self.run_worker(self._providers_smoke_cmd(subargs, log))
             return
@@ -25008,6 +25699,15 @@ class SuperQodeApp(App):
 
     def _sandbox_cmd(self, args: str, log: ConversationLog):
         """Show sandbox provider readiness in the TUI."""
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :sandbox arguments: {exc}")
+            return
+        if tokens and tokens[0] in {"doctor", "run"}:
+            self._run_cli_passthrough(["sandbox", *tokens], log, "Sandbox command")
+            return
+
         from superqode.sandbox import (
             get_sandbox_capabilities,
             sandbox_provider_status,
@@ -25066,6 +25766,10 @@ class SuperQodeApp(App):
             return
         subcommand = tokens[0].lower() if tokens else "list"
         subargs = tokens[1:]
+
+        if subcommand in {"show", "list"} and subargs:
+            self._run_cli_passthrough(["plugins", *tokens], log, "Plugins command")
+            return
 
         if subcommand in {"add", "install"}:
             if not subargs:
@@ -25405,6 +26109,15 @@ class SuperQodeApp(App):
 
     def _benchmark_cmd(self, args: str, log: ConversationLog):
         """Show benchmark harness status and optional task-file guidance."""
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :benchmark arguments: {exc}")
+            return
+        if tokens and tokens[0] == "run":
+            self._run_cli_passthrough(["benchmark", *tokens], log, "Benchmark command")
+            return
+
         from superqode.benchmarks import DEFAULT_TARGETS, is_target_available
 
         t = Text()
@@ -25912,12 +26625,12 @@ class SuperQodeApp(App):
             else:
                 log.add_info("Usage: :local stop <ollama|lmstudio|mlx|ds4|llama.cpp>")
         else:
-            log.add_info(f"Unknown subcommand: {sub}")
-            log.add_system(
-                "Available: init, smoke, labs, search, warm, status, scan, models, test, "
-                "info, recommend, serve, servers, stop, optimize, airplane, build, setup, "
-                "migrate, pack init"
-            )
+            try:
+                tokens = shlex.split(args or "")
+            except ValueError as exc:
+                log.add_error(f"Could not parse :local arguments: {exc}")
+                return
+            self._run_cli_passthrough(["local", *tokens], log, "Local command")
 
     @staticmethod
     def _parse_local_kv_args(subargs: str) -> dict:
@@ -27803,7 +28516,7 @@ class SuperQodeApp(App):
         elif sub == "connect":
             self._connect_acp_cmd(subargs, log)
         else:
-            self.run_worker(self._acp_doctor_cmd(args, log))
+            self._run_cli_group("agents", args, log, "Agents command")
 
     async def _acp_doctor_cmd(self, args: str, log: ConversationLog):
         """Run ACP agent diagnostics from the TUI."""
@@ -29434,6 +30147,10 @@ class SuperQodeApp(App):
                     ),
                     (":harness graph [run_id]", "Show planned graph or persisted run graph"),
                     (":harness runs", "List persisted HarnessSpec runs"),
+                    (
+                        ":harness wizard [name] --starter <template> --output <path>",
+                        "Create a HarnessSpec from wizard defaults in the TUI",
+                    ),
                     (":harness replay <run_id>", "Show exact replay readiness and next commands"),
                     (":harness fork <run_id> [event]", "Fork a persisted run at an event index"),
                     (
@@ -29701,6 +30418,16 @@ class SuperQodeApp(App):
         )
 
         parts = (args or "").split()
+        if parts and parts[0] in {
+            "show",
+            "hub",
+            "download",
+            "convert-mlx",
+            "cached",
+            "rm",
+        }:
+            self._run_cli_group("models", args, log, "Models command")
+            return
         if parts and parts[0] in ("providers", "provider-list"):
             self._show_command_output(log, render_providers_table())
             return

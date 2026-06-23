@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **TUI harness wizard** - Added a step-by-step `:harness wizard` flow for creating starter HarnessSpec files from the TUI, plus `:harness init` / flag shortcuts using the same wizard builder as the CLI.
+- **TUI CLI parity** - Exposed the remaining CLI command surface in the TUI command list and routed unsupported subcommands through the CLI runner so CLI-only workflows can be launched from the TUI.
+
 ## [0.2.0] - 2026-06-23
 
 ### Changed

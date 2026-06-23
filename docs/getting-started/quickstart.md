@@ -66,6 +66,7 @@ Useful TUI commands after connecting:
 | Command | Purpose |
 | --- | --- |
 | `:status` | Show current provider, runtime, mode, and harness state |
+| `:harness wizard` | Create and optionally load a starter HarnessSpec step by step |
 | `:harness harness.yaml` | Load a HarnessSpec into the session |
 | `:runtime list` | Show runtime backends |
 | `:runtime pydanticai` | Switch runtime where available |

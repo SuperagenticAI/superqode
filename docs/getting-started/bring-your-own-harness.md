@@ -31,7 +31,21 @@ The wizard asks a few plain questions and writes the file for you. No YAML editi
 superqode harness wizard
 ```
 
-It asks for a name, a starting point (model family), the provider/model, whether the agent may write files or run shell commands, the approval style, the tool-call format, and an optional multi-agent workflow. Then it writes `harness.yaml` and immediately explains what it built in plain English.
+From the TUI, start a step-by-step wizard:
+
+```text
+:harness wizard
+```
+
+It walks through the harness name, starter/model family, provider, model, tool access, permissions, tool-call format, workflow, output path, and whether to load the harness immediately.
+
+You can also provide the answers up front with flags:
+
+```text
+:harness wizard my-coder --starter qwen-coding --output harness.yaml --load
+```
+
+Either way, the builder records the name, starting point (model family), provider/model, file and shell permissions, approval style, tool-call format, and optional multi-agent workflow. Then it writes `harness.yaml` and explains what it built in plain English.
 
 ### Option B: Start from a model-family template
 

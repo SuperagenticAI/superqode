@@ -19,6 +19,7 @@ from superqode.harness import (
     HarnessSpec,
     WorkflowMode,
     WorkflowSpec,
+    load_harness_spec,
 )
 from superqode.tools.question_tool import Question, QuestionType
 from superqode.widgets.sidebar_panels import HarnessPanel
@@ -988,6 +989,7 @@ def test_tui_palette_exposes_harness_commands():
     commands = {command.id: command for command in app._build_palette_commands()}
 
     assert commands["harness"].shortcut == ":harness"
+    assert commands["harness_wizard"].shortcut == ":harness wizard "
     assert commands["harness_inspect"].shortcut == ":harness inspect"
     assert commands["harness_doctor"].shortcut == ":harness doctor"
     assert commands["harness_graph"].shortcut == ":harness graph"
@@ -1008,6 +1010,9 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":harness replay" in COMMANDS
     assert ":harness fork" in COMMANDS
     assert ":harness events" in COMMANDS
+    assert ":harness wizard" in COMMANDS
+    assert ":harness init" in COMMANDS
+    assert ":harness wizard" in {command.command for command in DEFAULT_COMMANDS}
     assert ":qe fullstack" not in COMMANDS
     assert ":qe unit_tester" not in COMMANDS
     assert ":qe api_tester" not in COMMANDS
@@ -1028,6 +1033,7 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":w" in COMMANDS
     assert ":e" in COMMANDS
     assert ":ls" in COMMANDS
+
     assert ":grep" in COMMANDS
     assert ":diff files" in COMMANDS
     assert ":timeline" in COMMANDS
@@ -1115,6 +1121,96 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":policy" in slash_values
     assert ":c" not in slash_values
     assert ":q" not in slash_values
+
+
+def test_tui_static_commands_cover_cli_surface_except_tui_launcher():
+    import click
+
+    from superqode.app.constants import COMMANDS
+    from superqode.main import cli_main
+
+    def walk(command, prefix=()):
+        rows = []
+        if isinstance(command, click.Group):
+            for name, subcommand in command.commands.items():
+                path = prefix + (name,)
+                rows.append(path)
+                rows.extend(walk(subcommand, path))
+        return rows
+
+    tui_commands = {tuple(command[1:].split()) for command in COMMANDS if command.startswith(":")}
+    missing = [
+        " ".join(path)
+        for path in walk(cli_main)
+        if path != ("tui",) and path not in tui_commands
+    ]
+
+    assert missing == []
+
+
+def test_tui_harness_wizard_writes_and_loads_spec(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._harness_cmd(
+        "wizard demo --starter coding --provider ollama --model qwen3-coder --output demo.yaml --load",
+        log,
+    )
+
+    spec_path = tmp_path / "demo.yaml"
+    assert spec_path.exists()
+    spec = load_harness_spec(spec_path)
+    assert spec.name == "demo"
+    assert spec.model_policy.primary == "ollama/qwen3-coder"
+    assert spec.metadata["built_with"] == "harness wizard"
+
+    rendered = "\n".join(render_plain(item) if not isinstance(item, str) else item for item in log.items)
+    assert "Harness Wizard" in rendered
+    assert "Loaded harness demo" in rendered
+    assert app._pure_mode is not None
+    assert app._pure_mode.harness_enabled
+
+
+def test_tui_harness_wizard_guided_steps_write_and_load_spec(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._harness_cmd("wizard", log)
+    assert app._awaiting_harness_wizard is True
+    assert "Harness name" in render_plain(log.items[-1])
+
+    app._handle_harness_wizard_input("guided", log)
+    assert "Choose starting point" in render_plain(log.items[-1])
+    app._handle_harness_wizard_input("1", log)
+    assert "Provider" in render_plain(log.items[-1])
+    app._handle_harness_wizard_input("ollama", log)
+    assert "Model" in render_plain(log.items[-1])
+    app._handle_harness_wizard_input("qwen3-coder", log)
+    assert "Tools" in render_plain(log.items[-1])
+    app._handle_harness_wizard_input("3", log)
+    assert "Permissions" in render_plain(log.items[-1])
+    app._handle_harness_wizard_input("1", log)
+    assert "Tool-call format" in render_plain(log.items[-1])
+    app._handle_harness_wizard_input("", log)
+    assert "Workflow" in render_plain(log.items[-1])
+    app._handle_harness_wizard_input("", log)
+    assert "Output file" in render_plain(log.items[-1])
+    app._handle_harness_wizard_input("guided.yaml", log)
+    assert "Load this harness now" in render_plain(log.items[-1])
+    app._handle_harness_wizard_input("", log)
+
+    spec = load_harness_spec(tmp_path / "guided.yaml")
+    assert spec.name == "guided"
+    assert spec.model_policy.primary == "ollama/qwen3-coder"
+    assert spec.execution_policy.allow_write is True
+    assert spec.execution_policy.allow_shell is False
+    assert app._awaiting_harness_wizard is False
+    assert app._pure_mode is not None
+    assert app._pure_mode.harness_enabled
 
 
 def test_tui_help_surfaces_developer_workflows():

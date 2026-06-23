@@ -13,11 +13,17 @@ require credentials:
 from __future__ import annotations
 
 import asyncio
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
 from superqode.agent.loop import AgentConfig, AgentLoop
 from superqode.harness.omnigent_importer import import_omnigent_agent
