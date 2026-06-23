@@ -7,10 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-24
+
 ### Added
 
 - **TUI harness wizard** - Added a step-by-step `:harness wizard` flow for creating starter HarnessSpec files from the TUI, plus `:harness init` / flag shortcuts using the same wizard builder as the CLI.
 - **TUI CLI parity** - Exposed the remaining CLI command surface in the TUI command list and routed unsupported subcommands through the CLI runner so CLI-only workflows can be launched from the TUI.
+
+### Fixed
+
+- **Smoke script source checkout support** - Made the Omnigent agent-session smoke script import SuperQode reliably when run directly from a checkout.
+
+### Changed
+
+- **Release metadata** - Bumped the package version and runtime `__version__` to `0.2.1`.
 
 ## [0.2.0] - 2026-06-23
 
