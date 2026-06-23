@@ -21,7 +21,9 @@ the TUI and runtime doctor, SuperQode adjusts the hint to the environment that i
 actually running: source checkouts use `uv pip install -e ".[<extra>]"`, project
 virtualenvs use `uv add "superqode[<extra>]"`, and plain virtualenvs use
 `uv pip install "superqode[<extra>]"`. Any one-click install prompt prints the
-exact command first and waits for confirmation.
+exact command first and waits for confirmation. See the
+[official uv documentation](https://docs.astral.sh/uv/) for uv installation and
+environment details.
 
 | Runtime | Install | Notes |
 | --- | --- | --- |

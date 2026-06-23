@@ -1,12 +1,14 @@
 # Installation
 
-This guide covers SuperQode installation, including prerequisites, verification, optional runtime extras, and troubleshooting.
+This guide covers SuperQode installation with uv, including prerequisites, verification, optional runtime extras, and troubleshooting.
 
 **Safety note (OSS):** Run the open-source SuperQode in a safe, controlled environment (sandbox, VM, or low-risk machine). This reduces the blast radius for testing workflows and agent-driven actions.
 
 ---
 
 ## Quick Install
+
+SuperQode uses [uv](https://docs.astral.sh/uv/) as the supported installer and development workflow. Install uv first if it is not already available.
 
 ```bash
 uv tool install superqode
@@ -348,7 +350,7 @@ $ superqode auth info
 
     **Error:** `superqode: command not found`
 
-    **Solution:** Ensure your PATH includes the `~/.local/bin` directory used by uv/pip.
+    **Solution:** Ensure your PATH includes the `~/.local/bin` directory used by uv.
 
     ```bash
     export PATH="$HOME/.local/bin:$PATH"
@@ -359,11 +361,9 @@ $ superqode auth info
 
     **Error:** `Permission denied` during installation
 
-    **Solution:** Use `--user` flag or install via uv:
+    **Solution:** Install with uv:
 
     ```bash
-    uv tool install superqode
-    # or use uv
     uv tool install superqode
     ```
 
@@ -400,12 +400,6 @@ If you encounter issues not covered here:
 
 ### Upgrade SuperQode
 
-=== "pip"
-
-    ```bash
-    uv tool upgrade superqode
-    ```
-
 === "uv"
 
     ```bash
@@ -425,12 +419,6 @@ pip index versions superqode
 ---
 
 ## Uninstalling
-
-=== "pip"
-
-    ```bash
-    pip uninstall superqode
-    ```
 
 === "uv"
 

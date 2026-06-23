@@ -100,7 +100,7 @@ Optional tools depend on your workflow:
     ```bash
     git clone https://github.com/SuperagenticAI/superqode.git
     cd superqode
-    uv sync --extra dev
+    uv sync --extra dev --extra docs
     uv run superqode --version
     ```
 

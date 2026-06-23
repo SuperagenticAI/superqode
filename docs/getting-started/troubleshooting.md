@@ -49,7 +49,8 @@ For source installs:
 ```bash
 git clone https://github.com/SuperagenticAI/superqode.git
 cd superqode
-uv pip install -e .
+uv sync --extra dev --extra docs
+uv run superqode --version
 ```
 
 ### The `superqode` command is not found

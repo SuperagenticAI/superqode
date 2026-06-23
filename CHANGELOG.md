@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Beta launch** - Marked this release as the first public beta for the SuperQode harness engineering framework.
 - **uv-first project workflow** - Updated contributor docs and GitHub Actions to install, lint, test, build, and deploy through uv.
-- **Installation docs** - Removed the unavailable curl installer path and aligned README and docs installation guidance around `uv tool install`, `uvx`, and source checkouts.
+- **Installation docs** - Removed the unavailable curl installer path and aligned README and docs installation guidance around `uv tool install`, `uvx`, source checkouts, and the official uv documentation.
 - **Documentation theme** - Enabled both light and dark documentation modes with scheme-specific homepage colors.
 - **Documentation homepage polish** - Reduced the homepage title scale, added a feature reference map, documented Harness Independence and Local Dynamic Workflows with RLM in feature lists, and added a CLI reference coverage test for top-level command groups.
 - **Release metadata** - Bumped the package version and runtime `__version__` to `0.2.0b1`.

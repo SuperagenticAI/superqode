@@ -74,6 +74,8 @@ uv tool install superqode
 uvx superqode
 ```
 
+SuperQode uses [uv](https://docs.astral.sh/uv/) for installs, development, and release checks. If uv is new to you, start with the official uv documentation before installing extras or working from source.
+
 ### Run SuperQode
 
 **Interactive TUI (Explore)**
@@ -290,6 +292,7 @@ Highlights:
 ## Contributing
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Development uses [uv](https://docs.astral.sh/uv/) for dependency management and command execution.
 
 ```bash
 git clone https://github.com/SuperagenticAI/superqode

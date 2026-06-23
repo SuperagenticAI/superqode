@@ -5,7 +5,8 @@ Thanks for your interest in improving SuperQode. This guide keeps contributions 
 ## Development Setup
 
 1. Ensure Python 3.12+ is installed.
-2. Clone the repo and install dependencies with uv.
+2. Install uv using the [official uv documentation](https://docs.astral.sh/uv/).
+3. Clone the repo and install dependencies with uv.
 
 ```bash
 git clone https://github.com/SuperagenticAI/superqode.git
