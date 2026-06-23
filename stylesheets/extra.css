@@ -154,13 +154,13 @@
   display: inline-block;
   margin: 0 0 0.95rem;
   padding: 0.35rem 0.7rem;
-  border: 1px solid rgba(251, 191, 36, 0.28);
+  border: 1px solid rgba(167, 139, 250, 0.32);
   border-radius: 999px;
-  background: rgba(251, 191, 36, 0.08);
+  background: rgba(167, 139, 250, 0.1);
   font-size: clamp(0.86rem, 2vw, 1.08rem);
   font-weight: 700;
   letter-spacing: 0;
-  color: #fbbf24;
+  color: #ddd6fe;
 }
 
 .sq-tagline {
