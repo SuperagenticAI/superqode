@@ -40,6 +40,8 @@ cd your-project
 superqode
 ```
 
+This installs the latest [SuperQode release](https://pypi.org/project/superqode/) from PyPI.
+
 That launches the interactive TUI. Connect a model, then start working:
 
 ```text

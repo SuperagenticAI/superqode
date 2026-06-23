@@ -67,7 +67,7 @@ This guide gets you from install to a useful first run.
 | Requirement | Version | Notes |
 | --- | --- | --- |
 | Python | 3.12+ | Required for the Python package |
-| uv | latest recommended | `uv tool install superqode` gives an isolated install |
+| uv | recommended | `uv tool install superqode` gives an isolated tool install |
 | Git | 2.25+ | Recommended for repository work and reviewing changes |
 
 Optional tools depend on your workflow:
@@ -103,6 +103,8 @@ Optional tools depend on your workflow:
     uv sync --extra dev --extra docs
     uv run superqode --version
     ```
+
+The uv and uvx commands install the latest [SuperQode release](https://pypi.org/project/superqode/) from PyPI.
 
 ---
 

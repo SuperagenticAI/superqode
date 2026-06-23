@@ -74,6 +74,8 @@ uv tool install superqode
 uvx superqode
 ```
 
+This installs the latest [SuperQode release](https://pypi.org/project/superqode/) from PyPI.
+
 SuperQode uses [uv](https://docs.astral.sh/uv/) for installs, development, and release checks. If uv is new to you, start with the official uv documentation before installing extras or working from source.
 
 ### Run SuperQode

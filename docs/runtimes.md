@@ -17,9 +17,10 @@ This distinction matters because users should be able to keep the same harness b
 execution engine. When an engine cannot honor a policy, SuperQode reports that clearly.
 
 The install commands below show the normal `uv tool install superqode` case. In
-the TUI and runtime doctor, SuperQode adjusts the hint to the environment that is
-actually running: source checkouts use `uv pip install -e ".[<extra>]"`, project
-virtualenvs use `uv add "superqode[<extra>]"`, and plain virtualenvs use
+the TUI and runtime doctor, SuperQode adjusts the hint to the environment that
+is actually running: source checkouts use
+`uv pip install -e ".[<extra>]"`, project virtualenvs use
+`uv add "superqode[<extra>]"`, and plain virtualenvs use
 `uv pip install "superqode[<extra>]"`. Any one-click install prompt prints the
 exact command first and waits for confirmation. See the
 [official uv documentation](https://docs.astral.sh/uv/) for uv installation and

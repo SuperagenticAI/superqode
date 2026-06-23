@@ -15,12 +15,6 @@ SuperQode is your portable coding agent harness. A harness defines the run contr
 uv tool install superqode
 ```
 
-Or with `uv`:
-
-```bash
-uv tool install superqode
-```
-
 Optional runtime backends are installed only when you need them:
 
 ```bash

@@ -20,6 +20,8 @@ Or run once without installing:
 uvx superqode
 ```
 
+This installs the latest [SuperQode release](https://pypi.org/project/superqode/) from PyPI.
+
 That's it. If you installed the tool, verify with:
 
 ```bash

@@ -130,4 +130,3 @@ uv sync --extra monty
 If code cannot read files, call the network, or import third-party packages,
 that is expected - Monty is fully isolated from the host by design. Use
 `read_file`/`bash` for those tasks instead.
-

@@ -7,16 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0b1] - 2026-06-23
+## [0.2.0] - 2026-06-23
 
 ### Changed
 
-- **Beta launch** - Marked this release as the first public beta for the SuperQode harness engineering framework.
+- **Beta launch** - Marked this release as the first public beta for the SuperQode harness engineering framework without requiring pre-release install flags.
 - **uv-first project workflow** - Updated contributor docs and GitHub Actions to install, lint, test, build, and deploy through uv.
 - **Installation docs** - Removed the unavailable curl installer path and aligned README and docs installation guidance around `uv tool install`, `uvx`, source checkouts, and the official uv documentation.
+- **Latest-release install docs** - Updated first-time install commands to use unpinned `uv tool install "superqode"` and `uvx "superqode"` so new users get the latest release from PyPI.
 - **Documentation theme** - Enabled both light and dark documentation modes with scheme-specific homepage colors.
 - **Documentation homepage polish** - Reduced the homepage title scale, added a feature reference map, documented Harness Independence and Local Dynamic Workflows with RLM in feature lists, and added a CLI reference coverage test for top-level command groups.
-- **Release metadata** - Bumped the package version and runtime `__version__` to `0.2.0b1`.
+- **Release metadata** - Bumped the package version and runtime `__version__` to `0.2.0`.
 
 ## [0.1.49] - 2026-06-22
 
