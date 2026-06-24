@@ -1213,6 +1213,50 @@ def test_tui_harness_wizard_guided_steps_write_and_load_spec(tmp_path, monkeypat
     assert app._pure_mode.harness_enabled
 
 
+def test_tui_harness_wizard_enter_defaults_create_runnable_spec(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._harness_cmd("wizard", log)
+    for _ in range(10):
+        app._handle_harness_wizard_input("", log)
+
+    spec = load_harness_spec(tmp_path / "harness.yaml")
+    assert spec.name == "my-harness"
+    assert spec.metadata["template"] == "qwen-coding"
+    assert spec.model_policy.primary == "ollama/qwen3-coder"
+    assert spec.model_policy.pack == "qwen-coder"
+    assert app._awaiting_harness_wizard is False
+    assert app._pure_mode is not None
+    assert app._pure_mode.harness_enabled
+
+
+def test_tui_harness_wizard_final_yes_loads_and_exits(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._harness_cmd("wizard", log)
+    for _ in range(9):
+        app._handle_harness_wizard_input("", log)
+    assert "Load this harness now" in render_plain(log.items[-1])
+
+    app._handle_harness_wizard_input("yes", log)
+
+    assert app._awaiting_harness_wizard is False
+    assert app._harness_wizard_state is None
+    assert app._pure_mode is not None
+    status = app._pure_mode.get_status()["harness"]
+    assert status["enabled"] is True
+    assert status["name"] == "my-harness"
+    assert status["path"].endswith("harness.yaml")
+    rendered = "\n".join(render_plain(item) if not isinstance(item, str) else item for item in log.items)
+    assert "Loaded harness my-harness" in rendered
+
+
 def test_tui_help_surfaces_developer_workflows():
     app = make_app()
     log = FakeLog()

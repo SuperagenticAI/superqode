@@ -12042,7 +12042,11 @@ class SuperQodeApp(App):
                     answers["name"] = raw
                 self._harness_wizard_next(state, "starter")
             elif step == "starter":
-                starter = self._harness_wizard_choice(raw, [key for key, _ in self._wizard_starters()])
+                starter = self._harness_wizard_choice(
+                    raw,
+                    [key for key, _ in self._wizard_starters()],
+                    default=str(answers.get("starter") or "qwen-coding"),
+                )
                 if starter is None:
                     log.add_error("Choose a starter by number or name.")
                     self._render_harness_wizard_step(log)
@@ -14849,6 +14853,15 @@ class SuperQodeApp(App):
 
         provider = self._pure_mode.session.provider
         model = self._pure_mode.session.model
+        if getattr(self._pure_mode, "harness_enabled", False) and hasattr(
+            self._pure_mode, "_resolve_harness_route"
+        ):
+            try:
+                provider, model = self._pure_mode._resolve_harness_route()
+            except Exception:
+                # Let the run path raise the user-facing error with full context.
+                provider = self._pure_mode.session.provider
+                model = self._pure_mode.session.model
         plan_mode_for_run = bool(getattr(self, "_active_plan_mode_for_current_message", False))
         if plan_mode_for_run:
             text = (

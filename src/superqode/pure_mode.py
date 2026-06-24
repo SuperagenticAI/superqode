@@ -22,7 +22,11 @@ from .agent.system_prompts import SystemPromptLevel
 from .agent.session_manager import SessionManager, SessionMetadata
 from .tools.base import ToolRegistry, ToolResult
 from .providers.gateway.litellm_gateway import LiteLLMGateway
-from .providers.model_specs import normalize_model_for_provider, normalize_provider_id
+from .providers.model_specs import (
+    normalize_model_for_provider,
+    normalize_provider_id,
+    split_provider_model_ref,
+)
 from .providers.registry import PROVIDERS, ProviderTier, ProviderCategory
 from .runtime import AgentRuntime, create_runtime, resolve_runtime_name
 
@@ -87,6 +91,8 @@ class PureMode:
         path = os.getenv("SUPERQODE_HARNESS", "").strip()
         if not path:
             return
+        if not Path(path).expanduser().exists():
+            return
         self.load_harness(path)
 
     def load_harness(self, path: str | Path):
@@ -99,6 +105,7 @@ class PureMode:
         self._harness_kernel = None
         self._harness_session = None
         self._harness_session_id = ""
+        self._sync_harness_session_fields()
         return self._harness_spec
 
     def set_harness(self, spec, *, path: str | Path | None = None) -> None:
@@ -108,6 +115,7 @@ class PureMode:
         self._harness_kernel = None
         self._harness_session = None
         self._harness_session_id = ""
+        self._sync_harness_session_fields()
 
     def clear_harness(self) -> None:
         """Return to direct runtime mode."""
@@ -116,10 +124,56 @@ class PureMode:
         self._harness_kernel = None
         self._harness_session = None
         self._harness_session_id = ""
+        self.session.harness_name = ""
+        self.session.harness_path = ""
+        self.session.harness_flavor = ""
+        self.session.harness_runtime = ""
+
+    def _sync_harness_session_fields(self) -> None:
+        """Mirror the loaded HarnessSpec into user-visible session status."""
+        if self._harness_spec is None:
+            self.session.harness_name = ""
+            self.session.harness_path = ""
+            self.session.harness_flavor = ""
+            self.session.harness_runtime = ""
+            return
+        self.session.harness_name = self._harness_spec.name
+        self.session.harness_path = self._harness_path
+        self.session.harness_flavor = self._harness_spec.flavor.value
+        self.session.harness_runtime = self._harness_spec.runtime.backend
 
     @property
     def harness_enabled(self) -> bool:
         return self._harness_spec is not None
+
+    def _resolve_harness_route(self) -> tuple[str, str]:
+        """Return the provider/model the active harness should run against."""
+        provider = self.session.provider
+        model = self.session.model
+        if self._harness_spec is None:
+            return provider, model
+
+        primary = str(getattr(self._harness_spec.model_policy, "primary", "") or "").strip()
+        configured_provider = str(
+            getattr(self._harness_spec.model_policy, "config", {}).get("provider") or ""
+        ).strip()
+        if primary:
+            parsed = split_provider_model_ref(primary, default_provider=configured_provider)
+            provider = normalize_provider_id(parsed.provider or configured_provider or provider)
+            model = normalize_model_for_provider(provider, parsed.model or primary)
+
+        self._validate_harness_route(provider, model)
+        return provider, model
+
+    @staticmethod
+    def _validate_harness_route(provider: str, model: str) -> None:
+        """Catch common local provider/model mismatches before streaming."""
+        if provider == "ollama" and model.lower().endswith("-mlx"):
+            raise RuntimeError(
+                "The active harness is trying to run an MLX-tagged model through Ollama: "
+                f"ollama/{model}. Use the exact Ollama model tag from `ollama list`, or set "
+                "`model_policy.primary: mlx/<model>` and connect with the MLX provider."
+            )
 
     def get_providers_for_picker(self) -> List[Dict[str, Any]]:
         """Get providers formatted for the TUI picker."""
@@ -271,6 +325,7 @@ class PureMode:
         self._harness_kernel = None
         self._harness_session = None
         self._harness_session_id = ""
+        self._sync_harness_session_fields()
 
     def set_system_level(self, level: SystemPromptLevel):
         """Change the system prompt level."""
@@ -282,11 +337,12 @@ class PureMode:
     async def run(self, prompt: str, plan_mode: Optional[bool] = None) -> AgentResponse:
         """Run a task in Pure Mode."""
         if self._harness_spec is not None:
+            provider, model = self._resolve_harness_route()
             session = await self._ensure_harness_session()
             result = await session.prompt(
                 prompt,
-                provider=self.session.provider,
-                model=self.session.model,
+                provider=provider,
+                model=model,
                 working_directory=self.session.working_directory,
                 runtime=self._harness_spec.runtime.backend,
             )
@@ -336,15 +392,16 @@ class PureMode:
     async def run_streaming(self, prompt: str, plan_mode: Optional[bool] = None):
         """Run a task with streaming output."""
         if self._harness_spec is not None:
+            provider, model = self._resolve_harness_route()
             session = await self._ensure_harness_session()
             async for event in session.stream(
                 prompt,
-                provider=self.session.provider,
-                model=self.session.model,
+                provider=provider,
+                model=model,
                 working_directory=self.session.working_directory,
                 runtime=self._harness_spec.runtime.backend,
             ):
-                if event.type != "delta":
+                if event.type not in {"delta", "model_delta"}:
                     continue
                 chunk = str(event.data.get("text", ""))
                 if self.on_stream_chunk:

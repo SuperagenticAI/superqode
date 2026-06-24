@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Smoke script source checkout support** - Made the Omnigent agent-session smoke script import SuperQode reliably when run directly from a checkout.
+- **Harness model routing** - Made `model_policy.primary` override the active TUI connection for harness runs and added a clear local-provider warning when an MLX-tagged model is routed through Ollama.
+- **Harness wizard defaults** - Made Enter-through defaults in the TUI wizard create a runnable Qwen local harness with an explicit `ollama/qwen3-coder` model policy.
+- **Harness wizard loading** - Fixed the final “Load this harness now?” step so loaded harnesses remain visible after reconnect/disconnect state changes, and stale `SUPERQODE_HARNESS` paths no longer crash Pure Mode startup.
+- **Harness streaming** - Forwarded builtin harness `model_delta` events through Pure Mode so TUI harness runs no longer report `chunks=0` when the model did stream content.
 
 ### Changed
 

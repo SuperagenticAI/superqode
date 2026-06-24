@@ -1,5 +1,6 @@
 """Tests for the minimal v2 HarnessKernel."""
 
+from dataclasses import replace
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -10,6 +11,7 @@ from superqode.harness import (
     FileHarnessStore,
     HarnessBackendResult,
     HarnessFlavor,
+    ModelPolicySpec,
     get_harness_template,
     init_harness,
 )
@@ -149,6 +151,16 @@ class FakeApprovalBackend(FakeBackend):
                 "pending_runtime": self.runtime,
             },
         )
+
+
+class FakeModelDeltaBackend:
+    async def stream(self, request):
+        from superqode.harness import HarnessEvent
+
+        yield HarnessEvent(type="model_request", data={"runtime": "fake"})
+        yield HarnessEvent(type="model_delta", data={"text": "hello"})
+        yield HarnessEvent(type="model_delta", data={"text": "-streamed"})
+        yield HarnessEvent(type="end", data={"runtime": "fake"})
 
 
 @pytest.mark.asyncio
@@ -306,6 +318,91 @@ async def test_pure_mode_can_stream_through_harness_spec(monkeypatch, tmp_path: 
     status = pure.get_status()
     assert status["harness"]["enabled"] is True
     assert status["harness"]["name"] == spec.name
+
+
+@pytest.mark.asyncio
+async def test_pure_mode_harness_primary_overrides_active_connection(monkeypatch, tmp_path: Path):
+    from superqode.pure_mode import PureMode
+
+    created = {}
+
+    def fake_create_runtime(name, **kwargs):
+        created["config"] = kwargs["config"]
+        return FakeRuntime(**kwargs)
+
+    monkeypatch.setattr("superqode.harness.backends.runtime.create_runtime", fake_create_runtime)
+    spec = replace(
+        get_harness_template("no-tool"),
+        model_policy=ModelPolicySpec(primary="mlx/qwen3.6:35b-mlx"),
+    )
+    pure = PureMode()
+    pure.set_harness(spec)
+    assert pure.connect("ollama", "qwen3.6:35b-a3b", working_directory=tmp_path)
+
+    chunks = [chunk async for chunk in pure.run_streaming("hello")]
+
+    assert "".join(chunks) == "hello-streamed"
+    assert created["config"].provider == "mlx"
+    assert created["config"].model == "qwen3.6:35b-mlx"
+
+
+def test_pure_mode_harness_warns_for_ollama_mlx_model(tmp_path: Path):
+    from superqode.pure_mode import PureMode
+
+    pure = PureMode()
+    pure.set_harness(get_harness_template("no-tool"))
+    assert pure.connect("ollama", "qwen3.6:35b-mlx", working_directory=tmp_path)
+
+    with pytest.raises(RuntimeError, match="MLX-tagged model through Ollama"):
+        pure._resolve_harness_route()
+
+
+def test_pure_mode_set_harness_updates_visible_status(tmp_path: Path):
+    from superqode.pure_mode import PureMode
+
+    spec = get_harness_template("qwen-coding")
+    pure = PureMode()
+    pure.set_harness(spec, path=tmp_path / "harness.yaml")
+
+    status = pure.get_status()["harness"]
+    assert status["enabled"] is True
+    assert status["name"] == "qwen-coding"
+    assert status["path"].endswith("harness.yaml")
+    assert status["flavor"] == "coding"
+    assert status["runtime"] == "builtin"
+
+
+def test_pure_mode_disconnect_preserves_loaded_harness_status(tmp_path: Path):
+    from superqode.pure_mode import PureMode
+
+    spec = get_harness_template("qwen-coding")
+    pure = PureMode()
+    pure.set_harness(spec, path=tmp_path / "harness.yaml")
+    assert pure.connect("ollama", "qwen3-coder", working_directory=tmp_path)
+
+    pure.disconnect()
+
+    status = pure.get_status()["harness"]
+    assert status["enabled"] is True
+    assert status["name"] == "qwen-coding"
+    assert status["path"].endswith("harness.yaml")
+
+
+@pytest.mark.asyncio
+async def test_pure_mode_harness_stream_forwards_model_delta_events(monkeypatch, tmp_path: Path):
+    from superqode.pure_mode import PureMode
+
+    monkeypatch.setattr(
+        "superqode.harness.kernel.create_harness_backend",
+        lambda name: FakeModelDeltaBackend(),
+    )
+    pure = PureMode()
+    pure.set_harness(get_harness_template("qwen-coding"), path=tmp_path / "harness.yaml")
+    assert pure.connect("ollama", "qwen3-coder", working_directory=tmp_path)
+
+    chunks = [chunk async for chunk in pure.run_streaming("hello")]
+
+    assert chunks == ["hello", "-streamed"]
 
 
 @pytest.mark.asyncio
