@@ -441,7 +441,9 @@ def test_missing_mlx_prompt_shows_environment_and_exact_command(monkeypatch):
     monkeypatch.setattr(
         servers,
         "mlx_install_command",
-        lambda python=None: "uv pip install --python /tmp/superqode/.venv/bin/python 'mlx-lm>=0.31.0,<0.32.0'",
+        lambda python=None: (
+            "uv pip install --python /tmp/superqode/.venv/bin/python 'mlx-lm>=0.31.0,<0.32.0'"
+        ),
     )
 
     app = SuperQodeApp.__new__(SuperQodeApp)
@@ -594,9 +596,9 @@ def test_prompt_border_title_uses_code_not_build(monkeypatch):
     monkeypatch.setattr(
         app,
         "query_one",
-        lambda selector, *args, **kwargs: input_box
-        if selector == "#input-box"
-        else (_ for _ in ()).throw(LookupError(selector)),
+        lambda selector, *args, **kwargs: (
+            input_box if selector == "#input-box" else (_ for _ in ()).throw(LookupError(selector))
+        ),
     )
 
     app._set_prompt_border_title()
@@ -1140,9 +1142,7 @@ def test_tui_static_commands_cover_cli_surface_except_tui_launcher():
 
     tui_commands = {tuple(command[1:].split()) for command in COMMANDS if command.startswith(":")}
     missing = [
-        " ".join(path)
-        for path in walk(cli_main)
-        if path != ("tui",) and path not in tui_commands
+        " ".join(path) for path in walk(cli_main) if path != ("tui",) and path not in tui_commands
     ]
 
     assert missing == []
@@ -1166,7 +1166,9 @@ def test_tui_harness_wizard_writes_and_loads_spec(tmp_path, monkeypatch):
     assert spec.model_policy.primary == "ollama/qwen3-coder"
     assert spec.metadata["built_with"] == "harness wizard"
 
-    rendered = "\n".join(render_plain(item) if not isinstance(item, str) else item for item in log.items)
+    rendered = "\n".join(
+        render_plain(item) if not isinstance(item, str) else item for item in log.items
+    )
     assert "Harness Wizard" in rendered
     assert "Loaded harness demo" in rendered
     assert app._pure_mode is not None
@@ -1253,7 +1255,9 @@ def test_tui_harness_wizard_final_yes_loads_and_exits(tmp_path, monkeypatch):
     assert status["enabled"] is True
     assert status["name"] == "my-harness"
     assert status["path"].endswith("harness.yaml")
-    rendered = "\n".join(render_plain(item) if not isinstance(item, str) else item for item in log.items)
+    rendered = "\n".join(
+        render_plain(item) if not isinstance(item, str) else item for item in log.items
+    )
     assert "Loaded harness my-harness" in rendered
 
 

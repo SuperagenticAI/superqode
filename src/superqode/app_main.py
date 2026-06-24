@@ -12238,7 +12238,9 @@ class SuperQodeApp(App):
         elif step == "provider":
             t.append("  Step 3/9  Provider\n", style=f"bold {THEME['cyan']}")
             t.append("  Leave blank to keep the template default.\n", style=THEME["muted"])
-            t.append("  Examples: ollama, lmstudio, mlx, ds4, openai, anthropic\n", style=THEME["text"])
+            t.append(
+                "  Examples: ollama, lmstudio, mlx, ds4, openai, anthropic\n", style=THEME["text"]
+            )
         elif step == "model":
             t.append("  Step 4/9  Model\n", style=f"bold {THEME['cyan']}")
             t.append("  Leave blank to keep the template model.\n", style=THEME["muted"])
@@ -25364,7 +25366,17 @@ class SuperQodeApp(App):
             self._doctor_cmd(subargs, log)
             return
 
-        if sub in {"list", "models", "guide", "recommend", "scan-free", "test", "monty", "ds4", "mlx"}:
+        if sub in {
+            "list",
+            "models",
+            "guide",
+            "recommend",
+            "scan-free",
+            "test",
+            "monty",
+            "ds4",
+            "mlx",
+        }:
             self._run_cli_group("providers", args, log, "Providers command")
             return
 

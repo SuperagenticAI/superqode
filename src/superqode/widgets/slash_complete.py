@@ -59,8 +59,12 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":harness inspect", "Summarize the active HarnessSpec", category="workflow"),
     SlashCommand("/harness templates", "List HarnessSpec templates", category="workflow"),
     SlashCommand(":harness templates", "List HarnessSpec templates", category="workflow"),
-    SlashCommand("/harness wizard", "Create a HarnessSpec from wizard defaults", category="workflow"),
-    SlashCommand(":harness wizard", "Create a HarnessSpec from wizard defaults", category="workflow"),
+    SlashCommand(
+        "/harness wizard", "Create a HarnessSpec from wizard defaults", category="workflow"
+    ),
+    SlashCommand(
+        ":harness wizard", "Create a HarnessSpec from wizard defaults", category="workflow"
+    ),
     SlashCommand("/harness init", "Create a HarnessSpec from wizard defaults", category="workflow"),
     SlashCommand(":harness init", "Create a HarnessSpec from wizard defaults", category="workflow"),
     SlashCommand("/harness doctor", "Check active or selected harness", category="workflow"),
@@ -87,7 +91,9 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":harness list-backends", "List HarnessSpec backends", category="workflow"),
     SlashCommand(":harness registry", "Manage the local harness registry", category="workflow"),
     SlashCommand(":harness inbox", "Manage queued harness inputs", category="workflow"),
-    SlashCommand(":harness observability", "Inspect/export harness observability", category="workflow"),
+    SlashCommand(
+        ":harness observability", "Inspect/export harness observability", category="workflow"
+    ),
     SlashCommand(
         ":harness optimize", "Optimize a HarnessSpec through metaharness", category="workflow"
     ),
