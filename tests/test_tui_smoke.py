@@ -1257,6 +1257,48 @@ def test_tui_harness_wizard_final_yes_loads_and_exits(tmp_path, monkeypatch):
     assert "Loaded harness my-harness" in rendered
 
 
+def test_tui_harness_wizard_yes_on_output_step_loads_default_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._harness_cmd("wizard", log)
+    for _ in range(8):
+        app._handle_harness_wizard_input("", log)
+    assert "Output file" in render_plain(log.items[-1])
+
+    app._handle_harness_wizard_input("yes", log)
+
+    assert (tmp_path / "harness.yaml").exists()
+    assert not (tmp_path / "yes").exists()
+    assert app._awaiting_harness_wizard is False
+    assert app._harness_wizard_state is None
+    assert app._pure_mode is not None
+    status = app._pure_mode.get_status()["harness"]
+    assert status["enabled"] is True
+    assert status["path"].endswith("harness.yaml")
+
+
+def test_tui_harness_wizard_defaults_use_next_available_output(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "harness.yaml").write_text("existing: true\n")
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._harness_cmd("wizard", log)
+    for _ in range(10):
+        app._handle_harness_wizard_input("", log)
+
+    assert (tmp_path / "harness-2.yaml").exists()
+    assert (tmp_path / "harness.yaml").read_text() == "existing: true\n"
+    assert app._awaiting_harness_wizard is False
+    status = app._pure_mode.get_status()["harness"]
+    assert status["enabled"] is True
+    assert status["path"].endswith("harness-2.yaml")
+
+
 def test_tui_help_surfaces_developer_workflows():
     app = make_app()
     log = FakeLog()

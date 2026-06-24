@@ -346,15 +346,17 @@ async def test_pure_mode_harness_primary_overrides_active_connection(monkeypatch
     assert created["config"].model == "qwen3.6:35b-mlx"
 
 
-def test_pure_mode_harness_warns_for_ollama_mlx_model(tmp_path: Path):
+def test_pure_mode_harness_allows_ollama_mlx_tagged_model(tmp_path: Path):
     from superqode.pure_mode import PureMode
 
     pure = PureMode()
     pure.set_harness(get_harness_template("no-tool"))
     assert pure.connect("ollama", "qwen3.6:35b-mlx", working_directory=tmp_path)
 
-    with pytest.raises(RuntimeError, match="MLX-tagged model through Ollama"):
-        pure._resolve_harness_route()
+    provider, model = pure._resolve_harness_route()
+
+    assert provider == "ollama"
+    assert model == "qwen3.6:35b-mlx"
 
 
 def test_pure_mode_set_harness_updates_visible_status(tmp_path: Path):

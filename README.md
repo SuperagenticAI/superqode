@@ -102,7 +102,7 @@ Inside the TUI, the local-first MVP path is:
 | File | Purpose | Created by |
 | --- | --- | --- |
 | `superqode.yaml` | Project configuration: providers, endpoints, MCP, memory, defaults | `superqode config init` or `:init` |
-| `harness.yaml` | Portable agent run contract | `superqode harness init ...` |
+| `harness.yaml` | Portable agent run contract | `:harness wizard`, `superqode harness wizard`, or `superqode harness init ...` |
 | `superqode.local.yaml` | Local-first HarnessSpec generated for this machine | `:local init` or `superqode local init --repo .` |
 | `superqode.airplane.yaml` | Strict no-network HarnessSpec for offline local work | `:local airplane prepare` or `superqode local airplane prepare` |
 
@@ -114,7 +114,26 @@ superqode --print "inspect this repository and suggest the smallest next step"
 
 ### Your First Harness Run
 
-A harness is the repeatable contract for how an agent run behaves. Start with the default coding harness:
+A harness is the repeatable contract for how an agent run behaves. In the TUI, create and load your first harness without writing YAML:
+
+```text
+:connect local
+:harness wizard
+```
+
+Press Enter through the defaults for a runnable local coding harness, choose an output file, and answer `yes` when asked whether to load it. If `harness.yaml` already exists, the wizard uses the next available path such as `harness-2.yaml`.
+
+For the CLI path, start with the interactive wizard or the default coding template:
+
+```bash
+cd your-project
+superqode harness wizard
+superqode harness explain --spec harness.yaml
+superqode harness doctor --spec harness.yaml
+superqode harness run --spec harness.yaml --prompt "summarize the architecture"
+```
+
+Template shortcut:
 
 ```bash
 cd your-project

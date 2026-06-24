@@ -12007,7 +12007,7 @@ class SuperQodeApp(App):
                 "tool_call_format": "auto",
                 "workflow_preset": "single",
             },
-            "output": "harness.yaml",
+            "output": self._default_harness_wizard_output(),
             "load": True,
             "force": False,
         }
@@ -12130,6 +12130,11 @@ class SuperQodeApp(App):
                 answers["workflow_preset"] = choice
                 self._harness_wizard_next(state, "output")
             elif step == "output":
+                load_answer = self._parse_yes_no(raw) if raw else None
+                if load_answer is not None:
+                    state["load"] = load_answer
+                    self._finish_harness_wizard_flow(log)
+                    return True
                 if raw:
                     state["output"] = raw
                 self._harness_wizard_next(state, "load")
@@ -12160,6 +12165,17 @@ class SuperQodeApp(App):
     def _harness_wizard_next(state: dict[str, Any], next_step: str) -> None:
         state.setdefault("history", []).append(state["step"])
         state["step"] = next_step
+
+    @staticmethod
+    def _default_harness_wizard_output() -> str:
+        base = Path("harness.yaml")
+        if not base.exists():
+            return str(base)
+        for index in range(2, 1000):
+            candidate = Path(f"harness-{index}.yaml")
+            if not candidate.exists():
+                return str(candidate)
+        return "harness-new.yaml"
 
     @staticmethod
     def _parse_yes_no(raw: str) -> bool | None:
@@ -12274,11 +12290,11 @@ class SuperQodeApp(App):
                 default = " (default)" if key == "single" else ""
                 t.append(f"  {index}. {key:<22} {label}{default}\n", style=THEME["text"])
         elif step == "output":
-            t.append("  Step 9/9  Output file\n", style=f"bold {THEME['cyan']}")
+            t.append("  Step 9/10  Output file\n", style=f"bold {THEME['cyan']}")
             t.append(f"  Default: {state['output']}\n", style=THEME["muted"])
             t.append("  Example: harness.yaml\n", style=THEME["text"])
         elif step == "load":
-            t.append("  Final  Load this harness now?\n", style=f"bold {THEME['cyan']}")
+            t.append("  Step 10/10  Load this harness now?\n", style=f"bold {THEME['cyan']}")
             t.append("  Default: yes\n", style=THEME["muted"])
             t.append("  Answer: yes or no\n", style=THEME["text"])
 
@@ -12293,7 +12309,10 @@ class SuperQodeApp(App):
         load_after_write = bool(state.get("load", True))
 
         if output.exists() and not state.get("force", False):
-            log.add_error(f"{output} already exists. Type a different output path or cancel.")
+            state["output"] = self._default_harness_wizard_output()
+            log.add_error(
+                f"{output} already exists. Suggested next available path: {state['output']}"
+            )
             state["step"] = "output"
             self._render_harness_wizard_step(log)
             return

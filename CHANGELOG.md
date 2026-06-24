@@ -7,24 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.1] - 2026-06-24
+## [0.2.3] - 2026-06-24
 
 ### Added
 
 - **TUI harness wizard** - Added a step-by-step `:harness wizard` flow for creating starter HarnessSpec files from the TUI, plus `:harness init` / flag shortcuts using the same wizard builder as the CLI.
 - **TUI CLI parity** - Exposed the remaining CLI command surface in the TUI command list and routed unsupported subcommands through the CLI runner so CLI-only workflows can be launched from the TUI.
+- **First harness documentation** - Documented the TUI and CLI wizard path for creating, loading, checking, and running a first HarnessSpec in a few steps.
 
 ### Fixed
 
 - **Smoke script source checkout support** - Made the Omnigent agent-session smoke script import SuperQode reliably when run directly from a checkout.
-- **Harness model routing** - Made `model_policy.primary` override the active TUI connection for harness runs and added a clear local-provider warning when an MLX-tagged model is routed through Ollama.
+- **Harness model routing** - Made `model_policy.primary` override the active TUI connection for harness runs while preserving valid Ollama model tags such as `*-mlx`.
 - **Harness wizard defaults** - Made Enter-through defaults in the TUI wizard create a runnable Qwen local harness with an explicit `ollama/qwen3-coder` model policy.
+- **Harness wizard final prompt** - Treated `yes`/`no` typed on the output-file step as the final load answer so the wizard no longer stores `yes` as a filename and loops back to the output prompt.
+- **Harness wizard output paths** - Picked the next available default output path such as `harness-2.yaml` when `harness.yaml` already exists, preventing default runs from bouncing back to the output prompt.
 - **Harness wizard loading** - Fixed the final “Load this harness now?” step so loaded harnesses remain visible after reconnect/disconnect state changes, and stale `SUPERQODE_HARNESS` paths no longer crash Pure Mode startup.
 - **Harness streaming** - Forwarded builtin harness `model_delta` events through Pure Mode so TUI harness runs no longer report `chunks=0` when the model did stream content.
 
 ### Changed
 
-- **Release metadata** - Bumped the package version and runtime `__version__` to `0.2.1`.
+- **Release metadata** - Bumped the package version and runtime `__version__` to `0.2.3`.
 
 ## [0.2.0] - 2026-06-23
 

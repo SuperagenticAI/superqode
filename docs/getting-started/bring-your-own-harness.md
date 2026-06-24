@@ -25,19 +25,55 @@ You almost never need to write a harness from scratch. You have three ways to ge
 
 ### Option A: The wizard (recommended)
 
-The wizard asks a few plain questions and writes the file for you. No YAML editing required to get started:
+The wizard asks a few plain questions and writes the file for you. No YAML editing required to get started.
+
+Use the TUI path when you want to create and immediately use your first harness:
+
+```bash
+cd your-project
+superqode
+```
+
+Inside the TUI:
+
+```text
+:connect local
+:harness wizard
+```
+
+Then answer the prompts:
+
+| Prompt | First-run answer |
+| --- | --- |
+| Harness name | Press Enter for `my-harness`, or type a project name such as `repo-coder` |
+| Starting point | Press Enter for `qwen-coding`, or choose another template |
+| Provider | Press Enter for the template default, or type `ollama`, `lmstudio`, `mlx`, `ds4`, `openai`, or `anthropic` |
+| Model | Press Enter for the template model, or type the exact model tag you connected |
+| Tools | Press Enter for full coding tools |
+| Permissions | Press Enter for balanced approvals |
+| Tool-call format | Press Enter for auto |
+| Workflow | Press Enter for a single-agent workflow |
+| Output file | Press Enter for `harness.yaml`; if it already exists, SuperQode suggests `harness-2.yaml`, `harness-3.yaml`, and so on |
+| Load this harness now? | Press Enter or type `yes` |
+
+When the wizard finishes, SuperQode writes the harness file, loads it, and the TUI starts using that policy for future messages. Try a small first prompt:
+
+```text
+Read README.md and summarize this project.
+```
+
+Check what is loaded anytime:
+
+```text
+:harness status
+:harness doctor
+```
+
+Use the CLI path when you want the same builder outside the TUI:
 
 ```bash
 superqode harness wizard
 ```
-
-From the TUI, start a step-by-step wizard:
-
-```text
-:harness wizard
-```
-
-It walks through the harness name, starter/model family, provider, model, tool access, permissions, tool-call format, workflow, output path, and whether to load the harness immediately.
 
 You can also provide the answers up front with flags:
 
@@ -46,6 +82,14 @@ You can also provide the answers up front with flags:
 ```
 
 Either way, the builder records the name, starting point (model family), provider/model, file and shell permissions, approval style, tool-call format, and optional multi-agent workflow. Then it writes `harness.yaml` and explains what it built in plain English.
+
+For a first CLI run after the wizard:
+
+```bash
+superqode harness explain --spec harness.yaml
+superqode harness doctor --spec harness.yaml
+superqode harness run --spec harness.yaml --prompt "Read README.md and summarize this project."
+```
 
 ### Option B: Start from a model-family template
 

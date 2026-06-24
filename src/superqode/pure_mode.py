@@ -168,12 +168,7 @@ class PureMode:
     @staticmethod
     def _validate_harness_route(provider: str, model: str) -> None:
         """Catch common local provider/model mismatches before streaming."""
-        if provider == "ollama" and model.lower().endswith("-mlx"):
-            raise RuntimeError(
-                "The active harness is trying to run an MLX-tagged model through Ollama: "
-                f"ollama/{model}. Use the exact Ollama model tag from `ollama list`, or set "
-                "`model_policy.primary: mlx/<model>` and connect with the MLX provider."
-            )
+        return
 
     def get_providers_for_picker(self) -> List[Dict[str, Any]]:
         """Get providers formatted for the TUI picker."""
