@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="sq-brand" x1="0" y1="56" x2="64" y2="8" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7C1FE8"/>
+      <stop offset="0.5" stop-color="#E9198C"/>
+      <stop offset="1" stop-color="#FFA400"/>
+    </linearGradient>
+  </defs>
+  <path d="M40 8.75H8.75V55.25H55.25V25" stroke="url(#sq-brand)" stroke-width="5.5"/>
+  <circle cx="17" cy="19" r="3" fill="url(#sq-brand)"/>
+  <circle cx="25" cy="19" r="3" fill="url(#sq-brand)"/>
+  <circle cx="33" cy="19" r="3" fill="url(#sq-brand)"/>
+  <path d="M17 26 29.5 36 17 46" stroke="url(#sq-brand)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M35 47.5h13.5" stroke="url(#sq-brand)" stroke-width="5.5" stroke-linecap="round"/>
+  <rect x="43.6" y="6.4" width="5.6" height="5.6" rx="0.5" fill="url(#sq-brand)"/>
+  <rect x="52.4" y="2.8" width="5.2" height="5.2" rx="0.5" fill="url(#sq-brand)"/>
+  <rect x="49.6" y="11.6" width="5.2" height="5.2" rx="0.5" fill="url(#sq-brand)"/>
+  <rect x="57.2" y="9.6" width="5.2" height="5.2" rx="0.5" fill="url(#sq-brand)"/>
+  <rect x="46.4" y="20.4" width="4.8" height="4.8" rx="0.5" fill="url(#sq-brand)"/>
+</svg>
