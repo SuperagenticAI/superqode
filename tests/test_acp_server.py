@@ -165,6 +165,89 @@ def test_resolve_provider_model_explicit_wins():
     assert model == "gpt-4o-mini"
 
 
+def test_resolve_provider_model_honors_harbor_requested_model(monkeypatch):
+    monkeypatch.setenv("HARBOR_ACP_REQUESTED_MODEL", "ollama/gemma4:e4b")
+    spec = SimpleNamespace(model_policy=SimpleNamespace(primary=None))
+    provider, model = resolve_provider_model(spec)
+    assert provider == "ollama"
+    assert model == "gemma4:e4b"
+
+
+def test_resolve_provider_model_harbor_beats_spec_primary(monkeypatch):
+    # The benchmark's --model is the run contract: it must win over a spec default.
+    monkeypatch.setenv("HARBOR_ACP_REQUESTED_MODEL", "openai/gpt-5")
+    spec = SimpleNamespace(model_policy=SimpleNamespace(primary="ollama/qwen3-coder"))
+    provider, model = resolve_provider_model(spec)
+    assert provider == "openai"
+    assert model == "gpt-5"
+
+
+async def test_set_session_model_updates_state():
+    session = FakeSession()
+    agent, _ = make_agent_with_session(session)
+    response = await agent.set_session_model(model_id="openrouter/qwen3-coder", session_id="sess-1")
+    assert response is not None
+    state = agent._sessions["sess-1"]
+    assert state.provider == "openrouter"
+    assert state.model == "qwen3-coder"
+
+
+async def test_set_session_model_bare_model_keeps_provider():
+    session = FakeSession()
+    agent, _ = make_agent_with_session(session)
+    await agent.set_session_model(model_id="gemma4:e4b", session_id="sess-1")
+    state = agent._sessions["sess-1"]
+    assert state.provider == "ollama"
+    assert state.model == "gemma4:e4b"
+
+
+async def test_set_session_model_unknown_session_raises():
+    agent = SuperQodeAcpAgent()
+    with pytest.raises(Exception):
+        await agent.set_session_model(model_id="x/y", session_id="nope")
+
+
+def test_load_spec_template_name_from_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("SUPERQODE_ACP_SPEC", "template:qwen-coding")
+    agent = SuperQodeAcpAgent()
+    spec = agent._load_spec(tmp_path)
+    assert "qwen" in spec.name.lower()
+
+
+def test_load_spec_unknown_template_raises(monkeypatch, tmp_path):
+    monkeypatch.setenv("SUPERQODE_ACP_SPEC", "template:not-a-real-template")
+    agent = SuperQodeAcpAgent()
+    with pytest.raises(Exception):
+        agent._load_spec(tmp_path)
+
+
+def test_benchmark_coding_template_is_autonomous():
+    from superqode.harness.templates import get_harness_template
+
+    spec = get_harness_template("benchmark-coding")
+    assert spec.execution_policy.approval_profile == "yolo"
+    assert spec.flavor.value == "coding"
+    stance = spec.agents[0].system_prompt or ""
+    assert "Never ask questions" in stance
+    assert "git reflog" in stance
+
+
+def test_benchmark_stance_reaches_agent_job_description():
+    # The stance only matters if it lands in the compiled profile the loop runs with.
+    from superqode.harness.compiler import compile_to_headless_profile
+    from superqode.harness.templates import get_harness_template
+
+    profile = compile_to_headless_profile(get_harness_template("benchmark-coding"))
+    assert "headless benchmark environment" in (profile.job_description or "")
+
+
+def test_load_spec_benchmark_template_via_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("SUPERQODE_ACP_SPEC", "template:benchmark-coding")
+    agent = SuperQodeAcpAgent()
+    spec = agent._load_spec(tmp_path)
+    assert spec.name == "benchmark-coding"
+
+
 async def test_prompt_streams_events_as_session_updates():
     session = FakeSession(
         events=[

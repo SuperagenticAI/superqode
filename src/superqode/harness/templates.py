@@ -223,8 +223,49 @@ def minimax_coding_template() -> HarnessSpec:
     )
 
 
+_BENCHMARK_STANCE = """You are running unattended in a headless benchmark environment.
+
+- There is NO user available. Never ask questions, never request confirmation, and
+  never end your turn waiting for input. A response that asks a question scores zero.
+- Investigate exhaustively with your tools before concluding anything is missing or
+  impossible: inspect history, logs, hidden files, and recoverable state (for example
+  `git reflog`, `git fsck --lost-found`, `git stash list`, backup and temp files).
+- Always attempt a concrete solution and apply it with your tools. A reasonable
+  attempt scores better than a perfect explanation with no changes.
+- Before finishing, verify your work by running the relevant commands or tests and
+  fix what fails. Finish with a short summary of what you changed."""
+
+
+def benchmark_coding_template() -> HarnessSpec:
+    """Coding harness tuned for unattended benchmark runs (Harbor, Terminal-Bench)."""
+    base = coding_template(name="benchmark-coding")
+    agents = tuple(
+        AgentSpec(**{**agent.__dict__, "system_prompt": _BENCHMARK_STANCE}) for agent in base.agents
+    )
+    return HarnessSpec(
+        **{
+            **base.__dict__,
+            "description": (
+                "Autonomous coding harness for headless benchmark runs: never asks the "
+                "user, investigates exhaustively, always attempts and verifies a fix."
+            ),
+            "agents": agents,
+            "execution_policy": ExecutionPolicySpec(
+                sandbox="local",
+                approval_profile="yolo",
+                allow_read=True,
+                allow_write=True,
+                allow_shell=True,
+            ),
+            "metadata": {"template": "benchmark-coding"},
+        }
+    )
+
+
 BUILTIN_TEMPLATES = {
     "coding": coding_template,
+    "benchmark-coding": benchmark_coding_template,
+    "benchmark_coding": benchmark_coding_template,
     "no-tool": no_tool_template,
     "no_tool": no_tool_template,
     "gemma4-coding": gemma4_coding_template,

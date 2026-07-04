@@ -2,6 +2,8 @@
 
 Agent Client Protocol (ACP) mode connects SuperQode to full-featured coding agents.
 
+> **The other direction:** SuperQode can also run *as* an ACP agent — inside Zed, JetBrains IDEs, Neovim, or the Harbor benchmark framework — with `superqode serve acp`. See [ACP Agent Server](../advanced/acp-agent-server.md).
+
 ---
 
 ## Overview

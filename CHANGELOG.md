@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-07-04
+
+### Added
+
+- **Harbor / Terminal-Bench compatibility for the ACP agent** - The ACP server now honors Harbor's `HARBOR_ACP_REQUESTED_MODEL` environment variable when resolving the session model and implements ACP `session/set_model`, so `harbor run --agent acp` can drive SuperQode on Terminal-Bench using the benchmark's `--model` flag with no wrapper code.
+- **Harness template selection over ACP** - `SUPERQODE_ACP_SPEC` (and `serve acp --spec`) now accepts `template:<name>` to pin any built-in harness template for a session without a spec file, enabling harness-variant comparisons in benchmark containers.
+- **`benchmark-coding` template** - An autonomous variant of the coding harness for unattended benchmark runs: yolo approvals, and a system stance that never asks the user questions, investigates recoverable state exhaustively (reflog, stashes, backups), always applies a concrete attempt, and verifies before finishing.
+- **ACP Agent Server documentation** - Added the ACP Agent Server guide covering editor setup, harness and model resolution, template selection, and running SuperQode on Terminal-Bench with Harbor, plus `serve acp` CLI reference coverage.
+
+### Changed
+
+- **Release metadata** - Bumped the package version and runtime `__version__` to `0.2.5`.
+
 ## [0.2.4] - 2026-07-04
 
 ### Added

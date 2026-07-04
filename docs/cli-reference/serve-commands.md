@@ -1,6 +1,6 @@
 # Serve Commands
 
-Expose SuperQode over the network: a browser-based TUI and an MCP server for your harnesses. A2A serving is available through the Python API.
+Expose SuperQode to other tools: an ACP agent for editors and benchmarks, an MCP server for your harnesses, and a browser-based TUI. A2A serving is available through the Python API.
 
 ---
 
@@ -8,6 +8,7 @@ Expose SuperQode over the network: a browser-based TUI and an MCP server for you
 
 | Surface | Command | Who connects |
 |---------|---------|--------------|
+| ACP | `superqode serve acp` | Any ACP client: Zed, JetBrains IDEs, Neovim, Devin Desktop, and the Harbor benchmark framework. Runs SuperQode as the coding agent, driven by your HarnessSpec. |
 | MCP | `superqode mcp` | Any MCP client (Claude Desktop, IDEs, other agents). Exposes your HarnessSpec workflows as `list_harnesses`, `describe_harness`, and `run_harness` tools. |
 | Harness MCP alias | `superqode serve harness --spec harness.yaml` | Same MCP server, shaped around one harness file or directory. |
 | Local Session API | `superqode serve api` | Browser/mobile companions and local tools that inspect or drive the switchboard and Software Factory graph. |
@@ -45,6 +46,26 @@ A typical MCP client configuration entry:
   }
 }
 ```
+
+---
+
+## serve acp
+
+Run SuperQode as an ACP agent on stdio, for Zed, JetBrains IDEs, Neovim, and Harbor/Terminal-Bench:
+
+```bash
+superqode serve acp                       # per-session harness discovery
+superqode serve acp --spec harness.yaml   # pin one HarnessSpec
+```
+
+| Option | Description |
+|--------|-------------|
+| `--spec` | HarnessSpec file to use for all sessions |
+| `--dir` | Directory of harness specs for discovery |
+| `--provider` | Provider override (env: `SUPERQODE_ACP_PROVIDER`) |
+| `--model` | Model override (env: `SUPERQODE_ACP_MODEL`) |
+
+`SUPERQODE_ACP_SPEC` accepts a spec path or `template:<name>` for a built-in template. stdout carries JSON-RPC, so human-facing output goes to stderr. See the full guide: [ACP Agent Server](../advanced/acp-agent-server.md).
 
 ---
 

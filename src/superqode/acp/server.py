@@ -31,6 +31,7 @@ from acp import (
     InitializeResponse,
     NewSessionResponse,
     PromptResponse,
+    SetSessionModelResponse,
     run_agent,
     start_tool_call,
     text_block,
@@ -168,7 +169,8 @@ def discover_session_spec(cwd: Path, harness_dir: Path | None = None) -> Path | 
 
 
 def resolve_provider_model(spec: Any, provider: str = "", model: str = "") -> tuple[str, str]:
-    """Resolve provider/model: explicit args → ACP env vars → model_policy.primary."""
+    """Resolve provider/model: explicit args → ACP env vars → Harbor requested model
+    → model_policy.primary."""
     from superqode.providers.model_specs import (
         normalize_model_for_provider,
         normalize_provider_id,
@@ -184,6 +186,17 @@ def resolve_provider_model(spec: Any, provider: str = "", model: str = "") -> tu
         parsed_model = split_provider_model_ref(model)
         if parsed_model.provider:
             provider, model = parsed_model.provider, parsed_model.model
+
+    # Harbor's ACP runner exports the benchmark's --model for the agent process;
+    # honoring it makes SuperQode work on Terminal-Bench without a wrapper.
+    harbor_requested = os.environ.get("HARBOR_ACP_REQUESTED_MODEL", "").strip()
+    if (not provider or not model) and harbor_requested:
+        parsed_requested = split_provider_model_ref(harbor_requested)
+        if parsed_requested.provider:
+            provider = provider or parsed_requested.provider
+            model = model or parsed_requested.model
+        else:
+            model = model or harbor_requested
 
     primary = getattr(getattr(spec, "model_policy", None), "primary", None)
     if (not provider or not model) and primary:
@@ -310,6 +323,23 @@ class SuperQodeAcpAgent:
     async def close_session(self, session_id: str, **kwargs: Any) -> None:
         self._sessions.pop(session_id, None)
         return None
+
+    async def set_session_model(
+        self, model_id: str, session_id: str, **kwargs: Any
+    ) -> SetSessionModelResponse:
+        """Switch the session's model; accepts `provider/model` or bare model ids."""
+        from superqode.providers.model_specs import split_provider_model_ref
+
+        state = self._sessions.get(session_id)
+        if state is None:
+            raise RequestError.invalid_params({"reason": f"Unknown session: {session_id}"})
+        parsed = split_provider_model_ref(str(model_id))
+        if parsed.provider:
+            state.provider = parsed.provider
+            state.model = parsed.model
+        else:
+            state.model = str(model_id)
+        return SetSessionModelResponse()
 
     async def cancel(self, session_id: str, **kwargs: Any) -> None:
         state = self._sessions.get(session_id)
@@ -477,10 +507,14 @@ class SuperQodeAcpAgent:
 
     def _load_spec(self, cwd: Path) -> Any:
         from superqode.harness import load_harness_spec
-        from superqode.harness.templates import coding_template
+        from superqode.harness.templates import coding_template, get_harness_template
 
-        explicit = self._spec_path or os.environ.get("SUPERQODE_ACP_SPEC", "").strip()
+        explicit = str(self._spec_path or os.environ.get("SUPERQODE_ACP_SPEC", "")).strip()
         if explicit:
+            # `template:<name>` selects a built-in template — no spec file needed,
+            # which is how benchmark containers pin a harness variant per run.
+            if explicit.startswith("template:"):
+                return get_harness_template(explicit.removeprefix("template:"))
             return load_harness_spec(Path(explicit).expanduser())
         found = discover_session_spec(cwd, self._harness_dir)
         if found is not None:

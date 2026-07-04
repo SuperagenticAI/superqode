@@ -162,6 +162,7 @@ nav:
     - 📊 Optimization Story: advanced/optimization.md
     - 🧠 Skill Optimization: advanced/skill-optimization.md
     - 📐 Benchmark Runner: advanced/benchmark-runner.md
+    - 🔌 ACP Agent Server: advanced/acp-agent-server.md
     - 🔁 Omnigent Compatibility: advanced/omnigent-compat.md
 
   - 🖥️ Local & Open Models:
