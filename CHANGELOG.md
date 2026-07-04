@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-07-04
+
 ### Added
 
-- **ACP agent server** - `superqode serve acp` runs SuperQode as an Agent Client Protocol agent over stdio, so ACP clients such as Zed, JetBrains IDEs, and Neovim can drive SuperQode as their coding agent. Each session resolves a HarnessSpec from `--spec`, the session directory's `superqode.local.yaml` / `harness.yaml`, the conventional harness directories, or the built-in coding template; provider/model resolve from flags, `SUPERQODE_ACP_PROVIDER` / `SUPERQODE_ACP_MODEL`, or the spec's `model_policy.primary`. Prompt turns stream harness model deltas, thinking, and tool calls as ACP session updates, harness tool approvals are relayed as ACP permission requests (allow once / always / reject), and `session/cancel` stops the running turn.
+- **ACP agent server** - `superqode serve acp` runs SuperQode as an Agent Client Protocol agent over stdio, so ACP clients such as Zed, JetBrains IDEs, and Neovim can drive SuperQode as their coding agent. Each session resolves a HarnessSpec from `--spec`, the session directory's `superqode.local.yaml` / `harness.yaml`, the conventional harness directories, or the built-in coding template; provider/model resolve from flags, `SUPERQODE_ACP_PROVIDER` / `SUPERQODE_ACP_MODEL`, or the spec's `model_policy.primary`. Prompt turns stream harness model deltas, thinking, and tool calls as ACP session updates, harness tool approvals are relayed as ACP permission requests (allow once / always / reject), and `session/cancel` stops the running turn. The initialize response advertises a terminal auth method that runs `superqode local init --repo .` as the setup experience, as required for ACP registry listing.
+- **ACP registry submission assets** - Added `install/acp-registry/superqode/` with the `agent.json` manifest (uvx distribution), monochrome 16×16 icon matching the SuperQode logo, and registry README, ready to copy into a fork of `agentclientprotocol/registry`.
+- **Scalable brand logo** - Added `assets/superqode-logo.svg`, a compact vector version of the SuperQode logo with the brand gradient, for docs, README, and website use.
+
+### Changed
+
+- **Release metadata** - Bumped the package version and runtime `__version__` to `0.2.4`.
 
 ## [0.2.3] - 2026-06-24
 
