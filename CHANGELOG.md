@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.5] - 2026-07-04
+## [0.2.6] - 2026-07-04
 
 ### Added
 
@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Release metadata** - Bumped the package version and runtime `__version__` to `0.2.5`.
+- **Release metadata** - Bumped the package version and runtime `__version__` to `0.2.6`.
 
 ## [0.2.4] - 2026-07-04
 
