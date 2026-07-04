@@ -22,7 +22,7 @@ console = Console()
 @click.pass_context
 def serve(ctx: click.Context):
     """Server commands for IDE and web integration."""
-    if ctx.invoked_subcommand in {"api", "harness"}:
+    if ctx.invoked_subcommand in {"api", "harness", "acp"}:
         return
     if not require_enterprise("Server integrations"):
         raise SystemExit(1)
@@ -108,6 +108,41 @@ def serve_harness(
         f"[cyan]Serving harness MCP tools from {harness_dir or 'default harness directories'}[/cyan]"
     )
     run_server("http" if http else "stdio", host, port, str(harness_dir) if harness_dir else None)
+
+
+@serve.command("acp")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), default=None)
+@click.option(
+    "--dir", "harness_dir", type=click.Path(file_okay=False, path_type=Path), default=None
+)
+@click.option("--provider", default="", envvar="SUPERQODE_ACP_PROVIDER")
+@click.option("--model", default="", envvar="SUPERQODE_ACP_MODEL")
+def serve_acp(spec_path: Optional[Path], harness_dir: Optional[Path], provider: str, model: str):
+    """Run SuperQode as an ACP agent on stdio (Zed, JetBrains, Neovim, ...).
+
+    The agent loop is a HarnessSpec: --spec pins one file, otherwise each
+    session resolves superqode.local.yaml / harness.yaml in its working
+    directory, then the conventional harness dirs, then the coding template.
+    """
+    import asyncio
+
+    from superqode.acp.server import run_acp_server
+
+    if spec_path and harness_dir:
+        raise click.ClickException("Pass either --spec or --dir, not both.")
+    # stdout carries JSON-RPC, so any human-facing output must go to stderr.
+    click.echo("SuperQode ACP agent listening on stdio", err=True)
+    try:
+        asyncio.run(
+            run_acp_server(
+                spec_path=spec_path,
+                harness_dir=harness_dir,
+                provider=provider,
+                model=model,
+            )
+        )
+    except KeyboardInterrupt:
+        pass
 
 
 @serve.command("api")

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **ACP agent server** - `superqode serve acp` runs SuperQode as an Agent Client Protocol agent over stdio, so ACP clients such as Zed, JetBrains IDEs, and Neovim can drive SuperQode as their coding agent. Each session resolves a HarnessSpec from `--spec`, the session directory's `superqode.local.yaml` / `harness.yaml`, the conventional harness directories, or the built-in coding template; provider/model resolve from flags, `SUPERQODE_ACP_PROVIDER` / `SUPERQODE_ACP_MODEL`, or the spec's `model_policy.primary`. Prompt turns stream harness model deltas, thinking, and tool calls as ACP session updates, harness tool approvals are relayed as ACP permission requests (allow once / always / reject), and `session/cancel` stops the running turn.
+
 ## [0.2.3] - 2026-06-24
 
 ### Added
