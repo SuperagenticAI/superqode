@@ -185,8 +185,7 @@ def test_resolve_provider_model_harbor_beats_spec_primary(monkeypatch):
 async def test_set_session_model_updates_state():
     session = FakeSession()
     agent, _ = make_agent_with_session(session)
-    response = await agent.set_session_model(model_id="openrouter/qwen3-coder", session_id="sess-1")
-    assert response is not None
+    await agent.set_session_model(model_id="openrouter/qwen3-coder", session_id="sess-1")
     state = agent._sessions["sess-1"]
     assert state.provider == "openrouter"
     assert state.model == "qwen3-coder"

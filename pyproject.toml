@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.2.6"
+version = "0.2.7"
 description = "SuperQode: harness engineering framework for coding agents, optimized for local and open models"
 readme = "README.md"
 license = "Apache-2.0"
@@ -25,7 +25,10 @@ dependencies = [
     "pyyaml>=6.0.3",
     "click>=8.0.0",
     "litellm>=1.83.14",
-    "agent-client-protocol>=0.10.0",
+    # Actively evolving protocol library: 0.11 removed session/set_model and its
+    # schema types. Code supports 0.10 and 0.11; cap to avoid surprise breakage
+    # in released artifacts.
+    "agent-client-protocol>=0.10.0,<0.12",
     "prompt_toolkit>=3.0.52",
     "rich>=15.0.0",
     "textual>=0.47.0",

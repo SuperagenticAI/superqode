@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-07-05
+
+### Fixed
+
+- **Fresh installs with agent-client-protocol 0.11** - `superqode serve acp` failed to start on new installs after the `agent-client-protocol` library released 0.11.0, which removed `session/set_model` and its schema types from the protocol. The ACP server now works on both 0.10 and 0.11, and the dependency is capped at `<0.12` so future protocol changes cannot break released artifacts.
+
+### Changed
+
+- **Release metadata** - Bumped the package version and runtime `__version__` to `0.2.7`.
+
 ## [0.2.6] - 2026-07-04
 
 ### Added

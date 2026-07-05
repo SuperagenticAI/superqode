@@ -31,7 +31,6 @@ from acp import (
     InitializeResponse,
     NewSessionResponse,
     PromptResponse,
-    SetSessionModelResponse,
     run_agent,
     start_tool_call,
     text_block,
@@ -324,10 +323,13 @@ class SuperQodeAcpAgent:
         self._sessions.pop(session_id, None)
         return None
 
-    async def set_session_model(
-        self, model_id: str, session_id: str, **kwargs: Any
-    ) -> SetSessionModelResponse:
-        """Switch the session's model; accepts `provider/model` or bare model ids."""
+    async def set_session_model(self, model_id: str, session_id: str, **kwargs: Any) -> None:
+        """Switch the session's model; accepts `provider/model` or bare model ids.
+
+        Returns None so the handler works across agent-client-protocol versions:
+        0.10 accepts None for session/set_model, and 0.11 removed the method from
+        the protocol (clients on 0.11 simply never route it here).
+        """
         from superqode.providers.model_specs import split_provider_model_ref
 
         state = self._sessions.get(session_id)
@@ -339,7 +341,7 @@ class SuperQodeAcpAgent:
             state.model = parsed.model
         else:
             state.model = str(model_id)
-        return SetSessionModelResponse()
+        return None
 
     async def cancel(self, session_id: str, **kwargs: Any) -> None:
         state = self._sessions.get(session_id)
