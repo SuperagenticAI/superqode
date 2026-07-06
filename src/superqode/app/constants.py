@@ -371,6 +371,7 @@ COMMANDS = [
     ":serve web",
     ":serve harness",
     ":serve api",
+    ":serve acp",
     ":profiles",
     ":profiles list",
     ":doctor",

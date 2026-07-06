@@ -46,6 +46,7 @@ from acp.schema import (
     PermissionOption,
     PromptCapabilities,
     TerminalAuthMethod,
+    ToolCallLocation,
     ToolCallUpdate,
 )
 
@@ -96,6 +97,74 @@ def _tool_kind(name: str) -> str:
         if fragment in lowered:
             return kind
     return "other"
+
+
+# Argument keys that carry the tool's target, by role. Cover both snake_case and
+# camelCase spellings since specs and external runtimes disagree on convention.
+_PATH_ARG_KEYS = ("file_path", "filePath", "path", "file", "abs_path", "filename", "target_file")
+_COMMAND_ARG_KEYS = ("command", "cmd", "script")
+_PATTERN_ARG_KEYS = ("pattern", "query", "regex", "search")
+_URL_ARG_KEYS = ("url", "uri")
+
+_TITLE_LIMIT = 120
+
+
+def _first_str(args: dict[str, Any], keys: tuple[str, ...]) -> str:
+    for key in keys:
+        value = args.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _clip_title(text: str) -> str:
+    text = " ".join(text.split())
+    if len(text) <= _TITLE_LIMIT:
+        return text
+    return text[: _TITLE_LIMIT - 1] + "…"
+
+
+def _tool_title(name: str, arguments: Any) -> str:
+    """Human-readable tool_call title: verb + target, not just the tool name.
+
+    Editors surface ``title`` directly (Zed, JetBrains) while ``raw_input`` is
+    hidden behind an expander, so the file path / command must be in the title.
+    """
+    args = arguments if isinstance(arguments, dict) else {}
+    kind = _tool_kind(name)
+    path = _first_str(args, _PATH_ARG_KEYS)
+    if kind == "execute":
+        command = _first_str(args, _COMMAND_ARG_KEYS)
+        return _clip_title(command) if command else name
+    if kind == "read" and path:
+        return _clip_title(f"Read {path}")
+    if kind == "edit" and path:
+        verb = "Write" if "write" in name.lower() or "create" in name.lower() else "Edit"
+        return _clip_title(f"{verb} {path}")
+    if kind == "search":
+        pattern = _first_str(args, _PATTERN_ARG_KEYS)
+        if pattern:
+            return _clip_title(f"Search {pattern}" + (f" in {path}" if path else ""))
+    if kind == "fetch":
+        url = _first_str(args, _URL_ARG_KEYS)
+        if url:
+            return _clip_title(f"Fetch {url}")
+    if path:
+        return _clip_title(f"{name} {path}")
+    return name
+
+
+def _tool_locations(arguments: Any) -> list[ToolCallLocation] | None:
+    """File locations for follow-the-agent UIs, when the arguments name a path."""
+    args = arguments if isinstance(arguments, dict) else {}
+    path = _first_str(args, _PATH_ARG_KEYS)
+    if not path:
+        return None
+    location = ToolCallLocation(path=path)
+    line = args.get("line") or args.get("start_line") or args.get("offset")
+    if isinstance(line, int) and line > 0:
+        location.line = line
+    return [location]
 
 
 def _prompt_to_text(blocks: list[Any] | None) -> str:
@@ -430,32 +499,55 @@ class SuperQodeAcpAgent:
                 await self._send_update(session_id, update_agent_thought_text(text))
         elif event_type == "tool_call":
             name = str(data.get("tool_name") or "tool")
+            arguments = data.get("arguments")
             call_id = tracker.start(name)
             await self._send_update(
                 session_id,
                 start_tool_call(
                     call_id,
-                    name,
+                    _tool_title(name, arguments),
                     kind=_tool_kind(name),
                     status="in_progress",
-                    raw_input=data.get("arguments"),
+                    locations=_tool_locations(arguments),
+                    raw_input=arguments,
                 ),
             )
         elif event_type == "tool_result":
             name = str(data.get("tool_name") or "tool")
             call_id = tracker.finish(name)
-            if call_id is None:
-                return
             success = data.get("success", True)
             output = data.get("output") if success else (data.get("error") or data.get("output"))
             content = []
             if output:
                 content.append(tool_content(text_block(_clip(output))))
+            status = "completed" if success else "failed"
+            if call_id is None:
+                # Runtimes like codex-sdk report tools only on completion; synthesize
+                # the tool_call rather than dropping the result on the floor.
+                arguments = data.get("arguments") or {
+                    key: data[key] for key in ("command", "path") if data.get(key)
+                }
+                call_id = tracker.start(name)
+                tracker.finish(name)
+                await self._send_update(
+                    session_id,
+                    start_tool_call(
+                        call_id,
+                        _tool_title(name, arguments),
+                        kind=_tool_kind(name),
+                        status=status,
+                        locations=_tool_locations(arguments),
+                        raw_input=arguments or None,
+                        content=content or None,
+                        raw_output=output,
+                    ),
+                )
+                return
             await self._send_update(
                 session_id,
                 update_tool_call(
                     call_id,
-                    status="completed" if success else "failed",
+                    status=status,
                     content=content or None,
                     raw_output=output,
                 ),
@@ -472,6 +564,7 @@ class SuperQodeAcpAgent:
                 return True
             item = dict(pending[0])
             tool_name = str(item.get("tool_name") or "tool")
+            arguments = item.get("arguments")
             call_id = str(item.get("tool_call_id") or tracker.start(tool_name))
             response = await self._conn.request_permission(
                 options=[
@@ -484,10 +577,11 @@ class SuperQodeAcpAgent:
                 session_id=session.session_id,
                 tool_call=ToolCallUpdate(
                     tool_call_id=call_id,
-                    title=tool_name,
+                    title=_tool_title(tool_name, arguments),
                     kind=_tool_kind(tool_name),
                     status="pending",
-                    raw_input=item.get("arguments"),
+                    locations=_tool_locations(arguments),
+                    raw_input=arguments,
                 ),
             )
             outcome = getattr(response, "outcome", None)

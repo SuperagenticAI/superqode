@@ -21415,6 +21415,7 @@ class SuperQodeApp(App):
             "shell": "▸",
             "terminal": "▸",
             "exec": "▸",
+            "run": "▸",
             "search": "⌕",
             "grep": "⌕",
             "find": "⌕",
@@ -21449,24 +21450,49 @@ class SuperQodeApp(App):
                 pass
             return p
 
+        def _first_arg(*keys: str) -> str:
+            for key in keys:
+                value = tool_input.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            return ""
+
+        # Cover snake_case and camelCase: harness tools, ACP agents, and the
+        # codex-sdk runtime all spell these keys differently.
         file_path = _relpath(
-            tool_input.get("filePath", tool_input.get("path", tool_input.get("file", "")))
+            _first_arg(
+                "filePath", "file_path", "path", "file", "abs_path", "filename", "target_file"
+            )
         )
 
-        if tool_lower in ("read", "write", "edit", "patch", "create") and file_path:
+        # Substring matching ("read_file", "Read file", "edit" all count as reads/
+        # edits); exact-name matching left every external agent in the generic branch.
+        def _matches(*fragments: str) -> bool:
+            return any(fragment in tool_lower for fragment in fragments)
+
+        if _matches("read", "write", "edit", "patch", "create") and file_path:
             return f"{icon} {file_path}"
-        if tool_lower in ("bash", "shell", "terminal", "exec"):
-            cmd = tool_input.get("command", "")
-            return f"{icon} {cmd}"
-        if tool_lower in ("search", "grep", "find"):
-            query = tool_input.get("pattern", tool_input.get("query", tool_input.get("search", "")))
-            return f"{icon} {query}"
-        if tool_lower in ("list", "ls", "glob"):
-            path = _relpath(tool_input.get("path", tool_input.get("directory", ".")))
-            return f"{icon} {path}"
+        if _matches("bash", "shell", "terminal", "exec", "command", "run"):
+            cmd = _first_arg("command", "cmd", "script")
+            if cmd:
+                return f"{icon} {cmd}"
+        if _matches("search", "grep", "find"):
+            query = _first_arg("pattern", "query", "search", "regex")
+            if query:
+                return f"{icon} {query}"
+        if _matches("list", "ls", "glob", "tree"):
+            path = _relpath(_first_arg("path", "directory", "dir_path"))
+            if path:
+                return f"{icon} {path}"
         if tool_lower == "todo_write":
             todos = tool_input.get("todos", [])
             return f"{icon} todo list ({len(todos)} items)"
+        if _matches("fetch", "web", "http"):
+            url = _first_arg("url", "uri")
+            if url:
+                return f"{icon} {url}"
+        if file_path:
+            return f"{icon} {tool_name} {file_path}"
 
         # Generic: show a short hint of the first argument value, not full JSON.
         if tool_input:

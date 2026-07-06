@@ -563,6 +563,9 @@ class PureMode:
     @staticmethod
     def _tool_args_from_runtime_event(event) -> dict[str, Any]:
         data = dict(event.data)
+        arguments = data.get("arguments")
+        if isinstance(arguments, dict) and arguments:
+            return dict(arguments)
         name = str(data.get("tool_name") or "")
         if name == "bash":
             return {"command": data.get("command") or ""}

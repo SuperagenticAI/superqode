@@ -23,6 +23,8 @@ from superqode.acp.server import (
     _AcpSessionState,
     _prompt_to_text,
     _tool_kind,
+    _tool_locations,
+    _tool_title,
     discover_session_spec,
     resolve_provider_model,
 )
@@ -292,6 +294,67 @@ async def test_prompt_failed_tool_result_marks_failed():
     await agent.prompt(prompt=[text_block("go")], session_id="sess-1")
     progress = next(u for u in client.updates if isinstance(u, ToolCallProgress))
     assert progress.status == "failed"
+
+
+def test_tool_title_shows_target():
+    assert _tool_title("read_file", {"file_path": "src/main.py"}) == "Read src/main.py"
+    assert _tool_title("write_file", {"filePath": "README.md"}) == "Write README.md"
+    assert _tool_title("edit_file", {"path": "src/app.py"}) == "Edit src/app.py"
+    assert _tool_title("bash", {"command": "pytest -x"}) == "pytest -x"
+    assert _tool_title("grep", {"pattern": "TODO", "path": "src"}) == "Search TODO in src"
+    assert _tool_title("web_fetch", {"url": "https://example.com"}) == "Fetch https://example.com"
+    # No useful arguments: fall back to the tool name, never crash.
+    assert _tool_title("bash", {}) == "bash"
+    assert _tool_title("mystery", None) == "mystery"
+
+
+def test_tool_locations_from_arguments():
+    locations = _tool_locations({"file_path": "src/main.py", "line": 42})
+    assert locations is not None
+    assert locations[0].path == "src/main.py"
+    assert locations[0].line == 42
+    assert _tool_locations({"command": "ls"}) is None
+    assert _tool_locations(None) is None
+
+
+async def test_tool_call_start_carries_title_and_location():
+    session = FakeSession(
+        events=[
+            HarnessEvent(
+                type="tool_call",
+                data={"tool_name": "read_file", "arguments": {"path": "a.py"}},
+            ),
+            HarnessEvent(
+                type="tool_result",
+                data={"tool_name": "read_file", "success": True, "output": "contents"},
+            ),
+        ]
+    )
+    agent, client = make_agent_with_session(session)
+    await agent.prompt(prompt=[text_block("go")], session_id="sess-1")
+    start = next(u for u in client.updates if isinstance(u, ToolCallStart))
+    assert start.title == "Read a.py"
+    assert start.locations and start.locations[0].path == "a.py"
+
+
+async def test_tool_result_without_start_is_not_dropped():
+    # Runtimes like codex-sdk emit only tool_result (with the command at the
+    # top level of the event data); the server must synthesize the tool_call.
+    session = FakeSession(
+        events=[
+            HarnessEvent(
+                type="tool_result",
+                data={"tool_name": "bash", "command": "ls -la", "success": True, "output": "ok"},
+            ),
+        ]
+    )
+    agent, client = make_agent_with_session(session)
+    await agent.prompt(prompt=[text_block("go")], session_id="sess-1")
+    starts = [u for u in client.updates if isinstance(u, ToolCallStart)]
+    assert len(starts) == 1
+    assert starts[0].title == "ls -la"
+    assert starts[0].status == "completed"
+    assert not [u for u in client.updates if isinstance(u, ToolCallProgress)]
 
 
 async def test_prompt_empty_input_ends_turn():

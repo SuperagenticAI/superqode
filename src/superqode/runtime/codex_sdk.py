@@ -537,6 +537,61 @@ class CodexSDKRuntime:
                     },
                 )
             ]
+        if method == "item/started":
+            item = getattr(payload, "item", None)
+            root = getattr(item, "root", item)
+            item_type = getattr(root, "type", "")
+            if item_type == "commandExecution":
+                return [
+                    HarnessEvent(
+                        type="tool_call",
+                        data={
+                            "tool_name": "bash",
+                            "tool_call_id": getattr(root, "id", None),
+                            "arguments": {
+                                "command": _payload_value(root, "command", default="")
+                            },
+                        },
+                    )
+                ]
+            if item_type == "fileChange":
+                return [
+                    HarnessEvent(
+                        type="tool_call",
+                        data={
+                            "tool_name": "patch",
+                            "tool_call_id": getattr(root, "id", None),
+                            "arguments": {
+                                "path": _payload_value(root, "path", "file_path", "filePath")
+                            },
+                        },
+                    )
+                ]
+            if item_type == "mcpToolCall":
+                server = _payload_value(root, "server", default="")
+                tool = _payload_value(root, "tool", default="")
+                return [
+                    HarnessEvent(
+                        type="tool_call",
+                        data={
+                            "tool_name": f"mcp:{server}/{tool}",
+                            "tool_call_id": getattr(root, "id", None),
+                            "arguments": _payload_value(root, "arguments", "args") or {},
+                        },
+                    )
+                ]
+            if item_type == "dynamicToolCall":
+                return [
+                    HarnessEvent(
+                        type="tool_call",
+                        data={
+                            "tool_name": str(_payload_value(root, "tool", default="dynamic_tool")),
+                            "tool_call_id": getattr(root, "id", None),
+                            "arguments": _payload_value(root, "arguments", "args") or {},
+                        },
+                    )
+                ]
+            return []
         if method == "item/completed":
             item = getattr(payload, "item", None)
             root = getattr(item, "root", item)
