@@ -548,9 +548,7 @@ class CodexSDKRuntime:
                         data={
                             "tool_name": "bash",
                             "tool_call_id": getattr(root, "id", None),
-                            "arguments": {
-                                "command": _payload_value(root, "command", default="")
-                            },
+                            "arguments": {"command": _payload_value(root, "command", default="")},
                         },
                     )
                 ]
