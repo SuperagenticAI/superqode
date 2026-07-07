@@ -98,6 +98,39 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
         ":harness optimize", "Optimize a HarnessSpec through metaharness", category="workflow"
     ),
     SlashCommand(
+        ":harness mine-failures",
+        "Mine self-improvement failures from harness JSON",
+        category="workflow",
+    ),
+    SlashCommand(
+        ":harness logbook", "Manage the self-improvement logbook", category="workflow"
+    ),
+    SlashCommand(
+        ":harness logbook prune",
+        "Prune stale self-improvement memory",
+        category="workflow",
+    ),
+    SlashCommand(
+        ":harness audit-candidate",
+        "Audit a candidate HarnessSpec before apply",
+        category="workflow",
+    ),
+    SlashCommand(
+        ":harness candidates",
+        "Manage self-improvement candidate history",
+        category="workflow",
+    ),
+    SlashCommand(
+        ":harness candidates list",
+        "Show accepted and rejected harness candidates",
+        category="workflow",
+    ),
+    SlashCommand(
+        ":harness improve",
+        "Improve a HarnessSpec from mined failures",
+        category="workflow",
+    ),
+    SlashCommand(
         ":harness optimize-inspect", "Inspect a harness optimization run", category="workflow"
     ),
     SlashCommand(

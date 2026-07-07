@@ -266,6 +266,43 @@ def test_harness_spec_round_trip_preserves_observability_exporters():
     assert restored.observability.config["mlflow_tracking_uri"] == "file:/tmp/mlruns"
 
 
+def test_harness_spec_round_trip_preserves_optimization_policy():
+    spec = harness_spec_from_dict(
+        {
+            "name": "self-improving",
+            "optimization": {
+                "enabled": True,
+                "require_human_apply": True,
+                "editable_surfaces": ["context", "workflow"],
+                "protected_surfaces": ["execution_policy", "checks"],
+                "heldout_fraction": 0.25,
+                "max_candidate_edits": 3,
+                "config": {"novelty_gate": True},
+            },
+        }
+    )
+
+    payload = harness_spec_to_dict(spec)
+    restored = harness_spec_from_dict(payload)
+
+    assert payload["optimization"]["enabled"] is True
+    assert restored.optimization.enabled is True
+    assert restored.optimization.editable_surfaces == ("context", "workflow")
+    assert restored.optimization.protected_surfaces == ("execution_policy", "checks")
+    assert restored.optimization.heldout_fraction == 0.25
+    assert restored.optimization.max_candidate_edits == 3
+    assert restored.optimization.config["novelty_gate"] is True
+
+
+def test_harness_spec_schema_includes_optimization_policy():
+    from superqode.harness import harness_spec_json_schema
+
+    schema = harness_spec_json_schema()
+
+    assert "optimization" in schema["properties"]
+    assert "editable_surfaces" in schema["properties"]["optimization"]["properties"]
+
+
 def test_workflow_preset_expands_harness_agents_and_mode():
     spec = harness_spec_from_dict(
         {

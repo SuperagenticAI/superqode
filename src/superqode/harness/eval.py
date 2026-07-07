@@ -15,6 +15,8 @@ from .spec import WorkflowMode
 from .testing import build_failure_digest
 from .workflow import run_workflow, workflow_steps_from_spec
 
+EVAL_SPLITS = ("all", "held-in", "held-out")
+
 
 def bundled_eval_packs_dir() -> Path:
     return Path(__file__).resolve().parents[1] / "data" / "eval_packs"
@@ -64,6 +66,7 @@ def load_eval_tasks(path: str | Path) -> dict[str, Any]:
     tasks = data.get("tasks", [])
     if not isinstance(tasks, list) or not tasks:
         raise ValueError("Eval task file requires a non-empty tasks list")
+    normalized_tasks: list[dict[str, Any]] = []
     for index, task in enumerate(tasks):
         if not isinstance(task, dict):
             raise ValueError(f"Eval task at index {index} must be a mapping")
@@ -71,10 +74,18 @@ def load_eval_tasks(path: str | Path) -> dict[str, Any]:
             raise ValueError(f"Eval task at index {index} requires id")
         if not str(task.get("prompt") or "").strip():
             raise ValueError(f"Eval task {task.get('id') or index} requires prompt")
+        normalized = dict(task)
+        normalized["split"] = _normalize_eval_split(task.get("split"))
+        normalized_tasks.append(normalized)
     variants = data.get("variants", [])
     if variants is not None and not isinstance(variants, list):
         raise ValueError("Eval variants must be a list")
-    return {"tasks": tasks, "variants": variants or [], "metadata": data.get("metadata") or {}}
+    return {
+        "tasks": normalized_tasks,
+        "variants": variants or [],
+        "metadata": data.get("metadata") or {},
+        "split_counts": eval_task_split_counts(normalized_tasks),
+    }
 
 
 async def run_harness_eval(
@@ -87,8 +98,13 @@ async def run_harness_eval(
     working_dir: str | Path = ".",
     sandbox_backend: str = "local",
     live: bool = False,
+    eval_split: str = "all",
 ) -> dict[str, Any]:
     task_file = load_eval_tasks(tasks_path)
+    split = _normalize_eval_filter(eval_split)
+    tasks = filter_eval_tasks(task_file["tasks"], split)
+    if not tasks:
+        raise ValueError(f"No eval tasks match split: {split}")
     specs = list(spec_paths)
     for variant in task_file["variants"]:
         if isinstance(variant, dict) and variant.get("spec"):
@@ -102,7 +118,7 @@ async def run_harness_eval(
         variant_results.append(
             await _run_variant_eval(
                 spec_path=spec_path,
-                tasks=task_file["tasks"],
+                tasks=tasks,
                 provider=provider,
                 model=model,
                 runtime=runtime,
@@ -122,6 +138,9 @@ async def run_harness_eval(
     regressed_variants = [item["harness"] for item in variant_results[1:] if item["regressed"]]
     return {
         "tasks_file": str(tasks_path),
+        "split": split,
+        "task_count": len(tasks),
+        "split_counts": task_file.get("split_counts") or eval_task_split_counts(task_file["tasks"]),
         "live": live,
         "status": "passed"
         if all(item["status"] != "error" for item in variant_results)
@@ -142,6 +161,23 @@ def harness_eval_regressions(baseline: dict[str, Any], candidate: dict[str, Any]
     passing tasks. Operates on `harness eval` variant dicts, no model needed.
     """
     return _regressions(baseline, candidate)
+
+
+def filter_eval_tasks(tasks: list[dict[str, Any]], split: str = "all") -> list[dict[str, Any]]:
+    """Return tasks for an eval split."""
+    normalized = _normalize_eval_filter(split)
+    if normalized == "all":
+        return list(tasks)
+    return [task for task in tasks if _normalize_eval_split(task.get("split")) == normalized]
+
+
+def eval_task_split_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {"held-in": 0, "held-out": 0, "all": len(tasks)}
+    for task in tasks:
+        split = _normalize_eval_split(task.get("split"))
+        if split in {"held-in", "held-out"}:
+            counts[split] += 1
+    return counts
 
 
 async def _run_variant_eval(
@@ -180,6 +216,8 @@ async def _run_variant_eval(
     failed = sum(1 for item in task_results if item["status"] == "failed")
     score = passed / len(task_results) if task_results else 0.0
     status = "error" if failed and passed == 0 else "passed"
+    duration_seconds = round(time.monotonic() - started, 3)
+    usage = _aggregate_task_usage(task_results)
     return {
         "harness": spec.name,
         "spec": str(spec_path),
@@ -189,7 +227,15 @@ async def _run_variant_eval(
         "passed": passed,
         "failed": failed,
         "skipped": sum(1 for item in task_results if item["status"] == "skipped"),
-        "duration_seconds": round(time.monotonic() - started, 3),
+        "duration_seconds": duration_seconds,
+        "usage": usage,
+        "tokens_in": usage["tokens_in"],
+        "tokens_out": usage["tokens_out"],
+        "total_tokens": usage["total_tokens"],
+        "cost_usd": usage["cost_usd"],
+        "tokens_per_success": _per_success(usage["total_tokens"], passed),
+        "cost_per_success": _per_success(usage["cost_usd"], passed, digits=8),
+        "latency_ms_per_success": _per_success(duration_seconds * 1000, passed),
         "tasks": task_results,
     }
 
@@ -210,6 +256,7 @@ async def _run_eval_task(
     if not live:
         return {
             "id": task["id"],
+            "split": task.get("split") or "held-in",
             "status": "skipped",
             "score": 0.0,
             "duration_seconds": 0.0,
@@ -240,14 +287,21 @@ async def _run_eval_task(
             )
             content = result.content or ""
             run_id = result.run_id
+        usage = _usage_from_result(result)
         passed, reason = _score_content(content, task)
         return {
             "id": task["id"],
+            "split": task.get("split") or "held-in",
             "status": "passed" if passed else "failed",
             "score": 1.0 if passed else 0.0,
             "duration_seconds": round(time.monotonic() - started, 3),
             "run_id": run_id,
             "content_chars": len(content),
+            "usage": usage,
+            "tokens_in": usage["tokens_in"],
+            "tokens_out": usage["tokens_out"],
+            "total_tokens": usage["total_tokens"],
+            "cost_usd": usage["cost_usd"],
             "reason": reason,
             "failure_digest": {}
             if passed
@@ -269,6 +323,7 @@ async def _run_eval_task(
     except Exception as exc:  # noqa: BLE001
         return {
             "id": task["id"],
+            "split": task.get("split") or "held-in",
             "status": "failed",
             "score": 0.0,
             "duration_seconds": round(time.monotonic() - started, 3),
@@ -301,6 +356,124 @@ def _score_content(content: str, task: dict[str, Any]) -> tuple[bool, str]:
     return (bool(content.strip()), "non-empty response" if content.strip() else "empty response")
 
 
+def _normalize_eval_filter(value: Any) -> str:
+    normalized = str(value or "all").strip().lower().replace("_", "-")
+    if normalized in {"*", "any"}:
+        return "all"
+    if normalized in {"heldin", "held-in", "in", "train", "training"}:
+        return "held-in"
+    if normalized in {"heldout", "held-out", "holdout", "out", "validation", "test"}:
+        return "held-out"
+    if normalized == "all":
+        return "all"
+    raise ValueError("eval split must be one of: all, held-in, held-out")
+
+
+def _normalize_eval_split(value: Any) -> str:
+    normalized = str(value or "held-in").strip().lower().replace("_", "-")
+    if normalized in {"heldin", "held-in", "in", "train", "training", "all"}:
+        return "held-in"
+    if normalized in {"heldout", "held-out", "holdout", "out", "validation", "test"}:
+        return "held-out"
+    raise ValueError("eval task split must be one of: held-in, held-out")
+
+
+def _usage_from_result(result: Any) -> dict[str, Any]:
+    if hasattr(result, "results"):
+        return _aggregate_run_usage(result.results)
+    return _aggregate_run_usage([result])
+
+
+def _aggregate_run_usage(results: list[Any] | tuple[Any, ...]) -> dict[str, Any]:
+    tokens_in = 0
+    tokens_out = 0
+    total_tokens = 0
+    cost_usd = 0.0
+    currency = ""
+    usage_seen = False
+    cost_seen = False
+    for result in results:
+        in_value = getattr(result, "tokens_in", None)
+        out_value = getattr(result, "tokens_out", None)
+        total_value = getattr(result, "total_tokens", None)
+        cost_value = getattr(result, "cost_usd", None)
+        response = getattr(result, "response", None)
+        if in_value is None and response is not None:
+            in_value = getattr(response, "input_tokens", None)
+        if out_value is None and response is not None:
+            out_value = getattr(response, "output_tokens", None)
+        if total_value is None and response is not None:
+            total_value = getattr(response, "total_tokens", None)
+        if cost_value is None and response is not None:
+            cost_value = getattr(response, "cost_usd", None)
+        if in_value is not None or out_value is not None or total_value is not None:
+            in_tokens = int(in_value or 0)
+            out_tokens = int(out_value or 0)
+            total = int(total_value or (in_tokens + out_tokens))
+            tokens_in += in_tokens
+            tokens_out += out_tokens
+            total_tokens += total
+            usage_seen = True
+        if cost_value is not None:
+            cost_usd += float(cost_value)
+            cost_seen = True
+            if response is not None:
+                currency = getattr(response, "cost_currency", None) or currency
+    return {
+        "tokens_in": tokens_in if usage_seen else None,
+        "tokens_out": tokens_out if usage_seen else None,
+        "total_tokens": total_tokens if usage_seen else None,
+        "cost_usd": round(cost_usd, 12) if cost_seen else None,
+        "cost_currency": currency or ("USD" if cost_seen else None),
+    }
+
+
+def _aggregate_task_usage(tasks: list[dict[str, Any]]) -> dict[str, Any]:
+    return _aggregate_usage_dicts([task.get("usage") or {} for task in tasks])
+
+
+def _aggregate_usage_dicts(usages: list[dict[str, Any]]) -> dict[str, Any]:
+    tokens_in = 0
+    tokens_out = 0
+    total_tokens = 0
+    cost_usd = 0.0
+    currency = ""
+    usage_seen = False
+    cost_seen = False
+    for usage in usages:
+        if not isinstance(usage, dict):
+            continue
+        in_value = usage.get("tokens_in")
+        out_value = usage.get("tokens_out")
+        total_value = usage.get("total_tokens")
+        cost_value = usage.get("cost_usd")
+        if in_value is not None or out_value is not None or total_value is not None:
+            in_tokens = int(in_value or 0)
+            out_tokens = int(out_value or 0)
+            total = int(total_value or (in_tokens + out_tokens))
+            tokens_in += in_tokens
+            tokens_out += out_tokens
+            total_tokens += total
+            usage_seen = True
+        if cost_value is not None:
+            cost_usd += float(cost_value)
+            currency = str(usage.get("cost_currency") or currency or "USD")
+            cost_seen = True
+    return {
+        "tokens_in": tokens_in if usage_seen else None,
+        "tokens_out": tokens_out if usage_seen else None,
+        "total_tokens": total_tokens if usage_seen else None,
+        "cost_usd": round(cost_usd, 12) if cost_seen else None,
+        "cost_currency": currency or ("USD" if cost_seen else None),
+    }
+
+
+def _per_success(value: int | float | None, passed: int, *, digits: int = 3) -> float | None:
+    if value is None or passed <= 0:
+        return None
+    return round(float(value) / passed, digits)
+
+
 def _regressions(baseline: dict[str, Any], candidate: dict[str, Any]) -> list[str]:
     base_by_id = {item["id"]: item for item in baseline["tasks"]}
     regressions = []
@@ -315,6 +488,7 @@ def render_harness_eval(payload: dict[str, Any]) -> str:
     lines = [
         f"Harness eval: {payload['status']}",
         f"Tasks: {payload['tasks_file']}",
+        f"Split: {payload.get('split') or 'all'} ({payload.get('task_count') or 0} task(s))",
         f"Live: {payload['live']}",
         f"Baseline: {payload['baseline']}",
         f"Best: {payload['best']}",
@@ -327,6 +501,15 @@ def render_harness_eval(payload: dict[str, Any]) -> str:
             f"passed={variant['passed']} failed={variant['failed']} "
             f"skipped={variant['skipped']} delta={variant['delta_vs_baseline']:+.3f}"
         )
+        usage = variant.get("usage") or {}
+        if usage.get("total_tokens") is not None or usage.get("cost_usd") is not None:
+            lines.append(
+                "    usage: "
+                f"tokens={usage.get('total_tokens') if usage.get('total_tokens') is not None else '-'} "
+                f"in={usage.get('tokens_in') if usage.get('tokens_in') is not None else '-'} "
+                f"out={usage.get('tokens_out') if usage.get('tokens_out') is not None else '-'} "
+                f"cost_usd={usage.get('cost_usd') if usage.get('cost_usd') is not None else '-'}"
+            )
         if variant["regressions_vs_baseline"]:
             lines.append(f"    regressions: {', '.join(variant['regressions_vs_baseline'])}")
     return "\n".join(lines)

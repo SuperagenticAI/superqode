@@ -28,6 +28,11 @@ superqode harness COMMAND [OPTIONS]
 | `eval` | Scorecard across tasks and harness variants |
 | `eval-packs` | List bundled eval task packs |
 | `auto-bench` | First-run model probe and recommendation wrapper |
+| `mine-failures` | Mine structured self-improvement failures from test/eval JSON |
+| `logbook` | Manage the file-backed self-improvement logbook |
+| `audit-candidate` | Audit a proposed harness before accepting it |
+| `candidates` | Inspect accepted/rejected self-improvement attempts |
+| `improve` | Export and optionally run a failure-guided harness improvement project |
 | `optimize` | Export and optionally run a meta-harness optimization project |
 | `run` | Run a task through a spec |
 | `registry` | Local publish/list/install hub for harness specs |
@@ -309,10 +314,15 @@ Run a task scorecard against one or more harness specs. Use `--variant` to compa
 
 It also acts as a **seesaw gate**: if any variant regresses a task the baseline solved, `harness eval` exits non-zero (code `2`) so you can block a candidate before applying it. The per-variant `regressions_vs_baseline` and a top-level `regressed` / `regressed_variants` are in the JSON. Pass `--allow-regressions` to override the gate.
 
+When a runtime exposes provider usage, eval JSON includes per-task and per-variant `usage` with `tokens_in`,
+`tokens_out`, `total_tokens`, `cost_usd`, plus `tokens_per_success`, `cost_per_success`, and
+`latency_ms_per_success`. Unknown provider usage remains `null` rather than estimated.
+
 ```bash
 superqode harness eval --spec base.yaml --variant optimized.yaml --tasks tasks.yaml  # exits 2 on regression
 superqode harness eval --spec base.yaml --variant optimized.yaml --tasks tasks.yaml --allow-regressions
 superqode harness eval --spec base.yaml --tasks tasks.yaml --live --json
+superqode harness eval --spec base.yaml --variant candidate.yaml --tasks tasks.yaml --split held-out
 ```
 
 | Option | Description |
@@ -321,6 +331,7 @@ superqode harness eval --spec base.yaml --tasks tasks.yaml --live --json
 | `--variant PATH` | Candidate spec compared against the baseline (repeatable) |
 | `--tasks PATH` | Task file to score against (required) |
 | `--provider` / `--model` / `--runtime` / `--sandbox` | Execution overrides |
+| `--split {all,held-in,held-out}` | Run all tasks or only one eval split |
 | `--live` | Execute tasks against the model endpoint |
 | `--allow-regressions` | Do not exit non-zero when a variant regresses (override the seesaw gate) |
 | `--json` | Emit JSON |
@@ -332,9 +343,17 @@ Task files are YAML:
 ```yaml
 tasks:
   - id: smoke
+    split: held-in
     prompt: "Reply with hello"
     expect_contains: hello
+  - id: heldout-smoke
+    split: held-out
+    prompt: "Reply with ready"
+    expect_contains: ready
 ```
+
+Use `held-in` for tasks the optimizer may see while proposing changes, and `held-out` for the final candidate
+gate. Tasks without `split` default to `held-in`.
 
 ### `harness eval-packs`
 
@@ -354,6 +373,142 @@ Run the quick model-facing wrapper around `harness test` or `harness eval` and p
 superqode harness auto-bench --spec harness.yaml
 superqode harness auto-bench --spec harness.yaml --tasks tasks.yaml --live
 ```
+
+### `harness mine-failures`
+
+Mine structured failure records from existing `harness test --json` or `harness eval --json` output. This does
+not change the harness; it creates evidence that can feed the logbook and `harness improve`.
+
+```bash
+superqode harness eval --spec harness.yaml --tasks tasks.yaml --live --json > eval.json
+superqode harness mine-failures --eval-result eval.json --output .superqode/self-improve/failures.json
+superqode harness mine-failures --harbor-run harbor-results/ --output .superqode/self-improve/failures.json
+```
+
+| Option | Description |
+| --- | --- |
+| `--test-result PATH` | Previous `harness test --json` output. Can be repeated |
+| `--eval-result PATH` | Previous `harness eval --json` output. Can be repeated |
+| `--harbor-run PATH` | Harbor/Terminal-Bench style JSON, JSONL, or result directory. Can be repeated |
+| `--output PATH` | JSON failure report to write |
+| `--json` | Emit JSON |
+
+### `harness logbook`
+
+Maintain a repo-local, file-backed self-improvement logbook. The first MVP logbook stores recurring failure
+patterns under `.superqode/self-improve/logbook/failure_patterns.yaml`.
+
+```bash
+superqode harness logbook update --from-failures .superqode/self-improve/failures.json
+superqode harness logbook show
+superqode harness logbook export --output .superqode/self-improve/logbook.md
+superqode harness logbook prune --min-count 2 --max-patterns 50
+```
+
+Logbook entries track `count`, `confidence`, `status`, first/last seen timestamps, source references, and
+negative-result slots. `prune` removes low-signal or stale memory while keeping active/pinned entries.
+
+### `harness audit-candidate`
+
+Audit a proposed harness before accepting or applying it. The audit compares the base and candidate specs,
+checks editable/protected surfaces, detects permission widening and weakened checks, verifies held-out eval
+gates, and compares the proposal against the native candidate ledger.
+
+```bash
+superqode harness eval \
+  --spec harness.yaml \
+  --variant candidate.yaml \
+  --tasks tasks.yaml \
+  --split held-out \
+  --live \
+  --json > heldout.json
+
+superqode harness audit-candidate \
+  --base harness.yaml \
+  --candidate candidate.yaml \
+  --tasks tasks.yaml \
+  --eval-result heldout.json \
+  --require-heldout \
+  --record
+```
+
+| Option | Description |
+| --- | --- |
+| `--base PATH` | Baseline HarnessSpec |
+| `--candidate PATH` | Candidate HarnessSpec |
+| `--tasks PATH` | Eval task file used to detect held-out requirements |
+| `--eval-result PATH` | Candidate eval JSON. Can be repeated |
+| `--surfaces TEXT` | Comma-separated editable surfaces |
+| `--protected-surfaces TEXT` | Comma-separated protected surfaces |
+| `--max-candidate-edits N` | Maximum changed spec fields |
+| `--require-heldout` | Require a passing held-out gate |
+| `--allow-protected-changes` | Do not reject solely for protected-surface edits |
+| `--allow-ungated` | Do not reject solely for missing eval gates |
+| `--record` | Append the accepted/rejected decision to `.superqode/self-improve/candidates.jsonl` |
+| `--json` | Emit JSON |
+
+### `harness candidates`
+
+Inspect the native JSONL ledger of accepted and rejected self-improvement attempts. This is the durable
+negative-result memory used to avoid repeating failed edits.
+
+```bash
+superqode harness candidates list
+superqode harness candidates show cand_1234abcd5678
+superqode harness candidates export --output .superqode/self-improve/candidates.md
+```
+
+### `harness improve`
+
+Create a self-improvement meta-harness project from the current spec, eval tasks, mined failures, and logbook
+memory. It uses the same optional meta-harness backend as `harness optimize`, but appends self-improvement
+guidance to `trace-evidence.md` and records editable/protected harness surfaces.
+
+If the task file has `split: held-out` tasks, `harness improve` includes held-out gating guidance and the
+exported meta-harness project includes dry split checks. When `--apply` is used, SuperQode audits the best
+candidate first and records the accepted/rejected decision in the candidate ledger.
+
+You can version default improvement boundaries in the harness itself:
+
+```yaml
+optimization:
+  enabled: true
+  require_human_apply: true
+  editable_surfaces: [context, workflow, model_policy, agents.tools]
+  protected_surfaces: [execution_policy, checks, approvals, sandbox]
+  heldout_fraction: 0.3
+  max_candidate_edits: 3
+```
+
+`--surfaces` and `--protected-surfaces` override the spec for one run.
+
+```bash
+superqode harness improve \
+  --spec harness.yaml \
+  --tasks tasks.yaml \
+  --from-failures .superqode/self-improve/failures.json \
+  --export-only
+
+superqode harness improve \
+  --spec harness.yaml \
+  --tasks tasks.yaml \
+  --from-failures .superqode/self-improve/failures.json \
+  --backend codex \
+  --budget 1
+```
+
+| Option | Description |
+| --- | --- |
+| `--from-failures PATH` | Failure report from `harness mine-failures`. Can be repeated |
+| `--logbook-dir PATH` | Self-improvement logbook directory |
+| `--candidate-ledger PATH` | JSONL ledger for accepted/rejected candidates |
+| `--surfaces TEXT` | Comma-separated surfaces the optimizer may edit |
+| `--protected-surfaces TEXT` | Comma-separated surfaces requiring explicit review |
+| `--export-only` | Create the project without running meta-harness |
+| `--apply` | Audit and copy the best candidate `harness.yaml` back after a successful run |
+| `--allow-protected-changes` | Allow audited protected-surface edits during `--apply` |
+| `--allow-ungated-apply` | Allow `--apply` without a passing held-out gate |
+| `--json` | Emit JSON |
 
 ### `harness optimize`
 

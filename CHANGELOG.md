@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-07-07
+
+### Added
+
+- **Self-improving harness loop** - Added `harness mine-failures`, `harness logbook`, and `harness improve` workflows for mining failures, maintaining repo-local harness memory, exporting bounded improvement projects, and feeding evidence into candidate generation.
+- **Candidate audit and ledger** - Added `harness audit-candidate` plus `harness candidates list/show/export` to record accepted and rejected harness candidates, detect protected-surface edits, permission widening, weakened checks, duplicate rejected edits, and missing held-out gates.
+- **Held-in / held-out eval splits** - Added split-aware eval tasks and `harness eval --split {all,held-in,held-out}` so candidate improvements can be gated separately from training/proposal tasks.
+- **Harness usage metrics** - Harness runs and eval scorecards now aggregate token, latency, and cost metrics where providers expose them.
+- **Self-improvement docs** - Documented the end-to-end loop, optimization policy fields, candidate audit gates, candidate ledger, and logbook pruning.
+
+### Changed
+
+- **Release metadata** - Bumped the package version, runtime `__version__`, lockfile package entry, and ACP registry metadata to `0.2.8`.
+
 ## [0.2.7] - 2026-07-05
 
 ### Fixed

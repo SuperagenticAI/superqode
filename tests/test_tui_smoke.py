@@ -2379,6 +2379,10 @@ def test_tui_optimize_commands_delegate_to_cli(monkeypatch):
     app.run_worker = lambda coro: asyncio.run(coro)
 
     app._harness_cmd("optimize --spec harness.yaml --tasks eval-tasks.yaml --export-only", log)
+    app._harness_cmd(
+        "improve --spec harness.yaml --tasks eval-tasks.yaml --from-failures failures.json --export-only",
+        log,
+    )
     app._harness_cmd("optimize-inspect .superqode/metaharness/run", log)
     app._harness_cmd("optimize-ledger .superqode/metaharness/run", log)
     app._local_cmd("optimize --endpoint http://127.0.0.1:11434/v1 --model qwen", log)
@@ -2396,6 +2400,20 @@ def test_tui_optimize_commands_delegate_to_cli(monkeypatch):
                 "--export-only",
             ],
             "Harness optimization",
+        ),
+        (
+            [
+                "harness",
+                "improve",
+                "--spec",
+                "harness.yaml",
+                "--tasks",
+                "eval-tasks.yaml",
+                "--from-failures",
+                "failures.json",
+                "--export-only",
+            ],
+            "Harness self-improvement",
         ),
         (
             ["harness", "optimize-inspect", ".superqode/metaharness/run"],

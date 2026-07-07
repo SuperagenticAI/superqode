@@ -70,7 +70,7 @@ def export_metaharness_project(
     shutil.copyfile(source_tasks, baseline / "eval-tasks.yaml")
     _write_baseline_docs(baseline, spec.name)
 
-    tasks = _metaharness_tasks()
+    tasks = _metaharness_tasks(task_file)
     (project / "tasks.json").write_text(json.dumps(tasks, indent=2) + "\n", encoding="utf-8")
     config = _metaharness_config(
         spec_name=spec.name,
@@ -398,8 +398,8 @@ def _metaharness_config(
     }
 
 
-def _metaharness_tasks() -> list[dict[str, Any]]:
-    return [
+def _metaharness_tasks(task_file: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    tasks = [
         {
             "id": "harness-name",
             "type": "file_phrase",
@@ -429,6 +429,34 @@ def _metaharness_tasks() -> list[dict[str, Any]]:
             "expect_exit_code": 0,
         },
     ]
+    split_counts = (task_file or {}).get("split_counts") or {}
+    if int(split_counts.get("held-in") or 0) > 0:
+        tasks.append(
+            {
+                "id": "harness-eval-held-in-dry",
+                "type": "command",
+                "weight": 1.0,
+                "command": (
+                    "superqode harness eval --spec harness.yaml "
+                    "--tasks eval-tasks.yaml --split held-in --json"
+                ),
+                "expect_exit_code": 0,
+            }
+        )
+    if int(split_counts.get("held-out") or 0) > 0:
+        tasks.append(
+            {
+                "id": "harness-eval-held-out-dry",
+                "type": "command",
+                "weight": 2.0,
+                "command": (
+                    "superqode harness eval --spec harness.yaml "
+                    "--tasks eval-tasks.yaml --split held-out --json"
+                ),
+                "expect_exit_code": 0,
+            }
+        )
+    return tasks
 
 
 def _write_baseline_docs(baseline: Path, spec_name: str) -> None:
@@ -481,8 +509,19 @@ def _default_trace_evidence(
         "## Eval Tasks",
         "",
     ]
+    split_counts = task_file.get("split_counts") or {}
+    if split_counts:
+        lines.extend(
+            [
+                f"- split all: {split_counts.get('all', 0)}",
+                f"- split held-in: {split_counts.get('held-in', 0)}",
+                f"- split held-out: {split_counts.get('held-out', 0)}",
+                "",
+            ]
+        )
     for task in task_file["tasks"]:
-        lines.append(f"- {task['id']}: {task['prompt']}")
+        split = task.get("split") or "held-in"
+        lines.append(f"- {task['id']} [{split}]: {task['prompt']}")
         if task.get("expect_contains"):
             lines.append(f"  - expect_contains: {task['expect_contains']}")
     if test_results:

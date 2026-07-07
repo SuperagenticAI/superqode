@@ -62,6 +62,22 @@ class HarnessRunResult:
     def iterations(self) -> int:
         return self.response.iterations
 
+    @property
+    def tokens_in(self) -> int | None:
+        return self.response.input_tokens
+
+    @property
+    def tokens_out(self) -> int | None:
+        return self.response.output_tokens
+
+    @property
+    def total_tokens(self) -> int | None:
+        return self.response.total_tokens
+
+    @property
+    def cost_usd(self) -> float | None:
+        return self.response.cost_usd
+
 
 class HarnessKernel:
     """Run HarnessSpec sessions through the current SuperQode runtime stack."""
@@ -227,8 +243,7 @@ class HarnessSession:
                 "status": status,
                 "stream": True,
                 "latency_ms": latency_ms,
-                "tokens_in": None,
-                "tokens_out": None,
+                **_unknown_usage_metadata(),
                 **(
                     {"pending_approvals": self._pending_approvals}
                     if self._pending_approvals
@@ -242,8 +257,7 @@ class HarnessSession:
             metadata={
                 "stream": True,
                 "latency_ms": latency_ms,
-                "tokens_in": None,
-                "tokens_out": None,
+                **_unknown_usage_metadata(),
                 **(
                     {"pending_approvals": self._pending_approvals}
                     if self._pending_approvals
@@ -352,6 +366,7 @@ class HarnessSession:
             )
         else:
             self._clear_pending_approval_state()
+        usage = _usage_metadata(response)
         self._emit(
             "run_end",
             run_id,
@@ -363,8 +378,7 @@ class HarnessSession:
                 "iterations": response.iterations,
                 "stopped_reason": response.stopped_reason,
                 "latency_ms": latency_ms,
-                "tokens_in": None,
-                "tokens_out": None,
+                **usage,
                 "typed_output": request.result_schema is not None,
                 **(
                     {"pending_approvals": self._pending_approvals}
@@ -381,8 +395,7 @@ class HarnessSession:
                 "iterations": response.iterations,
                 "stopped_reason": response.stopped_reason,
                 "latency_ms": latency_ms,
-                "tokens_in": None,
-                "tokens_out": None,
+                **usage,
                 "typed_output": request.result_schema is not None,
                 **(
                     {"pending_approvals": self._pending_approvals}
@@ -524,6 +537,27 @@ def _status_from_stopped_reason(stopped_reason: str) -> str:
     if stopped_reason in {"error", "cancelled"}:
         return "failed"
     return "succeeded"
+
+
+def _usage_metadata(response: AgentResponse) -> dict[str, Any]:
+    """Normalize usage fields emitted by runtimes into harness event metadata."""
+    return {
+        "tokens_in": response.input_tokens,
+        "tokens_out": response.output_tokens,
+        "total_tokens": response.total_tokens,
+        "cost_usd": response.cost_usd,
+        "cost_currency": response.cost_currency,
+    }
+
+
+def _unknown_usage_metadata() -> dict[str, Any]:
+    return {
+        "tokens_in": None,
+        "tokens_out": None,
+        "total_tokens": None,
+        "cost_usd": None,
+        "cost_currency": None,
+    }
 
 
 async def init_harness(

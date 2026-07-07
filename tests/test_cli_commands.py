@@ -367,7 +367,7 @@ class TestHarnessCommand:
             evidence = Path("mh-project/trace-evidence.md").read_text(encoding="utf-8")
             assert "## Harness Snapshot" in evidence
             assert "## Eval Tasks" in evidence
-            assert "- smoke: say hello" in evidence
+            assert "- smoke [held-in]: say hello" in evidence
             assert "## Previous Harness Test Results" in evidence
             assert "failure_category: model_endpoint_error" in evidence
             assert "## Previous Harness Eval Results" in evidence

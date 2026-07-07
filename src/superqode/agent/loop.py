@@ -605,6 +605,11 @@ class AgentResponse:
     # and any schema-validation errors (empty list means valid).
     structured_output: Optional[Any] = None
     schema_errors: Optional[List[str]] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    total_tokens: Optional[int] = None
+    cost_usd: Optional[float] = None
+    cost_currency: Optional[str] = None
 
 
 class ToolApprovalRequired(RuntimeError):
@@ -1991,8 +1996,60 @@ class AgentLoop:
         from .hooks import SESSION_START, STOP, USER_PROMPT_SUBMIT
 
         lifecycle_ctx = self._lifecycle_context()
+        usage_input_tokens = 0
+        usage_output_tokens = 0
+        usage_total_tokens = 0
+        usage_cost = 0.0
+        usage_seen = False
+        cost_seen = False
+        cost_currency = "USD"
+
+        def _record_gateway_usage(gateway_response) -> None:
+            nonlocal usage_input_tokens
+            nonlocal usage_output_tokens
+            nonlocal usage_total_tokens
+            nonlocal usage_cost
+            nonlocal usage_seen
+            nonlocal cost_seen
+            nonlocal cost_currency
+            usage = getattr(gateway_response, "usage", None)
+            if usage is not None:
+                prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+                completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+                total_tokens = int(getattr(usage, "total_tokens", 0) or 0)
+                if total_tokens <= 0:
+                    total_tokens = prompt_tokens + completion_tokens
+                usage_input_tokens += prompt_tokens
+                usage_output_tokens += completion_tokens
+                usage_total_tokens += total_tokens
+                usage_seen = True
+            cost = getattr(gateway_response, "cost", None)
+            if cost is not None:
+                input_cost = float(getattr(cost, "input_cost", 0.0) or 0.0)
+                output_cost = float(getattr(cost, "output_cost", 0.0) or 0.0)
+                total_cost = float(getattr(cost, "total_cost", 0.0) or 0.0)
+                if total_cost == 0.0 and (input_cost or output_cost):
+                    total_cost = input_cost + output_cost
+                usage_cost += total_cost
+                cost_currency = str(getattr(cost, "currency", None) or cost_currency or "USD")
+                cost_seen = True
 
         async def _finish(response: AgentResponse) -> AgentResponse:
+            if usage_seen:
+                response.input_tokens = (
+                    usage_input_tokens if response.input_tokens is None else response.input_tokens
+                )
+                response.output_tokens = (
+                    usage_output_tokens if response.output_tokens is None else response.output_tokens
+                )
+                response.total_tokens = (
+                    usage_total_tokens if response.total_tokens is None else response.total_tokens
+                )
+            if cost_seen:
+                response.cost_usd = usage_cost if response.cost_usd is None else response.cost_usd
+                response.cost_currency = (
+                    cost_currency if response.cost_currency is None else response.cost_currency
+                )
             self.run_active = False
             await self.hooks.fire(STOP, self._lifecycle_context(), response)
             # Opt-in automatic memory extraction, off the hot path.
@@ -2156,6 +2213,7 @@ class AgentLoop:
                         error=str(e),
                     )
                 )
+            _record_gateway_usage(response)
             await self.hooks.fire(AFTER_LLM_CALL, lifecycle_ctx, response)
 
             # Extract thinking content if available

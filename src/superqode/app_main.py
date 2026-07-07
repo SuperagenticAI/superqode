@@ -11703,7 +11703,7 @@ class SuperQodeApp(App):
             self._show_harness_events(log, subargs)
             return
 
-        if sub in ("optimize", "optimize-inspect", "optimize-ledger"):
+        if sub in ("improve", "optimize", "optimize-inspect", "optimize-ledger"):
             try:
                 tokens = shlex.split(subargs or "")
             except ValueError as exc:
@@ -11714,16 +11714,22 @@ class SuperQodeApp(App):
                     "Usage: :harness optimize --spec <path> --tasks <path> [--export-only]"
                 )
                 return
+            if sub == "improve" and not tokens:
+                log.add_info(
+                    "Usage: :harness improve --spec <path> --tasks <path> [--from-failures failures.json] [--export-only]"
+                )
+                return
             if sub in {"optimize-inspect", "optimize-ledger"} and not tokens:
                 log.add_info(f"Usage: :harness {sub} <run_dir>")
                 return
-            self.run_worker(
-                self._superqode_cli_cmd(["harness", sub, *tokens], log, "Harness optimization")
-            )
+            label = "Harness self-improvement" if sub == "improve" else "Harness optimization"
+            self.run_worker(self._superqode_cli_cmd(["harness", sub, *tokens], log, label))
             return
 
         cli_backed_harness_subcommands = {
+            "audit-candidate",
             "auto-bench",
+            "candidates",
             "compile",
             "diff",
             "drain",
@@ -11734,6 +11740,8 @@ class SuperQodeApp(App):
             "import-omnigent",
             "inbox",
             "list-backends",
+            "logbook",
+            "mine-failures",
             "registry",
             "run",
             "test",
@@ -11767,7 +11775,7 @@ class SuperQodeApp(App):
 
         if not path:
             log.add_info(
-                "Usage: :harness <spec.yaml> | :harness wizard [name] --starter <template> --output <path> [--load] | :harness inspect | :harness doctor | :harness graph | :harness replay <run_id> | :harness fork <run_id> | :harness evidence <run_id> | :harness runs | :harness optimize --spec <path> --tasks <path> | :harness optimize-inspect <run_dir> | :harness optimize-ledger <run_dir> | :harness templates | :harness off"
+                "Usage: :harness <spec.yaml> | :harness wizard [name] --starter <template> --output <path> [--load] | :harness inspect | :harness doctor | :harness graph | :harness replay <run_id> | :harness fork <run_id> | :harness evidence <run_id> | :harness runs | :harness mine-failures --eval-result eval.json | :harness audit-candidate --base <path> --candidate <path> | :harness candidates list | :harness improve --spec <path> --tasks <path> | :harness optimize --spec <path> --tasks <path> | :harness optimize-inspect <run_dir> | :harness optimize-ledger <run_dir> | :harness templates | :harness off"
             )
             return
 
@@ -30228,6 +30236,26 @@ class SuperQodeApp(App):
                         "Show run evidence, changes, checks, and result receipt",
                     ),
                     (":harness events <run_id>", "Show persisted event timeline for a harness run"),
+                    (
+                        ":harness mine-failures --eval-result eval.json",
+                        "Mine structured self-improvement failures from harness JSON",
+                    ),
+                    (
+                        ":harness logbook show",
+                        "Show the file-backed self-improvement logbook",
+                    ),
+                    (
+                        ":harness audit-candidate --base <path> --candidate <path>",
+                        "Audit protected surfaces, eval gates, and reward-hacking risk",
+                    ),
+                    (
+                        ":harness candidates list",
+                        "Show accepted and rejected self-improvement candidates",
+                    ),
+                    (
+                        ":harness improve --spec <path> --tasks <path>",
+                        "Improve a HarnessSpec from mined failures and logbook memory",
+                    ),
                     (
                         ":harness optimize --spec <path> --tasks <path>",
                         "Optimize a HarnessSpec through optional metaharness",

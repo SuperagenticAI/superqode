@@ -19,6 +19,7 @@ from .spec import (
     ModelPolicySpec,
     PermissionRuleSpec,
     ObservabilitySpec,
+    OptimizationSpec,
     RecursionSpec,
     RemoteHarnessSpec,
     RuntimeSpec,
@@ -159,6 +160,7 @@ def harness_spec_from_dict(data: dict[str, Any]) -> HarnessSpec:
         checks=_checks(raw.get("checks")),
         observability=_observability(raw.get("observability")),
         hooks=_hooks(raw.get("hooks")),
+        optimization=_optimization(raw.get("optimization")),
         metadata=dict(raw.get("metadata") or {}) if isinstance(raw.get("metadata"), dict) else {},
     )
     return apply_workflow_preset(spec)
@@ -351,6 +353,29 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
                 }
             }
             if spec.hooks.rules or not spec.hooks.enabled
+            else {}
+        ),
+        **(
+            {
+                "optimization": {
+                    "enabled": spec.optimization.enabled,
+                    "require_human_apply": spec.optimization.require_human_apply,
+                    "editable_surfaces": list(spec.optimization.editable_surfaces),
+                    "protected_surfaces": list(spec.optimization.protected_surfaces),
+                    "heldout_fraction": spec.optimization.heldout_fraction,
+                    **(
+                        {"max_candidate_edits": spec.optimization.max_candidate_edits}
+                        if spec.optimization.max_candidate_edits is not None
+                        else {}
+                    ),
+                    **(
+                        {"config": spec.optimization.config}
+                        if spec.optimization.config
+                        else {}
+                    ),
+                }
+            }
+            if _include_optimization(spec.optimization)
             else {}
         ),
         "metadata": spec.metadata,
@@ -563,6 +588,19 @@ def harness_spec_json_schema() -> dict[str, Any]:
                             },
                         },
                     },
+                },
+            },
+            "optimization": {
+                "type": "object",
+                "additionalProperties": True,
+                "properties": {
+                    "enabled": {"type": "boolean"},
+                    "require_human_apply": {"type": "boolean"},
+                    "editable_surfaces": {"type": "array", "items": {"type": "string"}},
+                    "protected_surfaces": {"type": "array", "items": {"type": "string"}},
+                    "heldout_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+                    "max_candidate_edits": {"type": "integer", "minimum": 1},
+                    "config": {"type": "object"},
                 },
             },
             "metadata": {"type": "object"},
@@ -802,6 +840,39 @@ def _hooks(value: Any) -> HooksSpec:
     return HooksSpec(
         enabled=bool(data.get("enabled", True)),
         rules=tuple(rules),
+    )
+
+
+def _optimization(value: Any) -> OptimizationSpec:
+    data = value if isinstance(value, dict) else {}
+    default = OptimizationSpec()
+    editable = _str_tuple(data.get("editable_surfaces")) or default.editable_surfaces
+    protected = _str_tuple(data.get("protected_surfaces")) or default.protected_surfaces
+    heldout_fraction = float(data.get("heldout_fraction", default.heldout_fraction))
+    if heldout_fraction < 0 or heldout_fraction > 1:
+        raise ValueError("optimization.heldout_fraction must be between 0 and 1")
+    max_candidate_edits = data.get("max_candidate_edits")
+    return OptimizationSpec(
+        enabled=bool(data.get("enabled", default.enabled)),
+        require_human_apply=bool(data.get("require_human_apply", default.require_human_apply)),
+        editable_surfaces=editable,
+        protected_surfaces=protected,
+        heldout_fraction=heldout_fraction,
+        max_candidate_edits=int(max_candidate_edits) if max_candidate_edits is not None else None,
+        config=dict(data.get("config") or {}) if isinstance(data.get("config"), dict) else {},
+    )
+
+
+def _include_optimization(spec: OptimizationSpec) -> bool:
+    default = OptimizationSpec()
+    return (
+        spec.enabled != default.enabled
+        or spec.require_human_apply != default.require_human_apply
+        or spec.editable_surfaces != default.editable_surfaces
+        or spec.protected_surfaces != default.protected_surfaces
+        or spec.heldout_fraction != default.heldout_fraction
+        or spec.max_candidate_edits is not None
+        or bool(spec.config)
     )
 
 

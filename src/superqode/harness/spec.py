@@ -217,6 +217,19 @@ class ObservabilitySpec:
 
 
 @dataclass(frozen=True)
+class OptimizationSpec:
+    """Policy boundaries for self-improving harness optimization."""
+
+    enabled: bool = False
+    require_human_apply: bool = True
+    editable_surfaces: tuple[str, ...] = ("context", "workflow", "model_policy", "agents.tools")
+    protected_surfaces: tuple[str, ...] = ("execution_policy", "checks", "approvals", "sandbox")
+    heldout_fraction: float = 0.3
+    max_candidate_edits: int | None = None
+    config: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class HarnessSpec:
     """Top-level SuperQode harness definition."""
 
@@ -236,6 +249,7 @@ class HarnessSpec:
     checks: ChecksSpec = field(default_factory=ChecksSpec)
     observability: ObservabilitySpec = field(default_factory=ObservabilitySpec)
     hooks: HooksSpec = field(default_factory=HooksSpec)
+    optimization: OptimizationSpec = field(default_factory=OptimizationSpec)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property

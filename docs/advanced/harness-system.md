@@ -13,7 +13,7 @@ are stored, and what output should be returned.
     `superqode harness explain --spec harness.yaml` reads the resolved policy (the same one the runtime enforces) and describes, in words, which tools the model gets, what it may read/write/run, how approvals work, and why a given tool-call format was chosen.
 
 !!! tip "Run vs measure vs optimize"
-    SuperQode runs a harness and measures it (`harness test` / `eval` / `auto-bench`). Improving the harness over many iterations is a separate, optional job: `superqode harness optimize` bridges to the optional [metaharness](harness-optimization.md) tool. See [Running, Measuring, and Optimizing a Harness](harness-optimization.md) for the distinction.
+    SuperQode runs a harness and measures it (`harness test` / `eval` / `auto-bench`). Improving the harness over many iterations is a separate, optional job: `superqode harness optimize` bridges to the optional [metaharness](harness-optimization.md) tool, while `superqode harness improve` adds failure mining, logbook memory, candidate audit gates, and accepted/rejected candidate history. See [Running, Measuring, and Optimizing a Harness](harness-optimization.md) and [Self-Improving Harnesses](self-improving-harness.md) for the distinction.
 
 ---
 
@@ -31,6 +31,7 @@ are stored, and what output should be returned.
 | Context | Instruction files, skills directories, session storage, compaction, and memory settings |
 | Observability | Events, traces, run store backend, and instrumentation configuration |
 | Hooks | Custom lifecycle callbacks at defined harness execution points |
+| Optimization | Self-improvement boundaries: editable surfaces, protected surfaces, held-out split, and human-apply policy |
 
 ### What Users Configure
 
@@ -43,6 +44,7 @@ Users configure a harness by selecting:
 - sandbox policy: read, write, shell, command, and network boundaries
 - workflow: single step, chain, parallel workers, router, orchestrator, or evaluator-optimizer
 - output: plain text, typed result, events, checks state, and run records
+- optimization: whether self-improvement is enabled, what surfaces can be edited, and what surfaces are protected
 
 This lets the same harness contract run through different engines while preserving the user-facing behavior.
 
