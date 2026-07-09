@@ -271,17 +271,21 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
         ":connect antigravity", "Connect via local Antigravity CLI handoff", category="workflow"
     ),
     SlashCommand(
-        ":connect grok", "Connect to Grok Build through the official Grok CLI", category="workflow"
+        ":connect grok",
+        "SuperQode harness on Grok subscription (CLI login)",
+        category="workflow",
     ),
     SlashCommand("/connect byok", "Connect to BYOK provider/model", category="workflow"),
     SlashCommand(":connect byok", "Connect to BYOK provider/model", category="workflow"),
     SlashCommand("/connect local", "Connect to local model provider", category="workflow"),
     SlashCommand(":connect local", "Connect to local model provider", category="workflow"),
-    SlashCommand(":grok", "Connect to Grok Build", category="workflow"),
+    SlashCommand(":grok", "Connect SuperQode harness on Grok subscription", category="workflow"),
     SlashCommand(":grok status", "Check Grok CLI and login readiness", category="workflow"),
     SlashCommand(":grok login", "Show Grok browser and device login commands", category="workflow"),
     SlashCommand(
-        ":grok api", "Reuse the local grok login for direct API calls (opt-in)", category="workflow"
+        ":grok api",
+        "Alias of :connect grok; import CLI session for SuperQode harness",
+        category="workflow",
     ),
     SlashCommand("/model", "Show or switch models", category="workflow"),
     SlashCommand("/tools", "Show active tool profile", category="workflow"),

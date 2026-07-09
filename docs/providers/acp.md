@@ -92,14 +92,13 @@ superqode connect acp grok
 ```
 
 Use `grok login --device-auth` on SSH or a headless machine. In the TUI,
-`:connect grok` opens the dedicated subscription profile. Grok Build follows
-the signed-in account's default model (currently Grok 4.5); pin one with
-`:grok connect grok-4.5` or `:grok connect grok-build-0.1`.
+`:connect acp grok` starts Grok Build over ACP. Grok Build follows the
+signed-in account's default model (currently Grok 4.5).
 
-Subscription credentials stay with the official Grok CLI. Direct API billing
-is separate and should use SuperQode's `xai/grok-4.5` BYOK provider path.
-To make direct API calls on the subscription itself, `:grok api` offers an
-explicit opt-in that reuses the local `grok login` session — see
+**Do not confuse this with `:connect grok`**, which uses SuperQode's harness on
+the same subscription (CLI chat proxy), not Grok Build. Subscription credentials
+start in the official Grok CLI; the harness path imports the session token into
+SuperQode. API-key billing is separate (`xai/grok-4.5` BYOK). See
 [BYOK Providers → Grok Subscription](byok.md#grok-subscription-official-cli).
 
 ---

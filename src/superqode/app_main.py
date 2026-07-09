@@ -4654,6 +4654,16 @@ class SuperQodeApp(App):
         elif conn == "acp":
             # A specific ACP agent (e.g. Claude) by short_name.
             self._connect_acp_cmd(profile.acp_agent or "", log)
+        elif conn == "subscription":
+            # SuperQode harness + product subscription login (not an external agent).
+            # Grok: import `grok login` token and connect the grok-cli provider.
+            if getattr(profile, "id", "") == "grok" or getattr(profile, "provider", None) == "grok-cli":
+                model = (getattr(profile, "model", None) or "grok-build").strip()
+                self._grok_api_cmd(model, log)
+            else:
+                log.add_error(
+                    f"Unsupported subscription profile: {getattr(profile, 'id', profile)}"
+                )
         elif conn == "byok":
             self._byok_highlighted_provider_index = 0
             self._byok_highlighted_model_index = 0
@@ -10934,14 +10944,13 @@ class SuperQodeApp(App):
 
     # ---- xAI Grok Build :grok command surface ------------------------------
     def _grok_cmd(self, args: str, log) -> None:
-        """Handle the official Grok CLI subscription and ACP connection flow."""
+        """Handle the Grok subscription (SuperQode harness) command surface."""
         parts = (args or "").split(maxsplit=1)
         sub = parts[0].strip().lower() if parts and parts[0].strip() else "connect"
         rest = parts[1].strip() if len(parts) > 1 else ""
-        if sub in ("connect", "start"):
-            command = "grok" + (f" {rest}" if rest else "")
-            self._connect_acp_cmd(command, log)
-        elif sub == "api":
+        if sub in ("connect", "start", "api"):
+            # Default subscription path = SuperQode harness via CLI chat proxy.
+            # Grok Build ACP remains at :connect acp grok.
             self._grok_api_cmd(rest, log)
         elif sub in ("status", "doctor"):
             self._show_grok_status(log)
@@ -10951,15 +10960,18 @@ class SuperQodeApp(App):
             self._show_grok_help(log)
         else:
             log.add_error(f"Unknown grok command: {sub}")
-            log.add_info("Usage: :grok [connect [model]|api [model|off]|status|login|help]")
+            log.add_info(
+                "Usage: :grok [connect [model]|api [model|off]|status|login|help] "
+                "(ACP: :connect acp grok)"
+            )
 
     def _grok_api_cmd(self, rest: str, log) -> None:
-        """Opt-in: import the Grok CLI's session token for direct API calls.
+        """Connect SuperQode harness using the Grok CLI subscription session.
 
-        The default `:connect grok` path never touches the CLI's credentials.
-        This command explicitly copies the local `grok login` session token
-        into SuperQode's auth store and connects the `grok-cli` BYOK provider,
-        which targets the CLI chat proxy documented by xAI.
+        Imports the local ``grok login`` session token into SuperQode's auth
+        store and connects the ``grok-cli`` provider (CLI chat proxy). This is
+        the default for ``:connect grok`` / ``:grok connect``. Grok Build as an
+        external agent is ``:connect acp grok``.
         """
         from superqode.providers import grok_cli_auth
 
@@ -10981,17 +10993,18 @@ class SuperQodeApp(App):
         if auth is None:
             log.add_error("No Grok CLI login found (~/.grok/auth.json).")
             log.add_info("Run `grok login` first, or use BYOK: :connect byok xai grok-4.5")
+            log.add_info("For Grok Build ACP instead: :connect acp grok")
             return
         if auth.is_expired():
             grok_cli_auth.remove_cli_token()
             log.add_error("The Grok CLI session looks expired (CLI sessions last ~7 days).")
-            log.add_info("Run `grok login` again, then re-run :grok api.")
+            log.add_info("Run `grok login` again, then re-run :connect grok.")
             return
 
         log.add_info("Imported the Grok CLI session token (stored in ~/.superqode/auth.json, 0600).")
         log.add_info(
-            "Direct API calls use the xAI-documented CLI chat proxy on your subscription — "
-            "intended for interactive use. Remove anytime with :grok api off."
+            "Connected SuperQode harness on your Grok subscription (CLI chat proxy). "
+            "Grok Build ACP: :connect acp grok. Remove token anytime with :grok api off."
         )
         self._connect_byok_mode("grok-cli", model, log)
 
@@ -11029,7 +11042,7 @@ class SuperQodeApp(App):
         elif token.get("imported"):
             t.append("imported but expired — run `grok login`, then :grok api\n", style=THEME["warning"])
         elif token.get("cli_login"):
-            t.append("available — run :grok api to use it for direct API calls\n", style=THEME["dim"])
+            t.append("available — run :connect grok to use SuperQode harness\n", style=THEME["dim"])
         else:
             t.append("not imported\n", style=THEME["dim"])
         t.append("    Default   ", style=THEME["muted"])
@@ -11040,9 +11053,11 @@ class SuperQodeApp(App):
         t.append("    grok login --device-auth  ", style=THEME["cyan"])
         t.append("sign in from SSH or a headless host\n", style=THEME["muted"])
         t.append("    :connect grok             ", style=THEME["cyan"])
-        t.append("start Grok Build through ACP\n", style=THEME["muted"])
-        t.append("    :grok api                 ", style=THEME["cyan"])
-        t.append("reuse the CLI login for direct API calls (opt-in)\n", style=THEME["muted"])
+        t.append("SuperQode harness on your subscription\n", style=THEME["muted"])
+        t.append("    :connect acp grok         ", style=THEME["cyan"])
+        t.append("Grok Build via official CLI ACP\n", style=THEME["muted"])
+        t.append("    :grok api off             ", style=THEME["cyan"])
+        t.append("remove imported session token\n", style=THEME["muted"])
         log.write(t)
 
     def _show_grok_login(self, log) -> None:
@@ -11053,11 +11068,13 @@ class SuperQodeApp(App):
         t.append("    grok login\n", style=THEME["cyan"])
         t.append("\n  For SSH or a headless machine:\n", style=THEME["muted"])
         t.append("    grok login --device-auth\n", style=THEME["cyan"])
-        t.append("\n  Then connect with:\n", style=THEME["muted"])
+        t.append("\n  Then connect SuperQode harness with:\n", style=THEME["muted"])
         t.append("    :connect grok\n", style=THEME["cyan"])
+        t.append("\n  Or Grok Build as an external ACP agent:\n", style=THEME["muted"])
+        t.append("    :connect acp grok\n", style=THEME["cyan"])
         t.append(
-            "\n  The official CLI stores and refreshes its own credentials locally. "
-            "SuperQode does not copy them.\n",
+            "\n  The official CLI stores login in ~/.grok/auth.json. "
+            ":connect grok imports the session token into SuperQode for the harness path.\n",
             style=THEME["dim"],
         )
         log.write(t)
@@ -11066,11 +11083,13 @@ class SuperQodeApp(App):
         t = Text()
         t.append("\n  Grok in SuperQode\n\n", style=f"bold {THEME['text']}")
         t.append("  :connect grok              ", style=THEME["cyan"])
-        t.append("connect the official Grok Build ACP server\n", style=THEME["muted"])
-        t.append("  :grok connect grok-build   ", style=THEME["cyan"])
-        t.append("request the model advertised by the signed-in CLI\n", style=THEME["muted"])
+        t.append("SuperQode harness on your Grok subscription\n", style=THEME["muted"])
+        t.append("  :grok connect [model]      ", style=THEME["cyan"])
+        t.append("same as :connect grok; pin e.g. grok-4.5 or grok-build\n", style=THEME["muted"])
+        t.append("  :connect acp grok          ", style=THEME["cyan"])
+        t.append("Grok Build coding agent via official CLI ACP\n", style=THEME["muted"])
         t.append("  :grok api [model]          ", style=THEME["cyan"])
-        t.append("reuse the local `grok login` session for direct API calls\n", style=THEME["muted"])
+        t.append("alias of :grok connect (import session + harness)\n", style=THEME["muted"])
         t.append("  :grok api off              ", style=THEME["cyan"])
         t.append("remove the imported session token\n", style=THEME["muted"])
         t.append("  :grok status               ", style=THEME["cyan"])
@@ -30655,7 +30674,8 @@ class SuperQodeApp(App):
                     (":connect antigravity", "Use local Antigravity CLI handoff"),
                     (":antigravity status", "Check local agy CLI status"),
                     (":antigravity migrate", "Show Gemini CLI migration steps"),
-                    (":connect grok", "Use signed-in Grok Build ACP (Grok 4.5 default)"),
+                    (":connect grok", "SuperQode harness on Grok subscription (CLI login)"),
+                    (":connect acp grok", "Grok Build via official CLI ACP"),
                     (":grok status|login", "Check Grok CLI readiness or show login commands"),
                 ],
             ),

@@ -42,13 +42,18 @@ def test_antigravity_profile_is_external_cli_connector():
     assert "gemini cli migration" in antigravity.description.lower()
 
 
-def test_grok_profile_is_cli_managed_acp_connector():
+def test_grok_profile_is_subscription_harness_connector():
+    """Grok subscription uses SuperQode harness; Grok Build ACP is under :connect acp."""
     grok = get_connection_profile("grok")
 
-    assert grok.connector == "acp"
-    assert grok.acp_agent == "grok"
+    assert grok.connector == "subscription"
+    assert grok.provider == "grok-cli"
+    assert grok.model == "grok-build"
+    assert grok.runtime == "builtin"
+    assert grok.acp_agent is None
     assert "subscription" in grok.label.lower()
-    assert "official grok cli" in grok.description.lower()
+    assert "harness" in grok.description.lower()
+    assert "acp" in grok.description.lower()
 
 
 def test_lookup_by_id_and_label():
@@ -130,6 +135,9 @@ class _DispatchStub:
     def _antigravity_cmd(self, args, log):
         self.calls.append(("antigravity", args))
 
+    def _grok_api_cmd(self, rest, log):
+        self.calls.append(("subscription", rest))
+
     def set_timer(self, *a, **k):
         pass
 
@@ -165,10 +173,11 @@ def test_dispatch_antigravity_routes_to_external_cli(_dispatch):
     assert ("antigravity", "connect") in stub.calls
 
 
-def test_dispatch_grok_routes_to_acp(_dispatch):
+def test_dispatch_grok_routes_to_subscription_harness(_dispatch):
     stub = _DispatchStub()
     _dispatch(stub, get_connection_profile("grok"), log=None)
-    assert ("acp", "grok") in stub.calls
+    assert ("subscription", "grok-build") in stub.calls
+    assert ("acp", "grok") not in stub.calls
 
 
 def test_dispatch_local_routes_to_local_picker(_dispatch):
@@ -232,3 +241,11 @@ def test_no_duplicate_acp_claude_profile():
         p for p in list_connection_profiles() if p.connector == "acp" and p.acp_agent == "claude"
     ]
     assert acp_claude_profiles == []
+
+
+def test_no_headline_acp_grok_profile():
+    """Grok Build ACP is only via :connect acp grok, not a second headline profile."""
+    acp_grok = [
+        p for p in list_connection_profiles() if p.connector == "acp" and p.acp_agent == "grok"
+    ]
+    assert acp_grok == []

@@ -228,7 +228,8 @@ Inside the TUI, start with `:help` and these commands:
 :connect codex        # Codex SDK with local Codex login
 :connect claude       # Claude Code through ACP
 :connect antigravity  # local Antigravity CLI handoff
-:connect grok         # Grok Build via the official Grok CLI (subscription)
+:connect grok         # SuperQode harness on Grok subscription (CLI login)
+:connect acp grok     # Grok Build via the official Grok CLI (ACP)
 :connect byok         # hosted provider/API-key path
 :connect local        # local model provider
 :tree                 # saved session branches

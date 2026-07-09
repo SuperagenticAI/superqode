@@ -135,7 +135,7 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:codex` - Connect to and manage the Codex SDK runtime
 - `:claude` - Connect to and manage the Claude Agent SDK runtime
 - `:antigravity` - Show Antigravity CLI handoff, status, and migration help
-- `:grok` - Connect Grok Build via the official Grok CLI (ACP), check status, or opt into direct API with `:grok api`
+- `:grok` - SuperQode harness on Grok subscription (CLI login); status/login; Grok Build ACP is `:connect acp grok`
 - `:plan <task>` - Ask for a plan only, without native tool execution
 - `:plan approve` - Execute the last planned request with tools enabled
 - `:plan edit [task]` - Edit the pending planned request before execution
@@ -337,20 +337,22 @@ Antigravity CLI handoff:
 :agy status
 ```
 
-Grok Build (official Grok CLI):
+Grok subscription (official Grok CLI login):
 
 ```text
+:connect grok                 # SuperQode harness on subscription
 :grok
-:grok connect [model]
-:grok api [model]
+:grok connect [model]         # pin e.g. grok-4.5 or grok-build
+:grok api [model]             # alias of connect
 :grok api off
 :grok status
 :grok login
+:connect acp grok             # Grok Build external agent (ACP)
 ```
 
-`:grok connect` runs Grok Build through its native ACP server on your
-subscription login. `:grok api` is the explicit opt-in that reuses the local
-`grok login` session token for direct API calls (see the
+`:connect grok` / `:grok connect` import the local `grok login` session and run
+**SuperQode's harness** on the CLI chat proxy. For xAI's Grok Build agent, use
+`:connect acp grok` (see the
 [BYOK provider docs](../providers/byok.md#grok-subscription-official-cli)).
 
 ## Optional Vim Helpers

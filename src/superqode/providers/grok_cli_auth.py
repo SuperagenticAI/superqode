@@ -7,13 +7,17 @@ how to reuse that token for direct API calls against the CLI chat proxy::
     curl -s -N -X POST "https://cli-chat-proxy.grok.com/v1/chat/completions" \\
       -H "Authorization: Bearer $(jq -r '."https://accounts.x.ai/sign-in".key' ~/.grok/auth.json)" \\
       -H "X-XAI-Token-Auth: xai-grok-cli" \\
-      -H "x-grok-model-override: grok-build" ...
+      -H "x-grok-model-override: grok-build" \\
+      -H "x-grok-client-version: 0.1.202" ...
 
-SuperQode never reads this file by default (the ``:connect grok`` ACP path
-leaves credentials entirely to the CLI). ``:grok api`` is the explicit opt-in:
-it imports the session token into SuperQode's local auth store
-(``~/.superqode/auth.json``, 0600) under the ``grok-cli`` provider, from where
-the normal BYOK credential resolution picks it up.
+The proxy rejects requests without ``x-grok-client-version`` (HTTP 426,
+version reported as ``none``) and requires at least ``0.1.202``. SuperQode
+sends the installed CLI version when available.
+
+``:connect grok`` / ``:grok connect`` import the session token into SuperQode's
+local auth store (``~/.superqode/auth.json``, 0600) under the ``grok-cli``
+provider so SuperQode's harness can use the subscription. Grok Build ACP
+(``:connect acp grok``) leaves credentials entirely to the CLI.
 
 CLI session tokens last about 7 days and are refreshed by the official CLI,
 not by SuperQode — when the token expires, re-run ``grok login`` and
@@ -24,6 +28,10 @@ from __future__ import annotations
 
 import base64
 import json
+import re
+import shutil
+import subprocess
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -35,10 +43,69 @@ PROVIDER_ID = "grok-cli"
 
 # Where the official CLI keeps its login (documented in the CLI README).
 GROK_AUTH_FILE = Path.home() / ".grok" / "auth.json"
+GROK_VERSION_FILE = Path.home() / ".grok" / "version.json"
 GROK_SIGNIN_KEY = "https://accounts.x.ai/sign-in"
 
 # Documented lifetime of a CLI session token ("Tokens expire after 7 days").
 CLI_SESSION_LIFETIME_SECONDS = 7 * 24 * 3600
+
+# Minimum version the CLI chat proxy accepts (HTTP 426 below this / when missing).
+MIN_CLI_VERSION = "0.1.202"
+
+_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+(?:[.-][0-9A-Za-z.]+)?)")
+
+
+def _parse_version_string(text: str) -> Optional[str]:
+    """Extract a dotted CLI version from a ``grok --version`` line or free text."""
+    if not text:
+        return None
+    match = _VERSION_RE.search(text.strip())
+    return match.group(1) if match else None
+
+
+@lru_cache(maxsize=1)
+def detect_cli_version() -> str:
+    """Return the installed Grok CLI version for the chat-proxy version header.
+
+    Prefers ``~/.grok/version.json`` (written by the installer), then
+    ``grok --version``. Falls back to :data:`MIN_CLI_VERSION` so the proxy
+    still accepts the request when the binary is missing but a token was
+    imported earlier.
+    """
+    try:
+        if GROK_VERSION_FILE.is_file():
+            data = json.loads(GROK_VERSION_FILE.read_text())
+            if isinstance(data, dict):
+                for key in ("version", "stable_version"):
+                    parsed = _parse_version_string(str(data.get(key) or ""))
+                    if parsed:
+                        return parsed
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        pass
+
+    grok_bin = shutil.which("grok")
+    if grok_bin:
+        try:
+            proc = subprocess.run(
+                [grok_bin, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            combined = f"{proc.stdout or ''}\n{proc.stderr or ''}"
+            parsed = _parse_version_string(combined)
+            if parsed:
+                return parsed
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+    return MIN_CLI_VERSION
+
+
+def clear_cli_version_cache() -> None:
+    """Drop the cached CLI version (tests / after ``grok update``)."""
+    detect_cli_version.cache_clear()
 
 
 def _jwt_expiry(token: str) -> int:

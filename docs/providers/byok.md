@@ -135,9 +135,10 @@ not yet available in the xAI API console for EU users.
 
 ## Grok Subscription (Official CLI)
 
-For an eligible local X/SuperGrok account, use the official Grok CLI ACP path
-instead of a BYOK key. SuperQode starts `grok agent stdio`; the CLI owns login,
-token refresh, and subscription usage.
+For an eligible local X/SuperGrok account, use the **Grok subscription** profile
+so SuperQode's harness runs on your CLI login (not a BYOK API key). SuperQode
+imports the `grok login` session and talks to the CLI chat proxy; SuperQode
+owns tools, memory, and the agent loop.
 
 ```bash
 # Install the official xAI CLI if needed (macOS/Linux/WSL)
@@ -147,14 +148,16 @@ curl -fsSL https://x.ai/cli/install.sh | bash
 # Sign in locally
 grok login
 
-# Start SuperQode with the subscription profile
+# SuperQode harness on your subscription
 superqode --connect grok
 ```
 
-Inside the TUI, use:
+Inside the TUI:
 
 ```text
-:connect grok
+:connect grok                 # SuperQode harness (default subscription path)
+:grok connect grok-4.5        # pin a model
+:connect acp grok             # Grok Build as external ACP agent instead
 ```
 
 On SSH or another headless machine, authenticate with:
@@ -163,36 +166,37 @@ On SSH or another headless machine, authenticate with:
 grok login --device-auth
 ```
 
-`Grok Build` follows the signed-in account's default model (the CLI's
-`grok-build` alias, currently Grok 4.5). To pin a specific model, pass it when
-connecting — `:grok connect grok-4.5` or `:grok connect grok-build-0.1` — and
-SuperQode forwards it through ACP. Grok Build access requires an eligible
-SuperGrok or X Premium+ plan; availability, quotas, and regional access are
-determined by xAI. By default SuperQode does not read or copy the subscription
-token. For cloud or automation workloads, use `XAI_API_KEY` BYOK instead.
+Default model is the CLI's `grok-build` alias (currently Grok 4.5). Subscription
+access requires an eligible SuperGrok or X Premium+ plan; quotas and regional
+access are determined by xAI. For cloud or automation workloads, use
+`XAI_API_KEY` BYOK instead.
 
-### Direct API with your subscription (opt-in)
+### How subscription connect works
 
-The Grok CLI documents reusing its local session token for direct calls to its
-chat proxy. `:grok api` is SuperQode's explicit opt-in for that route:
+`:connect grok` / `:grok connect` / `:grok api` all:
+
+1. Import the session token from `~/.grok/auth.json` into SuperQode's local auth
+   store (`~/.superqode/auth.json`, permissions 0600)
+2. Connect the `grok-cli` provider against `https://cli-chat-proxy.grok.com/v1`
+3. Send the headers xAI requires (`X-XAI-Token-Auth`, `x-grok-model-override`,
+   and `x-grok-client-version` from your installed CLI — the proxy returns
+   HTTP 426 when the version header is missing)
 
 ```text
-:grok api                 # connect grok-cli/grok-build on your subscription
-:grok api grok-4.5        # pin a specific model
-:grok api off             # remove the imported token
+:grok api off                 # remove the imported token
 ```
 
-This imports the `grok login` session token from `~/.grok/auth.json` into
-SuperQode's local auth store (`~/.superqode/auth.json`, permissions 0600) and
-connects the `grok-cli` provider, which targets
-`https://cli-chat-proxy.grok.com/v1` with the headers xAI requires
-(`X-XAI-Token-Auth`, `x-grok-model-override`). Enterprise proxies are honored
-via the CLI's own `GROK_CLI_CHAT_PROXY_BASE_URL` variable.
+Enterprise proxies are honored via `GROK_CLI_CHAT_PROXY_BASE_URL`.
+
+**Grok Build ACP** (xAI's coding agent, not SuperQode's harness): `:connect acp
+grok` starts `grok agent stdio`. Use that when you want the official Grok Build
+loop; use `:connect grok` when you want SuperQode's harness on the same
+subscription.
 
 Notes:
 
 - CLI sessions last about 7 days; when the token expires, run `grok login`
-  again, then re-run `:grok api`.
+  again, then re-run `:connect grok`.
 - Usage counts against your subscription and model eligibility is enforced by
   xAI per tier. This route is intended for interactive use — for automation or
   benchmarking, use `XAI_API_KEY` BYOK.

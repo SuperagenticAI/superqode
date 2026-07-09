@@ -60,8 +60,9 @@ class ProviderDef:
     # OpenAI-compatible (base_url + api_key passed explicitly). Curated
     # entries may also set this to opt into the same per-request routing.
     dynamic: bool = False
-    # Static HTTP headers required by the provider's endpoint. A "{model}"
-    # placeholder in a value is replaced with the request's model id.
+    # Static HTTP headers required by the provider's endpoint. Placeholders
+    # replaced per request: "{model}" → model id, "{cli_version}" → installed
+    # Grok CLI version (for grok-cli / subscription proxy).
     extra_headers: Dict[str, str] = field(default_factory=dict)
 
 
@@ -173,11 +174,13 @@ PROVIDERS: Dict[str, ProviderDef] = {
             "grok-4.3",
             "grok-build-0.1",
         ],
-        notes="Uses your `grok login` session via :grok api (opt-in). Subscription usage; interactive use only.",
+        notes="Uses your `grok login` session via :connect grok. Subscription usage; interactive use only. Grok Build ACP: :connect acp grok.",
         dynamic=True,  # per-request api_base/api_key routing, no env mutation
         extra_headers={
             "X-XAI-Token-Auth": "xai-grok-cli",
             "x-grok-model-override": "{model}",
+            # Proxy returns HTTP 426 when this is missing (version shown as "none").
+            "x-grok-client-version": "{cli_version}",
         },
     ),
     "mistral": ProviderDef(

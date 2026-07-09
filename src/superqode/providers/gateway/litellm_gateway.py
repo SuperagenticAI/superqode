@@ -493,7 +493,8 @@ class LiteLLMGateway(GatewayInterface):
         ``ProviderDef.dynamic``. Passing these per-request keeps the
         OpenAI-compatible routing isolated from the user's global OPENAI_* env.
         Provider-required headers (``ProviderDef.extra_headers``) are attached
-        here too, with a "{model}" placeholder resolved to the request's model.
+        here too. Placeholders: ``{model}`` → request model id;
+        ``{cli_version}`` → installed Grok CLI version (subscription proxy).
         """
         provider_def = _resolve_provider_def(provider)
         if provider_def is None or not provider_def.dynamic:
@@ -507,10 +508,20 @@ class LiteLLMGateway(GatewayInterface):
         if api_key and "api_key" not in request_kwargs:
             request_kwargs["api_key"] = api_key
         if provider_def.extra_headers and "extra_headers" not in request_kwargs:
-            request_kwargs["extra_headers"] = {
-                name: value.replace("{model}", model) if "{model}" in value else value
-                for name, value in provider_def.extra_headers.items()
-            }
+            cli_version = ""
+            if any("{cli_version}" in v for v in provider_def.extra_headers.values()):
+                from ..grok_cli_auth import detect_cli_version
+
+                cli_version = detect_cli_version()
+            resolved: Dict[str, str] = {}
+            for name, value in provider_def.extra_headers.items():
+                out = value
+                if "{model}" in out:
+                    out = out.replace("{model}", model)
+                if "{cli_version}" in out:
+                    out = out.replace("{cli_version}", cli_version)
+                resolved[name] = out
+            request_kwargs["extra_headers"] = resolved
 
     def _convert_messages(self, messages: List[Message]) -> List[Dict[str, Any]]:
         """Convert Message objects to LiteLLM format."""

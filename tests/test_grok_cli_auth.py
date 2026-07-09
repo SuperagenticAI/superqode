@@ -133,7 +133,25 @@ def test_grok_cli_provider_def_targets_documented_proxy():
     assert pdef.base_url_env == "GROK_CLI_CHAT_PROXY_BASE_URL"
     assert pdef.extra_headers["X-XAI-Token-Auth"] == "xai-grok-cli"
     assert pdef.extra_headers["x-grok-model-override"] == "{model}"
+    assert pdef.extra_headers["x-grok-client-version"] == "{cli_version}"
     assert pdef.example_models[0] == "grok-build"
+
+
+def test_detect_cli_version_from_version_json(tmp_path, monkeypatch):
+    version_file = tmp_path / "version.json"
+    version_file.write_text(json.dumps({"version": "0.2.93", "stable_version": "0.2.93"}))
+    monkeypatch.setattr(grok_cli_auth, "GROK_VERSION_FILE", version_file)
+    grok_cli_auth.clear_cli_version_cache()
+
+    assert grok_cli_auth.detect_cli_version() == "0.2.93"
+
+
+def test_detect_cli_version_falls_back_to_minimum(tmp_path, monkeypatch):
+    monkeypatch.setattr(grok_cli_auth, "GROK_VERSION_FILE", tmp_path / "missing.json")
+    monkeypatch.setattr(grok_cli_auth.shutil, "which", lambda _name: None)
+    grok_cli_auth.clear_cli_version_cache()
+
+    assert grok_cli_auth.detect_cli_version() == grok_cli_auth.MIN_CLI_VERSION
 
 
 def test_gateway_applies_proxy_headers_and_token(tmp_path, isolated_auth_store, monkeypatch):
@@ -142,6 +160,7 @@ def test_gateway_applies_proxy_headers_and_token(tmp_path, isolated_auth_store, 
     monkeypatch.delenv("GROK_CLI_CHAT_PROXY_BASE_URL", raising=False)
     auth_file = _write_cli_auth(tmp_path, {"https://accounts.x.ai/sign-in": {"key": "sess-gw"}})
     grok_cli_auth.import_cli_token(auth_file)
+    monkeypatch.setattr(grok_cli_auth, "detect_cli_version", lambda: "0.2.93")
 
     gateway = LiteLLMGateway.__new__(LiteLLMGateway)  # header logic needs no __init__
     request_kwargs = {}
@@ -152,6 +171,7 @@ def test_gateway_applies_proxy_headers_and_token(tmp_path, isolated_auth_store, 
     assert request_kwargs["extra_headers"] == {
         "X-XAI-Token-Auth": "xai-grok-cli",
         "x-grok-model-override": "grok-4.5",
+        "x-grok-client-version": "0.2.93",
     }
 
 
@@ -195,6 +215,26 @@ def test_grok_cmd_routes_api_subcommand():
     SuperQodeApp._grok_cmd(_Stub(), "api grok-4.5", _Log())
 
     assert calls == ["grok-4.5"]
+
+
+def test_grok_cmd_connect_uses_subscription_harness_not_acp():
+    """:grok connect must use SuperQode harness (token import), not Grok Build ACP."""
+    from superqode.app_main import SuperQodeApp
+
+    calls = []
+
+    class _Stub:
+        def _grok_api_cmd(self, rest, log):
+            calls.append(("api", rest))
+
+        def _connect_acp_cmd(self, command, log):
+            calls.append(("acp", command))
+
+    SuperQodeApp._grok_cmd(_Stub(), "connect grok-4.5", _Log())
+    SuperQodeApp._grok_cmd(_Stub(), "", _Log())  # default subcommand is connect
+
+    assert calls == [("api", "grok-4.5"), ("api", "")]
+    assert not any(c[0] == "acp" for c in calls)
 
 
 def test_grok_api_connects_default_model(tmp_path, isolated_auth_store, monkeypatch):

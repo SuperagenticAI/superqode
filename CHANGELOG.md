@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.11] - 2026-07-10
+
+### Changed
+
+- **`:connect grok` is SuperQode harness on subscription** - The Grok subscription profile now imports the official CLI `grok login` session and connects the `grok-cli` provider so SuperQode owns the agent loop (tools, memory, harness). Grok Build as an external agent remains available via `:connect acp grok` (`grok agent stdio`). `:grok connect` / `:grok api` share the harness path.
+- **Grok CLI chat proxy version header** - `grok-cli` requests now send `x-grok-client-version` from the installed Grok CLI (or a minimum floor), fixing HTTP 426 responses that reported version `(none)`.
+- **Release metadata** - Bumped the package version, runtime `__version__`, lockfile package entry, and ACP registry metadata to `0.2.11`.
+
 ## [0.2.9] - 2026-07-09
 
 ### Added

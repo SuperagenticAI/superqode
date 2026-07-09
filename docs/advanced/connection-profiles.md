@@ -28,9 +28,9 @@ Self-contained: uses Anthropic API key directly. Requires claude_agent_sdk packa
 
 Handoff profile: shows the command to run `agy` in a terminal. Does not connect SuperQode's own loop. Requires agy binary on PATH.
 
-### 7. Grok Subscription (connector: acp, agent: grok)
+### 7. Grok Subscription (connector: subscription, provider: grok-cli)
 
-Connects xAI's official Grok Build coding agent through its native ACP server (`grok agent stdio`) using an eligible SuperGrok or X Premium+ subscription. Requires the `grok` binary on PATH and a local `grok login` (`~/.grok/auth.json`). The official CLI owns credentials and refresh; by default SuperQode never reads the token. `:grok api` is a separate, explicit opt-in that reuses the CLI login for direct API calls.
+Connects **SuperQode's harness** to an eligible SuperGrok or X Premium+ account. Requires the `grok` binary on PATH and a local `grok login` (`~/.grok/auth.json`). On connect, SuperQode imports the CLI session token into its auth store and routes through the `grok-cli` provider (CLI chat proxy). **Grok Build ACP** remains available under `:connect acp grok` — that path runs xAI's agent, not SuperQode's harness.
 
 ## TUI Usage
 
@@ -41,7 +41,8 @@ Direct shortcuts:
 - `:connect codex` - connect Codex SDK directly
 - `:connect claude` - connect Claude Agent SDK directly
 - `:connect antigravity` - show agy handoff
-- `:connect grok` - connect Grok Build via the official Grok CLI (ACP)
+- `:connect grok` - SuperQode harness on Grok subscription (CLI login)
+- `:connect acp grok` - Grok Build coding agent via official CLI ACP
 - `:connect byok` - open the cloud provider picker
 - `:connect byok <provider>/<model>` - connect to a cloud model directly
 - `:connect local` - open the local provider picker
@@ -77,7 +78,8 @@ superqode connect setup deepseek --json
 - BYOK/Local -> runtime: builtin
 - ACP -> no runtime change (ACP subprocess)
 - Antigravity -> handoff (no runtime)
-- Grok -> ACP subprocess (`grok agent stdio`)
+- Grok subscription -> SuperQode harness (`grok-cli` + CLI session token)
+- Grok Build agent -> ACP subprocess via `:connect acp grok` (`grok agent stdio`)
 - Advanced -> user picks runtime
 
 When --connect implies a runtime, it sets SUPERQODE_RUNTIME but does not override an explicit --runtime flag.
