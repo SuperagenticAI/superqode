@@ -43,6 +43,44 @@ async def test_status_runtime_hides_builtin():
         assert bar.active_runtime == ""
 
 
+async def test_connect_picker_keyboard_navigation_keeps_selection_visible():
+    """A multiline :connect option must follow keyboard navigation in RichLog."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._show_connect_type_picker(log)
+        await pilot.pause()
+
+        for _ in range(6):
+            await pilot.press("down")
+            await pilot.pause()
+
+        selected_y = next(index for index, line in enumerate(log.lines) if "SELECTED" in line.text)
+        visible_height = log.scrollable_content_region.height
+
+        assert app._byok_highlighted_connect_type_index == 6
+        assert log.scroll_y <= selected_y < log.scroll_y + visible_height
+
+
+async def test_byok_picker_keyboard_navigation_keeps_selection_visible():
+    """The provider picker uses the same multiline RichLog navigation path."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._show_byok_providers(log)
+        await pilot.pause()
+
+        for _ in range(6):
+            await pilot.press("down")
+            await pilot.pause()
+
+        selected_y = next(index for index, line in enumerate(log.lines) if "SELECTED" in line.text)
+        visible_height = log.scrollable_content_region.height
+
+        assert app._byok_highlighted_provider_index == 6
+        assert log.scroll_y <= selected_y < log.scroll_y + visible_height
+
+
 async def test_claude_agent_badge_on_mounted_status_bar():
     app = SuperQodeApp()
     async with app.run_test() as pilot:

@@ -182,6 +182,17 @@ class ProviderManager:
 
         env_vars = key_mapping.get(provider_id)
         if not env_vars:
+            try:
+                from .dynamic import resolve_provider_def
+
+                provider_def = resolve_provider_def(provider_id)
+                if provider_def and provider_def.dynamic:
+                    return any(
+                        bool((os.getenv(env_var) or "").strip())
+                        for env_var in provider_def.env_vars
+                    )
+            except Exception:
+                pass
             return False
 
         # Handle both single string and list of env vars (for Google)
@@ -1218,6 +1229,24 @@ class ProviderManager:
 
     def get_models(self, provider_id: str, refresh: bool = False) -> List[ModelInfo]:
         """Get available models for a provider."""
+        try:
+            from .dynamic import resolve_provider_def
+            from .models import get_models_for_provider
+
+            provider_def = resolve_provider_def(provider_id)
+            if provider_def and provider_def.dynamic:
+                return [
+                    ModelInfo(
+                        id=model.id,
+                        name=model.name,
+                        provider_id=provider_id,
+                        description=model.description,
+                        context_size=model.context_window,
+                    )
+                    for model in get_models_for_provider(provider_id, include_all=True).values()
+                ]
+        except Exception:
+            pass
         # Return basic model list for now
         provider = next((p for p in self.list_providers() if p.id == provider_id), None)
         return provider.models if provider else []
@@ -1346,7 +1375,18 @@ class ProviderManager:
         """Make a chat completion request."""
         try:
             # Construct the full model name for LiteLLM
-            if provider_id == "ollama":
+            from .dynamic import provider_api_key, resolve_base_url, resolve_provider_def
+
+            provider_def = resolve_provider_def(provider_id)
+            if provider_def and provider_def.dynamic:
+                full_model = f"{provider_def.litellm_prefix}{model_id}"
+                api_base = resolve_base_url(provider_def)
+                api_key = provider_api_key(provider_def)
+                if api_base:
+                    kwargs.setdefault("api_base", api_base)
+                if api_key:
+                    kwargs.setdefault("api_key", api_key)
+            elif provider_id == "ollama":
                 full_model = f"ollama/{model_id}"
             elif provider_id == "openai":
                 full_model = f"openai/{model_id}"

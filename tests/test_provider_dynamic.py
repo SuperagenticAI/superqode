@@ -30,6 +30,12 @@ def fake_models_dev(monkeypatch):
             env_vars=["DEEPINFRA_API_KEY"],
             api_url="",
         ),
+        "meta": ProviderInfo(
+            id="meta",
+            name="Meta",
+            env_vars=["META_MODEL_API_KEY"],
+            api_url="https://api.meta.ai/v1",
+        ),
         # A local runtime id.
         "ollama": ProviderInfo(id="ollama", name="Ollama", env_vars=[], api_url=""),
     }
@@ -56,6 +62,15 @@ def test_synthesize_openai_compatible_with_endpoint(fake_models_dev):
     assert d.base_url_env == "BASETEN_BASE_URL"
     assert d.env_vars == ["BASETEN_API_KEY"]
     assert d.category == ProviderCategory.MODEL_HOSTS
+
+
+def test_synthesize_meta_model_api_route(fake_models_dev):
+    d = dynamic.resolve_provider_def("meta")
+
+    assert d is not None and d.dynamic is True
+    assert d.litellm_prefix == "openai/"
+    assert d.default_base_url == "https://api.meta.ai/v1"
+    assert d.env_vars == ["META_MODEL_API_KEY"]
 
 
 def test_synthesize_native_routing_without_endpoint(fake_models_dev):

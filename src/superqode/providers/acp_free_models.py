@@ -255,7 +255,7 @@ async def check_provider_free_models(provider_id: str) -> Optional[AgentFreeMode
         from superqode.providers.models_dev import get_models_dev
 
         client = get_models_dev()
-        await client.load()
+        await client.ensure_loaded()
 
         models = client.get_models_for_provider(provider_id)
 

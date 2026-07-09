@@ -22,6 +22,8 @@ from superqode.harness import (
     load_harness_spec,
 )
 from superqode.tools.question_tool import Question, QuestionType
+from superqode.providers.models import ModelCapability, ModelInfo, set_live_models
+from superqode.providers.models_dev import ProviderInfo, get_models_dev
 from superqode.widgets.sidebar_panels import HarnessPanel
 
 
@@ -162,6 +164,74 @@ def make_app() -> SuperQodeApp:
     app.set_timer = lambda *args, **kwargs: None
     app._ensure_input_focus = lambda: None
     return app
+
+
+def test_byok_picker_includes_models_dev_provider_and_full_model_lookup(monkeypatch):
+    import superqode.providers.models as model_db
+
+    app = make_app()
+    log = FakeLog()
+    client = get_models_dev()
+    saved_providers = dict(client._providers)
+    saved_models = dict(client._models)
+    saved_live_models = model_db._live_models
+    saved_use_live_data = model_db._use_live_data
+    saved_autoload_attempted = model_db._live_autoload_attempted
+    muse = ModelInfo(
+        id="muse-spark-1.1",
+        name="Muse Spark 1.1",
+        provider="meta",
+        input_price=1.25,
+        output_price=4.25,
+        context_window=1_000_000,
+        capabilities=[
+            ModelCapability.TOOLS,
+            ModelCapability.REASONING,
+            ModelCapability.VISION,
+            ModelCapability.LONG_CONTEXT,
+        ],
+    )
+    try:
+        client._providers = {
+            "meta": ProviderInfo(
+                id="meta",
+                name="Meta",
+                env_vars=["META_MODEL_API_KEY"],
+                api_url="https://api.meta.ai/v1",
+            )
+        }
+        client._models = {"meta": {muse.id: muse}}
+        monkeypatch.setattr(client, "ensure_cache_loaded", lambda: True)
+        set_live_models({"meta": {muse.id: muse}})
+
+        app._show_connect_picker(log)
+        assert any(provider_id == "meta" for provider_id, _ in app._byok_connect_list)
+        assert "meta" in {
+            candidate.value for candidate in app._byok_provider_completion_candidates()
+        }
+
+        app._just_showed_byok_picker = False
+        app._show_provider_models("meta", log)
+        assert app._byok_model_list == ["muse-spark-1.1"]
+        assert "muse-spark-1.1" in render_plain(log.items[-1])
+
+        selected = {}
+        app._byok_selected_provider = "openai"
+        app._awaiting_byok_model = True
+        app._byok_model_list = ["gpt-5.6"]
+        app._byok_all_model_list = ["gpt-5.6", "gpt-5.6-sol"]
+        app._connect_byok_mode = lambda provider, model, _log: selected.update(
+            provider=provider, model=model
+        )
+
+        assert app._handle_byok_model_selection("gpt-5.6-sol", log) is True
+        assert selected == {"provider": "openai", "model": "gpt-5.6-sol"}
+    finally:
+        client._providers = saved_providers
+        client._models = saved_models
+        model_db._live_models = saved_live_models
+        model_db._use_live_data = saved_use_live_data
+        model_db._live_autoload_attempted = saved_autoload_attempted
 
 
 def test_streaming_indicator_uses_single_slow_rotating_phrase(monkeypatch):

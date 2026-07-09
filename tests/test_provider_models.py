@@ -84,6 +84,31 @@ def test_fresh_live_models_still_replace_builtin_lists():
     assert "grok-build-0.1" not in xai
 
 
+def test_full_catalog_option_keeps_new_openai_variants_selectable():
+    set_live_models(
+        {
+            "openai": {
+                "gpt-5.3-chat-latest": ModelInfo(
+                    "gpt-5.3-chat-latest", "GPT 5.3 Chat Latest", "openai"
+                ),
+                "gpt-5.6": ModelInfo("gpt-5.6", "GPT-5.6", "openai"),
+                "gpt-5.6-luna": ModelInfo("gpt-5.6-luna", "GPT-5.6 Luna", "openai"),
+                "gpt-5.6-terra": ModelInfo("gpt-5.6-terra", "GPT-5.6 Terra", "openai"),
+                "gpt-5.6-sol": ModelInfo("gpt-5.6-sol", "GPT-5.6 Sol", "openai"),
+            }
+        }
+    )
+
+    full_catalog = get_models_for_provider("openai", include_all=True)
+
+    assert {
+        "gpt-5.6",
+        "gpt-5.6-luna",
+        "gpt-5.6-terra",
+        "gpt-5.6-sol",
+    } <= set(full_catalog)
+
+
 def test_builtin_xai_catalog_drops_retired_grok_models(monkeypatch):
     # xAI no longer serves grok-3/grok-2/grok-beta; they must not reappear.
     monkeypatch.setattr(model_db, "_use_live_data", False)

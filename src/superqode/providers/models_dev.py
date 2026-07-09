@@ -398,7 +398,13 @@ class ModelsDev:
         with urllib.request.urlopen(req, timeout=30, context=ctx) as response:
             return json.loads(response.read().decode("utf-8"))
 
-    def _parse_data(self, raw_data: Dict[str, Any]) -> None:
+    def _parse_data(
+        self,
+        raw_data: Dict[str, Any],
+        *,
+        fetched_at: Optional[str] = None,
+        ttl_hours: Optional[int] = None,
+    ) -> None:
         """Parse raw models.dev data into our format."""
         self._providers.clear()
         self._models.clear()
@@ -442,8 +448,12 @@ class ModelsDev:
 
         # Update metadata
         self._metadata = CacheMetadata(
-            fetched_at=datetime.now().isoformat(),
-            ttl_hours=int(self.cache_ttl.total_seconds() / 3600),
+            fetched_at=fetched_at or datetime.now().isoformat(),
+            ttl_hours=(
+                int(ttl_hours)
+                if ttl_hours is not None
+                else int(self.cache_ttl.total_seconds() / 3600)
+            ),
             provider_count=len(self._providers),
             model_count=sum(len(m) for m in self._models.values()),
         )
@@ -545,20 +555,17 @@ class ModelsDev:
             with open(CACHE_FILE, "r") as f:
                 cache_data = json.load(f)
 
-            # Parse metadata
+            # Preserve the original fetch timestamp. Re-parsing cached data must
+            # not make an expired catalog look newly downloaded.
             meta = cache_data.get("_metadata", {})
-            self._metadata = CacheMetadata(
-                fetched_at=meta.get("fetched_at", ""),
-                ttl_hours=meta.get("ttl_hours", 24),
-                provider_count=meta.get("provider_count", 0),
-                model_count=meta.get("model_count", 0),
-            )
+            fetched_at = meta.get("fetched_at", "")
+            ttl_hours = meta.get("ttl_hours", int(self.cache_ttl.total_seconds() / 3600))
 
             # Parse the actual data
             raw_data = {k: v for k, v in cache_data.items() if k != "_metadata"}
             if raw_data:
                 self._raw_data = raw_data
-                self._parse_data(raw_data)
+                self._parse_data(raw_data, fetched_at=fetched_at, ttl_hours=ttl_hours)
                 return True
 
         except Exception as e:

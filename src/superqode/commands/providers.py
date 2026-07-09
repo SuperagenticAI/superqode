@@ -856,9 +856,28 @@ def connect_provider(provider: Optional[str] = None, model: Optional[str] = None
         Exit code (0 for success, 1 for failure)
     """
     from ..dialogs.provider import ConnectDialog
+    from ..providers.dynamic import resolve_provider_def
     from ..providers.manager import ProviderManager
 
     manager = ProviderManager()
+
+    def resolve_catalog_provider(provider_id: str):
+        """Resolve a dynamic provider, fetching models.dev on a clean install."""
+        provider_def = resolve_provider_def(provider_id)
+        if provider_def is not None:
+            return provider_def
+        try:
+            import asyncio
+
+            from ..providers.models_dev import get_models_dev
+
+            client = get_models_dev()
+            asyncio.run(client.ensure_loaded())
+            if client.get_provider(provider_id) is None:
+                asyncio.run(client.refresh(force=True))
+        except Exception:
+            pass
+        return resolve_provider_def(provider_id)
 
     if provider and not model:
         parsed = split_provider_model_ref(provider)
@@ -873,18 +892,18 @@ def connect_provider(provider: Optional[str] = None, model: Optional[str] = None
     # If both provider and model are provided, try direct connection
     if provider and model:
         # Validate provider exists
-        if provider not in PROVIDERS:
+        provider_def = resolve_catalog_provider(provider)
+        if provider_def is None:
             console.print(f"[red]❌ Provider '{provider}' not found.[/red]")
             console.print(f"[dim]Use 'superqode providers list' to see available providers.[/dim]")
             return 1
 
         # Test connection
         console.print(f"[cyan]🔍 Testing connection to {provider}/{model}...[/cyan]")
-        success, error = manager.test_connection(provider)
+        success, error = manager.test_connection(provider, model)
 
         if not success:
             console.print(f"[red]❌ Connection failed: {error}[/red]")
-            provider_def = PROVIDERS[provider]
             if provider_def.env_vars:
                 env_var = provider_def.env_vars[0]
                 console.print(f"\n[yellow]💡 Set API key:[/yellow]")
@@ -899,7 +918,7 @@ def connect_provider(provider: Optional[str] = None, model: Optional[str] = None
 
     # If only provider is provided, show model selection dialog
     if provider:
-        if provider not in PROVIDERS:
+        if resolve_catalog_provider(provider) is None:
             console.print(f"[red]❌ Provider '{provider}' not found.[/red]")
             console.print(f"[dim]Use 'superqode providers list' to see available providers.[/dim]")
             return 1

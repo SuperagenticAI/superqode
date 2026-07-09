@@ -1193,8 +1193,16 @@ def get_model_info(provider_id: str, model_id: str) -> Optional[ModelInfo]:
     return None
 
 
-def get_models_for_provider(provider_id: str) -> Dict[str, ModelInfo]:
-    """Get all models for a provider, filtered to ensure they belong to that provider."""
+def get_models_for_provider(
+    provider_id: str, *, include_all: bool = False
+) -> Dict[str, ModelInfo]:
+    """Get provider models, optionally retaining the complete live catalog.
+
+    The default remains compact for recommendations and small status surfaces.
+    BYOK selection, direct connection completion, and catalog browsing pass
+    ``include_all=True`` so a new models.dev entry cannot be hidden by that
+    presentation-oriented trimming.
+    """
     models = get_effective_models().get(provider_id, {})
 
     # Filter models to ensure they actually belong to this provider
@@ -1216,6 +1224,8 @@ def get_models_for_provider(provider_id: str) -> Dict[str, ModelInfo]:
             ):
                 filtered[model_id] = model_info
 
+    if include_all:
+        return filtered
     if provider_id == "google":
         return _latest_google_models(filtered)
     if provider_id not in LOCAL_MODEL_PROVIDERS:

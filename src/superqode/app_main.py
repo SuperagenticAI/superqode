@@ -1391,6 +1391,10 @@ class SuperQodeApp(App):
         # Apply user keybinding overrides, if any
         self._load_custom_keybindings()
         self.set_timer(0.75, self._prewarm_litellm)
+        # Keep the dynamic catalog fresh independently of optional provider
+        # health checks. The short delay lets the first frame render first.
+        self.set_timer(0.5, self._start_models_dev_refresh)
+        self.set_interval(60 * 60, self._start_models_dev_refresh)
         if os.getenv("SUPERQODE_STARTUP_HEALTH", "").strip().lower() in ("1", "true", "yes"):
             self._run_startup_health_check()
         # Auto-connect a connection profile if requested via --connect.
@@ -1914,6 +1918,10 @@ class SuperQodeApp(App):
         """Run provider health check in background on startup."""
         self.run_worker(self._startup_health_check())
 
+    def _start_models_dev_refresh(self) -> None:
+        """Refresh the models.dev catalog without blocking the TUI."""
+        self.run_worker(self._load_models_dev_data())
+
     async def _startup_health_check(self):
         """Check provider health on startup."""
         from superqode.providers.health import get_health_checker
@@ -1933,9 +1941,6 @@ class SuperQodeApp(App):
         except Exception:
             # Silent failure - health check is optional
             pass
-
-        # Also load models.dev data in background
-        await self._load_models_dev_data()
 
     def _apply_live_models(self, client) -> bool:
         """Push the client's current provider/model data into the live registry."""
@@ -4059,7 +4064,9 @@ class SuperQodeApp(App):
             import asyncio
 
             async def do_refresh():
-                success = await client.load(force=True)
+                success = await client.refresh(force=True)
+                if success:
+                    self._apply_live_models(client)
                 self.call_later(lambda: on_refresh_complete(success))
 
             asyncio.create_task(do_refresh())
@@ -4075,31 +4082,60 @@ class SuperQodeApp(App):
     ):
         """Scroll the log to keep the highlighted item visible.
 
-        Does a single, direct ``scroll_to`` to the target line. The old approach
-        (jump to home, then a timer that scrolled down one line at a time in a
-        loop) caused a visible flicker once navigation passed the visible fold;
-        one synchronous, non-animated scroll is flicker-free.
+        Prefer the actual rendered selection row so wrapped descriptions and a
+        short terminal viewport cannot hide the item. The geometry fallback is
+        retained for pickers that do not render a ``SELECTED`` marker.
         """
+        if self._scroll_to_rendered_selected_row(log):
+            return
+
         try:
             log.auto_scroll = False
-
-            # Small lists fit on screen — just pin to the top.
-            visible_items = 8
-            if total_items <= visible_items or highlighted_idx < visible_items:
-                log.scroll_home(animate=False)
-                return
-
-            # Approximate line geometry of the rendered picker.
+            visible_height = max(
+                6,
+                int(
+                    getattr(getattr(log, "scrollable_content_region", None), "height", 0)
+                    or getattr(getattr(log, "size", None), "height", 18)
+                    or 18
+                ),
+            )
             lines_per_item = 3
             header_lines = 5
-            # Keep the highlighted item roughly centered in the viewport.
-            target_y = max(
-                0, header_lines + (highlighted_idx - visible_items // 2) * lines_per_item
-            )
-            # One non-animated jump — no home reset, no per-line loop, no timer.
+            highlighted_y = header_lines + highlighted_idx * lines_per_item
+            target_y = max(0, highlighted_y - max(1, visible_height // 2))
             log.scroll_to(y=target_y, animate=False)
         except Exception:
             pass  # If scrolling fails, just continue
+
+    @staticmethod
+    def _scroll_to_rendered_selected_row(log: ConversationLog) -> bool:
+        """Bring the RichLog row containing the current picker marker into view."""
+        try:
+            selected_y = next(
+                index
+                for index, line in enumerate(log.lines)
+                if "SELECTED" in line.text
+            )
+        except (AttributeError, StopIteration):
+            return False
+
+        try:
+            # A picker owns the viewport while it is active. Re-enabling
+            # RichLog's follow mode here would immediately jump back to the
+            # footer after this row-level scroll.
+            log.auto_scroll = False
+
+            from textual.geometry import Region
+
+            log.scroll_to_region(
+                Region(0, selected_y, 1, 1),
+                animate=False,
+                x_axis=False,
+                y_axis=True,
+            )
+            return True
+        except Exception:
+            return False
 
     def _scroll_to_highlighted_local_model(self, log: ConversationLog, highlighted_idx: int):
         """Scroll the local-model picker so the highlighted multi-line row is visible."""
@@ -4407,8 +4443,6 @@ class SuperQodeApp(App):
             self._byok_highlighted_connect_type_index = new_idx
             log = self.query_one("#log", ConversationLog)
             self._show_connect_type_picker(log, clear_log=False)
-            # Don't scroll during navigation to keep item in focus
-            # The item should already be visible after the update
             # Ensure input stays focused
             self.set_timer(0.05, self._ensure_input_focus)
 
@@ -4425,8 +4459,6 @@ class SuperQodeApp(App):
             self._byok_highlighted_connect_type_index = new_idx
             log = self.query_one("#log", ConversationLog)
             self._show_connect_type_picker(log, clear_log=False)
-            # Don't scroll during navigation to keep item in focus
-            # The item should already be visible after the update
             # Ensure input stays focused
             self.set_timer(0.05, self._ensure_input_focus)
 
@@ -8242,11 +8274,15 @@ class SuperQodeApp(App):
     @staticmethod
     def _provider_completion_candidates(local: bool) -> list[PromptCompletionCandidate]:
         try:
-            from superqode.providers.registry import PROVIDERS, ProviderCategory
+            from superqode.providers.registry import ProviderCategory
+            from superqode.providers.dynamic import all_provider_ids, resolve_provider_def
         except Exception:
             return []
         candidates = []
-        for provider_id, provider in PROVIDERS.items():
+        for provider_id in all_provider_ids():
+            provider = resolve_provider_def(provider_id)
+            if provider is None:
+                continue
             is_local = provider.category == ProviderCategory.LOCAL
             if local != is_local:
                 continue
@@ -8271,9 +8307,9 @@ class SuperQodeApp(App):
     @staticmethod
     def _provider_description(provider_id: str) -> str:
         try:
-            from superqode.providers.registry import PROVIDERS
+            from superqode.providers.dynamic import resolve_provider_def
 
-            provider = PROVIDERS.get(provider_id)
+            provider = resolve_provider_def(provider_id)
             return provider.name if provider else ""
         except Exception:
             return ""
@@ -8283,7 +8319,7 @@ class SuperQodeApp(App):
         try:
             from superqode.providers.models import get_models_for_provider
 
-            model = get_models_for_provider(provider_id).get(model_id)
+            model = get_models_for_provider(provider_id, include_all=True).get(model_id)
             if model is None:
                 return ""
             labels = []
@@ -8344,21 +8380,23 @@ class SuperQodeApp(App):
     @staticmethod
     def _all_provider_ids() -> list[str]:
         try:
-            from superqode.providers.registry import PROVIDERS
+            from superqode.providers.dynamic import all_provider_ids
 
-            return list(PROVIDERS.keys())
+            return all_provider_ids()
         except Exception:
             return []
 
     @staticmethod
     def _byok_provider_ids() -> list[str]:
         try:
-            from superqode.providers.registry import PROVIDERS, ProviderCategory
+            from superqode.providers.registry import ProviderCategory
+            from superqode.providers.dynamic import all_provider_ids, resolve_provider_def
 
             return [
                 provider_id
-                for provider_id, provider in PROVIDERS.items()
-                if provider.category != ProviderCategory.LOCAL
+                for provider_id in all_provider_ids()
+                if (provider := resolve_provider_def(provider_id)) is not None
+                and provider.category != ProviderCategory.LOCAL
             ]
         except Exception:
             return []
@@ -8381,7 +8419,7 @@ class SuperQodeApp(App):
         try:
             from superqode.providers.models import get_models_for_provider
 
-            return list(get_models_for_provider(provider_id).keys())
+            return list(get_models_for_provider(provider_id, include_all=True).keys())
         except Exception:
             return []
 
@@ -22312,6 +22350,7 @@ class SuperQodeApp(App):
 
         provider_id = self._byok_selected_provider
         model_list = getattr(self, "_byok_model_list", [])
+        searchable_model_list = getattr(self, "_byok_all_model_list", model_list)
 
         # CRITICAL: Ensure model list is populated before allowing selection
         if not model_list:
@@ -22340,7 +22379,7 @@ class SuperQodeApp(App):
                 return True
 
             # Try exact match first
-            for m in model_list:
+            for m in searchable_model_list:
                 if selection_lower == m.lower():
                     model = m
                     break
@@ -22355,17 +22394,47 @@ class SuperQodeApp(App):
 
             if not model:
                 log.add_error(f"Model '{selection}' not found for {provider_id}")
-                log.add_info(f"Available models: {', '.join(model_list[:5])}")
-                if len(model_list) > 5:
-                    log.add_info(f"... and {len(model_list) - 5} more")
+                log.add_info(f"Available models: {', '.join(searchable_model_list[:5])}")
+                if len(searchable_model_list) > 5:
+                    log.add_info(f"... and {len(searchable_model_list) - 5} more")
                 return True
 
         self._awaiting_byok_model = False
         self._connect_byok_mode(provider_id, model, log)
         return True
 
-    def _connect_byok_mode(
+    async def _refresh_catalog_then_connect_byok(
         self, provider: str, model: str, log: ConversationLog, resolved_role=None
+    ) -> None:
+        """Fetch a models.dev-only provider before retrying a direct connection."""
+        try:
+            from superqode.providers.models_dev import get_models_dev
+
+            client = get_models_dev()
+            await client.ensure_loaded()
+            if client.get_provider(provider) is None:
+                await client.refresh(force=True)
+            self._apply_live_models(client)
+        except Exception:
+            pass
+        self.call_later(
+            lambda: self._connect_byok_mode(
+                provider,
+                model,
+                log,
+                resolved_role,
+                _catalog_refresh_attempted=True,
+            )
+        )
+
+    def _connect_byok_mode(
+        self,
+        provider: str,
+        model: str,
+        log: ConversationLog,
+        resolved_role=None,
+        *,
+        _catalog_refresh_attempted: bool = False,
     ):
         """Connect to BYOK mode with specified provider/model.
 
@@ -22376,6 +22445,22 @@ class SuperQodeApp(App):
             resolved_role: Optional ResolvedRole object for role-based connections
                           (used to inject job description into system prompt)
         """
+        from superqode.providers.dynamic import resolve_provider_def
+
+        provider = normalize_provider_id(provider)
+        model = normalize_model_for_provider(provider, model)
+        provider_def = resolve_provider_def(provider)
+        if provider_def is None:
+            if not _catalog_refresh_attempted:
+                self.run_worker(
+                    self._refresh_catalog_then_connect_byok(provider, model, log, resolved_role)
+                )
+                return
+            log.add_error(
+                f"Provider '{provider}' is not available from the current models.dev catalog."
+            )
+            return
+
         # Clear any existing ACP connection when switching to BYOK
         if hasattr(self, "_acp_client") and self._acp_client:
             # Disconnect ACP client if switching from ACP to BYOK
@@ -22395,19 +22480,12 @@ class SuperQodeApp(App):
             session.connected_agent = None
         if hasattr(session, "acp_manager"):
             session.acp_manager = None
-        from superqode.providers.registry import PROVIDERS, ProviderCategory
-        from superqode.providers.dynamic import resolve_provider_def
+        from superqode.providers.registry import ProviderCategory
         from superqode.pure_mode import PureMode
         from superqode.agent.system_prompts import SystemPromptLevel
         from superqode.providers.usage import get_usage_tracker
         import os
 
-        provider = normalize_provider_id(provider)
-        model = normalize_model_for_provider(provider, model)
-
-        # Get provider info. Use the resolver so models.dev-synthesized providers
-        # (not in the curated registry) still get the API-key check below.
-        provider_def = resolve_provider_def(provider)
         provider_name = provider_def.name if provider_def else provider.upper()
 
         # Show experimental warning for vLLM and SGLang
@@ -23676,6 +23754,8 @@ class SuperQodeApp(App):
             # Don't scroll to home on navigation updates to reduce flickering
             log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
 
+        self._scroll_to_rendered_selected_row(log)
+
         # Set up selection handler
         self._awaiting_connect_type = True
         self._byok_highlighted_connect_type_index = highlighted_idx  # Preserve current highlight
@@ -23694,6 +23774,8 @@ class SuperQodeApp(App):
             delattr(self, "_byok_selected_provider")
         if hasattr(self, "_byok_model_list"):
             delattr(self, "_byok_model_list")
+        if hasattr(self, "_byok_all_model_list"):
+            delattr(self, "_byok_all_model_list")
         # Only clear connect list on initial display, not during navigation
         if clear_log and hasattr(self, "_byok_connect_list"):
             delattr(self, "_byok_connect_list")
@@ -23708,6 +23790,7 @@ class SuperQodeApp(App):
     def _show_connect_picker(self, log: ConversationLog, clear_log: bool = True):
         """Show interactive provider picker with model counts and API key guidance."""
         from superqode.providers.registry import PROVIDERS, ProviderCategory, get_free_providers
+        from superqode.providers.dynamic import all_provider_ids, resolve_provider_def
         from superqode.providers.models import get_models_for_provider, get_data_source
         import os
 
@@ -23723,6 +23806,8 @@ class SuperQodeApp(App):
             delattr(self, "_byok_selected_provider")
         if hasattr(self, "_byok_model_list"):
             delattr(self, "_byok_model_list")
+        if hasattr(self, "_byok_all_model_list"):
+            delattr(self, "_byok_all_model_list")
         # Only clear the connect list on initial display, not during navigation
         if clear_log and hasattr(self, "_byok_connect_list"):
             delattr(self, "_byok_connect_list")
@@ -23766,7 +23851,7 @@ class SuperQodeApp(App):
                         missing_keys.append(env_var)
 
             try:
-                models = get_models_for_provider(pid)
+                models = get_models_for_provider(pid, include_all=True)
                 model_count = len(models)
             except Exception:
                 model_count = len(pdef.example_models) if pdef.example_models else 0
@@ -23783,7 +23868,10 @@ class SuperQodeApp(App):
         }
 
         providers_by_category = {}
-        for pid, pdef in PROVIDERS.items():
+        for pid in all_provider_ids():
+            pdef = resolve_provider_def(pid)
+            if pdef is None:
+                continue
             category = pdef.category
             if category not in providers_by_category:
                 providers_by_category[category] = []
@@ -24043,7 +24131,8 @@ class SuperQodeApp(App):
                 self._show_connect_picker(log)
                 return
 
-        from superqode.providers.registry import PROVIDERS, ProviderCategory
+        from superqode.providers.registry import ProviderCategory
+        from superqode.providers.dynamic import resolve_provider_def
         from superqode.providers.models import (
             get_models_for_provider,
             get_data_source,
@@ -24060,7 +24149,7 @@ class SuperQodeApp(App):
                 # Fall back to numbered list if picker fails
                 pass
 
-        provider_def = PROVIDERS.get(provider_id)
+        provider_def = resolve_provider_def(provider_id)
         if not provider_def:
             log.add_error(f"Unknown provider: {provider_id}")
             return
@@ -24129,7 +24218,7 @@ class SuperQodeApp(App):
         )
 
         # Get models from database
-        db_models = get_models_for_provider(provider_id)
+        db_models = get_models_for_provider(provider_id, include_all=True)
 
         if db_models:
             # Helper function to detect latest models for any provider
@@ -24598,6 +24687,7 @@ class SuperQodeApp(App):
         # CRITICAL: Always set the model list to match the display order
         # model_list is always defined (initialized in both if db_models and else blocks)
         self._byok_model_list = model_list if model_list else []
+        self._byok_all_model_list = list(db_models) if db_models else list(self._byok_model_list)
 
         if db_models:
             self._byok_model_info = db_models  # Store model info for picker
@@ -24630,17 +24720,17 @@ class SuperQodeApp(App):
 
     def _show_provider_models_picker(self, provider_id: str, log: ConversationLog):
         """Show interactive model picker widget with keyboard navigation."""
-        from superqode.providers.registry import PROVIDERS
+        from superqode.providers.dynamic import resolve_provider_def
         from superqode.providers.models import get_models_for_provider, get_data_source
         from superqode.widgets.model_picker import ModelPickerWidget, ModelOption
 
-        provider_def = PROVIDERS.get(provider_id)
+        provider_def = resolve_provider_def(provider_id)
         if not provider_def:
             log.add_error(f"Unknown provider: {provider_id}")
             return
 
         # Get models
-        db_models = get_models_for_provider(provider_id)
+        db_models = get_models_for_provider(provider_id, include_all=True)
 
         if not db_models:
             # Fall back to numbered list
