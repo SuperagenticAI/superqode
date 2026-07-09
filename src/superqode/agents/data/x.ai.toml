@@ -1,0 +1,81 @@
+# Official Grok CLI agent entry.
+# https://x.ai/cli
+
+identity = "x.ai"
+name = "Grok Build"
+short_name = "grok"
+url = "https://x.ai/cli"
+protocol = "acp"
+author_name = "xAI"
+author_url = "https://x.ai"
+publisher_name = "SuperQode"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "xAI's official Grok Build coding agent, connected through its native ACP server."
+tags = ["xai", "grok", "subscription", "byok", "acp"]
+run_command."*" = "grok agent stdio"
+api_key_env_vars = ["XAI_API_KEY", "GROK_CODE_XAI_API_KEY"]
+
+help = '''
+# Grok Build
+
+Grok Build is xAI's official coding agent. SuperQode starts its native ACP server with:
+
+```bash
+grok agent stdio
+```
+
+## Install
+
+```bash
+# macOS / Linux / WSL
+curl -fsSL https://x.ai/cli/install.sh | bash
+
+# Windows PowerShell
+irm https://x.ai/cli/install.ps1 | iex
+```
+
+## Subscription login
+
+Grok Build is available to eligible SuperGrok and X Premium+ accounts.
+Authenticate the official CLI before connecting:
+
+```bash
+grok login
+```
+
+For an SSH or headless machine, use device authentication:
+
+```bash
+grok login --device-auth
+```
+
+Then connect in SuperQode with `:connect grok` or `superqode --connect grok`.
+The official CLI keeps subscription credentials locally (`~/.grok/auth.json`);
+SuperQode does not copy the token. Eligibility and available models are
+determined by xAI for the signed-in account.
+
+## Models
+
+Grok Build defaults to its `grok-build` alias (currently Grok 4.5). Pin a
+specific model from SuperQode with `:grok connect grok-4.5` or
+`:grok connect grok-build-0.1`; the hint is forwarded through ACP.
+
+## Direct API on your subscription (opt-in)
+
+`:grok api [model]` imports the local `grok login` session token into
+SuperQode's own auth store and connects the `grok-cli` provider against the
+CLI chat proxy documented by xAI. Remove it anytime with `:grok api off`.
+CLI sessions last about 7 days; re-run `grok login` when they expire.
+
+## BYOK
+
+For direct xAI API usage, set `XAI_API_KEY` and connect `xai/grok-4.5` through
+the BYOK provider picker. API usage is billed separately from a consumer
+subscription. The CLI itself also accepts `GROK_CODE_XAI_API_KEY` for
+headless, key-based runs.
+'''
+
+[actions."*".install]
+command = "curl -fsSL https://x.ai/cli/install.sh | bash"
+description = "Install the official Grok CLI"

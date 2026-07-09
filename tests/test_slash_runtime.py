@@ -107,10 +107,11 @@ def test_textual_completion_includes_harness_runtime_connect_and_session_command
         for completion in filter_slash_commands(DEFAULT_COMMANDS, ":cod")
     )
     assert any(completion.command == "/resume" for completion in resume)
-    assert [completion.command for completion in connect[:5]] == [
+    assert [completion.command for completion in connect[:6]] == [
         ":connect",
         ":connect acp",
         ":connect antigravity",
+        ":connect grok",
         ":connect byok",
         ":connect local",
     ]

@@ -270,10 +270,19 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(
         ":connect antigravity", "Connect via local Antigravity CLI handoff", category="workflow"
     ),
+    SlashCommand(
+        ":connect grok", "Connect to Grok Build through the official Grok CLI", category="workflow"
+    ),
     SlashCommand("/connect byok", "Connect to BYOK provider/model", category="workflow"),
     SlashCommand(":connect byok", "Connect to BYOK provider/model", category="workflow"),
     SlashCommand("/connect local", "Connect to local model provider", category="workflow"),
     SlashCommand(":connect local", "Connect to local model provider", category="workflow"),
+    SlashCommand(":grok", "Connect to Grok Build", category="workflow"),
+    SlashCommand(":grok status", "Check Grok CLI and login readiness", category="workflow"),
+    SlashCommand(":grok login", "Show Grok browser and device login commands", category="workflow"),
+    SlashCommand(
+        ":grok api", "Reuse the local grok login for direct API calls (opt-in)", category="workflow"
+    ),
     SlashCommand("/model", "Show or switch models", category="workflow"),
     SlashCommand("/tools", "Show active tool profile", category="workflow"),
     SlashCommand(":plugins", "List local plugin manifests", category="workflow"),
@@ -335,16 +344,18 @@ def _command_sort_key(query: str, command: str) -> tuple[int, str]:
             ":connect": 0,
             ":connect acp": 1,
             ":connect antigravity": 2,
-            ":connect byok": 3,
-            ":connect local": 4,
+            ":connect grok": 3,
+            ":connect byok": 4,
+            ":connect local": 5,
             ":clear": 20,
         },
         ":co": {
             ":connect": 0,
             ":connect acp": 1,
             ":connect antigravity": 2,
-            ":connect byok": 3,
-            ":connect local": 4,
+            ":connect grok": 3,
+            ":connect byok": 4,
+            ":connect local": 5,
         },
         ":q": {
             ":quit": 0,
@@ -362,10 +373,11 @@ def _command_sort_key(query: str, command: str) -> tuple[int, str]:
             ":connect": 0,
             ":connect acp": 1,
             ":connect antigravity": 2,
-            ":connect byok": 3,
-            ":connect local": 4,
-            ":exit": 5,
-            ":quit": 6,
+            ":connect grok": 3,
+            ":connect byok": 4,
+            ":connect local": 5,
+            ":exit": 6,
+            ":quit": 7,
         },
     }
     for prefix, scores in priority.items():
@@ -390,6 +402,7 @@ def filter_slash_commands(
             ":connect",
             ":connect acp",
             ":connect antigravity",
+            ":connect grok",
             ":connect byok",
             ":connect local",
         ]

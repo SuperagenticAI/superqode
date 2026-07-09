@@ -57,8 +57,12 @@ class ProviderDef:
     deployment_mode: Optional[str] = None
     # True when this def was synthesized from models.dev metadata rather than
     # being a curated, first-class entry. Dynamic providers route as
-    # OpenAI-compatible (base_url + api_key passed explicitly).
+    # OpenAI-compatible (base_url + api_key passed explicitly). Curated
+    # entries may also set this to opt into the same per-request routing.
     dynamic: bool = False
+    # Static HTTP headers required by the provider's endpoint. A "{model}"
+    # placeholder in a value is replaced with the request's model id.
+    extra_headers: Dict[str, str] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -138,14 +142,43 @@ PROVIDERS: Dict[str, ProviderDef] = {
         category=ProviderCategory.US_LABS,
         env_vars=["XAI_API_KEY"],
         litellm_prefix="xai/",
-        docs_url="https://console.x.ai/",
+        base_url_env="XAI_API_BASE",
+        default_base_url="https://api.x.ai/v1",
+        docs_url="https://docs.x.ai/developers/quickstart",
         example_models=[
-            "grok-3",
-            "grok-3-mini",
-            "grok-2",
-            "grok-beta",
+            "grok-4.5",
+            "grok-4.3",
+            "grok-build-0.1",
         ],
-        notes="Good for coding. Fast inference.",
+        notes="Grok 4.5 is available with an xAI API key. Use the Grok subscription profile for CLI-managed X/SuperGrok access.",
+    ),
+    "grok-cli": ProviderDef(
+        # Direct-API reuse of the official Grok CLI's subscription login
+        # (`:grok api`). The token is imported into SuperQode's local auth
+        # store; requests hit the CLI chat proxy documented by xAI with the
+        # headers it requires. No env key involved.
+        id="grok-cli",
+        name="Grok CLI Subscription",
+        tier=ProviderTier.TIER1,
+        category=ProviderCategory.US_LABS,
+        env_vars=[],
+        litellm_prefix="openai/",
+        # Same override env var the official CLI uses for enterprise proxies.
+        base_url_env="GROK_CLI_CHAT_PROXY_BASE_URL",
+        default_base_url="https://cli-chat-proxy.grok.com/v1",
+        docs_url="https://x.ai/cli",
+        example_models=[
+            "grok-build",
+            "grok-4.5",
+            "grok-4.3",
+            "grok-build-0.1",
+        ],
+        notes="Uses your `grok login` session via :grok api (opt-in). Subscription usage; interactive use only.",
+        dynamic=True,  # per-request api_base/api_key routing, no env mutation
+        extra_headers={
+            "X-XAI-Token-Auth": "xai-grok-cli",
+            "x-grok-model-override": "{model}",
+        },
     ),
     "mistral": ProviderDef(
         id="mistral",

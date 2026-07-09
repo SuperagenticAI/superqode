@@ -75,6 +75,35 @@ Restart the ACP session after changing MCP configuration so the agent receives t
 
 ---
 
+### Grok Build (xAI)
+
+[Grok Build](https://x.ai/cli) is xAI's official coding agent and exposes a
+native ACP server. It can use the official CLI's local subscription login or
+an `XAI_API_KEY` configured for the CLI.
+
+```bash
+# Install and authenticate the official CLI (macOS/Linux/WSL)
+curl -fsSL https://x.ai/cli/install.sh | bash
+# Windows PowerShell: irm https://x.ai/cli/install.ps1 | iex
+grok login
+
+# Connect from SuperQode
+superqode connect acp grok
+```
+
+Use `grok login --device-auth` on SSH or a headless machine. In the TUI,
+`:connect grok` opens the dedicated subscription profile. Grok Build follows
+the signed-in account's default model (currently Grok 4.5); pin one with
+`:grok connect grok-4.5` or `:grok connect grok-build-0.1`.
+
+Subscription credentials stay with the official Grok CLI. Direct API billing
+is separate and should use SuperQode's `xai/grok-4.5` BYOK provider path.
+To make direct API calls on the subscription itself, `:grok api` offers an
+explicit opt-in that reuses the local `grok login` session — see
+[BYOK Providers → Grok Subscription](byok.md#grok-subscription-official-cli).
+
+---
+
 ### OpenClaw (Enterprise Integration, Experimental)
 
 [OpenClaw](https://openclaw.ai/) provides an ACP bridge backed by the OpenClaw Gateway. This
@@ -135,6 +164,7 @@ SuperQode includes registry entries for these ACP agents (availability depends o
 - **Amp** (ACP adapter: `acp-amp` via [acp-amp](https://github.com/SuperagenticAI/acp-amp))
 - **Claude Code** (ACP adapter: `claude-code-acp`)
 - **Codex** (ACP adapter: `npx @openai/codex-acp` or `codex-acp`)
+- **Grok Build** (`grok agent stdio`)
 - **OpenHands** (`openhands acp`)
 - **Gemini CLI** (`gemini --experimental-acp`): enterprise/API-key ACP route. Individual Google AI users should prefer `:connect antigravity`
 - **Goose** (`goose`)

@@ -30,6 +30,7 @@ superqode -C PROFILE [COMMAND]
 | `codex` | Self-contained. Uses Codex SDK. Auto-sets runtime to `codex-sdk`. Requires `openai_codex` package and `~/.codex/auth.json`. |
 | `claude` | Self-contained. Uses Claude Agent SDK. Auto-sets runtime to `claude-agent-sdk`. Requires `claude_agent_sdk` package and `ANTHROPIC_API_KEY`. |
 | `antigravity` | Handoff to the `agy` CLI for Antigravity cloud-managed sessions. |
+| `grok` | Grok Build via the official Grok CLI's native ACP server, using an eligible X/SuperGrok subscription. Requires the `grok` binary and `grok login`. |
 | `byok` | Bring Your Own Key. Connect to a cloud provider with your own API key. |
 | `local` | Connect to a local or self-hosted provider (Ollama, MLX, LM Studio, etc.). |
 | `acp` | Connect to an ACP (Agent Client Protocol) coding agent. |
@@ -62,6 +63,9 @@ superqode --connect acp opencode
 
 # Handoff to Antigravity
 superqode --connect antigravity
+
+# Connect Grok Build on your Grok subscription (official Grok CLI, ACP)
+superqode --connect grok
 ```
 
 ---
@@ -92,6 +96,22 @@ Uses the Claude Agent SDK as the runtime backend.
 
 Hands off session management to the `agy` CLI. The Antigravity service handles
 provider selection, sandbox provisioning, and session persistence in the cloud.
+
+### grok
+
+Connects xAI's Grok Build coding agent through its native ACP server
+(`grok agent stdio`) on an eligible SuperGrok or X Premium+ subscription.
+
+| Requirement | Details |
+|-------------|---------|
+| Binary | `grok` on PATH (`curl -fsSL https://x.ai/cli/install.sh \| bash`) |
+| Auth | `grok login` (or `grok login --device-auth` on headless hosts); stored by the CLI in `~/.grok/auth.json` |
+| Connector | ACP subprocess; the CLI owns credentials and token refresh |
+
+The signed-in account's default model (the CLI's `grok-build` alias, currently
+Grok 4.5) is used unless a model is pinned. In the TUI, `:grok api` additionally
+offers an explicit opt-in to reuse the CLI login for direct API calls — see
+[BYOK Providers](../providers/byok.md#grok-subscription-official-cli).
 
 ### byok
 

@@ -659,10 +659,11 @@ class ProviderManager:
                 requires_api_key=True,
                 configured=self._is_provider_configured("xai"),
                 models=[
-                    ModelInfo("grok-3", "Grok-3 (Latest)", "xai", context_size=262144),
-                    ModelInfo("grok-3-mini", "Grok-3 Mini", "xai", context_size=131072),
-                    ModelInfo("grok-2", "Grok-2", "xai", context_size=131072),
-                    ModelInfo("grok-beta", "Grok Beta", "xai", context_size=131072),
+                    ModelInfo("grok-4.5", "Grok 4.5 (Latest)", "xai", context_size=500000),
+                    ModelInfo("grok-4.3", "Grok 4.3 (1M context)", "xai", context_size=1000000),
+                    ModelInfo(
+                        "grok-build-0.1", "Grok Build 0.1 (Fast coding)", "xai", context_size=256000
+                    ),
                 ],
             )
         )

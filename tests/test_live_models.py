@@ -7,6 +7,7 @@ import pytest
 from superqode.providers import live_models
 from superqode.providers.models import ModelCapability, ModelInfo
 from superqode.providers.models_dev import ProviderInfo, get_models_dev
+from superqode.providers.registry import PROVIDERS
 
 
 # --- payload parsing / endpoint candidates -----------------------------------
@@ -16,6 +17,14 @@ def test_models_endpoints_with_and_without_v1():
     assert live_models._models_endpoints("http://x/v1") == ["http://x/v1/models"]
     got = live_models._models_endpoints("http://x")
     assert got == ["http://x/v1/models", "http://x/models"]
+
+
+def test_xai_live_discovery_uses_official_api_endpoint():
+    xai = PROVIDERS["xai"]
+
+    assert xai.base_url_env == "XAI_API_BASE"
+    assert xai.default_base_url == "https://api.x.ai/v1"
+    assert xai.example_models[0] == "grok-4.5"
 
 
 def test_parse_openai_style():

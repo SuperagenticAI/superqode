@@ -5,6 +5,7 @@ from superqode.agents.acp_registry import (
     get_registry_agent,
     get_registry_agent_by_short_name,
 )
+from superqode.acp_discovery import KNOWN_AGENTS
 from superqode.agents.official_acp import OFFICIAL_ACP_AGENTS
 
 
@@ -31,6 +32,38 @@ def test_registry_short_name_lookup_uses_toml_data():
     assert agent is not None
     assert agent["identity"] == "opencode.ai"
     assert agent["run_command"] == "opencode acp"
+
+
+def test_registry_includes_official_grok_cli_agent():
+    agent = get_registry_agent_by_short_name("grok")
+
+    assert agent is not None
+    assert agent["identity"] == "x.ai"
+    assert agent["run_command"] == "grok agent stdio"
+
+
+def test_acp_discovery_uses_grok_native_stdio_server():
+    grok = next(agent for agent in KNOWN_AGENTS if agent["short_name"] == "grok")
+
+    assert grok["command"] == ["grok", "agent", "stdio"]
+    assert grok["requires_api_key"] is False
+    # Both the generic xAI key and the CLI's own key env are accepted.
+    assert grok["api_key_env_vars"] == ["XAI_API_KEY", "GROK_CODE_XAI_API_KEY"]
+
+
+def test_acp_discovery_grok_models_lead_with_account_default():
+    import asyncio
+
+    from superqode.acp_discovery import ACPDiscovery, DiscoveredAgent
+
+    agent = DiscoveredAgent(name="Grok Build", short_name="grok", command=["grok", "agent", "stdio"])
+    models = asyncio.run(ACPDiscovery()._get_models(agent))
+
+    ids = [m.id for m in models]
+    # The CLI's default alias must come first; explicit ids follow.
+    assert ids[0] == "grok-build"
+    assert "grok-4.5" in ids
+    assert "grok-build-0.1" in ids
 
 
 def test_fast_agent_registry_uses_documented_acp_entrypoint():

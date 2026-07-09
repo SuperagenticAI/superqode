@@ -135,6 +135,7 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:codex` - Connect to and manage the Codex SDK runtime
 - `:claude` - Connect to and manage the Claude Agent SDK runtime
 - `:antigravity` - Show Antigravity CLI handoff, status, and migration help
+- `:grok` - Connect Grok Build via the official Grok CLI (ACP), check status, or opt into direct API with `:grok api`
 - `:plan <task>` - Ask for a plan only, without native tool execution
 - `:plan approve` - Execute the last planned request with tools enabled
 - `:plan edit [task]` - Edit the pending planned request before execution
@@ -335,6 +336,22 @@ Antigravity CLI handoff:
 :antigravity migrate
 :agy status
 ```
+
+Grok Build (official Grok CLI):
+
+```text
+:grok
+:grok connect [model]
+:grok api [model]
+:grok api off
+:grok status
+:grok login
+```
+
+`:grok connect` runs Grok Build through its native ACP server on your
+subscription login. `:grok api` is the explicit opt-in that reuses the local
+`grok login` session token for direct API calls (see the
+[BYOK provider docs](../providers/byok.md#grok-subscription-official-cli)).
 
 ## Optional Vim Helpers
 

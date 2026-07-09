@@ -109,12 +109,95 @@ export MISTRAL_API_KEY=...
 superqode connect byok mistral mistral-large
 ```
 
-#### xAI (Grok)
+#### xAI (Grok 4.5)
 
 ```bash
 export XAI_API_KEY=...
-superqode connect byok xai grok
+superqode connect byok xai grok-4.5
 ```
+
+| Model | Context | Price (in/out per 1M) | Best For |
+|-------|---------|-----------------------|----------|
+| `grok-4.5` | 500K | $2.00 / $6.00 | Agentic coding, complex reasoning, and research |
+| `grok-4.3` | 1M | $1.25 / $2.50 | Document-heavy work needing the largest context |
+| `grok-build-0.1` | 256K | $1.00 / $2.00 | Fast agentic coding loops and iterative edits |
+
+Grok 4.5 supports `reasoning_effort` (low / medium / high, default high) and
+image + PDF input. Cached input is $0.50 per million tokens, and prompts above
+200K tokens are billed at a higher tier ($4 / $12). This route uses your xAI
+API account and is billed separately from a consumer subscription. Grok 4.5 is
+not yet available in the xAI API console for EU users.
+
+**Documentation**: [xAI Grok 4.5](https://docs.x.ai/developers/grok-4-5) ·
+[xAI model catalog](https://docs.x.ai/developers/models)
+
+---
+
+## Grok Subscription (Official CLI)
+
+For an eligible local X/SuperGrok account, use the official Grok CLI ACP path
+instead of a BYOK key. SuperQode starts `grok agent stdio`; the CLI owns login,
+token refresh, and subscription usage.
+
+```bash
+# Install the official xAI CLI if needed (macOS/Linux/WSL)
+curl -fsSL https://x.ai/cli/install.sh | bash
+# Windows PowerShell: irm https://x.ai/cli/install.ps1 | iex
+
+# Sign in locally
+grok login
+
+# Start SuperQode with the subscription profile
+superqode --connect grok
+```
+
+Inside the TUI, use:
+
+```text
+:connect grok
+```
+
+On SSH or another headless machine, authenticate with:
+
+```bash
+grok login --device-auth
+```
+
+`Grok Build` follows the signed-in account's default model (the CLI's
+`grok-build` alias, currently Grok 4.5). To pin a specific model, pass it when
+connecting — `:grok connect grok-4.5` or `:grok connect grok-build-0.1` — and
+SuperQode forwards it through ACP. Grok Build access requires an eligible
+SuperGrok or X Premium+ plan; availability, quotas, and regional access are
+determined by xAI. By default SuperQode does not read or copy the subscription
+token. For cloud or automation workloads, use `XAI_API_KEY` BYOK instead.
+
+### Direct API with your subscription (opt-in)
+
+The Grok CLI documents reusing its local session token for direct calls to its
+chat proxy. `:grok api` is SuperQode's explicit opt-in for that route:
+
+```text
+:grok api                 # connect grok-cli/grok-build on your subscription
+:grok api grok-4.5        # pin a specific model
+:grok api off             # remove the imported token
+```
+
+This imports the `grok login` session token from `~/.grok/auth.json` into
+SuperQode's local auth store (`~/.superqode/auth.json`, permissions 0600) and
+connects the `grok-cli` provider, which targets
+`https://cli-chat-proxy.grok.com/v1` with the headers xAI requires
+(`X-XAI-Token-Auth`, `x-grok-model-override`). Enterprise proxies are honored
+via the CLI's own `GROK_CLI_CHAT_PROXY_BASE_URL` variable.
+
+Notes:
+
+- CLI sessions last about 7 days; when the token expires, run `grok login`
+  again, then re-run `:grok api`.
+- Usage counts against your subscription and model eligibility is enforced by
+  xAI per tier. This route is intended for interactive use — for automation or
+  benchmarking, use `XAI_API_KEY` BYOK.
+- Most proxy models are streaming-only; SuperQode's chat path streams by
+  default.
 
 ---
 

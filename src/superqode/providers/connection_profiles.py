@@ -76,6 +76,11 @@ def _antigravity_cli_ready() -> bool:
     return shutil.which("agy") is not None
 
 
+def _grok_cli_ready() -> bool:
+    """Official Grok CLI installed with a locally managed subscription login."""
+    return shutil.which("grok") is not None and (Path.home() / ".grok" / "auth.json").exists()
+
+
 _BYOK_KEY_ENVS = (
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
@@ -84,6 +89,7 @@ _BYOK_KEY_ENVS = (
     "GROQ_API_KEY",
     "MISTRAL_API_KEY",
     "OPENROUTER_API_KEY",
+    "XAI_API_KEY",
 )
 
 
@@ -93,7 +99,7 @@ def _byok_ready() -> bool:
 
 # --- registry -----------------------------------------------------------------
 
-# Display order (local-first product positioning): Local, BYOK, ACP, Codex, Claude, Antigravity.
+# Display order (local-first product positioning): Local, BYOK, ACP, Codex, Claude, Antigravity, Grok.
 _PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="local",
@@ -149,6 +155,15 @@ _PROFILES: List[ConnectionProfile] = [
         connector="external-cli",
         detect=_antigravity_cli_ready,
         unavailable_hint="install agy from https://antigravity.google/docs/cli-install and sign in",
+    ),
+    ConnectionProfile(
+        id="grok",
+        label="Grok subscription",
+        description="Use Grok Build through the official Grok CLI and an eligible X/SuperGrok account",
+        connector="acp",
+        acp_agent="grok",
+        detect=_grok_cli_ready,
+        unavailable_hint="install the Grok CLI, then run `grok login` (or `grok login --device-auth`)",
     ),
 ]
 

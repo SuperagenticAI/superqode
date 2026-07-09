@@ -496,6 +496,18 @@ def test_opencode_acp_model_normalization_preserves_provider_ids():
     assert SuperQodeApp._normalize_acp_model_id("opencode", "opencode/auto") is None
 
 
+def test_grok_acp_model_normalization_strips_ui_prefixes():
+    # UI placeholders mean "use the signed-in account's default".
+    assert SuperQodeApp._normalize_acp_model_id("grok", "grok/default") is None
+    assert SuperQodeApp._normalize_acp_model_id("grok", "auto") is None
+    # Grok Build expects bare xAI ids; provider-style prefixes are stripped.
+    assert SuperQodeApp._normalize_acp_model_id("grok", "xai/grok-4.5") == "grok-4.5"
+    assert SuperQodeApp._normalize_acp_model_id("grok", "grok/grok-build-0.1") == "grok-build-0.1"
+    # The CLI's own default alias and bare ids pass through unchanged.
+    assert SuperQodeApp._normalize_acp_model_id("grok", "grok-build") == "grok-build"
+    assert SuperQodeApp._normalize_acp_model_id("grok", "grok-4.5") == "grok-4.5"
+
+
 def test_prompt_height_wraps_and_caps_long_text():
     # Prompt starts at a 3-line minimum and grows up to an 8-line cap.
     assert SelectionAwareInput._height_for_text("", 40) == 3
@@ -1022,6 +1034,7 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":connect acp" in COMMANDS
     assert ":connect byok" in COMMANDS
     assert ":connect local" in COMMANDS
+    assert ":connect grok" in COMMANDS
     assert ":chat" in COMMANDS
     assert ":build" in COMMANDS
     assert ":mode" in COMMANDS
@@ -1075,6 +1088,7 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":harness events" in slash_values
     assert ":connect" in slash_values
     assert ":connect acp" in slash_values
+    assert ":connect grok" in slash_values
     assert ":chat" in slash_values
     assert ":build" in slash_values
     assert ":mode" in slash_values
@@ -1802,19 +1816,21 @@ def test_slash_complete_prioritizes_connect_and_quit():
     connect_values = [command.command for command in filter_slash_commands(DEFAULT_COMMANDS, ":c")]
     quit_values = [command.command for command in filter_slash_commands(DEFAULT_COMMANDS, ":q")]
 
-    assert root_values[:7] == [
+    assert root_values[:8] == [
         ":connect",
         ":connect acp",
         ":connect antigravity",
+        ":connect grok",
         ":connect byok",
         ":connect local",
         ":exit",
         ":quit",
     ]
-    assert connect_values[:5] == [
+    assert connect_values[:6] == [
         ":connect",
         ":connect acp",
         ":connect antigravity",
+        ":connect grok",
         ":connect byok",
         ":connect local",
     ]
@@ -2276,19 +2292,21 @@ def test_prompt_completion_prioritizes_full_connect_and_quit_commands():
     connect_values = [candidate.value for candidate in app._prompt_completion_candidates_for(":c")]
     quit_values = [candidate.value for candidate in app._prompt_completion_candidates_for(":q")]
 
-    assert root_values[:7] == [
+    assert root_values[:8] == [
         ":connect",
         ":connect acp",
         ":connect antigravity",
+        ":connect grok",
         ":connect byok",
         ":connect local",
         ":exit",
         ":quit",
     ]
-    assert connect_values[:5] == [
+    assert connect_values[:6] == [
         ":connect",
         ":connect acp",
         ":connect antigravity",
+        ":connect grok",
         ":connect byok",
         ":connect local",
     ]
@@ -2296,6 +2314,7 @@ def test_prompt_completion_prioritizes_full_connect_and_quit_commands():
         ":connect",
         ":connect acp",
         ":connect antigravity",
+        ":connect grok",
         ":connect byok",
         ":connect local",
     ]

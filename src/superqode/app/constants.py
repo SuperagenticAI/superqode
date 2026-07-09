@@ -141,6 +141,7 @@ AGENT_COLORS = {
     "claude": "#d97706",  # Anthropic Orange
     "claude-code": "#d97706",  # Anthropic Orange
     "codex": "#10b981",  # Green
+    "grok": "#e5e7eb",  # xAI neutral, readable on the dark TUI
     "junie": "#fe315d",  # JetBrains Pink
     "goose": "#8b5cf6",  # Block Purple
     "kimi": "#5b21b6",  # Moonshot Deep Purple
@@ -162,6 +163,7 @@ AGENT_ICONS = {
     "claude": "🧡",  # Orange heart - Anthropic's warm AI
     "claude-code": "🧡",  # Orange heart - Anthropic's warm AI
     "codex": "📜",  # Scroll
+    "grok": "G",  # Grok Build
     "junie": "🧠",  # Brain - JetBrains intelligence
     "goose": "🦆",  # Duck - Block's Goose
     "kimi": "🌙",  # Moon - Moonshot AI's Kimi
@@ -251,6 +253,7 @@ COMMANDS = [
     ":connect codex",
     ":connect claude",
     ":connect antigravity",
+    ":connect grok",
     ":connect byok",
     ":connect local",
     ":connect acp",
@@ -266,6 +269,10 @@ COMMANDS = [
     ":antigravity migrate",
     ":antigravity launch",
     ":agy",
+    ":grok",
+    ":grok status",
+    ":grok login",
+    ":grok api",
     ":exit",
     ":quit",
     ":help",

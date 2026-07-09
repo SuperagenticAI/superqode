@@ -26,7 +26,7 @@ SuperQode supports multiple provider types for connecting to AI models and agent
 
     ---
 
-    Agent Client Protocol - connect to coding agents like OpenCode, Amp, Claude Code, and more.
+    Agent Client Protocol - connect to coding agents like OpenCode, Grok Build, Amp, Claude Code, and more.
 
     [:octicons-arrow-right-24: ACP Agents](acp.md)
 
@@ -118,7 +118,7 @@ Full support with optimized prompts (Enterprise adds prompt packs):
 | Google | Gemini 3.1 Pro/Flash |
 | Deepseek | Deepseek V3, R1 |
 | Mistral | Mistral Large |
-| xAI | Grok |
+| xAI | Grok 4.5, Grok 4.3, Grok Build 0.1 |
 
 ### Tier 2 (Supported)
 

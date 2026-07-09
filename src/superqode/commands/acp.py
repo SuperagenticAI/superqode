@@ -442,7 +442,6 @@ def validate_agent_environment(agent: "Agent") -> list[str]:
         "gemini": ["GOOGLE_API_KEY"],
         "openai": ["OPENAI_API_KEY"],
         "kimi": ["MOONSHOT_API_KEY"],
-        "grok": ["XAI_API_KEY"],
     }
 
     # Check if agent requires specific environment variables

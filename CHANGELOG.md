@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-07-09
+
+### Added
+
+- **Grok subscription profile (`:connect grok`)** - New connection profile that runs xAI's official Grok Build coding agent through its native ACP server (`grok agent stdio`) on an eligible SuperGrok/X Premium+ account. Includes agent-registry and discovery entries, a `:grok` command surface (`connect`, `status`, `login`, `help`), completion/suggestion wiring, and docs across the provider, CLI-reference, connection-profiles, and TUI pages.
+- **Opt-in direct API on the Grok subscription (`:grok api`)** - Explicitly imports the local `grok login` session token into SuperQode's 0600 auth store and connects the new `grok-cli` provider against the CLI chat proxy xAI documents (`https://cli-chat-proxy.grok.com/v1`), sending the required `X-XAI-Token-Auth` and `x-grok-model-override` headers. `:grok api off` removes the token; `:grok status` reports token state. The default ACP path still never reads the CLI's credentials.
+- **Grok 4.5 in the xAI BYOK catalog** - Added `grok-4.5` (500K context, reasoning efforts, vision), `grok-4.3` (1M context), and `grok-build-0.1` with current pricing; refreshed registry example models, base URL, and docs links.
+- **`ProviderDef.extra_headers`** - Curated providers can now declare required HTTP headers (with a `{model}` placeholder) applied per-request by the LiteLLM gateway, and can opt into per-request `api_base`/`api_key` routing without env mutation.
+
+### Fixed
+
+- **Stale models.dev cache hiding new models** - A months-old on-disk models.dev cache no longer replaces newer curated builtin model lists (it previously hid day-one models like `grok-4.5` and mispriced lookups via fuzzy matching). Live provider lists now only override builtins when they are at least as new by release date.
+- **Retired xAI models removed** - Dropped `grok-3`, `grok-3-mini`, `grok-2`, and `grok-beta` from the BYOK pickers to match xAI's current catalog; video-generation models are now excluded from chat model lists.
+
+### Changed
+
+- **Release metadata** - Bumped the package version, runtime `__version__`, lockfile package entry, and ACP registry metadata to `0.2.9`.
+
 ## [0.2.8] - 2026-07-07
 
 ### Added

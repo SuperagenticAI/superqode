@@ -212,6 +212,21 @@ KNOWN_AGENTS: List[Dict[str, Any]] = [
         "check_command": ["codex", "--version"],
     },
     # =========================================================================
+    # Grok Build - xAI's official CLI with native ACP support
+    # =========================================================================
+    {
+        "name": "Grok Build",
+        "short_name": "grok",
+        "command": ["grok", "agent", "stdio"],
+        "icon": "G",
+        "color": "#e5e7eb",
+        "description": "xAI's official Grok Build coding agent with native ACP support",
+        "website": "https://x.ai/cli",
+        "requires_api_key": False,
+        "api_key_env_vars": ["XAI_API_KEY", "GROK_CODE_XAI_API_KEY"],
+        "check_command": ["grok", "--version"],
+    },
+    # =========================================================================
     # 4. JetBrains Junie - JetBrains AI Agent
     # =========================================================================
     {
@@ -657,6 +672,39 @@ class ACPDiscovery:
                 ),
                 AgentModel(
                     id="gpt-4o", name="GPT-4o", provider="openai", description="Multimodal GPT"
+                ),
+            ],
+            # Grok Build follows the signed-in account's current default. The
+            # bare "grok-build" id is the CLI's own default-model alias; the
+            # rest are real xAI model ids a user can pin explicitly.
+            "grok": [
+                AgentModel(
+                    id="grok-build",
+                    name="Grok Build (account default)",
+                    provider="xai",
+                    description="Official Grok Build default alias, currently Grok 4.5",
+                    context_window=500000,
+                ),
+                AgentModel(
+                    id="grok-4.5",
+                    name="Grok 4.5",
+                    provider="xai",
+                    description="xAI's flagship model for agentic coding and reasoning",
+                    context_window=500000,
+                ),
+                AgentModel(
+                    id="grok-build-0.1",
+                    name="Grok Build 0.1",
+                    provider="xai",
+                    description="Fast coding model tuned for agentic engineering loops",
+                    context_window=256000,
+                ),
+                AgentModel(
+                    id="grok-4.3",
+                    name="Grok 4.3",
+                    provider="xai",
+                    description="1M-context Grok for document-heavy work",
+                    context_window=1000000,
                 ),
             ],
             # JetBrains Junie

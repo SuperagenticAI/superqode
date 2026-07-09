@@ -1,0 +1,135 @@
+"""Grok CLI session-token reuse (opt-in).
+
+The official Grok CLI stores its subscription session token in
+``~/.grok/auth.json`` after ``grok login``. xAI's own CLI documentation shows
+how to reuse that token for direct API calls against the CLI chat proxy::
+
+    curl -s -N -X POST "https://cli-chat-proxy.grok.com/v1/chat/completions" \\
+      -H "Authorization: Bearer $(jq -r '."https://accounts.x.ai/sign-in".key' ~/.grok/auth.json)" \\
+      -H "X-XAI-Token-Auth: xai-grok-cli" \\
+      -H "x-grok-model-override: grok-build" ...
+
+SuperQode never reads this file by default (the ``:connect grok`` ACP path
+leaves credentials entirely to the CLI). ``:grok api`` is the explicit opt-in:
+it imports the session token into SuperQode's local auth store
+(``~/.superqode/auth.json``, 0600) under the ``grok-cli`` provider, from where
+the normal BYOK credential resolution picks it up.
+
+CLI session tokens last about 7 days and are refreshed by the official CLI,
+not by SuperQode — when the token expires, re-run ``grok login`` and
+``:grok api``.
+"""
+
+from __future__ import annotations
+
+import base64
+import json
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
+
+from superqode.auth import OAuthAuth, get as get_local_auth, remove as remove_local_auth
+from superqode.auth import set as set_local_auth
+
+# Provider id used in the registry, the auth store, and BYOK connect.
+PROVIDER_ID = "grok-cli"
+
+# Where the official CLI keeps its login (documented in the CLI README).
+GROK_AUTH_FILE = Path.home() / ".grok" / "auth.json"
+GROK_SIGNIN_KEY = "https://accounts.x.ai/sign-in"
+
+# Documented lifetime of a CLI session token ("Tokens expire after 7 days").
+CLI_SESSION_LIFETIME_SECONDS = 7 * 24 * 3600
+
+
+def _jwt_expiry(token: str) -> int:
+    """Best-effort ``exp`` claim from a JWT-shaped token, else 0."""
+    if not token or token.count(".") < 2:
+        return 0
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        data = json.loads(base64.urlsafe_b64decode(payload))
+        exp = data.get("exp")
+        if isinstance(exp, (int, float)) and exp > 0:
+            return int(exp)
+    except Exception:  # noqa: BLE001 - opaque tokens are fine
+        pass
+    return 0
+
+
+def read_cli_token(path: Optional[Path] = None) -> Optional[Tuple[str, int]]:
+    """Read the CLI session token and an expiry estimate (epoch seconds).
+
+    Returns ``None`` when there is no usable login. Expiry comes from the
+    token's JWT ``exp`` claim when present, otherwise from the auth file's
+    mtime plus the documented 7-day session lifetime.
+    """
+    auth_file = path or GROK_AUTH_FILE
+    if not auth_file.exists():
+        return None
+    try:
+        data: Any = json.loads(auth_file.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    token = ""
+    entry = data.get(GROK_SIGNIN_KEY)
+    if isinstance(entry, dict):
+        token = str(entry.get("key") or "")
+    elif isinstance(entry, str):
+        token = entry
+    if not token:
+        # Other sign-in hosts (enterprise OIDC) use the same {url: {key: ...}}
+        # shape; a bare {"access_token": ...} covers external auth providers.
+        for value in data.values():
+            if isinstance(value, dict) and value.get("key"):
+                token = str(value["key"])
+                break
+        if not token and data.get("access_token"):
+            token = str(data["access_token"])
+    if not token:
+        return None
+
+    expires = _jwt_expiry(token)
+    if not expires:
+        try:
+            expires = int(auth_file.stat().st_mtime) + CLI_SESSION_LIFETIME_SECONDS
+        except OSError:
+            expires = 0
+    return token, expires
+
+
+def import_cli_token(path: Optional[Path] = None) -> Optional[OAuthAuth]:
+    """Copy the CLI session token into SuperQode's local auth store.
+
+    Explicit opt-in only — called from ``:grok api``. Returns the stored
+    credential, or ``None`` when no CLI login exists.
+    """
+    found = read_cli_token(path)
+    if found is None:
+        return None
+    token, expires = found
+    auth = OAuthAuth(access=token, refresh="", expires=expires)
+    set_local_auth(PROVIDER_ID, auth)
+    return auth
+
+
+def remove_cli_token() -> bool:
+    """Remove a previously imported CLI token from the local auth store."""
+    return remove_local_auth(PROVIDER_ID)
+
+
+def cli_token_status(path: Optional[Path] = None) -> Dict[str, Any]:
+    """Non-secret status summary for ``:grok status``."""
+    found = read_cli_token(path)
+    imported = get_local_auth(PROVIDER_ID)
+    imported_oauth = imported if isinstance(imported, OAuthAuth) else None
+    return {
+        "cli_login": found is not None,
+        "cli_expires": found[1] if found else 0,
+        "imported": imported_oauth is not None,
+        "imported_expired": bool(imported_oauth and imported_oauth.is_expired()),
+        "imported_expires": imported_oauth.expires if imported_oauth else 0,
+    }

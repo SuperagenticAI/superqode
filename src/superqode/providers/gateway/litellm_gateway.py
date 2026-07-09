@@ -484,11 +484,16 @@ class LiteLLMGateway(GatewayInterface):
                 if not os.environ.get("GEMINI_API_KEY"):
                     os.environ["GEMINI_API_KEY"] = google_key
 
-    def _apply_dynamic_provider(self, provider: str, request_kwargs: Dict[str, Any]) -> None:
-        """Set api_base/api_key for models.dev-synthesized (dynamic) providers.
+    def _apply_dynamic_provider(
+        self, provider: str, request_kwargs: Dict[str, Any], model: str = ""
+    ) -> None:
+        """Set api_base/api_key for dynamic (per-request-routed) providers.
 
-        Curated providers are unaffected. Passing these per-request keeps the
+        Curated providers are unaffected unless they opt in via
+        ``ProviderDef.dynamic``. Passing these per-request keeps the
         OpenAI-compatible routing isolated from the user's global OPENAI_* env.
+        Provider-required headers (``ProviderDef.extra_headers``) are attached
+        here too, with a "{model}" placeholder resolved to the request's model.
         """
         provider_def = _resolve_provider_def(provider)
         if provider_def is None or not provider_def.dynamic:
@@ -501,6 +506,11 @@ class LiteLLMGateway(GatewayInterface):
             request_kwargs["api_base"] = base_url
         if api_key and "api_key" not in request_kwargs:
             request_kwargs["api_key"] = api_key
+        if provider_def.extra_headers and "extra_headers" not in request_kwargs:
+            request_kwargs["extra_headers"] = {
+                name: value.replace("{model}", model) if "{model}" in value else value
+                for name, value in provider_def.extra_headers.items()
+            }
 
     def _convert_messages(self, messages: List[Message]) -> List[Dict[str, Any]]:
         """Convert Message objects to LiteLLM format."""
@@ -2241,7 +2251,7 @@ class LiteLLMGateway(GatewayInterface):
                 request_kwargs["api_key"] = api_key
 
         # models.dev-synthesized providers: inject api_base/api_key explicitly.
-        self._apply_dynamic_provider(provider, request_kwargs)
+        self._apply_dynamic_provider(provider, request_kwargs, model=model)
 
         if temperature is not None:
             request_kwargs["temperature"] = temperature
@@ -2516,7 +2526,7 @@ class LiteLLMGateway(GatewayInterface):
                 request_kwargs["api_key"] = api_key
 
         # models.dev-synthesized providers: inject api_base/api_key explicitly.
-        self._apply_dynamic_provider(provider, request_kwargs)
+        self._apply_dynamic_provider(provider, request_kwargs, model=model)
 
         # Provider-neutral reasoning + structured output (stream path).
         reasoning_effort = kwargs.pop("reasoning_effort", None)

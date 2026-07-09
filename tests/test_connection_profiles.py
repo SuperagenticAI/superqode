@@ -14,8 +14,8 @@ from superqode.providers.connection_profiles import (
 
 def test_registry_has_expected_profiles():
     ids = connection_profile_ids()
-    # Local-first display order: Local, BYOK, ACP, Codex, Claude, Antigravity.
-    assert ids == ["local", "byok", "acp", "codex", "claude", "antigravity"]
+    # Local-first display order: Local, BYOK, ACP, Codex, Claude, Antigravity, Grok.
+    assert ids == ["local", "byok", "acp", "codex", "claude", "antigravity", "grok"]
 
 
 def test_codex_profile_is_runtime_connector():
@@ -42,6 +42,15 @@ def test_antigravity_profile_is_external_cli_connector():
     assert "gemini cli migration" in antigravity.description.lower()
 
 
+def test_grok_profile_is_cli_managed_acp_connector():
+    grok = get_connection_profile("grok")
+
+    assert grok.connector == "acp"
+    assert grok.acp_agent == "grok"
+    assert "subscription" in grok.label.lower()
+    assert "official grok cli" in grok.description.lower()
+
+
 def test_lookup_by_id_and_label():
     assert get_connection_profile("codex").id == "codex"
     assert get_connection_profile("Codex subscription").id == "codex"
@@ -62,6 +71,23 @@ def test_codex_detect_uses_local_codex_auth(monkeypatch, tmp_path):
     (home / ".codex" / "auth.json").write_text("{}")
     monkeypatch.setattr(cp.Path, "home", staticmethod(lambda: home))
     assert cp._codex_ready() is True
+
+
+def test_grok_detect_requires_cli_subscription_auth(monkeypatch, tmp_path):
+    import superqode.providers.connection_profiles as cp
+
+    monkeypatch.setattr(cp.shutil, "which", lambda name: "/usr/local/bin/grok" if name == "grok" else None)
+    monkeypatch.setattr(cp.Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.delenv("XAI_API_KEY", raising=False)
+    assert cp._grok_cli_ready() is False
+
+    (tmp_path / ".grok").mkdir()
+    (tmp_path / ".grok" / "auth.json").write_text("{}")
+    assert cp._grok_cli_ready() is True
+
+    (tmp_path / ".grok" / "auth.json").unlink()
+    monkeypatch.setenv("XAI_API_KEY", "test-key")
+    assert cp._grok_cli_ready() is False
 
 
 def test_available_never_raises():
@@ -139,6 +165,12 @@ def test_dispatch_antigravity_routes_to_external_cli(_dispatch):
     assert ("antigravity", "connect") in stub.calls
 
 
+def test_dispatch_grok_routes_to_acp(_dispatch):
+    stub = _DispatchStub()
+    _dispatch(stub, get_connection_profile("grok"), log=None)
+    assert ("acp", "grok") in stub.calls
+
+
 def test_dispatch_local_routes_to_local_picker(_dispatch):
     stub = _DispatchStub()
     _dispatch(stub, get_connection_profile("local"), log=None)
@@ -153,6 +185,9 @@ def test_connect_subcommands_route_to_specific_pickers():
         def _show_connect_type_picker(self, log, clear_log=True):
             self.calls.append(("connect-picker",))
 
+        def _dispatch_connection_profile(self, profile, log):
+            self.calls.append(("profile", profile.id))
+
         def _connect_byok_cmd(self, args, log):
             self.calls.append(("byok-cmd", args))
 
@@ -164,10 +199,12 @@ def test_connect_subcommands_route_to_specific_pickers():
     SuperQodeApp._handle_command(stub, ":connect acp", log=None)
     SuperQodeApp._handle_command(stub, ":connect byok", log=None)
     SuperQodeApp._handle_command(stub, ":connect local", log=None)
+    SuperQodeApp._handle_command(stub, ":connect grok", log=None)
 
     assert ("acp", "") in stub.calls
     assert ("byok-cmd", "") in stub.calls
     assert ("local-cmd", "") in stub.calls
+    assert ("profile", "grok") in stub.calls
     assert ("connect-picker",) not in stub.calls
 
 
@@ -181,8 +218,10 @@ def test_connect_profiles_in_commands_and_completion():
     assert ":connect codex" in COMMANDS
     assert ":connect claude" in COMMANDS
     assert ":connect antigravity" in COMMANDS
+    assert ":connect grok" in COMMANDS
+    assert ":grok status" in COMMANDS
     values = {c.value for c in SuperQodeApp._connect_profile_completion_candidates()}
-    assert {"codex", "claude", "antigravity", "byok", "local", "acp"} <= values
+    assert {"codex", "claude", "antigravity", "grok", "byok", "local", "acp"} <= values
 
 
 def test_no_duplicate_acp_claude_profile():

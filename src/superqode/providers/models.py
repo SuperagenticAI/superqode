@@ -46,6 +46,7 @@ NON_CHAT_MODEL_MARKERS = (
     "rerank",
     "speech",
     "tts",
+    "video",
     "vision-preview",
 )
 
@@ -657,6 +658,147 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
         ),
     },
     # =========================================================================
+    # xAI
+    # =========================================================================
+    "xai": {
+        "grok-4.5": ModelInfo(
+            id="grok-4.5",
+            name="Grok 4.5",
+            provider="xai",
+            input_price=2.0,
+            output_price=6.0,
+            context_window=500000,
+            max_output=500000,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.VISION,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="xAI's flagship model for agentic coding and reasoning (effort low/medium/high).",
+            recommended_for=["agentic coding", "complex reasoning", "research"],
+            released="2026-07-08",
+        ),
+        "grok-4.3": ModelInfo(
+            id="grok-4.3",
+            name="Grok 4.3",
+            provider="xai",
+            input_price=1.25,
+            output_price=2.5,
+            context_window=1000000,
+            max_output=30000,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.VISION,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="1M-context Grok for document-heavy work at a lower price than Grok 4.5.",
+            recommended_for=["long context", "coding", "document analysis"],
+            released="2026-04-17",
+        ),
+        "grok-build-0.1": ModelInfo(
+            id="grok-build-0.1",
+            name="Grok Build 0.1",
+            provider="xai",
+            input_price=1.0,
+            output_price=2.0,
+            context_window=256000,
+            max_output=256000,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.VISION,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Fast coding model behind Grok Build, tuned for agentic engineering loops.",
+            recommended_for=["coding", "iterative edits", "fast agentic loops"],
+            released="2026-04-16",
+        ),
+    },
+    # =========================================================================
+    # GROK CLI SUBSCRIPTION (direct API via the local `grok login` session)
+    # =========================================================================
+    "grok-cli": {
+        "grok-build": ModelInfo(
+            id="grok-build",
+            name="Grok Build (default)",
+            provider="grok-cli",
+            context_window=500000,
+            max_output=500000,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.STREAMING,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="The CLI's default-model alias (currently Grok 4.5); included with the subscription.",
+            recommended_for=["coding", "agentic coding"],
+            released="2026-07-08",
+        ),
+        "grok-4.5": ModelInfo(
+            id="grok-4.5",
+            name="Grok 4.5",
+            provider="grok-cli",
+            context_window=500000,
+            max_output=500000,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.STREAMING,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Flagship Grok on your subscription (eligibility decided by xAI).",
+            recommended_for=["agentic coding", "complex reasoning"],
+            released="2026-07-08",
+        ),
+        "grok-4.3": ModelInfo(
+            id="grok-4.3",
+            name="Grok 4.3",
+            provider="grok-cli",
+            context_window=1000000,
+            max_output=30000,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.STREAMING,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="1M-context Grok on your subscription.",
+            recommended_for=["long context", "document analysis"],
+            released="2026-04-17",
+        ),
+        "grok-build-0.1": ModelInfo(
+            id="grok-build-0.1",
+            name="Grok Build 0.1",
+            provider="grok-cli",
+            context_window=256000,
+            max_output=256000,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.STREAMING,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Fast coding model on your subscription.",
+            recommended_for=["coding", "fast agentic loops"],
+            released="2026-04-16",
+        ),
+    },
+    # =========================================================================
     # DEEPSEEK
     # =========================================================================
     "deepseek": {
@@ -995,6 +1137,11 @@ def _maybe_autoload_live_models() -> None:
         pass
 
 
+def _newest_release(models: Dict[str, ModelInfo]) -> str:
+    """Newest ISO release date in a provider's model list ('' if none dated)."""
+    return max((m.released or "" for m in models.values()), default="")
+
+
 def get_effective_models() -> Dict[str, Dict[str, ModelInfo]]:
     """
     Get the effective models database.
@@ -1009,6 +1156,16 @@ def get_effective_models() -> Dict[str, Dict[str, ModelInfo]]:
         # absent from models.dev/cache so stale built-in models do not leak into BYOK.
         merged = MODELS.copy()
         for provider_id, models in _live_models.items():
+            # A stale models.dev cache (e.g. a CLI session on a machine whose
+            # TUI hasn't refreshed in months) must not shadow a curated builtin
+            # list that already knows about newer models. When both sides have
+            # release dates, whichever list has the newer model wins; a fresh
+            # cache always satisfies this and replaces the builtin as before.
+            builtin = merged.get(provider_id)
+            if builtin:
+                live_newest = _newest_release(models)
+                if live_newest and _newest_release(builtin) > live_newest:
+                    continue
             merged[provider_id] = models
         return merged
     return MODELS

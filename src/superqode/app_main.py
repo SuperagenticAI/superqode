@@ -5856,6 +5856,8 @@ class SuperQodeApp(App):
             self._codex_cmd(args, log)
         elif c == "claude":
             self._claude_cmd(args, log)
+        elif c in ("grok", "xai-grok"):
+            self._grok_cmd(args, log)
         elif c in ("antigravity", "agy"):
             self._antigravity_cmd(args, log)
         elif c == "approve":
@@ -6027,8 +6029,8 @@ class SuperQodeApp(App):
                         log,
                         "Connect setup",
                     )
-                elif subcmd in ("codex", "claude", "antigravity"):
-                    # Product/runtime connection profiles (Codex, Claude, …).
+                elif subcmd in ("codex", "claude", "antigravity", "grok"):
+                    # Product/runtime connection profiles (Codex, Claude, Grok, …).
                     from superqode.providers.connection_profiles import get_connection_profile
 
                     profile = get_connection_profile(subcmd)
@@ -7806,6 +7808,7 @@ class SuperQodeApp(App):
                 ":connect",
                 ":connect acp",
                 ":connect antigravity",
+                ":connect grok",
                 ":connect byok",
                 ":connect local",
             ]
@@ -7852,25 +7855,28 @@ class SuperQodeApp(App):
                 ":connect": 0,
                 ":connect acp": 1,
                 ":connect antigravity": 2,
-                ":connect byok": 3,
-                ":connect local": 4,
-                ":exit": 5,
-                ":quit": 6,
+                ":connect grok": 3,
+                ":connect byok": 4,
+                ":connect local": 5,
+                ":exit": 6,
+                ":quit": 7,
             },
             ":c": {
                 ":connect": 0,
                 ":connect acp": 1,
                 ":connect antigravity": 2,
-                ":connect byok": 3,
-                ":connect local": 4,
+                ":connect grok": 3,
+                ":connect byok": 4,
+                ":connect local": 5,
                 ":clear": 20,
             },
             ":co": {
                 ":connect": 0,
                 ":connect acp": 1,
                 ":connect antigravity": 2,
-                ":connect byok": 3,
-                ":connect local": 4,
+                ":connect grok": 3,
+                ":connect byok": 4,
+                ":connect local": 5,
             },
             ":q": {
                 ":quit": 0,
@@ -10884,6 +10890,158 @@ class SuperQodeApp(App):
         t.append(
             "\n  Structured SuperQode tool cards require an ACP/headless event stream. "
             "agy does not document that yet.\n",
+            style=THEME["dim"],
+        )
+        log.write(t)
+
+    # ---- xAI Grok Build :grok command surface ------------------------------
+    def _grok_cmd(self, args: str, log) -> None:
+        """Handle the official Grok CLI subscription and ACP connection flow."""
+        parts = (args or "").split(maxsplit=1)
+        sub = parts[0].strip().lower() if parts and parts[0].strip() else "connect"
+        rest = parts[1].strip() if len(parts) > 1 else ""
+        if sub in ("connect", "start"):
+            command = "grok" + (f" {rest}" if rest else "")
+            self._connect_acp_cmd(command, log)
+        elif sub == "api":
+            self._grok_api_cmd(rest, log)
+        elif sub in ("status", "doctor"):
+            self._show_grok_status(log)
+        elif sub in ("login", "auth"):
+            self._show_grok_login(log)
+        elif sub in ("help", "?"):
+            self._show_grok_help(log)
+        else:
+            log.add_error(f"Unknown grok command: {sub}")
+            log.add_info("Usage: :grok [connect [model]|api [model|off]|status|login|help]")
+
+    def _grok_api_cmd(self, rest: str, log) -> None:
+        """Opt-in: import the Grok CLI's session token for direct API calls.
+
+        The default `:connect grok` path never touches the CLI's credentials.
+        This command explicitly copies the local `grok login` session token
+        into SuperQode's auth store and connects the `grok-cli` BYOK provider,
+        which targets the CLI chat proxy documented by xAI.
+        """
+        from superqode.providers import grok_cli_auth
+
+        arg = (rest or "").strip()
+        if arg.lower() in ("off", "remove", "logout"):
+            if grok_cli_auth.remove_cli_token():
+                log.add_info("Removed the imported Grok CLI token from SuperQode's auth store.")
+            else:
+                log.add_info("No imported Grok CLI token to remove.")
+            return
+
+        model = arg or "grok-build"
+        for prefix in ("grok-cli/", "xai/", "grok/"):
+            if model.lower().startswith(prefix):
+                model = model[len(prefix) :]
+                break
+
+        auth = grok_cli_auth.import_cli_token()
+        if auth is None:
+            log.add_error("No Grok CLI login found (~/.grok/auth.json).")
+            log.add_info("Run `grok login` first, or use BYOK: :connect byok xai grok-4.5")
+            return
+        if auth.is_expired():
+            grok_cli_auth.remove_cli_token()
+            log.add_error("The Grok CLI session looks expired (CLI sessions last ~7 days).")
+            log.add_info("Run `grok login` again, then re-run :grok api.")
+            return
+
+        log.add_info("Imported the Grok CLI session token (stored in ~/.superqode/auth.json, 0600).")
+        log.add_info(
+            "Direct API calls use the xAI-documented CLI chat proxy on your subscription — "
+            "intended for interactive use. Remove anytime with :grok api off."
+        )
+        self._connect_byok_mode("grok-cli", model, log)
+
+    def _show_grok_status(self, log) -> None:
+        """Show local Grok CLI readiness without reading or displaying credentials."""
+        grok_path = shutil.which("grok")
+        auth_path = Path.home() / ".grok" / "auth.json"
+        has_api_key = bool(os.environ.get("XAI_API_KEY"))
+        t = Text()
+        t.append("\n  Grok Build status\n\n", style=f"bold {THEME['text']}")
+        t.append("    Binary    ", style=THEME["muted"])
+        t.append(
+            f"{grok_path or 'not found'}\n",
+            style=THEME["success" if grok_path else "warning"],
+        )
+        t.append("    CLI auth  ", style=THEME["muted"])
+        t.append(
+            "configured\n" if auth_path.exists() else "not found\n",
+            style=THEME["success" if auth_path.exists() else "dim"],
+        )
+        t.append("    BYOK      ", style=THEME["muted"])
+        t.append(
+            "XAI_API_KEY set\n" if has_api_key else "not set\n",
+            style=THEME["success" if has_api_key else "dim"],
+        )
+        try:
+            from superqode.providers.grok_cli_auth import cli_token_status
+
+            token = cli_token_status()
+        except Exception:  # noqa: BLE001 - status must never crash
+            token = {}
+        t.append("    API token ", style=THEME["muted"])
+        if token.get("imported") and not token.get("imported_expired"):
+            t.append("imported (:grok api off to remove)\n", style=THEME["success"])
+        elif token.get("imported"):
+            t.append("imported but expired — run `grok login`, then :grok api\n", style=THEME["warning"])
+        elif token.get("cli_login"):
+            t.append("available — run :grok api to use it for direct API calls\n", style=THEME["dim"])
+        else:
+            t.append("not imported\n", style=THEME["dim"])
+        t.append("    Default   ", style=THEME["muted"])
+        t.append("Grok Build (currently Grok 4.5)\n", style=THEME["text"])
+        t.append("\n  Commands:\n", style=THEME["muted"])
+        t.append("    grok login                ", style=THEME["cyan"])
+        t.append("sign in to an eligible X/SuperGrok account\n", style=THEME["muted"])
+        t.append("    grok login --device-auth  ", style=THEME["cyan"])
+        t.append("sign in from SSH or a headless host\n", style=THEME["muted"])
+        t.append("    :connect grok             ", style=THEME["cyan"])
+        t.append("start Grok Build through ACP\n", style=THEME["muted"])
+        t.append("    :grok api                 ", style=THEME["cyan"])
+        t.append("reuse the CLI login for direct API calls (opt-in)\n", style=THEME["muted"])
+        log.write(t)
+
+    def _show_grok_login(self, log) -> None:
+        """Give login commands instead of launching an interactive browser flow in the TUI."""
+        t = Text()
+        t.append("\n  Grok subscription login\n\n", style=f"bold {THEME['text']}")
+        t.append("  Run in a terminal:\n", style=THEME["muted"])
+        t.append("    grok login\n", style=THEME["cyan"])
+        t.append("\n  For SSH or a headless machine:\n", style=THEME["muted"])
+        t.append("    grok login --device-auth\n", style=THEME["cyan"])
+        t.append("\n  Then connect with:\n", style=THEME["muted"])
+        t.append("    :connect grok\n", style=THEME["cyan"])
+        t.append(
+            "\n  The official CLI stores and refreshes its own credentials locally. "
+            "SuperQode does not copy them.\n",
+            style=THEME["dim"],
+        )
+        log.write(t)
+
+    def _show_grok_help(self, log) -> None:
+        t = Text()
+        t.append("\n  Grok in SuperQode\n\n", style=f"bold {THEME['text']}")
+        t.append("  :connect grok              ", style=THEME["cyan"])
+        t.append("connect the official Grok Build ACP server\n", style=THEME["muted"])
+        t.append("  :grok connect grok-build   ", style=THEME["cyan"])
+        t.append("request the model advertised by the signed-in CLI\n", style=THEME["muted"])
+        t.append("  :grok api [model]          ", style=THEME["cyan"])
+        t.append("reuse the local `grok login` session for direct API calls\n", style=THEME["muted"])
+        t.append("  :grok api off              ", style=THEME["cyan"])
+        t.append("remove the imported session token\n", style=THEME["muted"])
+        t.append("  :grok status               ", style=THEME["cyan"])
+        t.append("check CLI and local auth readiness\n", style=THEME["muted"])
+        t.append("  :grok login                ", style=THEME["cyan"])
+        t.append("show browser and device-login commands\n", style=THEME["muted"])
+        t.append(
+            "\n  Subscription access and model eligibility are determined by xAI. "
+            "For direct API billing, use BYOK with XAI_API_KEY and xai/grok-4.5.\n",
             style=THEME["dim"],
         )
         log.write(t)
@@ -15612,6 +15770,7 @@ class SuperQodeApp(App):
                 "vtcode",
                 "auggie",
                 "amp",
+                "grok",
             }
             if short_name in acp_agents:
                 model_name = self.current_model if self.current_model else "auto"
@@ -15688,6 +15847,7 @@ class SuperQodeApp(App):
             "vtcode",
             "auggie",
             "amp",
+            "grok",
         )
 
         if agent_type in acp_agents:
@@ -16008,7 +16168,7 @@ class SuperQodeApp(App):
     @staticmethod
     def _normalize_acp_model_id(agent_type: str, model: str) -> str | None:
         """Normalize a UI model value before sending it to an ACP agent."""
-        if not model or agent_type not in ("codex", "openhands", "opencode"):
+        if not model or agent_type not in ("codex", "grok", "openhands", "opencode"):
             return None
         normalized = model.strip()
         # "auto"/"default" is a UI placeholder meaning "let the agent
@@ -16018,6 +16178,8 @@ class SuperQodeApp(App):
             "default",
             "opencode/auto",
             "opencode/default",
+            "grok/auto",
+            "grok/default",
         ):
             return None
         # OpenCode model ids are provider/model pairs (for example
@@ -16025,6 +16187,14 @@ class SuperQodeApp(App):
         # bare ids; do not rewrite real provider ids.
         if agent_type == "opencode" and "/" not in normalized:
             return f"opencode/{normalized}"
+        # Grok Build expects bare xAI model ids (grok-4.5, grok-build-0.1) or
+        # its own "grok-build" default alias; strip UI/provider prefixes.
+        if agent_type == "grok":
+            for prefix in ("xai/", "grok/"):
+                if normalized.lower().startswith(prefix):
+                    normalized = normalized[len(prefix) :]
+                    break
+            return normalized or None
         return normalized
 
     def _run_acp_jsonrpc_client(
@@ -16081,6 +16251,14 @@ class SuperQodeApp(App):
                 )
                 self._call_ui(log.add_info, "  export OPENAI_API_KEY=sk-...")
                 self._call_ui(log.add_info, "  or export CODEX_API_KEY=sk-...")
+                return
+        elif agent_type == "grok":
+            command = "grok agent stdio"
+            model_display = f"grok/{model}" if model and model != "auto" else "grok/grok-build"
+            if shutil.which("grok") is None:
+                self._call_ui(self._stop_thinking)
+                self._call_ui(log.add_error, "Grok CLI not found. Install it before connecting.")
+                self._call_ui(log.add_info, "  curl -fsSL https://x.ai/cli/install.sh | bash")
                 return
         elif agent_type == "junie":
             command = "junie --acp"
@@ -16617,6 +16795,11 @@ class SuperQodeApp(App):
                     if not ok:
                         self._acp_client = None
                         self._acp_client_key = None
+                        if agent_type == "grok":
+                            self._call_ui(
+                                log.add_info,
+                                "If Grok is not signed in, run `grok login` or `grok login --device-auth`, then retry.",
+                            )
                         return None, {}
 
                 # Store for cancellation cleanup
@@ -28801,6 +28984,8 @@ class SuperQodeApp(App):
             "geminicli": "💎",  # Gem (Gemini CLI)
             "codex": "📝",  # Memo/code
             "codex.openai.com": "📝",  # Memo/code
+            "grok": "G",  # Grok Build
+            "x.ai": "G",  # Grok Build
             "openclaw": "🦞",  # OpenClaw
             "openclaw.ai": "🦞",  # OpenClaw
             "goose": "🪿",  # Goose
@@ -28832,6 +29017,8 @@ class SuperQodeApp(App):
             "claude.com": 2,
             "codex": 3,
             "codex.openai.com": 3,
+            "grok": 4,
+            "x.ai": 4,
         }
 
         # Sort function: priority agents first, then alphabetically by name
@@ -29011,6 +29198,25 @@ class SuperQodeApp(App):
                         self._auto_select_codex_model(model_hint, agent, log)
                     else:
                         self._show_codex_models_selection(agent, log)
+                elif self.current_agent == "grok":
+                    # Grok Build owns the subscription and model catalog. Keep
+                    # the default unset so its signed-in account decides; an
+                    # explicit model hint is forwarded through ACP.
+                    self.current_model = (model_hint or "").strip()
+                    self.current_provider = "xai"
+                    self._awaiting_model_selection = False
+
+                    badge = self.query_one("#mode-badge", ModeBadge)
+                    badge.agent = self.current_agent
+                    badge.mode = ""
+                    badge.role = ""
+                    badge.model = self.current_model or "grok-build"
+                    badge.provider = self.current_provider
+                    badge.execution_mode = "acp"
+
+                    log.add_info("Connected to Grok Build via the official Grok CLI ACP server.")
+                    if not self.current_model:
+                        log.add_info("Using the signed-in account's Grok Build default (currently Grok 4.5).")
                 elif self.current_agent == "openhands":
                     # For OpenHands, handle model selection
                     if model_hint:
@@ -30359,6 +30565,8 @@ class SuperQodeApp(App):
                     (":connect antigravity", "Use local Antigravity CLI handoff"),
                     (":antigravity status", "Check local agy CLI status"),
                     (":antigravity migrate", "Show Gemini CLI migration steps"),
+                    (":connect grok", "Use signed-in Grok Build ACP (Grok 4.5 default)"),
+                    (":grok status|login", "Check Grok CLI readiness or show login commands"),
                 ],
             ),
             (

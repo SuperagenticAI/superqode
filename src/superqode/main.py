@@ -663,7 +663,7 @@ class SuperQodeGroup(click.Group):
     default=None,
     type=click.Choice(connection_profile_ids()),
     help=(
-        "Connection source to start with: codex / claude / antigravity / byok / "
+        "Connection source to start with: codex / claude / antigravity / grok / byok / "
         "local / acp. e.g. `--connect codex` to use your Codex subscription."
     ),
 )
