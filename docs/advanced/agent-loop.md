@@ -32,7 +32,7 @@ The rest of this page goes feature by feature, in that order.
 
 ## 1. Context windows that match reality
 
-Static model cards lie about local models: a 128K-card model loaded with `num_ctx 8192` *is* an 8K model right now. Before the first call, the loop probes the live server (Ollama `/api/ps`, llama.cpp `/props`, LM Studio and vLLM/DS4 `/v1/models`) for the **loaded** window and sizes everything else (compaction thresholds, kept-recent budgets, tool-output caps) from that number.
+Static model metadata does not necessarily reflect the active context window. For example, a model advertised with a 128K context window operates with an 8K window when loaded with `num_ctx 8192`. Before the first call, the loop queries the active server (Ollama `/api/ps`, llama.cpp `/props`, and LM Studio or vLLM/DS4 `/v1/models`) for the loaded context window. It uses that value to calculate compaction thresholds, recent-message retention budgets, and tool-output limits.
 
 Try it in the TUI:
 
@@ -44,7 +44,7 @@ Try it in the TUI:
 
 ## 2-3. Steering: talk to a run in progress
 
-Type while the agent works. On builtin (local/BYOK) connections the message is injected **between the agent's tool calls** and shapes the current run. You'll see `steering the current run` in the log. If the model is just finishing its answer when your message lands, the run keeps going instead of stopping.
+You can send input while the agent is running. For built-in local and BYOK connections, SuperQode injects the message **between the agent's tool calls**, allowing it to affect the current run. The log records this event as `steering the current run`. If the message arrives while the model is completing a response, the run continues with the new input.
 
 On connections that can't be steered (ACP agents, codex-sdk), messages fall back to the type-ahead queue and send when the agent is free (`:queue clear` empties it).
 
@@ -102,7 +102,7 @@ Tools declare `read_only`. A turn's tool calls run **concurrently only when ever
 
 ## 10. Auto-continue on token-limit cuts
 
-When a response stops with `finish_reason="length"` (output token limit) and no tool calls, the loop asks the model to continue from exactly where it stopped and joins the parts, up to `max_auto_continues` times (default 2, `0` disables). Streaming continues seamlessly mid-sentence.
+When a response stops with `finish_reason="length"` (output token limit) and no tool calls, the loop asks the model to continue from exactly where it stopped and joins the parts, up to `max_auto_continues` times (default 2, `0` disables). The continuation streams from the exact break point.
 
 ## 12. Rubric self-grading
 

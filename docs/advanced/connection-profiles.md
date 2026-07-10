@@ -30,7 +30,7 @@ Handoff profile: shows the command to run `agy` in a terminal. Does not connect 
 
 ### 7. Grok Subscription (connector: subscription, provider: grok-cli)
 
-Connects **SuperQode's harness** to an eligible SuperGrok or X Premium+ account. Requires the `grok` binary on PATH and a local `grok login` (`~/.grok/auth.json`). On connect, SuperQode imports the CLI session token into its auth store and routes through the `grok-cli` provider (CLI chat proxy). **Grok Build ACP** remains available under `:connect acp grok` — that path runs xAI's agent, not SuperQode's harness.
+Connects **SuperQode's harness** to an eligible SuperGrok or X Premium+ account. Requires the `grok` binary on PATH and a local `grok login` (`~/.grok/auth.json`). On connect, SuperQode imports the CLI session token into its auth store and routes through the `grok-cli` provider (CLI chat proxy). **Grok Build ACP** remains available under `:connect acp grok`; that path runs xAI's agent, not SuperQode's harness.
 
 ## TUI Usage
 
@@ -45,6 +45,7 @@ Direct shortcuts:
 - `:connect acp grok` - Grok Build coding agent via official CLI ACP
 - `:connect byok` - open the cloud provider picker
 - `:connect byok <provider>/<model>` - connect to a cloud model directly
+- `:connect <model>` - connect by model name alone (e.g. `:connect gpt-5.6`); the provider is resolved from the catalog, preferring first-party providers over gateway mirrors
 - `:connect local` - open the local provider picker
 - `:connect local <provider>/<model>` - connect to a local model directly
 - `:connect acp` - open the ACP agent picker

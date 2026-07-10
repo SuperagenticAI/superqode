@@ -1,8 +1,8 @@
 # ACP Agent Server
 
-`superqode serve acp` runs SuperQode as an **Agent Client Protocol (ACP) agent** on stdio. Any ACP client — Zed, JetBrains IDEs, Neovim, Devin Desktop, or the Harbor benchmark framework — can drive SuperQode as its coding agent.
+`superqode serve acp` runs SuperQode as an **Agent Client Protocol (ACP) agent** on stdio. Any ACP client (Zed, JetBrains IDEs, Neovim, Devin Desktop, or the Harbor benchmark framework) can drive SuperQode as its coding agent.
 
-This is the inverse of [ACP Agents](../providers/acp.md), where SuperQode is the *client* connecting to other agents. Here SuperQode is the agent — and the loop it runs is your [HarnessSpec](harness-system.md), not a fixed pipeline. The editor talks to the doorway; your harness does the work.
+This is the inverse of [ACP Agents](../providers/acp.md), where SuperQode is the *client* connecting to other agents. Here SuperQode is the agent, and the loop it runs is your [HarnessSpec](harness-system.md) rather than a fixed pipeline.
 
 ```bash
 superqode serve acp                       # stdio, auto-discovered harness
@@ -39,7 +39,7 @@ Each ACP session resolves a HarnessSpec, in order:
 4. The first spec under a conventional harness directory (`.superqode/harness/`, `harness/`, ...)
 5. The built-in `coding` template as a fallback
 
-So the agent your editor runs is literally the harness file versioned in the project you have open.
+The editor runs the harness file versioned with the open project.
 
 ### Template selection without a spec file
 
@@ -49,7 +49,7 @@ So the agent your editor runs is literally the harness file versioned in the pro
 SUPERQODE_ACP_SPEC=template:qwen-coding superqode serve acp
 ```
 
-Run `superqode harness list-templates` for the available names. This matters most in benchmark containers, where no spec file exists and you want to control — or compare — harness variants per run.
+Run `superqode harness list-templates` for the available names. This matters most in benchmark containers, where no spec file exists and you want to control or compare harness variants per run.
 
 ---
 
@@ -74,7 +74,7 @@ SuperQode needs no login for local or BYOK use. The initialize response advertis
 superqode local init --repo .
 ```
 
-— an interactive setup that detects your hardware, recommends a local model, and generates a starter harness for the project. Run it once per project from the editor's auth prompt, or skip it entirely if the project already has a harness or you use environment variables.
+This interactive setup detects your hardware, recommends a local model, and generates a starter harness for the project. Run it once per project from the editor's auth prompt, or skip it entirely if the project already has a harness or you use environment variables.
 
 ---
 
@@ -97,7 +97,7 @@ Full tool output and the complete event graph stay in the harness run store (`.s
 
 ## Running on Terminal-Bench with Harbor
 
-[Harbor](https://www.harborframework.com/) — the official harness for Terminal-Bench 2.x — has first-class ACP support, so SuperQode runs on the benchmark **with no adapter code**. Harbor installs SuperQode inside each task container from the ACP registry manifest, speaks ACP to it, and records the full trajectory.
+[Harbor](https://www.harborframework.com/), the official harness for Terminal-Bench 2.x, has first-class ACP support, so SuperQode runs on the benchmark without adapter code. Harbor installs SuperQode inside each task container from the ACP registry manifest, speaks ACP to it, and records the full trajectory.
 
 Once SuperQode is in the ACP registry:
 
@@ -120,7 +120,7 @@ The benchmark's `-m` flag reaches SuperQode automatically via `HARBOR_ACP_REQUES
 
 ### The `benchmark-coding` template
 
-Interactive harnesses ask clarifying questions; benchmarks have no user to answer them. The built-in `benchmark-coding` template is the coding harness with an autonomous stance — never ask, investigate recoverable state exhaustively (reflog, stashes, backups), always apply a concrete attempt, verify before finishing — and `yolo` approvals, since the task container is the sandbox:
+Interactive harnesses ask clarifying questions; benchmarks have no user to answer them. The built-in `benchmark-coding` template is the coding harness with an autonomous stance (never ask the user, investigate recoverable state such as reflog, stashes, and backups, always apply a concrete attempt, and verify before finishing) plus `yolo` approvals, since the task container is the sandbox:
 
 ```bash
 harbor run -d terminal-bench@2.0 -a acp:superqode -m <provider/model> \
@@ -129,7 +129,7 @@ harbor run -d terminal-bench@2.0 -a acp:superqode -m <provider/model> \
 
 ### Measuring the harness effect
 
-Because the harness is selectable per run, the same model can be benchmarked across harness variants — which is the point of [harness engineering](../harness-engineering.md):
+Because the harness is selectable per run, you can benchmark the same model across harness variants and measure the effect of each configuration:
 
 ```bash
 for t in coding benchmark-coding no-tool; do

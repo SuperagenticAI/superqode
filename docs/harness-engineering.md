@@ -1,9 +1,9 @@
 # What Is Harness Engineering
 
-A coding agent is not just a model. It is a model running inside a **harness**: the
-software that decides what the model sees, which tools it can call, how it
-remembers, how its work is checked, and what it is allowed to do. The model
-supplies the reasoning. The harness supplies everything else.
+A coding agent is a model running inside a **harness**: the software that
+decides what the model sees, which tools it can call, how it remembers, how its
+work is checked, and what it is allowed to do. The harness, not the model
+alone, determines how the agent behaves.
 
 Harness engineering is the practice of treating that surrounding system as a
 real engineering artifact: something you design, write down, measure, and
@@ -150,7 +150,7 @@ See the [Optimization Story](advanced/optimization.md) and
 
 ---
 
-## Why not just use someone else's harness
+## Why build a custom harness
 
 You can. SuperQode connects to hosted providers, Codex, Claude Code, and other
 agents through [BYOK](providers/byok.md), [ACP](providers/acp.md), and runtime
@@ -166,16 +166,15 @@ SDKs. The difference is who owns the contract.
 
 ### A harness you own, not a harness you rent
 
-The harness is now a recognized layer of the agent stack, to the point that it
-is offered as a managed cloud service: you declare an agent in configuration and
-a hosted platform assembles and runs the loop for you, billed as cloud capability.
+The harness is a distinct layer of the agent stack and is also available as a
+managed cloud service. In this model, users declare an agent in configuration
+and a hosted platform assembles and executes the agent loop.
 
-SuperQode takes the opposite stance. The harness is a file in your repository,
-not a service in someone else's cloud. It runs local first on hardware you
-control, it is versioned and reviewed like the rest of your code, and it behaves
-the same whether you point it at a local model, a hosted provider, or a remote
-runtime. A managed harness is useful when you want to outsource operations.
-SuperQode is for teams that want to own the harness itself.
+SuperQode stores the harness as a file in the repository and executes it on
+infrastructure controlled by the user. The harness can be versioned and reviewed
+with the rest of the codebase, and its behavior remains consistent across local
+models, hosted providers, and remote runtimes. This approach is intended for
+teams that require direct control over harness configuration and execution.
 
 Even when you borrow another agent's strengths, SuperQode stays the controlling
 harness. It can import an [Omnigent](advanced/omnigent-compat.md) spec, for

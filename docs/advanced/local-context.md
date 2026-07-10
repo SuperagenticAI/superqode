@@ -1,6 +1,6 @@
 # Local Context & Compaction
 
-SuperQode is tuned to get the best out of **local models** (≈10B–120B), where the
+SuperQode is tuned to get the best out of **local models** (approximately 10B-120B), where the
 single biggest failure mode is **running out of context**. It solves this
 automatically: it detects each model's *real loaded* context window and compacts
 the conversation before it overflows: no configuration required.
@@ -110,13 +110,14 @@ fine control (0 = auto).
 
 If you're picking a context size when loading a local model:
 
-- **8K–16K** is the sweet spot for most local coding models: enough for real
-  work, small enough to stay fast and fit in VRAM.
+- **8K-16K** is the practical range for most local coding models: enough for
+  real work, small enough to stay fast and fit in VRAM.
 - Going larger only helps if the machine has the VRAM. If the KV cache spills to
-  CPU RAM, inference can drop **20–50×** (e.g. 50–100 tok/s → 2–5 tok/s).
+  CPU RAM, inference can drop 20-50x (for example, from 50-100 tok/s to
+  2-5 tok/s).
 - K/V cache quantization (q8/q4) lets you fit a larger window in the same VRAM.
 
-Whatever you choose, SuperQode detects it and adapts: you don't have to tell it.
+SuperQode detects the configured context size and adjusts its context-management limits automatically.
 
 ---
 

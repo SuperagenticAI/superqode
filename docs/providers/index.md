@@ -119,6 +119,7 @@ Full support with optimized prompts (Enterprise adds prompt packs):
 | Deepseek | Deepseek V3, R1 |
 | Mistral | Mistral Large |
 | xAI | Grok 4.5, Grok 4.3, Grok Build 0.1 |
+| Meta | Muse Spark 1.1 |
 
 ### Tier 2 (Supported)
 
@@ -207,6 +208,7 @@ providers:
 | `anthropic` | `ANTHROPIC_API_KEY` | [docs.anthropic.com](https://docs.anthropic.com) |
 | `openai` | `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) |
 | `google` | `GOOGLE_API_KEY` | [ai.google.dev](https://ai.google.dev) |
+| `meta` | `META_MODEL_API_KEY` | [dev.meta.ai/docs](https://dev.meta.ai/docs) |
 | `xai` | `XAI_API_KEY` | [x.ai/api](https://x.ai/api) |
 
 ### China Labs

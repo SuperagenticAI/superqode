@@ -23,7 +23,8 @@ BYOK is the primary mode for production use:
 ## Quick Setup
 
 ```bash
-# 1. Set API key
+# 1. Set API key. Alternative: `superqode auth login anthropic` stores the
+#    key in ~/.superqode/auth.json (0600) via a masked prompt.
 export ANTHROPIC_API_KEY=sk-ant-...
 
 # 2. Verify configuration
@@ -32,6 +33,13 @@ superqode providers test anthropic
 # 3. Connect
 superqode connect byok anthropic <anthropic-model>
 ```
+
+!!! tip "Connect by model name alone"
+    In the TUI you can skip the provider: `:connect muse-spark-1.1` or
+    `:connect gpt-5.6` resolves the hosting provider from the catalog
+    (first-party providers are preferred over gateway mirrors). If a model has
+    several available routes, such as `grok-4.5` via the xAI API or the Grok
+    subscription, SuperQode lists the exact commands to choose from.
 
 ---
 
@@ -83,6 +91,24 @@ superqode connect byok google gemini-3.1-pro-preview
 | `gemini-flash-latest` | Latest Flash model from models.dev |
 
 **Documentation**: [ai.google.dev](https://ai.google.dev)
+
+#### Meta (Muse Spark)
+
+```bash
+export META_MODEL_API_KEY=...
+superqode connect byok meta muse-spark-1.1
+```
+
+| Model | Context | Best For |
+|-------|---------|----------|
+| `muse-spark-1.1` | 1M | Long-context coding and analysis on Meta's first-party API |
+
+Meta's model API is OpenAI-compatible at `https://api.meta.ai/v1` (override
+with `META_BASE_URL`). The model list follows models.dev, so new Meta releases
+appear automatically. In the TUI, `:connect muse-spark-1.1` resolves the
+provider from the catalog.
+
+**Documentation**: [dev.meta.ai/docs](https://dev.meta.ai/docs)
 
 ---
 
@@ -178,8 +204,8 @@ access are determined by xAI. For cloud or automation workloads, use
 1. Import the session token from `~/.grok/auth.json` into SuperQode's local auth
    store (`~/.superqode/auth.json`, permissions 0600)
 2. Connect the `grok-cli` provider against `https://cli-chat-proxy.grok.com/v1`
-3. Send the headers xAI requires (`X-XAI-Token-Auth`, `x-grok-model-override`,
-   and `x-grok-client-version` from your installed CLI — the proxy returns
+3. Send the headers xAI requires: `X-XAI-Token-Auth`, `x-grok-model-override`,
+   and `x-grok-client-version` from your installed CLI (the proxy returns
    HTTP 426 when the version header is missing)
 
 ```text
@@ -198,7 +224,7 @@ Notes:
 - CLI sessions last about 7 days; when the token expires, run `grok login`
   again, then re-run `:connect grok`.
 - Usage counts against your subscription and model eligibility is enforced by
-  xAI per tier. This route is intended for interactive use — for automation or
+  xAI per tier. This route is intended for interactive use. For automation or
   benchmarking, use `XAI_API_KEY` BYOK.
 - Most proxy models are streaming-only; SuperQode's chat path streams by
   default.
