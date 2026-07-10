@@ -368,11 +368,7 @@ def harness_spec_to_dict(spec: HarnessSpec) -> dict[str, Any]:
                         if spec.optimization.max_candidate_edits is not None
                         else {}
                     ),
-                    **(
-                        {"config": spec.optimization.config}
-                        if spec.optimization.config
-                        else {}
-                    ),
+                    **({"config": spec.optimization.config} if spec.optimization.config else {}),
                 }
             }
             if _include_optimization(spec.optimization)

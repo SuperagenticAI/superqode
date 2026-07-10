@@ -136,6 +136,25 @@ PROVIDERS: Dict[str, ProviderDef] = {
         ],
         notes="Gemini API via Google AI Studio. Free key at aistudio.google.com; great for large codebases.",
     ),
+    "meta": ProviderDef(
+        # Curated so Meta lists under US Labs instead of the synthesized
+        # models.dev tail (which defaults to Model Hosts / Tier 2). Routing is
+        # identical to the synthesized def: OpenAI-compatible per-request.
+        id="meta",
+        name="Meta",
+        tier=ProviderTier.TIER1,
+        category=ProviderCategory.US_LABS,
+        env_vars=["META_MODEL_API_KEY"],
+        litellm_prefix="openai/",
+        base_url_env="META_BASE_URL",
+        default_base_url="https://api.meta.ai/v1",
+        docs_url="https://dev.meta.ai/docs",
+        example_models=[
+            "muse-spark-1.1",
+        ],
+        notes="Meta's first-party model API (OpenAI-compatible). Model list follows models.dev.",
+        dynamic=True,  # per-request api_base/api_key routing, no env mutation
+    ),
     "xai": ProviderDef(
         id="xai",
         name="xAI (Grok)",

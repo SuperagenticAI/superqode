@@ -56,7 +56,9 @@ def test_acp_discovery_grok_models_lead_with_account_default():
 
     from superqode.acp_discovery import ACPDiscovery, DiscoveredAgent
 
-    agent = DiscoveredAgent(name="Grok Build", short_name="grok", command=["grok", "agent", "stdio"])
+    agent = DiscoveredAgent(
+        name="Grok Build", short_name="grok", command=["grok", "agent", "stdio"]
+    )
     models = asyncio.run(ACPDiscovery()._get_models(agent))
 
     ids = [m.id for m in models]

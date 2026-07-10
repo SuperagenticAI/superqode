@@ -3104,7 +3104,9 @@ def harness_logbook_export(logbook_dir, output_path):
 )
 @click.option("--dry-run", is_flag=True, help="Report pruning without writing")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
-def harness_logbook_prune(logbook_dir, min_count, max_patterns, keep_statuses, dry_run, json_output):
+def harness_logbook_prune(
+    logbook_dir, min_count, max_patterns, keep_statuses, dry_run, json_output
+):
     """Prune stale or low-confidence self-improvement memory."""
     from superqode.harness import prune_logbook
 
@@ -3199,9 +3201,7 @@ def harness_audit_candidate(
             allow_ungated=allow_ungated,
         )
         recorded = (
-            record_candidate_audit(audit, ledger_path=ledger_path, notes=notes)
-            if record
-            else None
+            record_candidate_audit(audit, ledger_path=ledger_path, notes=notes) if record else None
         )
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc

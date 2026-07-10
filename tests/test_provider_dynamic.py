@@ -153,3 +153,20 @@ def test_get_supported_providers_no_allowlist(fake_models_dev):
     # Allowlist gate removed: every known provider is returned.
     supported = get_models_dev().get_supported_providers()
     assert "baseten" in supported and "deepinfra" in supported
+
+
+def test_meta_is_curated_us_lab_not_synthesized_model_host():
+    """Meta must list under US Labs, not the models.dev tail (Model Hosts/Tier 2)."""
+    meta = PROVIDERS["meta"]
+
+    assert meta.category == ProviderCategory.US_LABS
+    assert meta.tier == ProviderTier.TIER1
+    # Routing mirrors the previously-synthesized def exactly.
+    assert meta.dynamic is True
+    assert meta.litellm_prefix == "openai/"
+    assert meta.default_base_url == "https://api.meta.ai/v1"
+    assert meta.base_url_env == "META_BASE_URL"
+    assert meta.env_vars == ["META_MODEL_API_KEY"]
+    # Curated entry wins over synthesis, so the picker shows it exactly once.
+    assert dynamic.resolve_provider_def("meta") is meta
+    assert dynamic.is_curated_provider("meta") is True

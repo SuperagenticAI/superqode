@@ -70,8 +70,7 @@ def render_failure_report(report: dict[str, Any]) -> str:
         key = dimension.get("id") or "unclassified"
         by_dimension[key] = by_dimension.get(key, 0) + 1
     lines.append(
-        "Dimensions: "
-        + ", ".join(f"{key}={value}" for key, value in sorted(by_dimension.items()))
+        "Dimensions: " + ", ".join(f"{key}={value}" for key, value in sorted(by_dimension.items()))
     )
     for failure in failures[:10]:
         dimension = failure.get("dimension") or {}
@@ -199,10 +198,7 @@ def logbook_to_markdown(logbook: dict[str, Any]) -> str:
         lines.append(f"  - confidence: {item.get('confidence') or '-'}")
         lines.append(f"  - status: {item.get('status') or 'active'}")
         lines.append(f"  - category: {item.get('failure_category') or '-'}")
-        lines.append(
-            f"  - dimension: {dimension.get('id') or '-'} "
-            f"{dimension.get('field') or '-'}"
-        )
+        lines.append(f"  - dimension: {dimension.get('id') or '-'} {dimension.get('field') or '-'}")
         surfaces = item.get("suggested_surfaces") or []
         if surfaces:
             lines.append(f"  - suggested_surfaces: {', '.join(map(str, surfaces))}")
@@ -466,13 +462,16 @@ def record_candidate_audit(
     path = Path(ledger_path).expanduser()
     path.parent.mkdir(parents=True, exist_ok=True)
     recorded_at = _now_iso()
-    attempt_id = "attempt_" + _hash_json(
-        {
-            "candidate_id": audit.get("candidate_id"),
-            "recorded_at": recorded_at,
-            "ledger_path": str(path),
-        }
-    )[:12]
+    attempt_id = (
+        "attempt_"
+        + _hash_json(
+            {
+                "candidate_id": audit.get("candidate_id"),
+                "recorded_at": recorded_at,
+                "ledger_path": str(path),
+            }
+        )[:12]
+    )
     record = {
         "schema_version": SELF_IMPROVE_SCHEMA_VERSION,
         "attempt_id": attempt_id,
@@ -604,7 +603,9 @@ def append_self_improve_evidence(
     path = Path(evidence_path).expanduser()
     if not path.is_file():
         raise FileNotFoundError(f"Trace evidence file not found: {path}")
-    failure_reports = [_read_json_mapping(Path(item).expanduser().resolve()) for item in failure_report_paths]
+    failure_reports = [
+        _read_json_mapping(Path(item).expanduser().resolve()) for item in failure_report_paths
+    ]
     logbook = read_logbook(logbook_dir)
     sections = [
         "",
@@ -633,15 +634,13 @@ def append_self_improve_evidence(
             failure_count += 1
             dimension = failure.get("dimension") or {}
             sections.append(
-                f"- {failure.get('failure_id') or '-'}: "
-                f"{failure.get('symptom') or '-'}"
+                f"- {failure.get('failure_id') or '-'}: {failure.get('symptom') or '-'}"
             )
             sections.append(f"  - source_type: {failure.get('source_type') or '-'}")
             sections.append(f"  - task_id: {failure.get('task_id') or '-'}")
             sections.append(f"  - category: {failure.get('failure_category') or '-'}")
             sections.append(
-                f"  - dimension: {dimension.get('id') or '-'} "
-                f"{dimension.get('field') or '-'}"
+                f"  - dimension: {dimension.get('id') or '-'} {dimension.get('field') or '-'}"
             )
             surfaces = failure.get("suggested_surfaces") or []
             if surfaces:
@@ -687,7 +686,9 @@ def _records_from_test_result(payload: dict[str, Any], source: Path) -> list[dic
         failed_checks = [(-1, {})]
     records = []
     for index, check in failed_checks:
-        symptom = check.get("error") or _first_string(digest.get("evidence")) or "Harness test failed"
+        symptom = (
+            check.get("error") or _first_string(digest.get("evidence")) or "Harness test failed"
+        )
         records.append(
             _failure_record(
                 source_type="harness_test",
@@ -1233,7 +1234,9 @@ def _candidate_eval_gates(
             }
         )
     missing_required = [
-        split for split in required_splits if split not in passed_splits and "all" not in passed_splits
+        split
+        for split in required_splits
+        if split not in passed_splits and "all" not in passed_splits
     ]
     return {
         "required_splits": list(required_splits),

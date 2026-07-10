@@ -1193,9 +1193,7 @@ def get_model_info(provider_id: str, model_id: str) -> Optional[ModelInfo]:
     return None
 
 
-def get_models_for_provider(
-    provider_id: str, *, include_all: bool = False
-) -> Dict[str, ModelInfo]:
+def get_models_for_provider(provider_id: str, *, include_all: bool = False) -> Dict[str, ModelInfo]:
     """Get provider models, optionally retaining the complete live catalog.
 
     The default remains compact for recommendations and small status surfaces.

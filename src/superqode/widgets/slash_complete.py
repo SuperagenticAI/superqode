@@ -102,9 +102,7 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
         "Mine self-improvement failures from harness JSON",
         category="workflow",
     ),
-    SlashCommand(
-        ":harness logbook", "Manage the self-improvement logbook", category="workflow"
-    ),
+    SlashCommand(":harness logbook", "Manage the self-improvement logbook", category="workflow"),
     SlashCommand(
         ":harness logbook prune",
         "Prune stale self-improvement memory",

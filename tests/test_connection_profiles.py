@@ -81,7 +81,9 @@ def test_codex_detect_uses_local_codex_auth(monkeypatch, tmp_path):
 def test_grok_detect_requires_cli_subscription_auth(monkeypatch, tmp_path):
     import superqode.providers.connection_profiles as cp
 
-    monkeypatch.setattr(cp.shutil, "which", lambda name: "/usr/local/bin/grok" if name == "grok" else None)
+    monkeypatch.setattr(
+        cp.shutil, "which", lambda name: "/usr/local/bin/grok" if name == "grok" else None
+    )
     monkeypatch.setattr(cp.Path, "home", staticmethod(lambda: tmp_path))
     monkeypatch.delenv("XAI_API_KEY", raising=False)
     assert cp._grok_cli_ready() is False

@@ -112,7 +112,9 @@ async def test_harness_run_end_emits_usage_metadata(monkeypatch, tmp_path: Path)
     )
     session = await kernel.session("usage-session")
 
-    result = await session.prompt("say ok", provider="test", model="model", working_directory=tmp_path)
+    result = await session.prompt(
+        "say ok", provider="test", model="model", working_directory=tmp_path
+    )
 
     assert result.tokens_in == 20
     assert result.tokens_out == 7

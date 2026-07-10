@@ -4112,9 +4112,7 @@ class SuperQodeApp(App):
         """Bring the RichLog row containing the current picker marker into view."""
         try:
             selected_y = next(
-                index
-                for index, line in enumerate(log.lines)
-                if "SELECTED" in line.text
+                index for index, line in enumerate(log.lines) if "SELECTED" in line.text
             )
         except (AttributeError, StopIteration):
             return False
@@ -4657,7 +4655,10 @@ class SuperQodeApp(App):
         elif conn == "subscription":
             # SuperQode harness + product subscription login (not an external agent).
             # Grok: import `grok login` token and connect the grok-cli provider.
-            if getattr(profile, "id", "") == "grok" or getattr(profile, "provider", None) == "grok-cli":
+            if (
+                getattr(profile, "id", "") == "grok"
+                or getattr(profile, "provider", None) == "grok-cli"
+            ):
                 model = (getattr(profile, "model", None) or "grok-build").strip()
                 self._grok_api_cmd(model, log)
             else:
@@ -11001,7 +11002,9 @@ class SuperQodeApp(App):
             log.add_info("Run `grok login` again, then re-run :connect grok.")
             return
 
-        log.add_info("Imported the Grok CLI session token (stored in ~/.superqode/auth.json, 0600).")
+        log.add_info(
+            "Imported the Grok CLI session token (stored in ~/.superqode/auth.json, 0600)."
+        )
         log.add_info(
             f"SuperQode harness on Grok subscription → grok-cli/{model} "
             "(not Grok Build ACP). Switch with :acp grok or :connect acp grok. "
@@ -11041,7 +11044,9 @@ class SuperQodeApp(App):
         if token.get("imported") and not token.get("imported_expired"):
             t.append("imported (:grok api off to remove)\n", style=THEME["success"])
         elif token.get("imported"):
-            t.append("imported but expired — run `grok login`, then :grok api\n", style=THEME["warning"])
+            t.append(
+                "imported but expired — run `grok login`, then :grok api\n", style=THEME["warning"]
+            )
         elif token.get("cli_login"):
             t.append("available — run :connect grok to use SuperQode harness\n", style=THEME["dim"])
         else:
@@ -29332,7 +29337,9 @@ class SuperQodeApp(App):
 
                     log.add_info("Connected to Grok Build via the official Grok CLI ACP server.")
                     if not self.current_model:
-                        log.add_info("Using the signed-in account's Grok Build default (currently Grok 4.5).")
+                        log.add_info(
+                            "Using the signed-in account's Grok Build default (currently Grok 4.5)."
+                        )
                 elif self.current_agent == "openhands":
                     # For OpenHands, handle model selection
                     if model_hint:

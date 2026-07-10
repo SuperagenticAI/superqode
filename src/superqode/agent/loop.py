@@ -2107,7 +2107,9 @@ class AgentLoop:
                     usage_input_tokens if response.input_tokens is None else response.input_tokens
                 )
                 response.output_tokens = (
-                    usage_output_tokens if response.output_tokens is None else response.output_tokens
+                    usage_output_tokens
+                    if response.output_tokens is None
+                    else response.output_tokens
                 )
                 response.total_tokens = (
                     usage_total_tokens if response.total_tokens is None else response.total_tokens

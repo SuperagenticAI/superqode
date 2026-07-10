@@ -268,9 +268,7 @@ def test_grok_api_without_cli_login_errors(tmp_path, isolated_auth_store, monkey
     assert any("No Grok CLI login" in e for e in log.errors)
 
 
-def test_grok_api_expired_session_errors_and_cleans_up(
-    tmp_path, isolated_auth_store, monkeypatch
-):
+def test_grok_api_expired_session_errors_and_cleans_up(tmp_path, isolated_auth_store, monkeypatch):
     auth_file = _write_cli_auth(
         tmp_path,
         {"https://accounts.x.ai/sign-in": {"key": _jwt_with_exp(int(time.time()) - 100)}},

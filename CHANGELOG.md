@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.13] - 2026-07-10
+
+### Added
+
+- **Meta listed under US Labs** - Meta now has a curated Tier 1 registry entry (`META_MODEL_API_KEY`, `https://api.meta.ai/v1`) so it appears with the other US labs in the provider picker instead of the auto-synthesized models.dev tail (which defaults to Model Hosts / Tier 2). Routing is unchanged: OpenAI-compatible per-request, model list follows models.dev.
+
+### Fixed
+
+- **CI lint gate green again** - `ruff format` applied to eleven files that had drifted from the formatter (harness self-improvement modules, provider registry/models, Grok tests, and completion surfaces); `ruff format --check` failed the lint job on `main` since 0.2.12.
+
+### Changed
+
+- **Release metadata** - Bumped the package version, runtime `__version__`, lockfile package entry, and ACP registry metadata to `0.2.13`.
+
 ## [0.2.12] - 2026-07-10
 
 ### Fixed

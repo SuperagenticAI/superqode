@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.2.12"
+version = "0.2.13"
 description = "SuperQode: harness engineering framework for coding agents, optimized for local and open models"
 readme = "README.md"
 license = "Apache-2.0"
