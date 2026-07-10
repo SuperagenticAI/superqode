@@ -245,9 +245,10 @@ async def test_local_simple_chat_skips_coding_scaffolding(monkeypatch, tmp_path)
     assert result.content == "hi"
     assert gateway.tools_seen == [None]
     assert [m.role for m in gateway.calls[0]] == ["system", "user"]
-    assert gateway.calls[0][0].content == (
-        "You are a concise assistant. Answer directly without using tools."
-    )
+    fast_system = gateway.calls[0][0].content
+    assert "ollama/qwen3:8b" in fast_system  # identity answerable without tools
+    assert "Do not use tools" in fast_system
+    assert len(fast_system) < 400  # stays a short chat prompt, not the coding harness
     assert gateway.calls[0][-1].content == "hello"
 
 

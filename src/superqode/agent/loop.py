@@ -71,6 +71,22 @@ def _cached_system_prompt(
             prompt += f"\n\nWorking directory: {working_directory}"
     else:
         prompt = get_system_prompt(level=level, working_directory=Path(working_directory))
+    # Make "which model are you using?" answerable without tools.
+    if provider and model and level != SystemPromptLevel.NONE:
+        display_model = model
+        if provider == "grok-cli":
+            prompt += (
+                f"\n\nYou are SuperQode's coding harness (not Grok Build ACP). "
+                f"Connected via Grok subscription as model `{display_model}` "
+                f"(provider `grok-cli`). Answer identity questions from this fact; "
+                f"do not invent a different model name."
+            )
+        else:
+            prompt += (
+                f"\n\nYou are SuperQode's coding harness. "
+                f"Active model: `{provider}/{display_model}`. "
+                f"Answer identity questions from this fact."
+            )
     try:
         from ..skills import load_project_instructions
 
@@ -171,6 +187,16 @@ def _message_to_tuple(m: "AgentMessage") -> Tuple:
     return (m.role, content, tool_calls_tuple, m.tool_call_id, m.name)
 
 
+def _code_intent_keyword_re() -> re.Pattern[str]:
+    """Word-boundary code intent (``coding`` must not match ``code``)."""
+    return re.compile(
+        r"\b("
+        r"file|files|code|function|functions|class|classes|read|write|edit|"
+        r"project|repo|repository|readme|codebase"
+        r")\b"
+    )
+
+
 def _is_simple_conversational_query(message: str) -> bool:
     """Detect if a query is simple/conversational and doesn't need tools.
 
@@ -181,6 +207,7 @@ def _is_simple_conversational_query(message: str) -> bool:
     """
     # Strip trailing punctuation so "How are you?" / "thanks!" match cleanly.
     message_lower = message.lower().strip().rstrip("?!. ")
+    code_keyword_re = _code_intent_keyword_re()
 
     # Greetings and small talk - no tools, no repo context needed. Keeping these
     # off the tool path is what makes a quick "how are you" feel instant on a
@@ -225,40 +252,72 @@ def _is_simple_conversational_query(message: str) -> bool:
         "great",
         "awesome",
         "gotcha",
+        # Common multi-word greetings that previously fell through to the
+        # full coding path (tools + explore-the-repo system prompt).
+        "hello there",
+        "hi there",
+        "hey there",
+        "hello hello",
+        "hi hi",
+        "hello friend",
+        "hi friend",
+        "hello everyone",
+        "good to meet you",
+        "nice to meet you",
+        "pleased to meet you",
     }
     if message_lower in greetings:
         return True
 
+    # Short social openers: "Hello!", "Hi there", "Hey, how are you?"
+    # Keep this tight — "hello please refactor the auth module" is a task.
+    words = message_lower.split()
+    if words:
+        opener = words[0].rstrip(",!;:")
+        if opener in ("hi", "hello", "hey", "howdy", "yo", "sup", "hiya", "greetings"):
+            rest = " ".join(words[1:])
+            social_rest = re.fullmatch(
+                r"(there|friend|everyone|all|folks|team)?"
+                r"([,!]?\s*(how are you( doing)?|how('s| is|s) it going|"
+                r"what('s| is|s) up|how have you been)?)?",
+                rest,
+            )
+            if social_rest is not None and not code_keyword_re.search(message_lower):
+                return True
+            # Bare multi-word still short: "hello hello", "hi hi"
+            if len(words) <= 2 and not code_keyword_re.search(message_lower):
+                if all(w.rstrip(",!;:") in ("hi", "hello", "hey", "there") for w in words):
+                    return True
+
+    # Session/model identity — answer from system context, never need tools.
+    # (Substring "code" must not match "coding model".)
+    identity_patterns = [
+        r"^(what|which) (coding |ai |llm )?(model|version)\b.*$",
+        r"^(what|which) model (are you|do you|is this|is)\b.*$",
+        r"^(who|what) are you\b.*$",
+        r"^what (provider|backend|runtime) (are you|is this|am i)\b.*$",
+        r"^(tell me about|introduce) yourself\b.*$",
+    ]
+    for pattern in identity_patterns:
+        # Keyword guard: "which model file defines the user class" is a code
+        # question, not an identity question.
+        if re.match(pattern, message_lower) and not code_keyword_re.search(message_lower):
+            return True
+
     # Simple question patterns - detect basic general knowledge questions
     # These should not require tools and some models handle them poorly with tools
     simple_patterns = [
-        r"^(what|what\'s|whats) .+\??$",  # "What is the capital?", "What's the weather?"
+        r"^(what|what\'s|whats|which) .+\??$",  # "What is…?", "Which model…?"
         r"^where .+\??$",  # "Where is the capital?"
         r"^who .+\??$",  # "Who is the president?"
         r"^when .+\??$",  # "When was the war?"
         r"^how (many|much|long|old) .+\??$",  # "How many people?", "How old is it?"
         r"^how (are|is|'s|s|have|was|do) (you|it|things|everything|ya)\b.*$",  # "how are you", "how's it going"
-        r"^(tell me about|introduce) yourself\b.*$",  # meta questions about the agent
     ]
 
     for pattern in simple_patterns:
         if re.match(pattern, message_lower):
-            # Double-check: no code keywords
-            code_keywords = [
-                "file",
-                "code",
-                "function",
-                "class",
-                "read",
-                "write",
-                "edit",
-                "project",
-                "repo",
-                "repository",
-                "readme",
-                "codebase",
-            ]
-            if not any(keyword in message_lower for keyword in code_keywords):
+            if not code_keyword_re.search(message_lower):
                 return True
 
     # Don't auto-detect other cases - be conservative
@@ -1431,23 +1490,31 @@ class AgentLoop:
         return any(token in p for token in self._LOCAL_PROVIDERS)
 
     def _use_fast_chat_path(self, user_message: str) -> bool:
-        """Skip coding-agent scaffolding for obvious local chat prompts.
+        """Skip coding-agent scaffolding for obvious chat prompts.
 
-        This keeps "hello" and basic non-code questions from paying for live
-        context probing, restored coding history, reminders, and tool schemas.
+        Applies to **local and cloud** providers (including Grok subscription /
+        ``grok-cli``). A bare "Hello" must not pay for tool schemas, the full
+        explore-the-codebase system prompt, repo reminders, or context probing.
         DS4 is intentionally excluded because it relies on a stable rendered
         prefix for KV-cache reuse.
         """
-        if not self._provider_is_local() or _is_ds4_provider(self.config.provider):
+        if _is_ds4_provider(self.config.provider):
             return False
         if self.config.plan_mode or self._prompt_tool_mode():
             return False
         return _is_simple_conversational_query(user_message)
 
     def _fast_chat_system_message(self) -> "AgentMessage":
+        provider = self.config.provider or "unknown"
+        model = self.config.model or "unknown"
         return AgentMessage(
             role="system",
-            content="You are a concise assistant. Answer directly without using tools.",
+            content=(
+                "You are a concise chat assistant in SuperQode. "
+                f"Active model: `{provider}/{model}`. "
+                "Answer the user directly in a short friendly reply. "
+                "Do not use tools, list directories, search the repo, or scan source code."
+            ),
         )
 
     async def _ensure_context_window(self) -> int:
@@ -2234,6 +2301,26 @@ class AgentLoop:
                 response_content, response.tool_calls
             )
 
+            # Fast-chat turns must never run tools — even if the model invents
+            # tool calls (common with strong coding models + explore-the-repo
+            # system prompts). "Hello" on Grok subscription used to scan the
+            # tree for minutes this way. Only gate on fast_chat: plan mode has
+            # its own blocker, prompt-tool mode sends tools via the prompt
+            # (tools_to_send is None there), and unknown-tool calls must still
+            # flow through normal processing so hooks fire.
+            if response.tool_calls and fast_chat:
+                if self.on_thinking:
+                    await self.on_thinking(
+                        "Ignoring tool calls on a simple chat turn (no repo scan)."
+                    )
+                if not (response_content or "").strip():
+                    response_content = (
+                        "Hello! I'm SuperQode's coding harness. "
+                        f"Connected as `{self.config.provider}/{self.config.model}`. "
+                        "How can I help?"
+                    )
+                response.tool_calls = None
+
             # Check for empty responses from models that should respond
             if not response_content.strip() and not response.tool_calls:
                 # Model returned empty content with no tool calls - this is likely a problem
@@ -2766,6 +2853,23 @@ class AgentLoop:
                 full_content, tool_calls or None
             )
             tool_calls = extracted_calls or []
+
+            # Never execute tools on fast-chat turns (subscription "Hello" must
+            # not kick off a multi-minute repo scan). fast_chat only — plan and
+            # prompt-tool modes handle their own tool-call flow.
+            if tool_calls and fast_chat:
+                if self.on_thinking:
+                    await self.on_thinking(
+                        "Ignoring tool calls on a simple chat turn (no repo scan)."
+                    )
+                if not (full_content or "").strip():
+                    full_content = (
+                        "Hello! I'm SuperQode's coding harness. "
+                        f"Connected as `{self.config.provider}/{self.config.model}`. "
+                        "How can I help?"
+                    )
+                    yield full_content
+                tool_calls = []
 
             # Handle tool calls
             if tool_calls:

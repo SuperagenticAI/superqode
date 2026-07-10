@@ -209,11 +209,16 @@ def test_connect_subcommands_route_to_specific_pickers():
     SuperQodeApp._handle_command(stub, ":connect byok", log=None)
     SuperQodeApp._handle_command(stub, ":connect local", log=None)
     SuperQodeApp._handle_command(stub, ":connect grok", log=None)
+    # ":connect acp grok" must open the ACP connection (grok agent stdio),
+    # never the subscription harness profile.
+    SuperQodeApp._handle_command(stub, ":connect acp grok", log=None)
 
     assert ("acp", "") in stub.calls
     assert ("byok-cmd", "") in stub.calls
     assert ("local-cmd", "") in stub.calls
     assert ("profile", "grok") in stub.calls
+    assert ("acp", "grok") in stub.calls
+    assert stub.calls.count(("profile", "grok")) == 1  # only the bare :connect grok
     assert ("connect-picker",) not in stub.calls
 
 
@@ -249,3 +254,27 @@ def test_no_headline_acp_grok_profile():
         p for p in list_connection_profiles() if p.connector == "acp" and p.acp_agent == "grok"
     ]
     assert acp_grok == []
+
+
+def test_acp_bare_agent_name_routes_to_connect():
+    """``:acp grok`` must connect Grok Build ACP, not print Unknown or use subscription."""
+    from superqode.app_main import SuperQodeApp
+
+    class _Log:
+        def add_warning(self, msg):
+            pass
+
+        def add_info(self, msg):
+            pass
+
+    class Stub(_DispatchStub):
+        pass
+
+    stub, log = Stub(), _Log()
+    SuperQodeApp._acp_cmd(stub, "grok", log)
+    SuperQodeApp._acp_cmd(stub, "opencode", log)
+    SuperQodeApp._acp_cmd(stub, "connect grok", log)
+
+    assert stub.calls.count(("acp", "grok")) == 2  # bare name + connect subcommand
+    assert ("acp", "opencode") in stub.calls
+    assert ("subscription", "grok-build") not in stub.calls

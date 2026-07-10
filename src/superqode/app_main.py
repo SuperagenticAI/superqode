@@ -11003,8 +11003,9 @@ class SuperQodeApp(App):
 
         log.add_info("Imported the Grok CLI session token (stored in ~/.superqode/auth.json, 0600).")
         log.add_info(
-            "Connected SuperQode harness on your Grok subscription (CLI chat proxy). "
-            "Grok Build ACP: :connect acp grok. Remove token anytime with :grok api off."
+            f"SuperQode harness on Grok subscription → grok-cli/{model} "
+            "(not Grok Build ACP). Switch with :acp grok or :connect acp grok. "
+            "Remove token anytime with :grok api off."
         )
         self._connect_byok_mode("grok-cli", model, log)
 
@@ -28841,7 +28842,12 @@ class SuperQodeApp(App):
         self._connect_agent(agent_name, model_hint)
 
     def _acp_cmd(self, args: str, log: ConversationLog):
-        """Handle :acp command with subcommands (list, install, model, doctor)."""
+        """Handle :acp command with subcommands (list, install, model, doctor).
+
+        Bare agent names are treated as connect targets so ``:acp grok`` works
+        the same as ``:connect acp grok`` (Grok Build ACP, not the subscription
+        harness path).
+        """
         parts = args.split(maxsplit=1) if args else []
         sub = parts[0].lower() if parts else "list"
         subargs = parts[1] if len(parts) > 1 else ""
@@ -28866,7 +28872,8 @@ class SuperQodeApp(App):
         elif sub in ("doctor", "check"):
             self.run_worker(self._acp_doctor_cmd(subargs, log))
         else:
-            log.add_info(f"Unknown: {sub}. Try: list, connect, install, model, doctor")
+            # ":acp grok" / ":acp opencode" → connect that ACP agent by short name
+            self._connect_acp_cmd(args.strip(), log)
 
     def _agents_cmd(self, args: str, log: ConversationLog):
         """Handle :agents as an alias for ACP agent management."""

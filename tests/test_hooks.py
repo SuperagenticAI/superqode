@@ -465,7 +465,10 @@ async def test_stop_hook_fires_on_max_iterations(tmp_path):
         config=config,
         hooks=reg,
     )
-    response = await loop.run("hello")
+    # A task-shaped prompt: "hello" now takes the fast chat path (no tool
+    # processing) on every provider, which would end the turn before the
+    # iteration cap is reached.
+    response = await loop.run("read the readme file")
     assert response.stopped_reason == "max_iterations"
     assert stopped == ["max_iterations"]
 

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.12] - 2026-07-10
+
+### Fixed
+
+- **`:acp grok` connects ACP again** - Bare agent names after `:acp` (e.g. `:acp grok`, `:acp opencode`) route to the ACP connect path, same as `:connect acp grok`, instead of printing "Unknown".
+- **Model-identity questions no longer force the full tool path** - Prompts like "which coding model are you using" skip tool schemas (word-boundary keyword check so "coding" is not treated as "code"), and the system prompt states the active SuperQode provider/model so the answer is fast and accurate on the subscription harness.
+- **Subscription "Hello" no longer multi-minute repo scans** - The fast chat path (short system prompt, no tool schemas, no repo reminders) now applies to cloud providers including `grok-cli`, not only local models. Expanded greeting detection (`Hello there`, etc.) and a hard guard ignores hallucinated tool calls on fast-chat turns so a coding model cannot invent a list_directory storm after a greeting. Plan mode, prompt-format tool calling, and hook processing keep their own tool-call flow (the guard applies only to fast-chat turns), and identity questions that name code artifacts (e.g. "which model file defines the user class") still take the full tool path.
+
+### Changed
+
+- **Release metadata** - Bumped the package version, runtime `__version__`, lockfile package entry, and ACP registry metadata to `0.2.12`.
+
 ## [0.2.11] - 2026-07-10
 
 ### Changed
