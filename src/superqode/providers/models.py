@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 LATEST_GOOGLE_PRO_MODEL = "gemini-3.1-pro-preview"
 LATEST_GOOGLE_FLASH_MODEL = "gemini-flash-latest"
@@ -43,6 +43,7 @@ NON_CHAT_MODEL_MARKERS = (
     "embed",
     "image",
     "moderation",
+    "realtime",
     "rerank",
     "speech",
     "tts",
@@ -1223,6 +1224,11 @@ def get_models_for_provider(provider_id: str, *, include_all: bool = False) -> D
                 filtered[model_id] = model_info
 
     if include_all:
+        if provider_id not in LOCAL_MODEL_PROVIDERS:
+            # Full catalogs read newest-first too (pickers, search, completion).
+            # Local server tags have no release dates; keep their server order.
+            ordered = sorted(filtered.values(), key=_hosted_model_sort_key, reverse=True)
+            return {model.id: model for model in ordered}
         return filtered
     if provider_id == "google":
         return _latest_google_models(filtered)
@@ -1274,14 +1280,18 @@ def _model_recency_key(model: ModelInfo) -> tuple[str, str]:
 
 
 def _current_hosted_models(models: Dict[str, ModelInfo]) -> Dict[str, ModelInfo]:
-    """Derive compact current hosted-model lists from models.dev metadata."""
+    """Derive compact current hosted-model lists from models.dev metadata.
+
+    Newest releases lead. "-latest" rolling aliases are kept alongside real
+    models (they win date ties) but no longer replace them — the old
+    exclusive-alias rule hid brand-new flagships (e.g. the GPT-5.6 family)
+    behind stale ``gpt-5.x-chat-latest`` entries.
+    """
     chat_models = [model for model in models.values() if _is_chat_model(model)]
     if not chat_models:
         chat_models = list(models.values())
 
-    latest_aliases = [model for model in chat_models if _is_latest_alias(model)]
-    selected = latest_aliases or chat_models
-    selected = sorted(selected, key=_hosted_model_sort_key, reverse=True)[:CURRENT_MODEL_LIMIT]
+    selected = sorted(chat_models, key=_hosted_model_sort_key, reverse=True)[:CURRENT_MODEL_LIMIT]
     return {model.id: model for model in selected}
 
 
@@ -1295,14 +1305,68 @@ def _is_latest_alias(model: ModelInfo) -> bool:
     return "latest" in text
 
 
-def _hosted_model_sort_key(model: ModelInfo) -> tuple[str, int, int, float, str]:
+def _hosted_model_sort_key(model: ModelInfo) -> tuple[str, int, int, int, float, str]:
     return (
         model.released or "",
+        1 if _is_latest_alias(model) else 0,  # rolling aliases win date ties
         1 if model.supports_tools else 0,
         model.context_window,
         -(model.input_price + model.output_price),
         model.id,
     )
+
+
+def find_providers_for_model(model_id: str) -> List[str]:
+    """Hosted provider ids whose catalog contains exactly this model id.
+
+    Powers bare-model connects (":connect gpt-5.6-sol") — a unique match lets
+    the TUI resolve the provider for the user. Local providers are excluded:
+    their tags are machine-specific and connect via :connect local.
+    """
+    needle = (model_id or "").strip().lower()
+    if not needle:
+        return []
+    matches = []
+    for provider_id, models in get_effective_models().items():
+        if provider_id in LOCAL_MODEL_PROVIDERS:
+            continue
+        for mid, info in models.items():
+            if mid.lower() == needle and info.provider == provider_id:
+                matches.append(provider_id)
+                break
+    return sorted(matches)
+
+
+def sort_models_newest_first(models: List[Any]) -> List[Any]:
+    """Order heterogeneous picker entries newest-release-first (stable).
+
+    ACP pickers hold plain dicts (Codex account models, OpenCode ids like
+    ``deepseek/deepseek-v4``); release dates come from the effective catalog.
+    Entries without a known date keep their advertised relative order, after
+    the dated ones.
+    """
+    released_by_id: Dict[str, str] = {}
+    for provider_models in get_effective_models().values():
+        for mid, info in provider_models.items():
+            if info.released:
+                existing = released_by_id.get(mid.lower(), "")
+                if info.released > existing:
+                    released_by_id[mid.lower()] = info.released
+
+    def _released(entry: Any) -> str:
+        raw_id = entry.get("id", "") if isinstance(entry, dict) else getattr(entry, "id", "")
+        model_id = str(raw_id or "").lower()
+        if not model_id:
+            return ""
+        direct = released_by_id.get(model_id, "")
+        if direct:
+            return direct
+        # "provider/model" pair ids (OpenCode) — match on the model part.
+        if "/" in model_id:
+            return released_by_id.get(model_id.rsplit("/", 1)[1], "")
+        return ""
+
+    return sorted(models, key=_released, reverse=True)
 
 
 def get_all_models() -> List[ModelInfo]:

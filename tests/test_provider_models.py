@@ -183,9 +183,14 @@ def test_live_provider_models_replace_stale_builtin_models():
     assert list(models) == ["claude-future-latest"]
 
 
-def test_live_hosted_models_prefer_latest_aliases():
-    # Synthetic provider with no builtin entry so this exercises only the
-    # latest-alias selection, not the stale-vs-builtin merge.
+def test_live_hosted_models_newest_first_with_aliases_alongside():
+    """Rolling "-latest" aliases must not hide newer real models.
+
+    Regression: the old exclusive-alias rule made the OpenAI picker show only
+    stale gpt-5.x-chat-latest entries while the brand-new GPT-5.6 family was
+    invisible. Newest release now leads; aliases stay in the list and win only
+    date ties.
+    """
     set_live_models(
         {
             "acme": {
@@ -197,13 +202,77 @@ def test_live_hosted_models_prefer_latest_aliases():
                     "acme",
                     released="2025-01-01",
                 ),
+                "gpt-tie-latest": ModelInfo(
+                    "gpt-tie-latest",
+                    "GPT Tie Latest",
+                    "acme",
+                    released="2026-01-01",
+                ),
             }
         }
     )
 
     models = get_models_for_provider("acme")
 
-    assert list(models) == ["gpt-new-latest"]
+    # Date tie between gpt-new and gpt-tie-latest: the alias wins the tie,
+    # then the real newest model, then older entries — nothing hidden.
+    assert list(models) == ["gpt-tie-latest", "gpt-new", "gpt-new-latest", "gpt-old"]
+
+    # The full catalog view reads newest-first too.
+    assert list(get_models_for_provider("acme", include_all=True)) == [
+        "gpt-tie-latest",
+        "gpt-new",
+        "gpt-new-latest",
+        "gpt-old",
+    ]
+
+
+def test_find_providers_for_model_resolves_bare_model_ids():
+    from superqode.providers.models import find_providers_for_model
+
+    set_live_models(
+        {
+            "acme": {
+                "shared-model": ModelInfo("shared-model", "Shared", "acme"),
+                "acme-only": ModelInfo("acme-only", "Acme Only", "acme"),
+            },
+            "beta": {
+                "shared-model": ModelInfo("shared-model", "Shared", "beta"),
+            },
+            # Local providers never participate in bare-model resolution.
+            "ollama": {
+                "acme-only": ModelInfo("acme-only", "Acme Only", "ollama"),
+            },
+        }
+    )
+
+    assert find_providers_for_model("acme-only") == ["acme"]
+    assert find_providers_for_model("Acme-Only") == ["acme"]  # case-insensitive
+    assert find_providers_for_model("shared-model") == ["acme", "beta"]
+    assert find_providers_for_model("nope") == []
+
+
+def test_sort_models_newest_first_orders_picker_dicts():
+    from superqode.providers.models import sort_models_newest_first
+
+    set_live_models(
+        {
+            "acme": {
+                "gpt-new": ModelInfo("gpt-new", "GPT New", "acme", released="2026-01-01"),
+                "gpt-old": ModelInfo("gpt-old", "GPT Old", "acme", released="2024-01-01"),
+            }
+        }
+    )
+
+    entries = [
+        {"id": "mystery-model"},  # unknown release — keeps advertised order, after dated
+        {"id": "gpt-old"},
+        {"id": "acme/gpt-new"},  # OpenCode-style provider/model pair id
+        {"id": "another-mystery"},
+    ]
+
+    ordered = [e["id"] for e in sort_models_newest_first(entries)]
+    assert ordered == ["acme/gpt-new", "gpt-old", "mystery-model", "another-mystery"]
 
 
 def test_provider_manager_mlx_models_do_not_fall_back_to_cache(monkeypatch):

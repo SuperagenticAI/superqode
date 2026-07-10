@@ -44,8 +44,9 @@ if TYPE_CHECKING:  # avoid importing the optional SDK / runtime at module load
     from .tools.permissions import PermissionManager
 
 # Empty default => "Codex owns it": defer to the machine's ~/.codex config for the
-# model. Override per call with ``model=...`` (use ``codex_session`` + ``cx.models()``
-# to list what your account exposes, e.g. gpt-5.5 / gpt-5.4 / gpt-5.4-mini).
+# model. Override per call with ``model=...``; use ``codex_session`` + ``cx.models()``
+# to list the live, account-scoped Codex catalogue rather than relying on a
+# hard-coded model list.
 DEFAULT_CODEX_MODEL = ""
 
 __all__ = [

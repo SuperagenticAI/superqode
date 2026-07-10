@@ -306,3 +306,136 @@ async def test_prompt_ctrl_a_selects_all():
         await pilot.press("ctrl+a")
         await pilot.pause()
         assert prompt.selected_text == "select me all"
+
+
+async def test_picker_error_messages_scroll_into_view(monkeypatch, tmp_path):
+    """Selecting a needs-setup profile must show its error/help messages.
+
+    Regression: choosing "Grok subscription" without a `grok login` wrote
+    "No Grok CLI login found" below the picker, but the viewport stayed pinned
+    to the top of the picker — the user saw nothing happen.
+    """
+    from superqode.providers import grok_cli_auth
+
+    monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", tmp_path / "missing-auth.json")
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._show_connect_type_picker(log)
+        await pilot.pause()
+
+        # Navigate to the Grok subscription profile (last entry) and select it.
+        for _ in range(6):
+            await pilot.press("down")
+            await pilot.pause()
+        assert app._byok_highlighted_connect_type_index == 6
+
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.pause()
+
+        error_y = next(
+            index for index, line in enumerate(log.lines) if "No Grok CLI login" in line.text
+        )
+        visible_height = log.scrollable_content_region.height
+        assert log.scroll_y <= error_y < log.scroll_y + visible_height, (
+            f"error at line {error_y} not in viewport [{log.scroll_y}, "
+            f"{log.scroll_y + visible_height})"
+        )
+
+
+async def test_codex_profile_error_visible_after_picker_navigation(monkeypatch):
+    """Choosing the Codex profile without the SDK must show the install error.
+
+    Same regression class as the Grok picker: the error was written while the
+    picker scroll helpers had left auto_scroll disabled, so the user saw
+    nothing happen.
+    """
+    import superqode.runtime as rt
+    from superqode.runtime import RuntimeInfo
+
+    def fake_list_runtimes():
+        return [
+            RuntimeInfo(
+                name="codex-sdk",
+                description="Codex SDK runtime",
+                installed=False,
+                install_hint='uv add "superqode[codex]"',
+                implemented=True,
+            )
+        ]
+
+    monkeypatch.setattr(rt, "list_runtimes", fake_list_runtimes)
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._show_connect_type_picker(log)
+        await pilot.pause()
+
+        for _ in range(3):  # local, byok, acp → codex at index 3
+            await pilot.press("down")
+            await pilot.pause()
+
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.pause()
+
+        error_y = next(
+            index for index, line in enumerate(log.lines) if "not installed" in line.text
+        )
+        visible_height = log.scrollable_content_region.height
+        assert log.scroll_y <= error_y < log.scroll_y + visible_height
+
+
+async def test_plain_write_panel_visible_after_byok_navigation(monkeypatch):
+    """Inline panels written with log.write() must also land in the viewport.
+
+    Arrow navigation runs the picker scroll helpers; they used to leave
+    auto_scroll disabled, hiding any later plain-write panel (e.g. the
+    "API Key Required" guidance).
+    """
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._show_byok_providers(log)
+        await pilot.pause()
+
+        for _ in range(8):
+            await pilot.press("down")
+            await pilot.pause()
+
+        app._connect_byok_mode("openai", "gpt-5.6", log)
+        await pilot.pause()
+        await pilot.pause()
+
+        panel_y = next(
+            index for index, line in enumerate(log.lines) if "API Key Required" in line.text
+        )
+        visible_height = log.scrollable_content_region.height
+        assert log.scroll_y <= panel_y < log.scroll_y + visible_height
+
+
+async def test_quit_command_quits_from_harness_wizard(monkeypatch):
+    """Typing :quit mid-wizard must reach the quit handler, not become an answer."""
+    app = SuperQodeApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._start_harness_wizard_flow(log)
+        await pilot.pause()
+        assert app._awaiting_harness_wizard is True
+
+        exits = []
+        monkeypatch.setattr(app, "_do_exit", lambda log: exits.append(True))
+
+        prompt = app.query_one(SelectionAwareInput)
+        prompt.focus()
+        prompt.load_text(":quit")
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert exits == [True]

@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Connect by model name alone** - `:connect gpt-5.6` now resolves the hosting provider from the catalog and connects. First-party curated providers are preferred over gateway mirrors, so `:connect muse-spark-1.1` goes to Meta, not a reseller; when a model still has several curated routes (e.g. `grok-4.5` via the xAI API or the Grok subscription), the exact `:connect provider/model` commands are listed instead of guessing. Unknown tokens keep the existing provider-models fallback.
+- **Auth-store hint in the API-key panel** - The "API Key Required" guidance now also offers `superqode auth login <provider>` (masked prompt, saved to `~/.superqode/auth.json`, 0600) so users can store a key without leaving the TUI workflow or editing shell config.
+
+### Changed
+
+- **Newest models first, everywhere** - BYOK shortlists and full catalogs, the Codex account model picker, and the OpenCode model picker now order entries newest-release-first. Rolling `-latest` aliases stay in the list and win date ties but no longer replace real models — the old exclusive-alias rule hid the brand-new GPT-5.6 family behind stale `gpt-5.x-chat-latest` entries. Realtime audio models are excluded from chat pickers.
+
+### Fixed
+
+- **Codex subscription compatibility and completion** - SuperQode now retries a bundled Codex app-server that cannot parse a newer global reasoning setting (such as `ultra`) with a process-local compatible `xhigh` override, leaving the user's global config unchanged. The live prompt now pages through every `:codex` subcommand and completes effort values, cached model IDs, and sandbox modes.
+- **Current local Codex model catalogue** - When the installed standalone Codex CLI is newer than the Python SDK's bundled app-server, SuperQode now uses it for the subscription runtime. `:codex model` / `:codex models` therefore show the account's current models (including GPT-5.6 where enabled), the active-model badge reflects the model actually resolved by the thread, and newly advertised `max` / `ultra` effort levels are available when supported.
+- **`:quit` quits from anywhere** - The harness wizard and pending agent questions consumed typed input before the command dispatcher, so `:quit` mid-wizard became a wizard answer instead of quitting. Typed commands now always win: the wizard passes every `:`/`/`/`!` line through to the dispatcher (keeping only its own `:cancel`/`:back` words), and agent questions pass the quit family through while still accepting free-text answers. Covered by unit tests and a mounted-TUI test that types `:quit` mid-wizard.
+- **Feedback is always visible in the TUI** - Picker scroll helpers left the log's follow-mode disabled after arrow navigation, so anything written afterwards (Codex "not installed" errors, the "API Key Required" panel, setup guidance) landed invisibly below the fold and Enter looked dead. The helpers now restore follow-mode, and feedback panels anchor the viewport to the *start* of the message so tall panels on short terminals show their heading first, not just their tail. Covered by mounted-TUI regression tests for the Codex profile and BYOK key-guidance flows.
+
+## [0.2.14] - 2026-07-10
+
+### Fixed
+
+- **Picker feedback messages always visible** - Selecting a needs-setup profile (e.g. "Grok subscription" without a `grok login`) wrote its error and guidance lines below the picker while the viewport stayed pinned to the picker top — Enter looked dead. `add_error` / `add_info` / `add_success` / `add_system` and shell output now re-enable follow-scroll and force the log to reveal the message. Covered by a mounted-TUI regression test that drives the real key flow.
+- **`add_warning` implemented** - Five call sites (DS4 health, live-model notices) referenced a `ConversationLog.add_warning` that did not exist and would have crashed with `AttributeError` when reached.
+
+### Changed
+
+- **Release metadata** - Bumped the package version, runtime `__version__`, lockfile package entry, and ACP registry metadata to `0.2.14`.
+
 ## [0.2.13] - 2026-07-10
 
 ### Added

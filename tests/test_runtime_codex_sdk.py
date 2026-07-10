@@ -42,6 +42,8 @@ class _FakeApprovalMode:
 
 @dataclass
 class _FakeCodexConfig:
+    config_overrides: tuple[str, ...] = ()
+    codex_bin: str | None = None
     cwd: str | None = None
     client_name: str = ""
     client_title: str = ""
@@ -51,6 +53,7 @@ class _FakeCodexConfig:
 @dataclass
 class _FakeThreadStart:
     thread: Any
+    model: str | None = None
 
 
 @dataclass
@@ -161,7 +164,10 @@ class _FakeCodexClient:
 
     def thread_start(self, params=None):
         self.thread_start_params = params
-        return _FakeThreadStart(thread=types.SimpleNamespace(id="thread-1"))
+        return _FakeThreadStart(
+            thread=types.SimpleNamespace(id="thread-1"),
+            model=params.get("model") if params else "gpt-5.4",
+        )
 
     def model_list(self, include_hidden=False):
         return types.SimpleNamespace(
@@ -226,6 +232,8 @@ class _FakeCodexClient:
 
 @pytest.fixture
 def fake_codex_sdk(monkeypatch):
+    from superqode.runtime import codex_sdk
+
     fake = types.ModuleType("openai_codex")
     fake.ApprovalMode = _FakeApprovalMode
     fake.CodexConfig = _FakeCodexConfig
@@ -237,6 +245,9 @@ def fake_codex_sdk(monkeypatch):
 
     monkeypatch.setitem(sys.modules, "openai_codex", fake)
     monkeypatch.setitem(sys.modules, "openai_codex.client", fake_client_mod)
+    # Unit fakes must not depend on whichever Codex executable happens to be
+    # installed on the test runner. Individual tests opt into a local CLI.
+    monkeypatch.setattr(codex_sdk, "_newer_local_codex_binary", lambda: None)
     return fake
 
 
@@ -270,6 +281,23 @@ def test_factory_returns_codex_sdk_runtime(fake_codex_sdk, tmp_path):
     assert runtime.name == "codex-sdk"
 
 
+def test_runtime_prefers_a_newer_local_codex_cli(fake_codex_sdk, monkeypatch, tmp_path):
+    """A local newer app-server must drive the live Codex model catalogue."""
+    from superqode.runtime import codex_sdk
+
+    monkeypatch.setattr(
+        codex_sdk,
+        "_newer_local_codex_binary",
+        lambda: ("/opt/homebrew/bin/codex", "0.144.0"),
+    )
+    runtime = create_runtime("codex-sdk", config=_config(tmp_path))
+
+    assert runtime.metadata.userAgent == "fake-codex"
+    assert _FakeCodexClient.last_instance.config.codex_bin == "/opt/homebrew/bin/codex"
+    assert runtime.app_server_source == "local Codex CLI 0.144.0"
+    assert runtime.active_model == "gpt-5.4"
+
+
 def test_installed_sdk_protocol_contract_has_translated_fields():
     sdk_types = pytest.importorskip("openai_codex.generated.v2_all")
 
@@ -281,19 +309,45 @@ def test_installed_sdk_protocol_contract_has_translated_fields():
     assert "content_items" in sdk_types.DynamicToolCallThreadItem.model_fields
 
 
+def test_installed_sdk_accepts_newer_codex_reasoning_efforts():
+    """New server-advertised efforts must not make model/list fail to parse."""
+    pytest.importorskip("openai_codex")
+    from openai_codex.types import ReasoningEffort
+    from superqode.runtime.codex_sdk import _enable_forward_compatible_reasoning_efforts
+
+    _enable_forward_compatible_reasoning_efforts()
+
+    assert ReasoningEffort("max").value == "max"
+    assert ReasoningEffort("ultra").value == "ultra"
+
+
 def test_codex_model_response_conversion_uses_live_ids():
     from superqode.app_main import SuperQodeApp
 
     response = types.SimpleNamespace(
         data=[
+            types.SimpleNamespace(
+                model="gpt-5.6-terra",
+                display_name="GPT-5.6-Terra",
+                supported_reasoning_efforts=[
+                    types.SimpleNamespace(reasoning_effort=types.SimpleNamespace(value="max")),
+                    types.SimpleNamespace(reasoning_effort=types.SimpleNamespace(value="ultra")),
+                ],
+            ),
             types.SimpleNamespace(model="gpt-5.5"),
             types.SimpleNamespace(id="gpt-5.4-mini"),
         ]
     )
 
     models = SuperQodeApp._models_from_codex_response(response)
-    assert [model["id"] for model in models] == ["gpt-5.5", "gpt-5.4-mini"]
-    assert models[0]["name"] == "Gpt 5.5"
+    assert [model["id"] for model in models] == [
+        "gpt-5.6-terra",
+        "gpt-5.5",
+        "gpt-5.4-mini",
+    ]
+    assert models[0]["name"] == "GPT-5.6-Terra"
+    assert models[0]["efforts"] == ["max", "ultra"]
+    assert models[1]["name"] == "Gpt 5.5"
 
 
 @pytest.mark.skipif(
@@ -922,9 +976,74 @@ def test_runtime_model_effort_and_one_shot_sandbox_controls(fake_codex_sdk, tmp_
     second = runtime._turn_kwargs()
 
     assert first["model"] == "gpt-5.5"
-    assert first["effort"] == "high"
+    assert getattr(first["effort"], "value", first["effort"]) == "high"
     assert first["sandbox"] == "read-only"
     assert "sandbox" not in second
+
+
+def test_runtime_supports_none_effort_and_default_reset(fake_codex_sdk, tmp_path):
+    runtime = create_runtime("codex-sdk", config=_config(tmp_path))
+
+    runtime.set_reasoning_effort("none")
+    assert runtime.reasoning_effort == "none"
+    effort = runtime._turn_kwargs()["effort"]
+    assert getattr(effort, "value", effort) == "none"
+
+    runtime.set_reasoning_effort("default")
+    assert runtime.reasoning_effort is None
+    assert "effort" not in runtime._turn_kwargs()
+
+
+def test_runtime_supports_newer_efforts_with_a_newer_local_cli(
+    fake_codex_sdk, monkeypatch, tmp_path
+):
+    from superqode.runtime import codex_sdk
+
+    monkeypatch.setattr(
+        codex_sdk,
+        "_newer_local_codex_binary",
+        lambda: ("/opt/homebrew/bin/codex", "0.144.0"),
+    )
+    runtime = create_runtime("codex-sdk", config=_config(tmp_path))
+
+    runtime.set_reasoning_effort("max")
+    effort = runtime._turn_kwargs()["effort"]
+    assert getattr(effort, "value", effort) == "max"
+
+    runtime.set_reasoning_effort("ultra")
+    effort = runtime._turn_kwargs()["effort"]
+    assert getattr(effort, "value", effort) == "ultra"
+
+
+def test_runtime_retries_with_compatible_effort_for_newer_config(
+    fake_codex_sdk, monkeypatch, tmp_path
+):
+    """A newer global Codex config must not block the pinned SDK protocol."""
+    attempts = []
+
+    class _ConfigMismatchThenSystemClient(_FakeCodexClient):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            attempts.append(self)
+
+        def initialize(self):
+            if len(attempts) == 1:
+                raise RuntimeError(
+                    "failed to load configuration: ~/.codex/config.toml:2:26: "
+                    "unknown variant `ultra`, expected one of `none`, `minimal`, `low`, "
+                    "`medium`, `high`, `xhigh`"
+                )
+            return super().initialize()
+
+    monkeypatch.setattr(
+        sys.modules["openai_codex.client"], "CodexClient", _ConfigMismatchThenSystemClient
+    )
+
+    runtime = create_runtime("codex-sdk", config=_config(tmp_path))
+    assert runtime.metadata.userAgent == "fake-codex"
+    assert attempts[0].closed is True
+    assert attempts[1].config.config_overrides == ('model_reasoning_effort="xhigh"',)
+    assert runtime._app_server_config_overrides == ('model_reasoning_effort="xhigh"',)
 
 
 def test_runtime_thread_lifecycle_helpers(fake_codex_sdk, tmp_path):

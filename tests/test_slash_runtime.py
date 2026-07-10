@@ -194,8 +194,13 @@ def test_codex_effort_picker_selection_accepts_number_and_name(monkeypatch):
     selected: list[str] = []
     monkeypatch.setattr(app, "_codex_effort_cmd", lambda effort, log: selected.append(effort))
 
+    # Derive the number from the option list so adding options (e.g. "none")
+    # cannot silently shift what this test selects.
+    options = [option["id"] for option in app._codex_effort_options()]
+    medium_number = str(options.index("medium") + 1)
+
     app._awaiting_codex_effort = True
-    assert app._handle_codex_effort_selection("4", _Log()) is True
+    assert app._handle_codex_effort_selection(medium_number, _Log()) is True
     assert selected == ["medium"]
 
     app._awaiting_codex_effort = True

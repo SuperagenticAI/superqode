@@ -1142,9 +1142,38 @@ class ConversationLog(RichLog):
 
         return super().write(*processed_args, **kwargs)
 
+    def write_feedback(self, content: Text):
+        """Write feedback (errors, guidance panels) and make sure it is seen.
+
+        Two failure modes this guards against:
+
+        1. Pickers disable ``auto_scroll`` while managing the viewport; a
+           feedback line written afterwards landed invisibly below the fold
+           (selecting "Grok subscription" without a `grok login` looked like a
+           dead Enter key).
+        2. ``scroll_end`` tail-anchors: a panel taller than the viewport (the
+           "API Key Required" block on a short terminal) showed only its last
+           lines, hiding the heading that says what happened.
+
+        So: re-enable follow-scroll for subsequent output, then anchor the
+        viewport to the *start* of this block. ``scroll_to`` clamps to the
+        max scroll, so a short block near the end behaves exactly like
+        ``scroll_end`` while a tall block stays readable top-down.
+        """
+        start_y = len(self.lines)
+        self.auto_scroll = True
+        self.write(content, scroll_end=False)
+        try:
+            self.scroll_to(y=start_y, animate=False)
+        except Exception:
+            self.scroll_end(animate=False)
+
+    # Backwards-compatible internal alias.
+    _write_feedback = write_feedback
+
     def add_system(self, text: str):
         self._messages.append(("system", text, ""))
-        self.write(Text(f"  ✨ {text}", style=f"italic {THEME['muted']}"))
+        self._write_feedback(Text(f"  ✨ {text}", style=f"italic {THEME['muted']}"))
 
     def add_error(self, text: str):
         self._messages.append(("error", text, ""))
@@ -1152,18 +1181,22 @@ class ConversationLog(RichLog):
 
         # Try to display with rich markup support
         try:
-            self.write(Text(f"  ❌ {text}", markup=True))
+            self._write_feedback(Text(f"  ❌ {text}", markup=True))
         except Exception:
             # Fallback to plain text
-            self.write(Text(f"  ❌ {text}", style=THEME["error"]))
+            self._write_feedback(Text(f"  ❌ {text}", style=THEME["error"]))
 
     def add_success(self, text: str):
         self._messages.append(("success", text, ""))
-        self.write(Text(f"  ✅ {text}", style=THEME["success"]))
+        self._write_feedback(Text(f"  ✅ {text}", style=THEME["success"]))
 
     def add_info(self, text: str):
         self._messages.append(("info", text, ""))
-        self.write(Text(f"  ℹ️ {text}", style=THEME["cyan"]))
+        self._write_feedback(Text(f"  ℹ️ {text}", style=THEME["cyan"]))
+
+    def add_warning(self, text: str):
+        self._messages.append(("warning", text, ""))
+        self._write_feedback(Text(f"  ⚠️ {text}", style=THEME["warning"]))
 
     def add_shell(self, cmd: str, output: str, ok: bool = True):
         """Add shell command output to the log."""
@@ -1179,7 +1212,7 @@ class ConversationLog(RichLog):
             (f"{cmd}\n", f"bold {THEME['text']}"),
             (output, THEME["text"] if ok else THEME["error"]),
         )
-        self.write(content)
+        self._write_feedback(content)
 
     def get_last_response(self) -> str:
         """Get the last agent response text for copying."""

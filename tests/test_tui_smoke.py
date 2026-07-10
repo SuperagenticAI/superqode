@@ -4655,3 +4655,235 @@ def test_colorful_status_bar_no_badge_when_unset():
 
     bar = ColorfulStatusBar()
     assert "🔧" not in bar.render().plain
+
+
+def test_wizard_lets_typed_commands_through_to_dispatcher(tmp_path, monkeypatch):
+    """:quit (and any typed command) must never be swallowed by the wizard."""
+    monkeypatch.chdir(tmp_path)
+    app = make_app()
+    log = FakeLog()
+    app._show_command_output = lambda target_log, content, clear_log=True: target_log.write(content)
+
+    app._harness_cmd("wizard", log)
+    assert app._awaiting_harness_wizard is True
+
+    # Typed commands fall through (False = dispatcher handles them, so
+    # ":quit" quits the app from any wizard step).
+    assert app._handle_harness_wizard_input(":quit", log) is False
+    assert app._handle_harness_wizard_input("/exit", log) is False
+    assert app._handle_harness_wizard_input(":connect byok", log) is False
+    assert app._awaiting_harness_wizard is True  # wizard still pending
+
+    # The wizard's own control words keep working.
+    assert app._handle_harness_wizard_input(":cancel", log) is True
+    assert app._awaiting_harness_wizard is False
+
+
+def test_agent_question_lets_quit_through_to_dispatcher():
+    """:quit must quit even while an agent question is pending."""
+
+    class _PendingFuture:
+        def done(self):
+            return False
+
+    app = make_app()
+    log = FakeLog()
+    app._awaiting_agent_question = True
+    app._pending_agent_question = object()
+    app._pending_agent_question_future = _PendingFuture()
+
+    for quit_cmd in (":quit", "/quit", ":exit", "/exit", ":q"):
+        assert app._handle_agent_question_input(quit_cmd, log) is False
+    # The pending question is untouched — app teardown resolves it.
+    assert app._awaiting_agent_question is True
+
+
+def test_codex_config_error_hint_explains_unknown_variant():
+    """The user's exact failure: a config value the app-server doesn't know."""
+
+    class _Recorder:
+        def __init__(self):
+            self.infos = []
+
+        def add_info(self, msg):
+            self.infos.append(msg)
+
+    log = _Recorder()
+    exc = Exception(
+        "JSON-RPC error -32600: failed to load configuration: "
+        "/Users/shashi/.codex/config.toml:2:26: unknown variant `ultra`, "
+        "expected one of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`"
+    )
+    SuperQodeApp._codex_config_error_hint(log, exc)
+
+    joined = " ".join(log.infos)
+    assert "config.toml:2:26" in joined
+    assert "`ultra` is newer than it supports" in joined
+    assert "xhigh" in joined  # accepted values are listed for the user
+    assert "per-process effort override" in joined
+    assert SuperQodeApp._codex_error_hint(str(exc)) == joined
+
+    # Unrelated errors add no noise.
+    quiet = _Recorder()
+    SuperQodeApp._codex_config_error_hint(quiet, Exception("connection refused"))
+    assert quiet.infos == []
+
+
+def test_codex_active_model_comes_from_the_live_thread_not_catalog_default():
+    app = make_app()
+    app._pure_mode = SimpleNamespace(
+        _runtime=SimpleNamespace(active_model="gpt-5.6-terra"),
+    )
+    log = FakeLog()
+
+    asyncio.run(app._resolve_codex_active_model(log))
+
+    assert any("Active Codex model: gpt-5.6-terra" in str(item) for item in log.items)
+
+
+def test_codex_subcommands_autocomplete_on_both_surfaces():
+    """All Codex controls are reachable in the live prompt and legacy overlay."""
+    from superqode.app.constants import COMMANDS
+    from superqode.widgets.slash_complete import DEFAULT_COMMANDS
+
+    app = make_app()
+    app._codex_models = [
+        {
+            "id": "gpt-5.6-terra",
+            "name": "GPT-5.6 Terra",
+            "efforts": ["low", "medium", "high", "xhigh", "max", "ultra"],
+        },
+        {"id": "gpt-5.6-sol", "name": "GPT-5.6 Sol", "efforts": ["xhigh"]},
+    ]
+
+    codex_cmds = [c for c in COMMANDS if c.startswith(":codex")]
+    assert ":codex effort" in codex_cmds
+    assert ":codex model" in codex_cmds
+
+    slash_values = {c.command for c in DEFAULT_COMMANDS}
+    missing = [c for c in codex_cmds if c not in slash_values]
+    assert missing == []
+
+    # The live TUI uses _prompt_completion_candidates_for(), not DEFAULT_COMMANDS.
+    subcommands = [
+        candidate.value for candidate in app._prompt_completion_candidates_for(":codex ")
+    ]
+    assert set(codex_cmds) - {":codex"} <= set(subcommands)
+
+    efforts = [
+        candidate.value for candidate in app._prompt_completion_candidates_for(":codex effort ")
+    ]
+    assert efforts == [
+        ":codex effort default",
+        ":codex effort none",
+        ":codex effort minimal",
+        ":codex effort low",
+        ":codex effort medium",
+        ":codex effort high",
+        ":codex effort xhigh",
+        ":codex effort max",
+        ":codex effort ultra",
+    ]
+    assert app._suggest_prompt_completion(":codex effort h") == ":codex effort high"
+
+    models = [
+        candidate.value for candidate in app._prompt_completion_candidates_for(":codex model gpt")
+    ]
+    assert models == [":codex model gpt-5.6-terra", ":codex model gpt-5.6-sol"]
+
+    # The panel displays a compact page, but keeps every Codex subcommand
+    # keyboard-reachable through up/down navigation.
+    candidates = app._prompt_completion_candidates_for(":codex ")
+    app._show_prompt_completion_panel(candidates)
+    assert len(app._prompt_completion_candidates) == len(candidates) > 8
+
+
+def test_connect_bare_model_resolves_provider(monkeypatch):
+    """':connect gpt-5.6-sol' style input resolves the hosting provider."""
+    from superqode.providers import models as model_db
+    from superqode.providers.models import ModelInfo
+
+    monkeypatch.setattr(model_db, "_use_live_data", True)
+    monkeypatch.setattr(model_db, "_live_autoload_attempted", True)
+    monkeypatch.setattr(
+        model_db,
+        "_live_models",
+        {
+            "acme": {"gpt-9-flash": ModelInfo("gpt-9-flash", "GPT 9 Flash", "acme")},
+            "beta": {"dual-model": ModelInfo("dual-model", "Dual", "beta")},
+            "gamma": {"dual-model": ModelInfo("dual-model", "Dual", "gamma")},
+        },
+    )
+
+    class _Log:
+        def __init__(self):
+            self.infos = []
+
+        def add_info(self, msg):
+            self.infos.append(msg)
+
+    class _Stub:
+        def __init__(self):
+            self.connected = []
+            self.shown = []
+
+        def _connect_byok_mode(self, provider, model, log):
+            self.connected.append((provider, model))
+
+        def _show_provider_models(self, provider, log, use_picker=False):
+            self.shown.append(provider)
+
+    # Unique model id → auto-resolve and connect.
+    stub, log = _Stub(), _Log()
+    SuperQodeApp._connect_byok_cmd(stub, "gpt-9-flash", log)
+    assert stub.connected == [("acme", "gpt-9-flash")]
+
+    # Ambiguous id → list the candidates, never guess.
+    stub, log = _Stub(), _Log()
+    SuperQodeApp._connect_byok_cmd(stub, "dual-model", log)
+    assert stub.connected == []
+    joined = " ".join(log.infos)
+    assert ":connect beta/dual-model" in joined
+    assert ":connect gamma/dual-model" in joined
+
+    # Unknown token → existing provider-models fallback.
+    stub, log = _Stub(), _Log()
+    SuperQodeApp._connect_byok_cmd(stub, "no-such-thing", log)
+    assert stub.connected == []
+    assert stub.shown == ["no-such-thing"]
+
+
+def test_connect_bare_model_prefers_curated_provider_over_gateways(monkeypatch):
+    """Gateways mirror popular models; first-party curated providers win."""
+    from superqode.providers import models as model_db
+    from superqode.providers.models import ModelInfo
+
+    monkeypatch.setattr(model_db, "_use_live_data", True)
+    monkeypatch.setattr(model_db, "_live_autoload_attempted", True)
+    monkeypatch.setattr(
+        model_db,
+        "_live_models",
+        {
+            # meta is a curated registry provider; fauxgateway is models.dev-only.
+            "meta": {"solo-x": ModelInfo("solo-x", "Solo X", "meta")},
+            "fauxgateway": {"solo-x": ModelInfo("solo-x", "Solo X", "fauxgateway")},
+        },
+    )
+
+    class _Log:
+        def add_info(self, msg):
+            pass
+
+    class _Stub:
+        def __init__(self):
+            self.connected = []
+
+        def _connect_byok_mode(self, provider, model, log):
+            self.connected.append((provider, model))
+
+        def _show_provider_models(self, provider, log, use_picker=False):
+            raise AssertionError("should resolve, not fall back")
+
+    stub = _Stub()
+    SuperQodeApp._connect_byok_cmd(stub, "solo-x", _Log())
+    assert stub.connected == [("meta", "solo-x")]

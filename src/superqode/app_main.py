@@ -1104,30 +1104,31 @@ class SuperQodeApp(App):
         ]
 
     def _get_opencode_models(self) -> List[Dict]:
-        """Get OpenCode models from the live CLI catalog."""
+        """Get OpenCode models from the live CLI catalog, newest releases first."""
         try:
+            from superqode.providers.models import sort_models_newest_first
             from superqode.providers.opencode_models import get_opencode_models_sync
 
             models = get_opencode_models_sync()
 
             # Convert to our format. Show all discovered OpenCode models, not
             # only free ones, because the catalog and free-tier markers change.
-            return [
-                {
-                    "id": m["id"],
-                    "name": m.get("name", m["id"].split("/")[-1]),
-                    "context": m.get("context", 128000),
-                    "free": bool(m.get("is_free", False)),
-                    "recommended": bool(m.get("recommended", False)),
-                    "desc": m.get("description") or m.get("source", "OpenCode"),
-                    "catalog_unavailable": bool(m.get("catalog_unavailable", False)),
-                }
-                for m in models
-            ]
+            return sort_models_newest_first(
+                [
+                    {
+                        "id": m["id"],
+                        "name": m.get("name", m["id"].split("/")[-1]),
+                        "context": m.get("context", 128000),
+                        "free": bool(m.get("is_free", False)),
+                        "recommended": bool(m.get("recommended", False)),
+                        "desc": m.get("description") or m.get("source", "OpenCode"),
+                        "catalog_unavailable": bool(m.get("catalog_unavailable", False)),
+                    }
+                    for m in models
+                ]
+            )
         except Exception:
             return []
-
-        return []
 
     @property
     def gemini_models(self) -> List[Dict]:
@@ -1266,7 +1267,9 @@ class SuperQodeApp(App):
                     "hidden": bool(getattr(model, "hidden", False)),
                 }
             )
-        return models
+        from superqode.providers.models import sort_models_newest_first
+
+        return sort_models_newest_first(models)
 
     @property
     def openhands_models(self) -> List[Dict]:
@@ -2444,8 +2447,38 @@ class SuperQodeApp(App):
         log._last_error = f"{title}: {message}"
 
     @staticmethod
+    def _codex_config_error_hint_text(exc) -> str | None:
+        """Return an actionable hint for a rejected ``~/.codex/config.toml``.
+
+        A newer standalone Codex CLI can write configuration values before the
+        SDK's bundled app-server learns them.  Keep the parser independent of
+        the TUI so cold connection, status probing, and stream errors all show
+        the same recovery guidance.
+        """
+
+        message = str(exc)
+        if "failed to load configuration" not in message.lower():
+            return None
+        location = re.search(r"(\S+config\.toml:\d+:\d+)", message)
+        unknown = re.search(r"unknown variant `([^`]+)`", message)
+        expected = re.search(r"expected one of (.+?)(?:\n|$)", message)
+        source = location.group(1) if location else "~/.codex/config.toml"
+        if unknown and expected:
+            return (
+                f"Codex's bundled app-server cannot read {source}: "
+                f"`{unknown.group(1)}` is newer than it supports. Restart SuperQode to apply its "
+                f"compatible per-process effort override; if that is unavailable, change the value to one of: "
+                f"{expected.group(1).strip()}."
+            )
+        return f"Codex could not read {source}. Fix the reported config line, then retry."
+
+    @staticmethod
     def _codex_error_hint(message: str) -> str:
         """Map common Codex SDK/app-server failures to user-facing recovery hints."""
+
+        config_hint = SuperQodeApp._codex_config_error_hint_text(message)
+        if config_hint:
+            return config_hint
         lowered = (message or "").lower()
         if "codex-sdk" in lowered and "install" in lowered:
             return 'Install the SDK extra: uv tool install "superqode[codex-sdk]".'
@@ -4090,6 +4123,9 @@ class SuperQodeApp(App):
             return
 
         try:
+            # Disable follow-mode only around our own managed scroll, then
+            # restore it: leaving it off made every later feedback write
+            # (errors, setup guidance) land invisibly below the fold.
             log.auto_scroll = False
             visible_height = max(
                 6,
@@ -4106,6 +4142,8 @@ class SuperQodeApp(App):
             log.scroll_to(y=target_y, animate=False)
         except Exception:
             pass  # If scrolling fails, just continue
+        finally:
+            log.auto_scroll = True
 
     @staticmethod
     def _scroll_to_rendered_selected_row(log: ConversationLog) -> bool:
@@ -4118,9 +4156,12 @@ class SuperQodeApp(App):
             return False
 
         try:
-            # A picker owns the viewport while it is active. Re-enabling
-            # RichLog's follow mode here would immediately jump back to the
-            # footer after this row-level scroll.
+            # Follow-mode is disabled only around this managed scroll (a write
+            # with auto_scroll on would yank to the footer). It is restored in
+            # the finally so later feedback writes — errors, setup guidance —
+            # scroll into view instead of landing invisibly below the picker.
+            # Nothing writes between here and the next picker render, which
+            # disables follow-mode itself before writing.
             log.auto_scroll = False
 
             from textual.geometry import Region
@@ -4134,6 +4175,8 @@ class SuperQodeApp(App):
             return True
         except Exception:
             return False
+        finally:
+            log.auto_scroll = True
 
     def _scroll_to_highlighted_local_model(self, log: ConversationLog, highlighted_idx: int):
         """Scroll the local-model picker so the highlighted multi-line row is visible."""
@@ -4149,6 +4192,8 @@ class SuperQodeApp(App):
             log.scroll_to(y=target_y, animate=False)
         except Exception:
             pass
+        finally:
+            log.auto_scroll = True
 
     def _scroll_down_to_item(self, log: ConversationLog, target_offset: int, lines_per_item: int):
         """Helper to scroll down to show the highlighted item."""
@@ -7457,6 +7502,110 @@ class SuperQodeApp(App):
             )
         return candidates
 
+    @staticmethod
+    def _codex_subcommand_completion_candidates(value: str) -> list[PromptCompletionCandidate]:
+        """Complete the real ``:codex`` command tree, in its useful order."""
+
+        prefix = ":codex "
+        partial = value[len(prefix) :].lower()
+        subcommands = (
+            ("status", "Show Codex SDK/app-server status"),
+            ("model", "Pick or set the Codex model for future turns"),
+            ("models", "List models available to this Codex account"),
+            ("effort", "Pick or set Codex reasoning effort"),
+            ("sandbox", "Set the Codex sandbox override"),
+            ("review", "Run a read-only Codex diff review"),
+            ("thread", "Show the current Codex thread"),
+            ("sessions", "List Codex sessions for this repo"),
+            ("resume", "Resume a Codex thread"),
+            ("fork", "Fork a Codex thread"),
+            ("compact", "Compact the current Codex thread"),
+            ("rename", "Rename the current Codex thread"),
+            ("archive", "Archive a Codex thread"),
+            ("account", "Show the signed-in Codex account"),
+            ("logout", "Sign out of Codex"),
+        )
+        return [
+            PromptCompletionCandidate(
+                value=f"{prefix}{subcommand}",
+                label=subcommand,
+                description=description,
+                kind="codex",
+            )
+            for subcommand, description in subcommands
+            if subcommand.startswith(partial) and f"{prefix}{subcommand}" != value
+        ]
+
+    def _codex_effort_completion_candidates(self, value: str) -> list[PromptCompletionCandidate]:
+        """Offer valid SDK effort values without starting an app-server per keypress."""
+
+        prefix = ":codex effort "
+        partial = value[len(prefix) :].lower()
+        return [
+            PromptCompletionCandidate(
+                value=f"{prefix}{option['id']}",
+                label=option["id"],
+                description=option["desc"],
+                kind="effort",
+            )
+            for option in self._codex_effort_options()
+            if option["id"].startswith(partial) and f"{prefix}{option['id']}" != value
+        ]
+
+    def _codex_model_completion_candidates(self, value: str) -> list[PromptCompletionCandidate]:
+        """Complete cached account models; typing must never start a network probe."""
+
+        prefix = ":codex model "
+        partial = value[len(prefix) :].lower()
+        candidates = [
+            PromptCompletionCandidate(
+                value=f"{prefix}default",
+                label="default",
+                description="Clear the override and use ~/.codex again",
+                kind="model",
+            )
+        ]
+        for model in list(getattr(self, "_codex_models", None) or []):
+            model_id = str(model.get("id") or "").strip()
+            if not model_id:
+                continue
+            name = str(model.get("name") or "").strip()
+            efforts = ", ".join(str(effort) for effort in model.get("efforts") or [])
+            description = name if name and name != model_id else ""
+            if efforts:
+                description = f"{description} · effort: {efforts}".strip(" ·")
+            candidates.append(
+                PromptCompletionCandidate(
+                    value=f"{prefix}{model_id}",
+                    label=model_id,
+                    description=description or "Cached Codex account model",
+                    kind="model",
+                )
+            )
+        return [
+            candidate
+            for candidate in candidates
+            if candidate.label.lower().startswith(partial) and candidate.value != value
+        ]
+
+    @staticmethod
+    def _codex_sandbox_completion_candidates(value: str) -> list[PromptCompletionCandidate]:
+        prefix = ":codex sandbox "
+        partial = value[len(prefix) :].lower()
+        options = (
+            ("read-only", "Read files without allowing edits"),
+            ("workspace-write", "Allow edits inside the workspace"),
+            ("full-access", "Allow unrestricted local access"),
+            ("default", "Clear the override and use Codex config"),
+        )
+        return [
+            PromptCompletionCandidate(
+                value=f"{prefix}{mode}", label=mode, description=description, kind="sandbox"
+            )
+            for mode, description in options
+            if mode.startswith(partial) and f"{prefix}{mode}" != value
+        ]
+
     def _prompt_completion_candidates_for(self, value: str) -> list[PromptCompletionCandidate]:
         """Return contextual completion candidates for command-like prompt text."""
         mention_candidates = self._mention_completion_candidates(value)
@@ -7467,6 +7616,28 @@ class SuperQodeApp(App):
             return []
 
         lowered = value.lower()
+        # Codex has a deeper command tree than the generic static list.  Keep
+        # it contextual so every subcommand remains keyboard-reachable and
+        # offer values for its model/effort controls without probing the SDK on
+        # every input change.
+        if lowered == ":codex":
+            return [
+                PromptCompletionCandidate(
+                    value=":codex",
+                    label=":codex",
+                    description="Connect to the Codex SDK runtime",
+                    kind="command",
+                ),
+                *self._codex_subcommand_completion_candidates(":codex "),
+            ]
+        if lowered.startswith(":codex effort "):
+            return self._codex_effort_completion_candidates(value)
+        if lowered.startswith(":codex model "):
+            return self._codex_model_completion_candidates(value)
+        if lowered.startswith(":codex sandbox "):
+            return self._codex_sandbox_completion_candidates(value)
+        if lowered.startswith(":codex "):
+            return self._codex_subcommand_completion_candidates(value)
         context_specs = [
             (":mcp connect ", self._mcp_server_completion_candidates),
             (":mcp disconnect ", self._mcp_server_completion_candidates),
@@ -7618,7 +7789,10 @@ class SuperQodeApp(App):
         self._show_prompt_completion_panel(candidates)
 
     def _show_prompt_completion_panel(self, candidates: list[PromptCompletionCandidate]) -> None:
-        self._prompt_completion_candidates = candidates[:8]
+        # Keep every matching candidate so a command group (notably :codex)
+        # does not silently lose entries. The renderer below pages eight rows at
+        # a time to retain the compact prompt layout on short terminals.
+        self._prompt_completion_candidates = list(candidates)
         self._prompt_completion_index = min(
             self._prompt_completion_index,
             max(0, len(self._prompt_completion_candidates) - 1),
@@ -7645,10 +7819,18 @@ class SuperQodeApp(App):
         if not self._prompt_completion_candidates:
             self._hide_prompt_completion_panel()
             return
+        total = len(self._prompt_completion_candidates)
+        page_size = 8
+        selected_index = self._prompt_completion_index
+        start = max(0, min(selected_index - page_size // 2, total - page_size))
+        end = min(total, start + page_size)
         text = Text()
         text.append("  completions", style=f"bold {THEME['cyan']}")
+        if total > page_size:
+            text.append(f"  {start + 1}–{end} of {total}", style=THEME["muted"])
         text.append("   ↑↓ choose   Tab/Enter accept   Esc close\n", style=THEME["dim"])
-        for index, candidate in enumerate(self._prompt_completion_candidates):
+        for index in range(start, end):
+            candidate = self._prompt_completion_candidates[index]
             selected = index == self._prompt_completion_index
             marker = ">" if selected else " "
             label_style = f"bold {THEME['text']}" if selected else THEME["cyan"]
@@ -10540,21 +10722,32 @@ class SuperQodeApp(App):
         self.run_worker(self._resolve_codex_active_model(log), exclusive=False)
 
     async def _resolve_codex_active_model(self, log: ConversationLog) -> None:
-        """Query the runtime for the active/default model and surface it."""
+        """Query the live thread's resolved model and surface it.
+
+        ``model/list`` is a catalogue, not a source of truth for the model a
+        thread actually resolved from ``~/.codex``. In particular, an older
+        app-server can have a stale catalogue while still honoring a newer
+        configured model.
+        """
         try:
             pure = getattr(self, "_pure_mode", None)
             runtime = getattr(pure, "_runtime", None) if pure is not None else None
-            if runtime is None or not hasattr(runtime, "models"):
+            if runtime is None:
                 return
-            resp = await asyncio.to_thread(runtime.models)
-            data = list(getattr(resp, "data", []) or [])
-            chosen = next(
-                (m for m in data if getattr(m, "is_default", False)),
-                data[0] if data else None,
+            model_id = str(
+                await asyncio.to_thread(lambda: getattr(runtime, "active_model", "")) or ""
             )
-            model_id = ""
-            if chosen is not None:
-                model_id = str(getattr(chosen, "model", getattr(chosen, "id", "")) or "")
+            if not model_id and hasattr(runtime, "models"):
+                # Compatibility fallback for third-party runtime shims that
+                # have not yet exposed ``active_model``.
+                resp = await asyncio.to_thread(runtime.models)
+                data = list(getattr(resp, "data", []) or [])
+                chosen = next(
+                    (m for m in data if getattr(m, "is_default", False)),
+                    data[0] if data else None,
+                )
+                if chosen is not None:
+                    model_id = str(getattr(chosen, "model", getattr(chosen, "id", "")) or "")
             if not model_id:
                 return
             self._set_status_model(model_id)
@@ -10670,6 +10863,9 @@ class SuperQodeApp(App):
                 self._announce_self_contained_connection(sub, log)
             except Exception as exc:  # noqa: BLE001
                 log.add_error(f"Switched to {sub} but auto-connect failed: {exc}")
+                config_hint = self._codex_config_error_hint_text(exc)
+                if config_hint:
+                    log.add_info(config_hint)
         else:
             log.add_info(
                 f"Runtime swapped: {current} → {sub}. "
@@ -11064,7 +11260,7 @@ class SuperQodeApp(App):
         t.append("Grok Build via official CLI ACP\n", style=THEME["muted"])
         t.append("    :grok api off             ", style=THEME["cyan"])
         t.append("remove imported session token\n", style=THEME["muted"])
-        log.write(t)
+        log.write_feedback(t)
 
     def _show_grok_login(self, log) -> None:
         """Give login commands instead of launching an interactive browser flow in the TUI."""
@@ -11083,7 +11279,7 @@ class SuperQodeApp(App):
             ":connect grok imports the session token into SuperQode for the harness path.\n",
             style=THEME["dim"],
         )
-        log.write(t)
+        log.write_feedback(t)
 
     def _show_grok_help(self, log) -> None:
         t = Text()
@@ -11107,7 +11303,7 @@ class SuperQodeApp(App):
             "For direct API billing, use BYOK with XAI_API_KEY and xai/grok-4.5.\n",
             style=THEME["dim"],
         )
-        log.write(t)
+        log.write_feedback(t)
 
     def _claude_runtime_or_connect(self, log):
         pure = getattr(self, "_pure_mode", None)
@@ -11301,14 +11497,27 @@ class SuperQodeApp(App):
             log.add_success(f"Codex {label} complete.")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Codex {label} failed: {exc}")
+            self._codex_config_error_hint(log, exc)
 
-    @staticmethod
-    def _codex_effort_options() -> list[dict[str, str]]:
-        return [
+    def _codex_effort_options(self) -> list[dict[str, str]]:
+        """Return stable efforts plus newer values advertised by this account.
+
+        The Codex app-server owns which reasoning levels a subscription model
+        supports. Keep the normal SDK values available offline, then add newer
+        values (currently ``max``/``ultra``) only after the live model catalogue
+        has advertised them.
+        """
+
+        options = [
             {
                 "id": "default",
                 "name": "Codex default",
                 "desc": "Use the effort configured in ~/.codex or selected by Codex.",
+            },
+            {
+                "id": "none",
+                "name": "None",
+                "desc": "Disable extra reasoning for the fastest direct responses.",
             },
             {
                 "id": "minimal",
@@ -11336,6 +11545,35 @@ class SuperQodeApp(App):
                 "desc": "Maximum reasoning when latency is less important.",
             },
         ]
+        known = {option["id"] for option in options}
+        supported = {
+            str(effort).strip().lower().replace("-", "_")
+            for model in list(getattr(self, "_codex_models", None) or [])
+            for effort in list(model.get("efforts") or [])
+        }
+        for option in (
+            {
+                "id": "max",
+                "name": "Maximum",
+                "desc": "More reasoning than xhigh when the selected Codex model supports it.",
+            },
+            {
+                "id": "ultra",
+                "name": "Ultra",
+                "desc": "Highest reasoning level exposed by the local Codex CLI for supported models.",
+            },
+        ):
+            if option["id"] in supported and option["id"] not in known:
+                options.append(option)
+        return options
+
+    @staticmethod
+    def _codex_config_error_hint(log, exc) -> None:
+        """Write the shared configuration recovery hint, when applicable."""
+
+        hint = SuperQodeApp._codex_config_error_hint_text(exc)
+        if hint:
+            log.add_info(hint)
 
     def _codex_picker_line(
         self,
@@ -11375,6 +11613,7 @@ class SuperQodeApp(App):
                 self._codex_models = self._models_from_codex_response(response)
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not list Codex models: {exc}")
+            self._codex_config_error_hint(log, exc)
             return
 
         models = list(getattr(self, "_codex_models", None) or [])
@@ -11405,6 +11644,10 @@ class SuperQodeApp(App):
             text.append("\n\n")
         else:
             text.append("  Current: Codex default from ~/.codex\n\n", style=THEME["muted"])
+        catalog_source = str(getattr(current_runtime, "app_server_source", "") or "")
+        if catalog_source:
+            text.append("  Catalog source: ", style=THEME["muted"])
+            text.append(f"{catalog_source}\n\n", style=THEME["dim"])
 
         for idx, model in enumerate(models):
             model_id = str(model.get("id") or "")
@@ -11432,15 +11675,18 @@ class SuperQodeApp(App):
     def _show_codex_effort_picker(self, log, *, clear_log: bool = True) -> None:
         self._reset_connect_selection_states()
         self._awaiting_codex_effort = True
+        try:
+            runtime = self._codex_runtime_or_connect(log)
+            # Refresh once when opening the picker so newly-added Codex
+            # effort values are offered, without probing while the user types.
+            self._codex_models = self._models_from_codex_response(runtime.models())
+            current = runtime.reasoning_effort or "default"
+        except Exception:
+            current = "default"
         options = self._codex_effort_options()
         self._codex_highlighted_effort_index = min(
             getattr(self, "_codex_highlighted_effort_index", 0), len(options) - 1
         )
-        try:
-            runtime = self._codex_runtime_or_connect(log)
-            current = runtime.reasoning_effort or "default"
-        except Exception:
-            current = "default"
 
         text = Text()
         text.append("\n  Codex reasoning effort\n\n", style=f"bold {THEME['cyan']}")
@@ -11538,9 +11784,8 @@ class SuperQodeApp(App):
                     selected = option
                     break
             if selected is None:
-                log.add_error(
-                    "Invalid Codex effort. Choose minimal, low, medium, high, xhigh, or default."
-                )
+                choices = ", ".join(option["id"] for option in options)
+                log.add_error(f"Invalid Codex effort. Choose one of: {choices}.")
                 return True
 
         self._awaiting_codex_effort = False
@@ -11554,10 +11799,15 @@ class SuperQodeApp(App):
             self._codex_models = self._models_from_codex_response(response)
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not list Codex models: {exc}")
+            self._codex_config_error_hint(log, exc)
             return
 
         text = Text()
         text.append("\n  Codex models\n\n", style=f"bold {THEME['cyan']}")
+        catalog_source = str(getattr(runtime, "app_server_source", "") or "")
+        if catalog_source:
+            text.append("  Catalog source: ", style=THEME["muted"])
+            text.append(f"{catalog_source}\n\n", style=THEME["dim"])
         for model in self._codex_models[:30]:
             text.append("  ")
             text.append(str(model.get("id") or ""), style=f"bold {THEME['text']}")
@@ -11598,6 +11848,7 @@ class SuperQodeApp(App):
             log.add_success(f"Codex model set to {label}")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not set Codex model: {exc}")
+            self._codex_config_error_hint(log, exc)
 
     def _codex_effort_cmd(self, effort: str, log) -> None:
         if not effort:
@@ -11610,6 +11861,7 @@ class SuperQodeApp(App):
             log.add_success(f"Codex reasoning effort set to {current}")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not set Codex effort: {exc}")
+            self._codex_config_error_hint(log, exc)
 
     def _codex_sandbox_cmd(self, mode: str, log) -> None:
         if not mode:
@@ -11621,6 +11873,7 @@ class SuperQodeApp(App):
             log.add_success(f"Codex sandbox set to {mode}")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not set Codex sandbox: {exc}")
+            self._codex_config_error_hint(log, exc)
 
     def _codex_thread_cmd(self, log) -> None:
         try:
@@ -11628,6 +11881,7 @@ class SuperQodeApp(App):
             thread = runtime.read_thread(include_turns=False).thread
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not read Codex thread: {exc}")
+            self._codex_config_error_hint(log, exc)
             return
         data = self._codex_obj_dict(thread)
         text = Text()
@@ -11647,6 +11901,7 @@ class SuperQodeApp(App):
             response = runtime.list_threads(limit=20, archived=archived)
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not list Codex sessions: {exc}")
+            self._codex_config_error_hint(log, exc)
             return
         threads = list(getattr(response, "data", []) or getattr(response, "threads", []) or [])
         text = Text()
@@ -11702,6 +11957,7 @@ class SuperQodeApp(App):
             log.add_success(f"Codex archived {str(target)[:12]}.")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not archive Codex thread: {exc}")
+            self._codex_config_error_hint(log, exc)
 
     def _codex_account_cmd(self, log) -> None:
         try:
@@ -11709,6 +11965,7 @@ class SuperQodeApp(App):
             response = runtime.account()
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not read Codex account: {exc}")
+            self._codex_config_error_hint(log, exc)
             return
         data = self._codex_obj_dict(response)
         account = self._codex_obj_dict(data.get("account"))
@@ -11728,6 +11985,7 @@ class SuperQodeApp(App):
             runtime.set_next_turn_sandbox("read-only")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not start Codex review: {exc}")
+            self._codex_config_error_hint(log, exc)
             return
         review_prompt = prompt or (
             "Review the current uncommitted diff only. Do not edit files or run commands that modify state. "
@@ -11790,6 +12048,11 @@ class SuperQodeApp(App):
             text.append("  Thread      ", style=THEME["muted"])
             text.append(str(thread_id), style=THEME["text"])
             text.append("\n")
+        if active and getattr(runtime, "_client", None) is not None:
+            source = str(getattr(runtime, "_app_server_source", "") or "")
+            if source:
+                text.append("  App-server  ", style=THEME["muted"])
+                text.append(f"{source}\n", style=THEME["text"])
 
         if not installed:
             text.append("\n  Install     ", style=THEME["muted"])
@@ -12250,6 +12513,17 @@ class SuperQodeApp(App):
 
         raw = (text or "").strip()
         lowered = raw.lower()
+        # Typed commands always win over the wizard (same rule as the pickers):
+        # ":quit" must quit the app from any step, ":help" must help, etc. The
+        # wizard keeps only its own :cancel/:back control words; every other
+        # ":"/"/"/"!" line falls through to the normal command dispatcher.
+        if raw[:1] in (":", "/", "!") and lowered not in {
+            ":cancel",
+            "/cancel",
+            ":back",
+            "/back",
+        }:
+            return False
         if lowered in {"cancel", ":cancel", "/cancel", "quit", "exit"}:
             self._awaiting_harness_wizard = False
             self._harness_wizard_state = None
@@ -14590,6 +14864,12 @@ class SuperQodeApp(App):
 
         raw = response.strip()
         lowered = raw.lower()
+
+        # Quit must always quit, even mid-question. Fall through to the normal
+        # command dispatcher; app teardown resolves the pending future. (Other
+        # ":" input stays a literal answer — free-text replies are legitimate.)
+        if lowered in (":quit", "/quit", ":exit", "/exit", ":q", "/q"):
+            return False
 
         if lowered in (":cancel", "/cancel", ":back", "/back"):
             if not future.done():
@@ -22522,7 +22802,7 @@ class SuperQodeApp(App):
             t.append(f"EXPERIMENTAL", style=f"bold {THEME['warning']}")
             t.append(f". Features may be unstable and behavior may change.\n", style=THEME["text"])
             t.append(f"  Please report any issues you encounter.\n\n", style=THEME["dim"])
-            log.write(t)
+            log.write_feedback(t)
 
         # Check API key before connecting (except for local providers)
         if (
@@ -22556,9 +22836,14 @@ class SuperQodeApp(App):
                 t.append(
                     f"    3. Add to ~/.zshrc or ~/.bashrc for persistence\n\n", style=THEME["dim"]
                 )
+                t.append(
+                    "  Or store it in SuperQode's local auth store (no shell config):\n",
+                    style=THEME["muted"],
+                )
+                t.append(f"    superqode auth login {provider}\n\n", style=THEME["cyan"])
                 t.append(f"  Then run: ", style=THEME["muted"])
                 t.append(f":connect {provider}/{model}\n", style=THEME["success"])
-                log.write(t)
+                log.write_feedback(t)
                 return
 
         # Store previous provider for quick switching
@@ -23085,6 +23370,32 @@ class SuperQodeApp(App):
                 # Direct connect with provider and model
                 self._connect_byok_mode(provider, model, log)
             else:
+                # A bare token that is not a provider may be a model id
+                # (":connect gpt-5.6-sol") — resolve the provider from the
+                # catalog so users do not need to know who hosts a model.
+                from superqode.providers.dynamic import is_curated_provider, resolve_provider_def
+                from superqode.providers.models import find_providers_for_model
+
+                if resolve_provider_def(provider) is None:
+                    candidates = find_providers_for_model(provider)
+                    if len(candidates) > 1:
+                        # Gateways mirror popular models; prefer first-party /
+                        # curated providers so ":connect gpt-5.6" goes to
+                        # OpenAI, not a reseller. Multiple curated matches
+                        # (e.g. grok-4.5 via xai API or grok-cli subscription)
+                        # remain a genuine user choice.
+                        curated = [pid for pid in candidates if is_curated_provider(pid)]
+                        if curated:
+                            candidates = curated
+                    if len(candidates) == 1:
+                        log.add_info(f"Resolved '{provider}' to {candidates[0]}/{provider}.")
+                        self._connect_byok_mode(candidates[0], provider, log)
+                        return
+                    if len(candidates) > 1:
+                        log.add_info(f"'{provider}' is available from several providers:")
+                        for pid in candidates:
+                            log.add_info(f"  :connect {pid}/{provider}")
+                        return
                 # Show models for this provider - always use numbered list
                 self._show_provider_models(provider, log, use_picker=False)
             return

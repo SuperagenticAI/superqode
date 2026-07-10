@@ -8,9 +8,13 @@ native builtin runtime remains the portable SuperQode harness path.
 from __future__ import annotations
 
 import asyncio
+import re
+import shutil
+import subprocess
 import threading
 import uuid
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any, Callable
 
 from ..agent.loop import AgentConfig, AgentMessage, AgentResponse
@@ -36,6 +40,129 @@ def _require_sdk():
 def _status_value(value: Any) -> str:
     raw = getattr(value, "value", value)
     return str(raw or "")
+
+
+_CODEX_VERSION_RE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
+_FORWARD_COMPATIBILITY_LOCK = threading.Lock()
+
+
+def _codex_binary_version(binary: str) -> tuple[int, int, int] | None:
+    """Return a Codex CLI's numeric version without invoking a shell."""
+
+    try:
+        completed = subprocess.run(
+            [binary, "--version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    match = _CODEX_VERSION_RE.search(f"{completed.stdout}\n{completed.stderr}")
+    if match is None:
+        return None
+    return tuple(int(part) for part in match.groups())
+
+
+def _bundled_codex_binary() -> str | None:
+    """Locate the app-server shipped with the optional Python SDK."""
+
+    try:
+        from codex_cli_bin import bundled_codex_path
+
+        return str(bundled_codex_path())
+    except (ImportError, OSError):
+        return None
+
+
+def _newer_local_codex_binary() -> tuple[str, str] | None:
+    """Return a newer standalone Codex CLI, if the user has one installed.
+
+    The Python SDK deliberately uses its packaged app-server by default.  That
+    is normally the safest choice, but it means an updated local Codex CLI can
+    expose a newer subscription model catalogue than the packaged binary.  Use
+    the local binary only when it is demonstrably newer than the package's
+    binary; otherwise retain the SDK default.
+    """
+
+    local = shutil.which("codex")
+    if not local:
+        return None
+    bundled = _bundled_codex_binary()
+    if bundled:
+        try:
+            if local == bundled or Path(local).resolve() == Path(bundled).resolve():
+                return None
+        except OSError:
+            pass
+
+    local_version = _codex_binary_version(local)
+    if local_version is None:
+        return None
+    bundled_version = _codex_binary_version(bundled) if bundled else None
+    if bundled_version is not None and local_version <= bundled_version:
+        return None
+    return (local, ".".join(str(part) for part in local_version))
+
+
+def _enable_forward_compatible_reasoning_efforts() -> None:
+    """Let an older generated SDK preserve newly-added Codex effort values.
+
+    The app-server protocol returns the supported efforts with each model.  A
+    newer local Codex CLI can add values such as ``max`` and ``ultra`` before
+    the Python SDK republishes its generated enum.  Pydantic delegates enum
+    conversion to ``Enum(value)``, so a small ``_missing_`` handler preserves
+    those string values instead of rejecting the whole model response.
+
+    This is intentionally limited to reasoning effort, an open string-like
+    capability advertised by the server, rather than weakening validation for
+    unrelated protocol fields.
+    """
+
+    try:
+        from openai_codex.types import ReasoningEffort
+    except (ImportError, AttributeError):
+        return
+    if getattr(ReasoningEffort, "_superqode_forward_compatible", False):
+        return
+
+    def _missing(cls, value):
+        if not isinstance(value, str) or not value:
+            return None
+        with _FORWARD_COMPATIBILITY_LOCK:
+            existing = cls._value2member_map_.get(value)
+            if existing is not None:
+                return existing
+            try:
+                member = str.__new__(cls, value) if issubclass(cls, str) else object.__new__(cls)
+            except TypeError:
+                return None
+            member._name_ = re.sub(r"\W+", "_", value).upper()
+            member._value_ = value
+            cls._value2member_map_[value] = member
+            return member
+
+    ReasoningEffort._missing_ = classmethod(_missing)
+    ReasoningEffort._superqode_forward_compatible = True
+
+
+def _codex_effort_compatibility_overrides(exc: BaseException) -> tuple[str, ...]:
+    """Return a child-process override for newer global reasoning settings.
+
+    When no newer standalone Codex CLI is available, the published Python SDK
+    bundles a pinned app-server. A newer Codex CLI may have written
+    ``model_reasoning_effort = "ultra"`` before that bundled server understands
+    it. Launch the fallback server with its closest supported setting instead
+    of mutating the user's global config.
+    """
+
+    message = str(exc).lower()
+    if "failed to load configuration" not in message or "config.toml" not in message:
+        return ()
+    if "unknown variant" not in message or "expected one of" not in message:
+        return ()
+    return ('model_reasoning_effort="xhigh"',)
 
 
 def _payload_value(obj: Any, *names: str, default: Any = None) -> Any:
@@ -166,6 +293,13 @@ class CodexSDKRuntime:
         self._cancelled = False
         self._reasoning_effort: str | None = None
         self._next_turn_sandbox: str | None = None
+        self._active_model = ""
+        self._app_server_source = "SDK-bundled Codex app-server"
+        self._local_codex_binary_checked = False
+        self._local_codex_binary: tuple[str, str] | None = None
+        # Set only when a global Codex effort needs a compatible, per-process
+        # override for the SDK's bundled fallback app-server.
+        self._app_server_config_overrides: tuple[str, ...] = ()
         self._start_lock = threading.Lock()
         self._turn_lock = threading.Lock()
 
@@ -178,52 +312,186 @@ class CodexSDKRuntime:
         self._ensure_started_sync()
         return self._init
 
+    def _preferred_local_codex_binary(self) -> tuple[str, str] | None:
+        """Cache whether a newer standalone Codex CLI is available to this runtime."""
+
+        if not self._local_codex_binary_checked:
+            self._local_codex_binary_checked = True
+            self._local_codex_binary = _newer_local_codex_binary()
+        return self._local_codex_binary
+
+    @staticmethod
+    def _sdk_config_supports_codex_bin(CodexConfig) -> bool:
+        """Avoid probing the host CLI for older/test SDK config shims."""
+
+        fields = getattr(CodexConfig, "__dataclass_fields__", None)
+        return fields is None or "codex_bin" in fields
+
+    def _sdk_config(
+        self,
+        CodexConfig,
+        *,
+        config_overrides: tuple[str, ...] = (),
+        prefer_local: bool = True,
+    ) -> tuple[Any, str]:
+        """Build the SDK launch config and identify the app-server it will use.
+
+        A newer standalone CLI is both the source of truth for a Codex
+        subscription's currently-enabled models and capable of running those
+        models.  The SDK's bundled binary remains a safe fallback for machines
+        without a newer local CLI or if the local process cannot start.
+        """
+
+        kwargs: dict[str, Any] = {
+            "cwd": str(self.config.working_directory),
+            "client_name": "superqode_codex_sdk",
+            "client_title": "SuperQode Codex SDK Runtime",
+            "client_version": self._sdk_client_version(),
+        }
+        if config_overrides:
+            kwargs["config_overrides"] = config_overrides
+        if prefer_local and self._sdk_config_supports_codex_bin(CodexConfig):
+            local = self._preferred_local_codex_binary()
+            if local is not None:
+                binary, version = local
+                try:
+                    return (
+                        CodexConfig(**kwargs, codex_bin=binary),
+                        f"local Codex CLI {version}",
+                    )
+                except TypeError:
+                    # A future SDK may expose a non-dataclass config without
+                    # a ``codex_bin`` argument. Fall back to its default.
+                    pass
+        return CodexConfig(**kwargs), "SDK-bundled Codex app-server"
+
+    @staticmethod
+    def _sdk_client_version() -> str:
+        # Identify SuperQode as the originating client (+ version) so Codex
+        # usage from SuperQode is attributable — lets us track adoption and
+        # which SuperQode version drove the session.
+        try:
+            from .. import __version__ as sq_version
+        except Exception:  # noqa: BLE001
+            sq_version = "0"
+        return str(sq_version)
+
+    def _thread_start_params(self) -> dict[str, Any]:
+        # "Codex owns it": defer to the machine's ~/.codex configuration
+        # (model, approval policy, sandbox, MCP, project trust). Only send what
+        # the caller explicitly set, so an empty model/sandbox lets the local
+        # Codex config decide. SuperQode imposes nothing extra.
+        params: dict[str, Any] = {"cwd": str(self.config.working_directory)}
+        if self.config.model:
+            params["model"] = self.config.model
+        if self.config.provider and self.config.provider != "openai":
+            params["modelProvider"] = self.config.provider
+        if self.config.custom_system_prompt:
+            params["developerInstructions"] = self.config.custom_system_prompt
+        if self.sandbox_backend:  # explicit override only; else use ~/.codex
+            params["sandbox"] = self._thread_sandbox_mode()
+        return params
+
+    def _start_sdk_client(self, CodexClient, sdk_config, thread_params: dict[str, Any]):
+        """Start, initialize, and create a thread, closing a failed client."""
+
+        client = CodexClient(config=sdk_config, approval_handler=self._approval_handler)
+        try:
+            client.start()
+            init = client.initialize()
+            started = client.thread_start(thread_params)
+        except Exception:
+            client.close()
+            raise
+        return client, init, started
+
     def _ensure_started_sync(self) -> None:
         if self._client is not None and self._thread is not None:
             return
         with self._start_lock:
             if self._client is not None and self._thread is not None:
                 return
-            from openai_codex import ApprovalMode, CodexConfig, Thread
+            from openai_codex import CodexConfig, Thread
             from openai_codex.client import CodexClient
 
-            # Identify SuperQode as the originating client (+ version) so Codex
-            # usage from SuperQode is attributable — lets us track adoption and
-            # which SuperQode version drove the session.
+            _enable_forward_compatible_reasoning_efforts()
+            thread_params = self._thread_start_params()
+            primary_config, primary_source = self._sdk_config(CodexConfig)
             try:
-                from .. import __version__ as _sq_version
-            except Exception:  # noqa: BLE001
-                _sq_version = "0"
-
-            sdk_config = CodexConfig(
-                cwd=str(self.config.working_directory),
-                client_name="superqode_codex_sdk",
-                client_title="SuperQode Codex SDK Runtime",
-                client_version=str(_sq_version),
-            )
-            client = CodexClient(config=sdk_config, approval_handler=self._approval_handler)
-            try:
-                client.start()
-                self._init = client.initialize()
-                # "Codex owns it": defer to the machine's ~/.codex configuration
-                # (model, approval policy, sandbox, MCP, project trust). Only send
-                # what the caller explicitly set, so an empty model/sandbox lets
-                # the local Codex config decide. SuperQode imposes nothing extra.
-                thread_params: dict[str, Any] = {"cwd": str(self.config.working_directory)}
-                if self.config.model:
-                    thread_params["model"] = self.config.model
-                if self.config.provider and self.config.provider != "openai":
-                    thread_params["modelProvider"] = self.config.provider
-                if self.config.custom_system_prompt:
-                    thread_params["developerInstructions"] = self.config.custom_system_prompt
-                if self.sandbox_backend:  # explicit override only; else use ~/.codex
-                    thread_params["sandbox"] = self._thread_sandbox_mode()
-                started = client.thread_start(thread_params)
-            except Exception:
-                client.close()
-                raise
+                client, init, started = self._start_sdk_client(
+                    CodexClient,
+                    primary_config,
+                    thread_params,
+                )
+                source = primary_source
+                overrides: tuple[str, ...] = ()
+            except Exception as primary_error:
+                if primary_source.startswith("local Codex CLI "):
+                    # A newer standalone CLI is preferred for its live model
+                    # catalogue. If it cannot start, preserve the previous
+                    # bundled-SDK behavior rather than leaving the runtime
+                    # unusable solely because a PATH entry is unhealthy.
+                    bundled_config, bundled_source = self._sdk_config(
+                        CodexConfig, prefer_local=False
+                    )
+                    try:
+                        client, init, started = self._start_sdk_client(
+                            CodexClient,
+                            bundled_config,
+                            thread_params,
+                        )
+                        source = bundled_source
+                        overrides = ()
+                    except Exception as bundled_error:
+                        overrides = _codex_effort_compatibility_overrides(bundled_error)
+                        if not overrides:
+                            raise RuntimeError(
+                                f"{primary_source} failed: {primary_error}; "
+                                f"bundled Codex app-server fallback failed: {bundled_error}"
+                            ) from bundled_error
+                        try:
+                            compatible_config, source = self._sdk_config(
+                                CodexConfig,
+                                config_overrides=overrides,
+                                prefer_local=False,
+                            )
+                            client, init, started = self._start_sdk_client(
+                                CodexClient,
+                                compatible_config,
+                                thread_params,
+                            )
+                        except Exception as compatibility_error:
+                            raise RuntimeError(
+                                f"{primary_source} failed: {primary_error}; "
+                                f"bundled Codex app-server failed: {bundled_error}; "
+                                f"compatibility effort override also failed: {compatibility_error}"
+                            ) from compatibility_error
+                else:
+                    overrides = _codex_effort_compatibility_overrides(primary_error)
+                    if not overrides:
+                        raise
+                    try:
+                        compatible_config, source = self._sdk_config(
+                            CodexConfig,
+                            config_overrides=overrides,
+                            prefer_local=False,
+                        )
+                        client, init, started = self._start_sdk_client(
+                            CodexClient,
+                            compatible_config,
+                            thread_params,
+                        )
+                    except Exception as compatibility_error:
+                        raise RuntimeError(
+                            f"Bundled Codex app-server failed: {primary_error}; "
+                            f"compatibility effort override also failed: {compatibility_error}"
+                        ) from compatibility_error
+            self._app_server_config_overrides = overrides
+            self._app_server_source = source
+            self._init = init
             self._client = client
             self._thread = Thread(client, started.thread.id)
+            self._active_model = str(getattr(started, "model", None) or self.config.model or "")
 
     def _thread_sandbox_mode(self) -> str | None:
         if self.sandbox_backend in {"full", "full_access", "none"}:
@@ -274,16 +542,22 @@ class CodexSDKRuntime:
         model = getattr(response, "model", None)
         if model:
             self.config.model = str(model)
+            self._active_model = str(model)
 
-    @staticmethod
-    def _coerce_effort(effort: str):
+    def _coerce_effort(self, effort: str):
         normalized = effort.strip().lower().replace("-", "_")
-        if normalized in {"", "default", "none"}:
+        if normalized in {"", "default"}:
             return None
-        allowed = {"minimal", "low", "medium", "high", "xhigh"}
+        allowed = {"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}
         if normalized not in allowed:
             raise ValueError(f"Unsupported Codex reasoning effort: {effort}")
+        if normalized in {"max", "ultra"} and self._preferred_local_codex_binary() is None:
+            raise ValueError(
+                f"Codex reasoning effort '{effort}' requires a newer local Codex CLI; "
+                "update Codex or choose xhigh."
+            )
         try:
+            _enable_forward_compatible_reasoning_efforts()
             from openai_codex.types import ReasoningEffort
 
             return ReasoningEffort(normalized)
@@ -293,6 +567,7 @@ class CodexSDKRuntime:
     def set_model(self, model: str) -> None:
         """Set the model override used by subsequent Codex turns."""
         self.config.model = model.strip()
+        self._active_model = self.config.model
 
     def set_reasoning_effort(self, effort: str | None) -> None:
         """Set the reasoning effort override used by subsequent Codex turns."""
@@ -316,6 +591,20 @@ class CodexSDKRuntime:
     @property
     def reasoning_effort(self) -> str | None:
         return self._reasoning_effort
+
+    @property
+    def active_model(self) -> str:
+        """The model resolved by the live Codex thread, not a stale list default."""
+
+        self._ensure_started_sync()
+        return self._active_model
+
+    @property
+    def app_server_source(self) -> str:
+        """Human-readable source of the app-server backing this runtime."""
+
+        self._ensure_started_sync()
+        return self._app_server_source
 
     def _turn_kwargs(self) -> dict[str, Any]:
         """Per-turn options for the SDK's public ``Thread.turn()``.
