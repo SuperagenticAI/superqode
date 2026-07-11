@@ -33,6 +33,25 @@ def _jwt_with_exp(exp: int) -> str:
     return f"{header}.{body}.sig"
 
 
+def _fake_grok_cli_installed(monkeypatch) -> None:
+    """Pretend the Grok CLI binary is on PATH.
+
+    CI runners (and many developer machines without Grok) have no ``grok``
+    binary. ``_import_grok_token`` / ``_show_grok_models`` short-circuit with
+    install guidance when ``shutil.which("grok")`` is None; tests that cover
+    login / token paths need the binary check to pass first.
+    """
+    import superqode.app_main as am
+
+    monkeypatch.setattr(
+        am.shutil,
+        "which",
+        lambda name, *args, **kwargs: (
+            "/usr/local/bin/grok" if name == "grok" else None
+        ),
+    )
+
+
 # --- reading ~/.grok/auth.json ------------------------------------------------
 
 
@@ -250,6 +269,7 @@ def test_grok_cmd_connect_defaults_to_grok_build_acp():
 
 
 def test_grok_api_connects_default_model(tmp_path, isolated_auth_store, monkeypatch):
+    _fake_grok_cli_installed(monkeypatch)
     auth_file = _write_cli_auth(tmp_path, {"https://accounts.x.ai/sign-in": {"key": "sess-ok"}})
     monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", auth_file)
 
@@ -261,6 +281,7 @@ def test_grok_api_connects_default_model(tmp_path, isolated_auth_store, monkeypa
 
 
 def test_grok_api_strips_provider_prefixes(tmp_path, isolated_auth_store, monkeypatch):
+    _fake_grok_cli_installed(monkeypatch)
     auth_file = _write_cli_auth(tmp_path, {"https://accounts.x.ai/sign-in": {"key": "sess-ok"}})
     monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", auth_file)
 
@@ -271,6 +292,7 @@ def test_grok_api_strips_provider_prefixes(tmp_path, isolated_auth_store, monkey
 
 
 def test_grok_api_without_cli_login_errors(tmp_path, isolated_auth_store, monkeypatch):
+    _fake_grok_cli_installed(monkeypatch)
     monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", tmp_path / "missing.json")
 
     stub, log = _AppStub(), _Log()
@@ -281,6 +303,7 @@ def test_grok_api_without_cli_login_errors(tmp_path, isolated_auth_store, monkey
 
 
 def test_grok_api_expired_session_errors_and_cleans_up(tmp_path, isolated_auth_store, monkeypatch):
+    _fake_grok_cli_installed(monkeypatch)
     auth_file = _write_cli_auth(
         tmp_path,
         {"https://accounts.x.ai/sign-in": {"key": _jwt_with_exp(int(time.time()) - 100)}},
@@ -451,6 +474,8 @@ def test_show_grok_models_falls_back_when_logged_out(monkeypatch):
     from superqode.app_main import SuperQodeApp
     from superqode.providers import models as model_db
 
+    # CLI present but not signed in → login guidance (not the install path).
+    _fake_grok_cli_installed(monkeypatch)
     monkeypatch.setattr(grok_cli_auth, "clear_cli_models_cache", lambda: None)
     monkeypatch.setattr(grok_cli_auth, "cached_cli_models", lambda: {"default": "", "models": []})
     monkeypatch.setattr(model_db, "_use_live_data", False)
@@ -469,6 +494,7 @@ def test_show_grok_models_falls_back_when_logged_out(monkeypatch):
 def test_grok_model_picker_requires_login(tmp_path, isolated_auth_store, monkeypatch):
     from superqode.app_main import SuperQodeApp
 
+    _fake_grok_cli_installed(monkeypatch)
     monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", tmp_path / "missing.json")
 
     class _Stub:
