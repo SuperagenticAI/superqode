@@ -46,9 +46,7 @@ def _fake_grok_cli_installed(monkeypatch) -> None:
     monkeypatch.setattr(
         am.shutil,
         "which",
-        lambda name, *args, **kwargs: (
-            "/usr/local/bin/grok" if name == "grok" else None
-        ),
+        lambda name, *args, **kwargs: ("/usr/local/bin/grok" if name == "grok" else None),
     )
 
 
