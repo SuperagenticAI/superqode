@@ -1029,3 +1029,56 @@ class TestACPClientIntegration:
 
         await client.stop()
         assert client._process is None
+
+
+class TestToolUpdateMerging:
+    """Sparse tool_call_update payloads must reach consumers merged."""
+
+    @pytest.mark.asyncio
+    async def test_on_tool_update_receives_merged_record(self, tmp_path):
+        from superqode.acp.client import ACPClient
+
+        seen_updates = []
+        seen_calls = []
+
+        async def on_tool_update(update):
+            seen_updates.append(update)
+
+        async def on_tool_call(call):
+            seen_calls.append(call)
+
+        client = ACPClient(
+            project_root=tmp_path,
+            command="opencode acp",
+            on_tool_call=on_tool_call,
+            on_tool_update=on_tool_update,
+        )
+
+        await client._handle_session_update(
+            {
+                "update": {
+                    "sessionUpdate": "tool_call",
+                    "toolCallId": "call-1",
+                    "title": "Run tests",
+                    "kind": "execute",
+                    "status": "in_progress",
+                    "rawInput": {"command": "pytest -q"},
+                }
+            }
+        )
+        # Follow-up carries only id + status, as several agents send it.
+        await client._handle_session_update(
+            {
+                "update": {
+                    "sessionUpdate": "tool_call_update",
+                    "toolCallId": "call-1",
+                    "status": "completed",
+                }
+            }
+        )
+
+        assert len(seen_updates) == 1
+        merged = seen_updates[0]
+        assert merged["status"] == "completed"
+        assert merged["title"] == "Run tests"  # from the original call
+        assert merged["rawInput"] == {"command": "pytest -q"}

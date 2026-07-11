@@ -1254,7 +1254,7 @@ def test_tui_harness_wizard_writes_and_loads_spec(tmp_path, monkeypatch):
         render_plain(item) if not isinstance(item, str) else item for item in log.items
     )
     assert "Harness Wizard" in rendered
-    assert "Loaded harness demo" in rendered
+    assert "Harness: Demo loaded" in rendered
     assert app._pure_mode is not None
     assert app._pure_mode.harness_enabled
 
@@ -1342,7 +1342,7 @@ def test_tui_harness_wizard_final_yes_loads_and_exits(tmp_path, monkeypatch):
     rendered = "\n".join(
         render_plain(item) if not isinstance(item, str) else item for item in log.items
     )
-    assert "Loaded harness my-harness" in rendered
+    assert "Harness: My-harness loaded" in rendered
 
 
 def test_tui_harness_wizard_yes_on_output_step_loads_default_path(tmp_path, monkeypatch):
@@ -4887,3 +4887,193 @@ def test_connect_bare_model_prefers_curated_provider_over_gateways(monkeypatch):
     stub = _Stub()
     SuperQodeApp._connect_byok_cmd(stub, "solo-x", _Log())
     assert stub.connected == [("meta", "solo-x")]
+
+
+def test_calm_tool_done_shows_bash_command():
+    """A finished bash tool must show what ran, not a bare 'run' line.
+
+    Regression: the calm-mode result line rebuilt args from result metadata
+    but forwarded only "path", so read results showed their file while bash
+    results showed nothing (observed on the Grok subscription harness, but
+    provider-independent).
+    """
+    from types import SimpleNamespace
+
+    class _Stub:
+        def __init__(self):
+            self.done = []
+
+        def _is_calm_output(self):
+            return True
+
+        def _calm_tool_done(self, name, args, log, ok=True):
+            self.done.append((name, args, ok))
+
+    stub = _Stub()
+    result = SimpleNamespace(
+        success=True,
+        output="3 passed",
+        metadata={"command": "pytest -q", "exit_code": 0, "cwd": "/repo"},
+    )
+    SuperQodeApp._show_pure_tool_result(stub, "bash", result, log=None)
+    assert stub.done == [("bash", {"command": "pytest -q"}, True)]
+
+    # Read results keep their path target.
+    stub = _Stub()
+    result = SimpleNamespace(success=True, output="...", metadata={"path": "src/app.py"})
+    SuperQodeApp._show_pure_tool_result(stub, "read", result, log=None)
+    assert stub.done == [("read", {"path": "src/app.py"}, True)]
+
+
+def test_calm_verb_target_renders_command_for_bash():
+    """End-to-end mapping: bash + command metadata renders as 'run <command>'."""
+
+    class _Stub:
+        def query_one(self, *_a, **_k):
+            raise RuntimeError("no widget in unit test")
+
+    verb, target = SuperQodeApp._calm_verb_target(_Stub(), "bash", {"command": "pytest -q"})
+    assert verb == "bash" or verb == "run"  # widget formatter unavailable → fallback verb
+    assert target == "pytest -q"
+
+
+def test_harness_display_name_capitalizes_for_labels():
+    from superqode.app_main import _harness_display_name
+
+    assert _harness_display_name("core") == "Core"
+    assert _harness_display_name("workbench") == "Workbench"
+    assert _harness_display_name("no-tool") == "No-tool"
+    assert _harness_display_name("") == "-"
+    assert _harness_display_name(None) == "-"
+
+
+def test_grok_connect_without_cli_shows_install_steps(monkeypatch):
+    """Missing product must produce install guidance, not `grok login` advice."""
+    import superqode.app_main as am
+
+    monkeypatch.setattr(am.shutil, "which", lambda name: None)
+
+    class _Log:
+        def __init__(self):
+            self.lines = []
+
+        def add_error(self, msg):
+            self.lines.append(msg)
+
+        def add_info(self, msg):
+            self.lines.append(msg)
+
+    class _Stub:
+        pass
+
+    log = _Log()
+    assert am.SuperQodeApp._import_grok_token(_Stub(), log) is False
+    joined = " ".join(log.lines)
+    assert "not installed" in joined
+    assert "https://x.ai/cli/install.sh" in joined
+    assert ":connect byok xai grok-4.5" in joined
+
+
+def test_codex_connect_without_cli_shows_install_steps(tmp_path, monkeypatch):
+    """:connect codex without the Codex CLI must explain how to install it."""
+    import superqode.app_main as am
+    import superqode.runtime as rt
+    from superqode.runtime import RuntimeInfo
+
+    monkeypatch.setenv("HOME", str(tmp_path))  # no ~/.codex/auth.json
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("CODEX_API_KEY", raising=False)
+    monkeypatch.setattr(am.shutil, "which", lambda name: None)
+    monkeypatch.setattr(
+        rt,
+        "list_runtimes",
+        lambda: [
+            RuntimeInfo(
+                name="codex-sdk",
+                description="Codex SDK runtime",
+                installed=True,
+                install_hint=None,
+                implemented=True,
+            )
+        ],
+    )
+
+    class _Log:
+        def __init__(self):
+            self.lines = []
+
+        def add_error(self, msg):
+            self.lines.append(msg)
+
+        def add_info(self, msg):
+            self.lines.append(msg)
+
+    class _Stub:
+        pass
+
+    log = _Log()
+    am.SuperQodeApp._runtime_cmd(_Stub(), "codex-sdk", log)
+    joined = " ".join(log.lines)
+    assert "npm i -g @openai/codex" in joined
+    assert "codex login" in joined
+    assert ":connect byok openai" in joined
+
+
+def test_calm_mode_skips_partial_tool_output_chunks():
+    """Streamed output chunks must not commit a finished-tool line each.
+
+    Regression: the Codex runtime streams command output in flushes; each
+    flush arrived as a success ToolResult with no metadata, printing a stack
+    of bare "run" lines in calm mode.
+    """
+    from types import SimpleNamespace
+
+    class _Stub:
+        def __init__(self):
+            self.done = []
+
+        def _is_calm_output(self):
+            return True
+
+        def _calm_tool_done(self, name, args, log, ok=True):
+            self.done.append((name, args, ok))
+
+    stub = _Stub()
+    for chunk in ("collecting tests\n", "3 passed\n"):
+        partial = SimpleNamespace(success=True, output=chunk, metadata={"partial": True})
+        SuperQodeApp._show_pure_tool_result(stub, "bash", partial, log=None)
+    assert stub.done == []
+
+    final = SimpleNamespace(
+        success=True,
+        output="3 passed",
+        metadata={"command": "pytest -q", "exit_code": 0, "status": "completed"},
+    )
+    SuperQodeApp._show_pure_tool_result(stub, "bash", final, log=None)
+    assert stub.done == [("bash", {"command": "pytest -q"}, True)]
+
+
+def test_agent_session_label_names_what_actually_runs():
+    """Codex sessions must not be labelled with SuperQode's native harness."""
+    from types import SimpleNamespace
+
+    app = SuperQodeApp.__new__(SuperQodeApp)
+
+    # Self-contained runtime: the agent owns the loop, regardless of the
+    # native harness setting.
+    app._pure_mode = SimpleNamespace(
+        runtime_name="codex-sdk",
+        get_status=lambda: {"harness": {"name": "core"}},
+    )
+    assert app._agent_session_label("openai") == "Runtime: Codex (agent-owned harness)"
+
+    # Native loop with a named harness.
+    app._pure_mode = SimpleNamespace(
+        runtime_name="builtin",
+        get_status=lambda: {"harness": {"name": "core"}},
+    )
+    assert app._agent_session_label("xai") == "Harness: Core"
+
+    # Native loop without a harness name falls back to the provider.
+    app._pure_mode = SimpleNamespace(runtime_name="", get_status=lambda: {"harness": {}})
+    assert app._agent_session_label("openai") == "BYOK openai"

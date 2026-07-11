@@ -817,6 +817,12 @@ def render_welcome(
 # ============================================================================
 
 
+def _harness_display_name(name) -> str:
+    """Human form of a harness id for TUI labels ("core" -> "Core")."""
+    text = str(name or "").strip()
+    return text[:1].upper() + text[1:] if text else "-"
+
+
 def get_session():
     from superqode.main import session
 
@@ -4695,21 +4701,8 @@ class SuperQodeApp(App):
             # Self-contained runtime (e.g. Codex) — auto-connects in _runtime_cmd.
             self._runtime_cmd(profile.runtime or "", log)
         elif conn == "acp":
-            # A specific ACP agent (e.g. Claude) by short_name.
+            # A specific ACP agent by short_name (Claude, Grok Build, …).
             self._connect_acp_cmd(profile.acp_agent or "", log)
-        elif conn == "subscription":
-            # SuperQode harness + product subscription login (not an external agent).
-            # Grok: import `grok login` token and connect the grok-cli provider.
-            if (
-                getattr(profile, "id", "") == "grok"
-                or getattr(profile, "provider", None) == "grok-cli"
-            ):
-                model = (getattr(profile, "model", None) or "grok-build").strip()
-                self._grok_api_cmd(model, log)
-            else:
-                log.add_error(
-                    f"Unsupported subscription profile: {getattr(profile, 'id', profile)}"
-                )
         elif conn == "byok":
             self._byok_highlighted_provider_index = 0
             self._byok_highlighted_model_index = 0
@@ -10810,6 +10803,29 @@ class SuperQodeApp(App):
             log.add_error(f"Runtime '{sub}' is a stub and not yet usable.")
             return
 
+        # A friendly setup path for the Codex subscription: someone without
+        # the product installed should get install steps, not a stack trace
+        # from a missing ~/.codex login.
+        if sub == "codex-sdk":
+            codex_auth = Path.home() / ".codex" / "auth.json"
+            has_env_key = bool(
+                _os.environ.get("OPENAI_API_KEY") or _os.environ.get("CODEX_API_KEY")
+            )
+            if not codex_auth.exists() and not has_env_key:
+                if shutil.which("codex") is None:
+                    log.add_error(
+                        "The Codex CLI is not installed, so the Codex "
+                        "subscription route is unavailable."
+                    )
+                    log.add_info("Install it:  npm i -g @openai/codex")
+                else:
+                    log.add_error(
+                        "Codex is installed but not signed in (~/.codex/auth.json missing)."
+                    )
+                log.add_info("Sign in with `codex login`, then re-run :connect codex.")
+                log.add_info("No subscription? Use BYOK instead: :connect byok openai <model>")
+                return
+
         current = resolve_runtime_name()
         if sub in self._SELF_CONTAINED_RUNTIMES:
             existing = getattr(self, "_pure_mode", None)
@@ -11145,9 +11161,12 @@ class SuperQodeApp(App):
         parts = (args or "").split(maxsplit=1)
         sub = parts[0].strip().lower() if parts and parts[0].strip() else "connect"
         rest = parts[1].strip() if len(parts) > 1 else ""
-        if sub in ("connect", "start", "api"):
-            # Default subscription path = SuperQode harness via CLI chat proxy.
-            # Grok Build ACP remains at :connect acp grok.
+        if sub in ("connect", "start"):
+            # Subscription default = Grok Build, xAI's own agent over ACP
+            # (matching the Codex and Claude profiles). SuperQode's harness on
+            # the same plan is the explicit opt-in `:grok api`.
+            self._connect_acp_cmd(("grok " + rest).strip(), log)
+        elif sub == "api":
             self._grok_api_cmd(rest, log)
         elif sub in ("models", "ls"):
             self._show_grok_models(log)
@@ -11200,8 +11219,8 @@ class SuperQodeApp(App):
             "Imported the Grok CLI session token (stored in ~/.superqode/auth.json, 0600)."
         )
         log.add_info(
-            f"SuperQode harness on Grok subscription → grok-cli/{model} "
-            "(not Grok Build ACP). Switch with :acp grok or :connect acp grok. "
+            f"SuperQode harness on Grok subscription → grok-cli/{model}. "
+            "For xAI's own Grok Build agent instead, use :connect grok. "
             "Remove token anytime with :grok api off."
         )
         self._connect_byok_mode("grok-cli", model, log)
@@ -11213,6 +11232,20 @@ class SuperQodeApp(App):
         written to the log) when there is no usable CLI login.
         """
         from superqode.providers import grok_cli_auth
+
+        # Someone without the product installed should get install steps, not
+        # be told to run a command that does not exist on their machine.
+        if shutil.which("grok") is None:
+            log.add_error(
+                "The Grok CLI is not installed, so the subscription route is unavailable."
+            )
+            log.add_info(
+                "Install it (macOS/Linux/WSL): curl -fsSL https://x.ai/cli/install.sh | bash"
+            )
+            log.add_info("Windows PowerShell:           irm https://x.ai/cli/install.ps1 | iex")
+            log.add_info("Then sign in with `grok login` and re-run :connect grok.")
+            log.add_info("No subscription? Use BYOK instead: :connect byok xai grok-4.5")
+            return False
 
         auth = grok_cli_auth.import_cli_token()
         if auth is None:
@@ -11256,9 +11289,13 @@ class SuperQodeApp(App):
         t.append("\n  Source: ", style=THEME["muted"])
         if live:
             t.append("`grok models` (signed-in CLI catalog)\n", style=THEME["text"])
+        elif shutil.which("grok") is None:
+            t.append("builtin fallback: Grok CLI not installed\n", style=THEME["warning"])
+            t.append("  Install: ", style=THEME["muted"])
+            t.append("curl -fsSL https://x.ai/cli/install.sh | bash\n", style=THEME["cyan"])
         else:
             t.append(
-                "builtin fallback — CLI missing or not signed in; run `grok login`\n",
+                "builtin fallback: CLI not signed in; run `grok login`\n",
                 style=THEME["warning"],
             )
         t.append("  Select and connect with ", style=THEME["muted"])
@@ -11314,7 +11351,7 @@ class SuperQodeApp(App):
                 "imported but expired — run `grok login`, then :grok api\n", style=THEME["warning"]
             )
         elif token.get("cli_login"):
-            t.append("available — run :connect grok to use SuperQode harness\n", style=THEME["dim"])
+            t.append("available: run :grok api to use SuperQode's harness\n", style=THEME["dim"])
         else:
             t.append("not imported\n", style=THEME["dim"])
         t.append("    Default   ", style=THEME["muted"])
@@ -11325,9 +11362,9 @@ class SuperQodeApp(App):
         t.append("    grok login --device-auth  ", style=THEME["cyan"])
         t.append("sign in from SSH or a headless host\n", style=THEME["muted"])
         t.append("    :connect grok             ", style=THEME["cyan"])
-        t.append("SuperQode harness on your subscription\n", style=THEME["muted"])
-        t.append("    :connect acp grok         ", style=THEME["cyan"])
-        t.append("Grok Build via official CLI ACP\n", style=THEME["muted"])
+        t.append("Grok Build, xAI's own agent (ACP)\n", style=THEME["muted"])
+        t.append("    :grok api [model]         ", style=THEME["cyan"])
+        t.append("SuperQode harness on your subscription (opt-in)\n", style=THEME["muted"])
         t.append("    :grok api off             ", style=THEME["cyan"])
         t.append("remove imported session token\n", style=THEME["muted"])
         log.write_feedback(t)
@@ -11340,13 +11377,13 @@ class SuperQodeApp(App):
         t.append("    grok login\n", style=THEME["cyan"])
         t.append("\n  For SSH or a headless machine:\n", style=THEME["muted"])
         t.append("    grok login --device-auth\n", style=THEME["cyan"])
-        t.append("\n  Then connect SuperQode harness with:\n", style=THEME["muted"])
+        t.append("\n  Then connect Grok Build (xAI's own agent):\n", style=THEME["muted"])
         t.append("    :connect grok\n", style=THEME["cyan"])
-        t.append("\n  Or Grok Build as an external ACP agent:\n", style=THEME["muted"])
-        t.append("    :connect acp grok\n", style=THEME["cyan"])
+        t.append("\n  Or run SuperQode's harness on the same plan:\n", style=THEME["muted"])
+        t.append("    :grok api [model]\n", style=THEME["cyan"])
         t.append(
             "\n  The official CLI stores login in ~/.grok/auth.json. "
-            ":connect grok imports the session token into SuperQode for the harness path.\n",
+            ":grok api imports the session token into SuperQode for the harness path.\n",
             style=THEME["dim"],
         )
         log.write_feedback(t)
@@ -11355,19 +11392,15 @@ class SuperQodeApp(App):
         t = Text()
         t.append("\n  Grok in SuperQode\n\n", style=f"bold {THEME['text']}")
         t.append("  :connect grok              ", style=THEME["cyan"])
-        t.append("SuperQode harness on your Grok subscription\n", style=THEME["muted"])
+        t.append("Grok Build, xAI's own coding agent (ACP)\n", style=THEME["muted"])
         t.append("  :grok connect [model]      ", style=THEME["cyan"])
-        t.append("same as :connect grok; pin e.g. grok-4.5 or grok-build\n", style=THEME["muted"])
+        t.append("same as :connect grok; optional model hint\n", style=THEME["muted"])
+        t.append("  :grok api [model]          ", style=THEME["cyan"])
+        t.append("SuperQode harness on your subscription (opt-in)\n", style=THEME["muted"])
         t.append("  :grok models               ", style=THEME["cyan"])
         t.append("list the signed-in CLI's model catalog\n", style=THEME["muted"])
         t.append("  :grok model [name]         ", style=THEME["cyan"])
-        t.append(
-            "pick a subscription model (picker) or connect one directly\n", style=THEME["muted"]
-        )
-        t.append("  :connect acp grok          ", style=THEME["cyan"])
-        t.append("Grok Build coding agent via official CLI ACP\n", style=THEME["muted"])
-        t.append("  :grok api [model]          ", style=THEME["cyan"])
-        t.append("alias of :grok connect (import session + harness)\n", style=THEME["muted"])
+        t.append("pick a subscription model for the SuperQode harness path\n", style=THEME["muted"])
         t.append("  :grok api off              ", style=THEME["cyan"])
         t.append("remove the imported session token\n", style=THEME["muted"])
         t.append("  :grok status               ", style=THEME["cyan"])
@@ -12197,7 +12230,7 @@ class SuperQodeApp(App):
             status = pure.get_status().get("harness", {}) if pure else {}
             if status.get("enabled"):
                 log.add_info(
-                    f"Harness: {status.get('name')} "
+                    f"Harness: {_harness_display_name(status.get('name'))} "
                     f"({status.get('flavor')}, runtime={status.get('runtime')})"
                 )
                 if status.get("path"):
@@ -12230,8 +12263,8 @@ class SuperQodeApp(App):
                 log.add_error(f"Could not resolve harness: {exc}")
                 return
             log.add_info(
-                f"Harness: {entry.id} ({entry.source}, runtime={entry.runtime}, "
-                f"tools={len(entry.tools)})"
+                f"Harness: {_harness_display_name(entry.id)} ({entry.source}, "
+                f"runtime={entry.runtime}, tools={len(entry.tools)})"
             )
             log.add_info(entry.description)
             log.add_info(f"Tools: {', '.join(entry.tools) or 'none'}")
@@ -12391,7 +12424,7 @@ class SuperQodeApp(App):
         self._refresh_harness_panel()
 
         log.add_success(
-            f"✓ Loaded harness {entry.id} "
+            f"✓ Harness: {_harness_display_name(entry.id)} loaded "
             f"({entry.spec.flavor.value}, runtime={entry.runtime}, tools={len(entry.tools)})"
         )
         log.add_info(
@@ -15753,16 +15786,10 @@ class SuperQodeApp(App):
             self._stop_thinking()
             self._start_stream_animation(log)
 
-            harness_name = ""
-            try:
-                harness_name = self._pure_mode.get_status().get("harness", {}).get("name", "")
-            except Exception:
-                harness_name = ""
-
             # Use enhanced agent session header (always visible)
             _safe_call(
                 log.start_agent_session,
-                f"Harness {harness_name}" if harness_name else f"BYOK {provider}",
+                self._agent_session_label(provider),
                 model,
                 "byok" if not is_local else "local",
                 self.approval_mode,
@@ -16948,6 +16975,10 @@ class SuperQodeApp(App):
 
             last_thinking_time[0] = current_time
 
+        # One committed calm line per tool call id, whether the completion
+        # arrives on the initial tool_call or a later tool_call_update.
+        calm_committed_tool_ids: set = set()
+
         async def on_tool_call(tool_call: dict) -> None:
             """Handle tool calls - ALWAYS visible (this is the agent's actual work)."""
             # Flush any pending thinking before showing tool call
@@ -16967,10 +16998,29 @@ class SuperQodeApp(App):
                     if file_path not in files_read:
                         files_read.append(file_path)
 
-            # Calm mode: fold the action into the live throbber instead of a row.
+            # Calm mode: fold the action into the live throbber instead of a
+            # row. Some agents send a single tool_call already carrying its
+            # final status with no follow-up update; without honoring it here
+            # the tool never left a visible line at all.
             command = raw_input.get("command", "")
             if self._is_calm_output():
-                self._call_ui(self._calm_tool_running, title, raw_input, log)
+                from superqode.acp.render import normalize_acp_tool_status
+
+                call_status = normalize_acp_tool_status(tool_call.get("status", ""))
+                call_id = str(tool_call.get("toolCallId") or "")
+                if call_status in ("completed", "failed"):
+                    if call_id not in calm_committed_tool_ids:
+                        if call_id:
+                            calm_committed_tool_ids.add(call_id)
+                        self._call_ui(
+                            self._calm_tool_done,
+                            title,
+                            raw_input,
+                            log,
+                            call_status == "completed",
+                        )
+                else:
+                    self._call_ui(self._calm_tool_running, title, raw_input, log)
                 return
             # Verbose: show the tool call row - the agent's actual work.
             self._call_ui(
@@ -17018,10 +17068,15 @@ class SuperQodeApp(App):
             # Calm mode: one tidy line on completion/failure, throbber while
             # running - no raw output/diffs (flip to :thinking verbose for all).
             if self._is_calm_output():
-                if status == "completed":
-                    self._call_ui(self._calm_tool_done, tool_title, raw_input, log, True)
-                elif status == "failed":
-                    self._call_ui(self._calm_tool_done, tool_title, raw_input, log, False)
+                call_id = str(update.get("toolCallId") or "")
+                if status in ("completed", "failed"):
+                    if call_id and call_id in calm_committed_tool_ids:
+                        return  # already committed from the initial tool_call
+                    if call_id:
+                        calm_committed_tool_ids.add(call_id)
+                    self._call_ui(
+                        self._calm_tool_done, tool_title, raw_input, log, status == "completed"
+                    )
                 elif status == "running":
                     self._call_ui(self._calm_tool_running, tool_title, raw_input, log)
                 return
@@ -22482,6 +22537,31 @@ class SuperQodeApp(App):
         # Clear screen and show fresh workspace
         self._clear_for_workspace(log, f"PURE • {provider}")
 
+    def _agent_session_label(self, provider: str) -> str:
+        """Session-banner label that names what actually runs the turn.
+
+        Self-contained runtimes (Codex, Claude Agent SDK) execute their own
+        agent loop and tools; labelling those sessions with SuperQode's
+        native harness ("Harness: Core") misled users about whose harness
+        was active.
+        """
+        pure = getattr(self, "_pure_mode", None)
+        runtime_name = str(getattr(pure, "runtime_name", "") or "")
+        if runtime_name in self._SELF_CONTAINED_RUNTIMES:
+            friendly = {
+                "codex-sdk": "Codex",
+                "claude-agent-sdk": "Claude Agent SDK",
+            }.get(runtime_name, runtime_name)
+            return f"Runtime: {friendly} (agent-owned harness)"
+        harness_name = ""
+        try:
+            harness_name = pure.get_status().get("harness", {}).get("name", "") if pure else ""
+        except Exception:  # noqa: BLE001 - banner must never fail a send
+            harness_name = ""
+        if harness_name:
+            return f"Harness: {_harness_display_name(harness_name)}"
+        return f"BYOK {provider}"
+
     def _show_pure_tool_call(self, name: str, args: dict, log: ConversationLog):
         """Show Pure/BYOK/local tool calls through the shared tool renderer."""
         # Calm mode: surface the action in the live throbber, not a full row.
@@ -22498,7 +22578,19 @@ class SuperQodeApp(App):
         # Calm mode: one tidy line per finished tool, no raw output/diff.
         if self._is_calm_output():
             metadata = getattr(result, "metadata", None) or {}
-            args = {"path": metadata.get("path")} if metadata.get("path") else {}
+            # Streamed output chunks are progress, not completions. Committing
+            # a line per chunk produced a stack of bare "run" rows on the
+            # Codex runtime.
+            if metadata.get("partial"):
+                return
+            # Forward every target-like field, not only path: bash results
+            # carry "command" (a bare "run" line told the user nothing about
+            # what ran), search tools carry "pattern"/"query".
+            args = {
+                key: metadata.get(key)
+                for key in ("path", "command", "pattern", "query")
+                if metadata.get(key)
+            }
             self._calm_tool_done(name, args, log, ok=success)
             return
         status = "success" if success else "error"
@@ -22516,7 +22608,7 @@ class SuperQodeApp(App):
             name,
             status,
             file_path,
-            "",
+            str(metadata.get("command") or ""),
             output_str,
             None,
             diff_text,

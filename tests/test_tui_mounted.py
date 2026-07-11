@@ -308,16 +308,19 @@ async def test_prompt_ctrl_a_selects_all():
         assert prompt.selected_text == "select me all"
 
 
-async def test_picker_error_messages_scroll_into_view(monkeypatch, tmp_path):
-    """Selecting a needs-setup profile must show its error/help messages.
+async def test_grok_profile_selection_routes_to_grok_build_acp(monkeypatch):
+    """Selecting "Grok subscription" in the picker connects Grok Build (ACP).
 
-    Regression: choosing "Grok subscription" without a `grok login` wrote
-    "No Grok CLI login found" below the picker, but the viewport stayed pinned
-    to the top of the picker — the user saw nothing happen.
+    Since 0.2.x the bare Grok profile runs xAI's own agent, matching Codex and
+    Claude. (Picker-feedback visibility is covered by the Codex-profile test
+    below.)
     """
-    from superqode.providers import grok_cli_auth
+    calls = []
 
-    monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", tmp_path / "missing-auth.json")
+    def fake_connect_acp(self, args, log):
+        calls.append(args)
+
+    monkeypatch.setattr(SuperQodeApp, "_connect_acp_cmd", fake_connect_acp)
 
     app = SuperQodeApp()
     async with app.run_test(size=(80, 24)) as pilot:
@@ -333,16 +336,8 @@ async def test_picker_error_messages_scroll_into_view(monkeypatch, tmp_path):
 
         await pilot.press("enter")
         await pilot.pause()
-        await pilot.pause()
 
-        error_y = next(
-            index for index, line in enumerate(log.lines) if "No Grok CLI login" in line.text
-        )
-        visible_height = log.scrollable_content_region.height
-        assert log.scroll_y <= error_y < log.scroll_y + visible_height, (
-            f"error at line {error_y} not in viewport [{log.scroll_y}, "
-            f"{log.scroll_y + visible_height})"
-        )
+        assert calls == ["grok"]
 
 
 async def test_codex_profile_error_visible_after_picker_navigation(monkeypatch):

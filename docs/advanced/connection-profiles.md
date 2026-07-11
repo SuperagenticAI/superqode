@@ -28,9 +28,11 @@ Self-contained: uses Anthropic API key directly. Requires claude_agent_sdk packa
 
 Handoff profile: shows the command to run `agy` in a terminal. Does not connect SuperQode's own loop. Requires agy binary on PATH.
 
-### 7. Grok Subscription (connector: subscription, provider: grok-cli)
+### 7. Grok Subscription (connector: acp, agent: grok)
 
-Connects **SuperQode's harness** to an eligible SuperGrok or X Premium+ account. Requires the `grok` binary on PATH and a local `grok login` (`~/.grok/auth.json`). On connect, SuperQode imports the CLI session token into its auth store and routes through the `grok-cli` provider (CLI chat proxy). **Grok Build ACP** remains available under `:connect acp grok`; that path runs xAI's agent, not SuperQode's harness.
+Runs **Grok Build**, xAI's own coding agent, on an eligible SuperGrok or X Premium+ account. This matches the Codex and Claude subscription profiles: the vendor's agent owns the loop. Requires the `grok` binary on PATH and a local `grok login` (`~/.grok/auth.json`). SuperQode starts `grok agent stdio` over ACP.
+
+To run **SuperQode's own harness** on the same subscription instead, use `:grok api [model]`. That imports the CLI session token into SuperQode's auth store and routes through the `grok-cli` provider (CLI chat proxy), so `core`/`workbench` and SuperQode's tools drive Grok 4.5.
 
 ## TUI Usage
 
@@ -41,8 +43,8 @@ Direct shortcuts:
 - `:connect codex` - connect Codex SDK directly
 - `:connect claude` - connect Claude Agent SDK directly
 - `:connect antigravity` - show agy handoff
-- `:connect grok` - SuperQode harness on Grok subscription (CLI login)
-- `:connect acp grok` - Grok Build coding agent via official CLI ACP
+- `:connect grok` - Grok Build, xAI's own coding agent, on your subscription (ACP)
+- `:grok api [model]` - SuperQode's harness on the same subscription (opt-in)
 - `:connect byok` - open the cloud provider picker
 - `:connect byok <provider>/<model>` - connect to a cloud model directly
 - `:connect <model>` - connect by model name alone (e.g. `:connect gpt-5.6`); the provider is resolved from the catalog, preferring first-party providers over gateway mirrors
@@ -79,8 +81,8 @@ superqode connect setup deepseek --json
 - BYOK/Local -> runtime: builtin
 - ACP -> no runtime change (ACP subprocess)
 - Antigravity -> handoff (no runtime)
-- Grok subscription -> SuperQode harness (`grok-cli` + CLI session token)
-- Grok Build agent -> ACP subprocess via `:connect acp grok` (`grok agent stdio`)
+- Grok subscription (`:connect grok`) -> Grok Build ACP subprocess (`grok agent stdio`)
+- Grok via SuperQode harness (`:grok api`) -> `grok-cli` provider + CLI session token
 - Advanced -> user picks runtime
 
 When --connect implies a runtime, it sets SUPERQODE_RUNTIME but does not override an explicit --runtime flag.

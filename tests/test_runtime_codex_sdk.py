@@ -1072,3 +1072,58 @@ def test_runtime_thread_lifecycle_helpers(fake_codex_sdk, tmp_path):
     assert _FakeCodexClient.last_instance.archived == "fork-1"
     assert runtime.account().account.email == "user@example.com"
     assert runtime.logout().status == "ok"
+
+
+def test_failed_turn_raises_with_provider_reason(fake_codex_sdk, tmp_path):
+    """A usage-limit rejection must surface, not end as a silent empty turn."""
+    _FakeThread.next_events = [
+        _FakeNotification(
+            "turn/completed",
+            types.SimpleNamespace(
+                turn=types.SimpleNamespace(
+                    status="failed",
+                    error=types.SimpleNamespace(
+                        message="You've hit your usage limit. Try again at 3:58 PM."
+                    ),
+                )
+            ),
+        ),
+    ]
+    runtime = create_runtime("codex-sdk", config=_config(tmp_path))
+
+    async def collect():
+        return [event async for event in runtime.run_harness_events("hello")]
+
+    import asyncio
+
+    with pytest.raises(RuntimeError, match="usage limit"):
+        asyncio.run(collect())
+
+
+def test_failed_turn_without_message_still_raises(fake_codex_sdk, tmp_path):
+    _FakeThread.next_events = [
+        _FakeNotification(
+            "turn/completed",
+            types.SimpleNamespace(turn=types.SimpleNamespace(status="failed")),
+        ),
+    ]
+    runtime = create_runtime("codex-sdk", config=_config(tmp_path))
+
+    async def collect():
+        return [event async for event in runtime.run_harness_events("hello")]
+
+    import asyncio
+
+    with pytest.raises(RuntimeError, match="turn status: failed"):
+        asyncio.run(collect())
+
+
+def test_successful_turn_with_no_error_is_unchanged(fake_codex_sdk, tmp_path):
+    runtime = create_runtime("codex-sdk", config=_config(tmp_path))
+
+    async def collect():
+        return [chunk async for chunk in runtime.run_streaming("hello")]
+
+    import asyncio
+
+    assert asyncio.run(collect()) == ["hello"]

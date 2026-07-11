@@ -1096,7 +1096,11 @@ class ACPClient:
                     await self.on_tool_call(synthesized)
                 return
             if self.on_tool_update:
-                await self.on_tool_update(update)
+                # Hand consumers the merged record, not the sparse update:
+                # many agents send follow-ups carrying only id + status, and
+                # the TUI needs the original title/rawInput to say what the
+                # tool actually did.
+                await self.on_tool_update(self._tool_calls.get(tool_call_id) or update)
 
         elif update_type == "plan":
             entries = update.get("entries", [])

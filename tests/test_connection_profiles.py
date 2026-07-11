@@ -42,18 +42,19 @@ def test_antigravity_profile_is_external_cli_connector():
     assert "gemini cli migration" in antigravity.description.lower()
 
 
-def test_grok_profile_is_subscription_harness_connector():
-    """Grok subscription uses SuperQode harness; Grok Build ACP is under :connect acp."""
+def test_grok_profile_defaults_to_grok_build_acp():
+    """`:connect grok` runs xAI's own Grok Build agent (ACP), like Codex/Claude.
+
+    SuperQode's harness on the same subscription is the explicit opt-in
+    `:grok api` (grok-cli provider), not the bare connect.
+    """
     grok = get_connection_profile("grok")
 
-    assert grok.connector == "subscription"
-    assert grok.provider == "grok-cli"
-    assert grok.model == "grok-build"
-    assert grok.runtime == "builtin"
-    assert grok.acp_agent is None
+    assert grok.connector == "acp"
+    assert grok.acp_agent == "grok"
     assert "subscription" in grok.label.lower()
-    assert "harness" in grok.description.lower()
-    assert "acp" in grok.description.lower()
+    # Points users to the SuperQode-harness opt-in.
+    assert ":grok api" in grok.description
 
 
 def test_lookup_by_id_and_label():
@@ -175,11 +176,11 @@ def test_dispatch_antigravity_routes_to_external_cli(_dispatch):
     assert ("antigravity", "connect") in stub.calls
 
 
-def test_dispatch_grok_routes_to_subscription_harness(_dispatch):
+def test_dispatch_grok_routes_to_grok_build_acp(_dispatch):
     stub = _DispatchStub()
     _dispatch(stub, get_connection_profile("grok"), log=None)
-    assert ("subscription", "grok-build") in stub.calls
-    assert ("acp", "grok") not in stub.calls
+    assert ("acp", "grok") in stub.calls
+    assert ("subscription", "grok-build") not in stub.calls
 
 
 def test_dispatch_local_routes_to_local_picker(_dispatch):
@@ -250,12 +251,12 @@ def test_no_duplicate_acp_claude_profile():
     assert acp_claude_profiles == []
 
 
-def test_no_headline_acp_grok_profile():
-    """Grok Build ACP is only via :connect acp grok, not a second headline profile."""
+def test_grok_headline_profile_is_the_acp_grok_build_agent():
+    """`:connect grok` IS the Grok Build ACP profile (like Codex/Claude subscriptions)."""
     acp_grok = [
         p for p in list_connection_profiles() if p.connector == "acp" and p.acp_agent == "grok"
     ]
-    assert acp_grok == []
+    assert [p.id for p in acp_grok] == ["grok"]
 
 
 def test_acp_bare_agent_name_routes_to_connect():

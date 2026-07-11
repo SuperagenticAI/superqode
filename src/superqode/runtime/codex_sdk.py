@@ -745,6 +745,7 @@ class CodexSDKRuntime:
             self._active_turn = turn
             stream = turn.stream()
             completed = False
+            turn_error = ""
             seen_agent_delta_item_ids: set[str] = set()
             queue: asyncio.Queue = asyncio.Queue()
             _start_stream_reader(stream, asyncio.get_running_loop(), queue)
@@ -761,6 +762,10 @@ class CodexSDKRuntime:
                     ):
                         if event.type == "turn_complete":
                             completed = True
+                            status = str(event.data.get("status") or "")
+                            message = str(event.data.get("error") or "")
+                            if message or status in {"failed", "error", "errored"}:
+                                turn_error = message or f"turn status: {status}"
                         yield event
             finally:
                 self._active_turn = None
@@ -772,6 +777,10 @@ class CodexSDKRuntime:
                     yield HarnessEvent(type="turn_complete", data={"status": "cancelled"})
                 else:
                     raise RuntimeError("Codex stream ended without turn/completed")
+            elif turn_error and not self._cancelled:
+                # Surface the provider's reason (usage limits, auth, model
+                # eligibility) instead of ending as a silent empty response.
+                raise RuntimeError(f"Codex turn failed: {turn_error}")
             yield HarnessEvent(type="model_result", data={"runtime": self.name})
         finally:
             self._turn_lock.release()
@@ -985,10 +994,21 @@ class CodexSDKRuntime:
                 ]
         if method == "turn/completed":
             turn = getattr(payload, "turn", None)
+            # A failed turn carries its reason here (e.g. a usage-limit
+            # rejection). Dropping it made the TUI show a bare "no response".
+            error = getattr(turn, "error", None)
+            error_message = ""
+            if error is not None:
+                error_message = str(
+                    getattr(error, "message", None) or getattr(error, "detail", None) or error
+                ).strip()
             return [
                 HarnessEvent(
                     type="turn_complete",
-                    data={"status": _status_value(getattr(turn, "status", ""))},
+                    data={
+                        "status": _status_value(getattr(turn, "status", "")),
+                        "error": error_message,
+                    },
                 )
             ]
         return []

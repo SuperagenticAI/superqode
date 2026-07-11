@@ -5,12 +5,11 @@ subscription, Claude, a BYOK provider, a local model, an ACP agent). Each
 profile declares a ``connector`` that the TUI/CLI dispatches on:
 
     runtime      self-contained runtime (own model+auth), e.g. codex-sdk
-    acp          a specific ACP agent by short_name, e.g. "claude"
+    acp          a specific ACP agent by short_name, e.g. "claude" or "grok"
     byok         the BYOK provider/model picker
     local        the local provider/model picker
     acp-picker   the generic "pick any ACP agent" list
     external-cli a local vendor TUI that does not expose ACP/headless events yet
-    subscription SuperQode harness + product login (e.g. Grok CLI session → grok-cli)
 
 This module has no TUI dependencies so it can be unit-tested and reused by both
 the TUI and the CLI. New products (Claude Agent SDK, Antigravity) slot in as new
@@ -36,12 +35,9 @@ class ConnectionProfile:
     id: str
     label: str
     description: str
-    connector: str  # runtime | acp | byok | local | acp-picker | external-cli | subscription
+    connector: str  # runtime | acp | byok | local | acp-picker | external-cli
     runtime: Optional[str] = None  # for connector == "runtime"
     acp_agent: Optional[str] = None  # for connector == "acp"
-    # for connector == "subscription": SuperQode harness provider id + default model
-    provider: Optional[str] = None
-    model: Optional[str] = None
     self_contained: bool = False
     # Probe (no network) for whether this source is ready to use right now.
     detect: Optional[Callable[[], bool]] = None
@@ -164,15 +160,14 @@ _PROFILES: List[ConnectionProfile] = [
         id="grok",
         label="Grok subscription",
         description=(
-            "SuperQode harness on your X/SuperGrok login (official Grok CLI session). "
-            "Grok Build ACP is under :connect acp grok"
+            "Grok Build coding agent on your X/SuperGrok login (xAI's own harness, "
+            "via the official CLI). SuperQode harness on the same plan: :grok api"
         ),
-        # SuperQode owns the agent loop; credentials come from `grok login`.
-        # External Grok Build agent remains available via the ACP picker.
-        connector="subscription",
-        provider="grok-cli",
-        model="grok-build",
-        runtime="builtin",
+        # Subscriptions default to the vendor's own agent, matching the Codex
+        # and Claude profiles. Running SuperQode's harness on this plan is the
+        # explicit opt-in `:grok api [model]` (grok-cli provider).
+        connector="acp",
+        acp_agent="grok",
         detect=_grok_cli_ready,
         unavailable_hint="install the Grok CLI, then run `grok login` (or `grok login --device-auth`)",
     ),

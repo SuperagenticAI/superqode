@@ -574,7 +574,11 @@ class PureMode:
         buffer["text"] += text
         buffered = str(buffer["text"])
         if "\n" in text or len(buffered) >= 512 or now - float(buffer["last_flush"]) >= 0.1:
-            self.on_tool_result(name, ToolResult(success=True, output=buffered))
+            # "partial" marks streamed output chunks, not completions — the
+            # TUI's calm mode must not commit a finished-tool line per chunk.
+            self.on_tool_result(
+                name, ToolResult(success=True, output=buffered, metadata={"partial": True})
+            )
             buffer["text"] = ""
             buffer["last_flush"] = now
 
@@ -588,7 +592,9 @@ class PureMode:
             if not text:
                 continue
             if force or now - float(buffer.get("last_flush") or now) >= 0.1:
-                self.on_tool_result(name, ToolResult(success=True, output=text))
+                self.on_tool_result(
+                    name, ToolResult(success=True, output=text, metadata={"partial": True})
+                )
                 buffer["text"] = ""
                 buffer["last_flush"] = now
 

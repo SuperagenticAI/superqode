@@ -135,7 +135,7 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:codex` - Connect to and manage the Codex SDK runtime
 - `:claude` - Connect to and manage the Claude Agent SDK runtime
 - `:antigravity` - Show Antigravity CLI handoff, status, and migration help
-- `:grok` - SuperQode harness on Grok subscription (CLI login); status/login; Grok Build ACP is `:connect acp grok`
+- `:grok` - Grok Build (xAI's agent) on your subscription; `:grok api` runs SuperQode's harness on the same plan; also status/login/models
 - `:plan <task>` - Ask for a plan only, without native tool execution
 - `:plan approve` - Execute the last planned request with tools enabled
 - `:plan edit [task]` - Edit the pending planned request before execution
@@ -340,19 +340,21 @@ Antigravity CLI handoff:
 Grok subscription (official Grok CLI login):
 
 ```text
-:connect grok                 # SuperQode harness on subscription
-:grok
-:grok connect [model]         # pin e.g. grok-4.5 or grok-build
-:grok api [model]             # alias of connect
-:grok api off
+:connect grok                 # Grok Build, xAI's own agent (ACP) — default
+:grok                         # same as :connect grok
+:grok connect [model]         # ...with an optional model hint
+:grok api [model]             # SuperQode's harness on the subscription (opt-in)
+:grok api off                 # remove the imported session token
+:grok model                   # pick a subscription model for the harness path
+:grok models                  # list the signed-in CLI's model catalog
 :grok status
 :grok login
-:connect acp grok             # Grok Build external agent (ACP)
 ```
 
-`:connect grok` / `:grok connect` import the local `grok login` session and run
-**SuperQode's harness** on the CLI chat proxy. For xAI's Grok Build agent, use
-`:connect acp grok` (see the
+`:connect grok` runs **Grok Build**, xAI's own coding agent, over ACP, matching
+the Codex and Claude subscription profiles. To run **SuperQode's harness** on
+the same subscription instead, use `:grok api [model]`, which imports the local
+`grok login` session and routes through the CLI chat proxy (see the
 [BYOK provider docs](../providers/byok.md#grok-subscription-official-cli)).
 
 ## Optional Vim Helpers

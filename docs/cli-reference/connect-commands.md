@@ -30,7 +30,7 @@ superqode -C PROFILE [COMMAND]
 | `codex` | Self-contained. Uses Codex SDK. Auto-sets runtime to `codex-sdk`. Requires `openai_codex` package and `~/.codex/auth.json`. |
 | `claude` | Self-contained. Uses Claude Agent SDK. Auto-sets runtime to `claude-agent-sdk`. Requires `claude_agent_sdk` package and `ANTHROPIC_API_KEY`. |
 | `antigravity` | Handoff to the `agy` CLI for Antigravity cloud-managed sessions. |
-| `grok` | SuperQode harness on your Grok subscription (imports `grok login` session → `grok-cli` provider). Requires the `grok` binary and `grok login`. Grok Build ACP: `--connect acp` / `:connect acp grok`. |
+| `grok` | Grok Build (xAI's own agent) on your Grok subscription over ACP (`grok agent stdio`). Requires the `grok` binary and `grok login`. To run SuperQode's harness on the same subscription instead, use `:grok api`. |
 | `byok` | Bring Your Own Key. Connect to a cloud provider with your own API key. |
 | `local` | Connect to a local or self-hosted provider (Ollama, MLX, LM Studio, etc.). |
 | `acp` | Connect to an ACP (Agent Client Protocol) coding agent. |
@@ -102,19 +102,19 @@ provider selection, sandbox provisioning, and session persistence in the cloud.
 
 ### grok
 
-Connects **SuperQode's own harness** to your Grok subscription by importing the
-official CLI's `grok login` session and using the `grok-cli` provider (CLI chat
-proxy). SuperQode owns tools, memory, and the agent loop.
+Runs **Grok Build**, xAI's own coding agent, on your Grok subscription over ACP
+(`grok agent stdio`). This matches the Codex and Claude subscription profiles:
+the vendor's agent owns the loop.
 
 | Requirement | Details |
 |-------------|---------|
 | Binary | `grok` on PATH (`curl -fsSL https://x.ai/cli/install.sh \| bash`) |
-| Auth | `grok login` (or `grok login --device-auth` on headless hosts); stored by the CLI in `~/.grok/auth.json`, then imported into `~/.superqode/auth.json` for harness use |
-| Connector | SuperQode builtin harness + `grok-cli` (not ACP) |
+| Auth | `grok login` (or `grok login --device-auth` on headless hosts); stored by the CLI in `~/.grok/auth.json` |
+| Connector | ACP agent `grok` (Grok Build) |
 
-Default model is `grok-build` (currently Grok 4.5). Pin another with
-`:grok connect grok-4.5`. For **Grok Build** as xAI's external coding agent,
-use `:connect acp grok` instead. See
+To run **SuperQode's own harness** on the same subscription instead, use
+`:grok api [model]`: it imports the CLI session into `~/.superqode/auth.json`
+and routes through the `grok-cli` provider (CLI chat proxy). See
 [BYOK Providers](../providers/byok.md#grok-subscription-official-cli).
 
 ### byok

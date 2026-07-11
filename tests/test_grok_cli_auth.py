@@ -222,8 +222,11 @@ def test_grok_cmd_routes_api_subcommand():
     assert calls == ["grok-4.5"]
 
 
-def test_grok_cmd_connect_uses_subscription_harness_not_acp():
-    """:grok connect must use SuperQode harness (token import), not Grok Build ACP."""
+def test_grok_cmd_connect_defaults_to_grok_build_acp():
+    """:grok connect (and bare :grok) runs Grok Build ACP, like Codex/Claude.
+
+    SuperQode's harness on the subscription is the explicit `:grok api` opt-in.
+    """
     from superqode.app_main import SuperQodeApp
 
     calls = []
@@ -237,9 +240,13 @@ def test_grok_cmd_connect_uses_subscription_harness_not_acp():
 
     SuperQodeApp._grok_cmd(_Stub(), "connect grok-4.5", _Log())
     SuperQodeApp._grok_cmd(_Stub(), "", _Log())  # default subcommand is connect
+    SuperQodeApp._grok_cmd(_Stub(), "api grok-4.5", _Log())  # explicit harness opt-in
 
-    assert calls == [("api", "grok-4.5"), ("api", "")]
-    assert not any(c[0] == "acp" for c in calls)
+    assert calls == [
+        ("acp", "grok grok-4.5"),
+        ("acp", "grok"),
+        ("api", "grok-4.5"),
+    ]
 
 
 def test_grok_api_connects_default_model(tmp_path, isolated_auth_store, monkeypatch):

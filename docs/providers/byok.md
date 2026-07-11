@@ -161,10 +161,15 @@ not yet available in the xAI API console for EU users.
 
 ## Grok Subscription (Official CLI)
 
-For an eligible local X/SuperGrok account, use the **Grok subscription** profile
-so SuperQode's harness runs on your CLI login (not a BYOK API key). SuperQode
-imports the `grok login` session and talks to the CLI chat proxy; SuperQode
-owns tools, memory, and the agent loop.
+For an eligible local X/SuperGrok account, the **Grok subscription** profile has
+two routes on the same `grok login`:
+
+- `:connect grok` runs **Grok Build**, xAI's own coding agent, over ACP. This
+  is the default, matching the Codex and Claude subscription profiles: the
+  vendor's agent owns the loop.
+- `:grok api [model]` runs **SuperQode's own harness** on the subscription. It
+  imports the `grok login` session and talks to the CLI chat proxy, so
+  `core`/`workbench`, SuperQode's tools, and memory drive Grok 4.5.
 
 ```bash
 # Install the official xAI CLI if needed (macOS/Linux/WSL)
@@ -174,16 +179,18 @@ curl -fsSL https://x.ai/cli/install.sh | bash
 # Sign in locally
 grok login
 
-# SuperQode harness on your subscription
+# Grok Build (xAI's own agent) on your subscription
 superqode --connect grok
 ```
 
 Inside the TUI:
 
 ```text
-:connect grok                 # SuperQode harness (default subscription path)
-:grok connect grok-4.5        # pin a model
-:connect acp grok             # Grok Build as external ACP agent instead
+:connect grok                 # Grok Build, xAI's own agent (ACP) — default
+:grok api                     # SuperQode's harness on the subscription (opt-in)
+:grok api grok-4.5            # ...pinned to a specific model
+:grok model                   # ...or pick from a menu of subscription models
+:grok models                  # list the signed-in CLI's model catalog
 ```
 
 On SSH or another headless machine, authenticate with:
@@ -192,14 +199,13 @@ On SSH or another headless machine, authenticate with:
 grok login --device-auth
 ```
 
-Default model is the CLI's `grok-build` alias (currently Grok 4.5). Subscription
-access requires an eligible SuperGrok or X Premium+ plan; quotas and regional
-access are determined by xAI. For cloud or automation workloads, use
-`XAI_API_KEY` BYOK instead.
+Subscription access requires an eligible SuperGrok or X Premium+ plan; quotas
+and regional access are determined by xAI. For cloud or automation workloads,
+use `XAI_API_KEY` BYOK instead.
 
-### How subscription connect works
+### How the `:grok api` harness route works
 
-`:connect grok` / `:grok connect` / `:grok api` all:
+`:grok api` (the SuperQode-harness opt-in) does the following:
 
 1. Import the session token from `~/.grok/auth.json` into SuperQode's local auth
    store (`~/.superqode/auth.json`, permissions 0600)
@@ -214,18 +220,13 @@ access are determined by xAI. For cloud or automation workloads, use
 
 Enterprise proxies are honored via `GROK_CLI_CHAT_PROXY_BASE_URL`.
 
-**Grok Build ACP** (xAI's coding agent, not SuperQode's harness): `:connect acp
-grok` starts `grok agent stdio`. Use that when you want the official Grok Build
-loop; use `:connect grok` when you want SuperQode's harness on the same
-subscription.
-
 Notes:
 
 - CLI sessions last about 7 days; when the token expires, run `grok login`
-  again, then re-run `:connect grok`.
+  again, then reconnect.
 - Usage counts against your subscription and model eligibility is enforced by
-  xAI per tier. This route is intended for interactive use. For automation or
-  benchmarking, use `XAI_API_KEY` BYOK.
+  xAI per tier. The `:grok api` route is intended for interactive use. For
+  automation or benchmarking, use `XAI_API_KEY` BYOK.
 - Most proxy models are streaming-only; SuperQode's chat path streams by
   default.
 
