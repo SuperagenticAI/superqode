@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .agent.loop import AgentConfig, AgentResponse
+from .agent.loop_policy import core_loop_policy, workbench_loop_policy
 from .runtime import create_runtime, resolve_runtime_name
 from .agent.session_manager import SessionManager, SessionMessage, SessionMetadata
 from .agent.system_prompts import SystemPromptLevel
@@ -82,6 +83,20 @@ def get_harness_profiles() -> Dict[str, HarnessProfile]:
     )
 
     return {
+        "core": HarnessProfile(
+            name="core",
+            description="Lean native coding harness with four model-facing tools.",
+            system_level=SystemPromptLevel.CORE,
+            tools=["read", "write", "edit", "bash"],
+            permissions=build_permissions,
+        ),
+        "workbench": HarnessProfile(
+            name="workbench",
+            description="Feature-rich native coding harness.",
+            system_level=SystemPromptLevel.FULL,
+            tools=None,
+            permissions=build_permissions,
+        ),
         "no-tool": HarnessProfile(
             name="no-tool",
             description="Model-only reasoning profile with no tools or repository access.",
@@ -123,6 +138,10 @@ def get_harness_profiles() -> Dict[str, HarnessProfile]:
 
 def create_tool_registry(profile: HarnessProfile) -> ToolRegistry:
     """Create a tool registry for a profile."""
+    if profile.name == "core":
+        return ToolRegistry.core()
+    if profile.name == "workbench":
+        return ToolRegistry.coding()
     registry = ToolRegistry.full()
     if profile.tools is not None:
         return registry.filtered(profile.tools)
@@ -133,7 +152,7 @@ async def run_headless(
     prompt: str,
     provider: str,
     model: str,
-    profile_name: str = "build",
+    profile_name: str = "core",
     working_directory: Optional[Path] = None,
     system_level: Optional[SystemPromptLevel] = None,
     session_id: Optional[str] = None,
@@ -153,10 +172,22 @@ async def run_headless(
     ``rubric`` enables self-grading: a grader call judges the answer against
     the rubric and "needs_revision" feedback re-enters the loop.
     """
+    aliases = {"minimal": "core", "coding": "workbench", "native": "workbench"}
+    profile_name = aliases.get(profile_name, profile_name)
     profiles = get_harness_profiles()
+    custom_harness = None
     if profile_name not in profiles:
-        valid = ", ".join(sorted(profiles))
-        raise ValueError(f"Unknown profile '{profile_name}'. Valid profiles: {valid}")
+        from .harness import resolve_harness
+
+        try:
+            custom_harness = resolve_harness(
+                profile_name, root=working_directory or Path.cwd()
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            valid = ", ".join(sorted(profiles))
+            raise ValueError(
+                f"Unknown harness or profile '{profile_name}'. Built-in profiles: {valid}"
+            ) from exc
 
     schema: Optional[Dict[str, Any]] = None
     if output_schema is not None:
@@ -165,7 +196,7 @@ async def run_headless(
         schema = load_schema(Path(output_schema))
         prompt = prompt + schema_instruction(schema)
 
-    profile = profiles[profile_name]
+    profile = profiles.get(profile_name)
     storage_dir = ".superqode/sessions"
     requested_working_directory = working_directory or Path.cwd()
     active_working_directory = requested_working_directory
@@ -191,6 +222,54 @@ async def run_headless(
         storage_dir = str((requested_working_directory / ".superqode" / "sessions").resolve())
         session_id = session_id or worktree_session_id
 
+    if custom_harness is not None:
+        from .harness import create_harness_store, init_harness
+
+        spec = custom_harness.spec
+        try:
+            store_kind = spec.observability.run_store
+            store = create_harness_store(
+                store_kind,
+                (
+                    Path(spec.context.session_storage) / "store.sqlite3"
+                    if store_kind == "sqlite"
+                    else Path(spec.context.session_storage)
+                ),
+            )
+            kernel = await init_harness(spec, store=store)
+            harness_session = await kernel.session(session_id)
+            result = await harness_session.prompt(
+                prompt,
+                provider=provider,
+                model=model,
+                working_directory=active_working_directory,
+                runtime=runtime,
+                sandbox_backend=sandbox_backend,
+                result=schema,
+                metadata={
+                    "harness_source": custom_harness.source,
+                    "harness_digest": custom_harness.digest,
+                    **({"rubric": rubric} if rubric else {}),
+                },
+            )
+            return result.response
+        finally:
+            if worktree_info:
+                from .workspace.worktree import GitWorktreeManager
+
+                await GitWorktreeManager(requested_working_directory).remove_worktree(
+                    worktree_info, force=True
+                )
+
+    assert profile is not None
+
+    loop_policy = core_loop_policy() if profile.name in {"core", "no-tool"} else workbench_loop_policy()
+    harness_source = "built-in" if profile.name in {"core", "workbench", "no-tool"} else "profile"
+    harness_digest = ""
+    if harness_source == "built-in":
+        from .harness import resolve_harness
+
+        harness_digest = resolve_harness(profile.name).digest
     config = AgentConfig(
         provider=provider,
         model=model,
@@ -202,6 +281,13 @@ async def run_headless(
         session_storage_dir=storage_dir,
         session_id=session_id,
         rubric=rubric,
+        loop_policy=loop_policy,
+        harness_id=profile.name,
+        harness_source=harness_source,
+        harness_digest=harness_digest,
+        tool_contract_version=(
+            "core-tools-v1" if profile.name == "core" else "workbench-v1"
+        ),
     )
 
     runtime_obj = create_runtime(
@@ -210,7 +296,7 @@ async def run_headless(
         tools=create_tool_registry(profile),
         config=config,
         parallel_tools=True,
-        include_mcp=_env_flag("SUPERQODE_MCP_SEARCH"),
+        include_mcp=_env_flag("SUPERQODE_MCP_SEARCH") and loop_policy.mcp,
         permission_manager=PermissionManager(
             apply_backend_permissions(profile.permissions, sandbox_backend)
         ),

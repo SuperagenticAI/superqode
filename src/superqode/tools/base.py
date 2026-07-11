@@ -263,6 +263,18 @@ class ToolRegistry:
         return cls()
 
     @classmethod
+    def core(cls) -> "ToolRegistry":
+        """Create the four-tool registry used by the default core harness."""
+        from .core_tools import CoreBashTool, CoreEditTool, CoreReadTool, CoreWriteTool
+
+        registry = cls()
+        registry.register(CoreReadTool())
+        registry.register(CoreWriteTool())
+        registry.register(CoreEditTool())
+        registry.register(CoreBashTool())
+        return registry
+
+    @classmethod
     def default(cls) -> "ToolRegistry":
         """Create registry with default minimal tools."""
         from .file_tools import ReadFileTool, WriteFileTool, CreateFileTool, ListDirectoryTool
@@ -439,6 +451,8 @@ class ToolRegistry:
     def for_profile(cls, profile: str = "coding") -> "ToolRegistry":
         """Create a registry for a named tool profile."""
         normalized = (profile or "coding").strip().lower()
+        if normalized in ("core", "minimal-core", "minimal_core"):
+            return cls.core()
         if normalized in ("full", "all"):
             return cls.full()
         if normalized in ("standard", "safe"):

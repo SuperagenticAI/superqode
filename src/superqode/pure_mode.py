@@ -18,6 +18,7 @@ from rich.table import Table
 from rich.text import Text
 
 from .agent.loop import AgentLoop, AgentConfig, AgentResponse
+from .agent.loop_policy import NativeLoopPolicy, core_loop_policy, workbench_loop_policy
 from .agent.system_prompts import SystemPromptLevel
 from .agent.session_manager import SessionManager, SessionMetadata
 from .tools.base import ToolRegistry, ToolResult
@@ -65,13 +66,15 @@ class PureMode:
         self.session = PureSession()
         self.gateway = LiteLLMGateway()
         self._tool_profile_env = os.getenv("SUPERQODE_TOOL_PROFILE", "").strip().lower()
-        self.tool_profile = self._tool_profile_env or "coding"
+        self.tool_profile = self._tool_profile_env or "core"
         self.tools = ToolRegistry.for_profile(self.tool_profile)
+        self._loop_policy: NativeLoopPolicy = core_loop_policy()
         self.runtime_name = resolve_runtime_name(cli=runtime)
         self._runtime: Optional[AgentRuntime] = None
         self._agent: Optional[AgentLoop] = None
         self._session_manager: Optional[SessionManager] = None
         self._harness_spec = None
+        self._harness_definition = None
         self._harness_path = ""
         self._harness_kernel = None
         self._harness_session = None
@@ -88,63 +91,82 @@ class PureMode:
         self._runtime_seen_tool_calls: set = set()
 
     def _load_env_harness(self) -> None:
-        path = os.getenv("SUPERQODE_HARNESS", "").strip()
-        if not path:
-            return
-        if not Path(path).expanduser().exists():
-            return
-        self.load_harness(path)
+        reference = os.getenv("SUPERQODE_HARNESS", "").strip() or "core"
+        try:
+            self.select_harness(reference)
+        except (FileNotFoundError, ValueError):
+            # Startup remains usable when a stale harness setting is present.
+            self.select_harness("core")
 
-    def load_harness(self, path: str | Path):
-        """Load a HarnessSpec for subsequent provider connections."""
-        from superqode.harness import load_harness_spec
+    def select_harness(self, reference: str | Path):
+        """Select a built-in harness name or HarnessSpec path."""
+        from superqode.harness import resolve_harness
 
-        spec_path = Path(path).expanduser()
-        self._harness_spec = load_harness_spec(spec_path)
-        self._harness_path = str(spec_path)
+        definition = resolve_harness(reference, root=Path.cwd())
+        self._harness_definition = definition
+        self._loop_policy = definition.loop_policy
+        self._harness_spec = definition.spec if definition.source != "built-in" else None
+        self._harness_path = str(definition.path or "")
+        profile = str(definition.spec.model_policy.config.get("tool_profile") or "").strip()
+        if not profile:
+            profile = "none" if definition.id == "no-tool" else "coding"
+        self.tool_profile = self._tool_profile_env or profile
+        self.tools = ToolRegistry.for_profile(self.tool_profile)
         self._harness_kernel = None
         self._harness_session = None
         self._harness_session_id = ""
+        self._runtime = None
+        self._agent = None
         self._sync_harness_session_fields()
-        return self._harness_spec
+        return definition
+
+    def load_harness(self, path: str | Path):
+        """Load a HarnessSpec for subsequent provider connections."""
+        return self.select_harness(path).spec
 
     def set_harness(self, spec, *, path: str | Path | None = None) -> None:
         """Set an already loaded HarnessSpec."""
+        from superqode.harness.catalog import HarnessDefinition
+
         self._harness_spec = spec
         self._harness_path = str(path or "")
+        self._harness_definition = HarnessDefinition(
+            id=spec.name.strip().lower(),
+            display_name=spec.name,
+            description=spec.description,
+            runtime=spec.runtime.backend,
+            source="file",
+            spec=spec,
+            loop_policy=workbench_loop_policy(),
+            path=Path(path).expanduser().resolve() if path else None,
+        )
+        self._loop_policy = workbench_loop_policy()
         self._harness_kernel = None
         self._harness_session = None
         self._harness_session_id = ""
         self._sync_harness_session_fields()
 
     def clear_harness(self) -> None:
-        """Return to direct runtime mode."""
-        self._harness_spec = None
-        self._harness_path = ""
-        self._harness_kernel = None
-        self._harness_session = None
-        self._harness_session_id = ""
-        self.session.harness_name = ""
-        self.session.harness_path = ""
-        self.session.harness_flavor = ""
-        self.session.harness_runtime = ""
+        """Return to the built-in core harness."""
+        self.select_harness("core")
 
     def _sync_harness_session_fields(self) -> None:
         """Mirror the loaded HarnessSpec into user-visible session status."""
-        if self._harness_spec is None:
+        definition = self._harness_definition
+        if definition is None:
             self.session.harness_name = ""
             self.session.harness_path = ""
             self.session.harness_flavor = ""
             self.session.harness_runtime = ""
             return
-        self.session.harness_name = self._harness_spec.name
+        self.session.harness_name = definition.id
         self.session.harness_path = self._harness_path
-        self.session.harness_flavor = self._harness_spec.flavor.value
-        self.session.harness_runtime = self._harness_spec.runtime.backend
+        self.session.harness_flavor = definition.spec.flavor.value
+        self.session.harness_runtime = definition.runtime
 
     @property
     def harness_enabled(self) -> bool:
-        return self._harness_spec is not None
+        return self._harness_definition is not None
 
     def _resolve_harness_route(self) -> tuple[str, str]:
         """Return the provider/model the active harness should run against."""
@@ -228,6 +250,11 @@ class PureMode:
         """
         provider = normalize_provider_id(provider)
         model = normalize_model_for_provider(provider, model)
+        selected_id = getattr(self._harness_definition, "id", "core")
+        if selected_id == "core":
+            system_level = SystemPromptLevel.CORE
+        elif selected_id == "no-tool":
+            system_level = SystemPromptLevel.NO_TOOL
         self.session.provider = provider
         self.session.model = model
         self.session.system_level = system_level
@@ -247,7 +274,7 @@ class PureMode:
 
         provider_def = PROVIDERS.get(provider)
         is_ds4 = provider == "ds4"
-        if is_ds4 and not self._tool_profile_env:
+        if is_ds4 and not self._tool_profile_env and selected_id == "workbench":
             self.tool_profile = "ds4"
             self.tools = ToolRegistry.for_profile(self.tool_profile)
         elif self._tool_profile_env and self.tool_profile != self._tool_profile_env:
@@ -283,6 +310,13 @@ class PureMode:
             session_storage_dir=".superqode/sessions",
             session_id=session_id,
             session_history_limit=session_history_limit,
+            loop_policy=self._loop_policy,
+            harness_id=selected_id,
+            harness_source=getattr(self._harness_definition, "source", "built-in"),
+            harness_digest=getattr(self._harness_definition, "digest", ""),
+            tool_contract_version=(
+                "core-tools-v1" if selected_id == "core" else "workbench-v1"
+            ),
         )
 
         runtime_kwargs: dict[str, Any] = {}
@@ -298,7 +332,7 @@ class PureMode:
             on_tool_result=self.on_tool_result,
             on_thinking=self.on_thinking,
             parallel_tools=parallel_tools,
-            include_mcp=_env_flag("SUPERQODE_MCP_SEARCH"),
+            include_mcp=_env_flag("SUPERQODE_MCP_SEARCH") and self._loop_policy.mcp,
             **runtime_kwargs,
         )
         self._agent = getattr(self._runtime, "loop", None)
@@ -655,7 +689,12 @@ class PureMode:
             "tools": [t.name for t in self.tools.list()],
             "tool_profile": self.tool_profile,
             "harness": {
-                "enabled": self._harness_spec is not None,
+                "enabled": self._harness_definition is not None,
+                "id": getattr(self._harness_definition, "id", ""),
+                "source": getattr(self._harness_definition, "source", ""),
+                "digest": (
+                    self._harness_definition.digest if self._harness_definition is not None else ""
+                ),
                 "name": self.session.harness_name,
                 "path": self.session.harness_path,
                 "flavor": self.session.harness_flavor,
@@ -706,6 +745,15 @@ class PureMode:
         metadata = self._session_manager.get_session_info(resolved_session_id)
         if not metadata:
             return None
+
+        # Sessions created before harness metadata existed used the historical
+        # native behavior, now called workbench. Preserve that behavior instead
+        # of silently resuming old conversations under the lean core contract.
+        resume_harness = metadata.harness_id or "workbench"
+        try:
+            self.select_harness(resume_harness)
+        except (FileNotFoundError, ValueError):
+            self.select_harness("workbench")
 
         # Start session and get messages
         self._session_manager.start_session(session_id=resolved_session_id)

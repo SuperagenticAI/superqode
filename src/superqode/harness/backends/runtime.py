@@ -292,6 +292,9 @@ def _create_runtime_for_request(
         model=request.model,
     )
     runtime_name = request.runtime or default_runtime_name
+    from ...agent.loop_policy import core_loop_policy, workbench_loop_policy
+
+    is_core = model_policy.profile == "core"
     config = AgentConfig(
         provider=request.provider,
         model=request.model,
@@ -315,6 +318,11 @@ def _create_runtime_for_request(
         harness_runtime=runtime_name,
         harness_sandbox_backend=request.sandbox_backend,
         harness_delegation_depth=int(request.metadata.get("delegation_depth") or 0),
+        loop_policy=core_loop_policy() if is_core else workbench_loop_policy(),
+        harness_id=request.spec.name,
+        harness_source=str(request.metadata.get("harness_source") or "spec"),
+        harness_digest=str(request.metadata.get("harness_digest") or ""),
+        tool_contract_version="core-tools-v1" if is_core else "workbench-v1",
     )
     callbacks = {}
     hook_kwargs = {}

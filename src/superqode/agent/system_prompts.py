@@ -7,6 +7,7 @@ We offer multiple levels so users can test model capabilities fairly.
 Levels:
 - NONE: No system prompt at all - pure model behavior
 - NO_TOOL: Tool-free reasoning harness
+- CORE: Compact four-tool coding harness
 - MINIMAL: Just "You are a coding assistant"
 - STANDARD: Basic tool usage guidance
 - FULL: Detailed instructions (like other coding agents)
@@ -25,6 +26,7 @@ class SystemPromptLevel(Enum):
 
     NONE = "none"  # No system prompt
     NO_TOOL = "no_tool"  # Tool-free reasoning harness
+    CORE = "core"  # Compact four-tool coding harness
     MINIMAL = "minimal"  # One line
     STANDARD = "standard"  # Basic guidance
     FULL = "full"  # Detailed (like other agents)
@@ -159,6 +161,9 @@ instead of pretending to inspect files. When useful, provide assumptions explici
 that a tool-enabled coding harness could execute later.
 
 Be concise, technically specific, and distinguish facts from inference.""",
+    SystemPromptLevel.CORE: """You are a coding agent working in the current repository.
+
+Use read to inspect files, bash to search and run commands, edit for precise changes, and write to create or replace files. Read before editing. Keep changes focused, run relevant checks, and finish with a concise summary of changes and verification.""",
     SystemPromptLevel.MINIMAL: "You are a coding assistant with access to tools.",
     SystemPromptLevel.STANDARD: """You are a coding assistant with access to tools for reading, writing, and editing files, running shell commands, and searching code.
 

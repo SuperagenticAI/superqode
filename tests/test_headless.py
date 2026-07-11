@@ -1,6 +1,14 @@
 """Tests for headless harness profiles."""
 
-from superqode.headless import create_tool_registry, get_harness_profiles, response_to_json
+import asyncio
+from types import SimpleNamespace
+
+from superqode.headless import (
+    create_tool_registry,
+    get_harness_profiles,
+    response_to_json,
+    run_headless,
+)
 from superqode.agent.loop import AgentConfig, AgentLoop
 from superqode.agent.session_manager import SessionManager
 from superqode.providers.gateway.base import GatewayResponse
@@ -29,6 +37,14 @@ def test_build_profile_exposes_full_registry():
     assert "read_file" in tool_names
     assert "write_file" in tool_names
     assert "agent" in tool_names
+
+
+def test_core_profile_exposes_exact_minimal_contract():
+    profile = get_harness_profiles()["core"]
+    registry = create_tool_registry(profile)
+
+    assert [tool.name for tool in registry.list()] == ["read", "write", "edit", "bash"]
+    assert profile.system_level.value == "core"
 
 
 def test_no_tool_profile_exposes_no_tools_and_denies_permissions():
@@ -121,3 +137,55 @@ def test_agent_loop_resumes_stored_messages(tmp_path, monkeypatch):
     assert "previous question" in sent_contents
     assert "previous answer" in sent_contents
     assert "next question" in sent_contents
+
+
+def test_headless_accepts_a_harness_spec_path(tmp_path, monkeypatch):
+    import superqode.harness as harness_api
+    from superqode.harness import save_harness_spec
+    from superqode.harness.templates import core_template
+
+    spec_path = save_harness_spec(core_template(name="custom-core"), tmp_path / "custom.yaml")
+    captured = {}
+
+    class FakeSession:
+        async def prompt(self, prompt, **kwargs):
+            captured.update(prompt=prompt, **kwargs)
+            return SimpleNamespace(
+                response=AgentResponse(
+                    content="done",
+                    messages=[],
+                    tool_calls_made=0,
+                    iterations=1,
+                    stopped_reason="complete",
+                )
+            )
+
+    class FakeKernel:
+        async def session(self, session_id):
+            captured["session_id"] = session_id
+            return FakeSession()
+
+    async def fake_init_harness(spec, store=None):
+        captured["spec"] = spec
+        captured["store"] = store
+        return FakeKernel()
+
+    monkeypatch.setattr(harness_api, "create_harness_store", lambda *args: object())
+    monkeypatch.setattr(harness_api, "init_harness", fake_init_harness)
+
+    response = asyncio.run(
+        run_headless(
+            "fix it",
+            provider="test",
+            model="model",
+            profile_name=str(spec_path),
+            working_directory=tmp_path,
+            session_id="custom-session",
+        )
+    )
+
+    assert response.content == "done"
+    assert captured["spec"].name == "custom-core"
+    assert captured["session_id"] == "custom-session"
+    assert captured["metadata"]["harness_source"] == "file"
+    assert captured["metadata"]["harness_digest"].startswith("sha256:")

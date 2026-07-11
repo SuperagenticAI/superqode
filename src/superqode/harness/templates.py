@@ -13,6 +13,43 @@ from .spec import (
 )
 
 
+def core_template(*, name: str = "core", backend: str = "builtin") -> HarnessSpec:
+    """Lean four-tool native coding harness."""
+    return HarnessSpec(
+        name=name,
+        description="Lean native coding harness with read, write, edit, and bash.",
+        flavor=HarnessFlavor.CODING,
+        runtime=RuntimeSpec(backend=backend),
+        model_policy=ModelPolicySpec(
+            profile="core",
+            config={
+                "system_level": "core",
+                "tool_profile": "core",
+                "max_iterations": 0,
+                "session_history_limit": 20,
+                "parallel_tools": True,
+            },
+        ),
+        execution_policy=ExecutionPolicySpec(
+            sandbox="local",
+            approval_profile="balanced",
+            allow_read=True,
+            allow_write=True,
+            allow_shell=True,
+            allow_network=False,
+        ),
+        agents=(
+            AgentSpec(
+                id="coder",
+                role="implementation",
+                tools=("read", "write", "edit", "bash"),
+            ),
+        ),
+        checks=ChecksSpec(enabled=False),
+        metadata={"template": "core", "builtin_harness": True},
+    )
+
+
 def coding_template(*, name: str = "superqode-coding", backend: str = "builtin") -> HarnessSpec:
     """Default tool-rich coding harness."""
     return HarnessSpec(
@@ -53,6 +90,28 @@ def coding_template(*, name: str = "superqode-coding", backend: str = "builtin")
         ),
         checks=ChecksSpec(enabled=True),
         metadata={"template": "coding"},
+    )
+
+
+def workbench_template(*, name: str = "workbench", backend: str = "builtin") -> HarnessSpec:
+    """Feature-rich native harness preserving the former default behavior."""
+    base = coding_template(name=name, backend=backend)
+    return HarnessSpec(
+        **{
+            **base.__dict__,
+            "description": "Feature-rich native coding harness with the full workbench toolset.",
+            "model_policy": ModelPolicySpec(
+                profile="workbench",
+                config={
+                    "system_level": "full",
+                    "tool_profile": "coding",
+                    "max_iterations": 0,
+                    "session_history_limit": 20,
+                    "parallel_tools": True,
+                },
+            ),
+            "metadata": {"template": "workbench", "builtin_harness": True},
+        }
     )
 
 
@@ -263,6 +322,8 @@ def benchmark_coding_template() -> HarnessSpec:
 
 
 BUILTIN_TEMPLATES = {
+    "core": core_template,
+    "workbench": workbench_template,
     "coding": coding_template,
     "benchmark-coding": benchmark_coding_template,
     "benchmark_coding": benchmark_coding_template,

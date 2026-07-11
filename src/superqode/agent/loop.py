@@ -44,6 +44,7 @@ from .system_prompts import (
     get_provider_prompt,
 )
 from .session_manager import SessionManager, SessionMessage
+from .loop_policy import NativeLoopPolicy, workbench_loop_policy
 from ..providers.profiles import resolve_model_profile, run_pre_init_once
 
 
@@ -511,6 +512,14 @@ class AgentConfig:
     # Tool settings
     tools_enabled: bool = True
 
+    # Native harness behavior. The workbench policy preserves historical
+    # defaults; the core harness supplies a lean policy explicitly.
+    loop_policy: NativeLoopPolicy = field(default_factory=workbench_loop_policy)
+    harness_id: str = "workbench"
+    harness_source: str = "built-in"
+    harness_digest: str = ""
+    tool_contract_version: str = "workbench-v1"
+
     # Execution settings
     # 0 or negative => unlimited (no cap). Positive => safety cap.
     # Aligned with fast-agent semantics where the loop runs until the model
@@ -725,7 +734,7 @@ class AgentLoop:
         self.parallel_tools = parallel_tools
         self.mcp_executor = mcp_executor
         self._mcp_tools = mcp_tools or []
-        self.include_mcp = include_mcp
+        self.include_mcp = include_mcp and config.loop_policy.mcp
         if self.include_mcp:
             try:
                 from ..tools.mcp_tools import get_mcp_tools
@@ -765,6 +774,10 @@ class AgentLoop:
                 session_id=self.session_id,
                 provider=config.provider,
                 model=config.model,
+                harness_id=config.harness_id,
+                harness_source=config.harness_source,
+                harness_digest=config.harness_digest,
+                tool_contract_version=config.tool_contract_version,
             )
 
         # Apply the deferred-tool policy (env-gated) before the first compute
@@ -832,7 +845,7 @@ class AgentLoop:
 
         # Peer agents (spawn_agent/...). Lazily created; None inside
         # sub/peer agents so the hierarchy stays one level deep.
-        self._allow_peer_agents = allow_peer_agents
+        self._allow_peer_agents = allow_peer_agents and config.loop_policy.peer_agents
         self._peer_manager: Optional[Any] = None
 
     def _exec_policy(self):
@@ -991,6 +1004,8 @@ class AgentLoop:
         self, iteration: int, user_message: str = ""
     ) -> List["AgentMessage"]:
         """Per-call synthetic reminders; attached to the request, never to history."""
+        if not self.config.loop_policy.reminders:
+            return []
         try:
             from .reminders import collect_reminders, format_reminder_message
 
@@ -2178,7 +2193,9 @@ class AgentLoop:
         tool_calls_made = 0
         iterations = 0
         unexecuted_tool_intent_retries = 0
-        max_unexecuted_tool_intent_retries = 1
+        max_unexecuted_tool_intent_retries = (
+            1 if self.config.loop_policy.semantic_tool_retry else 0
+        )
         auto_continues = 0
         length_parts: List[str] = []
         rubric_rounds = 0
@@ -2471,9 +2488,11 @@ class AgentLoop:
             else:
                 # No tool calls. If the output was cut at the max-token limit,
                 # ask the model to continue from where it stopped (bounded).
-                if response.finish_reason == "length" and auto_continues < max(
-                    0, self.config.max_auto_continues
-                ):
+                auto_continue_limit = min(
+                    max(0, self.config.max_auto_continues),
+                    max(0, self.config.loop_policy.auto_continue_limit),
+                )
+                if response.finish_reason == "length" and auto_continues < auto_continue_limit:
                     auto_continues += 1
                     length_parts.append(response_content)
                     messages.append(AgentMessage(role="assistant", content=response_content))
@@ -2489,7 +2508,7 @@ class AgentLoop:
                     )
                     if self.on_thinking:
                         await self.on_thinking(
-                            f"Output hit the token limit; auto-continuing ({auto_continues}/{self.config.max_auto_continues})..."
+                            f"Output hit the token limit; auto-continuing ({auto_continues}/{auto_continue_limit})..."
                         )
                     continue
 
@@ -2949,9 +2968,11 @@ class AgentLoop:
                 # No tool calls. If the output was cut at the max-token limit,
                 # ask the model to continue from where it stopped; the
                 # continuation streams seamlessly after the partial text.
-                if stream_finish_reason == "length" and auto_continues < max(
-                    0, self.config.max_auto_continues
-                ):
+                auto_continue_limit = min(
+                    max(0, self.config.max_auto_continues),
+                    max(0, self.config.loop_policy.auto_continue_limit),
+                )
+                if stream_finish_reason == "length" and auto_continues < auto_continue_limit:
                     auto_continues += 1
                     messages.append(AgentMessage(role="assistant", content=full_content))
                     messages.append(
@@ -2966,7 +2987,7 @@ class AgentLoop:
                     )
                     if self.on_thinking:
                         await self.on_thinking(
-                            f"Output hit the token limit; auto-continuing ({auto_continues}/{self.config.max_auto_continues})..."
+                            f"Output hit the token limit; auto-continuing ({auto_continues}/{auto_continue_limit})..."
                         )
                     continue
 

@@ -292,6 +292,7 @@ def parse_config(data: Dict[str, Any]) -> Config:
             team_name=sq_data.get("team_name", sq_data.get("name", "My Development Team")),
             description=sq_data.get("description", "Multi-agent software development team"),
             runtime=sq_data.get("runtime"),
+            harness=sq_data.get("harness"),
         )
 
         # Parse gateway config
@@ -569,6 +570,8 @@ def save_config(config: Config, config_path: Optional[Path] = None) -> None:
             "description": config.superqode.description,
         }
     }
+    if config.superqode.harness:
+        config_dict["superqode"]["harness"] = config.superqode.harness
 
     if config.default:
         config_dict["default"] = {

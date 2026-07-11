@@ -52,6 +52,13 @@ from .spec import (
     WorkflowSpec,
 )
 from .templates import BUILTIN_TEMPLATES, get_harness_template
+from .catalog import (
+    DEFAULT_HARNESS_ID,
+    HarnessDefinition,
+    builtin_harnesses,
+    list_harnesses,
+    resolve_harness,
+)
 
 _LAZY_IMPORTS = {
     # Hooks
@@ -272,6 +279,8 @@ __all__ = [
     "WorkflowStep",
     "WORKFLOW_PRESETS",
     "BUILTIN_TEMPLATES",
+    "DEFAULT_HARNESS_ID",
+    "HarnessDefinition",
     "EffectiveModelPolicy",
     "RESULT_END",
     "RESULT_START",
@@ -350,6 +359,9 @@ __all__ = [
     "create_harness_backend",
     "doctor_harness",
     "get_harness_template",
+    "builtin_harnesses",
+    "list_harnesses",
+    "resolve_harness",
     "get_workflow_preset",
     "get_sandbox_capabilities",
     "generate_run_id",

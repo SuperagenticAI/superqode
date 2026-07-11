@@ -67,19 +67,21 @@ def test_session_listing_preserves_full_id_and_prefix_resolution(tmp_path, monke
     assert pure.resolve_session_id("abcdefgh1234") == "abcdefgh1234"
 
 
-def test_pure_mode_uses_coding_tool_profile_by_default(monkeypatch):
+def test_pure_mode_uses_core_harness_by_default(monkeypatch):
     monkeypatch.delenv("SUPERQODE_TOOL_PROFILE", raising=False)
+    monkeypatch.delenv("SUPERQODE_HARNESS", raising=False)
 
     pure = PureMode()
     status = pure.get_status()
 
-    assert status["tool_profile"] == "coding"
-    assert "patch" in status["tools"]
-    assert "web_fetch" in status["tools"]
+    assert status["tool_profile"] == "core"
+    assert status["tools"] == ["read", "write", "edit", "bash"]
+    assert status["harness"]["id"] == "core"
 
 
 def test_pure_mode_switches_to_ds4_profile_on_connect(tmp_path, monkeypatch):
     monkeypatch.delenv("SUPERQODE_TOOL_PROFILE", raising=False)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "workbench")
     monkeypatch.chdir(tmp_path)
 
     pure = PureMode()
@@ -97,6 +99,7 @@ def test_pure_mode_switches_to_ds4_profile_on_connect(tmp_path, monkeypatch):
 
 def test_pure_mode_enables_mcp_tools_for_byok_and_local_when_requested(tmp_path, monkeypatch):
     monkeypatch.setenv("SUPERQODE_MCP_SEARCH", "1")
+    monkeypatch.setenv("SUPERQODE_HARNESS", "workbench")
     monkeypatch.chdir(tmp_path)
 
     byok = PureMode()
@@ -124,6 +127,21 @@ def test_explicit_tool_profile_overrides_ds4_default(tmp_path, monkeypatch):
 
     assert status["tool_profile"] == "coding"
     assert "batch" in status["tools"]
+
+
+def test_core_harness_does_not_expand_for_ds4_or_mcp(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+    monkeypatch.setenv("SUPERQODE_MCP_SEARCH", "1")
+    monkeypatch.delenv("SUPERQODE_TOOL_PROFILE", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    pure = PureMode()
+    pure.connect("ds4", "deepseek-v4-flash")
+
+    assert pure.get_status()["tools"] == ["read", "write", "edit", "bash"]
+    assert pure._agent is not None
+    assert pure._agent.config.system_prompt_level.value == "core"
+    assert pure._agent.config.loop_policy.mcp is False
 
 
 def test_session_manager_can_load_recent_messages_only(tmp_path, monkeypatch):
@@ -164,3 +182,33 @@ def test_resume_reuses_resolved_session_id_and_fork_branches_active_session(tmp_
     assert fork_id == "resume-session-branch"
     assert pure.get_current_session_id() == "resume-session-branch"
     assert pure._session_manager.current_session_id == "resume-session-branch"
+
+
+def test_legacy_session_resumes_with_workbench_harness(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SUPERQODE_HARNESS", raising=False)
+    manager = SessionManager(".superqode/sessions")
+    manager.start_session("legacy-session", provider="ollama", model="qwen2.5-coder")
+
+    pure = PureMode()
+    pure._session_manager = SessionManager(".superqode/sessions")
+    assert pure.resume_session("legacy-session") == []
+
+    status = pure.get_status()
+    assert status["harness"]["id"] == "workbench"
+    assert status["tool_profile"] == "coding"
+
+
+def test_new_session_records_core_harness_contract(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+
+    pure = PureMode()
+    pure.connect("ollama", "qwen2.5-coder", session_id="core-session")
+
+    metadata = SessionManager(".superqode/sessions").get_session_info("core-session")
+    assert metadata is not None
+    assert metadata.harness_id == "core"
+    assert metadata.harness_source == "built-in"
+    assert metadata.harness_digest.startswith("sha256:")
+    assert metadata.tool_contract_version == "core-tools-v1"

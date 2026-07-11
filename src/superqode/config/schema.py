@@ -205,6 +205,8 @@ class SuperQodeConfig:
 
     # Agent runtime backend: "builtin" | "adk" | "openai-agents"
     runtime: Optional[str] = None
+    # Default user-facing harness name or HarnessSpec path.
+    harness: Optional[str] = None
 
     # Gateway and error handling config
     gateway: GatewayConfig = field(default_factory=GatewayConfig)

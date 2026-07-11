@@ -12106,7 +12106,12 @@ class SuperQodeApp(App):
             sub = "status"
 
         try:
-            from superqode.harness import BUILTIN_TEMPLATES, get_harness_template, load_harness_spec
+            from superqode.harness import (
+                BUILTIN_TEMPLATES,
+                get_harness_template,
+                list_harnesses,
+                resolve_harness,
+            )
         except Exception as exc:
             log.add_error(f"Harness support is unavailable: {exc}")
             return
@@ -12126,7 +12131,35 @@ class SuperQodeApp(App):
                 if env_path:
                     log.add_info(f"Harness configured for next connection: {env_path}")
                 else:
-                    log.add_info("No HarnessSpec is active. Use :harness <path> to load one.")
+                    log.add_info("No harness is active. Use :harness use core.")
+            return
+
+        if sub in ("list", "available"):
+            for entry in list_harnesses(Path.cwd()):
+                marker = "*" if entry.default else " "
+                status = "ready" if entry.available else (entry.issue or "unavailable")
+                log.add_info(
+                    f"{marker} {entry.id:18} {entry.source:10} {entry.runtime:14} "
+                    f"tools={len(entry.tools):2} {status}"
+                )
+            return
+
+        if sub == "show":
+            if not subargs:
+                log.add_error("Usage: :harness show <name-or-path>")
+                return
+            try:
+                entry = resolve_harness(subargs, root=Path.cwd())
+            except Exception as exc:
+                log.add_error(f"Could not resolve harness: {exc}")
+                return
+            log.add_info(
+                f"Harness: {entry.id} ({entry.source}, runtime={entry.runtime}, "
+                f"tools={len(entry.tools)})"
+            )
+            log.add_info(entry.description)
+            log.add_info(f"Tools: {', '.join(entry.tools) or 'none'}")
+            log.add_info(f"Digest: {entry.digest}")
             return
 
         if sub in ("templates", "list-templates"):
@@ -12243,41 +12276,45 @@ class SuperQodeApp(App):
             return
 
         if sub in ("off", "disable", "none"):
-            _os.environ.pop("SUPERQODE_HARNESS", None)
+            _os.environ["SUPERQODE_HARNESS"] = "core"
             if hasattr(self, "_pure_mode") and self._pure_mode is not None:
                 self._pure_mode.clear_harness()
                 if self._pure_mode.session.connected:
                     self._pure_mode.disconnect()
             self._refresh_harness_panel()
-            log.add_info("HarnessSpec disabled. Reconnect with :connect byok or :connect local.")
+            log.add_info("Restored the core harness. Reconnect with :connect byok or :connect local.")
             return
 
         if sub in ("load", "use"):
-            path = subargs
+            reference = subargs
         else:
-            path = args.strip()
+            reference = args.strip()
 
-        if not path:
+        if not reference:
             log.add_info(
                 "Usage: :harness <spec.yaml> | :harness wizard [name] --starter <template> --output <path> [--load] | :harness inspect | :harness doctor | :harness graph | :harness replay <run_id> | :harness fork <run_id> | :harness evidence <run_id> | :harness runs | :harness mine-failures --eval-result eval.json | :harness audit-candidate --base <path> --candidate <path> | :harness candidates list | :harness improve --spec <path> --tasks <path> | :harness optimize --spec <path> --tasks <path> | :harness optimize-inspect <run_dir> | :harness optimize-ledger <run_dir> | :harness templates | :harness off"
             )
             return
 
         try:
-            spec = load_harness_spec(path)
+            entry = resolve_harness(reference, root=Path.cwd())
         except Exception as exc:
-            log.add_error(f"Could not load harness spec: {exc}")
+            log.add_error(f"Could not resolve harness: {exc}")
             return
 
-        _os.environ["SUPERQODE_HARNESS"] = path
+        _os.environ["SUPERQODE_HARNESS"] = str(entry.path or entry.id)
         pure = self._ensure_pure_mode()
-        pure.set_harness(spec, path=path)
+        if hasattr(pure, "select_harness"):
+            pure.select_harness(str(entry.path or entry.id))
+        else:
+            pure.set_harness(entry.spec, path=entry.path)
         if pure.session.connected:
             pure.disconnect()
         self._refresh_harness_panel()
 
         log.add_success(
-            f"✓ Loaded harness {spec.name} ({spec.flavor.value}, runtime={spec.runtime.backend})"
+            f"✓ Loaded harness {entry.id} "
+            f"({entry.spec.flavor.value}, runtime={entry.runtime}, tools={len(entry.tools)})"
         )
         log.add_info(
             "Reconnect with :connect byok or :connect local to run the TUI through this spec."

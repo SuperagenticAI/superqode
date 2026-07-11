@@ -3,6 +3,7 @@ Tests for the minimal tool system.
 """
 
 import asyncio
+import json
 import pytest
 import tempfile
 from pathlib import Path
@@ -94,6 +95,47 @@ class TestToolRegistry:
 
         assert "patch" in names
         assert "web_fetch" in names
+
+    def test_core_profile_has_exactly_four_compact_tools(self):
+        registry = ToolRegistry.for_profile("core")
+
+        assert [tool.name for tool in registry.list()] == ["read", "write", "edit", "bash"]
+        definitions = {item["function"]["name"]: item["function"] for item in registry.to_openai_format()}
+        assert set(definitions) == {"read", "write", "edit", "bash"}
+        assert set(definitions["edit"]["parameters"]["properties"]) == {
+            "path",
+            "old_text",
+            "new_text",
+        }
+
+    def test_core_tool_contract_stays_materially_smaller_than_workbench(self):
+        core_schema = json.dumps(ToolRegistry.core().to_openai_format(), separators=(",", ":"))
+        workbench_schema = json.dumps(
+            ToolRegistry.coding().to_openai_format(), separators=(",", ":")
+        )
+
+        assert len(core_schema) < len(workbench_schema) * 0.15
+
+    @pytest.mark.asyncio
+    async def test_core_tools_reuse_safe_file_implementations(self, tool_context):
+        registry = ToolRegistry.core()
+
+        written = await registry.get("write").execute(
+            {"path": "example.txt", "content": "alpha\nbeta\n"}, tool_context
+        )
+        read = await registry.get("read").execute(
+            {"path": "example.txt", "offset": 1, "limit": 2}, tool_context
+        )
+        edited = await registry.get("edit").execute(
+            {"path": "example.txt", "old_text": "beta", "new_text": "gamma"},
+            tool_context,
+        )
+
+        assert written.success is True
+        assert read.success is True
+        assert "alpha" in read.output
+        assert edited.success is True
+        assert (tool_context.working_directory / "example.txt").read_text() == "alpha\ngamma\n"
 
     def test_ds4_profile_is_smaller_and_avoids_parallel_meta_tools(self):
         registry = ToolRegistry.for_profile("ds4")

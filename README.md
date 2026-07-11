@@ -112,6 +112,20 @@ cd your-project
 superqode --print "inspect this repository and suggest the smallest next step"
 ```
 
+SuperQode starts with the built-in `core` harness: a compact prompt and exactly four
+model-facing tools, `read`, `write`, `edit`, and `bash`. The former tool-rich native
+behavior remains available as `workbench`.
+
+```bash
+superqode harness list
+superqode harness show core
+superqode --harness workbench --print "inspect this repository"
+superqode harness use workbench   # persist the project default in superqode.yaml
+```
+
+In the TUI, use `:harness list`, `:harness use core`, or `:harness use workbench`.
+Named harnesses and HarnessSpec files use the same `--harness` option.
+
 ### Your First Harness Run
 
 A harness is the repeatable contract for how an agent run behaves. In the TUI, create and load your first harness without writing YAML:

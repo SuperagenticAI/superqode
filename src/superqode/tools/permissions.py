@@ -58,6 +58,7 @@ class ToolGroup(Enum):
 TOOL_GROUPS: Dict[str, ToolGroup] = {
     # Read operations
     "read_file": ToolGroup.READ,
+    "read": ToolGroup.READ,
     "list_directory": ToolGroup.READ,
     "grep": ToolGroup.READ,
     "glob": ToolGroup.READ,
@@ -66,6 +67,8 @@ TOOL_GROUPS: Dict[str, ToolGroup] = {
     # Write operations
     "write_file": ToolGroup.WRITE,
     "edit_file": ToolGroup.WRITE,
+    "write": ToolGroup.WRITE,
+    "edit": ToolGroup.WRITE,
     "insert_text": ToolGroup.WRITE,
     "patch": ToolGroup.WRITE,
     "multi_edit": ToolGroup.WRITE,
@@ -361,7 +364,7 @@ class PermissionManager:
             return "low"
 
         # Write operations
-        if tool_name in ["write_file", "edit_file", "patch", "multi_edit"]:
+        if tool_name in ["write_file", "edit_file", "write", "edit", "patch", "multi_edit"]:
             path = arguments.get("path", "")
             if any(p in path for p in ["/etc", "/usr", "/bin", "/var"]):
                 return "high"
@@ -372,7 +375,7 @@ class PermissionManager:
             return "medium"
 
         # Read operations
-        if tool_name in ["read_file", "list_directory", "grep", "glob"]:
+        if tool_name in ["read_file", "read", "list_directory", "grep", "glob"]:
             return "low"
 
         return "medium"

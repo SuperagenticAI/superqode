@@ -1204,7 +1204,9 @@ def _agent_readiness_check(spec: HarnessSpec) -> dict[str, Any]:
         errors.append(f"duplicate agent ids: {_join(duplicates)}")
 
     agents: list[dict[str, Any]] = []
-    known_tools = {tool.name for tool in ToolRegistry.full().list()}
+    known_tools = {
+        tool.name for registry in (ToolRegistry.full(), ToolRegistry.core()) for tool in registry.list()
+    }
     for agent in spec.agents:
         missing_tools = [
             tool for tool in agent.tools if tool not in known_tools and not tool.startswith("mcp_")
@@ -1345,7 +1347,9 @@ def _tool_check(spec: HarnessSpec) -> dict[str, Any]:
             "message": "No tools are requested.",
             "data": {"requested": [], "fix": "No action needed."},
         }
-    available = {tool.name for tool in ToolRegistry.full().list()}
+    available = {
+        tool.name for registry in (ToolRegistry.full(), ToolRegistry.core()) for tool in registry.list()
+    }
     missing = [tool for tool in requested if tool not in available and not tool.startswith("mcp_")]
     mcp_tools = [tool for tool in requested if tool.startswith("mcp_")]
     warnings = []

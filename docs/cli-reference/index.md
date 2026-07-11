@@ -55,7 +55,8 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | `--tui` | superqode | Force the Textual TUI (default) |
 | `-p`, `--print` | superqode | Run one headless coding task and print the response |
 | `--mode json` | superqode | Run one headless task and emit structured JSON |
-| `--profile` | superqode | Select harness profile: `build`, `plan`, or `review` |
+| `--harness` | superqode | Select `core` (default), `workbench`, or a HarnessSpec path |
+| `--profile` | superqode | Select a legacy task profile such as `plan` or `review` |
 | `--provider` | superqode | Override provider for headless mode |
 | `--model` | superqode | Override model for headless mode |
 | `--changes` | superqode | Control post-run change output: `summary`, `files`, `diff`, or `none` |
@@ -67,6 +68,7 @@ Use `superqode` directly for one-shot coding harness tasks:
 ```bash
 superqode doctor
 superqode -p "summarize this repository"
+superqode -p --harness workbench "use the full native toolset"
 superqode -p --changes files "make the small docs fix"
 superqode -p --changes none "answer without a change footer"
 superqode --mode json --profile plan "plan the auth refactor"

@@ -137,6 +137,30 @@ class TestHarnessCommand:
         assert by_backend["openai-agents"]["supports_approvals"] is True
         assert "install_hint" in by_backend["deepagents"]
 
+    def test_harness_list_and_show_core(self, runner):
+        listed = runner.invoke(cli_main, ["harness", "list", "--json"])
+
+        assert listed.exit_code == 0
+        payload = json.loads(listed.output)
+        core = next(item for item in payload if item["id"] == "core")
+        assert core["default"] is True
+        assert core["tools"] == ["read", "write", "edit", "bash"]
+        assert any(item["id"] == "workbench" for item in payload)
+
+        shown = runner.invoke(cli_main, ["harness", "show", "core", "--json"])
+        assert shown.exit_code == 0
+        detail = json.loads(shown.output)
+        assert detail["runtime"] == "builtin"
+        assert detail["spec"]["model_policy"]["config"]["tool_profile"] == "core"
+
+    def test_harness_use_writes_project_default(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli_main, ["harness", "use", "workbench"])
+
+            assert result.exit_code == 0
+            data = __import__("yaml").safe_load(Path("superqode.yaml").read_text())
+            assert data["superqode"]["harness"] == "workbench"
+
     def test_harness_list_templates_json(self, runner):
         result = runner.invoke(cli_main, ["harness", "list-templates", "--json"])
 

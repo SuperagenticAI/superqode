@@ -14,6 +14,9 @@ superqode harness COMMAND [OPTIONS]
 
 | Command | Purpose |
 | --- | --- |
+| `list` | List selectable built-in and discovered harnesses |
+| `show` | Show the resolved tools and policy for a selectable harness |
+| `use` | Persist a project default harness in `superqode.yaml` |
 | `wizard` | Build a spec interactively, no hand-written YAML |
 | `init` | Scaffold a spec from a built-in template |
 | `list-templates` | List built-in templates |
@@ -47,6 +50,28 @@ superqode harness COMMAND [OPTIONS]
 | `inbox` | Manage durable session inputs |
 | `drain` | Execute pending durable inputs once |
 | `worker` | Run a durable inbox worker loop |
+
+---
+
+## Selecting a Harness
+
+The default `core` harness keeps model context small with a compact prompt and four
+tools: `read`, `write`, `edit`, and `bash`. Select `workbench` when a task benefits
+from the broader native search, patch, web, planning, and coordination toolset.
+
+```bash
+superqode harness list
+superqode harness show core
+superqode --harness workbench --print "fix the failing test"
+superqode harness use workbench
+```
+
+`harness use` stores the choice under `superqode.harness` in `superqode.yaml`.
+An explicit `--harness` name or HarnessSpec path takes precedence. In the TUI, the
+equivalent commands are `:harness list` and `:harness use <name-or-path>`.
+
+The selectable harness catalogue is different from `list-templates`: catalogue
+entries can be activated directly, while templates scaffold new HarnessSpec files.
 
 ---
 

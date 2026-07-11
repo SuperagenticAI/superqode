@@ -571,7 +571,11 @@ class SuperQodeGroup(click.Group):
     default="text",
     help="Headless output mode",
 )
-@click.option("--profile", default="build", help="Harness profile: build, plan, review, qe")
+@click.option(
+    "--profile",
+    default=None,
+    help="Legacy headless profile (prefer --harness): build, plan, review, no-tool",
+)
 @click.option("--plan", "plan_only", is_flag=True, help="Run headless prompt in plan-only mode")
 @click.option(
     "--output-schema",
@@ -595,8 +599,7 @@ class SuperQodeGroup(click.Group):
     "harness_path",
     envvar="SUPERQODE_HARNESS",
     default=None,
-    type=click.Path(exists=True),
-    help="HarnessSpec YAML/JSON for the interactive TUI",
+    help="Harness name or HarnessSpec YAML/JSON path (default: core)",
 )
 @click.option("--resume", help="Resume a stored session by id or unique prefix")
 @click.option("--fork", "fork_from", help="Fork a stored session by id or unique prefix")
@@ -707,13 +710,16 @@ def cli_main(
     # doesn't crash startup) and set the env var so downstream code that uses
     # resolve_runtime_name() picks it up.
     yaml_runtime: Optional[str] = None
-    if not runtime_name:
-        try:
-            from superqode.config.loader import load_config
+    yaml_harness: Optional[str] = None
+    try:
+        from superqode.config.loader import load_config
 
-            yaml_runtime = load_config().superqode.runtime
-        except Exception:  # noqa: BLE001 — startup must remain resilient
-            yaml_runtime = None
+        loaded_config = load_config().superqode
+        yaml_runtime = loaded_config.runtime
+        yaml_harness = loaded_config.harness
+    except Exception:  # noqa: BLE001 — startup must remain resilient
+        yaml_runtime = None
+        yaml_harness = None
     effective_runtime = runtime_name or yaml_runtime
     # A connection profile (e.g. --connect codex) can imply a runtime backend.
     if connect_name:
@@ -732,8 +738,8 @@ def cli_main(
             _os.environ["SUPERQODE_CONNECT"] = _profile.id
     if effective_runtime:
         _os.environ["SUPERQODE_RUNTIME"] = effective_runtime
-    if harness_path:
-        _os.environ["SUPERQODE_HARNESS"] = str(harness_path)
+    effective_harness = str(harness_path or yaml_harness or "core")
+    _os.environ["SUPERQODE_HARNESS"] = effective_harness
     """SuperQode - coding agent harness for developer workflows.
 
     Use the TUI for interactive coding work or headless mode for one-shot tasks.
@@ -781,7 +787,7 @@ def cli_main(
                         prompt=prompt,
                         provider=provider,
                         model=model_name,
-                        profile_name=profile,
+                        profile_name=profile or effective_harness,
                         session_id=resume,
                         fork_from=fork_from,
                         sandbox_backend=sandbox_backend,
@@ -796,7 +802,7 @@ def cli_main(
                         json.dumps(
                             {
                                 "type": "superqode.error",
-                                "profile": profile,
+                                "profile": profile or effective_harness,
                                 "provider": provider,
                                 "model": model_name,
                                 "error": str(e),
@@ -819,7 +825,7 @@ def cli_main(
                         response,
                         provider,
                         model_name,
-                        profile,
+                        profile or effective_harness,
                         change_summary=change_summary.to_dict(),
                     )
                 )
@@ -2111,6 +2117,86 @@ def skills_optimize(
 def harness():
     """Create, validate, and run SuperQode harness specs."""
     pass
+
+
+@harness.command("list")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_list(json_output):
+    """List selectable built-in, project, and registry harnesses."""
+    from superqode.harness import list_harnesses
+
+    rows = [entry.to_dict() for entry in list_harnesses(Path.cwd())]
+    if json_output:
+        click.echo(json.dumps(rows, indent=2))
+        return
+    click.echo(f"{'ID':<20} {'DEFAULT':<8} {'SOURCE':<10} {'RUNTIME':<16} {'TOOLS':>5}  STATUS")
+    for row in rows:
+        status = "ready" if row["available"] else str(row["issue"] or "unavailable")
+        click.echo(
+            f"{str(row['id']):<20} "
+            f"{('*' if row['default'] else ''):<8} "
+            f"{str(row['source']):<10} "
+            f"{str(row['runtime']):<16} "
+            f"{int(row['tool_count']):>5}  {status}"
+        )
+
+
+@harness.command("show")
+@click.argument("reference")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_show(reference, json_output):
+    """Show one selectable harness by name or spec path."""
+    from superqode.harness import harness_spec_to_dict, resolve_harness
+
+    try:
+        entry = resolve_harness(reference, root=Path.cwd())
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    payload = {**entry.to_dict(), "spec": harness_spec_to_dict(entry.spec)}
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    click.echo(f"Harness: {entry.id}{' (default)' if entry.default else ''}")
+    click.echo(f"Description: {entry.description}")
+    click.echo(f"Source: {entry.source}")
+    click.echo(f"Runtime: {entry.runtime}")
+    click.echo(f"Tools ({len(entry.tools)}): {', '.join(entry.tools) or 'none'}")
+    click.echo(f"Digest: {entry.digest}")
+
+
+@harness.command("use")
+@click.argument("reference")
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(path_type=Path),
+    default=Path("superqode.yaml"),
+    show_default=True,
+    help="Project configuration to update",
+)
+def harness_use(reference, config_path):
+    """Set the project's default harness."""
+    import yaml
+
+    from superqode.harness import resolve_harness
+
+    try:
+        entry = resolve_harness(reference, root=Path.cwd())
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    data = {}
+    if config_path.is_file():
+        loaded = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        if not isinstance(loaded, dict):
+            raise click.ClickException(f"{config_path} must contain a YAML mapping")
+        data = loaded
+    superqode_config = data.setdefault("superqode", {})
+    if not isinstance(superqode_config, dict):
+        raise click.ClickException("superqode config section must be a mapping")
+    superqode_config["harness"] = str(entry.path or entry.id)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    click.echo(f"Project default harness: {entry.id} ({config_path})")
 
 
 @harness.command("list-templates")

@@ -29,6 +29,10 @@ class SessionMetadata:
     total_tokens: int = 0
     parent_session_id: Optional[str] = None
     title: str = ""
+    harness_id: str = ""
+    harness_source: str = ""
+    harness_digest: str = ""
+    tool_contract_version: str = ""
 
 
 @dataclass
@@ -61,6 +65,10 @@ class SessionStore:
         model: str = "",
         parent_session_id: Optional[str] = None,
         title: str = "",
+        harness_id: str = "",
+        harness_source: str = "",
+        harness_digest: str = "",
+        tool_contract_version: str = "",
     ) -> SessionMetadata:
         """Create a new session."""
         now = datetime.now().isoformat()
@@ -72,6 +80,10 @@ class SessionStore:
             model=model,
             parent_session_id=parent_session_id,
             title=title,
+            harness_id=harness_id,
+            harness_source=harness_source,
+            harness_digest=harness_digest,
+            tool_contract_version=tool_contract_version,
         )
         self._save_metadata(metadata)
         self._record_graph(metadata)
@@ -92,6 +104,10 @@ class SessionStore:
                     "total_tokens": metadata.total_tokens,
                     "parent_session_id": metadata.parent_session_id,
                     "title": metadata.title,
+                    "harness_id": metadata.harness_id,
+                    "harness_source": metadata.harness_source,
+                    "harness_digest": metadata.harness_digest,
+                    "tool_contract_version": metadata.tool_contract_version,
                 },
                 indent=2,
             )
@@ -318,6 +334,10 @@ class SessionManager:
         session_id: Optional[str] = None,
         provider: str = "",
         model: str = "",
+        harness_id: str = "",
+        harness_source: str = "",
+        harness_digest: str = "",
+        tool_contract_version: str = "",
     ) -> str:
         """Start a new session or resume existing."""
         if session_id and self.store.get_metadata(session_id):
@@ -328,7 +348,15 @@ class SessionManager:
         import uuid
 
         new_id = session_id or str(uuid.uuid4())[:8]
-        self.store.create_session(new_id, provider, model)
+        self.store.create_session(
+            new_id,
+            provider,
+            model,
+            harness_id=harness_id,
+            harness_source=harness_source,
+            harness_digest=harness_digest,
+            tool_contract_version=tool_contract_version,
+        )
         self._current_session_id = new_id
         return new_id
 
