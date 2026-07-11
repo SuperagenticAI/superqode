@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import shutil
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -99,6 +100,22 @@ def _claude_agent_sdk_factory(**kwargs) -> AgentRuntime:
     return module.ClaudeAgentSDKRuntime(**kwargs)
 
 
+def _antigravity_sdk_factory(**kwargs) -> AgentRuntime:
+    try:
+        module = importlib.import_module("superqode.runtime.antigravity_sdk")
+    except ImportError as exc:
+        raise RuntimeNotInstalledError(
+            "Antigravity SDK runtime requires the 'antigravity-sdk' extra. "
+            f"Install with: {_extra_install('antigravity-sdk')}"
+        ) from exc
+    return module.AntigravitySDKRuntime(**kwargs)
+
+
+def _antigravity_cli_factory(**kwargs) -> AgentRuntime:
+    module = importlib.import_module("superqode.runtime.antigravity_cli")
+    return module.AntigravityCLIRuntime(**kwargs)
+
+
 _FACTORIES: dict[str, Callable[..., AgentRuntime]] = {
     "builtin": _builtin_factory,
     "adk": _adk_factory,
@@ -106,6 +123,8 @@ _FACTORIES: dict[str, Callable[..., AgentRuntime]] = {
     "pydanticai": _pydanticai_factory,
     "codex-sdk": _codex_sdk_factory,
     "claude-agent-sdk": _claude_agent_sdk_factory,
+    "antigravity-sdk": _antigravity_sdk_factory,
+    "antigravity-cli": _antigravity_cli_factory,
 }
 
 _DESCRIPTIONS: dict[str, str] = {
@@ -115,6 +134,8 @@ _DESCRIPTIONS: dict[str, str] = {
     "pydanticai": "PydanticAI agent framework",
     "codex-sdk": "OpenAI Codex Python SDK / local app-server",
     "claude-agent-sdk": "Anthropic Claude Agent SDK (API key)",
+    "antigravity-sdk": "Google Antigravity SDK (Gemini API key)",
+    "antigravity-cli": "Google Antigravity CLI (Google Sign-In)",
 }
 
 _OPTIONAL_PACKAGES: dict[str, tuple[str, str]] = {
@@ -124,6 +145,7 @@ _OPTIONAL_PACKAGES: dict[str, tuple[str, str]] = {
     "pydanticai": ("pydantic_ai", "superqode[pydanticai]"),
     "codex-sdk": ("openai_codex", "superqode[codex-sdk]"),
     "claude-agent-sdk": ("claude_agent_sdk", "superqode[claude-agent-sdk]"),
+    "antigravity-sdk": ("google.antigravity", "superqode[antigravity-sdk]"),
 }
 
 
@@ -149,6 +171,14 @@ def list_runtimes() -> list[RuntimeInfo]:
         if name == "builtin":
             installed = True
             install_hint = None
+            implemented = True
+        elif name == "antigravity-cli":
+            installed = shutil.which("agy") is not None
+            install_hint = (
+                None
+                if installed
+                else "install agy from https://antigravity.google/docs/cli-install"
+            )
             implemented = True
         else:
             pkg, extra = _OPTIONAL_PACKAGES[name]

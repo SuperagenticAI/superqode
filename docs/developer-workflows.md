@@ -23,7 +23,7 @@ Connection commands:
 :connect
 :connect codex        # Codex SDK using your local Codex login
 :connect claude       # Claude Code through ACP
-:connect antigravity  # local Antigravity CLI handoff
+:connect antigravity  # signed-in agy CLI; run `agy` once to log in
 :connect acp          # any configured ACP agent
 :connect byok         # direct hosted provider/API key
 :connect local        # Ollama, LM Studio, MLX, vLLM, SGLang, TGI, DS4

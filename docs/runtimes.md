@@ -93,7 +93,7 @@ the engine that executes it. The picker is profile-driven and shows live status:
   [3] Local model          Ollama / MLX / vLLM / LM Studio ...
   [4] Codex subscription   Drive OpenAI Codex with your ChatGPT/Codex login (~/.codex)
   [5] Claude Agent SDK     Use your Anthropic API key via claude-agent-sdk
-  [6] Antigravity CLI      Use Google's local agy CLI; Gemini CLI migration path
+  [6] Antigravity CLI      Use Google's agent harness with your Google Sign-In
   [7] Advanced runtime     Pick the execution engine (builtin / openai-agents / ...)
 ```
 
@@ -107,7 +107,8 @@ Direct commands and CLI:
 ```bash
 :connect codex            # in the TUI, uses your Codex subscription
 :connect claude           # use Claude Agent SDK with ANTHROPIC_API_KEY
-:connect antigravity      # show the local agy handoff + Gemini migration hints
+:connect antigravity      # signed-in agy CLI (Google OAuth/keyring)
+:connect byok google      # Google API key path
 :connect acp              # generic ACP picker, including local Claude Code
 superqode --connect codex # launch already on Codex
 superqode --connect codex --print "summarize this repo"   # headless
@@ -115,31 +116,37 @@ superqode --connect codex --print "summarize this repo"   # headless
 
 Each source maps to a connector internally: **Codex** → the `codex-sdk` runtime
 (self-contained, `~/.codex` auth); **Claude** → the `claude-agent-sdk` runtime
-(`ANTHROPIC_API_KEY`); **Antigravity** → the local `agy` CLI handoff; **BYOK/Local**
+(`ANTHROPIC_API_KEY`); **Antigravity** → the `antigravity-cli` runtime using
+`agy`'s Google Sign-In/keyring; **BYOK/Local**
 → the `builtin` runtime + provider/model, with an optional runtime override;
 **Advanced** → the raw `:runtime` picker.
 
 Only **Codex** is a sanctioned *subscription* SDK path today. Claude has two paths:
 **Claude Code (ACP)** uses your own local Claude CLI, and **Claude Agent SDK** is
 an **API-key** runtime (`claude-agent-sdk`, `ANTHROPIC_API_KEY`). Both are shipped.
-**Antigravity CLI** uses Google's local `agy` login/keyring directly, but it is
-currently an external TUI handoff because Google has not documented an ACP/headless
-event stream for `agy`. An Antigravity SDK runtime would be API-key only
-(`GEMINI_API_KEY`) and is separate from this CLI profile.
+**Antigravity CLI** is a self-contained runtime backed by `agy --print`. The
+official CLI owns Google OAuth and retrieves its session from the OS keyring;
+SuperQode never reads the token. API-key users can use `:connect byok google`,
+or install the optional `antigravity-sdk` extra and select that advanced runtime.
 
 ### Antigravity CLI
 
 Google's Antigravity CLI (`agy`) is the consumer migration path for Gemini CLI:
 
 ```text
-:connect antigravity
+:antigravity launch
 :antigravity status
 :antigravity migrate
 ```
 
-SuperQode does **not** route `agy` through ACP today. `:connect antigravity` shows
-the current-repository launch command (`cd <repo> && agy`), local install/auth
-status, and Gemini CLI migration commands such as `agy plugin import gemini`.
+SuperQode does **not** route `agy` through ACP. `:connect antigravity` invokes
+its supported headless print mode and continues the CLI conversation between
+turns. `agy` 1.1.1 or newer is required because it fixes subprocess hangs and
+error exit codes. The route streams text, but `agy` does not expose structured
+tool or approval events.
+
+For a complete comparison of harness ownership, authentication, and supported
+routes, see [Google Antigravity](providers/antigravity.md).
 
 Gemini CLI remains listed under the generic ACP picker for enterprise/API-key ACP
 users. For Google AI Pro, Ultra, and free Code Assist individual accounts, prefer

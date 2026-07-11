@@ -4180,6 +4180,54 @@ def test_local_model_scroll_calculation_uses_multiline_rows():
     assert calls[-1]["animate"] is False
 
 
+def test_picker_scroll_reveals_selected_row_and_supporting_content():
+    calls = []
+    log = SimpleNamespace(
+        auto_scroll=True,
+        lines=[
+            SimpleNamespace(text="header"),
+            SimpleNamespace(text="▶ [7] Advanced runtime  ← SELECTED"),
+            SimpleNamespace(text="description"),
+            SimpleNamespace(text="ready"),
+            SimpleNamespace(text="instructions"),
+        ],
+        size=SimpleNamespace(height=8),
+        scrollable_content_region=SimpleNamespace(height=8),
+        scroll_to_region=lambda region, **kwargs: calls.append((region, kwargs)),
+    )
+
+    assert SuperQodeApp._scroll_to_rendered_selected_block(log) is True
+    assert calls
+    region, kwargs = calls[-1]
+    assert region.y == 1
+    assert region.height == 5
+    assert kwargs["animate"] is False
+
+
+def test_connect_selection_replaces_picker_before_rendering_result():
+    from superqode.providers.connection_profiles import list_connection_profiles
+
+    app = make_app()
+    log = FakeLog()
+    log.write("long picker content")
+    profiles = list_connection_profiles()
+    app._awaiting_connect_type = True
+    app._byok_highlighted_connect_type_index = len(profiles) - 1
+    app.query_one = lambda *args, **kwargs: log
+    observed = []
+
+    def dispatch(profile, target_log):
+        observed.append((profile.id, list(target_log.items)))
+        target_log.write("selected result")
+
+    app._dispatch_connection_profile = dispatch
+    app.action_select_highlighted_connect_type()
+
+    assert observed == [(profiles[-1].id, [])]
+    assert log.items == ["selected result"]
+    assert log.scrolled_home is True
+
+
 def test_tui_local_smoke_command_renders_mvp_readiness(monkeypatch):
     from superqode.local.smoke import SmokeCheck, SmokeReport
 

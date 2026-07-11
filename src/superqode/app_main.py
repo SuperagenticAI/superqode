@@ -4125,7 +4125,8 @@ class SuperQodeApp(App):
         short terminal viewport cannot hide the item. The geometry fallback is
         retained for pickers that do not render a ``SELECTED`` marker.
         """
-        if self._scroll_to_rendered_selected_row(log):
+        if self._scroll_to_rendered_selected_block(log):
+            self._schedule_picker_visibility(log, highlighted_idx, total_items)
             return
 
         try:
@@ -4150,13 +4151,16 @@ class SuperQodeApp(App):
             pass  # If scrolling fails, just continue
         finally:
             log.auto_scroll = True
+        self._schedule_picker_visibility(log, highlighted_idx, total_items)
 
     @staticmethod
-    def _scroll_to_rendered_selected_row(log: ConversationLog) -> bool:
-        """Bring the RichLog row containing the current picker marker into view."""
+    def _scroll_to_rendered_selected_block(log: ConversationLog) -> bool:
+        """Bring the selected row and its supporting content into view."""
         try:
             selected_y = next(
-                index for index, line in enumerate(log.lines) if "SELECTED" in line.text
+                index
+                for index, line in enumerate(log.lines)
+                if "SELECTED" in line.text or "▶" in line.text
             )
         except (AttributeError, StopIteration):
             return False
@@ -4172,8 +4176,17 @@ class SuperQodeApp(App):
 
             from textual.geometry import Region
 
+            visible_height = max(
+                4,
+                int(
+                    getattr(getattr(log, "scrollable_content_region", None), "height", 0)
+                    or getattr(getattr(log, "size", None), "height", 18)
+                    or 18
+                ),
+            )
+            block_height = min(visible_height, 5)
             log.scroll_to_region(
-                Region(0, selected_y, 1, 1),
+                Region(0, selected_y, 1, block_height),
                 animate=False,
                 x_axis=False,
                 y_axis=True,
@@ -4183,6 +4196,35 @@ class SuperQodeApp(App):
             return False
         finally:
             log.auto_scroll = True
+
+    def _schedule_picker_visibility(
+        self, log: ConversationLog, highlighted_idx: int, total_items: int
+    ) -> None:
+        """Repeat managed scrolling after Textual has completed layout."""
+
+        def reveal() -> None:
+            if self._scroll_to_rendered_selected_block(log):
+                return
+            try:
+                log.auto_scroll = False
+                visible_height = max(
+                    6,
+                    int(getattr(getattr(log, "size", None), "height", 18) or 18),
+                )
+                selected_y = 5 + highlighted_idx * 3
+                log.scroll_to(y=max(0, selected_y - max(1, visible_height // 2)), animate=False)
+            except Exception:
+                pass
+            finally:
+                log.auto_scroll = True
+
+        try:
+            self.call_after_refresh(reveal)
+        except Exception:
+            try:
+                self.set_timer(0.01, reveal)
+            except Exception:
+                pass
 
     def _scroll_to_highlighted_local_model(self, log: ConversationLog, highlighted_idx: int):
         """Scroll the local-model picker so the highlighted multi-line row is visible."""
@@ -4523,6 +4565,11 @@ class SuperQodeApp(App):
         if not (0 <= idx < len(profiles)):
             idx = 0
         log = self.query_one("#log", ConversationLog)
+        # A selection result replaces the picker. Appending below a long picker
+        # can leave the requested content outside the viewport.
+        log.clear()
+        log.scroll_home(animate=False)
+        log.auto_scroll = True
         self._dispatch_connection_profile(profiles[idx], log)
 
     def _show_runtime_picker(self, log: ConversationLog, clear_log: bool = True):
@@ -4606,6 +4653,7 @@ class SuperQodeApp(App):
         self._awaiting_runtime_selection = True
         self._runtime_highlighted_index = highlighted_idx
         self._runtime_selection_list = runtimes
+        self._scroll_to_highlighted_item(log, highlighted_idx, len(runtimes))
         self.set_timer(0.05, self._ensure_input_focus)
 
     def action_navigate_runtime_up(self):
@@ -9564,6 +9612,7 @@ class SuperQodeApp(App):
         t.append(":sessions resume <id>", style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t, clear_log=clear_log)
+        self._scroll_to_highlighted_item(log, self._session_resume_highlighted_index, len(sessions))
         self.set_timer(0.05, self._ensure_input_focus)
 
     def action_navigate_session_resume_up(self) -> None:
@@ -10684,12 +10733,44 @@ class SuperQodeApp(App):
             ),
             runtime_name,
         )
-        if runtime_name == "claude-agent-sdk":
-            auth_text = "Anthropic API key (ANTHROPIC_API_KEY)"
-            cmd_prefix = ":claude"
-        else:
-            auth_text = "your local Codex login (~/.codex)"
-            cmd_prefix = ":codex"
+        connection_details = {
+            "codex-sdk": {
+                "auth": "your local Codex login (~/.codex)",
+                "model": "resolving...",
+                "commands": (
+                    (":codex model", "to switch model"),
+                    (":codex status", "for diagnostics"),
+                ),
+            },
+            "claude-agent-sdk": {
+                "auth": "Anthropic API key (ANTHROPIC_API_KEY)",
+                "model": "Claude SDK default",
+                "commands": (
+                    (":claude model", "to switch model"),
+                    (":claude status", "for diagnostics"),
+                ),
+            },
+            "antigravity-cli": {
+                "auth": "Google Sign-In managed by agy and the OS keyring",
+                "model": "managed by Antigravity CLI",
+                "commands": (
+                    (":antigravity status", "for diagnostics"),
+                    (":antigravity help", "for route details"),
+                ),
+            },
+            "antigravity-sdk": {
+                "auth": "Gemini API key (GEMINI_API_KEY or GOOGLE_API_KEY)",
+                "model": "Antigravity SDK default",
+                "commands": (
+                    (":antigravity status", "for diagnostics"),
+                    (":antigravity help", "for route details"),
+                ),
+            },
+        }
+        details = connection_details.get(
+            runtime_name,
+            {"auth": "managed by runtime", "model": "runtime default", "commands": ()},
+        )
         t = Text()
         t.append("\n  ✓ ", style=f"bold {THEME['success']}")
         t.append("Connected — ", style=f"bold {THEME['text']}")
@@ -10697,22 +10778,22 @@ class SuperQodeApp(App):
         t.append("    Runtime   ", style=THEME["muted"])
         t.append(f"{runtime_name}\n", style=THEME["text"])
         t.append("    Auth      ", style=THEME["muted"])
-        t.append(f"{auth_text}\n", style=THEME["text"])
+        t.append(f"{details['auth']}\n", style=THEME["text"])
         t.append("    Model     ", style=THEME["muted"])
-        t.append("resolving…\n", style=THEME["dim"])
+        t.append(f"{details['model']}\n", style=THEME["dim"])
         t.append("\n  Next:\n", style=THEME["muted"])
         t.append("    • ", style=THEME["dim"])
         t.append("type a message", style=THEME["cyan"])
         t.append(" to start coding\n", style=THEME["muted"])
-        t.append("    • ", style=THEME["dim"])
-        t.append(f"{cmd_prefix} model", style=THEME["cyan"])
-        t.append(" to switch model   ", style=THEME["muted"])
-        t.append(f"{cmd_prefix} status", style=THEME["cyan"])
-        t.append(" for diagnostics\n", style=THEME["muted"])
+        for command, description in details["commands"]:
+            t.append("    • ", style=THEME["dim"])
+            t.append(command, style=THEME["cyan"])
+            t.append(f" {description}\n", style=THEME["muted"])
         log.write(t)
         self._set_status_runtime(runtime_name)  # badge shows the runtime now
         self._set_status_model("")  # model fills in once resolved
-        self.run_worker(self._resolve_codex_active_model(log), exclusive=False)
+        if runtime_name == "codex-sdk":
+            self.run_worker(self._resolve_codex_active_model(log), exclusive=False)
 
     async def _resolve_codex_active_model(self, log: ConversationLog) -> None:
         """Query the live thread's resolved model and surface it.
@@ -10840,8 +10921,11 @@ class SuperQodeApp(App):
                 self._install_pure_permission_bridge(existing, log)
                 _os.environ["SUPERQODE_RUNTIME"] = sub
                 self._set_status_runtime(sub)
-                self.run_worker(self._resolve_codex_active_model(log), exclusive=False)
-                log.add_info(f"Already connected via {sub}; reusing warm Codex app-server.")
+                if sub == "codex-sdk":
+                    self.run_worker(self._resolve_codex_active_model(log), exclusive=False)
+                    log.add_info("Already connected via codex-sdk; reusing warm Codex app-server.")
+                else:
+                    log.add_info(f"Already connected via {sub}; reusing the active session.")
                 return
         # For self-contained runtimes, ``current`` only reflects the env/runtime
         # name (which --connect/SUPERQODE_RUNTIME may already have set) — not
@@ -10874,7 +10958,11 @@ class SuperQodeApp(App):
                 pure = self._ensure_pure_mode()
                 self._install_pure_permission_bridge(pure, log)
                 pure.runtime_name = sub
-                provider = "anthropic" if sub == "claude-agent-sdk" else "openai"
+                provider = {
+                    "claude-agent-sdk": "anthropic",
+                    "antigravity-sdk": "google",
+                    "antigravity-cli": "google",
+                }.get(sub, "openai")
                 pure.connect(provider=provider, model="", working_directory=Path.cwd())
                 self._announce_self_contained_connection(sub, log)
             except Exception as exc:  # noqa: BLE001
@@ -10890,7 +10978,9 @@ class SuperQodeApp(App):
 
     # Runtimes that are self-contained (own model + auth) and can be used in the
     # TUI without a separate :connect step.
-    _SELF_CONTAINED_RUNTIMES = frozenset({"codex-sdk", "claude-agent-sdk"})
+    _SELF_CONTAINED_RUNTIMES = frozenset(
+        {"codex-sdk", "claude-agent-sdk", "antigravity-sdk", "antigravity-cli"}
+    )
 
     def _codex_cmd(self, args: str, log) -> None:
         """Handle :codex and Codex SDK runtime subcommands."""
@@ -11014,7 +11104,13 @@ class SuperQodeApp(App):
         """
         parts = (args or "").split(maxsplit=1)
         sub = parts[0].strip().lower() if parts and parts[0].strip() else "connect"
-        if sub in ("connect", "start", "launch", "open"):
+        if sub in ("connect", "start", "cli"):
+            self._runtime_cmd("antigravity-cli", log)
+        elif sub in ("sdk", "api-key-sdk"):
+            self._runtime_cmd("antigravity-sdk", log)
+        elif sub in ("superqode", "byok"):
+            self._connect_byok_cmd("google", log)
+        elif sub in ("launch", "open"):
             self._show_antigravity_connect(log)
         elif sub in ("status", "doctor"):
             self._show_antigravity_status(log)
@@ -11024,7 +11120,7 @@ class SuperQodeApp(App):
             self._show_antigravity_help(log)
         else:
             log.add_error(f"Unknown antigravity command: {sub}")
-            log.add_info("Usage: :antigravity [status|migrate|launch|help]")
+            log.add_info("Usage: :antigravity [cli|sdk|superqode|status|migrate|launch|help]")
 
     def _antigravity_command_line(self) -> str:
         return f"cd {shlex.quote(str(Path.cwd()))} && agy"
@@ -11064,7 +11160,7 @@ class SuperQodeApp(App):
         t.append(f"    {command}\n", style=THEME["cyan"])
         t.append("\n  Notes:\n", style=THEME["muted"])
         t.append(
-            "    - Antigravity CLI is currently an interactive TUI, not a documented ACP/headless stream.\n",
+            "    - agy has headless print mode, but does not expose a documented ACP event stream.\n",
             style=THEME["muted"],
         )
         t.append("    - Use ", style=THEME["muted"])
@@ -11136,14 +11232,20 @@ class SuperQodeApp(App):
         t.append("    Gemini CLI:       ~/.gemini/\n", style=THEME["dim"])
         t.append("    Antigravity CLI:  ~/.gemini/antigravity-cli/\n", style=THEME["dim"])
         t.append("\n  SuperQode route:\n", style=THEME["muted"])
-        t.append("    :connect antigravity\n", style=THEME["cyan"])
+        t.append("    :connect antigravity  # Google Sign-In route\n", style=THEME["cyan"])
         log.write(t)
 
     def _show_antigravity_help(self, log) -> None:
         t = Text()
         t.append("\n  Antigravity in SuperQode\n\n", style=f"bold {THEME['text']}")
         t.append("  :connect antigravity       ", style=THEME["cyan"])
-        t.append("show agy launch handoff for this repo\n", style=THEME["muted"])
+        t.append("Antigravity harness through signed-in agy\n", style=THEME["muted"])
+        t.append("  :antigravity sdk           ", style=THEME["cyan"])
+        t.append("Antigravity harness through its API-key SDK\n", style=THEME["muted"])
+        t.append("  :antigravity superqode     ", style=THEME["cyan"])
+        t.append("SuperQode harness with a Google API key\n", style=THEME["muted"])
+        t.append("  :antigravity launch        ", style=THEME["cyan"])
+        t.append("show the separate agy CLI handoff\n", style=THEME["muted"])
         t.append("  :antigravity status        ", style=THEME["cyan"])
         t.append("check binary/settings status\n", style=THEME["muted"])
         t.append("  :antigravity migrate       ", style=THEME["cyan"])
@@ -15282,6 +15384,7 @@ class SuperQodeApp(App):
         if clear_log:
             log.clear()
         log.write(t)
+        self._scroll_to_highlighted_item(log, self._mode_highlighted_index, len(modes))
         self.set_timer(0.05, self._ensure_input_focus)
 
     def _handle_mode_selection(self, text: str, log: ConversationLog) -> bool:
@@ -24297,7 +24400,7 @@ class SuperQodeApp(App):
             # Don't scroll to home on navigation updates to reduce flickering
             log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
 
-        self._scroll_to_rendered_selected_row(log)
+        self._scroll_to_highlighted_item(log, highlighted_idx, len(profiles))
 
         # Set up selection handler
         self._awaiting_connect_type = True
@@ -31203,7 +31306,7 @@ class SuperQodeApp(App):
                     (":claude status", "Show Claude Agent SDK status"),
                     (":claude model|permission", "Pick Claude model and permission mode"),
                     (":claude sessions|resume", "Manage Claude Agent SDK sessions"),
-                    (":connect antigravity", "Use local Antigravity CLI handoff"),
+                    (":connect antigravity", "Use signed-in Antigravity CLI"),
                     (":antigravity status", "Check local agy CLI status"),
                     (":antigravity migrate", "Show Gemini CLI migration steps"),
                     (":connect grok", "SuperQode harness on Grok subscription (CLI login)"),

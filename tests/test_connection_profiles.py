@@ -35,11 +35,12 @@ def test_claude_profile_is_agent_sdk_runtime():
     assert "subscription" not in (claude.label + claude.description).lower()
 
 
-def test_antigravity_profile_is_external_cli_connector():
+def test_antigravity_profile_is_signed_in_cli_runtime_connector():
     antigravity = get_connection_profile("antigravity")
-    assert antigravity.connector == "external-cli"
-    assert antigravity.runtime is None
-    assert "gemini cli migration" in antigravity.description.lower()
+    assert antigravity.connector == "runtime"
+    assert antigravity.runtime == "antigravity-cli"
+    assert antigravity.self_contained is True
+    assert "google sign-in" in antigravity.description.lower()
 
 
 def test_grok_profile_defaults_to_grok_build_acp():
@@ -170,10 +171,64 @@ def test_dispatch_claude_routes_to_runtime(_dispatch):
     assert ("runtime", "claude-agent-sdk") in stub.calls
 
 
-def test_dispatch_antigravity_routes_to_external_cli(_dispatch):
+def test_dispatch_antigravity_routes_to_cli_runtime(_dispatch):
     stub = _DispatchStub()
     _dispatch(stub, get_connection_profile("antigravity"), log=None)
-    assert ("antigravity", "connect") in stub.calls
+    assert ("runtime", "antigravity-cli") in stub.calls
+
+
+def test_antigravity_commands_select_explicit_harness_routes():
+    from superqode.app_main import SuperQodeApp
+
+    class Stub:
+        def __init__(self):
+            self.calls = []
+
+        def _runtime_cmd(self, runtime, _log):
+            self.calls.append(("runtime", runtime))
+
+        def _connect_byok_cmd(self, provider, _log):
+            self.calls.append(("byok", provider))
+
+    stub = Stub()
+    SuperQodeApp._antigravity_cmd(stub, "cli", log=None)
+    SuperQodeApp._antigravity_cmd(stub, "sdk", log=None)
+    SuperQodeApp._antigravity_cmd(stub, "superqode", log=None)
+
+    assert stub.calls == [
+        ("runtime", "antigravity-cli"),
+        ("runtime", "antigravity-sdk"),
+        ("byok", "google"),
+    ]
+
+
+def test_antigravity_connection_announcement_never_mentions_codex():
+    from superqode.app_main import SuperQodeApp
+
+    class Log:
+        def __init__(self):
+            self.output = ""
+
+        def write(self, value):
+            self.output += str(value)
+
+    class Stub:
+        def _set_status_runtime(self, _runtime):
+            pass
+
+        def _set_status_model(self, _model):
+            pass
+
+        def run_worker(self, *_args, **_kwargs):
+            raise AssertionError("Antigravity must not run Codex model resolution")
+
+    log = Log()
+    SuperQodeApp._announce_self_contained_connection(Stub(), "antigravity-cli", log)
+
+    assert "Google Sign-In managed by agy" in log.output
+    assert ":antigravity status" in log.output
+    assert "Codex" not in log.output
+    assert ":codex" not in log.output
 
 
 def test_dispatch_grok_routes_to_grok_build_acp(_dispatch):

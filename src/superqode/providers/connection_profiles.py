@@ -72,7 +72,7 @@ def _claude_agent_ready() -> bool:
 
 
 def _antigravity_cli_ready() -> bool:
-    """Antigravity CLI installed on PATH. Auth is managed by agy/keyring."""
+    """The signed-in CLI owns Google OAuth; the runtime validates its version."""
     return shutil.which("agy") is not None
 
 
@@ -151,10 +151,12 @@ _PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="antigravity",
         label="Antigravity CLI",
-        description="Use Google's local agy CLI; recommended Gemini CLI migration path for individual users",
-        connector="external-cli",
+        description="Use Google's Antigravity agent with your Google Sign-In",
+        connector="runtime",
+        runtime="antigravity-cli",
+        self_contained=True,
         detect=_antigravity_cli_ready,
-        unavailable_hint="install agy from https://antigravity.google/docs/cli-install and sign in",
+        unavailable_hint="install agy from https://antigravity.google/docs/cli-install",
     ),
     ConnectionProfile(
         id="grok",

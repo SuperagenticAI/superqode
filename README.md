@@ -241,7 +241,8 @@ Inside the TUI, start with `:help` and these commands:
 ```text
 :connect codex        # Codex SDK with local Codex login
 :connect claude       # Claude Code through ACP
-:connect antigravity  # local Antigravity CLI handoff
+:connect antigravity  # signed-in Antigravity CLI (Google OAuth/keyring)
+:connect byok google  # Google API key path
 :connect grok         # SuperQode harness on Grok subscription (CLI login)
 :connect acp grok     # Grok Build via the official Grok CLI (ACP)
 :connect byok         # hosted provider/API-key path

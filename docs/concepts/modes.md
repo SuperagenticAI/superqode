@@ -204,7 +204,7 @@ SDK mode runs a vendor's own agent engine inside SuperQode. You keep SuperQode's
 | --- | --- | --- |
 | Codex SDK (`:connect codex`) | Your ChatGPT subscription (local Codex login) or an OpenAI API key | Codex-native patches, plans, and command events are normalized into SuperQode's event surface |
 | Claude Agent SDK (`:connect claude`) | Your Claude subscription or an Anthropic API key | Claude Code behavior with SuperQode session management; `TodoWrite` feeds the shared plan panel |
-| Antigravity (`:connect antigravity`) | Your Google account via the Antigravity CLI | Currently an interactive handoff; it will adopt the structured event path when a documented stream is available |
+| Antigravity (`:connect antigravity`) | Your Google account via the official `agy` CLI | Headless print runtime using `agy`'s OS-keyring login; text streaming only because `agy` does not expose structured tool events |
 
 Use SDK mode when:
 

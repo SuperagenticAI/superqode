@@ -109,6 +109,12 @@ claude-agent-sdk = [
     # via ANTHROPIC_API_KEY). Adapter maps SDK message/block + permission shapes.
     "claude-agent-sdk>=0.2.9,<0.3.0",
 ]
+antigravity-sdk = [
+    "google-antigravity>=0.1.6,<0.2.0",
+    # 0.1.6 ships edition-2024 generated descriptors but its own protobuf
+    # lower bound is too loose; protobuf 5 fails while importing the SDK.
+    "protobuf>=6.31.1",
+]
 deepagents = [
     "deepagents>=0.6.0,<0.7.0",
 ]

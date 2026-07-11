@@ -204,3 +204,6 @@ release_builds/
 reference/
 # CocoIndex Code (ccc)
 /.cocoindex_code/
+
+# Antigravity CLI workspace metadata
+/.antigravitycli/

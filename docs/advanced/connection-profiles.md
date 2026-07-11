@@ -24,7 +24,7 @@ Self-contained: brings its own model and auth via Codex login. Requires openai_c
 
 Self-contained: uses Anthropic API key directly. Requires claude_agent_sdk package and ANTHROPIC_API_KEY. Auto-connects on selection.
 
-### 6. Antigravity CLI (connector: external-cli)
+### 6. Antigravity CLI (connector: runtime)
 
 Handoff profile: shows the command to run `agy` in a terminal. Does not connect SuperQode's own loop. Requires agy binary on PATH.
 
@@ -42,7 +42,9 @@ Direct shortcuts:
 
 - `:connect codex` - connect Codex SDK directly
 - `:connect claude` - connect Claude Agent SDK directly
-- `:connect antigravity` - show agy handoff
+- `:connect antigravity` - use `agy` headless mode with its Google Sign-In/keyring
+- `:connect byok google` - use a Google API key through the BYOK path
+- `:runtime antigravity-sdk` - optional direct Antigravity SDK/API-key runtime
 - `:connect grok` - Grok Build, xAI's own coding agent, on your subscription (ACP)
 - `:grok api [model]` - SuperQode's harness on the same subscription (opt-in)
 - `:connect byok` - open the cloud provider picker

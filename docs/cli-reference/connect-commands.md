@@ -29,7 +29,7 @@ superqode -C PROFILE [COMMAND]
 |---------|-------------|
 | `codex` | Self-contained. Uses Codex SDK. Auto-sets runtime to `codex-sdk`. Requires `openai_codex` package and `~/.codex/auth.json`. |
 | `claude` | Self-contained. Uses Claude Agent SDK. Auto-sets runtime to `claude-agent-sdk`. Requires `claude_agent_sdk` package and `ANTHROPIC_API_KEY`. |
-| `antigravity` | Handoff to the `agy` CLI for Antigravity cloud-managed sessions. |
+| `antigravity` | Self-contained `agy` runtime using Google Sign-In and the OS keyring. |
 | `grok` | Grok Build (xAI's own agent) on your Grok subscription over ACP (`grok agent stdio`). Requires the `grok` binary and `grok login`. To run SuperQode's harness on the same subscription instead, use `:grok api`. |
 | `byok` | Bring Your Own Key. Connect to a cloud provider with your own API key. |
 | `local` | Connect to a local or self-hosted provider (Ollama, MLX, LM Studio, etc.). |
@@ -37,11 +37,12 @@ superqode -C PROFILE [COMMAND]
 
 ### Self-Contained Profiles
 
-`codex` and `claude` are self-contained profiles. They each bundle their own
+`codex`, `claude`, and `antigravity` are self-contained profiles. They each bundle their own
 runtime, so the `runtime` setting is automatically selected:
 
 - `--connect codex` sets runtime to `codex-sdk`
 - `--connect claude` sets runtime to `claude-agent-sdk`
+- `--connect antigravity` sets runtime to `antigravity-cli`
 
 ### Examples
 
@@ -61,7 +62,7 @@ superqode --connect local ollama qwen3:8b
 # Connect to an ACP agent
 superqode --connect acp opencode
 
-# Handoff to Antigravity
+# Run Antigravity with your existing Google Sign-In
 superqode --connect antigravity
 
 # Connect SuperQode harness on your Grok subscription (official CLI login)
@@ -97,8 +98,13 @@ Uses the Claude Agent SDK as the runtime backend.
 
 ### antigravity
 
-Hands off session management to the `agy` CLI. The Antigravity service handles
-provider selection, sandbox provisioning, and session persistence in the cloud.
+Uses the official `agy` CLI in headless print mode. Authentication stays inside
+`agy`: run it once to complete Google Sign-In, after which it reads the session
+from the OS keyring. SuperQode requires `agy` 1.1.1 or newer. For API keys, use
+`:connect byok google` or the optional `antigravity-sdk` advanced runtime.
+
+See [Google Antigravity](../providers/antigravity.md) for the harness ownership
+matrix and the supported CLI, SDK, and SuperQode harness routes.
 
 ### grok
 

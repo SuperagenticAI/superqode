@@ -271,7 +271,7 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":connect", "Choose ACP, BYOK, or local connection", category="workflow"),
     SlashCommand(":connect acp", "Connect to ACP agent", category="workflow"),
     SlashCommand(
-        ":connect antigravity", "Connect via local Antigravity CLI handoff", category="workflow"
+        ":connect antigravity", "Connect via signed-in Antigravity CLI", category="workflow"
     ),
     SlashCommand(
         ":connect grok",
