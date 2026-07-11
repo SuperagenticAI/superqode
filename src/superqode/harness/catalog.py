@@ -166,7 +166,9 @@ def list_harnesses(root: str | Path = ".") -> list[HarnessDefinition]:
     return entries
 
 
-def resolve_harness(reference: str | Path | None = None, *, root: str | Path = ".") -> HarnessDefinition:
+def resolve_harness(
+    reference: str | Path | None = None, *, root: str | Path = "."
+) -> HarnessDefinition:
     """Resolve a built-in/discovered harness name or an explicit spec path."""
     raw = str(reference or DEFAULT_HARNESS_ID).strip()
     candidate = Path(raw).expanduser()

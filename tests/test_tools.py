@@ -100,7 +100,9 @@ class TestToolRegistry:
         registry = ToolRegistry.for_profile("core")
 
         assert [tool.name for tool in registry.list()] == ["read", "write", "edit", "bash"]
-        definitions = {item["function"]["name"]: item["function"] for item in registry.to_openai_format()}
+        definitions = {
+            item["function"]["name"]: item["function"] for item in registry.to_openai_format()
+        }
         assert set(definitions) == {"read", "write", "edit", "bash"}
         assert set(definitions["edit"]["parameters"]["properties"]) == {
             "path",

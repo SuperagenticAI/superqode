@@ -108,6 +108,83 @@ def clear_cli_version_cache() -> None:
     detect_cli_version.cache_clear()
 
 
+_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-]*$")
+
+
+def parse_cli_models_output(text: str) -> Dict[str, Any]:
+    """Parse ``grok models`` output into ``{"default": str, "models": [ids]}``.
+
+    The command prints a ``Default model:`` line and an ``Available models:``
+    section (empty when the CLI is not authenticated). Model lines may carry
+    bullets or trailing descriptions; only the leading id token is kept.
+    """
+    default = ""
+    models: list[str] = []
+    in_models = False
+    for raw_line in (text or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        lowered = line.lower()
+        if lowered.startswith("default model:"):
+            candidate = line.split(":", 1)[1].strip()
+            if _MODEL_ID_RE.match(candidate):
+                default = candidate
+            continue
+        if lowered.startswith("available models"):
+            in_models = True
+            continue
+        if not in_models:
+            continue
+        if line.endswith(":"):  # a new section header ends the model list
+            break
+        token = line.lstrip("-*• \t").split()[0].rstrip(",") if line.lstrip("-*• \t") else ""
+        token = token.strip("()")
+        if token and _MODEL_ID_RE.match(token) and token not in models:
+            models.append(token)
+    return {"default": default, "models": models}
+
+
+_cli_models_cache: Optional[Dict[str, Any]] = None
+_cli_models_fetched = False
+
+
+def cached_cli_models() -> Dict[str, Any]:
+    """Subscription model catalog as reported by ``grok models``, cached.
+
+    Returns ``{"default": str, "models": [ids]}``; the model list is empty when
+    the CLI is missing or not authenticated. Fetched once per process so
+    pickers stay fast; ``clear_cli_models_cache`` resets (tests, re-login).
+    """
+    global _cli_models_cache, _cli_models_fetched
+    if _cli_models_fetched and _cli_models_cache is not None:
+        return _cli_models_cache
+    _cli_models_fetched = True
+    result: Dict[str, Any] = {"default": "", "models": []}
+    grok_bin = shutil.which("grok")
+    if grok_bin:
+        try:
+            proc = subprocess.run(
+                [grok_bin, "models"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,
+            )
+            result = parse_cli_models_output(f"{proc.stdout or ''}\n{proc.stderr or ''}")
+        except (OSError, subprocess.SubprocessError):
+            pass
+    _cli_models_cache = result
+    return result
+
+
+def clear_cli_models_cache() -> None:
+    """Drop the cached CLI model catalog (tests / after ``grok login``)."""
+    global _cli_models_cache, _cli_models_fetched
+    _cli_models_cache = None
+    _cli_models_fetched = False
+
+
 def _jwt_expiry(token: str) -> int:
     """Best-effort ``exp`` claim from a JWT-shaped token, else 0."""
     if not token or token.count(".") < 2:

@@ -314,9 +314,7 @@ class PureMode:
             harness_id=selected_id,
             harness_source=getattr(self._harness_definition, "source", "built-in"),
             harness_digest=getattr(self._harness_definition, "digest", ""),
-            tool_contract_version=(
-                "core-tools-v1" if selected_id == "core" else "workbench-v1"
-            ),
+            tool_contract_version=("core-tools-v1" if selected_id == "core" else "workbench-v1"),
         )
 
         runtime_kwargs: dict[str, Any] = {}

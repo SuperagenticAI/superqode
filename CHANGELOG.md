@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Grok subscription picker shows the CLI's real model catalog** - The `grok-cli` model list was a hardcoded snapshot, so models the signed-in Grok CLI offers (for example the new `grok-composer` family) never appeared in SuperQode. The picker now sources the catalog from `grok models` (cached per session, in the CLI's own order, with curated metadata for known ids) and falls back to the builtin snapshot when the CLI is missing or logged out.
+
 ### Added
 
 - **Connect by model name alone** - `:connect gpt-5.6` now resolves the hosting provider from the catalog and connects. First-party curated providers are preferred over gateway mirrors, so `:connect muse-spark-1.1` goes to Meta, not a reseller; when a model still has several curated routes (e.g. `grok-4.5` via the xAI API or the Grok subscription), the exact `:connect provider/model` commands are listed instead of guessing. Unknown tokens keep the existing provider-models fallback.

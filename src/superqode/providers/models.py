@@ -1202,6 +1202,13 @@ def get_models_for_provider(provider_id: str, *, include_all: bool = False) -> D
     ``include_all=True`` so a new models.dev entry cannot be hidden by that
     presentation-oriented trimming.
     """
+    # The Grok subscription catalog is whatever the signed-in CLI reports;
+    # its order matches the CLI's own /model picker, so return it as-is.
+    if provider_id == "grok-cli":
+        live_cli = _grok_cli_live_catalog()
+        if live_cli:
+            return live_cli
+
     models = get_effective_models().get(provider_id, {})
 
     # Filter models to ensure they actually belong to this provider
@@ -1314,6 +1321,64 @@ def _hosted_model_sort_key(model: ModelInfo) -> tuple[str, int, int, int, float,
         -(model.input_price + model.output_price),
         model.id,
     )
+
+
+def _grok_cli_live_catalog() -> Dict[str, ModelInfo]:
+    """Subscription models as reported by the installed Grok CLI.
+
+    ``grok models`` is the source of truth for what the signed-in account can
+    use; a hardcoded list goes stale the first time xAI ships a new family
+    (grok-composer did exactly that). Metadata for known ids is copied from
+    the builtin catalogs; unknown ids get conservative defaults. Returns an
+    empty dict when the CLI is missing or logged out, in which case the
+    builtin grok-cli entries apply.
+    """
+    try:
+        from .grok_cli_auth import cached_cli_models
+
+        listing = cached_cli_models()
+    except Exception:  # noqa: BLE001 - CLI probing is best-effort
+        return {}
+    ids = list(listing.get("models") or [])
+    if not ids:
+        return {}
+    default_id = str(listing.get("default") or "")
+    if default_id and default_id not in ids:
+        ids.insert(0, default_id)
+
+    effective = get_effective_models()
+    templates = {**effective.get("xai", {}), **MODELS.get("grok-cli", {})}
+    catalog: Dict[str, ModelInfo] = {}
+    for model_id in ids:
+        template = templates.get(model_id)
+        if template is not None:
+            catalog[model_id] = ModelInfo(
+                id=model_id,
+                name=template.name,
+                provider="grok-cli",
+                context_window=template.context_window,
+                max_output=template.max_output,
+                capabilities=list(template.capabilities),
+                description=template.description,
+                recommended_for=list(template.recommended_for),
+                released=template.released,
+            )
+        else:
+            catalog[model_id] = ModelInfo(
+                id=model_id,
+                name=model_id,
+                provider="grok-cli",
+                context_window=256000,
+                max_output=32000,
+                capabilities=[
+                    ModelCapability.TOOLS,
+                    ModelCapability.STREAMING,
+                    ModelCapability.CODE,
+                    ModelCapability.LONG_CONTEXT,
+                ],
+                description="Subscription model reported by `grok models`.",
+            )
+    return catalog
 
 
 def find_providers_for_model(model_id: str) -> List[str]:

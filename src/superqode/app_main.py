@@ -11149,6 +11149,13 @@ class SuperQodeApp(App):
             # Default subscription path = SuperQode harness via CLI chat proxy.
             # Grok Build ACP remains at :connect acp grok.
             self._grok_api_cmd(rest, log)
+        elif sub in ("models", "ls"):
+            self._show_grok_models(log)
+        elif sub == "model":
+            if rest:
+                self._grok_api_cmd(rest, log)
+            else:
+                self._show_grok_model_picker(log)
         elif sub in ("status", "doctor"):
             self._show_grok_status(log)
         elif sub in ("login", "auth"):
@@ -11158,8 +11165,8 @@ class SuperQodeApp(App):
         else:
             log.add_error(f"Unknown grok command: {sub}")
             log.add_info(
-                "Usage: :grok [connect [model]|api [model|off]|status|login|help] "
-                "(ACP: :connect acp grok)"
+                "Usage: :grok [connect [model]|model [name]|models|api [model|off]|"
+                "status|login|help] (ACP: :connect acp grok)"
             )
 
     def _grok_api_cmd(self, rest: str, log) -> None:
@@ -11186,16 +11193,7 @@ class SuperQodeApp(App):
                 model = model[len(prefix) :]
                 break
 
-        auth = grok_cli_auth.import_cli_token()
-        if auth is None:
-            log.add_error("No Grok CLI login found (~/.grok/auth.json).")
-            log.add_info("Run `grok login` first, or use BYOK: :connect byok xai grok-4.5")
-            log.add_info("For Grok Build ACP instead: :connect acp grok")
-            return
-        if auth.is_expired():
-            grok_cli_auth.remove_cli_token()
-            log.add_error("The Grok CLI session looks expired (CLI sessions last ~7 days).")
-            log.add_info("Run `grok login` again, then re-run :connect grok.")
+        if not self._import_grok_token(log):
             return
 
         log.add_info(
@@ -11207,6 +11205,78 @@ class SuperQodeApp(App):
             "Remove token anytime with :grok api off."
         )
         self._connect_byok_mode("grok-cli", model, log)
+
+    def _import_grok_token(self, log) -> bool:
+        """Import the local `grok login` session into the auth store.
+
+        Shared by connect and the model picker. Returns False (with guidance
+        written to the log) when there is no usable CLI login.
+        """
+        from superqode.providers import grok_cli_auth
+
+        auth = grok_cli_auth.import_cli_token()
+        if auth is None:
+            log.add_error("No Grok CLI login found (~/.grok/auth.json).")
+            log.add_info("Run `grok login` first, or use BYOK: :connect byok xai grok-4.5")
+            log.add_info("For Grok Build ACP instead: :connect acp grok")
+            return False
+        if auth.is_expired():
+            grok_cli_auth.remove_cli_token()
+            log.add_error("The Grok CLI session looks expired (CLI sessions last ~7 days).")
+            log.add_info("Run `grok login` again, then re-run :connect grok.")
+            return False
+        # Login state may have changed since the last catalog probe.
+        grok_cli_auth.clear_cli_models_cache()
+        return True
+
+    def _show_grok_models(self, log) -> None:
+        """List the subscription models the signed-in Grok CLI reports."""
+        from superqode.providers import grok_cli_auth
+        from superqode.providers.models import get_models_for_provider
+
+        # An explicit list request always re-probes the CLI.
+        grok_cli_auth.clear_cli_models_cache()
+        listing: dict = {}
+        try:
+            listing = grok_cli_auth.cached_cli_models()
+        except Exception:  # noqa: BLE001 - CLI probing is best-effort
+            pass
+        live = bool(listing.get("models"))
+        default_id = str(listing.get("default") or "grok-build")
+        models = get_models_for_provider("grok-cli")
+
+        t = Text()
+        t.append("\n  Grok subscription models\n\n", style=f"bold {THEME['text']}")
+        for info in models.values():
+            marker = "▸ " if info.id == default_id else "  "
+            t.append(f"  {marker}", style=THEME["success" if marker.strip() else "muted"])
+            t.append(f"{info.id:28s}", style=THEME["cyan"])
+            t.append(f"{info.context_display:>6s}  ", style=THEME["muted"])
+            t.append(f"{info.description}\n", style=THEME["dim"])
+        t.append("\n  Source: ", style=THEME["muted"])
+        if live:
+            t.append("`grok models` (signed-in CLI catalog)\n", style=THEME["text"])
+        else:
+            t.append(
+                "builtin fallback — CLI missing or not signed in; run `grok login`\n",
+                style=THEME["warning"],
+            )
+        t.append("  Select and connect with ", style=THEME["muted"])
+        t.append(":grok model", style=THEME["cyan"])
+        t.append(" (picker) or ", style=THEME["muted"])
+        t.append(":grok model <name>\n", style=THEME["cyan"])
+        log.write_feedback(t)
+
+    def _show_grok_model_picker(self, log) -> None:
+        """Interactive picker over the subscription catalog; Enter connects.
+
+        Reuses the BYOK model picker (numbers, arrows, search), so selecting a
+        model connects grok-cli/<model> on the subscription without switching
+        to the Grok CLI.
+        """
+        if not self._import_grok_token(log):
+            return
+        self._show_provider_models("grok-cli", log, use_picker=False)
 
     def _show_grok_status(self, log) -> None:
         """Show local Grok CLI readiness without reading or displaying credentials."""
@@ -11288,6 +11358,12 @@ class SuperQodeApp(App):
         t.append("SuperQode harness on your Grok subscription\n", style=THEME["muted"])
         t.append("  :grok connect [model]      ", style=THEME["cyan"])
         t.append("same as :connect grok; pin e.g. grok-4.5 or grok-build\n", style=THEME["muted"])
+        t.append("  :grok models               ", style=THEME["cyan"])
+        t.append("list the signed-in CLI's model catalog\n", style=THEME["muted"])
+        t.append("  :grok model [name]         ", style=THEME["cyan"])
+        t.append(
+            "pick a subscription model (picker) or connect one directly\n", style=THEME["muted"]
+        )
         t.append("  :connect acp grok          ", style=THEME["cyan"])
         t.append("Grok Build coding agent via official CLI ACP\n", style=THEME["muted"])
         t.append("  :grok api [model]          ", style=THEME["cyan"])
@@ -12282,7 +12358,9 @@ class SuperQodeApp(App):
                 if self._pure_mode.session.connected:
                     self._pure_mode.disconnect()
             self._refresh_harness_panel()
-            log.add_info("Restored the core harness. Reconnect with :connect byok or :connect local.")
+            log.add_info(
+                "Restored the core harness. Reconnect with :connect byok or :connect local."
+            )
             return
 
         if sub in ("load", "use"):

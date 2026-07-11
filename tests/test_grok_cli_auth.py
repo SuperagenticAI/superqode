@@ -202,6 +202,11 @@ class _AppStub:
 
         SuperQodeApp._grok_api_cmd(self, rest, log)
 
+    def _import_grok_token(self, log):
+        from superqode.app_main import SuperQodeApp
+
+        return SuperQodeApp._import_grok_token(self, log)
+
 
 def test_grok_cmd_routes_api_subcommand():
     from superqode.app_main import SuperQodeApp
@@ -291,3 +296,192 @@ def test_grok_api_off_removes_token(isolated_auth_store):
 
     assert isolated_auth_store.get("grok-cli") is None
     assert stub.connected == []
+
+
+# --- CLI model catalog (`grok models`) ------------------------------------------
+
+
+def test_parse_cli_models_output_authenticated():
+    text = """
+Default model: grok-build
+
+Available models:
+  - grok-build (default)
+  - grok-4.5
+  * grok-composer-2.5-fast  fast agentic coding
+  grok-4.3
+"""
+    parsed = grok_cli_auth.parse_cli_models_output(text)
+    assert parsed["default"] == "grok-build"
+    assert parsed["models"] == ["grok-build", "grok-4.5", "grok-composer-2.5-fast", "grok-4.3"]
+
+
+def test_parse_cli_models_output_unauthenticated():
+    # Exact shape observed from `grok models` when logged out.
+    text = "You are not authenticated.\n\nDefault model: grok-build\n\nAvailable models:\n"
+    parsed = grok_cli_auth.parse_cli_models_output(text)
+    assert parsed["default"] == "grok-build"
+    assert parsed["models"] == []
+
+
+def test_cached_cli_models_runs_once_and_clears(monkeypatch):
+    calls = []
+
+    class _Proc:
+        stdout = "Default model: grok-build\n\nAvailable models:\n  grok-4.5\n"
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return _Proc()
+
+    grok_cli_auth.clear_cli_models_cache()
+    monkeypatch.setattr(grok_cli_auth.shutil, "which", lambda name: "/usr/local/bin/grok")
+    monkeypatch.setattr(grok_cli_auth.subprocess, "run", fake_run)
+
+    first = grok_cli_auth.cached_cli_models()
+    second = grok_cli_auth.cached_cli_models()
+    assert first["models"] == ["grok-4.5"]
+    assert second is first
+    assert len(calls) == 1
+
+    grok_cli_auth.clear_cli_models_cache()
+    grok_cli_auth.cached_cli_models()
+    assert len(calls) == 2
+    grok_cli_auth.clear_cli_models_cache()
+
+
+def test_grok_cli_picker_uses_live_cli_catalog(monkeypatch):
+    """The picker must show what `grok models` reports (e.g. grok-composer)."""
+    from superqode.providers.models import get_models_for_provider
+
+    monkeypatch.setattr(
+        grok_cli_auth,
+        "cached_cli_models",
+        lambda: {"default": "grok-build", "models": ["grok-4.5", "grok-composer-2.5-fast"]},
+    )
+
+    models = get_models_for_provider("grok-cli")
+
+    # Default alias is prepended; CLI order is preserved; new families appear.
+    assert list(models) == ["grok-build", "grok-4.5", "grok-composer-2.5-fast"]
+    composer = models["grok-composer-2.5-fast"]
+    assert composer.provider == "grok-cli"
+    assert "grok models" in composer.description
+    # Known ids keep their curated metadata.
+    assert models["grok-4.5"].context_window == 500000
+
+
+def test_grok_cli_picker_falls_back_to_builtin_when_logged_out(monkeypatch):
+    from superqode.providers import models as model_db
+    from superqode.providers.models import get_models_for_provider
+
+    monkeypatch.setattr(grok_cli_auth, "cached_cli_models", lambda: {"default": "", "models": []})
+    monkeypatch.setattr(model_db, "_use_live_data", False)
+    monkeypatch.setattr(model_db, "_live_models", None)
+    monkeypatch.setattr(model_db, "_live_autoload_attempted", True)
+
+    models = get_models_for_provider("grok-cli")
+
+    assert "grok-build" in models  # builtin snapshot still works offline
+    assert "grok-4.5" in models
+
+
+# --- :grok models / :grok model TUI surface --------------------------------------
+
+
+def test_grok_cmd_routes_models_and_model_subcommands():
+    from superqode.app_main import SuperQodeApp
+
+    calls = []
+
+    class _Stub:
+        def _show_grok_models(self, log):
+            calls.append("models")
+
+        def _show_grok_model_picker(self, log):
+            calls.append("picker")
+
+        def _grok_api_cmd(self, rest, log):
+            calls.append(("api", rest))
+
+    SuperQodeApp._grok_cmd(_Stub(), "models", _Log())
+    SuperQodeApp._grok_cmd(_Stub(), "model", _Log())
+    SuperQodeApp._grok_cmd(_Stub(), "model grok-4.5", _Log())
+
+    assert calls == ["models", "picker", ("api", "grok-4.5")]
+
+
+class _PanelLog(_Log):
+    def __init__(self):
+        super().__init__()
+        self.panels = []
+
+    def write_feedback(self, content):
+        self.panels.append(content.plain if hasattr(content, "plain") else str(content))
+
+
+def test_show_grok_models_lists_live_cli_catalog(monkeypatch):
+    from superqode.app_main import SuperQodeApp
+
+    monkeypatch.setattr(grok_cli_auth, "clear_cli_models_cache", lambda: None)
+    monkeypatch.setattr(
+        grok_cli_auth,
+        "cached_cli_models",
+        lambda: {"default": "grok-build", "models": ["grok-4.5", "grok-composer-2.5-fast"]},
+    )
+
+    log = _PanelLog()
+    SuperQodeApp._show_grok_models(object.__new__(SuperQodeApp), log)
+
+    panel = " ".join(log.panels)
+    assert "grok-composer-2.5-fast" in panel
+    assert "grok-build" in panel  # default alias is shown and marked
+    assert "signed-in CLI catalog" in panel
+
+
+def test_show_grok_models_falls_back_when_logged_out(monkeypatch):
+    from superqode.app_main import SuperQodeApp
+    from superqode.providers import models as model_db
+
+    monkeypatch.setattr(grok_cli_auth, "clear_cli_models_cache", lambda: None)
+    monkeypatch.setattr(grok_cli_auth, "cached_cli_models", lambda: {"default": "", "models": []})
+    monkeypatch.setattr(model_db, "_use_live_data", False)
+    monkeypatch.setattr(model_db, "_live_models", None)
+    monkeypatch.setattr(model_db, "_live_autoload_attempted", True)
+
+    log = _PanelLog()
+    SuperQodeApp._show_grok_models(object.__new__(SuperQodeApp), log)
+
+    panel = " ".join(log.panels)
+    assert "grok-4.5" in panel  # builtin snapshot
+    assert "builtin fallback" in panel
+    assert "grok login" in panel
+
+
+def test_grok_model_picker_requires_login(tmp_path, isolated_auth_store, monkeypatch):
+    from superqode.app_main import SuperQodeApp
+
+    monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", tmp_path / "missing.json")
+
+    class _Stub:
+        def __init__(self):
+            self.picker_calls = []
+
+        def _import_grok_token(self, log):
+            return SuperQodeApp._import_grok_token(self, log)
+
+        def _show_provider_models(self, provider, log, use_picker=False):
+            self.picker_calls.append(provider)
+
+    stub, log = _Stub(), _Log()
+    SuperQodeApp._show_grok_model_picker(stub, log)
+    assert stub.picker_calls == []
+    assert any("No Grok CLI login" in e for e in log.errors)
+
+    # With a login present the BYOK picker opens for grok-cli.
+    auth_file = _write_cli_auth(tmp_path, {"https://accounts.x.ai/sign-in": {"key": "sess-ok"}})
+    monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", auth_file)
+    stub, log = _Stub(), _Log()
+    SuperQodeApp._show_grok_model_picker(stub, log)
+    assert stub.picker_calls == ["grok-cli"]

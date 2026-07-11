@@ -2193,9 +2193,7 @@ class AgentLoop:
         tool_calls_made = 0
         iterations = 0
         unexecuted_tool_intent_retries = 0
-        max_unexecuted_tool_intent_retries = (
-            1 if self.config.loop_policy.semantic_tool_retry else 0
-        )
+        max_unexecuted_tool_intent_retries = 1 if self.config.loop_policy.semantic_tool_retry else 0
         auto_continues = 0
         length_parts: List[str] = []
         rubric_rounds = 0

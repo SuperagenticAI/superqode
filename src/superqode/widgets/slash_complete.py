@@ -283,6 +283,11 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand("/connect local", "Connect to local model provider", category="workflow"),
     SlashCommand(":connect local", "Connect to local model provider", category="workflow"),
     SlashCommand(":grok", "Connect SuperQode harness on Grok subscription", category="workflow"),
+    SlashCommand(":grok connect", "Connect the Grok subscription harness", category="workflow"),
+    SlashCommand(
+        ":grok models", "List the signed-in Grok CLI's model catalog", category="workflow"
+    ),
+    SlashCommand(":grok model", "Pick a Grok subscription model and connect", category="workflow"),
     SlashCommand(":grok status", "Check Grok CLI and login readiness", category="workflow"),
     SlashCommand(":grok login", "Show Grok browser and device login commands", category="workflow"),
     SlashCommand(

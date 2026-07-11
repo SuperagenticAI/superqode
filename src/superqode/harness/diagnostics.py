@@ -1205,7 +1205,9 @@ def _agent_readiness_check(spec: HarnessSpec) -> dict[str, Any]:
 
     agents: list[dict[str, Any]] = []
     known_tools = {
-        tool.name for registry in (ToolRegistry.full(), ToolRegistry.core()) for tool in registry.list()
+        tool.name
+        for registry in (ToolRegistry.full(), ToolRegistry.core())
+        for tool in registry.list()
     }
     for agent in spec.agents:
         missing_tools = [
@@ -1348,7 +1350,9 @@ def _tool_check(spec: HarnessSpec) -> dict[str, Any]:
             "data": {"requested": [], "fix": "No action needed."},
         }
     available = {
-        tool.name for registry in (ToolRegistry.full(), ToolRegistry.core()) for tool in registry.list()
+        tool.name
+        for registry in (ToolRegistry.full(), ToolRegistry.core())
+        for tool in registry.list()
     }
     missing = [tool for tool in requested if tool not in available and not tool.startswith("mcp_")]
     mcp_tools = [tool for tool in requested if tool.startswith("mcp_")]

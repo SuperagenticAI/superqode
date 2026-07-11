@@ -180,9 +180,7 @@ async def run_headless(
         from .harness import resolve_harness
 
         try:
-            custom_harness = resolve_harness(
-                profile_name, root=working_directory or Path.cwd()
-            )
+            custom_harness = resolve_harness(profile_name, root=working_directory or Path.cwd())
         except (FileNotFoundError, ValueError) as exc:
             valid = ", ".join(sorted(profiles))
             raise ValueError(
@@ -263,7 +261,9 @@ async def run_headless(
 
     assert profile is not None
 
-    loop_policy = core_loop_policy() if profile.name in {"core", "no-tool"} else workbench_loop_policy()
+    loop_policy = (
+        core_loop_policy() if profile.name in {"core", "no-tool"} else workbench_loop_policy()
+    )
     harness_source = "built-in" if profile.name in {"core", "workbench", "no-tool"} else "profile"
     harness_digest = ""
     if harness_source == "built-in":
@@ -285,9 +285,7 @@ async def run_headless(
         harness_id=profile.name,
         harness_source=harness_source,
         harness_digest=harness_digest,
-        tool_contract_version=(
-            "core-tools-v1" if profile.name == "core" else "workbench-v1"
-        ),
+        tool_contract_version=("core-tools-v1" if profile.name == "core" else "workbench-v1"),
     )
 
     runtime_obj = create_runtime(
