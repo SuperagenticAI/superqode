@@ -20,10 +20,10 @@ def test_dialog_lists_current_runtimes():
         "adk",
         "openai-agents",
         "codex-sdk",
-            "claude-agent-sdk",
-            "antigravity-sdk",
-            "antigravity-cli",
-            "pydanticai",
+        "claude-agent-sdk",
+        "antigravity-sdk",
+        "antigravity-cli",
+        "pydanticai",
     }
 
 

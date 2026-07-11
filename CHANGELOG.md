@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.16] - 2026-07-11
+
+### Added
+
+- **Google Antigravity CLI runtime** - Added a first-class `antigravity-cli` runtime that uses the official `agy` headless interface and its Google Sign-In session. OAuth credentials remain owned by `agy` and the operating system keyring.
+- **Google Antigravity SDK runtime** - Added an optional `antigravity-sdk` runtime for API-key users, including normalized text, thinking, tool-call, tool-result, and completion events.
+- **Explicit Antigravity harness routes** - Added commands for the signed-in Antigravity harness, the API-key Antigravity SDK harness, and the SuperQode harness with Google BYOK. Provider documentation now identifies harness ownership, authentication, event support, and security boundaries.
+
+### Fixed
+
+- **Antigravity workspace isolation** - SuperQode now passes the exact Antigravity project ID for the active repository and resumes only the conversation ID mapped to that resolved working directory. The adapter no longer uses global `agy --continue`, preventing conversation and tool-path leakage between repositories.
+- **Accurate Antigravity connection status** - Antigravity connection panels now report Google Sign-In or Gemini API-key authentication and show Antigravity commands. They no longer display Codex authentication, model resolution, or `:codex` guidance.
+- **Picker selection visibility** - Keyboard-driven pickers keep the complete selected block visible after layout. Selecting a connection replaces the picker before rendering its result, so setup guidance and connection details cannot remain below the viewport.
+
+### Changed
+
+- **Codex and Grok CLI integration** - Improved Codex compatibility, active model discovery, completion behavior, Grok subscription model discovery, and connection guidance across the TUI and documentation.
+- **Release metadata** - Bumped the package version, runtime `__version__`, lockfile package entry, and ACP registry metadata to `0.2.16`.
+
 ### Fixed
 
 - **Grok subscription picker shows the CLI's real model catalog** - The `grok-cli` model list was a hardcoded snapshot, so models the signed-in Grok CLI offers (for example the new `grok-composer` family) never appeared in SuperQode. The picker now sources the catalog from `grok models` (cached per session, in the CLI's own order, with curated metadata for known ids) and falls back to the builtin snapshot when the CLI is missing or logged out.

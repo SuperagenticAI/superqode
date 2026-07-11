@@ -13,6 +13,7 @@ class _Response:
         async def stream():
             yield "hello "
             yield "world"
+
         return stream()
 
 
@@ -40,6 +41,7 @@ def test_antigravity_runtime_streams_and_accepts_google_key(monkeypatch):
     sdk.LocalAgentConfig = lambda **kwargs: SimpleNamespace(**kwargs)
     monkeypatch.setitem(sys.modules, "google", google)
     monkeypatch.setitem(sys.modules, "google.antigravity", sdk)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
 
     from superqode.runtime.antigravity_sdk import AntigravitySDKRuntime
@@ -85,6 +87,7 @@ def test_antigravity_runtime_normalizes_rich_sdk_events(monkeypatch):
             async def stream():
                 for item in (Thought(), ToolCall(), ToolResult(), Text()):
                     yield item
+
             return stream()
 
     class Agent:

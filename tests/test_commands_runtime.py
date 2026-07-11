@@ -45,6 +45,8 @@ def test_list_json_emits_array(runner, monkeypatch):
         "openai-agents",
         "codex-sdk",
         "claude-agent-sdk",
+        "antigravity-sdk",
+        "antigravity-cli",
         "pydanticai",
     }
     # Exactly one entry is marked active.
