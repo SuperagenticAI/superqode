@@ -1,180 +1,130 @@
-"""
-Agent CLI commands for SuperQode.
+"""SuperQode 'agents' CLI: list/store/show/doctor/connect/install ACP agents."""
 
-Commands for listing and showing ACP/External agents.
-"""
+import json
+import click
+import click
 
 import click
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-
-from ..agents.registry import (
-    AGENTS,
-    AgentProtocol,
-    AgentStatus,
-    get_supported_agents,
-    get_acp_agents,
-    get_external_agents,
-)
 
 
-console = Console()
-
-
+# ACP Agent commands
 @click.group()
 def agents():
-    """Manage coding agents (ACP mode)."""
+    """Manage ACP (Agent-Client Protocol) coding agents."""
     pass
-
-
 @agents.command("list")
+@click.option("--store", is_flag=True, help="Show agent store interface")
 @click.option(
     "--protocol",
     type=click.Choice(["acp", "external"]),
-    help="Filter by protocol",
+    help="Filter by protocol. The active agents command currently lists ACP agents.",
 )
-@click.option(
-    "--supported",
-    is_flag=True,
-    help="Show only supported agents",
-)
-def list_agents(protocol: str, supported: bool):
-    """List available coding agents."""
+@click.option("--supported", is_flag=True, help="Accepted for compatibility; ACP agents are shown.")
+def agents_list(store, protocol, supported):
+    """List all available ACP coding agents."""
+    from superqode.commands.acp import show_agents_list, show_agents_store
 
-    # Filter agents
-    filtered = dict(AGENTS)
-
-    if protocol:
-        proto = AgentProtocol.ACP if protocol == "acp" else AgentProtocol.EXTERNAL
-        filtered = {k: v for k, v in filtered.items() if v.protocol == proto}
-
-    if supported:
-        filtered = {k: v for k, v in filtered.items() if v.status == AgentStatus.SUPPORTED}
-
-    # Build table
-    table = Table(title="Coding Agents", show_header=True, header_style="bold cyan")
-    table.add_column("Agent", style="white")
-    table.add_column("Name", style="white")
-    table.add_column("Protocol", style="dim")
-    table.add_column("Status", style="white")
-    table.add_column("Description", style="dim", max_width=40)
-
-    # Sort by status (supported first) then name
-    sorted_agents = sorted(filtered.items(), key=lambda x: (x[1].status.value, x[0]))
-
-    for agent_id, agent_def in sorted_agents:
-        status_map = {
-            AgentStatus.SUPPORTED: "[green]✅ Supported[/green]",
-            AgentStatus.COMING_SOON: "[yellow]🔜 Coming Soon[/yellow]",
-            AgentStatus.EXPERIMENTAL: "[blue]🧪 Experimental[/blue]",
-        }
-        status = status_map.get(agent_def.status, agent_def.status.value)
-
-        protocol_str = agent_def.protocol.value.upper()
-
-        table.add_row(
-            agent_id,
-            agent_def.name,
-            protocol_str,
-            status,
-            agent_def.description[:40] + "..."
-            if len(agent_def.description) > 40
-            else agent_def.description,
+    if protocol == "external":
+        click.echo(
+            "No external agents are listed by this command. Use `superqode agents list` for ACP agents."
         )
-
-    console.print(table)
-
-    # Summary
-    supported_count = sum(1 for v in filtered.values() if v.status == AgentStatus.SUPPORTED)
-    console.print(f"\n[dim]Total: {len(filtered)} agents, {supported_count} supported[/dim]")
-
-
-@agents.command("show")
-@click.argument("agent_id")
-def show_agent(agent_id: str):
-    """Show details for a specific agent."""
-
-    agent_def = AGENTS.get(agent_id)
-
-    if not agent_def:
-        console.print(f"[red]Error: Agent '{agent_id}' not found[/red]")
-        console.print("\nAvailable agents:")
-        for aid in sorted(AGENTS.keys()):
-            console.print(f"  • {aid}")
         return
 
-    # Build info panel
-    status_map = {
-        AgentStatus.SUPPORTED: "[green]✅ Supported[/green]",
-        AgentStatus.COMING_SOON: "[yellow]🔜 Coming Soon[/yellow]",
-        AgentStatus.EXPERIMENTAL: "[blue]🧪 Experimental[/blue]",
-    }
-    status = status_map.get(agent_def.status, agent_def.status.value)
+    if store:
+        show_agents_store()
+    else:
+        show_agents_list()
+@agents.command("store")
+def agents_store():
+    """Show the beautiful agent store interface."""
+    from superqode.commands.acp import show_agents_store
 
-    info_lines = [
-        f"[bold]Agent:[/bold] {agent_def.name}",
-        f"[bold]ID:[/bold] {agent_id}",
-        f"[bold]Protocol:[/bold] {agent_def.protocol.value.upper()}",
-        f"[bold]Status:[/bold] {status}",
-        f"[bold]Connection:[/bold] {agent_def.connection_type}",
-        "",
-        f"[bold]Description:[/bold]",
-        f"  {agent_def.description}",
-        "",
-    ]
+    show_agents_store()
+@agents.command("show")
+@click.argument("agent", metavar="AGENT")
+def agents_show(agent):
+    """Show detailed information about a specific agent."""
+    from superqode.commands.acp import show_agent
 
-    # Capabilities
-    if agent_def.capabilities:
-        info_lines.append("[bold]Capabilities:[/bold]")
-        for cap in agent_def.capabilities:
-            info_lines.append(f"  • {cap}")
-        info_lines.append("")
+    show_agent(agent)
+@agents.command("doctor")
+@click.argument("agent", metavar="AGENT", required=False)
+@click.option("--live", is_flag=True, help="Start the ACP agent and check protocol support")
+@click.option("--timeout", default=10.0, type=float, help="Live protocol check timeout")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def agents_doctor(agent, live, timeout, json_output):
+    """Check ACP agent install, setup, and optional protocol health."""
+    import asyncio
 
-    # Auth info
-    info_lines.append("[bold]Authentication:[/bold]")
-    info_lines.append(f"  {agent_def.auth_info}")
-    info_lines.append("")
+    from superqode.acp.doctor import acp_doctor
 
-    # Setup
-    info_lines.append("[bold]Setup:[/bold]")
-    info_lines.append(f"  {agent_def.setup_command}")
-    info_lines.append("")
+    results = asyncio.run(acp_doctor(agent, live=live, timeout=timeout))
+    if agent and not results:
+        raise click.ClickException(f"ACP agent not found: {agent}")
 
-    # Command
-    if agent_def.command:
-        info_lines.append(f"[bold]Command:[/bold] {agent_def.command}")
-        info_lines.append("")
+    if json_output:
+        click.echo(json.dumps(results, indent=2))
+        return
 
-    # Docs
-    info_lines.append(f"[bold]Documentation:[/bold] {agent_def.docs_url}")
+    for result in results:
+        status = "installed" if result["installed"] else "missing"
+        click.echo(f"{result['short_name']} ({result['name']}): {status}")
+        if result.get("command"):
+            click.echo(f"  command: {result['command']}")
+        if result.get("missing_env_vars"):
+            click.echo(f"  env: set one of {', '.join(result['missing_env_vars'])}")
+        if not result["installed"] and result.get("install_command"):
+            click.echo(f"  install: {result['install_command']}")
+        live_result = result.get("live")
+        if live_result:
+            started = "yes" if live_result.get("started") else "no"
+            click.echo(f"  protocol started: {started}")
+            if live_result.get("session"):
+                click.echo("  session: yes")
+            if live_result.get("models"):
+                click.echo(f"  models: {len(live_result['models'])}")
+            if live_result.get("modes"):
+                click.echo(f"  modes: {len(live_result['modes'])}")
+            if live_result.get("error"):
+                click.echo(f"  error: {live_result['error']}")
+@agents.command("connect")
+@click.argument("agent", metavar="AGENT")
+@click.option("--project-dir", "-d", metavar="DIR", help="Project directory to work in")
+def agents_connect(agent, project_dir):
+    """Connect to an ACP coding agent. (Deprecated: use 'superqode connect acp' instead)"""
+    import warnings
 
-    panel = Panel(
-        "\n".join(info_lines),
-        title=f"Agent: {agent_def.name}",
-        border_style="cyan",
+    warnings.warn(
+        "'superqode agents connect' is deprecated. Use 'superqode connect acp' instead.",
+        DeprecationWarning,
+        stacklevel=2,
     )
-    console.print(panel)
+    from superqode.commands.acp import connect_agent
 
-    # Usage example
-    if agent_def.status == AgentStatus.SUPPORTED:
-        console.print("\n[bold]Usage in superqode.yaml:[/bold]")
-        console.print(f"""
-[dim]team:
-  dev:
-    roles:
-      my-role:
-        mode: "acp"
-        agent: "{agent_id}"
-        agent_config:
-          provider: "anthropic"
-          model: "claude-opus-4-8"
-        job_description: |
-          Your job description here...[/dim]
-""")
+    exit(connect_agent(agent, project_dir))
+@agents.command("install")
+@click.argument("agent", metavar="AGENT")
+def agents_install(agent):
+    """Install an ACP coding agent."""
+    from superqode.commands.acp import install_agent_cmd
 
+    exit(install_agent_cmd(agent))
+@agents.command("free-models")
+@click.option(
+    "--agent",
+    "agent_filter",
+    default=None,
+    help="Only show free models from this agent (identity or short_name)",
+)
+@click.option("--refresh", is_flag=True, help="Skip the discovery cache and re-probe live")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of a table")
+def agents_free_models(agent_filter, refresh, as_json):
+    """List free-tier models discovered across all installed ACP agents.
 
-# Register with main CLI
-def register_commands(cli):
-    """Register agent commands with the main CLI."""
-    cli.add_command(agents)
+    Each agent declares its catalog via the optional [free_models] section
+    in its TOML descriptor; SuperQode probes them in parallel and falls
+    back to a curated list when the live probe is unavailable.
+    """
+    from superqode.commands.acp import show_free_models
+
+    exit(show_free_models(agent_filter=agent_filter, refresh=refresh, as_json=as_json))
