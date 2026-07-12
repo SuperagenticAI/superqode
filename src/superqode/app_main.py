@@ -16,210 +16,54 @@ Note: This module imports from superqode.app/ package for modular components.
 
 from __future__ import annotations
 
-import asyncio
-import asyncio.base_subprocess as _asyncio_base_subprocess
-import json
 import os
-import pty
 import re
-import select
-import signal
-import subprocess
-import shutil
-import shlex
-import time
-import math
-import random
-import concurrent.futures
-import threading
-from urllib.parse import urlparse
+import shutil  # noqa: F401  (patched as superqode.app_main.shutil by tests)
 from pathlib import Path
-from typing import Any
-from dataclasses import dataclass, field
-from enum import Enum
-from time import monotonic
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, Center, ScrollableContainer
-from textual.widgets import Static, Input, Footer, RichLog, DirectoryTree, TextArea
+from textual.containers import Container, Horizontal
+from textual.widgets import Static
 from textual.binding import Binding
-from textual.reactive import reactive, var
-from textual.suggester import Suggester
-from textual import work, on, events
+from textual.reactive import reactive
+from textual import events
 from textual.timer import Timer
 
-from rich.text import Text
-from rich.panel import Panel
-from rich.markdown import Markdown
-from rich.rule import Rule
-from rich.console import Group
-from rich.box import ROUNDED, DOUBLE, HEAVY
 
-from superqode.providers.model_specs import (
-    normalize_model_for_provider,
-    normalize_provider_id,
-    split_provider_model_ref,
-)
 
 
 from superqode.app.recipes import PromptCompletionCandidate, LocalRecipe  # noqa: F401
 
 
 # Import from modular app package
-from superqode.app.constants import (
-    ASCII_LOGO,
-    COMPACT_LOGO,
-    GRADIENT,
-    RAINBOW,
-    THEME,
-    ICONS,
-    AGENT_COLORS,
-    AGENT_ICONS,
-    THINKING_MSGS,
-    COMMANDS,
-)
 from superqode.app.css import APP_CSS
-from superqode.app.models import AgentStatus, AgentInfo, check_installed, load_agents_sync
+from superqode.app.models import AgentInfo
 from superqode.app.suggester import CommandSuggester
 from superqode.app.widgets import (
-    GradientLogo,
     ColorfulStatusBar,
-    GradientTagline,
-    PulseWaveBar,
-    RainbowProgressBar,
-    ScanningLine,
     TopScanningLine,
     BottomScanningLine,
-    ProgressChase,
-    SparkleTrail,
-    ThinkingWave,
     StreamingThinkingIndicator,
     ModeBadge,
     HintsBar,
     ConversationLog,
-    ApprovalWidget,
-    DiffDisplay,
-    PlanDisplay,
-    ToolCallDisplay,
-    FlashMessage,
-    DangerWarning,
 )
-from superqode.widgets.leader_key import LeaderKeyPopup
-from superqode.widgets.command_palette import CommandPalette, PaletteCommand
-from superqode.widgets.rewind_overlay import RewindOverlay, RewindTarget
-from superqode.widgets.theme_picker import ThemePicker
+from superqode.widgets.command_palette import CommandPalette
 from superqode.app.theme_bridge import (
     apply_theme as _apply_theme_palette,
     load_saved_theme,
-    save_theme,
-    theme_names,
 )
 
 # SuperQode modules
-from superqode.danger import (
-    analyze_command,
-    DangerLevel,
-    DANGER_STYLES,
-    is_safe,
-    is_destructive,
-    requires_approval,
-)
-from superqode.diff_view import (
-    compute_diff,
-    render_diff,
-    render_diff_unified,
-    render_diff_split,
-    DiffMode,
-    DiffViewer,
-    FileDiff,
-)
-from superqode.approval import (
-    ApprovalManager,
-    ApprovalRequest,
-    ApprovalAction,
-    render_approval_request,
-    render_approval_list,
-)
 from superqode.plan import (
     PlanManager,
-    PlanTask,
-    TaskStatus,
-    TaskPriority,
-    render_plan,
-    render_plan_compact,
-    render_current_task,
 )
-from superqode.tool_call import (
-    ToolCallManager,
-    ToolCall as ToolCallData,
-    ToolStatus,
-    ToolKind,
-    render_tool_call,
-    render_tool_calls,
-)
-from superqode.flash import (
-    FlashManager,
-    FlashStyle,
-    flash_success,
-    flash_warning,
-    flash_error,
-    flash_info,
-)
-from superqode.atomic import AtomicFileManager, atomic_write, atomic_read
-from superqode.file_viewer import (
-    FileViewer,
-    render_file,
-    render_file_preview,
-    render_file_info,
-    get_file_info,
-    detect_language,
-)
-from superqode.history import HistoryManager, HistoryEntry, render_history
+from superqode.history import HistoryManager
 from superqode.sidebar import (
-    get_file_diff,
-    EnhancedSidebar,
-    CompactSidebar,
-    ColorfulDirectoryTree,
-    FilePreview,
-    get_file_icon,
-    get_folder_icon,
-    # Tabbed sidebar components
     CollapsibleSidebar,
-    GitStatusWidget,
-    FileSearch,
-    SidebarTabs,
-    GitChangesPanel,
-    CodebaseSearch,
-    get_git_changes,
-)
-from superqode.agent_output import (
-    format_agent_output_for_log,
-    create_simple_response_panel,
-    render_thinking_section,
-    render_full_response,
-    ThinkingLine,
-    AgentResponse,
-    COLORS as OUTPUT_COLORS,
 )
 
 # SuperQode Enhanced Display (unique design system)
-from superqode.design_system import (
-    COLORS as SQ_COLORS,
-    GRADIENT_PURPLE,
-    SUPERQODE_ICONS,
-    render_gradient_text,
-    render_status_indicator,
-)
-from superqode.providers.models import LATEST_GOOGLE_FLASH_MODEL, LATEST_GOOGLE_PRO_MODEL
-from superqode.undo_manager import UndoManager
-from superqode.safety import (
-    get_safety_warnings,
-    show_safety_warnings,
-    get_warning_acknowledgment,
-    WarningSeverity,
-    should_skip_warnings,
-    mark_warnings_acknowledged,
-)
 
 # Constants, models, CSS, widgets are imported from superqode.app package
 # See imports above for what's available
