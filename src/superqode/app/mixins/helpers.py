@@ -11,7 +11,7 @@ import time
 import concurrent.futures
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional
 from textual.widgets import Static, Input
 from textual import work
 from rich.text import Text

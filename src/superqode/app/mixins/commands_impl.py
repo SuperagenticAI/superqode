@@ -9,7 +9,7 @@ import shutil
 import shlex
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional
 from rich.text import Text
 from superqode.app.constants import (
     THEME,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 import asyncio
 import shutil
-from typing import Any
+from typing import Any, Dict, List, Optional
 from rich.text import Text
 from superqode.providers.model_specs import (
     split_provider_model_ref,
