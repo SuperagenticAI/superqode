@@ -7,6 +7,7 @@ import pytest
 
 from superqode.agent.loop import AgentConfig
 from superqode.runtime.antigravity_cli import AntigravityCLIRuntime, _version_tuple
+from superqode.runtime.antigravity_status import probe_antigravity_cli
 
 
 def test_version_tuple():
@@ -33,6 +34,71 @@ def test_rejects_cli_before_subprocess_fix(monkeypatch):
     monkeypatch.setattr(asyncio, "create_subprocess_exec", create)
     with pytest.raises(RuntimeError, match="1.1.1 or newer"):
         asyncio.run(runtime._check_version())
+
+
+def test_version_check_has_a_timeout(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda _name: "/tmp/agy")
+    runtime = AntigravityCLIRuntime(
+        config=AgentConfig(provider="google", model="", working_directory=Path.cwd())
+    )
+
+    class Process:
+        killed = False
+
+        async def communicate(self):
+            await asyncio.sleep(60)
+
+        def kill(self):
+            self.killed = True
+
+        async def wait(self):
+            return -9
+
+    process = Process()
+
+    async def create(*_args, **_kwargs):
+        return process
+
+    async def immediate_timeout(awaitable, timeout):
+        awaitable.close()
+        raise asyncio.TimeoutError
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", create)
+    monkeypatch.setattr(asyncio, "wait_for", immediate_timeout)
+
+    with pytest.raises(RuntimeError, match="Timed out"):
+        asyncio.run(runtime._check_version())
+    assert process.killed is True
+
+
+def test_readiness_probe_rejects_old_cli(monkeypatch):
+    class Process:
+        returncode = 0
+        stdout = "1.0.3\n"
+        stderr = ""
+
+    monkeypatch.setattr("shutil.which", lambda _name: "/tmp/agy")
+    monkeypatch.setattr("subprocess.run", lambda *_args, **_kwargs: Process())
+
+    status = probe_antigravity_cli()
+
+    assert status.installed is True
+    assert status.compatible is False
+    assert "agy update" in status.issue
+
+
+def test_stderr_is_drained_concurrently_and_bounded():
+    class Stream:
+        def __init__(self):
+            self.chunks = [b"a" * 40000, b"b" * 40000, b""]
+
+        async def read(self, _size):
+            return self.chunks.pop(0)
+
+    output = asyncio.run(AntigravityCLIRuntime._read_bounded_stderr(Stream(), limit=65536))
+
+    assert len(output) == 65536
+    assert output.endswith(b"b" * 40000)
 
 
 def test_command_uses_workspace_project_then_exact_conversation(monkeypatch, tmp_path):

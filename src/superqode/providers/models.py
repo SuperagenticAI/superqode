@@ -1329,7 +1329,7 @@ def _grok_cli_live_catalog() -> Dict[str, ModelInfo]:
     ``grok models`` is the source of truth for what the signed-in account can
     use; a hardcoded list goes stale the first time xAI ships a new family
     (grok-composer did exactly that). Metadata for known ids is copied from
-    the builtin catalogs; unknown ids get conservative defaults. Returns an
+    the builtin catalogs; unknown ids are explicitly marked unknown. Returns an
     empty dict when the CLI is missing or logged out, in which case the
     builtin grok-cli entries apply.
     """
@@ -1368,15 +1368,13 @@ def _grok_cli_live_catalog() -> Dict[str, ModelInfo]:
                 id=model_id,
                 name=model_id,
                 provider="grok-cli",
-                context_window=256000,
-                max_output=32000,
-                capabilities=[
-                    ModelCapability.TOOLS,
-                    ModelCapability.STREAMING,
-                    ModelCapability.CODE,
-                    ModelCapability.LONG_CONTEXT,
-                ],
-                description="Subscription model reported by `grok models`.",
+                context_window=0,
+                max_output=0,
+                capabilities=[],
+                description=(
+                    "Subscription model reported by `grok models`; context and "
+                    "capabilities have not been verified."
+                ),
             )
     return catalog
 

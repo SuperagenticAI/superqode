@@ -3505,6 +3505,11 @@ class SuperQodeApp(App):
                 if not info.implemented:
                     log.add_error(f"Runtime '{info.name}' is a stub and not yet usable.")
                     return True
+                if not info.ready:
+                    log.add_error(
+                        f"Runtime '{info.name}' is not ready: {info.status_detail or 'check setup'}"
+                    )
+                    return True
                 self._awaiting_runtime_selection = False
                 self._runtime_cmd(info.name, log)
                 if info.name not in self._SELF_CONTAINED_RUNTIMES:
@@ -4594,11 +4599,14 @@ class SuperQodeApp(App):
             is_active = info.name == current
             is_highlighted = i == highlighted_idx
 
-            if info.installed and info.implemented:
+            if info.usable:
                 status = "ready"
                 status_color = THEME["success"]
             elif not info.installed:
                 status = "needs setup"
+                status_color = THEME["warning"]
+            elif not info.ready:
+                status = "not ready"
                 status_color = THEME["warning"]
             else:
                 status = "stub"
@@ -4704,6 +4712,12 @@ class SuperQodeApp(App):
         if not info.implemented:
             log = self.query_one("#log", ConversationLog)
             log.add_error(f"Runtime '{info.name}' is a stub and not yet usable.")
+            return
+        if not info.ready:
+            log = self.query_one("#log", ConversationLog)
+            log.add_error(
+                f"Runtime '{info.name}' is not ready: {info.status_detail or 'check setup'}"
+            )
             return
         self._awaiting_runtime_selection = False
         log = self.query_one("#log", ConversationLog)
@@ -5512,6 +5526,12 @@ class SuperQodeApp(App):
                         return
                     if not info.implemented:
                         log.add_error(f"Runtime '{info.name}' is a stub and not yet usable.")
+                        return
+                    if not info.ready:
+                        log.add_error(
+                            f"Runtime '{info.name}' is not ready: "
+                            f"{info.status_detail or 'check setup'}"
+                        )
                         return
                     self._awaiting_runtime_selection = False
                     self._runtime_cmd(info.name, log)
@@ -7730,8 +7750,10 @@ class SuperQodeApp(App):
             )
         ]
         for info in list_runtimes():
-            if info.installed:
+            if info.usable:
                 desc = info.description
+            elif info.installed and not info.ready:
+                desc = f"not ready — {info.status_detail or 'check setup'}"
             else:
                 desc = f"not installed — {info.install_hint or 'optional extra required'}"
             candidates.append(
@@ -10861,6 +10883,8 @@ class SuperQodeApp(App):
                     status = f"missing — {info.install_hint or ''}"
                 elif not info.implemented:
                     status = "stub"
+                elif not info.ready:
+                    status = f"unavailable — {info.status_detail or ''}"
                 else:
                     status = "ready"
                 log.add_info(f"  {marker} {info.name:18} {status:30} {info.description}")
@@ -10882,6 +10906,9 @@ class SuperQodeApp(App):
             return
         if not info.implemented:
             log.add_error(f"Runtime '{sub}' is a stub and not yet usable.")
+            return
+        if not info.ready:
+            log.add_error(f"Runtime '{sub}' is not ready: {info.status_detail or 'check setup'}")
             return
 
         # A friendly setup path for the Codex subscription: someone without
@@ -11259,7 +11286,7 @@ class SuperQodeApp(App):
 
     # ---- xAI Grok Build :grok command surface ------------------------------
     def _grok_cmd(self, args: str, log) -> None:
-        """Handle the Grok subscription (SuperQode harness) command surface."""
+        """Handle Grok Build ACP and the explicit native-harness opt-in."""
         parts = (args or "").split(maxsplit=1)
         sub = parts[0].strip().lower() if parts and parts[0].strip() else "connect"
         rest = parts[1].strip() if len(parts) > 1 else ""
@@ -11294,9 +11321,9 @@ class SuperQodeApp(App):
         """Connect SuperQode harness using the Grok CLI subscription session.
 
         Imports the local ``grok login`` session token into SuperQode's auth
-        store and connects the ``grok-cli`` provider (CLI chat proxy). This is
-        the default for ``:connect grok`` / ``:grok connect``. Grok Build as an
-        external agent is ``:connect acp grok``.
+        store and connects the ``grok-cli`` provider (CLI chat proxy). Grok
+        Build is the default ``:connect grok`` / ``:grok connect`` route;
+        this native-harness path is always an explicit opt-in.
         """
         from superqode.providers import grok_cli_auth
 
@@ -11365,6 +11392,10 @@ class SuperQodeApp(App):
         return True
 
     def _show_grok_models(self, log) -> None:
+        """Schedule CLI model discovery without blocking the Textual event loop."""
+        self.run_worker(self._show_grok_models_async(log), exclusive=False)
+
+    async def _show_grok_models_async(self, log) -> None:
         """List the subscription models the signed-in Grok CLI reports."""
         from superqode.providers import grok_cli_auth
         from superqode.providers.models import get_models_for_provider
@@ -11373,7 +11404,7 @@ class SuperQodeApp(App):
         grok_cli_auth.clear_cli_models_cache()
         listing: dict = {}
         try:
-            listing = grok_cli_auth.cached_cli_models()
+            listing = await asyncio.to_thread(grok_cli_auth.cached_cli_models)
         except Exception:  # noqa: BLE001 - CLI probing is best-effort
             pass
         live = bool(listing.get("models"))
@@ -11415,6 +11446,16 @@ class SuperQodeApp(App):
         """
         if not self._import_grok_token(log):
             return
+        self.run_worker(self._show_grok_model_picker_async(log), exclusive=False)
+
+    async def _show_grok_model_picker_async(self, log) -> None:
+        """Warm the CLI catalog off-thread, then open the native model picker."""
+        from superqode.providers import grok_cli_auth
+
+        try:
+            await asyncio.to_thread(grok_cli_auth.cached_cli_models)
+        except Exception:  # noqa: BLE001 - the picker has a builtin fallback
+            pass
         self._show_provider_models("grok-cli", log, use_picker=False)
 
     def _show_grok_status(self, log) -> None:
@@ -31309,8 +31350,8 @@ class SuperQodeApp(App):
                     (":connect antigravity", "Use signed-in Antigravity CLI"),
                     (":antigravity status", "Check local agy CLI status"),
                     (":antigravity migrate", "Show Gemini CLI migration steps"),
-                    (":connect grok", "SuperQode harness on Grok subscription (CLI login)"),
-                    (":connect acp grok", "Grok Build via official CLI ACP"),
+                    (":connect grok", "Grok Build, xAI's own agent over ACP"),
+                    (":grok api", "SuperQode harness on the same subscription (opt-in)"),
                     (":grok status|login", "Check Grok CLI readiness or show login commands"),
                 ],
             ),
@@ -31647,6 +31688,13 @@ class SuperQodeApp(App):
 
     async def _exit_sequence_async(self, log: ConversationLog):
         """Await ACP/subprocess cleanup, then show goodbye and exit."""
+        pure = getattr(self, "_pure_mode", None)
+        if pure is not None:
+            try:
+                await asyncio.wait_for(pure.aclose(), timeout=2.0)
+            except Exception:  # noqa: BLE001 - exit cleanup is best-effort
+                pass
+
         # Stop ACP client
         if self._acp_client is not None:
             try:
@@ -31759,6 +31807,7 @@ class SuperQodeApp(App):
             pure = getattr(self, "_pure_mode", None)
             if pure is not None:
                 pure.cancel()
+                pure.disconnect()
         except Exception:
             pass
         if provider:

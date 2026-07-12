@@ -116,3 +116,44 @@ def test_antigravity_runtime_normalizes_rich_sdk_events(monkeypatch):
     ]
     assert events[2].data["tool_name"] == "view_file"
     assert events[3].data["success"] is True
+
+
+def test_antigravity_tool_exception_is_a_failed_result(monkeypatch):
+    google = ModuleType("google")
+    google.__path__ = []
+    sdk = ModuleType("google.antigravity")
+    monkeypatch.setitem(sys.modules, "google", google)
+    monkeypatch.setitem(sys.modules, "google.antigravity", sdk)
+
+    class ToolResult:
+        name = "bash"
+        id = "call-2"
+        result = None
+        error = None
+        exception = RuntimeError("boom")
+
+    class Response:
+        @property
+        def chunks(self):
+            async def stream():
+                yield ToolResult()
+
+            return stream()
+
+    class Agent:
+        async def chat(self, _prompt):
+            return Response()
+
+    from superqode.runtime.antigravity_sdk import AntigravitySDKRuntime
+
+    runtime = AntigravitySDKRuntime(
+        config=AgentConfig(provider="google", model="", working_directory=Path.cwd())
+    )
+    runtime._agent = Agent()
+
+    async def collect():
+        return [event async for event in runtime.run_harness_events("inspect")]
+
+    result = next(event for event in asyncio.run(collect()) if event.type == "tool_result")
+    assert result.data["success"] is False
+    assert result.data["error"] == "boom"

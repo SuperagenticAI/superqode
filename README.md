@@ -243,8 +243,8 @@ Inside the TUI, start with `:help` and these commands:
 :connect claude       # Claude Code through ACP
 :connect antigravity  # signed-in Antigravity CLI (Google OAuth/keyring)
 :connect byok google  # Google API key path
-:connect grok         # SuperQode harness on Grok subscription (CLI login)
-:connect acp grok     # Grok Build via the official Grok CLI (ACP)
+:connect grok         # Grok Build, xAI's own agent over ACP
+:grok api             # SuperQode core/workbench harness on the same subscription
 :connect byok         # hosted provider/API-key path
 :connect local        # local model provider
 :tree                 # saved session branches

@@ -72,8 +72,10 @@ def _claude_agent_ready() -> bool:
 
 
 def _antigravity_cli_ready() -> bool:
-    """The signed-in CLI owns Google OAuth; the runtime validates its version."""
-    return shutil.which("agy") is not None
+    """The CLI exists and meets the minimum safe subprocess version."""
+    from superqode.runtime.antigravity_status import probe_antigravity_cli
+
+    return probe_antigravity_cli().compatible
 
 
 def _grok_cli_ready() -> bool:
@@ -156,7 +158,10 @@ _PROFILES: List[ConnectionProfile] = [
         runtime="antigravity-cli",
         self_contained=True,
         detect=_antigravity_cli_ready,
-        unavailable_hint="install agy from https://antigravity.google/docs/cli-install",
+        unavailable_hint=(
+            "install or update agy from https://antigravity.google/docs/cli-install "
+            "(SuperQode requires 1.1.1+)"
+        ),
     ),
     ConnectionProfile(
         id="grok",

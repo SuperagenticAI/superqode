@@ -24,8 +24,6 @@ from superqode.agent.loop import _is_simple_conversational_query as is_simple
         "Hi there",
         "Hey there",
         "Hello, how are you?",
-        "What is a compiler?",
-        "Who wrote Hamlet?",
         # Model identity must skip tools (substring "code" in "coding" used to force tools).
         "which coding model are you using",
         "Which coding model is this?",
@@ -50,6 +48,14 @@ def test_conversational_prompts_are_simple(prompt):
         "which file should I edit",
         "what code uses auth",
         "hello please refactor the auth module",
+        "What is a compiler?",
+        "Who wrote Hamlet?",
+        "What dependencies are outdated?",
+        "Which tests are failing?",
+        "Where is authentication implemented?",
+        "Who calls the login endpoint?",
+        "When does CI deploy?",
+        "How many tests are failing?",
     ],
 )
 def test_code_prompts_are_not_simple(prompt):

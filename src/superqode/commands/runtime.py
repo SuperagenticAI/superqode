@@ -40,6 +40,8 @@ def list_runtimes_cmd(json_output: bool) -> None:
                 "description": r.description,
                 "installed": r.installed,
                 "implemented": r.implemented,
+                "ready": r.ready,
+                "status_detail": r.status_detail,
                 "install_hint": r.install_hint,
                 "active": r.name == active,
             }
@@ -60,6 +62,8 @@ def list_runtimes_cmd(json_output: bool) -> None:
             status = f"[yellow]missing[/yellow]  {r.install_hint or ''}".strip()
         elif not r.implemented:
             status = "[red]stub[/red]"
+        elif not r.ready:
+            status = f"[yellow]unavailable[/yellow]  {r.status_detail or ''}".strip()
         else:
             status = "[green]ready[/green]"
         table.add_row(marker, r.name, status, r.description)
@@ -111,6 +115,9 @@ def doctor(name: Optional[str]) -> None:
         console.print(f"  description: {info.description}")
         console.print(f"  installed:   {'yes' if info.installed else 'no'}")
         console.print(f"  implemented: {'yes' if info.implemented else 'no'}")
+        console.print(f"  ready:       {'yes' if info.ready else 'no'}")
+        if info.status_detail:
+            console.print(f"  status:      {info.status_detail}")
         if info.install_hint:
             console.print(f"  install:     [yellow]{info.install_hint}[/yellow]")
 
@@ -137,7 +144,7 @@ def doctor(name: Optional[str]) -> None:
         elif target == "builtin":
             _probe_modules(["superqode.agent.loop", "superqode.tools.base"])
 
-        if not info.installed or not info.implemented:
+        if not info.usable:
             any_problems = True
 
     if any_problems:

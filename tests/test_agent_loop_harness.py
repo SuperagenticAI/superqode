@@ -253,6 +253,24 @@ async def test_local_simple_chat_skips_coding_scaffolding(monkeypatch, tmp_path)
 
 
 @pytest.mark.asyncio
+async def test_fast_chat_does_not_replace_empty_model_output_with_a_greeting():
+    gateway = ScriptedGateway(
+        [GatewayResponse(content="", tool_calls=[_tool_call("read_file", '{"path":"README.md"}')])]
+    )
+    loop = AgentLoop(
+        gateway=gateway,
+        tools=ToolRegistry.default(),
+        config=AgentConfig(provider="ollama", model="qwen3:8b"),
+    )
+
+    result = await loop.run("hello")
+
+    assert "returned an empty response" in result.content
+    assert "How can I help?" not in result.content
+    assert result.tool_calls_made == 0
+
+
+@pytest.mark.asyncio
 async def test_local_simple_chat_streaming_fast_path(monkeypatch):
     gateway = ScriptedGateway([])
     loop = AgentLoop(

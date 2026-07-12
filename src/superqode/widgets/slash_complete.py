@@ -275,15 +275,15 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     ),
     SlashCommand(
         ":connect grok",
-        "SuperQode harness on Grok subscription (CLI login)",
+        "Grok Build, xAI's own agent on your subscription (ACP)",
         category="workflow",
     ),
     SlashCommand("/connect byok", "Connect to BYOK provider/model", category="workflow"),
     SlashCommand(":connect byok", "Connect to BYOK provider/model", category="workflow"),
     SlashCommand("/connect local", "Connect to local model provider", category="workflow"),
     SlashCommand(":connect local", "Connect to local model provider", category="workflow"),
-    SlashCommand(":grok", "Connect SuperQode harness on Grok subscription", category="workflow"),
-    SlashCommand(":grok connect", "Connect the Grok subscription harness", category="workflow"),
+    SlashCommand(":grok", "Connect Grok Build, xAI's own agent (ACP)", category="workflow"),
+    SlashCommand(":grok connect", "Connect Grok Build over ACP", category="workflow"),
     SlashCommand(
         ":grok models", "List the signed-in Grok CLI's model catalog", category="workflow"
     ),
@@ -292,7 +292,7 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":grok login", "Show Grok browser and device login commands", category="workflow"),
     SlashCommand(
         ":grok api",
-        "Alias of :connect grok; import CLI session for SuperQode harness",
+        "Import the CLI session for SuperQode's native harness (opt-in)",
         category="workflow",
     ),
     SlashCommand("/model", "Show or switch models", category="workflow"),

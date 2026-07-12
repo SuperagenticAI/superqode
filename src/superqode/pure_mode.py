@@ -6,6 +6,7 @@ without the bias of heavy harnesses.
 """
 
 import asyncio
+import inspect
 import os
 import time
 from dataclasses import dataclass, field
@@ -71,6 +72,7 @@ class PureMode:
         self._loop_policy: NativeLoopPolicy = core_loop_policy()
         self.runtime_name = resolve_runtime_name(cli=runtime)
         self._runtime: Optional[AgentRuntime] = None
+        self._runtime_close_tasks: set[asyncio.Task] = set()
         self._agent: Optional[AgentLoop] = None
         self._session_manager: Optional[SessionManager] = None
         self._harness_spec = None
@@ -115,8 +117,7 @@ class PureMode:
         self._harness_kernel = None
         self._harness_session = None
         self._harness_session_id = ""
-        self._runtime = None
-        self._agent = None
+        self._dispose_runtime()
         self._sync_harness_session_fields()
         return definition
 
@@ -128,6 +129,7 @@ class PureMode:
         """Set an already loaded HarnessSpec."""
         from superqode.harness.catalog import HarnessDefinition
 
+        self._dispose_runtime()
         self._harness_spec = spec
         self._harness_path = str(path or "")
         self._harness_definition = HarnessDefinition(
@@ -268,8 +270,7 @@ class PureMode:
             if self._harness_spec.is_no_tool:
                 self.tool_profile = "none"
                 self.tools = ToolRegistry.empty()
-            self._runtime = None
-            self._agent = None
+            self._dispose_runtime()
             return True
 
         provider_def = PROVIDERS.get(provider)
@@ -321,6 +322,7 @@ class PureMode:
         if self.runtime_name in ("codex-sdk", "claude-agent-sdk"):
             runtime_kwargs["approval_callback"] = self.on_permission_request
 
+        self._dispose_runtime()
         self._runtime = create_runtime(
             self.runtime_name,
             gateway=self.gateway,
@@ -346,13 +348,52 @@ class PureMode:
 
     def disconnect(self):
         """Disconnect from Pure Mode."""
+        self.cancel()
+        self._dispose_runtime()
         self.session = PureSession()
-        self._agent = None
-        self._runtime = None
         self._harness_kernel = None
         self._harness_session = None
         self._harness_session_id = ""
         self._sync_harness_session_fields()
+
+    def _dispose_runtime(self) -> None:
+        """Close and detach the current runtime without blocking a running UI loop."""
+        runtime, self._runtime = self._runtime, None
+        self._agent = None
+        if runtime is None:
+            return
+        closer = getattr(runtime, "aclose", None) or getattr(runtime, "close", None)
+        if closer is None:
+            return
+        try:
+            result = closer()
+        except Exception:  # noqa: BLE001 - cleanup must not make switching unusable
+            return
+        if not inspect.isawaitable(result):
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(result)
+            return
+        task = loop.create_task(result)
+        self._runtime_close_tasks.add(task)
+        task.add_done_callback(self._runtime_close_tasks.discard)
+
+    async def aclose(self) -> None:
+        """Close the active runtime and await any cleanup scheduled by switching."""
+        self.cancel()
+        runtime, self._runtime = self._runtime, None
+        self._agent = None
+        if runtime is not None:
+            closer = getattr(runtime, "aclose", None) or getattr(runtime, "close", None)
+            if closer is not None:
+                result = closer()
+                if inspect.isawaitable(result):
+                    await result
+        pending = list(self._runtime_close_tasks)
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
     def set_system_level(self, level: SystemPromptLevel):
         """Change the system prompt level."""
@@ -441,10 +482,7 @@ class PureMode:
             # Self-contained runtimes (e.g. codex-sdk) have no builtin AgentLoop
             # (no ``.loop``); stream straight through the runtime instead.
             if self._runtime is not None:
-                if self.runtime_name in (
-                    "codex-sdk",
-                    "claude-agent-sdk",
-                ) and hasattr(self._runtime, "run_harness_events"):
+                if hasattr(self._runtime, "run_harness_events"):
                     self._runtime_seen_tool_calls = set()
                     try:
                         async for event in self._runtime.run_harness_events(prompt):
@@ -484,6 +522,13 @@ class PureMode:
         """Forward runtime harness events into PureMode callbacks."""
         if event.type == "model_delta":
             return str(event.data.get("text") or "")
+        if event.type == "thinking":
+            text = str(event.data.get("text") or "")
+            if text and self.on_thinking:
+                result = self.on_thinking(text)
+                if inspect.isawaitable(result):
+                    asyncio.create_task(result)
+            return ""
         if event.type == "tool_call":
             # Some runtimes (Claude) emit an explicit tool_call before the result.
             name = str(event.data.get("tool_name") or "tool")
@@ -676,6 +721,8 @@ class PureMode:
         """Cancel the current agent operation."""
         if self._agent:
             self._agent.cancel()
+        elif self._runtime is not None:
+            self._runtime.cancel()
 
     def get_status(self) -> Dict[str, Any]:
         """Get current Pure Mode status."""

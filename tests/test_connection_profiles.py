@@ -43,6 +43,23 @@ def test_antigravity_profile_is_signed_in_cli_runtime_connector():
     assert "google sign-in" in antigravity.description.lower()
 
 
+def test_antigravity_detect_requires_compatible_cli(monkeypatch):
+    import superqode.providers.connection_profiles as cp
+    from superqode.runtime.antigravity_status import AntigravityCLIStatus
+
+    monkeypatch.setattr(
+        "superqode.runtime.antigravity_status.probe_antigravity_cli",
+        lambda: AntigravityCLIStatus(
+            binary="/tmp/agy",
+            version_text="1.0.3",
+            version=(1, 0, 3),
+            issue="run agy update",
+        ),
+    )
+
+    assert cp._antigravity_cli_ready() is False
+
+
 def test_grok_profile_defaults_to_grok_build_acp():
     """`:connect grok` runs xAI's own Grok Build agent (ACP), like Codex/Claude.
 

@@ -171,7 +171,10 @@ def cached_cli_models() -> Dict[str, Any]:
                 timeout=15,
                 check=False,
             )
-            result = parse_cli_models_output(f"{proc.stdout or ''}\n{proc.stderr or ''}")
+            if proc.returncode == 0:
+                # stderr may contain warnings or error headings that resemble
+                # model identifiers. Only successful stdout is catalog data.
+                result = parse_cli_models_output(proc.stdout or "")
         except (OSError, subprocess.SubprocessError):
             pass
     _cli_models_cache = result

@@ -201,8 +201,8 @@ def _code_intent_keyword_re() -> re.Pattern[str]:
 def _is_simple_conversational_query(message: str) -> bool:
     """Detect if a query is simple/conversational and doesn't need tools.
 
-    Simple queries are general knowledge questions, greetings, or basic
-    questions that don't require code/file operations.
+    Simple queries are greetings, social openers, or questions about the
+    active model/runtime that never require repository inspection.
 
     This is conservative - only returns True for very obvious cases.
     """
@@ -305,23 +305,10 @@ def _is_simple_conversational_query(message: str) -> bool:
         if re.match(pattern, message_lower) and not code_keyword_re.search(message_lower):
             return True
 
-    # Simple question patterns - detect basic general knowledge questions
-    # These should not require tools and some models handle them poorly with tools
-    simple_patterns = [
-        r"^(what|what\'s|whats|which) .+\??$",  # "What is…?", "Which model…?"
-        r"^where .+\??$",  # "Where is the capital?"
-        r"^who .+\??$",  # "Who is the president?"
-        r"^when .+\??$",  # "When was the war?"
-        r"^how (many|much|long|old) .+\??$",  # "How many people?", "How old is it?"
-        r"^how (are|is|'s|s|have|was|do) (you|it|things|everything|ya)\b.*$",  # "how are you", "how's it going"
-    ]
-
-    for pattern in simple_patterns:
-        if re.match(pattern, message_lower):
-            if not code_keyword_re.search(message_lower):
-                return True
-
-    # Don't auto-detect other cases - be conservative
+    # Do not infer that open-ended questions are general knowledge. Prompts such
+    # as "Which tests are failing?" and "Where is authentication implemented?"
+    # need repository tools even though they contain no obvious code keyword.
+    # Ambiguous questions deliberately stay on the normal tool-capable path.
     return False
 
 
@@ -2330,12 +2317,6 @@ class AgentLoop:
                     await self.on_thinking(
                         "Ignoring tool calls on a simple chat turn (no repo scan)."
                     )
-                if not (response_content or "").strip():
-                    response_content = (
-                        "Hello! I'm SuperQode's coding harness. "
-                        f"Connected as `{self.config.provider}/{self.config.model}`. "
-                        "How can I help?"
-                    )
                 response.tool_calls = None
 
             # Check for empty responses from models that should respond
@@ -2881,13 +2862,6 @@ class AgentLoop:
                     await self.on_thinking(
                         "Ignoring tool calls on a simple chat turn (no repo scan)."
                     )
-                if not (full_content or "").strip():
-                    full_content = (
-                        "Hello! I'm SuperQode's coding harness. "
-                        f"Connected as `{self.config.provider}/{self.config.model}`. "
-                        "How can I help?"
-                    )
-                    yield full_content
                 tool_calls = []
 
             # Handle tool calls

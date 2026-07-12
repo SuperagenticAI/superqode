@@ -1,4 +1,7 @@
+import asyncio
+
 from superqode.agent.session_manager import SessionManager
+from superqode.harness.events import HarnessEvent
 from superqode.pure_mode import PureMode
 
 
@@ -212,3 +215,93 @@ def test_new_session_records_core_harness_contract(tmp_path, monkeypatch):
     assert metadata.harness_source == "built-in"
     assert metadata.harness_digest.startswith("sha256:")
     assert metadata.tool_contract_version == "core-tools-v1"
+
+
+def test_disconnect_closes_self_contained_runtime():
+    class Runtime:
+        closed = False
+        cancelled = False
+
+        def cancel(self):
+            self.cancelled = True
+
+        def close(self):
+            self.closed = True
+
+    pure = PureMode()
+    runtime = Runtime()
+    pure._runtime = runtime
+
+    pure.disconnect()
+
+    assert runtime.cancelled is True
+    assert runtime.closed is True
+    assert pure._runtime is None
+
+
+def test_aclose_awaits_async_runtime_cleanup():
+    class Runtime:
+        closed = False
+
+        def cancel(self):
+            return None
+
+        async def aclose(self):
+            await asyncio.sleep(0)
+            self.closed = True
+
+    async def exercise():
+        pure = PureMode()
+        runtime = Runtime()
+        pure._runtime = runtime
+        await pure.aclose()
+        return runtime
+
+    assert asyncio.run(exercise()).closed is True
+
+
+def test_structured_runtime_events_are_capability_based():
+    class Runtime:
+        def cancel(self):
+            return None
+
+        async def run_harness_events(self, _prompt):
+            yield HarnessEvent(type="thinking", data={"text": "checking"})
+            yield HarnessEvent(
+                type="tool_call",
+                data={"tool_name": "read", "tool_call_id": "1", "args": {"path": "README.md"}},
+            )
+            yield HarnessEvent(
+                type="tool_result",
+                data={
+                    "tool_name": "read",
+                    "tool_call_id": "1",
+                    "success": True,
+                    "output": "contents",
+                },
+            )
+            yield HarnessEvent(type="model_delta", data={"text": "done"})
+
+    async def exercise():
+        pure = PureMode(runtime="antigravity-sdk")
+        pure._runtime = Runtime()
+        pure._agent = None
+        thinking = []
+        calls = []
+        results = []
+
+        async def on_thinking(text):
+            thinking.append(text)
+
+        pure.on_thinking = on_thinking
+        pure.on_tool_call = lambda name, args: calls.append((name, args))
+        pure.on_tool_result = lambda name, result: results.append((name, result.output))
+        chunks = [chunk async for chunk in pure.run_streaming("inspect")]
+        await asyncio.sleep(0)
+        return chunks, thinking, calls, results
+
+    chunks, thinking, calls, results = asyncio.run(exercise())
+    assert chunks == ["done"]
+    assert thinking == ["checking"]
+    assert calls == [("read", {"path": "README.md"})]
+    assert results == [("read", "contents")]

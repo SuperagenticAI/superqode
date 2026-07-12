@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import importlib
 import os
-import shutil
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -33,6 +32,12 @@ class RuntimeInfo:
     installed: bool
     install_hint: str | None  # None when no extra is needed
     implemented: bool  # False for stubs (openai-agents in v1)
+    ready: bool = True
+    status_detail: str | None = None
+
+    @property
+    def usable(self) -> bool:
+        return self.installed and self.implemented and self.ready
 
 
 def _builtin_factory(**kwargs) -> AgentRuntime:
@@ -172,13 +177,20 @@ def list_runtimes() -> list[RuntimeInfo]:
             installed = True
             install_hint = None
             implemented = True
+            ready = True
+            status_detail = None
         elif name == "antigravity-cli":
-            installed = shutil.which("agy") is not None
-            install_hint = (
-                None
-                if installed
-                else "install agy from https://antigravity.google/docs/cli-install"
+            from .antigravity_status import probe_antigravity_cli
+
+            status = probe_antigravity_cli()
+            installed = status.installed
+            ready = status.compatible
+            status_detail = status.issue or (
+                f"compatible CLI {status.version_text}; Google Sign-In is verified on first use"
+                if status.version_text
+                else None
             )
+            install_hint = None if installed else status.issue
             implemented = True
         else:
             pkg, extra = _OPTIONAL_PACKAGES[name]
@@ -189,6 +201,8 @@ def list_runtimes() -> list[RuntimeInfo]:
                 installed = False
             install_hint = None if installed else _extra_install(name)
             implemented = True
+            ready = installed
+            status_detail = None
         out.append(
             RuntimeInfo(
                 name=name,
@@ -196,6 +210,8 @@ def list_runtimes() -> list[RuntimeInfo]:
                 installed=installed,
                 install_hint=install_hint,
                 implemented=implemented,
+                ready=ready,
+                status_detail=status_detail,
             )
         )
     return out

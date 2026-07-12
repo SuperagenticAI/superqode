@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import sys
 import os
+import sys
 import threading
 import time
 import types
@@ -296,6 +296,58 @@ def test_runtime_prefers_a_newer_local_codex_cli(fake_codex_sdk, monkeypatch, tm
     assert _FakeCodexClient.last_instance.config.codex_bin == "/opt/homebrew/bin/codex"
     assert runtime.app_server_source == "local Codex CLI 0.144.0"
     assert runtime.active_model == "gpt-5.4"
+
+
+def test_runtime_can_disable_newer_local_codex_cli(fake_codex_sdk, monkeypatch, tmp_path):
+    from superqode.runtime import codex_sdk
+
+    monkeypatch.setenv("SUPERQODE_CODEX_PREFER_LOCAL_CLI", "0")
+    monkeypatch.setattr(
+        codex_sdk,
+        "_newer_local_codex_binary",
+        lambda: ("/opt/homebrew/bin/codex", "0.144.0"),
+    )
+    runtime = create_runtime("codex-sdk", config=_config(tmp_path))
+
+    assert runtime.metadata.userAgent == "fake-codex"
+    assert _FakeCodexClient.last_instance.config.codex_bin is None
+    assert runtime.app_server_source == "SDK-bundled Codex app-server"
+
+
+def test_model_list_protocol_error_falls_back_to_bundled_server(
+    fake_codex_sdk, monkeypatch, tmp_path
+):
+    from superqode.runtime import codex_sdk
+
+    clients = []
+
+    class _LocalModelMismatchClient(_FakeCodexClient):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            clients.append(self)
+
+        def model_list(self, include_hidden=False):
+            if self.config.codex_bin:
+                raise ValueError("protocol validation failed for model/list")
+            return super().model_list(include_hidden=include_hidden)
+
+    monkeypatch.setattr(
+        codex_sdk,
+        "_newer_local_codex_binary",
+        lambda: ("/opt/homebrew/bin/codex", "0.144.0"),
+    )
+    monkeypatch.setattr(
+        sys.modules["openai_codex.client"], "CodexClient", _LocalModelMismatchClient
+    )
+    runtime = create_runtime("codex-sdk", config=_config(tmp_path))
+
+    models = runtime.models()
+
+    assert models.data[0].model == "gpt-5.4"
+    assert len(clients) == 2
+    assert clients[0].closed is True
+    assert clients[1].config.codex_bin is None
+    assert runtime.app_server_source == "SDK-bundled Codex app-server"
 
 
 def test_installed_sdk_protocol_contract_has_translated_fields():

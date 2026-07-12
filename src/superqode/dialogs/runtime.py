@@ -71,6 +71,8 @@ class RuntimeDialog:
                 status = f"[yellow]missing[/yellow] {info.install_hint or ''}".strip()
             elif not info.implemented:
                 status = "[red]stub (not implemented)[/red]"
+            elif not info.ready:
+                status = f"[yellow]unavailable[/yellow] {info.status_detail or ''}".strip()
             else:
                 status = "[green]✓ available[/green]"
             table.add_row(str(idx), info.name, status, info.description)
@@ -103,6 +105,13 @@ class RuntimeDialog:
 
         if not selected.implemented:
             _console.print(f"[red]Runtime '{selected.name}' is a stub and not yet usable.[/red]")
+            return None
+
+        if not selected.ready:
+            _console.print(
+                f"[yellow]Runtime '{selected.name}' is not ready.[/yellow] "
+                f"[dim]{selected.status_detail or ''}[/dim]"
+            )
             return None
 
         return selected.name

@@ -8,21 +8,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 import shutil
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
 from ..agent.loop import AgentConfig, AgentMessage, AgentResponse
+from .antigravity_status import MINIMUM_ANTIGRAVITY_CLI_VERSION, version_tuple
 from .errors import RuntimeNotInstalledError
 
-_MINIMUM_VERSION = (1, 1, 1)
-
-
-def _version_tuple(text: str) -> tuple[int, int, int] | None:
-    match = re.search(r"(?<!\d)(\d+)\.(\d+)\.(\d+)", text or "")
-    return tuple(map(int, match.groups())) if match else None
+_MINIMUM_VERSION = MINIMUM_ANTIGRAVITY_CLI_VERSION
+_version_tuple = version_tuple
 
 
 class AntigravityCLIRuntime:
@@ -66,7 +62,14 @@ class AntigravityCLIRuntime:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await process.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=3.0)
+        except asyncio.TimeoutError as exc:
+            process.kill()
+            await process.wait()
+            raise RuntimeError(
+                "Timed out while checking `agy --version`; run `agy update`"
+            ) from exc
         text = (stdout or stderr).decode(errors="replace").strip()
         version = _version_tuple(text)
         if process.returncode or version is None:
@@ -145,18 +148,28 @@ class AntigravityCLIRuntime:
             self._process = process
             chunks: list[str] = []
             assert process.stdout is not None
-            while True:
-                raw = await process.stdout.read(4096)
-                if not raw:
-                    break
-                text = raw.decode(errors="replace")
-                chunks.append(text)
-                yield text
-            stderr = b""
-            if process.stderr is not None:
-                stderr = await process.stderr.read()
-            returncode = await process.wait()
-            self._process = None
+            stderr_task = asyncio.create_task(self._read_bounded_stderr(process.stderr))
+            try:
+                while True:
+                    raw = await process.stdout.read(4096)
+                    if not raw:
+                        break
+                    text = raw.decode(errors="replace")
+                    chunks.append(text)
+                    yield text
+                returncode = await process.wait()
+                stderr = await stderr_task
+            finally:
+                if process.returncode is None:
+                    process.terminate()
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=2.0)
+                    except asyncio.TimeoutError:
+                        process.kill()
+                        await process.wait()
+                self._process = None
+                if not stderr_task.done():
+                    stderr_task.cancel()
             if returncode and not self._cancelled:
                 detail = stderr.decode(errors="replace").strip()
                 raise RuntimeError(
@@ -166,6 +179,23 @@ class AntigravityCLIRuntime:
                 )
             if not self._cancelled and (chunks or returncode == 0):
                 self._capture_workspace_conversation()
+
+    @staticmethod
+    async def _read_bounded_stderr(
+        stream: asyncio.StreamReader | None, *, limit: int = 64 * 1024
+    ) -> bytes:
+        """Drain stderr concurrently while retaining only the latest diagnostics."""
+        if stream is None:
+            return b""
+        buffered = bytearray()
+        while True:
+            chunk = await stream.read(4096)
+            if not chunk:
+                break
+            buffered.extend(chunk)
+            if len(buffered) > limit:
+                del buffered[:-limit]
+        return bytes(buffered)
 
     async def run(self, prompt: str) -> AgentResponse:
         chunks = [chunk async for chunk in self.run_streaming(prompt)]

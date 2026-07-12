@@ -103,13 +103,16 @@ class AntigravitySDKRuntime:
                 elif kind == "ToolResult":
                     name = getattr(chunk, "name", "tool")
                     error = getattr(chunk, "error", None)
+                    exception = getattr(chunk, "exception", None)
+                    failure = error or exception
                     yield HarnessEvent(
                         type="tool_result",
                         data={
                             "tool_name": getattr(name, "value", name),
                             "tool_call_id": getattr(chunk, "id", None),
-                            "success": not bool(error),
-                            "output": error or getattr(chunk, "result", None),
+                            "success": not bool(failure),
+                            "output": failure or getattr(chunk, "result", None),
+                            "error": str(failure) if failure else None,
                         },
                     )
         else:

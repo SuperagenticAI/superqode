@@ -8,6 +8,7 @@ native builtin runtime remains the portable SuperQode harness path.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import shutil
 import subprocess
@@ -350,7 +351,9 @@ class CodexSDKRuntime:
         }
         if config_overrides:
             kwargs["config_overrides"] = config_overrides
-        if prefer_local and self._sdk_config_supports_codex_bin(CodexConfig):
+        prefer_local_setting = os.getenv("SUPERQODE_CODEX_PREFER_LOCAL_CLI", "1").strip().lower()
+        local_enabled = prefer_local_setting not in {"0", "false", "no", "off"}
+        if prefer_local and local_enabled and self._sdk_config_supports_codex_bin(CodexConfig):
             local = self._preferred_local_codex_binary()
             if local is not None:
                 binary, version = local
@@ -364,6 +367,56 @@ class CodexSDKRuntime:
                     # a ``codex_bin`` argument. Fall back to its default.
                     pass
         return CodexConfig(**kwargs), "SDK-bundled Codex app-server"
+
+    def _restart_with_bundled_app_server(self, operation: str, error: BaseException) -> None:
+        """Replace an incompatible local app-server after a safe metadata operation.
+
+        Model/account reads have no filesystem side effects, so retrying them
+        against the SDK-pinned server is safe. Agent turns are deliberately not
+        replayed because a failed decode may occur after tools have executed.
+        """
+        if not self._app_server_source.startswith("local Codex CLI "):
+            raise error
+
+        from openai_codex import CodexConfig, Thread
+        from openai_codex.client import CodexClient
+
+        old_client, self._client = self._client, None
+        self._thread = None
+        if old_client is not None:
+            try:
+                old_client.close()
+            except Exception:  # noqa: BLE001 - continue with the safe fallback
+                pass
+
+        config, source = self._sdk_config(CodexConfig, prefer_local=False)
+        overrides: tuple[str, ...] = ()
+        try:
+            client, init, started = self._start_sdk_client(
+                CodexClient, config, self._thread_start_params()
+            )
+        except Exception as bundled_error:
+            overrides = _codex_effort_compatibility_overrides(bundled_error)
+            if not overrides:
+                raise RuntimeError(
+                    f"{operation} failed with {self._app_server_source}: {error}; "
+                    f"bundled Codex fallback also failed: {bundled_error}"
+                ) from bundled_error
+            compatible, source = self._sdk_config(
+                CodexConfig,
+                config_overrides=overrides,
+                prefer_local=False,
+            )
+            client, init, started = self._start_sdk_client(
+                CodexClient, compatible, self._thread_start_params()
+            )
+
+        self._app_server_config_overrides = overrides
+        self._app_server_source = source
+        self._init = init
+        self._client = client
+        self._thread = Thread(client, started.thread.id)
+        self._active_model = str(getattr(started, "model", None) or self.config.model or "")
 
     @staticmethod
     def _sdk_client_version() -> str:
@@ -1034,11 +1087,19 @@ class CodexSDKRuntime:
 
     def models(self, *, include_hidden: bool = False):
         self._ensure_started_sync()
-        return self._client.model_list(include_hidden=include_hidden)
+        try:
+            return self._client.model_list(include_hidden=include_hidden)
+        except Exception as error:
+            self._restart_with_bundled_app_server("Codex model listing", error)
+            return self._client.model_list(include_hidden=include_hidden)
 
     def account(self, *, refresh_token: bool = False):
         self._ensure_started_sync()
-        return self._client.account_read({"refreshToken": refresh_token})
+        try:
+            return self._client.account_read({"refreshToken": refresh_token})
+        except Exception as error:
+            self._restart_with_bundled_app_server("Codex account read", error)
+            return self._client.account_read({"refreshToken": refresh_token})
 
     def logout(self):
         self._ensure_started_sync()

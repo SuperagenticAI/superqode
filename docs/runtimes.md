@@ -342,6 +342,13 @@ A runnable version of the above is in
 
 The local `reference/codex/sdk/python` checkout is documentation/reference material only. Runtime code must depend on the packaged SDK (`openai-codex`) so installs are reproducible and do not accidentally bind to a local reference tree.
 
+When a newer standalone Codex CLI is installed, SuperQode prefers it so the
+subscription model catalogue stays current. Safe metadata operations such as
+model listing and account reads automatically fall back to the SDK-pinned
+app-server if the newer CLI returns an incompatible protocol response. Set
+`SUPERQODE_CODEX_PREFER_LOCAL_CLI=0` to always use the SDK-pinned server; agent
+turns are never replayed automatically because tools may already have run.
+
 Set `SUPERQODE_CODEX_REAL_TEST=1` to run the optional real SDK/app-server smoke
 test during development; it is skipped by default because it requires local
 Codex auth and may contact the Codex service.
