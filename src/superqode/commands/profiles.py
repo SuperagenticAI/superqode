@@ -11,6 +11,8 @@ import click
 def profiles():
     """List built-in SuperQode harness profiles."""
     pass
+
+
 @profiles.command("list")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def profiles_list(json_output):

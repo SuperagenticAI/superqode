@@ -29,6 +29,7 @@ class CodexMixin:
         if self._codex_models is None:
             self._codex_models = self._get_codex_models()
         return self._codex_models
+
     def _get_codex_models(self) -> List[Dict]:
         """Get live Codex models exposed to the local Codex account."""
         try:
@@ -43,6 +44,7 @@ class CodexMixin:
                     "desc": "Use the model configured in ~/.codex",
                 }
             ]
+
     def _fetch_live_codex_models(self) -> List[Dict]:
         existing = getattr(self, "_pure_mode", None)
         runtime = getattr(existing, "_runtime", None) if existing is not None else None
@@ -60,6 +62,7 @@ class CodexMixin:
             return self._models_from_codex_response(probe.models())
         finally:
             probe.close()
+
     @staticmethod
     def _models_from_codex_response(models_response) -> List[Dict]:
         data = list(getattr(models_response, "data", []) or [])
@@ -89,6 +92,7 @@ class CodexMixin:
         from superqode.providers.models import sort_models_newest_first
 
         return sort_models_newest_first(models)
+
     @staticmethod
     def _codex_config_error_hint_text(exc) -> str | None:
         """Return an actionable hint for a rejected ``~/.codex/config.toml``.
@@ -114,11 +118,13 @@ class CodexMixin:
                 f"{expected.group(1).strip()}."
             )
         return f"Codex could not read {source}. Fix the reported config line, then retry."
+
     @staticmethod
     def _codex_error_hint(message: str) -> str:
         """Map common Codex SDK/app-server failures to user-facing recovery hints."""
 
         from superqode.app_main import SuperQodeApp
+
         config_hint = SuperQodeApp._codex_config_error_hint_text(message)
         if config_hint:
             return config_hint
@@ -142,6 +148,7 @@ class CodexMixin:
         if "turn/completed" in lowered:
             return "The Codex app-server stream ended unexpectedly. Retry; if it repeats, run `:codex status`."
         return "Run `:codex status` for SDK, app-server, auth, and model diagnostics."
+
     def action_navigate_codex_model_up(self):
         """Navigate to previous Codex SDK model."""
         if not getattr(self, "_awaiting_codex_model", False):
@@ -155,6 +162,7 @@ class CodexMixin:
         self._show_codex_model_picker(log, clear_log=False, refetch=False)
         self._scroll_to_highlighted_item(log, self._codex_highlighted_model_index, len(models))
         self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_codex_model_down(self):
         """Navigate to next Codex SDK model."""
         if not getattr(self, "_awaiting_codex_model", False):
@@ -168,6 +176,7 @@ class CodexMixin:
         self._show_codex_model_picker(log, clear_log=False, refetch=False)
         self._scroll_to_highlighted_item(log, self._codex_highlighted_model_index, len(models))
         self.set_timer(0.05, self._ensure_input_focus)
+
     def action_select_highlighted_codex_model(self):
         """Select the currently highlighted Codex SDK model."""
         if not getattr(self, "_awaiting_codex_model", False):
@@ -177,6 +186,7 @@ class CodexMixin:
         if 0 <= idx < len(models):
             log = self.query_one("#log", ConversationLog)
             self._handle_codex_model_selection(str(idx + 1), log)
+
     def action_navigate_codex_effort_up(self):
         """Navigate to previous Codex SDK reasoning effort."""
         if not getattr(self, "_awaiting_codex_effort", False):
@@ -188,6 +198,7 @@ class CodexMixin:
         self._show_codex_effort_picker(log, clear_log=False)
         self._scroll_to_highlighted_item(log, self._codex_highlighted_effort_index, len(options))
         self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_codex_effort_down(self):
         """Navigate to next Codex SDK reasoning effort."""
         if not getattr(self, "_awaiting_codex_effort", False):
@@ -199,6 +210,7 @@ class CodexMixin:
         self._show_codex_effort_picker(log, clear_log=False)
         self._scroll_to_highlighted_item(log, self._codex_highlighted_effort_index, len(options))
         self.set_timer(0.05, self._ensure_input_focus)
+
     def action_select_highlighted_codex_effort(self):
         """Select the currently highlighted Codex SDK reasoning effort."""
         if not getattr(self, "_awaiting_codex_effort", False):
@@ -208,6 +220,7 @@ class CodexMixin:
         if 0 <= idx < len(options):
             log = self.query_one("#log", ConversationLog)
             self._handle_codex_effort_selection(str(idx + 1), log)
+
     @staticmethod
     def _codex_subcommand_completion_candidates(value: str) -> list[PromptCompletionCandidate]:
         """Complete the real ``:codex`` command tree, in its useful order."""
@@ -241,6 +254,7 @@ class CodexMixin:
             for subcommand, description in subcommands
             if subcommand.startswith(partial) and f"{prefix}{subcommand}" != value
         ]
+
     def _codex_effort_completion_candidates(self, value: str) -> list[PromptCompletionCandidate]:
         """Offer valid SDK effort values without starting an app-server per keypress."""
 
@@ -256,6 +270,7 @@ class CodexMixin:
             for option in self._codex_effort_options()
             if option["id"].startswith(partial) and f"{prefix}{option['id']}" != value
         ]
+
     def _codex_model_completion_candidates(self, value: str) -> list[PromptCompletionCandidate]:
         """Complete cached account models; typing must never start a network probe."""
 
@@ -291,6 +306,7 @@ class CodexMixin:
             for candidate in candidates
             if candidate.label.lower().startswith(partial) and candidate.value != value
         ]
+
     @staticmethod
     def _codex_sandbox_completion_candidates(value: str) -> list[PromptCompletionCandidate]:
         prefix = ":codex sandbox "
@@ -308,6 +324,7 @@ class CodexMixin:
             for mode, description in options
             if mode.startswith(partial) and f"{prefix}{mode}" != value
         ]
+
     async def _resolve_codex_active_model(self, log: ConversationLog) -> None:
         """Query the live thread's resolved model and surface it.
 
@@ -341,6 +358,7 @@ class CodexMixin:
             log.add_info(f"Active Codex model: {model_id}  ·  switch with :codex model")
         except Exception:  # noqa: BLE001 — best-effort, never fatal
             pass
+
     def _codex_cmd(self, args: str, log) -> None:
         """Handle :codex and Codex SDK runtime subcommands."""
         raw = (args or "").strip()
@@ -400,6 +418,7 @@ class CodexMixin:
         log.add_info(
             "Usage: :codex [status|models|model|effort|sandbox|review|compact|thread|sessions|resume|fork|rename|archive|account|logout]"
         )
+
     def _codex_runtime_or_connect(self, log):
         pure = getattr(self, "_pure_mode", None)
         runtime = getattr(pure, "_runtime", None) if pure is not None else None
@@ -415,6 +434,7 @@ class CodexMixin:
         if runtime is None or getattr(pure, "runtime_name", "") != "codex-sdk":
             raise RuntimeError("Codex runtime is not connected")
         return runtime
+
     @staticmethod
     def _codex_obj_dict(obj) -> dict:
         if obj is None:
@@ -429,6 +449,7 @@ class CodexMixin:
             for key in dir(obj)
             if not key.startswith("_") and not callable(getattr(obj, key))
         }
+
     def _codex_runtime_action(self, log, label: str, action) -> None:
         try:
             runtime = self._codex_runtime_or_connect(log)
@@ -437,6 +458,7 @@ class CodexMixin:
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Codex {label} failed: {exc}")
             self._codex_config_error_hint(log, exc)
+
     def _codex_effort_options(self) -> list[dict[str, str]]:
         """Return stable efforts plus newer values advertised by this account.
 
@@ -504,14 +526,17 @@ class CodexMixin:
             if option["id"] in supported and option["id"] not in known:
                 options.append(option)
         return options
+
     @staticmethod
     def _codex_config_error_hint(log, exc) -> None:
         """Write the shared configuration recovery hint, when applicable."""
 
         from superqode.app_main import SuperQodeApp
+
         hint = SuperQodeApp._codex_config_error_hint_text(exc)
         if hint:
             log.add_info(hint)
+
     def _codex_picker_line(
         self,
         text: Text,
@@ -539,6 +564,7 @@ class CodexMixin:
         if highlighted:
             text.append("  selected", style=f"bold {THEME['success']}")
         text.append("\n")
+
     def _show_codex_model_picker(
         self, log, *, clear_log: bool = True, refetch: bool = True
     ) -> None:
@@ -607,6 +633,7 @@ class CodexMixin:
         text.append(":codex models", style=THEME["cyan"])
         text.append(" shows a plain list.\n", style=THEME["muted"])
         self._show_command_output(log, text, clear_log=clear_log)
+
     def _show_codex_effort_picker(self, log, *, clear_log: bool = True) -> None:
         self._reset_connect_selection_states()
         self._awaiting_codex_effort = True
@@ -648,6 +675,7 @@ class CodexMixin:
         )
         text.append("  Esc cancels.\n", style=THEME["muted"])
         self._show_command_output(log, text, clear_log=clear_log)
+
     def _handle_codex_model_selection(self, selection: str, log) -> bool:
         if not getattr(self, "_awaiting_codex_model", False):
             return False
@@ -694,6 +722,7 @@ class CodexMixin:
         self._awaiting_codex_model = False
         self._apply_codex_model_override(str(selected.get("id") or ""), log)
         return True
+
     def _handle_codex_effort_selection(self, selection: str, log) -> bool:
         if not getattr(self, "_awaiting_codex_effort", False):
             return False
@@ -724,6 +753,7 @@ class CodexMixin:
         self._awaiting_codex_effort = False
         self._codex_effort_cmd(selected["id"], log)
         return True
+
     def _codex_models_cmd(self, log, *, include_hidden: bool = False) -> None:
         try:
             runtime = self._codex_runtime_or_connect(log)
@@ -759,6 +789,7 @@ class CodexMixin:
         text.append(":codex model <id>", style=THEME["cyan"])
         text.append(" to switch future turns.\n", style=THEME["muted"])
         log.write(text)
+
     def _codex_model_cmd(self, model: str, log) -> None:
         if not model:
             self._show_codex_model_picker(log)
@@ -767,6 +798,7 @@ class CodexMixin:
             self._apply_codex_model_override("", log)
             return
         self._apply_codex_model_override(model, log)
+
     def _apply_codex_model_override(self, model: str, log) -> None:
         try:
             runtime = self._codex_runtime_or_connect(log)
@@ -779,6 +811,7 @@ class CodexMixin:
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not set Codex model: {exc}")
             self._codex_config_error_hint(log, exc)
+
     def _codex_effort_cmd(self, effort: str, log) -> None:
         if not effort:
             self._show_codex_effort_picker(log)
@@ -791,6 +824,7 @@ class CodexMixin:
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not set Codex effort: {exc}")
             self._codex_config_error_hint(log, exc)
+
     def _codex_sandbox_cmd(self, mode: str, log) -> None:
         if not mode:
             log.add_info("Usage: :codex sandbox <read-only|workspace-write|full-access|default>")
@@ -802,6 +836,7 @@ class CodexMixin:
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not set Codex sandbox: {exc}")
             self._codex_config_error_hint(log, exc)
+
     def _codex_thread_cmd(self, log) -> None:
         try:
             runtime = self._codex_runtime_or_connect(log)
@@ -820,6 +855,7 @@ class CodexMixin:
                 text.append(str(value), style=THEME["text"])
                 text.append("\n")
         log.write(text)
+
     def _codex_sessions_cmd(self, args: str, log) -> None:
         archived = "archived" in args.split() or "--archived" in args.split()
         try:
@@ -849,6 +885,7 @@ class CodexMixin:
         text.append(":codex fork <thread_id>", style=THEME["cyan"])
         text.append(".\n", style=THEME["muted"])
         log.write(text)
+
     def _codex_resume_cmd(self, thread_id: str, log) -> None:
         if not thread_id:
             log.add_info("Usage: :codex resume <thread_id>")
@@ -856,6 +893,7 @@ class CodexMixin:
         self._codex_runtime_action(
             log, f"resume {thread_id[:12]}", lambda runtime: runtime.resume_thread(thread_id)
         )
+
     def _codex_fork_cmd(self, thread_id: str, log) -> None:
         if not thread_id:
             log.add_info("Usage: :codex fork <thread_id>")
@@ -863,11 +901,13 @@ class CodexMixin:
         self._codex_runtime_action(
             log, f"fork {thread_id[:12]}", lambda runtime: runtime.fork_thread(thread_id)
         )
+
     def _codex_rename_cmd(self, name: str, log) -> None:
         if not name:
             log.add_info("Usage: :codex rename <thread name>")
             return
         self._codex_runtime_action(log, "rename", lambda runtime: runtime.rename_thread(name))
+
     def _codex_archive_cmd(self, thread_id: str, log) -> None:
         try:
             runtime = self._codex_runtime_or_connect(log)
@@ -880,6 +920,7 @@ class CodexMixin:
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not archive Codex thread: {exc}")
             self._codex_config_error_hint(log, exc)
+
     def _codex_account_cmd(self, log) -> None:
         try:
             runtime = self._codex_runtime_or_connect(log)
@@ -899,6 +940,7 @@ class CodexMixin:
             text.append(str(value)[:120], style=THEME["text"])
             text.append("\n")
         log.write(text)
+
     def _codex_review_cmd(self, prompt: str, log) -> None:
         try:
             runtime = self._codex_runtime_or_connect(log)
@@ -918,6 +960,7 @@ class CodexMixin:
         self.is_busy = True
         self._cancel_requested = False
         self._send_to_pure_mode(review_prompt, log)
+
     def _codex_status(self, log, *, probe: bool = False) -> None:
         """Show Codex SDK/app-server/auth status."""
         from importlib import metadata
@@ -1013,6 +1056,7 @@ class CodexMixin:
             text.append("\n")
 
         log.write(text)
+
     def _run_codex_acp(
         self,
         message: str,
@@ -1596,6 +1640,7 @@ class CodexMixin:
             self._call_ui(self._stop_thinking)
             self._call_ui(self._stop_stream_animation)
             self._call_ui(log.add_error, f"❌ Error: {str(e)}")
+
     def _show_codex_models_selection(self, agent: Dict[str, Any], log: ConversationLog):
         """Show Codex CLI available models for selection."""
         name = agent.get("name", "Codex CLI")
@@ -1686,6 +1731,7 @@ class CodexMixin:
         badge.role = ""
         badge.model = ""
         badge.provider = "codex"
+
     def _auto_select_codex_model(
         self, model_hint: str, agent: Dict[str, Any], log: ConversationLog
     ):

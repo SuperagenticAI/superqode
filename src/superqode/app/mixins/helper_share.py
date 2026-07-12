@@ -56,6 +56,7 @@ class HelperShareMixin:
 
         stamp = time.strftime("%Y%m%d-%H%M%S")
         return export_format, Path(".superqode") / "exports" / f"transcript-{stamp}{suffix}"
+
     def _resolve_share_session_id(self, value: str = "") -> str:
         from superqode.headless import resolve_session_id
 
@@ -66,6 +67,7 @@ class HelperShareMixin:
         if not current_id:
             raise ValueError("No active session. Use :sessions to choose one.")
         return resolve_session_id(current_id, ".superqode/sessions")
+
     @staticmethod
     def _parse_share_session_and_path(tokens: list[str]) -> tuple[str, str]:
         if not tokens:
@@ -77,6 +79,7 @@ class HelperShareMixin:
                 return "", token
             return token, ""
         return tokens[0], tokens[1]
+
     def _import_share_artifact(self, path: Path, new_session_id: str = "") -> str:
         from superqode.session.share_artifacts import import_share_artifact
 

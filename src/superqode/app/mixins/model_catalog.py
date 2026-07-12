@@ -37,6 +37,7 @@ class ModelCatalogMixin:
         if self._opencode_models is None:
             self._opencode_models = self._get_opencode_models()
         return self._opencode_models
+
     def _get_opencode_models(self) -> List[Dict]:
         """Get OpenCode models from the live CLI catalog, newest releases first."""
         try:
@@ -63,12 +64,14 @@ class ModelCatalogMixin:
             )
         except Exception:
             return []
+
     @property
     def gemini_models(self) -> List[Dict]:
         """Lazy load Gemini models."""
         if self._gemini_models is None:
             self._gemini_models = self._get_gemini_models()
         return self._gemini_models
+
     def _get_gemini_models(self) -> List[Dict]:
         """Get Gemini models list - synced with providers/models.py."""
         return [
@@ -87,12 +90,14 @@ class ModelCatalogMixin:
                 "recommended": True,
             },
         ]
+
     @property
     def claude_models(self) -> List[Dict]:
         """Lazy load Claude models."""
         if self._claude_models is None:
             self._claude_models = self._get_claude_models()
         return self._claude_models
+
     def _get_claude_models(self) -> List[Dict]:
         """Get Claude models list - synced with providers/models.py."""
         return [
@@ -130,12 +135,14 @@ class ModelCatalogMixin:
                 "desc": "Fast and cost-effective Claude model",
             },
         ]
+
     @property
     def openhands_models(self) -> List[Dict]:
         """Lazy load OpenHands models."""
         if self._openhands_models is None:
             self._openhands_models = self._get_openhands_models()
         return self._openhands_models
+
     def _get_openhands_models(self) -> List[Dict]:
         """Get OpenHands models list."""
         return [
@@ -172,9 +179,11 @@ class ModelCatalogMixin:
             {"id": "gpt-4o", "name": "GPT-4o", "context": 128000},
             {"id": "claude-haiku-4-5", "name": "Claude Haiku 4.5", "context": 200000},
         ]
+
     def _start_models_dev_refresh(self) -> None:
         """Refresh the models.dev catalog without blocking the TUI."""
         self.run_worker(self._load_models_dev_data())
+
     def _apply_live_models(self, client) -> bool:
         """Push the client's current provider/model data into the live registry."""
         from superqode.providers.models import set_live_models
@@ -188,6 +197,7 @@ class ModelCatalogMixin:
             set_live_models(live_models)
             return True
         return False
+
     async def _load_models_dev_data(self):
         """Load models from models.dev: cached instantly, then force-refresh.
 
@@ -212,6 +222,7 @@ class ModelCatalogMixin:
         except Exception:
             # Silent failure - live data is optional
             pass
+
     def _unload_ollama_model(self, model: str) -> bool:
         """Ask Ollama to unload a resident model without killing the Ollama app."""
         import json as _json
@@ -243,6 +254,7 @@ class ModelCatalogMixin:
             return True
         except Exception:
             return False
+
     def _select_model_by_number(self, num: int):
         """Select a model by number when awaiting model selection."""
         # Only work if we're awaiting selection
@@ -386,33 +398,43 @@ class ModelCatalogMixin:
                 log.write(t)
             else:
                 log.add_error(f"Invalid selection. Choose 1-{len(self._openhands_models)}")
+
     def action_select_model_1(self):
         """Select item 1 in current selection mode."""
         self._select_by_number_universal(1)
+
     def action_select_model_2(self):
         """Select item 2 in current selection mode."""
         self._select_by_number_universal(2)
+
     def action_select_model_3(self):
         """Select item 3 in current selection mode."""
         self._select_by_number_universal(3)
+
     def action_select_model_4(self):
         """Select item 4 in current selection mode."""
         self._select_by_number_universal(4)
+
     def action_select_model_5(self):
         """Select item 5 in current selection mode."""
         self._select_by_number_universal(5)
+
     def action_select_model_6(self):
         """Select item 6 in current selection mode."""
         self._select_by_number_universal(6)
+
     def action_select_model_7(self):
         """Select item 7 in current selection mode."""
         self._select_by_number_universal(7)
+
     def action_select_model_8(self):
         """Select item 8 in current selection mode."""
         self._select_by_number_universal(8)
+
     def action_select_model_9(self):
         """Select item 9 in current selection mode."""
         self._select_by_number_universal(9)
+
     def action_navigate_model_up(self):
         """Navigate to previous model (arrow up)."""
         # Check if we're in model selection mode
@@ -440,6 +462,7 @@ class ModelCatalogMixin:
                 self._scroll_to_highlighted_item(log, new_idx, len(model_list))
                 # Ensure input stays focused
                 self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_model_down(self):
         """Navigate to next model (arrow down)."""
         # Check if we're in model selection mode
@@ -467,6 +490,7 @@ class ModelCatalogMixin:
                 self._scroll_to_highlighted_item(log, new_idx, len(model_list))
                 # Ensure input stays focused
                 self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_opencode_model_up(self):
         """Navigate to previous opencode model (arrow up)."""
         if not getattr(self, "_awaiting_model_selection", False):
@@ -499,6 +523,7 @@ class ModelCatalogMixin:
             self._show_opencode_models_selection(agent, log, clear_log=False)
             # Ensure input stays focused
             self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_opencode_model_down(self):
         """Navigate to next opencode model (arrow down)."""
         if not getattr(self, "_awaiting_model_selection", False):
@@ -531,6 +556,7 @@ class ModelCatalogMixin:
             self._show_opencode_models_selection(agent, log, clear_log=False)
             # Ensure input stays focused
             self.set_timer(0.05, self._ensure_input_focus)
+
     def action_select_highlighted_opencode_model(self):
         """Select the currently highlighted opencode model (Enter key)."""
         if not getattr(self, "_awaiting_model_selection", False):
@@ -562,6 +588,7 @@ class ModelCatalogMixin:
             # _connect_agent is decorated with @work, so calling it directly
             # returns a Worker that will run the async method
             self._connect_agent("opencode", model_id)
+
     def _current_acp_model_list(self) -> list[Any]:
         """Return model list for the active ACP model picker."""
         agent = getattr(self, "current_agent", "")
@@ -576,6 +603,7 @@ class ModelCatalogMixin:
         if agent == "openhands":
             return list(getattr(self, "openhands_models", []))
         return []
+
     def _redraw_current_acp_model_picker(
         self, log: ConversationLog, clear_log: bool = False
     ) -> None:
@@ -601,6 +629,7 @@ class ModelCatalogMixin:
             if not clear_log:
                 log.clear()
             self._show_openhands_models_selection(agent_data, log)
+
     def action_navigate_acp_model_up(self):
         """Navigate to previous ACP model for the current agent."""
         if not getattr(self, "_awaiting_model_selection", False):
@@ -613,6 +642,7 @@ class ModelCatalogMixin:
         log = self.query_one("#log", ConversationLog)
         self._redraw_current_acp_model_picker(log, clear_log=False)
         self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_acp_model_down(self):
         """Navigate to next ACP model for the current agent."""
         if not getattr(self, "_awaiting_model_selection", False):
@@ -625,6 +655,7 @@ class ModelCatalogMixin:
         log = self.query_one("#log", ConversationLog)
         self._redraw_current_acp_model_picker(log, clear_log=False)
         self.set_timer(0.05, self._ensure_input_focus)
+
     def action_select_highlighted_acp_model(self):
         """Select highlighted model for the current ACP agent."""
         if not getattr(self, "_awaiting_model_selection", False):
@@ -635,6 +666,7 @@ class ModelCatalogMixin:
         current_idx = getattr(self, "_opencode_highlighted_model_index", 0)
         if 0 <= current_idx < len(models):
             self._select_model_by_number(current_idx + 1)
+
     def action_refresh_opencode_models(self):
         """Refresh OpenCode models from CLI."""
         if not getattr(self, "_awaiting_model_selection", False):
@@ -681,6 +713,7 @@ class ModelCatalogMixin:
             t = Text()
             t.append(f"\n  ⚠️  Error refreshing: {str(e)}", style=THEME["error"])
             log.write(t)
+
     def action_select_highlighted_model(self):
         """Select the currently highlighted model (Enter key)."""
         if not getattr(self, "_awaiting_byok_model", False):
@@ -698,9 +731,11 @@ class ModelCatalogMixin:
                 log = self.query_one("#log", ConversationLog)
                 self._awaiting_byok_model = False
                 self._connect_byok_mode(provider_id, model, log)
+
     def _complete_model_switch(self, value: str, prefix: str) -> str | None:
         candidates = self._model_switch_candidates(value, prefix)
         return candidates[0].value if candidates else None
+
     def _model_switch_candidates(self, value: str, prefix: str) -> list[PromptCompletionCandidate]:
         partial = value[len(prefix) :]
         if "/" not in partial:
@@ -735,6 +770,7 @@ class ModelCatalogMixin:
             for model in self._model_ids_for_provider(provider)
             if model.lower().startswith(model_partial.lower())
         ][:8]
+
     @staticmethod
     def _model_description(provider_id: str, model_id: str) -> str:
         try:
@@ -756,6 +792,7 @@ class ModelCatalogMixin:
             return " | ".join(part for part in [prefix, context, price] if part)
         except Exception:
             return ""
+
     @staticmethod
     def _model_ids_for_provider(provider_id: str) -> list[str]:
         try:
@@ -764,6 +801,7 @@ class ModelCatalogMixin:
             return list(get_models_for_provider(provider_id, include_all=True).keys())
         except Exception:
             return []
+
     def _model_supports_vision(self, model: str) -> bool:
         """Best-effort check whether the active model accepts images."""
         try:
@@ -776,6 +814,7 @@ class ModelCatalogMixin:
             pass
         # Unknown: don't discourage; assume capable.
         return True
+
     def _set_status_model(self, model: str) -> None:
         """Show the active model in the visible status bar (ColorfulStatusBar)."""
         try:
@@ -784,9 +823,11 @@ class ModelCatalogMixin:
             self.query_one("#status-bar", ColorfulStatusBar).active_model = model or ""
         except Exception:  # noqa: BLE001
             pass
+
     def _show_grok_models(self, log) -> None:
         """Schedule CLI model discovery without blocking the Textual event loop."""
         self.run_worker(self._show_grok_models_async(log), exclusive=False)
+
     async def _show_grok_models_async(self, log) -> None:
         """List the subscription models the signed-in Grok CLI reports."""
         from superqode.providers import grok_cli_auth
@@ -828,6 +869,7 @@ class ModelCatalogMixin:
         t.append(" (picker) or ", style=THEME["muted"])
         t.append(":grok model <name>\n", style=THEME["cyan"])
         log.write_feedback(t)
+
     def _show_grok_model_picker(self, log) -> None:
         """Interactive picker over the subscription catalog; Enter connects.
 
@@ -838,6 +880,7 @@ class ModelCatalogMixin:
         if not self._import_grok_token(log):
             return
         self.run_worker(self._show_grok_model_picker_async(log), exclusive=False)
+
     async def _show_grok_model_picker_async(self, log) -> None:
         """Warm the CLI catalog off-thread, then open the native model picker."""
         from superqode.providers import grok_cli_auth
@@ -847,6 +890,7 @@ class ModelCatalogMixin:
         except Exception:  # noqa: BLE001 - the picker has a builtin fallback
             pass
         self._show_provider_models("grok-cli", log, use_picker=False)
+
     def _claude_model_cmd(self, model: str, log) -> None:
         from superqode.runtime.claude_agent_sdk import CLAUDE_MODELS
 
@@ -872,6 +916,7 @@ class ModelCatalogMixin:
             log.add_success(f"Claude model set to {chosen or 'Claude Code default'}")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not set Claude model: {exc}")
+
     def _workflow_provider_model(self, spec) -> tuple[str, str]:
         """Resolve provider/model for an explicit workflow run."""
         provider = getattr(self, "current_provider", "") or ""
@@ -887,6 +932,7 @@ class ModelCatalogMixin:
             else:
                 model = model or primary_text
         return provider, model
+
     def _is_model_query(self, text: str) -> bool:
         """Check if the user is asking about which model/AI is being used."""
         text_lower = text.lower().strip()
@@ -923,6 +969,7 @@ class ModelCatalogMixin:
                 return True
 
         return False
+
     def _answer_model_query(self, log: ConversationLog):
         """Answer the user's question about which model is being used."""
         t = Text()
@@ -978,6 +1025,7 @@ class ModelCatalogMixin:
 
         t.append("\n")
         log.write(t)
+
     @staticmethod
     def _normalize_acp_model_id(agent_type: str, model: str) -> str | None:
         """Normalize a UI model value before sending it to an ACP agent."""
@@ -1009,6 +1057,7 @@ class ModelCatalogMixin:
                     break
             return normalized or None
         return normalized
+
     def _show_agent_header_with_model(self, name: str, model: str, log: ConversationLog):
         """Show agent output header with model information and approval mode.
 
@@ -1053,6 +1102,7 @@ class ModelCatalogMixin:
 
         # Create checkpoint before agent operation
         self._create_checkpoint_before_agent(f"{name} operation")
+
     def _show_provider_models(
         self,
         provider_id: str,
@@ -1663,6 +1713,7 @@ class ModelCatalogMixin:
 
         # Ensure input stays focused for keyboard navigation
         self.set_timer(0.05, self._ensure_input_focus)
+
     def _show_provider_models_picker(self, provider_id: str, log: ConversationLog):
         """Show interactive model picker widget with keyboard navigation."""
         from superqode.providers.dynamic import resolve_provider_def
@@ -1794,6 +1845,7 @@ class ModelCatalogMixin:
         self._model_picker_widget = picker
         self._picker_provider_id = provider_id
         self._picker_log = log
+
     async def _show_openai_compatible_models(self, provider_id: str, log: ConversationLog):
         """List models from an OpenAI-compatible local server (llama.cpp, custom).
 
@@ -1927,6 +1979,7 @@ class ModelCatalogMixin:
         t.append("Select a model number or name to connect\n", style=THEME["text"])
         log.write(t)
         self.set_timer(0.05, self._ensure_input_focus)
+
     def _models_cmd(self, args: str, log: ConversationLog):
         """Handle :models command - Show/switch models."""
         args = args.strip()
@@ -1970,6 +2023,7 @@ class ModelCatalogMixin:
             self._show_provider_models(provider, log)
         else:
             log.add_info("No provider selected")
+
     def _model_cmd(self, args: str, log: ConversationLog):
         """Handle current model status and lightweight runtime overrides."""
         args = args.strip()
@@ -2024,6 +2078,7 @@ class ModelCatalogMixin:
         log.add_info(
             "Usage: :model [doctor|switch <provider>/<model>|reasoning <value>|temperature <n>|verbosity <value>]"
         )
+
     def _show_model_status(self, log: ConversationLog):
         """Show active provider/model and known capability hints."""
         from superqode.providers.models import get_models_for_provider
@@ -2097,6 +2152,7 @@ class ModelCatalogMixin:
         t.append(", ", style=THEME["muted"])
         t.append(":recommend coding\n", style=THEME["cyan"])
         self._show_command_output(log, t)
+
     def _models_update_cmd(self, log: ConversationLog):
         """Handle :models update - Refresh model data from models.dev."""
         t = Text()
@@ -2107,6 +2163,7 @@ class ModelCatalogMixin:
 
         # Run the update in background
         self.run_worker(self._do_models_update(log))
+
     async def _do_models_update(self, log: ConversationLog):
         """Actually perform the models.dev update."""
         try:
@@ -2151,6 +2208,7 @@ class ModelCatalogMixin:
             t.append(f"\n  ✗ ", style=f"bold {THEME['error']}")
             t.append(f"Update failed: {e}\n", style=THEME["text"])
             log.write(t)
+
     def _models_search_cmd(self, query: str, log: ConversationLog):
         """Handle :models search <query> - Search across all models."""
         from superqode.providers.models import search_models, get_data_source
@@ -2192,6 +2250,7 @@ class ModelCatalogMixin:
         t.append(" to connect\n", style=THEME["muted"])
 
         log.write(t)
+
     def _models_info_cmd(self, log: ConversationLog):
         """Handle :models info - Show model database info."""
         from superqode.providers.models import (
@@ -2252,6 +2311,7 @@ class ModelCatalogMixin:
         t.append(" to refresh from models.dev\n", style=THEME["muted"])
 
         log.write(t)
+
     def _set_model(self, model_name: str, log: ConversationLog):
         """Set the model for the current agent."""
         model_name = model_name.strip()
@@ -2321,6 +2381,7 @@ class ModelCatalogMixin:
             t.append(f"  🆓 This is a FREE model!\n", style=THEME["success"])
 
         log.write(t)
+
     def _auto_select_opencode_model(
         self, model_hint: str, agent: Dict[str, Any], log: ConversationLog
     ):
@@ -2375,6 +2436,7 @@ class ModelCatalogMixin:
             # No match found, show available models
             log.add_info(f"Model '{model_hint}' not found. Available models:")
             self._show_opencode_models_selection(agent, log)
+
     def _show_opencode_models_selection(
         self, agent: Dict[str, Any], log: ConversationLog, clear_log: bool = True
     ):
@@ -2520,6 +2582,7 @@ class ModelCatalogMixin:
         badge.role = ""
         badge.model = ""
         badge.provider = ""
+
     def _show_gemini_models_selection(self, agent: Dict[str, Any], log: ConversationLog):
         """Show Gemini available models for selection."""
         name = agent.get("name", "Gemini CLI")
@@ -2602,6 +2665,7 @@ class ModelCatalogMixin:
         badge.role = ""
         badge.model = ""
         badge.provider = "gemini"
+
     def _auto_select_gemini_model(
         self, model_hint: str, agent: Dict[str, Any], log: ConversationLog
     ):
@@ -2654,6 +2718,7 @@ class ModelCatalogMixin:
             # No match found, show available models
             log.add_info(f"Model '{model_hint}' not found. Available models:")
             self._show_gemini_models_selection(agent, log)
+
     def _show_claude_models_selection(self, agent: Dict[str, Any], log: ConversationLog):
         """Show Claude Code available models for selection."""
         name = agent.get("name", "Claude Code")
@@ -2742,6 +2807,7 @@ class ModelCatalogMixin:
         badge.role = ""
         badge.model = ""
         badge.provider = "claude"
+
     def _auto_select_claude_model(
         self, model_hint: str, agent: Dict[str, Any], log: ConversationLog
     ):
@@ -2800,6 +2866,7 @@ class ModelCatalogMixin:
             # No match found, show available models
             log.add_info(f"Model '{model_hint}' not found. Available models:")
             self._show_claude_models_selection(agent, log)
+
     def _show_openhands_models_selection(self, agent: Dict[str, Any], log: ConversationLog):
         """Show OpenHands available models for selection."""
         name = agent.get("name", "OpenHands")
@@ -2891,6 +2958,7 @@ class ModelCatalogMixin:
         badge.role = ""
         badge.model = ""
         badge.provider = "openhands"
+
     def _auto_select_openhands_model(
         self, model_hint: str, agent: Dict[str, Any], log: ConversationLog
     ):
@@ -2952,6 +3020,7 @@ class ModelCatalogMixin:
             # No match found, show available models
             log.add_info(f"Model '{model_hint}' not found. Available models:")
             self._show_openhands_models_selection(agent, log)
+
     def _models_cmd(self, args: str, log: ConversationLog):
         """`:models` — browse the models.dev catalog from the TUI.
 
@@ -3039,6 +3108,7 @@ class ModelCatalogMixin:
         )
         total = len(matched)
         self._show_command_output(log, render_models_table(matched[:40], total=total))
+
     async def _models_live_render(self, provider: str, log: ConversationLog):
         """Worker: query a provider's live /v1/models endpoint and render it."""
         from superqode.providers.live_models import discover_provider_models

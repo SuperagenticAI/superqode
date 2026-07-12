@@ -77,6 +77,7 @@ class HelperDiffReviewMixin:
                 }
 
         return file_diffs
+
     def _looks_like_diff(self, text: str) -> bool:
         """Detect unified-diff-shaped text produced by acp/render.py.
 
@@ -104,12 +105,14 @@ class HelperDiffReviewMixin:
             if stripped.startswith(("+ ", "- ", "+\t", "-\t")):
                 return True
         return False
+
     def _current_git_diff_text(self) -> str:
         """Return a review-grade current diff document.
 
         Kept for tests and compatibility; ``:diff`` uses the same formatter.
         """
         return self._format_diff_review(self._current_git_diff_sections())
+
     def _current_git_diff_sections(self) -> list[tuple[str, str]]:
         """Return the current working-tree diff, including staged and untracked files."""
         chunks: list[tuple[str, str]] = []
@@ -163,6 +166,7 @@ class HelperDiffReviewMixin:
             if untracked_chunks:
                 chunks.append(("Untracked", "\n\n".join(untracked_chunks)))
         return chunks
+
     def _diff_review_entries(self, sections: list[tuple[str, str]]) -> list[dict[str, Any]]:
         """Return file-level diff entries for review/navigation."""
         entries: list[dict[str, Any]] = []
@@ -182,6 +186,7 @@ class HelperDiffReviewMixin:
                     entry["approval_id"] = approval_id
                 entries.append(entry)
         return entries
+
     def _diff_chunk_approval_id(self, chunk: str) -> str:
         """Extract the pending approval id marker from a synthetic pending diff."""
         for line in chunk.splitlines()[:3]:
@@ -189,6 +194,7 @@ class HelperDiffReviewMixin:
             if marker in line:
                 return line.split(marker, 1)[1].strip().split()[0]
         return ""
+
     def _approve_diff_entry(self, entry: dict[str, Any], *, always: bool = False) -> str:
         """Approve a pending approval diff entry and apply its file change."""
         approval_id = str(entry.get("approval_id") or "")
@@ -208,6 +214,7 @@ class HelperDiffReviewMixin:
                 return f"Approved, but failed to write {request.file_path}: {exc}"
         suffix = " (always)" if always else ""
         return f"Approved: {request.title}{suffix}"
+
     def _reject_diff_entry(self, entry: dict[str, Any], *, always: bool = False) -> str:
         """Reject a pending approval diff entry."""
         approval_id = str(entry.get("approval_id") or "")
@@ -222,6 +229,7 @@ class HelperDiffReviewMixin:
             return "Approval request is no longer pending."
         suffix = " (never allow)" if always else ""
         return f"Rejected: {request.title}{suffix}"
+
     def _filter_diff_sections(
         self,
         sections: list[tuple[str, str]],
@@ -242,6 +250,7 @@ class HelperDiffReviewMixin:
             if matches:
                 out.append((label, "\n\n".join(matches)))
         return out
+
     def _split_unified_diff_by_file(self, diff_text: str) -> list[tuple[str, str]]:
         """Split unified diff text into ``(path, chunk)`` file entries."""
         entries: list[tuple[str, str]] = []
@@ -275,6 +284,7 @@ class HelperDiffReviewMixin:
                 current_path = line.removeprefix("+++ b/")
         finish()
         return entries
+
     def _diff_file_stats(self, diff_text: str) -> list[dict[str, Any]]:
         """Extract per-file path/add/delete counts from unified diff text."""
         stats: list[dict[str, Any]] = []

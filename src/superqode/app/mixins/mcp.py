@@ -40,9 +40,11 @@ class McpMixin:
                 )
             )
         return candidates
+
     @staticmethod
     def _mcp_resource_ref(server_id: str, uri: str) -> str:
         return f"mcp://{server_id}/{uri}"
+
     @staticmethod
     def _mcp_resource_completion_candidates() -> list[PromptCompletionCandidate]:
         try:
@@ -73,6 +75,7 @@ class McpMixin:
                 )
             )
         return candidates[:25]
+
     @staticmethod
     def _mcp_server_config_from_target(server_id: str, target: str):
         """Build an MCPServerConfig from a URL or stdio command string."""
@@ -102,6 +105,7 @@ class McpMixin:
             auto_connect=True,
             config=MCPStdioConfig(command=command, args=args),
         )
+
     @staticmethod
     def _mcp_id_from_target(target: str) -> str:
         """Generate a stable-ish MCP server id for direct connect targets."""
@@ -119,6 +123,7 @@ class McpMixin:
                 base = base.split("/")[-1]
         safe = "".join(ch if ch.isalnum() else "-" for ch in base.lower()).strip("-")
         return safe or "mcp-server"
+
     async def _mcp_attach_resource(self, manager, target: str, log: ConversationLog) -> None:
         """Stage an MCP resource reference for the next prompt."""
         resource = self._resolve_mcp_resource_ref(manager, target)
@@ -136,6 +141,7 @@ class McpMixin:
         if resource.mime_type:
             detail = f"{detail} ({resource.mime_type})"
         log.add_info(f"Attached MCP resource: {detail}")
+
     async def _mcp_cmd(self, args: str, log: ConversationLog):
         """Handle MCP status and inventory commands."""
         try:

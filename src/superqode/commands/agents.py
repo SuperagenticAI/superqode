@@ -12,6 +12,8 @@ import click
 def agents():
     """Manage ACP (Agent-Client Protocol) coding agents."""
     pass
+
+
 @agents.command("list")
 @click.option("--store", is_flag=True, help="Show agent store interface")
 @click.option(
@@ -34,12 +36,16 @@ def agents_list(store, protocol, supported):
         show_agents_store()
     else:
         show_agents_list()
+
+
 @agents.command("store")
 def agents_store():
     """Show the beautiful agent store interface."""
     from superqode.commands.acp import show_agents_store
 
     show_agents_store()
+
+
 @agents.command("show")
 @click.argument("agent", metavar="AGENT")
 def agents_show(agent):
@@ -47,6 +53,8 @@ def agents_show(agent):
     from superqode.commands.acp import show_agent
 
     show_agent(agent)
+
+
 @agents.command("doctor")
 @click.argument("agent", metavar="AGENT", required=False)
 @click.option("--live", is_flag=True, help="Start the ACP agent and check protocol support")
@@ -87,6 +95,8 @@ def agents_doctor(agent, live, timeout, json_output):
                 click.echo(f"  modes: {len(live_result['modes'])}")
             if live_result.get("error"):
                 click.echo(f"  error: {live_result['error']}")
+
+
 @agents.command("connect")
 @click.argument("agent", metavar="AGENT")
 @click.option("--project-dir", "-d", metavar="DIR", help="Project directory to work in")
@@ -102,6 +112,8 @@ def agents_connect(agent, project_dir):
     from superqode.commands.acp import connect_agent
 
     exit(connect_agent(agent, project_dir))
+
+
 @agents.command("install")
 @click.argument("agent", metavar="AGENT")
 def agents_install(agent):
@@ -109,6 +121,8 @@ def agents_install(agent):
     from superqode.commands.acp import install_agent_cmd
 
     exit(install_agent_cmd(agent))
+
+
 @agents.command("free-models")
 @click.option(
     "--agent",

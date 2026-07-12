@@ -352,9 +352,11 @@ class SlashCommandMixin:
         # Always return focus to input after command completes
         # Use a small delay to ensure command output is displayed first
         self.set_timer(0.1, self._ensure_input_focus)
+
     def _handle_timeline(self, log: ConversationLog):
         """Open a replay-style timeline of the current TUI session."""
         self._open_text_overlay(log.format_session_timeline(), "Session Timeline")
+
     def _handle_stash(self, args: str, log: ConversationLog):
         """Manage stashed prompt drafts: restore (pop), list, or clear."""
         arg = (args or "").strip().lower()
@@ -391,6 +393,7 @@ class SlashCommandMixin:
         self._draft_stash = stash
         self._set_prompt_prefill(draft)
         log.add_info(f"📤 Restored stashed draft ({len(stash)} remaining). Edit and press Enter.")
+
     def _handle_queue(self, args: str, log: ConversationLog):
         """View or clear the type-ahead message queue."""
         arg = (args or "").strip().lower()
@@ -416,6 +419,7 @@ class SlashCommandMixin:
         t.append(":queue clear", style=f"bold {THEME['cyan']}")
         t.append(" to drop them.\n", style=THEME["muted"])
         log.write(t)
+
     def _handle_export(self, args: str, log: ConversationLog) -> None:
         """Export the current conversation to HTML, Markdown, or JSON."""
         from superqode.rendering.html_export import render_transcript_html
@@ -455,6 +459,7 @@ class SlashCommandMixin:
             log.add_error(f"Could not export transcript: {exc}")
             return
         log.add_success(f"Exported {export_format} transcript -> {out_path}")
+
     def _handle_sandbox(self, args: str, log: ConversationLog) -> None:
         """Show or set the local OS command sandbox.
 
@@ -520,6 +525,7 @@ class SlashCommandMixin:
         except Exception:
             pass
         log.write(t)
+
     def _handle_rewind(self, args: str, log: ConversationLog):
         """Rewind the conversation to an earlier user message.
 
@@ -550,6 +556,7 @@ class SlashCommandMixin:
             self._open_rewind_overlay(log)
             return
         log.add_info("Usage: :rewind  •  :rewind <number>  •  :rewind last")
+
     def _handle_paste_image(self, args: str, log: ConversationLog):
         """`:paste` — attach an image from a path or the system clipboard."""
         value = (args or "").strip().strip("'\"")
@@ -570,6 +577,7 @@ class SlashCommandMixin:
                 "No image found on the clipboard. Copy an image, then run :paste — "
                 "or use :paste <path-to-image>."
             )
+
     def _handle_session(self, args: str, log: ConversationLog):
         """Session subcommands: `:session` (info) and `:session rename <name>`."""
         parts = (args or "").strip().split(maxsplit=1)
@@ -634,6 +642,7 @@ class SlashCommandMixin:
         t.append(":session rename <name>", style=f"bold {THEME['cyan']}")
         t.append(" to label it.\n", style=THEME["muted"])
         log.write(t)
+
     def _handle_update(self, args: str, log: ConversationLog):
         """Check whether a newer SuperQode release is available on PyPI."""
         from importlib.metadata import version as _pkg_version
@@ -644,6 +653,7 @@ class SlashCommandMixin:
             current = "unknown"
         log.add_info(f"Installed SuperQode version: {current}. Checking for updates…")
         self.run_worker(self._check_update_worker(current, log), exclusive=False)
+
     def _handle_sessions_command(self, args: str, log: ConversationLog) -> None:
         """Handle :sessions subcommands without stealing :session."""
         try:
@@ -684,6 +694,7 @@ class SlashCommandMixin:
             return
 
         self._run_cli_passthrough(["sessions", *tokens], log, "Sessions command")
+
     def _handle_session_resume_selection(self, selection: str, log: ConversationLog) -> bool:
         """Handle a typed number, id prefix, or title fragment in the resume picker."""
         sessions = getattr(self, "_session_resume_list", [])
@@ -718,6 +729,7 @@ class SlashCommandMixin:
 
         self._handle_resume_session(target.session_id, log)
         return True
+
     def _handle_factory(self, args: str, log: ConversationLog) -> None:
         """Software Factory commands for model/harness/provider independence."""
         try:
@@ -751,6 +763,7 @@ class SlashCommandMixin:
             self._factory_lineage(rest, log)
         else:
             self._run_cli_passthrough(["factory", *tokens], log, "Factory command")
+
     def _handle_share(self, args: str, log: ConversationLog) -> None:
         """Create, list, import, and revoke local share artifacts."""
         try:
@@ -774,6 +787,7 @@ class SlashCommandMixin:
             self._share_revoke(rest, log)
         else:
             log.add_info("Usage: :share [create|export|import|list|revoke] [session-id|path]")
+
     def _handle_trust(self, args: str, log: ConversationLog) -> None:
         """Show or change local trust for the current project."""
         from superqode.project_trust import set_project_trust
@@ -791,6 +805,7 @@ class SlashCommandMixin:
             log.add_info("Usage: :trust [status|yes|no|doctor]")
             return
         self._show_trust_status(log, doctor=(arg == "doctor"))
+
     def _handle_harness_wizard_input(self, text: str, log) -> bool:
         """Advance the guided HarnessSpec wizard."""
         state = getattr(self, "_harness_wizard_state", None)
@@ -949,6 +964,7 @@ class SlashCommandMixin:
 
         self._render_harness_wizard_step(log)
         return True
+
     def _handle_resume_session(self, args: str, log: ConversationLog):
         """Resume a previous local provider session."""
         session_id = args.strip()
@@ -970,6 +986,7 @@ class SlashCommandMixin:
             role = str(message.get("role", "?")).upper()
             content = str(message.get("content", "")).replace("\n", " ")[:120]
             log.add_info(f"[{role}] {content}")
+
     def _handle_fork_session(self, args: str, log: ConversationLog):
         """Fork the active local provider session."""
         if not hasattr(self, "_pure_mode") or not self._pure_mode.get_current_session_id():
@@ -984,6 +1001,7 @@ class SlashCommandMixin:
             log.add_error(f"Could not fork session: {exc}")
             return
         log.add_info(f"Forked current session to {fork_id}.")
+
     def _handle_compact(self, log: ConversationLog):
         """Compact or enable compaction for the active local provider session."""
         if not hasattr(self, "_pure_mode") or not self._pure_mode.session.connected:
@@ -999,6 +1017,7 @@ class SlashCommandMixin:
             )
         else:
             log.add_error(result.get("message", "Compaction is not available."))
+
     def _handle_context(self, args: str, log: ConversationLog):
         """Show or override the context window used for adaptive compaction.
 
@@ -1040,6 +1059,7 @@ class SlashCommandMixin:
         log.add_system(
             f"Compaction triggers at {threshold:,} tokens · keeps ~{keep_recent:,} recent."
         )
+
     def _handle_workspace(self, args: str, log: ConversationLog):
         """Manage the multi-repo search workspace: :workspace add|remove|list."""
         from superqode.search_registry import (
@@ -1097,6 +1117,7 @@ class SlashCommandMixin:
 
         log.add_error(f"Unknown :workspace action: {sub}")
         log.add_system("Valid: add <path>, remove <path>, list")
+
     def _handle_thinking_verbosity(self, args: str, log: ConversationLog):
         """Handle :thinking command to control thinking-log detail.
 
@@ -1157,6 +1178,7 @@ class SlashCommandMixin:
         }
         log.add_success(f"{icons[state]} Thinking: {state.upper()}")
         log.add_system(descs[state])
+
     def _handle_log_verbosity(self, args: str, log: ConversationLog):
         """Handle :log command to control log verbosity."""
         from superqode.logging import LogVerbosity
@@ -1253,6 +1275,7 @@ class SlashCommandMixin:
         else:
             log.add_error(f"Invalid verbosity: {level}")
             log.add_system("Valid levels: minimal, normal, verbose")
+
     def _handle_message(self, text: str, log: ConversationLog):
         session = get_session()
         mode = get_mode()
@@ -1384,6 +1407,7 @@ class SlashCommandMixin:
             self._send_to_agent(text, name, log)
         else:
             log.add_info("Not connected. Use :connect to choose a runtime or agent.")
+
     def _handle_agent_question_input(self, response: str, log: ConversationLog) -> bool:
         """Resolve a pending ask_user/confirm question from the prompt input."""
         if not getattr(self, "_awaiting_agent_question", False):
@@ -1456,6 +1480,7 @@ class SlashCommandMixin:
         self._reset_input_placeholder()
         log.add_info("Answered agent question. Continuing...")
         return True
+
     def _handle_mode_selection(self, text: str, log: ConversationLog) -> bool:
         value = (text or "").strip().lower()
         modes = self._mode_picker_items()
@@ -1470,6 +1495,7 @@ class SlashCommandMixin:
                 return True
         log.add_info("Choose 1-3, chat, build, or plan.")
         return True
+
     def _handle_gemini_event(
         self,
         event: dict,
@@ -1639,6 +1665,7 @@ class SlashCommandMixin:
                     f"⚡ Done ({total_tokens} tokens, {tool_calls} tools)",
                     log,
                 )
+
     def _handle_opencode_event(
         self,
         event: dict,
@@ -1831,6 +1858,7 @@ class SlashCommandMixin:
                 if content:
                     # Show full content, no truncation
                     self._call_ui(self._show_thinking_line, f"📋 {content}", log)
+
     def _handle_terminal_method(
         self,
         method: str,
@@ -2155,6 +2183,7 @@ class SlashCommandMixin:
             return {}, True
 
         return {}, False
+
     def _handle_modal_permission_result(self, result: str):
         """Handle the result from the modal permission dialog."""
         if not result:
@@ -2203,6 +2232,7 @@ class SlashCommandMixin:
         if event is not None:
             event.set()
         self._reset_input_placeholder()
+
     def _handle_permission_input(self, response: str) -> bool:
         """Handle permission input from user. Returns True if handled."""
         if not self._permission_pending:
@@ -2266,9 +2296,11 @@ class SlashCommandMixin:
             return True
 
         return False
+
     def _handle_permission_auto(self, process, line: str):
         """Auto-handle permission requests (legacy)."""
         self._send_permission_response(process, "y")
+
     def _handle_acp_agent_selection(self, selection: str, log: ConversationLog) -> bool:
         """Handle ACP agent selection from numbered list."""
         # Check for _acp_agent_list (from :connect acp command)
@@ -2333,6 +2365,7 @@ class SlashCommandMixin:
                 pass
 
         return False
+
     def _handle_recommendation_selection(self, selection: str, log: ConversationLog) -> bool:
         """Connect to a provider/model from the last :recommend list."""
         selection = (selection or "").strip()
@@ -2358,6 +2391,7 @@ class SlashCommandMixin:
         else:
             self._connect_byok_mode(item.provider, item.model, log)
         return True
+
     def _handle_copy(self, log: ConversationLog, args: str = ""):
         """Handle :copy command - copy last response, error, prompt, or transcript."""
         target = (args or "").strip().lower()
@@ -2409,6 +2443,7 @@ class SlashCommandMixin:
         else:
             log.add_success(f"✅ {content_label} saved to: {output_file}")
             log.add_info("💡 Use :open to view and select text")
+
     def _handle_open(self, log: ConversationLog):
         """Handle :open command - open last response/error in external viewer for text selection."""
         last_error = log.get_last_error()
@@ -2446,6 +2481,7 @@ class SlashCommandMixin:
         except Exception as e:
             log.add_info(f"📄 {content_type.title()} saved to: {output_file}")
             log.add_info("Open this file manually to select and copy text")
+
     def _handle_theme(self, args: str, log: ConversationLog):
         """Handle :theme command - open the picker or apply a named theme live.
 
@@ -2468,6 +2504,7 @@ class SlashCommandMixin:
                 log.add_success(f"Theme changed to: {name}")
 
         self.push_screen(ThemePicker(current=self._current_theme), callback=_on_dismissed)
+
     def _handle_diagnostics(self, args: str, log: ConversationLog):
         """Handle :diagnostics command - show code diagnostics."""
         from superqode.tools.diagnostics import quick_diagnostics
@@ -2527,6 +2564,7 @@ class SlashCommandMixin:
             t.append(f"\n  ... and {len(all_diagnostics) - 20} more\n", style=THEME["muted"])
 
         log.write(t)
+
     def _handle_edit(self, log: ConversationLog):
         """Handle :edit command - open external editor to compose message."""
         import tempfile
@@ -2613,6 +2651,7 @@ class SlashCommandMixin:
                 os.unlink(temp_path)
             except Exception:
                 pass
+
     def _handle_select(self, log: ConversationLog, args: str = ""):
         """Handle :select command - show response/error/transcript in a selectable screen."""
         target = (args or "").strip().lower()
@@ -2769,6 +2808,7 @@ class SlashCommandMixin:
 
         screen = SelectableScreen(clean_response, content_type)
         self.push_screen(screen, callback=on_screen_dismissed)
+
     def _handle_approve(self, args: str, log: ConversationLog):
         """Handle :approve command."""
         if self._approval_manager is None:
@@ -2802,6 +2842,7 @@ class SlashCommandMixin:
                 log.add_success(f"📄 Written: {req.file_path}")
             except Exception as e:
                 log.add_error(f"Failed to write: {e}")
+
     def _handle_reject(self, args: str, log: ConversationLog):
         """Handle :reject command."""
         if self._approval_manager is None:
@@ -2827,6 +2868,7 @@ class SlashCommandMixin:
         if always:
             msg += " (never allow)"
         log.add_error(msg)
+
     def _handle_permissions(self, log: ConversationLog):
         """Show active permission/approval policy and pending decisions."""
         t = Text()
@@ -2890,6 +2932,7 @@ class SlashCommandMixin:
         t.append(":reject", style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
         log.write(t)
+
     def _handle_diff(self, args: str, log: ConversationLog):
         """Handle :diff command."""
         from rich.console import Console
@@ -2965,6 +3008,7 @@ class SlashCommandMixin:
             sections = filtered
 
         self._open_diff_review_overlay(sections)
+
     def _handle_plan(self, args: str, log: ConversationLog):
         """Handle :plan command."""
         arg_text = args.strip()
@@ -3060,6 +3104,7 @@ class SlashCommandMixin:
             return
 
         self._render_plan_review(log)
+
     def _handle_undo(self, log: ConversationLog):
         """Handle :undo command - uses enhanced undo manager."""
         # Try enhanced undo manager first
@@ -3088,6 +3133,7 @@ class SlashCommandMixin:
             log.write(text)
         else:
             log.add_info("◇ Nothing to undo")
+
     def _handle_redo(self, log: ConversationLog):
         """Handle :redo command."""
         if hasattr(self, "_undo_manager") and self._undo_manager:
@@ -3101,6 +3147,7 @@ class SlashCommandMixin:
                 log.write(text)
                 return
         log.add_info("◇ Nothing to redo")
+
     def _handle_checkpoints(self, log: ConversationLog):
         """Handle :checkpoints command - list available checkpoints."""
         if not hasattr(self, "_undo_manager") or not self._undo_manager:
@@ -3139,6 +3186,7 @@ class SlashCommandMixin:
             f"\n  Use :restore <name> to restore a checkpoint\n", style=SQ_COLORS.text_ghost
         )
         log.write(text)
+
     def _handle_agents_discover(self, log: ConversationLog):
         """Handle :acp discover command."""
         text = Text()
@@ -3148,6 +3196,7 @@ class SlashCommandMixin:
 
         # Run discovery in background
         self._discover_acp_agents()
+
     def _handle_history(self, args: str, log: ConversationLog):
         """Handle :history command."""
         if args.lower() == "clear":
@@ -3182,6 +3231,7 @@ class SlashCommandMixin:
             t.append(f"{cmd}\n", style=THEME["text"])
 
         log.write(t)
+
     def _handle_view(self, args: str, log: ConversationLog):
         """Handle :view command for file viewing."""
         if not args:
@@ -3198,6 +3248,7 @@ class SlashCommandMixin:
         # View file content
         file_path = args.strip()
         self._view_file(file_path, log)
+
     def _handle_search(self, args: str, log: ConversationLog):
         """Handle :search command for searching in files."""
         if not args:

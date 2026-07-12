@@ -12,6 +12,8 @@ import click
 def trust():
     """Manage local project trust."""
     pass
+
+
 def _print_trust_status(json_output: bool = False, doctor: bool = False) -> None:
     from superqode.project_trust import get_project_trust, project_risk_signals, trust_store_path
 
@@ -42,16 +44,22 @@ def _print_trust_status(json_output: bool = False, doctor: bool = False) -> None
             click.echo(f"  - {signal_name}")
     elif doctor:
         click.echo("No project-local plugins, MCP config, or hooks detected.")
+
+
 @trust.command("status")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def trust_status(json_output):
     """Show trust status for the current project."""
     _print_trust_status(json_output=json_output)
+
+
 @trust.command("doctor")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def trust_doctor(json_output):
     """Show trust-sensitive project-local files."""
     _print_trust_status(json_output=json_output, doctor=True)
+
+
 @trust.command("yes")
 def trust_yes():
     """Trust the current project on this machine."""
@@ -59,6 +67,8 @@ def trust_yes():
 
     record = set_project_trust(Path.cwd(), True, note="trusted from CLI")
     click.echo(f"Trusted project: {record.path}")
+
+
 @trust.command("no")
 def trust_no():
     """Mark the current project untrusted on this machine."""

@@ -24,6 +24,7 @@ class HelperPermissionsMixin:
 
             self._pure_mode = PureMode()
         return self._pure_mode
+
     def _install_pure_permission_bridge(self, pure, log: ConversationLog) -> None:
         """Route self-contained runtime approval callbacks through the TUI prompt."""
 
@@ -40,6 +41,7 @@ class HelperPermissionsMixin:
             return self._request_runtime_permission(tool_name, arguments, log)
 
         pure.on_permission_request = on_permission_request
+
     def _announce_pending_approvals(self, source, log) -> None:
         """Surface pending approvals from an active runtime or HarnessSpec session."""
         try:
@@ -75,6 +77,7 @@ class HelperPermissionsMixin:
                 padding=(1, 2),
             )
         )
+
     def _is_permission_request(self, line: str) -> bool:
         """Check if a line is a permission request from the agent."""
         permission_keywords = [
@@ -96,6 +99,7 @@ class HelperPermissionsMixin:
         ]
         line_lower = line.lower()
         return any(kw in line_lower for kw in permission_keywords)
+
     def _ensure_approved_tools(self) -> set:
         """Ensure _approved_tools is initialized and return it.
 
@@ -105,6 +109,7 @@ class HelperPermissionsMixin:
         if not hasattr(self, "_approved_tools"):
             self._approved_tools = set()
         return self._approved_tools
+
     def _tool_needs_permission(self, tool_name: str, tool_input: dict) -> bool:
         """Check if a tool call needs user permission.
 
@@ -221,6 +226,7 @@ class HelperPermissionsMixin:
 
         # Unknown tools - ask for permission to be safe
         return True
+
     def _request_runtime_permission(
         self,
         tool_name: str,
@@ -288,6 +294,7 @@ class HelperPermissionsMixin:
             self._runtime_permission_allow_all = True
             return True
         return response == "allow"
+
     def _permission_risk(
         self, tool_name: str, tool_input: dict, reason: str = ""
     ) -> tuple[str, str]:
@@ -320,12 +327,14 @@ class HelperPermissionsMixin:
         if reason == "file change":
             return "medium", THEME["warning"]
         return "low", THEME["success"]
+
     def _start_permission_pulse(self):
         """Start pulsing animation on input box to draw attention."""
         self._permission_pulse_frame = 0
         if hasattr(self, "_permission_pulse_timer") and self._permission_pulse_timer:
             self._permission_pulse_timer.stop()
         self._permission_pulse_timer = self.set_interval(0.4, self._update_permission_pulse)
+
     def _stop_permission_pulse(self):
         """Stop the permission pulse animation."""
         if hasattr(self, "_permission_pulse_timer") and self._permission_pulse_timer:
@@ -337,6 +346,7 @@ class HelperPermissionsMixin:
             input_box.styles.border = ("tall", "#1a1a1a")
         except Exception:
             pass
+
     def _update_permission_pulse(self):
         """Update the pulsing animation on input box."""
         if not self._permission_pending:

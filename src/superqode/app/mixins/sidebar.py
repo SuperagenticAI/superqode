@@ -22,6 +22,7 @@ class SidebarMixin:
             sidebar._width = 80  # Initial width
         except Exception:
             pass
+
     def _update_sidebar_agent_panel(self, **kwargs):
         """Update the agent panel in sidebar with current agent info."""
         try:
@@ -31,6 +32,7 @@ class SidebarMixin:
                 agent_panel.update_agent(**kwargs)
         except Exception:
             pass
+
     def _update_sidebar_context_panel(self, path: str, token_count: int = 0):
         """Add a file to the context panel."""
         try:
@@ -40,6 +42,7 @@ class SidebarMixin:
                 context_panel.add_file(path, token_count)
         except Exception:
             pass
+
     def _update_sidebar_history_panel(self, role: str, content: str, agent_name: str = ""):
         """Add a message to the history panel."""
         try:
@@ -49,6 +52,7 @@ class SidebarMixin:
                 history_panel.add_message(role, content, agent_name)
         except Exception:
             pass
+
     def _update_sidebar_diff_panel(
         self,
         path: str,
@@ -65,6 +69,7 @@ class SidebarMixin:
                 diff_panel.add_file(path, status, additions, deletions, diff_text)
         except Exception:
             pass
+
     def _run_sidebar_terminal_command(self, cmd: str, output: str = "", success: bool = True):
         """Run a command in the sidebar terminal panel."""
         try:
@@ -74,6 +79,7 @@ class SidebarMixin:
                 terminal_panel.add_command(cmd, output, success)
         except Exception:
             pass
+
     def _navigate_to_sidebar_changes(self, files_modified: list):
         """Navigate sidebar to Changes tab and highlight modified files."""
         try:
@@ -109,6 +115,7 @@ class SidebarMixin:
         except Exception:
             # Silently fail - sidebar might not be available
             pass
+
     def action_toggle_sidebar(self):
         self.sidebar_visible = not self.sidebar_visible
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
@@ -122,6 +129,7 @@ class SidebarMixin:
             divider.add_class("-hidden")
             # Return focus to input when sidebar is closed
             self.set_timer(0.1, self._ensure_input_focus)
+
     def action_shrink_sidebar(self):
         """Shrink sidebar width."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
@@ -129,6 +137,7 @@ class SidebarMixin:
         new_width = max(30, current_width - 10)
         sidebar.styles.width = new_width
         sidebar._width = new_width
+
     def action_expand_sidebar(self):
         """Expand sidebar width."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
@@ -136,12 +145,14 @@ class SidebarMixin:
         new_width = min(150, current_width + 10)
         sidebar.styles.width = new_width
         sidebar._width = new_width
+
     def action_sidebar_files(self):
         """Switch sidebar to files view."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
         sidebar.current_view = "files"
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
+
     def action_sidebar_harness(self):
         """Switch sidebar to harness overview."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
@@ -149,36 +160,42 @@ class SidebarMixin:
         self._refresh_harness_panel()
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
+
     def action_sidebar_agent(self):
         """Switch sidebar to agent panel."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
         sidebar.current_view = "agent"
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
+
     def action_sidebar_context(self):
         """Switch sidebar to context panel."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
         sidebar.current_view = "context"
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
+
     def action_sidebar_terminal(self):
         """Switch sidebar to terminal panel."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
         sidebar.current_view = "terminal"
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
+
     def action_sidebar_diff(self):
         """Switch sidebar to diff panel."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
         sidebar.current_view = "diff"
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
+
     def action_sidebar_history(self):
         """Switch sidebar to history panel."""
         sidebar = self.query_one("#sidebar", CollapsibleSidebar)
         sidebar.current_view = "history"
         if not self.sidebar_visible:
             self.action_toggle_sidebar()
+
     @on(CollapsibleSidebar.FileOpened)
     def on_sidebar_file_opened(self, event: CollapsibleSidebar.FileOpened) -> None:
         """Handle file opened from sidebar - show in conversation."""

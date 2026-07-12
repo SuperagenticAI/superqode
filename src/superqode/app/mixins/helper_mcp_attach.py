@@ -24,10 +24,12 @@ class HelperMcpAttachMixin:
         if not server_id or not uri:
             return None
         return server_id, uri
+
     @staticmethod
     def _extract_mcp_refs_from_text(text: str) -> tuple[str, list[str]]:
         """Remove inline MCP refs from prompt text and return them separately."""
         from superqode.app_main import SuperQodeApp
+
         parts = text.split()
         refs: list[str] = []
         kept: list[str] = []
@@ -38,11 +40,13 @@ class HelperMcpAttachMixin:
             else:
                 kept.append(part)
         return " ".join(kept).strip(), refs
+
     @staticmethod
     def _truncate_mcp_content(text: str, remaining_chars: int) -> tuple[str, bool]:
         if len(text) <= remaining_chars:
             return text, False
         return text[: max(0, remaining_chars)].rstrip(), True
+
     async def _resolve_mcp_attachment_context(self, log: ConversationLog | None = None) -> str:
         """Read staged MCP resource refs into bounded prompt context."""
         refs = list(dict.fromkeys(getattr(self, "_current_mcp_refs", []) or []))
@@ -117,6 +121,7 @@ class HelperMcpAttachMixin:
         if not blocks:
             return ""
         return "<mcp-resources>\n" + "\n\n".join(blocks) + "\n</mcp-resources>"
+
     def _resolve_mcp_attachment_context_sync(self, log: ConversationLog | None = None) -> str:
         """Synchronous wrapper for thread-based agent runners."""
         try:
@@ -126,6 +131,7 @@ class HelperMcpAttachMixin:
             if log is not None:
                 log.add_error("Could not resolve MCP resources from this runner.")
             return ""
+
     @staticmethod
     def _configured_mcp_server_ids() -> list[str]:
         try:
@@ -135,12 +141,14 @@ class HelperMcpAttachMixin:
             return list(servers.keys())
         except Exception:
             return []
+
     def _sync_attachment_prefill(self) -> None:
         if not getattr(self, "_attached_refs", None):
             self._set_prompt_prefill("")
             return
         prefill = " ".join(dict.fromkeys(self._attached_refs)) + " "
         self._set_prompt_prefill(prefill)
+
     def _is_image_path(self, value: str) -> bool:
         """True if value looks like a path to a readable image file."""
         try:
@@ -148,6 +156,7 @@ class HelperMcpAttachMixin:
             return path.suffix.lower() in self._IMAGE_EXTENSIONS and path.is_file()
         except Exception:
             return False
+
     def _grab_clipboard_image(self) -> Optional[Path]:
         """Best-effort capture of an image on the system clipboard to a temp PNG.
 
@@ -200,6 +209,7 @@ class HelperMcpAttachMixin:
         except Exception:
             pass
         return None
+
     def _stage_image_attachment(
         self, path: Path, log: ConversationLog, *, source: str = ""
     ) -> bool:
@@ -221,6 +231,7 @@ class HelperMcpAttachMixin:
                 "Note: the active model may not support images. Connect a vision model to use it."
             )
         return True
+
     async def _add_mcp_server_config(
         self,
         manager,
@@ -238,6 +249,7 @@ class HelperMcpAttachMixin:
         save_mcp_config(servers)
         manager.add_server(config)
         return True, f"Saved MCP server {server_id}."
+
     @staticmethod
     def _resolve_mcp_resource_ref(manager, target: str):
         """Resolve a user-facing MCP resource reference to a resource object."""

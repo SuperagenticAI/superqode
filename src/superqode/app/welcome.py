@@ -118,6 +118,8 @@ def render_welcome(
     items.append(place(keys_text))
 
     return Group(*items)
+
+
 def _harness_display_name(name) -> str:
     """Human form of a harness id for TUI labels ("core" -> "Core")."""
     text = str(name or "").strip()

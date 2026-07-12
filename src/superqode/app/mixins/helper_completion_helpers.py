@@ -37,6 +37,7 @@ class HelperCompletionHelpersMixin:
                 )
             )
         return matches
+
     def _path_candidates_after_prefix(
         self,
         value: str,
@@ -54,6 +55,7 @@ class HelperCompletionHelpersMixin:
             )
             for path, description in self._path_token_candidates(partial, files_only=files_only)
         ]
+
     @staticmethod
     def _path_token_candidates(partial: str, *, files_only: bool = False) -> list[tuple[str, str]]:
         expanded = partial.replace("\\ ", " ")
@@ -85,9 +87,11 @@ class HelperCompletionHelpersMixin:
             if len(candidates) >= 8:
                 break
         return candidates
+
     @staticmethod
     def _static_command_candidates(value: str) -> list[PromptCompletionCandidate]:
         from superqode.app_main import SuperQodeApp
+
         lowered = value.lower()
         if lowered in {":c", ":co", ":con", ":conn", ":conne", ":connec"}:
             commands = [
@@ -132,6 +136,7 @@ class HelperCompletionHelpersMixin:
                 ),
             )
         return matches[:8]
+
     @staticmethod
     def _command_description(command: str) -> str:
         descriptions = {

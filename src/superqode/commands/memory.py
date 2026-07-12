@@ -12,6 +12,8 @@ import click
 def memory():
     """Manage SuperQode agent memory."""
     pass
+
+
 @memory.command("providers")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def memory_providers(json_output):
@@ -25,6 +27,8 @@ def memory_providers(json_output):
     for status in statuses:
         state = _memory_status_state(status)
         click.echo(f"{status.provider:<12} {state:<9} {status.detail}")
+
+
 @memory.command("status")
 @click.option(
     "--provider",
@@ -50,6 +54,8 @@ def memory_status(provider, json_output):
         click.echo(f"Path: {status.path}")
     if status.detail:
         click.echo(f"Detail: {status.detail}")
+
+
 @memory.command("doctor")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def memory_doctor(json_output):
@@ -67,6 +73,8 @@ def memory_doctor(json_output):
     for status in statuses:
         state = _memory_status_state(status).upper()
         click.echo(f"{state} {status.provider}: {status.detail}")
+
+
 @memory.command("remember")
 @click.argument("text")
 @click.option(
@@ -84,6 +92,8 @@ def memory_remember(text, kind, scope, tags):
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"Remembered {record.id}")
+
+
 @memory.command("search")
 @click.argument("query")
 @click.option(
@@ -113,6 +123,8 @@ def memory_search(query, provider, limit, json_output):
         record = result.record
         click.echo(f"{record.id}  {result.provider}  {record.kind}  score={result.score:.2f}")
         click.echo(f"  {record.content}")
+
+
 @memory.command("forget")
 @click.argument("memory_id")
 def memory_forget(memory_id):
@@ -124,6 +136,8 @@ def memory_forget(memory_id):
         click.echo(f"Forgot {memory_id}")
     else:
         raise click.ClickException(f"Memory not found: {memory_id}")
+
+
 @memory.command("export")
 @click.option(
     "--provider",
@@ -145,6 +159,8 @@ def memory_export(provider, output):
         click.echo(f"Exported memory to {output}")
     else:
         click.echo(content, nl=False)
+
+
 def _memory_status_state(status) -> str:
     if getattr(status, "available", False):
         return "ready"

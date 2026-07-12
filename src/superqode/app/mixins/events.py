@@ -31,6 +31,7 @@ class EventHandlerMixin:
             sidebar._width = new_width
         except Exception:
             pass
+
     @on(CommandPalette.CommandSelected)
     def on_command_palette_selected(self, event: CommandPalette.CommandSelected) -> None:
         """Route command palette selections through the existing command dispatcher."""
@@ -106,6 +107,7 @@ class EventHandlerMixin:
             self._handle_command(command, log)
         else:
             log.add_error(f"No handler for palette command: {event.command.label}")
+
     @on(events.TextSelected)
     async def on_text_selected(self) -> None:
         """Automatically copy selected text to the clipboard on mouse-drag select.
@@ -142,6 +144,7 @@ class EventHandlerMixin:
         except Exception:
             # Best-effort: never let a copy/notify failure crash the UI.
             pass
+
     @on(LeaderKeyPopup.KeyPressed)
     def on_leader_key_popup_key_pressed(self, event: LeaderKeyPopup.KeyPressed) -> None:
         """Handle leader key selection from popup."""
@@ -169,12 +172,14 @@ class EventHandlerMixin:
 
         # Return focus to input
         self.set_timer(0.1, self._ensure_input_focus)
+
     @on(LeaderKeyPopup.Cancelled)
     def on_leader_key_popup_cancelled(self, event: LeaderKeyPopup.Cancelled) -> None:
         """Handle leader mode cancellation."""
         self._leader_mode = False
         # Return focus to input
         self.set_timer(0.1, self._ensure_input_focus)
+
     def on_click(self, event: events.Click) -> None:
         """Route mouse clicks on numbered picker links through direct selection."""
         style = getattr(event, "style", None)
@@ -197,12 +202,14 @@ class EventHandlerMixin:
         except Exception:
             pass
         self._selection_digit_timer = self.set_timer(0.35, self._apply_selection_buffer)
+
     @on(ColorfulDirectoryTree.FileOpenRequested)
     def on_tree_file_open_requested(self, event: ColorfulDirectoryTree.FileOpenRequested) -> None:
         """Handle file open request from tree directly."""
         event.stop()
         log = self.query_one("#log", ConversationLog)
         self._view_file(str(event.path), log)
+
     def on_input_submitted(self, event: Input.Submitted):
         """Handle input submission - only processes on Enter, doesn't interfere with typing."""
         if event.input.id != "prompt-input":

@@ -11,6 +11,8 @@ import click
 def factory():
     """Model- and harness-independent Software Factory commands."""
     pass
+
+
 @factory.command("status")
 @click.argument("session_id", required=False)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
@@ -32,6 +34,8 @@ def factory_status(session_id, json_output):
     click.echo(f"Model: {factory_meta.get('model_ref') or '-'}")
     click.echo(f"Harness: {factory_meta.get('harness') or '-'}")
     click.echo(f"Lineage events: {len(payload.get('lineage') or [])}")
+
+
 @factory.command("routes")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def factory_routes(json_output):
@@ -46,6 +50,8 @@ def factory_routes(json_output):
         tags = ", ".join(route.get("tags") or [])
         click.echo(f"{name:<16} {route.get('policy'):<18} {tags}")
         click.echo(f"  {route.get('description')}")
+
+
 @factory.command("policy")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def factory_policy(json_output):
@@ -59,6 +65,8 @@ def factory_policy(json_output):
         return
     click.echo(f"Policy path: {payload['path']}")
     click.echo(json.dumps(payload["policy"], indent=2))
+
+
 @factory.command("init-policy")
 @click.option("--force", is_flag=True, help="Overwrite an existing .superqode/factory.yaml")
 def factory_init_policy(force):
@@ -70,6 +78,8 @@ def factory_init_policy(force):
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"Factory policy: {path}")
+
+
 @factory.command("resolve-route")
 @click.argument("route")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
@@ -85,6 +95,8 @@ def factory_resolve_route(route, json_output):
         click.echo(json.dumps(payload, indent=2))
     else:
         click.echo(json.dumps(payload, indent=2))
+
+
 @factory.command("mode")
 @click.argument("mode")
 @click.argument("session_id", required=False)
@@ -102,6 +114,8 @@ def factory_mode(mode, session_id, reason, json_output):
         click.echo(json.dumps(payload, indent=2))
     else:
         click.echo(f"Factory mode for {payload['session_id']}: {mode}")
+
+
 @factory.command("switch-model")
 @click.argument("model_ref")
 @click.argument("session_id", required=False)
@@ -127,6 +141,8 @@ def factory_switch_model(model_ref, session_id, runtime, reason, json_output):
         click.echo(f"Session {payload['session']['session_id']} model -> {model_ref}")
         for warning in payload.get("privacy_warnings") or []:
             click.echo(f"Warning: {warning}")
+
+
 @factory.command("switch-harness")
 @click.argument("harness")
 @click.argument("session_id", required=False)
@@ -146,6 +162,8 @@ def factory_switch_harness(harness, session_id, reason, json_output):
         click.echo(json.dumps(payload, indent=2))
     else:
         click.echo(f"Session {payload['session']['session_id']} harness -> {harness}")
+
+
 @factory.command("fork-model")
 @click.argument("source_session_id", required=False)
 @click.option("--model", "model_ref", required=True, help="Provider/model reference")
@@ -169,6 +187,8 @@ def factory_fork_model(source_session_id, model_ref, role, session_id, title, go
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"Forked to {payload['fork']['session']['session_id']} on {model_ref}")
+
+
 @factory.command("fork-harness")
 @click.argument("source_session_id", required=False)
 @click.option("--harness", required=True, help="Harness id/name")
@@ -192,6 +212,8 @@ def factory_fork_harness(source_session_id, harness, role, session_id, title, go
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"Forked to {payload['fork']['session']['session_id']} using harness {harness}")
+
+
 @factory.command("lineage")
 @click.argument("session_id", required=False)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")

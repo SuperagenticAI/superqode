@@ -21,6 +21,7 @@ class PickerNavigationMixin:
     def _picker_link_style(style: str, number: int) -> str:
         """Add a Textual/Rich link target to a picker style."""
         return f"{style} link superqode://pick/{number}"
+
     def _select_by_number_universal(self, num: int):
         """Universal number selection handler for all selection modes.
 
@@ -167,6 +168,7 @@ class PickerNavigationMixin:
             return True
 
         return False
+
     def _select_picker_number_direct(self, num: int) -> bool:
         """Select a picker item directly from a mouse click.
 
@@ -245,6 +247,7 @@ class PickerNavigationMixin:
             return True
 
         return bool(self._select_by_number_universal(num))
+
     def _scroll_to_highlighted_item(
         self, log: ConversationLog, highlighted_idx: int, total_items: int
     ):
@@ -281,6 +284,7 @@ class PickerNavigationMixin:
         finally:
             log.auto_scroll = True
         self._schedule_picker_visibility(log, highlighted_idx, total_items)
+
     def _schedule_picker_visibility(
         self, log: ConversationLog, highlighted_idx: int, total_items: int
     ) -> None:
@@ -309,6 +313,7 @@ class PickerNavigationMixin:
                 self.set_timer(0.01, reveal)
             except Exception:
                 pass
+
     def action_navigate_provider_up(self):
         """Navigate to previous provider (arrow up)."""
         if not getattr(self, "_awaiting_byok_provider", False):
@@ -328,6 +333,7 @@ class PickerNavigationMixin:
             self._scroll_to_highlighted_item(log, new_idx, len(provider_list))
             # Ensure input stays focused
             self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_provider_down(self):
         """Navigate to next provider (arrow down)."""
         if not getattr(self, "_awaiting_byok_provider", False):
@@ -347,6 +353,7 @@ class PickerNavigationMixin:
             self._scroll_to_highlighted_item(log, new_idx, len(provider_list))
             # Ensure input stays focused
             self.set_timer(0.05, self._ensure_input_focus)
+
     def action_select_highlighted_provider(self):
         """Select the currently highlighted provider (Enter key)."""
         if not getattr(self, "_awaiting_byok_provider", False):
@@ -364,6 +371,7 @@ class PickerNavigationMixin:
             # Reset model highlight index when entering a new provider
             self._byok_highlighted_model_index = 0
             self._show_provider_models(provider_id, log, use_picker=False)
+
     def _show_runtime_picker(self, log: ConversationLog, clear_log: bool = True):
         """Show interactive runtime picker with highlighting and status."""
         from superqode.runtime import list_runtimes, resolve_runtime_name
@@ -450,6 +458,7 @@ class PickerNavigationMixin:
         self._runtime_selection_list = runtimes
         self._scroll_to_highlighted_item(log, highlighted_idx, len(runtimes))
         self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_runtime_up(self):
         """Navigate to previous runtime (arrow up)."""
         if not getattr(self, "_awaiting_runtime_selection", False):
@@ -464,6 +473,7 @@ class PickerNavigationMixin:
             log = self.query_one("#log", ConversationLog)
             self._show_runtime_picker(log, clear_log=False)
             self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_runtime_down(self):
         """Navigate to next runtime (arrow down)."""
         if not getattr(self, "_awaiting_runtime_selection", False):
@@ -478,6 +488,7 @@ class PickerNavigationMixin:
             log = self.query_one("#log", ConversationLog)
             self._show_runtime_picker(log, clear_log=False)
             self.set_timer(0.05, self._ensure_input_focus)
+
     def action_select_highlighted_runtime(self):
         """Select the currently highlighted runtime (Enter key)."""
         if not getattr(self, "_awaiting_runtime_selection", False):
@@ -510,6 +521,7 @@ class PickerNavigationMixin:
         # BYOK provider picker so users can complete the connection.
         if info.name not in self._SELF_CONTAINED_RUNTIMES:
             self._show_byok_providers(log)
+
     def action_navigate_acp_agent_up(self):
         """Navigate to previous ACP agent (arrow up)."""
         if not getattr(self, "_awaiting_acp_agent_selection", False):
@@ -527,6 +539,7 @@ class PickerNavigationMixin:
             self._show_agents(log, clear_log=False)
             self._scroll_to_highlighted_item(log, new_idx, len(agent_list))
             self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_acp_agent_down(self):
         """Navigate to next ACP agent (arrow down)."""
         if not getattr(self, "_awaiting_acp_agent_selection", False):
@@ -544,6 +557,7 @@ class PickerNavigationMixin:
             self._show_agents(log, clear_log=False)
             self._scroll_to_highlighted_item(log, new_idx, len(agent_list))
             self.set_timer(0.05, self._ensure_input_focus)
+
     def action_select_highlighted_acp_agent(self):
         """Select the currently highlighted ACP agent (Enter key)."""
         if not getattr(self, "_awaiting_acp_agent_selection", False):
@@ -578,6 +592,7 @@ class PickerNavigationMixin:
                     log.add_info(f"Install with: {install_cmd}")
                 else:
                     log.add_info(f"Use: :acp install {agent_data['short_name']}")
+
     def _show_session_resume_picker(self, log: ConversationLog, clear_log: bool = True) -> None:
         """Show a keyboard-navigable picker for resuming local sessions."""
         manager = self._get_session_manager()
@@ -638,6 +653,7 @@ class PickerNavigationMixin:
         self._show_command_output(log, t, clear_log=clear_log)
         self._scroll_to_highlighted_item(log, self._session_resume_highlighted_index, len(sessions))
         self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_session_resume_up(self) -> None:
         """Navigate to previous resumable session."""
         if not getattr(self, "_awaiting_session_resume", False):
@@ -651,6 +667,7 @@ class PickerNavigationMixin:
             self._session_resume_highlighted_index = new_idx
             log = self.query_one("#log", ConversationLog)
             self._show_session_resume_picker(log, clear_log=False)
+
     def action_navigate_session_resume_down(self) -> None:
         """Navigate to next resumable session."""
         if not getattr(self, "_awaiting_session_resume", False):
@@ -664,6 +681,7 @@ class PickerNavigationMixin:
             self._session_resume_highlighted_index = new_idx
             log = self.query_one("#log", ConversationLog)
             self._show_session_resume_picker(log, clear_log=False)
+
     def action_select_highlighted_session_resume(self) -> None:
         """Resume the highlighted session."""
         if not getattr(self, "_awaiting_session_resume", False):
@@ -675,12 +693,14 @@ class PickerNavigationMixin:
         if 0 <= idx < len(sessions):
             log = self.query_one("#log", ConversationLog)
             self._handle_resume_session(sessions[idx].session_id, log)
+
     def _mode_picker_items(self) -> list[tuple[str, str, str]]:
         return [
             ("chat", "Chat", "Local/BYOK direct model chat. ACP agents use Build/Plan."),
             ("build", "Build", "Repo-aware coding harness with tools."),
             ("plan", "Plan", "Reason first. No native tools until approved."),
         ]
+
     def _show_mode_picker(self, log: ConversationLog, clear_log: bool = True) -> None:
         """Show a keyboard-navigable Chat/Build/Plan switcher."""
         modes = self._mode_picker_items()
@@ -725,12 +745,14 @@ class PickerNavigationMixin:
         log.write(t)
         self._scroll_to_highlighted_item(log, self._mode_highlighted_index, len(modes))
         self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_mode_up(self) -> None:
         if not getattr(self, "_awaiting_mode_selection", False):
             return
         self._mode_highlighted_index = max(0, getattr(self, "_mode_highlighted_index", 0) - 1)
         log = self.query_one("#log", ConversationLog)
         self._show_mode_picker(log, clear_log=True)
+
     def action_navigate_mode_down(self) -> None:
         if not getattr(self, "_awaiting_mode_selection", False):
             return
@@ -740,6 +762,7 @@ class PickerNavigationMixin:
         )
         log = self.query_one("#log", ConversationLog)
         self._show_mode_picker(log, clear_log=True)
+
     def action_select_highlighted_mode(self) -> None:
         if not getattr(self, "_awaiting_mode_selection", False):
             return
@@ -747,6 +770,7 @@ class PickerNavigationMixin:
         idx = min(max(0, getattr(self, "_mode_highlighted_index", 0)), len(modes) - 1)
         log = self.query_one("#log", ConversationLog)
         self._apply_interaction_mode(modes[idx][0], log)
+
     def _setup_picker_handlers(self, picker, provider_id: str, log: ConversationLog):
         """Set up picker message handlers."""
         from superqode.widgets.model_picker import ModelPickerWidget

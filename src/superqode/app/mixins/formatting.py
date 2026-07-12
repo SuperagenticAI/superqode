@@ -52,6 +52,7 @@ class FormattingMixin:
             t.append(f"    +{len(queue) - 5} more\n", style=THEME["dim"])
         panel.update(t)
         panel.add_class("visible")
+
     def _render_compare_results(self, results, log: ConversationLog) -> None:
         """Render parallel-compare results as labelled stacked sections."""
         from superqode.rendering.markdown import render_agent_markdown
@@ -70,6 +71,7 @@ class FormattingMixin:
                 log.write(Text("  (empty response)\n", style=THEME["muted"]))
             else:
                 log.write(Text(f"  {result.error}\n", style=THEME["error"], overflow="fold"))
+
     def _render_attachments(self) -> Text:
         t = Text()
         t.append("\n  📎 ", style=f"bold {THEME['cyan']}")
@@ -96,6 +98,7 @@ class FormattingMixin:
         t.append(", ", style=THEME["muted"])
         t.append(":attach clear\n", style=THEME["cyan"])
         return t
+
     def _write_share_artifact(
         self,
         session_id: str,
@@ -111,6 +114,7 @@ class FormattingMixin:
             storage_dir=".superqode/sessions",
             include_tree=include_tree,
         )
+
     def _render_harness_wizard_step(self, log) -> None:
         state = getattr(self, "_harness_wizard_state", None)
         if not state:
@@ -201,6 +205,7 @@ class FormattingMixin:
             t.append("  Answer: yes or no\n", style=THEME["text"])
 
         self._show_command_output(log, t)
+
     def _write_chat_stats(self, log: ConversationLog, ttft, tps, tokens: int, total: float) -> None:
         """One muted metrics line under a chat reply."""
         line = Text()
@@ -215,6 +220,7 @@ class FormattingMixin:
         line.append("  ·  ".join(parts), style=THEME["muted"])
         line.append("\n", style="")
         log.write(line)
+
     def _format_todo_list(self, todos: list) -> list:
         """Format a TODO list with emojis and nice display."""
         if not todos:
@@ -245,6 +251,7 @@ class FormattingMixin:
             formatted_lines.append(line)
 
         return formatted_lines
+
     def _format_tool_message(self, tool_name: str, tool_input: dict) -> str:
         """Format a tool use message with permission indicator based on approval mode."""
         # Check if this is a destructive operation
@@ -331,6 +338,7 @@ class FormattingMixin:
                 msg = f"🔴 {msg}"
 
         return msg
+
     def _format_tool_output(self, tool_name: str, output: Any, log: ConversationLog) -> bool:
         """Format and display tool output with proper JSON parsing.
 
@@ -389,6 +397,7 @@ class FormattingMixin:
             pass
 
         return False
+
     def _display_todo_list(self, data: Any, log: ConversationLog) -> None:
         """Display a TODO list with nice formatting."""
         from rich.text import Text
@@ -466,6 +475,7 @@ class FormattingMixin:
             more = Text()
             more.append(f"    ... and {len(data) - 8} more\n", style="#71717a")
             self._call_ui(log.write, more)
+
     def _display_file_results(self, data: Any, tool_name: str, log: ConversationLog) -> None:
         """Display file search results."""
         from rich.text import Text
@@ -516,6 +526,7 @@ class FormattingMixin:
             more = Text()
             more.append(f"    ... and {len(files) - 6} more\n", style="#71717a")
             self._call_ui(log.write, more)
+
     def _display_task_list(self, data: list, log: ConversationLog) -> None:
         """Display Claude Code style task list."""
         from rich.text import Text
@@ -548,6 +559,7 @@ class FormattingMixin:
                 f"{str(subject)}\n", style="#e4e4e7" if status != "completed" else "#71717a"
             )
             self._call_ui(log.write, line)
+
     def _display_error_result(self, data: dict, log: ConversationLog) -> None:
         """Display error result."""
         from rich.text import Text
@@ -565,6 +577,7 @@ class FormattingMixin:
             line.append("    ✕ ", style="#ef4444")
             line.append(f"{str(msg)}\n", style="#ef4444")
             self._call_ui(log.write, line)
+
     def _display_plan(self, data: list, log: ConversationLog) -> None:
         """Display plan steps."""
         from rich.text import Text
@@ -588,6 +601,7 @@ class FormattingMixin:
             line.append(f"    {icon}. ", style=color)
             line.append(f"{str(desc)}\n", style="#e4e4e7")
             self._call_ui(log.write, line)
+
     def _display_success_result(self, data: dict, tool_name: str, log: ConversationLog) -> None:
         """Display success/result dict."""
         from rich.text import Text
@@ -607,6 +621,7 @@ class FormattingMixin:
             error = data.get("error", data.get("message", "Failed"))
             line.append(f"{str(error)}\n", style="#ef4444")
         self._call_ui(log.write, line)
+
     def _display_generic_list(self, data: list, tool_name: str, log: ConversationLog) -> None:
         """Display a generic list."""
         from rich.text import Text
@@ -637,6 +652,7 @@ class FormattingMixin:
             more = Text()
             more.append(f"    ... and {len(data) - 5} more\n", style="#71717a")
             self._call_ui(log.write, more)
+
     def _display_generic_dict(self, data: dict, tool_name: str, log: ConversationLog) -> None:
         """Display a generic dict."""
         from rich.text import Text
@@ -654,6 +670,7 @@ class FormattingMixin:
             more = Text()
             more.append(f"  ... +{len(data) - 4} more fields\n", style="#71717a")
             self._call_ui(log.write, more)
+
     def _format_tool_message_rich(self, tool_name: str, tool_input: dict) -> str:
         """Format a tool use message as a single compact line.
 
@@ -760,6 +777,7 @@ class FormattingMixin:
                     val_str = val_str[:77] + "…"
                 return f"{icon} {tool_name} {val_str}"
         return f"{icon} {tool_name}"
+
     def _write_collapsed_changes_line(
         self, log: ConversationLog, files_modified: list, file_diffs: dict
     ) -> None:
@@ -784,6 +802,7 @@ class FormattingMixin:
         line.append(":work verbose", style=f"bold {SQ_COLORS.info}")
         line.append(" for inline diffs\n", style=SQ_COLORS.text_muted)
         log.write(line)
+
     def _format_free_inference_offers(self, offers, offer_status) -> Text:
         """Render curated fallback/free setup offers."""
         t = Text()
@@ -813,6 +832,7 @@ class FormattingMixin:
         t.append(" or ", style=THEME["muted"])
         t.append(":providers free --live models-dev\n", style=THEME["cyan"])
         return t
+
     def _format_live_free_inference(self, candidates, errors, sources) -> Text:
         """Render live zero-price model routes."""
         t = Text()
@@ -845,6 +865,7 @@ class FormattingMixin:
         t.append("\n  CLI JSON: ", style=THEME["muted"])
         t.append("superqode providers scan-free --live --json\n", style=THEME["cyan"])
         return t
+
     def _format_acp_doctor_results(self, results: list[dict], live: bool = False) -> Text:
         """Render ACP diagnostics for TUI."""
         t = Text()
@@ -902,6 +923,7 @@ class FormattingMixin:
             t.append(" to run protocol startup check\n", style=THEME["muted"])
 
         return t
+
     def _format_diff_review(self, sections: list[tuple[str, str]]) -> str:
         """Build a review document with a file index and full patches."""
         sections = [(label, text.strip()) for label, text in sections if text and text.strip()]
@@ -941,6 +963,7 @@ class FormattingMixin:
             lines.extend(["", f"## {label}", ""])
             lines.append(text)
         return "\n".join(lines).strip()
+
     def _format_diff_file_index(self, sections: list[tuple[str, str]]) -> str:
         """Return only the file index for quick review in the log."""
         stats = self._diff_review_entries(sections)
@@ -956,6 +979,7 @@ class FormattingMixin:
             )
         lines.append("Use :diff <path> to open one file.")
         return "\n".join(lines)
+
     def _format_diff_entry_review(
         self,
         entry: dict[str, Any],
@@ -983,6 +1007,7 @@ class FormattingMixin:
                 patch,
             ]
         ).strip()
+
     def _render_plan_review(self, log: ConversationLog) -> None:
         pending = getattr(self, "_pending_plan_request", "").strip()
         if not pending and not self._plan_manager.tasks:

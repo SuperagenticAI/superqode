@@ -102,7 +102,23 @@ from superqode.app.mixins.helper_recipes_skills import HelperRecipesSkillsMixin
 from superqode.app.mixins.helper_message_queue import HelperMessageQueueMixin
 
 
-class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInteractionModeMixin, HelperFileViewMixin, HelperTodosPlanMixin, HelperShareMixin, HelperCompletionHelpersMixin, HelperStartupMixin, HelperExitLifecycleMixin, HelperWizardMixin, HelperClipboardMixin, HelperVimMixin, HelperMcpAttachMixin, HelperDiffReviewMixin, HelperPermissionsMixin):
+class HelpersMixin(
+    HelperMessageQueueMixin,
+    HelperRecipesSkillsMixin,
+    HelperInteractionModeMixin,
+    HelperFileViewMixin,
+    HelperTodosPlanMixin,
+    HelperShareMixin,
+    HelperCompletionHelpersMixin,
+    HelperStartupMixin,
+    HelperExitLifecycleMixin,
+    HelperWizardMixin,
+    HelperClipboardMixin,
+    HelperVimMixin,
+    HelperMcpAttachMixin,
+    HelperDiffReviewMixin,
+    HelperPermissionsMixin,
+):
     """State/parsing/resolution/predicate helpers used across the app."""
 
     @property
@@ -111,6 +127,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
         if self._agents is None:
             self._agents = self._load_agents()
         return self._agents
+
     def _set_prompt_border_title(self) -> None:
         """Give the prompt box a neutral code-focused title."""
         try:
@@ -118,6 +135,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             input_box.border_title = "✎ Code"
         except Exception:
             pass
+
     def _refresh_harness_panel(self) -> None:
         """Refresh the harness workbench sidebar, if mounted."""
         try:
@@ -127,6 +145,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
                 harness_panel.refresh_summary()
         except Exception:
             pass
+
     def _call_ui(self, func, *args):
         """Run a UI callback from either worker threads or the app thread."""
         try:
@@ -136,15 +155,18 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             if "different thread" in message or "app thread" in message:
                 return func(*args)
             raise
+
     def _conversation_log(self) -> ConversationLog | None:
         try:
             return self.query_one("#log", ConversationLog)
         except Exception:
             return None
+
     def _create_checkpoint_before_agent(self, operation_name: str = "Agent operation"):
         """Create a checkpoint before an agent operation."""
         if hasattr(self, "_undo_manager") and self._undo_manager:
             self._undo_manager.create_checkpoint(f"Before: {operation_name}")
+
     def _queue_selection_digit(self, digit: str) -> None:
         """Queue a digit for multi-digit selection in provider/model pickers."""
         buf = getattr(self, "_selection_digit_buffer", "")
@@ -158,6 +180,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             prompt_input.cursor_position = len(buf)
         except Exception:
             pass
+
     def _apply_selection_buffer(self) -> None:
         """Apply buffered numeric selection to the current picker."""
         buf = getattr(self, "_selection_digit_buffer", "")
@@ -203,6 +226,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             self._select_by_number_universal(int(buf))
         except Exception:
             pass
+
     @staticmethod
     def _scroll_to_rendered_selected_block(log: ConversationLog) -> bool:
         """Bring the selected row and its supporting content into view."""
@@ -246,6 +270,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             return False
         finally:
             log.auto_scroll = True
+
     def _scroll_down_to_item(self, log: ConversationLog, target_offset: int, lines_per_item: int):
         """Helper to scroll down to show the highlighted item."""
         try:
@@ -255,6 +280,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
                 log.scroll_down(animate=False)
         except Exception:
             pass
+
     def _adjust_scroll_for_item(self, log: ConversationLog, highlighted_idx: int, total_items: int):
         """Adjust scroll position to show highlighted item (legacy, kept for compatibility)."""
         try:
@@ -262,6 +288,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             self._scroll_to_highlighted_item(log, highlighted_idx, total_items)
         except Exception:
             pass
+
     def _update_terminal_title(self, task: str = "") -> None:
         """Reflect the active model and current task in the terminal/tab title."""
         agent = getattr(self, "current_agent", "") or getattr(self, "current_model", "") or ""
@@ -277,6 +304,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             self.sub_title = " · ".join(sub_parts)
         except Exception:
             pass
+
     def _resolve_context_window(self, provider: str, model: str) -> int:
         """Best-effort lookup of a model's context window for the usage meter."""
         if not model:
@@ -290,6 +318,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
         except Exception:
             pass
         return 0
+
     def _in_selection_mode(self) -> bool:
         return any(
             getattr(self, flag, False)
@@ -309,15 +338,18 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
                 "_awaiting_mode_selection",
             )
         )
+
     def watch_is_busy(self, old: bool, new: bool) -> None:
         """When the agent becomes idle, drain any queued type-ahead messages."""
         if old and not new and getattr(self, "_typeahead_queue", []):
             # Small delay lets the completion render settle before the next turn.
             self.set_timer(0.2, self._drain_message_queue)
+
     @staticmethod
     def _env_flag(name: str) -> bool:
         value = os.environ.get(name, "").strip().lower()
         return value in {"1", "true", "yes", "on"}
+
     @staticmethod
     def _is_known_slash_input(text: str) -> bool:
         candidate = text.strip().lower()
@@ -331,6 +363,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             known = {command.lower() for command in COMMANDS if command.startswith("/")}
         first_word = candidate.split(maxsplit=1)[0]
         return candidate in known or first_word in known
+
     def _try_acp_slash_command(self, name: str, args: str, log: ConversationLog) -> bool:
         """Dispatch a slash command through the ACP local registry if registered.
 
@@ -385,11 +418,13 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
         if output:
             log.write(output)
         return True
+
     def _user_message_history(self, log: ConversationLog) -> list[str]:
         """Return prior user messages (oldest first) for rewind/edit."""
         return [
             text for role, text, _agent in log._messages if role == "user" and str(text).strip()
         ]
+
     def _apply_and_persist_theme(self, name: str) -> bool:
         """Apply a theme palette live, persist it, and refresh the visible UI."""
         if not _apply_theme_palette(name):
@@ -402,6 +437,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
         except Exception:
             pass
         return True
+
     def _perform_rewind(self, occurrence: int, log: ConversationLog) -> None:
         """Truncate context to before the Nth user message and reload it.
 
@@ -434,6 +470,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
         log.add_info(
             f"↩ Rewound to message {occurrence}/{total}{suffix}. Edit and press Enter to resend."
         )
+
     @staticmethod
     def _trim_transcript_to_user_occurrence(log: ConversationLog, occurrence: int) -> None:
         """Drop transcript entries from the Nth user message onward."""
@@ -450,6 +487,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
                     break
         if cut is not None:
             del records[cut:]
+
     def _set_prompt_prefill(self, value: str) -> None:
         """Put text in the prompt input and focus it."""
         try:
@@ -459,6 +497,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             input_widget.focus()
         except Exception:
             pass
+
     @staticmethod
     def _provider_description(provider_id: str) -> str:
         try:
@@ -468,6 +507,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             return provider.name if provider else ""
         except Exception:
             return ""
+
     @staticmethod
     def _all_provider_ids() -> list[str]:
         try:
@@ -476,11 +516,13 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             return all_provider_ids()
         except Exception:
             return []
+
     def _get_session_manager(self):
         """Get a local JSONL session manager."""
         from superqode.agent.session_manager import SessionManager
 
         return SessionManager(storage_dir=".superqode/sessions")
+
     def _current_session_id(self) -> str:
         """Resolve the active or most-recent local session id."""
         try:
@@ -497,6 +539,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
         except Exception:
             pass
         return ""
+
     async def _check_update_worker(self, current: str, log: ConversationLog):
         """Fetch the latest version from PyPI without blocking the UI."""
         import asyncio
@@ -528,6 +571,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             self._call_ui(log.write, t)
         else:
             self._call_ui(log.add_success, f"SuperQode is up to date ({current}).")
+
     @staticmethod
     def _version_is_newer(latest: str, current: str) -> bool:
         """Compare dotted version strings; True if latest > current."""
@@ -543,10 +587,12 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             return parse(latest) > parse(current)
         except Exception:
             return False
+
     def _factory(self):
         from superqode.session.factory import SoftwareFactory
 
         return SoftwareFactory(storage_dir=".superqode/sessions")
+
     def _ensure_project_trusted_for(self, log: ConversationLog, action: str) -> bool:
         """Require project trust before enabling project-local executable surfaces."""
         from superqode.project_trust import get_project_trust
@@ -559,6 +605,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             "Review this workspace, then run :trust yes to allow project-local plugins/MCP."
         )
         return False
+
     def _set_status_runtime(self, runtime_name: str) -> None:
         """Show the active runtime in the visible status bar (hidden for builtin)."""
         try:
@@ -568,6 +615,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             self.query_one("#status-bar", ColorfulStatusBar).active_runtime = display
         except Exception:  # noqa: BLE001
             pass
+
     def _import_grok_token(self, log) -> bool:
         """Import the local `grok login` session into the auth store.
 
@@ -604,10 +652,12 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
         # Login state may have changed since the last catalog probe.
         grok_cli_auth.clear_cli_models_cache()
         return True
+
     def _active_agent_loop(self):
         """The live AgentLoop for the current BYOK/local session, if any."""
         pure = getattr(self, "_pure_mode", None)
         return getattr(pure, "_agent", None) if pure is not None else None
+
     async def _context_show_worker(self, agent, log, redetect: bool = False) -> None:
         try:
             if redetect:
@@ -641,6 +691,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
         t.append(":context auto", style=f"bold {THEME['cyan']}")
         t.append(" to re-detect\n", style=THEME["muted"])
         self._call_ui(self._show_command_output, log, t)
+
     async def _ask_agent_question(self, question, log: ConversationLog):
         """Show an agent question in the TUI and await the next input submission."""
         from superqode.tools.question_tool import Answer
@@ -700,6 +751,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
 
         answer = await asyncio.wrap_future(future)
         return Answer(value=answer["value"], custom=answer.get("custom", False))
+
     def _direct_chat_status(self) -> tuple[bool, str, str]:
         """Return whether raw chat can talk to the active direct model session."""
         pure = getattr(self, "_pure_mode", None)
@@ -739,16 +791,19 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             "Use :connect local or :connect byok first. ACP agents use Build/Plan mode.",
             "",
         )
+
     @work(exclusive=True)
     async def _chat_worker(self, text: str, log: ConversationLog):
         """Worker wrapper so chat streaming runs off the input handler."""
         await self._send_chat_message(text, log)
+
     def _use_jsonrpc_acp_client(self) -> bool:
         """Return True when the custom JSON-RPC ACP client is enabled."""
         import os
 
         mode = os.environ.get("SUPERQODE_ACP_CLIENT", "").strip().lower()
         return mode in {"custom", "jsonrpc", "rpc"}
+
     def _get_tool_signature(self, tool_name: str, tool_input: dict) -> str:
         """Generate a unique signature for a tool call to track approvals."""
         # Create a signature from tool name and key parameters
@@ -756,6 +811,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
         command = tool_input.get("command", "")
         key = f"{tool_name}:{file_path or command}"
         return key
+
     def _reset_input_placeholder(self):
         """Reset input placeholder to default and stop any animations."""
         # Stop permission pulse animation
@@ -776,6 +832,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             input_widget.placeholder = SelectionAwareInput.DEFAULT_PLACEHOLDER
         except Exception:
             pass
+
     def _set_input_placeholder(self, text: str) -> None:
         """Best-effort prompt hint for inline decisions."""
         try:
@@ -783,15 +840,18 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             input_widget.placeholder = text
         except Exception:
             pass
+
     def _strip_ansi(self, text: str) -> str:
         """Remove ANSI escape codes from text."""
         import re
 
         ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
         return ansi_escape.sub("", text)
+
     def _is_calm_output(self) -> bool:
         """True when we should present a calm, summarized view (not verbose)."""
         return getattr(self, "thinking_verbosity", "normal") != "verbose"
+
     def _looks_like_code(self, text: str) -> bool:
         """Check if a line looks like code (to be suppressed for local models).
 
@@ -909,6 +969,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
                 return True
 
         return False
+
     def _get_emoji_for_line(self, line: str) -> str:
         """Get appropriate emoji based on line content type with variety."""
 
@@ -1178,6 +1239,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
                 ]
                 # Use line hash for consistent emoji per line type
                 return generic_emojis[line_hash % len(generic_emojis)]
+
     def _memory_status_state(self, status) -> str:
         if getattr(status, "available", False):
             return "ready"
@@ -1186,6 +1248,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
         if getattr(status, "installed", None) is False:
             return "missing"
         return "missing"
+
     async def _check_provider_health(self, log: ConversationLog):
         """Check provider health asynchronously."""
         from superqode.providers.health import get_health_checker, ProviderStatus
@@ -1248,6 +1311,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
         t.append(" to connect to a ready provider\n", style=THEME["muted"])
 
         self._call_ui(log.write, t)
+
     @staticmethod
     def _parse_serve_args(subargs: str) -> tuple[str, dict]:
         """Parse ``<engine> [--model X] [--port N] [--ctx N] [--host H]``."""
@@ -1283,6 +1347,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             else:
                 i += 1
         return engine, opts
+
     @work(exclusive=True)
     async def _install_agent(self, agent_id: str, log: ConversationLog):
         agent = next((a for a in self._agents if a.short_name == agent_id), None)
@@ -1313,6 +1378,7 @@ class HelpersMixin(HelperMessageQueueMixin, HelperRecipesSkillsMixin, HelperInte
             pass
 
         log.add_info(f"No install command found for {agent.name}")
+
     def _retry_last_message(self, log: ConversationLog):
         """Retry the last user prompt in the current session."""
         if not self._last_user_message:

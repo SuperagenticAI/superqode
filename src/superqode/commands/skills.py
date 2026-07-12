@@ -12,6 +12,8 @@ import click
 def skills():
     """Manage and optimize SuperQode markdown skills."""
     pass
+
+
 @skills.command("optimize")
 @click.argument("skill")
 @click.option("--engine", type=click.Choice(["gepa"]), default="gepa", show_default=True)

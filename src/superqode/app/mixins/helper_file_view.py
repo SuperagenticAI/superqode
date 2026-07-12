@@ -45,6 +45,7 @@ class HelperFileViewMixin:
                 log.add_info(f"No files matching '{query}'")
         except Exception as e:
             log.add_error(str(e))
+
     def _view_file(self, file_path: str, log: ConversationLog):
         """View file content with syntax highlighting."""
         from rich.syntax import Syntax
@@ -90,6 +91,7 @@ class HelperFileViewMixin:
             log.add_error(f"File not found: {file_path}")
         except Exception as e:
             log.add_error(f"Error viewing file: {e}")
+
     def _view_file_info(self, file_path: str, log: ConversationLog):
         """View file information without content."""
         try:
@@ -131,6 +133,7 @@ class HelperFileViewMixin:
             log.add_error(f"File not found: {file_path}")
         except Exception as e:
             log.add_error(f"Error: {e}")
+
     def _search_in_file(self, term: str, file_path: str, log: ConversationLog):
         """Search for a term in a specific file."""
         try:
@@ -181,6 +184,7 @@ class HelperFileViewMixin:
             log.add_error(f"File not found: {file_path}")
         except Exception as e:
             log.add_error(f"Error: {e}")
+
     def _search_in_directory(self, term: str, log: ConversationLog):
         """Search for a term in all files in current directory."""
         import os

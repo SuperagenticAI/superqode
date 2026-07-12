@@ -1101,6 +1101,8 @@ def providers_models(provider_id, json_output):
     click.echo(f"{provider_def.name} ({provider_id})")
     for model in models:
         click.echo(f"  {model}")
+
+
 @providers.command("doctor")
 @click.argument("provider_id", required=False)
 @click.option("--live", is_flag=True, help="Run live local-provider health checks")
@@ -1161,6 +1163,8 @@ def providers_doctor(provider_id, live, json_output):
             click.echo(f"  smoke client: {'yes' if live_result.get('supported') else 'no'}")
             if live_result.get("host"):
                 click.echo(f"  host: {live_result['host']}")
+
+
 @providers.command("recommend")
 @click.argument("task", required=False, default="coding")
 @click.option("--limit", default=8, type=int, help="Maximum recommendations")
@@ -1180,6 +1184,8 @@ def providers_recommend(task, limit, json_output):
             f"price={item.price}  ctx={item.context}  tools={item.tool_support}  {setup}"
         )
         click.echo(f"  {item.reason}")
+
+
 @providers.command("guide")
 @click.argument("provider_id", required=False)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
@@ -1204,6 +1210,8 @@ def providers_guide(provider_id, json_output):
                 f"  - {model['model']}  price={model['price']}  "
                 f"ctx={model['context']}  tools={model['tool_support']}"
             )
+
+
 @providers.command("smoke")
 @click.argument("provider_id")
 @click.option("--model", help="Model to check")

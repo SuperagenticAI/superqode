@@ -12,6 +12,8 @@ import click
 def skillopt():
     """Optimize markdown skills with bounded edits and eval gates."""
     pass
+
+
 @skillopt.command("export")
 @click.argument("skill")
 @click.option("--tasks", "tasks_path", type=click.Path(exists=True, path_type=Path), required=True)
@@ -54,6 +56,8 @@ def skillopt_export(
         click.echo(json.dumps(export.to_dict(), indent=2))
         return
     click.echo(render_skillopt_export(export))
+
+
 @skillopt.command("check")
 @click.option(
     "--baseline", "baseline_path", type=click.Path(exists=True, path_type=Path), required=True

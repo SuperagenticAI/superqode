@@ -43,6 +43,7 @@ class HelperExitLifecycleMixin:
             t.append("  ✨ Ready - What would you like to build?\n", style=THEME["muted"])
         t.append("\n")
         log.write(t)
+
     def _cleanup_terminals(self, terminals: dict):
         """Clean up any running terminal processes."""
         for tid, term in terminals.items():
@@ -55,6 +56,7 @@ class HelperExitLifecycleMixin:
             except Exception:
                 pass
         terminals.clear()
+
     def _go_home(self, log: ConversationLog):
         # First, cancel any running agent process
         if self._agent_process is not None:
@@ -116,6 +118,7 @@ class HelperExitLifecycleMixin:
 
         # Clear and show homepage
         self.action_clear_screen()
+
     def _reset_mode_badge_after_role_run(self):
         """Reset mode badge to HOME after a role run completes."""
         try:
@@ -128,6 +131,7 @@ class HelperExitLifecycleMixin:
             badge.execution_mode = ""
         except Exception:
             pass  # Silently fail if badge not found
+
     def _do_exit(self, log: ConversationLog):
         """Show a beautiful goodbye screen and exit."""
         self._cleanup_on_exit()
@@ -144,6 +148,7 @@ class HelperExitLifecycleMixin:
             # Event loop is closed or not running - exit directly
             self._show_goodbye_sync(log)
             self.exit()
+
     async def _exit_sequence_async(self, log: ConversationLog):
         """Await ACP/subprocess cleanup, then show goodbye and exit."""
         pure = getattr(self, "_pure_mode", None)
@@ -219,6 +224,7 @@ class HelperExitLifecycleMixin:
 
         # Exit after a short delay to show the goodbye screen
         self.set_timer(0.5, lambda: self.exit())
+
     def _cleanup_on_exit(self):
         """Clean up all running processes and timers before exit."""
         # Cancel any pending operations

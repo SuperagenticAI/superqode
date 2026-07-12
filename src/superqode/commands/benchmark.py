@@ -11,6 +11,8 @@ import click
 def benchmark():
     """Run coding harness benchmarks."""
     pass
+
+
 @benchmark.command("run")
 @click.argument("tasks_file", type=click.Path(exists=True))
 @click.option(

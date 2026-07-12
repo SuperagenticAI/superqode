@@ -32,10 +32,12 @@ class CompletionMixin:
         self._prompt_completion_candidates = candidates
         self._prompt_completion_index = 0
         return self._accept_prompt_completion(input_widget)
+
     def _suggest_prompt_completion(self, value: str) -> str | None:
         """Return a contextual completion for command-like prompt text."""
         candidates = self._prompt_completion_candidates_for(value)
         return candidates[0].value if candidates else None
+
     def _mention_completion_candidates(self, value: str) -> list[PromptCompletionCandidate] | None:
         """Return file candidates for an active @mention, or None when not in one.
 
@@ -67,6 +69,7 @@ class CompletionMixin:
                 )
             )
         return candidates
+
     def _prompt_completion_candidates_for(self, value: str) -> list[PromptCompletionCandidate]:
         """Return contextual completion candidates for command-like prompt text."""
         mention_candidates = self._mention_completion_candidates(value)
@@ -135,6 +138,7 @@ class CompletionMixin:
             return self._model_switch_candidates(value, ":model switch ")
 
         return self._static_command_candidates(value)
+
     @staticmethod
     def _theme_completion_candidates() -> list[PromptCompletionCandidate]:
         """Theme names for `:theme <name>` completion."""
@@ -149,6 +153,7 @@ class CompletionMixin:
             )
             for name, description in available_themes()
         ]
+
     @staticmethod
     def _should_submit_prompt_without_completion(value: str) -> bool:
         """Return True when Enter should execute the exact command in the prompt."""
@@ -166,6 +171,7 @@ class CompletionMixin:
         }:
             return True
         return lowered in {candidate.lower() for candidate in COMMANDS}
+
     def _selected_prompt_completion_value(self) -> str:
         """Return the currently highlighted completion value, if any."""
         if not self._prompt_completion_candidates:
@@ -175,6 +181,7 @@ class CompletionMixin:
             min(self._prompt_completion_index, len(self._prompt_completion_candidates) - 1),
         )
         return self._prompt_completion_candidates[index].value
+
     def _prompt_completion_enter_action(self, value: str) -> str:
         """Choose whether Enter accepts a completion or submits the prompt.
 
@@ -188,6 +195,7 @@ class CompletionMixin:
         if self._should_submit_prompt_without_completion(value):
             return "submit"
         return "accept"
+
     def _update_prompt_completion_panel(self, value: str) -> None:
         """Refresh the visible prompt completion panel as the prompt changes."""
         candidates = self._prompt_completion_candidates_for(value)
@@ -195,6 +203,7 @@ class CompletionMixin:
             self._hide_prompt_completion_panel()
             return
         self._show_prompt_completion_panel(candidates)
+
     def _show_prompt_completion_panel(self, candidates: list[PromptCompletionCandidate]) -> None:
         # Keep every matching candidate so a command group (notably :codex)
         # does not silently lose entries. The renderer below pages eight rows at
@@ -206,6 +215,7 @@ class CompletionMixin:
         )
         self._prompt_completion_visible = True
         self._render_prompt_completion_panel()
+
     def _hide_prompt_completion_panel(self) -> None:
         self._prompt_completion_candidates = []
         self._prompt_completion_index = 0
@@ -216,6 +226,7 @@ class CompletionMixin:
             panel.remove_class("visible")
         except Exception:
             pass
+
     def _render_prompt_completion_panel(self) -> None:
         try:
             panel = self.query_one("#prompt-completions", Static)
@@ -251,6 +262,7 @@ class CompletionMixin:
             text.append("\n")
         panel.update(text)
         panel.add_class("visible")
+
     def _move_prompt_completion(self, delta: int) -> None:
         if not self._prompt_completion_candidates:
             return
@@ -258,6 +270,7 @@ class CompletionMixin:
             self._prompt_completion_candidates
         )
         self._render_prompt_completion_panel()
+
     def _accept_prompt_completion(self, input_widget: SelectionAwareInput) -> bool:
         if not self._prompt_completion_candidates:
             return False
@@ -272,6 +285,7 @@ class CompletionMixin:
         input_widget.cursor_position = len(value)
         self._hide_prompt_completion_panel()
         return True
+
     @staticmethod
     def _first_completion(value: str, candidates: list[str] | tuple[str, ...]) -> str | None:
         lowered = value.lower()
@@ -279,6 +293,7 @@ class CompletionMixin:
             if candidate.lower().startswith(lowered) and candidate != value:
                 return candidate
         return None
+
     @staticmethod
     def _complete_after_prefix(
         value: str,
@@ -291,6 +306,7 @@ class CompletionMixin:
                 completed = prefix + candidate
                 return completed if completed != value else None
         return None
+
     def _complete_path_after_prefix(
         self,
         value: str,
@@ -304,11 +320,14 @@ class CompletionMixin:
             return None
         suggestion = prefix + completed
         return suggestion if suggestion != value else None
+
     @staticmethod
     def _complete_path_token(partial: str, *, files_only: bool = False) -> str | None:
         from superqode.app_main import SuperQodeApp
+
         candidates = SuperQodeApp._path_token_candidates(partial, files_only=files_only)
         return candidates[0][0] if candidates else None
+
     @staticmethod
     def _command_completion_sort_key(lowered_input: str, command: str) -> tuple[int, str]:
         command_lower = command.lower()
@@ -351,6 +370,7 @@ class CompletionMixin:
             if lowered_input.startswith(prefix):
                 return (scores.get(command_lower, 10), command_lower)
         return (10, command_lower)
+
     @staticmethod
     def _skill_completion_candidates() -> list[PromptCompletionCandidate]:
         try:
@@ -367,9 +387,11 @@ class CompletionMixin:
             ]
         except Exception:
             return []
+
     @staticmethod
     def _all_skill_completion_candidates() -> list[PromptCompletionCandidate]:
         from superqode.app_main import SuperQodeApp
+
         loaded = {
             candidate.label: candidate for candidate in SuperQodeApp._skill_completion_candidates()
         }
@@ -402,6 +424,7 @@ class CompletionMixin:
                 ),
             )
         return list(loaded.values())
+
     @staticmethod
     def _provider_completion_candidates(local: bool) -> list[PromptCompletionCandidate]:
         try:
@@ -426,6 +449,7 @@ class CompletionMixin:
                 )
             )
         return candidates
+
     def _show_completion_summary(self, name: str, summary: dict, log: ConversationLog):
         """Show completion summary when there's no text response."""
         from superqode.widgets.response_changes import (

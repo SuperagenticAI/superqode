@@ -11,6 +11,8 @@ import click
 def tools():
     """Inspect coding harness tools."""
     pass
+
+
 @tools.command("list")
 @click.option("--profile", default="build", help="Harness profile to inspect")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")

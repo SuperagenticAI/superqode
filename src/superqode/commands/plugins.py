@@ -12,6 +12,8 @@ import click
 def plugins():
     """Inspect SuperQode plugin manifests."""
     pass
+
+
 @plugins.command("list")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 @click.option("--all", "include_disabled", is_flag=True, help="Include disabled plugins")
@@ -37,6 +39,8 @@ def plugins_list(json_output, include_disabled):
     for plugin in loaded:
         state = "enabled" if plugin.id not in disabled else "disabled"
         click.echo(f"{plugin.id}  {plugin.version}  {state}  {plugin.name}")
+
+
 @plugins.command("show")
 @click.argument("plugin_id")
 def plugins_show(plugin_id):
@@ -48,6 +52,8 @@ def plugins_show(plugin_id):
             click.echo(json.dumps(plugin.to_dict(), indent=2))
             return
     raise click.ClickException(f"Plugin not found: {plugin_id}")
+
+
 @plugins.command("validate")
 @click.argument("path", type=click.Path(exists=True))
 def plugins_validate(path):
@@ -60,6 +66,8 @@ def plugins_validate(path):
             click.echo(f"Error: {issue}")
         raise click.ClickException("Plugin manifest is invalid")
     click.echo("Plugin manifest is valid.")
+
+
 @plugins.command("doctor")
 @click.argument("path", required=False, type=click.Path())
 def plugins_doctor(path):
@@ -100,6 +108,8 @@ def plugins_doctor(path):
     click.echo(f"{ok_count}/{len(paths)} manifests valid.")
     if failed:
         raise click.ClickException("Plugin doctor found issues")
+
+
 @plugins.command("add")
 @click.argument("source", type=click.Path(exists=True))
 def plugins_add(source):
@@ -114,6 +124,8 @@ def plugins_add(source):
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"Installed plugin {plugin.id}")
+
+
 @plugins.command("enable")
 @click.argument("plugin_id")
 def plugins_enable(plugin_id):
@@ -127,6 +139,8 @@ def plugins_enable(plugin_id):
     click.echo(
         f"Enabled plugin {plugin_id}" if changed else f"Plugin {plugin_id} was already enabled"
     )
+
+
 @plugins.command("disable")
 @click.argument("plugin_id")
 def plugins_disable(plugin_id):

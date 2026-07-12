@@ -69,6 +69,7 @@ class HuggingFaceMixin:
             log.add_system(
                 "Available: search, trending, coding, info, gguf, download, endpoints, recommend, transformers"
             )
+
     def _hf_status(self, log: ConversationLog):
         """Show HuggingFace status."""
         from superqode.providers.huggingface import get_hf_hub, get_transformers_runner
@@ -109,6 +110,7 @@ class HuggingFaceMixin:
         t.append(" to find models\n", style=THEME["muted"])
 
         log.write(t)
+
     async def _hf_search(self, query: str, log: ConversationLog):
         """Search HuggingFace Hub for models."""
         from superqode.providers.huggingface import get_hf_hub
@@ -145,6 +147,7 @@ class HuggingFaceMixin:
             t.append(f"  ○ No models found\n", style=THEME["muted"])
 
         log.write(t)
+
     async def _hf_trending(self, log: ConversationLog):
         """Show trending text generation models."""
         from superqode.providers.huggingface import get_hf_hub
@@ -167,6 +170,7 @@ class HuggingFaceMixin:
             t.append("\n", style="")
 
         log.write(t)
+
     async def _hf_coding(self, log: ConversationLog):
         """Show popular coding models."""
         from superqode.providers.huggingface import get_hf_hub
@@ -191,6 +195,7 @@ class HuggingFaceMixin:
             t.append("\n", style="")
 
         log.write(t)
+
     async def _hf_info(self, model_id: str, log: ConversationLog):
         """Show detailed info about a HF model."""
         from superqode.providers.huggingface import get_hf_hub
@@ -231,6 +236,7 @@ class HuggingFaceMixin:
             t.append(f"  ○ Model not found\n", style=THEME["error"])
 
         log.write(t)
+
     async def _hf_gguf(self, model_id: str, log: ConversationLog):
         """List GGUF files for a model."""
         from superqode.providers.huggingface import get_hf_hub
@@ -261,6 +267,7 @@ class HuggingFaceMixin:
             t.append(f"  This model may not have GGUF versions\n", style=THEME["dim"])
 
         log.write(t)
+
     async def _hf_download(self, args: str, log: ConversationLog):
         """Download a model from HuggingFace Hub."""
         from superqode.providers.huggingface import get_hf_downloader
@@ -299,6 +306,7 @@ class HuggingFaceMixin:
             t.append(f"Download failed: {result.error}\n", style=THEME["error"])
 
         log.write(t)
+
     async def _hf_endpoints(self, log: ConversationLog):
         """List HuggingFace Inference Endpoints."""
         from superqode.providers.huggingface import get_hf_endpoints_client
@@ -339,6 +347,7 @@ class HuggingFaceMixin:
             )
 
         log.write(t)
+
     def _hf_recommend(self, log: ConversationLog):
         """Show recommended HF models."""
         from superqode.providers.huggingface import RECOMMENDED_MODELS
@@ -364,6 +373,7 @@ class HuggingFaceMixin:
         t.append(f"  💡 These work with HF Inference API (free tier)\n", style=THEME["muted"])
 
         self._show_command_output(log, t)
+
     def _hf_transformers_status(self, log: ConversationLog):
         """Show transformers runner status."""
         from superqode.providers.huggingface import get_transformers_runner

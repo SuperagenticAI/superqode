@@ -51,6 +51,7 @@ class DialogsMixin:
             text.append(f" +{len(agents) - 4} more", style=SQ_COLORS.text_dim)
         text.append("\n", style="")
         log.write(text)
+
     def _show_welcome(self, team_name: str):
         log = self.query_one("#log", ConversationLog)
         # Temporarily disable auto-scroll so we can scroll to top
@@ -69,6 +70,7 @@ class DialogsMixin:
         log.scroll_home(animate=False)
         # Re-enable auto-scroll for future messages
         self.set_timer(0.2, lambda: setattr(log, "auto_scroll", True))
+
     def _show_error_card(
         self,
         log: ConversationLog,
@@ -104,6 +106,7 @@ class DialogsMixin:
         t.append("\n", style=THEME["muted"])
         log.write(t)
         log._last_error = f"{title}: {message}"
+
     def _show_tools(self, args: str, log: ConversationLog):
         """Show the active tool profile and available tools."""
         from superqode.tools.base import ToolRegistry
@@ -204,6 +207,7 @@ class DialogsMixin:
         t.append(":mcp tools", style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _open_rewind_overlay(self, log: ConversationLog) -> None:
         """Push the interactive transcript/rewind overlay."""
         messages = self._user_message_history(log)
@@ -222,6 +226,7 @@ class DialogsMixin:
                 self._perform_rewind(occurrence, log)
 
         self.push_screen(RewindOverlay(transcript, targets), callback=_on_dismissed)
+
     def _show_recipes(self, log: ConversationLog) -> None:
         recipes = sorted(self._load_local_recipes().values(), key=lambda item: item.name.lower())
         t = Text()
@@ -262,6 +267,7 @@ class DialogsMixin:
         t.append(":recipe doctor <name>", style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _show_recipe_info(self, recipe: LocalRecipe, log: ConversationLog) -> None:
         t = Text()
         t.append("\n  ◇ ", style=f"bold {THEME['purple']}")
@@ -293,6 +299,7 @@ class DialogsMixin:
                 t.append("\n...", style=THEME["dim"])
             t.append("\n", style="")
         self._show_command_output(log, t)
+
     def _show_recipe_doctor(self, recipe: LocalRecipe, log: ConversationLog) -> None:
         issues = self._recipe_issues(recipe)
         t = Text()
@@ -305,6 +312,7 @@ class DialogsMixin:
                 t.append("  warning  ", style=THEME["warning"])
                 t.append(f"{issue}\n", style=THEME["text"])
         self._show_command_output(log, t)
+
     def _show_recipes_doctor(self, log: ConversationLog) -> None:
         recipes = sorted(self._load_local_recipes().values(), key=lambda item: item.name.lower())
         t = Text()
@@ -324,6 +332,7 @@ class DialogsMixin:
         t.append("\n  Issues      ", style=THEME["muted"])
         t.append(f"{total_issues}\n", style=THEME["warning"] if total_issues else THEME["success"])
         self._show_command_output(log, t)
+
     def _show_mcp_doctor(self, manager, server_filter: str, log: ConversationLog) -> None:
         """Render MCP server configuration and runtime diagnostics."""
         configs = manager.get_server_configs()
@@ -382,6 +391,7 @@ class DialogsMixin:
         t.append(":mcp reconnect <server>", style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _show_sessions(self, log: ConversationLog):
         """Show recent local coding sessions."""
         manager = self._get_session_manager()
@@ -420,9 +430,11 @@ class DialogsMixin:
         t.append(":switchboard", style=THEME["cyan"])
         t.append(" for graph, handoff, approvals, and share-tree actions.\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _show_session_tree(self, log: ConversationLog):
         """Show saved sessions grouped by parent/fork relationship."""
         self._handle_switchboard("graph", log)
+
     def _show_share_status(self, log: ConversationLog) -> None:
         current_id = self._current_session_id()
         share_count = len(list(self._share_dir().glob("*.superqode-share.json")))
@@ -442,6 +454,7 @@ class DialogsMixin:
         t.append("    :share import <artifact> [new-session-id]\n", style=THEME["cyan"])
         t.append("    :share list  |  :share revoke <artifact>\n", style=THEME["cyan"])
         self._show_command_output(log, t)
+
     def _show_trust_status(self, log: ConversationLog, *, doctor: bool = False) -> None:
         from superqode.project_trust import (
             get_project_trust,
@@ -486,6 +499,7 @@ class DialogsMixin:
         t.append(":trust doctor", style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _show_antigravity_status(self, log) -> None:
         agy_path = shutil.which("agy")
         settings = Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
@@ -512,6 +526,7 @@ class DialogsMixin:
         t.append("    :antigravity migrate   ", style=THEME["cyan"])
         t.append("show Gemini CLI migration commands\n", style=THEME["muted"])
         log.write(t)
+
     def _show_antigravity_migration(self, log) -> None:
         t = Text()
         t.append("\n  Gemini CLI -> Antigravity CLI\n\n", style=f"bold {THEME['text']}")
@@ -537,6 +552,7 @@ class DialogsMixin:
         t.append("\n  SuperQode route:\n", style=THEME["muted"])
         t.append("    :connect antigravity  # Google Sign-In route\n", style=THEME["cyan"])
         log.write(t)
+
     def _show_antigravity_help(self, log) -> None:
         t = Text()
         t.append("\n  Antigravity in SuperQode\n\n", style=f"bold {THEME['text']}")
@@ -558,6 +574,7 @@ class DialogsMixin:
             style=THEME["dim"],
         )
         log.write(t)
+
     def _show_grok_status(self, log) -> None:
         """Show local Grok CLI readiness without reading or displaying credentials."""
         grok_path = shutil.which("grok")
@@ -611,6 +628,7 @@ class DialogsMixin:
         t.append("    :grok api off             ", style=THEME["cyan"])
         t.append("remove imported session token\n", style=THEME["muted"])
         log.write_feedback(t)
+
     def _show_grok_login(self, log) -> None:
         """Give login commands instead of launching an interactive browser flow in the TUI."""
         t = Text()
@@ -629,6 +647,7 @@ class DialogsMixin:
             style=THEME["dim"],
         )
         log.write_feedback(t)
+
     def _show_grok_help(self, log) -> None:
         t = Text()
         t.append("\n  Grok in SuperQode\n\n", style=f"bold {THEME['text']}")
@@ -654,6 +673,7 @@ class DialogsMixin:
             style=THEME["dim"],
         )
         log.write_feedback(t)
+
     def _show_harness_wizard_help(self, log) -> None:
         t = Text()
         t.append("\n  ▣ ", style=f"bold {THEME['purple']}")
@@ -681,6 +701,7 @@ class DialogsMixin:
         ):
             t.append("    " + line + "\n", style=THEME["text"])
         self._show_command_output(log, t)
+
     def _show_harness_inspect(self, log) -> None:
         """Show a readable summary for the active HarnessSpec."""
         spec, path = self._active_harness_spec()
@@ -755,6 +776,7 @@ class DialogsMixin:
         t.append(":harness graph", style=THEME["cyan"])
         t.append("\n")
         self._show_command_output(log, t)
+
     def _show_harness_doctor(self, log) -> None:
         """Show active HarnessSpec readiness checks."""
         spec, _path = self._active_harness_spec()
@@ -798,6 +820,7 @@ class DialogsMixin:
                 t.append(f"  missing: {', '.join(check.data['missing'])}", style=THEME["muted"])
             t.append("\n")
         self._show_command_output(log, t)
+
     def _show_harness_graph(self, log, run_id: str = "") -> None:
         """Show the planned graph or a persisted actual graph."""
         spec, _path = self._active_harness_spec()
@@ -832,6 +855,7 @@ class DialogsMixin:
             t.append("\n")
         t.append(f"\n  {graph_note}\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _show_harness_runs(self, log) -> None:
         """Show recent persisted harness runs."""
         spec, _path = self._active_harness_spec()
@@ -864,6 +888,7 @@ class DialogsMixin:
         t.append("\n  Inspect graph with ", style=THEME["muted"])
         t.append(":harness graph <run_id>\n", style=THEME["cyan"])
         self._show_command_output(log, t)
+
     def _show_harness_evidence(self, log, run_id: str) -> None:
         """Show a readable evidence report for a persisted harness run."""
         spec, _path = self._active_harness_spec()
@@ -941,6 +966,7 @@ class DialogsMixin:
         t.append(f":harness events {run['run_id']}", style=THEME["cyan"])
         t.append("\n")
         self._show_command_output(log, t)
+
     def _show_harness_replay(self, log, run_id: str) -> None:
         """Show replay readiness for a persisted harness run."""
         spec, _path = self._active_harness_spec()
@@ -990,6 +1016,7 @@ class DialogsMixin:
         t.append(f":harness events {run['run_id']}", style=THEME["cyan"])
         t.append("\n")
         self._show_command_output(log, t)
+
     def _show_harness_fork(self, log, args: str) -> None:
         """Fork a persisted harness run at an optional event index."""
         spec, _path = self._active_harness_spec()
@@ -1034,6 +1061,7 @@ class DialogsMixin:
         t.append(f":harness graph {fork['run_id']}", style=THEME["cyan"])
         t.append("\n")
         self._show_command_output(log, t)
+
     def _show_harness_events(self, log, run_id: str) -> None:
         """Show the persisted event timeline for a harness run."""
         spec, _path = self._active_harness_spec()
@@ -1078,6 +1106,7 @@ class DialogsMixin:
         t.append(f":harness evidence {run_id}", style=THEME["cyan"])
         t.append("\n")
         self._show_command_output(log, t)
+
     def _show_workflow_center(self, log) -> None:
         """Render the active HarnessSpec workflow center."""
         spec, path = self._active_harness_spec()
@@ -1142,6 +1171,7 @@ class DialogsMixin:
         t.append(":workflow status", style=THEME["cyan"])
         t.append("\n", style="")
         self._show_command_output(log, t)
+
     def _show_workflow_presets(self, log) -> None:
         """Show built-in HarnessSpec workflow presets."""
         from superqode.harness import list_workflow_presets
@@ -1157,6 +1187,7 @@ class DialogsMixin:
         t.append("\n  Use in HarnessSpec YAML: ", style=THEME["muted"])
         t.append("workflow: { preset: parallel-review }\n", style=THEME["cyan"])
         self._show_command_output(log, t)
+
     def _show_workflow_preview(self, log, prompt: str = "") -> None:
         """Show a readiness preview for the active workflow."""
         spec, path = self._active_harness_spec()
@@ -1174,6 +1205,7 @@ class DialogsMixin:
             self._show_command_output(log, t)
             return
         self._show_command_output(log, self._workflow_preview_text(spec, prompt))
+
     def _show_superqode_demo(self, log: ConversationLog):
         """Show a demo of SuperQode's unique design system."""
 
@@ -1337,6 +1369,7 @@ class DialogsMixin:
         footer.append(":connect acp opencode", style=f"bold {SQ_COLORS.info}")
         footer.append(" to see it in action\n\n", style=SQ_COLORS.text_ghost)
         log.write(footer)
+
     def _show_permission_prompt(self, tool_name: str, tool_input: dict, log: ConversationLog):
         """Render an inline permission request in the conversation log.
 
@@ -1410,6 +1443,7 @@ class DialogsMixin:
         except Exception:
             pass
         self._start_permission_pulse()
+
     def _show_permission_modal(self, tool_name: str, tool_input: dict, reason: str):
         """Show a modal permission dialog for ASK mode."""
         from textual.screen import ModalScreen
@@ -1517,7 +1551,6 @@ class DialogsMixin:
                 self.reason = reason
 
             def compose(self):
-
                 with Container(id="permission-dialog"):
                     # Title (subtle, no emoji)
                     title = f"{self.tool_name}"
@@ -1591,6 +1624,7 @@ class DialogsMixin:
 
         screen = TUIPermissionScreen(tool_name, tool_input, reason)
         self.push_screen(screen, on_modal_result)
+
     def _show_permission_auto_approved(self, line: str, log: ConversationLog):
         """Show permission auto-approved (AUTO mode)."""
         t = Text()
@@ -1599,6 +1633,7 @@ class DialogsMixin:
         t.append(" → ", style="#52525b")
         t.append("AUTO-APPROVED\n", style="bold #22c55e")
         log.write(t)
+
     def _show_permission_denied(self, line: str, log: ConversationLog):
         """Show permission denied (DENY mode)."""
         t = Text()
@@ -1607,6 +1642,7 @@ class DialogsMixin:
         t.append(" → ", style="#52525b")
         t.append("DENIED\n", style="bold #ef4444")
         log.write(t)
+
     def _show_permission_ask(self, line: str, log: ConversationLog):
         """Show permission request in ASK mode - shows indicator but allows operation."""
         t = Text()
@@ -1650,10 +1686,12 @@ class DialogsMixin:
         t.append(" (use :mode deny to block destructive ops) │\n", style="#71717a")
         t.append("  ╰─────────────────────────────────────────────────────────╯\n", style="#f59e0b")
         log.write(t)
+
     # Keep old methods for compatibility
     def _show_permission_alert(self, line: str, log: ConversationLog):
         """Show a permission alert to the user (legacy)."""
         self._show_permission_ask(line, log)
+
     def _show_agent_header(self, name: str, log: ConversationLog):
         """Show agent output header."""
         header = Text()
@@ -1669,6 +1707,7 @@ class DialogsMixin:
         header.append("is working...", style="#71717a")
         header.append("  [Ctrl+T to hide logs]  [Esc to cancel]\n", style="#52525b")
         log.write(header)
+
     def _show_calm_summary(self, log: ConversationLog) -> None:
         """End-of-turn roll-up line shown in calm mode."""
         actions = getattr(self, "_calm_actions", 0)
@@ -1686,6 +1725,7 @@ class DialogsMixin:
         t.append("\n", style="")
         log.write(t)
         self._calm_actions = 0
+
     def _show_final_response(
         self, response_text: str, name: str, duration: float, log: ConversationLog
     ):
@@ -1711,6 +1751,7 @@ class DialogsMixin:
         footer = Text()
         footer.append("\n", style="")
         log.write(footer)
+
     # Keep old method name for compatibility
     def _show_beautiful_response(
         self,
@@ -1722,6 +1763,7 @@ class DialogsMixin:
     ):
         """Alias for _show_final_response."""
         self._show_final_response(response_text, name, duration, log)
+
     def _show_final_outcome(
         self, response_text: str, name: str, summary: dict, log: ConversationLog
     ):
@@ -1825,6 +1867,7 @@ class DialogsMixin:
         # user just asked for — scroll to the end and resume follow mode.
         log.auto_scroll = True
         self.set_timer(0.1, lambda: log.scroll_end(animate=False))
+
     def _show_pure_tool_call(self, name: str, args: dict, log: ConversationLog):
         """Show Pure/BYOK/local tool calls through the shared tool renderer."""
         # Calm mode: surface the action in the live throbber, not a full row.
@@ -1834,6 +1877,7 @@ class DialogsMixin:
         file_path = args.get("path", args.get("file_path", args.get("filePath", "")))
         command = args.get("command", "")
         log.add_tool_call(name, "running", file_path, command, "", args)
+
     def _show_pure_tool_result(self, name: str, result, log: ConversationLog):
         """Show Pure/BYOK/local tool results through the shared tool renderer."""
         success = bool(getattr(result, "success", False))
@@ -1879,10 +1923,12 @@ class DialogsMixin:
             deletions if isinstance(deletions, int) else None,
             metadata,
         )
+
     def _show_agents(self, log: ConversationLog, clear_log: bool = True):
         """Show all ACP agents with installation status."""
         # Schedule async execution
         self._show_agents_async(log, clear_log=clear_log)
+
     @work(exclusive=True)
     async def _show_agents_async(self, log: ConversationLog, clear_log: bool = True):
         """Show all ACP agents with installation status (async implementation)."""
@@ -2098,6 +2144,7 @@ class DialogsMixin:
         t.append(f" to cancel selection\n", style=THEME["dim"])
 
         self._show_command_output(log, t, clear_log=clear_log)
+
     def _show_context(self, log: ConversationLog):
         t = Text()
         t.append(f"\n  📎 ", style=f"bold {THEME['cyan']}")
@@ -2135,6 +2182,7 @@ class DialogsMixin:
             t.append(f"     ... and {len(refs) - 5} more\n", style=THEME["dim"])
 
         log.write(t)
+
     def _show_harness_status(self, log: ConversationLog):
         """Show coding harness active state in one compact view."""
         t = Text()
@@ -2238,6 +2286,7 @@ class DialogsMixin:
             pass
 
         self._show_command_output(log, t)
+
     def _show_help(self, log: ConversationLog):
         t = Text()
         t.append(f"\n  ❓ ", style=f"bold {THEME['purple']}")
@@ -2722,6 +2771,7 @@ class DialogsMixin:
             t.append("\n", style="")
 
         self._show_command_output(log, t)
+
     def _show_command_output(self, log: ConversationLog, content, clear_log: bool = True):
         """Clear screen and show command output cleanly, scrolled to top.
 
@@ -2745,6 +2795,7 @@ class DialogsMixin:
             log.write(content)
             # Don't scroll to home on navigation updates to reduce flickering
             log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
+
     def _show_files(self, log: ConversationLog):
         try:
             cwd = Path.cwd()
@@ -2765,6 +2816,7 @@ class DialogsMixin:
             self._show_command_output(log, t)
         except Exception as e:
             log.add_error(str(e))
+
     def _show_goodbye_sync(self, log: ConversationLog):
         """Show goodbye screen synchronously (fallback when event loop unavailable)."""
         try:
@@ -2797,6 +2849,7 @@ class DialogsMixin:
             log.write(t)
         except Exception:
             pass
+
     def _show_tui_doctor_dashboard(self, log: ConversationLog):
         """Show a one-screen readiness dashboard for TUI agent runs."""
         rows: list[tuple[str, str, str, str]] = []
@@ -2949,6 +3002,7 @@ class DialogsMixin:
         t.append(":recipe doctor", style=THEME["cyan"])
         t.append(" recipes\n", style=THEME["cyan"])
         self._show_command_output(log, t)
+
     def _open_diff_entry_file(self, entry: dict[str, Any]) -> str:
         """Open a diff entry's file in the user's editor/default app."""
         import shlex
@@ -2975,6 +3029,7 @@ class DialogsMixin:
         except Exception as exc:
             return f"Failed to open {path}: {exc}"
         return f"Opened: {path}"
+
     def _open_diff_review_overlay(self, sections: list[tuple[str, str]]) -> None:
         """Open an interactive diff review overlay with file navigation."""
         from textual.binding import Binding
@@ -3222,6 +3277,7 @@ class DialogsMixin:
             self._ensure_input_focus()
 
         self.push_screen(DiffReviewScreen(), callback=on_screen_dismissed)
+
     def _open_text_overlay(self, content: str, title: str) -> None:
         """Open a selectable text overlay for diffs/transcripts/large text."""
         from textual.screen import ModalScreen

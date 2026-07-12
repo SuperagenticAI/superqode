@@ -11,6 +11,8 @@ import click
 def sessions():
     """Manage stored SuperQode coding sessions."""
     pass
+
+
 @sessions.command("list")
 @click.option("--limit", default=20, type=int, help="Maximum sessions to show")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
@@ -46,6 +48,8 @@ def sessions_list(limit, json_output):
             f"{item.session_id}  {item.provider or '-'}  {item.model or '-'}  "
             f"{item.message_count} messages  {item.updated_at}"
         )
+
+
 @sessions.command("tree")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def sessions_tree(json_output):
@@ -70,6 +74,8 @@ def sessions_tree(json_output):
         return
     for node in tree:
         print_node(node)
+
+
 @sessions.command("graph")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def sessions_graph(json_output):
@@ -98,6 +104,8 @@ def sessions_graph(json_output):
         return
     for node in tree:
         print_node(node)
+
+
 @sessions.command("switch")
 @click.argument("session_id", required=False)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
@@ -114,6 +122,8 @@ def sessions_switch(session_id, json_output):
         click.echo(json.dumps(record, indent=2))
     else:
         click.echo(f"Active session: {record['session_id']}  {record.get('title') or ''}")
+
+
 @sessions.command("info")
 @click.argument("session_id", required=False)
 def sessions_info(session_id):
@@ -124,6 +134,8 @@ def sessions_info(session_id):
         click.echo(json.dumps(SessionSwitchboard().info(session_id or ""), indent=2))
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
+
+
 @sessions.command("history")
 @click.argument("session_id", required=False)
 @click.option("--limit", default=20, type=int, help="Maximum messages to show")
@@ -142,6 +154,8 @@ def sessions_history(session_id, limit, json_output):
     for item in payload["messages"]:
         content = " ".join(str(item.get("content") or "").split())
         click.echo(f"{item.get('timestamp')}  {item.get('role')}: {content[:500]}")
+
+
 @sessions.command("children")
 @click.argument("session_id", required=False)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
@@ -164,6 +178,8 @@ def sessions_children(session_id, json_output):
             f"{child['session_id']}  {child.get('agent_id') or '-'}  "
             f"{child.get('status') or '-'}  {child.get('title') or ''}"
         )
+
+
 @sessions.command("handoff")
 @click.argument("source_session_id", required=False)
 @click.option(
@@ -211,6 +227,8 @@ def sessions_handoff(
         click.echo(json.dumps(packet.to_dict(), indent=2))
     else:
         click.echo(packet.to_message(), nl=False)
+
+
 @sessions.command("fork-agent")
 @click.argument("source_session_id", required=False)
 @click.option("--agent", required=True, help="Agent id/name receiving the fork")
@@ -235,6 +253,8 @@ def sessions_fork_agent(source_session_id, agent, session_id, title, goal):
         f"Forked {source_session_id or 'active'} to {payload['session']['session_id']} "
         f"for agent {agent} with handoff {payload['handoff']['id']}"
     )
+
+
 @sessions.command("show")
 @click.argument("session_id")
 @click.option("--format", "fmt", type=click.Choice(["markdown", "json"]), default="markdown")
@@ -243,6 +263,8 @@ def sessions_show(session_id, fmt):
     from superqode.headless import export_session
 
     click.echo(export_session(session_id, fmt=fmt), nl=False)
+
+
 @sessions.command("export")
 @click.argument("session_id")
 @click.option(
@@ -260,6 +282,8 @@ def sessions_export(session_id, fmt, output):
         click.echo(f"Exported session to {output}")
     else:
         click.echo(content, nl=False)
+
+
 @sessions.command("delete")
 @click.argument("session_id")
 def sessions_delete(session_id):

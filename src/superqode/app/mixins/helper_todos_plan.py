@@ -34,6 +34,7 @@ class HelperTodosPlanMixin:
         except Exception:  # noqa: BLE001
             pass
         self._refresh_prompt_mode_label()
+
     def _set_todos(self, todos: list) -> None:
         """Update the pinned live todo/plan panel from the latest todo data."""
         try:
@@ -73,6 +74,7 @@ class HelperTodosPlanMixin:
             t.append(f"  +{len(items) - 6} more\n", style=THEME["dim"])
         panel.update(t)
         panel.add_class("visible")
+
     def _sync_plan_manager_from_todos(self, todos: list[dict]) -> None:
         """Mirror live todo_write/SDK plan updates into :plan state."""
         self._plan_manager.clear()
@@ -105,12 +107,14 @@ class HelperTodosPlanMixin:
                 str(todo.get("status") or "pending").lower(), TaskStatus.PENDING
             )
             self._plan_manager.update_status(task.id, status)
+
     def _set_todos_from_input(self, tool_input: dict) -> None:
         """Update the todo panel from a todo_write tool input payload."""
         if isinstance(tool_input, dict):
             todos = tool_input.get("todos")
             if isinstance(todos, list):
                 self._set_todos(todos)
+
     def _is_todo_list(self, data: Any) -> bool:
         """Check if data looks like a TODO list."""
         if not isinstance(data, list) or not data:

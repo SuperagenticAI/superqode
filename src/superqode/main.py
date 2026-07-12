@@ -1012,58 +1012,72 @@ except Exception:
 
 
 from superqode.commands.sessions import sessions
+
 cli_main.add_command(sessions, name="sessions")
 
 
 from superqode.commands.factory import factory
+
 cli_main.add_command(factory, name="factory")
 
 
 from superqode.commands.share import share
+
 cli_main.add_command(share, name="share")
 
 
 from superqode.commands.trust import trust
+
 cli_main.add_command(trust, name="trust")
 
 
 from superqode.commands.memory import memory
+
 cli_main.add_command(memory, name="memory")
 
 
 from superqode.commands.skillopt import skillopt
+
 cli_main.add_command(skillopt, name="skillopt")
 
 
 from superqode.commands.skills import skills
+
 cli_main.add_command(skills, name="skills")
 
 
 from superqode.commands.harness import harness
+
 cli_main.add_command(harness, name="harness")
 
 
 from superqode.commands.plugins import plugins
+
 cli_main.add_command(plugins, name="plugins")
 
 
 from superqode.commands.sandbox import sandbox
+
 cli_main.add_command(sandbox, name="sandbox")
 
 
 from superqode.commands.benchmark import benchmark
+
 cli_main.add_command(benchmark, name="benchmark")
 
 
 from superqode.commands.profiles import profiles
+
 cli_main.add_command(profiles, name="profiles")
 
 
 from superqode.commands.tools import tools
+
 cli_main.add_command(tools, name="tools")
 
 
 from superqode.commands.models import models
+
 cli_main.add_command(models, name="models")
 
 
@@ -1113,10 +1127,12 @@ def init_command(force):
 
 
 from superqode.commands.agents import agents
+
 cli_main.add_command(agents, name="agents")
 
 
 from superqode.commands.connect import connect
+
 cli_main.add_command(connect, name="connect")
 
 

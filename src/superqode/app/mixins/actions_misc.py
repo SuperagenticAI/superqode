@@ -21,10 +21,12 @@ class MiscActionsMixin:
         """Copy last agent response to clipboard (Ctrl+Shift+C)."""
         log = self.query_one("#log", ConversationLog)
         self._handle_copy(log)
+
     def action_open_editor(self):
         """Open external editor for composing message (Ctrl+E)."""
         log = self.query_one("#log", ConversationLog)
         self._handle_edit(log)
+
     def action_undo_action(self):
         """Undo the last agent operation."""
         if not hasattr(self, "_undo_manager") or not self._undo_manager:
@@ -43,6 +45,7 @@ class MiscActionsMixin:
             log.write(text)
         else:
             log.add_info("◇ Nothing to undo")
+
     def action_redo_action(self):
         """Redo the previously undone operation."""
         if not hasattr(self, "_undo_manager") or not self._undo_manager:
@@ -59,6 +62,7 @@ class MiscActionsMixin:
             log.write(text)
         else:
             log.add_info("◇ Nothing to redo")
+
     def action_create_checkpoint(self):
         """Create a manual checkpoint."""
         if not hasattr(self, "_undo_manager") or not self._undo_manager:
@@ -75,6 +79,7 @@ class MiscActionsMixin:
             log.write(text)
         else:
             log.add_info("◇ No changes to checkpoint")
+
     def action_toggle_split_view(self):
         """Toggle the split view for code + chat."""
         log = self.query_one("#log", ConversationLog)
@@ -100,6 +105,7 @@ class MiscActionsMixin:
             text.append("OFF", style=SQ_COLORS.text_dim)
             text.append("\n", style="")
             log.write(text)
+
     def action_cancel_agent(self):
         """Cancel the currently running agent operation."""
         log = self.query_one("#log", ConversationLog)
@@ -140,6 +146,7 @@ class MiscActionsMixin:
 
         if provider:
             self._teardown_local_model_runtime(provider, model)
+
     def action_stash_draft(self) -> None:
         """Ctrl+G: set the current prompt draft aside; :stash restores it."""
         try:
@@ -157,6 +164,7 @@ class MiscActionsMixin:
         self._draft_stash.append(draft)
         input_widget.value = ""
         log.add_info(f"📥 Stashed draft ({len(self._draft_stash)} saved). Restore with :stash.")
+
     def action_rewind(self) -> None:
         """Open the transcript/rewind overlay (Ctrl+R)."""
         log = self._conversation_log()

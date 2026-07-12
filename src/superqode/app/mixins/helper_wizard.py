@@ -34,6 +34,7 @@ class HelperWizardMixin:
             "force": False,
         }
         self._render_harness_wizard_step(log)
+
     @staticmethod
     def _default_harness_wizard_output() -> str:
         base = Path("harness.yaml")
@@ -44,6 +45,7 @@ class HelperWizardMixin:
             if not candidate.exists():
                 return str(candidate)
         return "harness-new.yaml"
+
     @staticmethod
     def _parse_yes_no(raw: str) -> bool | None:
         lowered = raw.strip().lower()
@@ -52,11 +54,13 @@ class HelperWizardMixin:
         if lowered in {"n", "no", "false", "0"}:
             return False
         return None
+
     @staticmethod
     def _wizard_starters() -> tuple[tuple[str, str], ...]:
         from superqode.harness import WIZARD_STARTERS
 
         return WIZARD_STARTERS
+
     def _finish_harness_wizard_flow(self, log) -> None:
         state = getattr(self, "_harness_wizard_state", None)
         if not state:
@@ -129,6 +133,7 @@ class HelperWizardMixin:
 
         if load_after_write:
             self._harness_cmd(f"load {path}", log)
+
     def _active_harness_spec(self):
         """Return the active HarnessSpec and source path, if one is configured."""
         import os as _os

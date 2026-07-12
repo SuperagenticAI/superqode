@@ -53,10 +53,12 @@ class SwitchboardMixin:
             log.add_info(
                 "Usage: :switchboard [graph|switch|info|history|children|handoff|fork-agent|approvals|share-tree]"
             )
+
     def _switchboard(self):
         from superqode.session.switchboard import SessionSwitchboard
 
         return SessionSwitchboard(storage_dir=".superqode/sessions")
+
     def _show_switchboard_help(self, log: ConversationLog) -> None:
         t = Text()
         t.append("\n  Session Tree / Session Switchboard\n\n", style=f"bold {THEME['purple']}")
@@ -84,6 +86,7 @@ class SwitchboardMixin:
             t.append(f"  {command:<58}", style=f"bold {THEME['cyan']}")
             t.append(f"{desc}\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _show_switchboard_graph(self, log: ConversationLog) -> None:
         try:
             switchboard = self._switchboard()
@@ -153,12 +156,14 @@ class SwitchboardMixin:
         t.append(":sw approvals", style=THEME["cyan"])
         t.append("\n", style="")
         self._show_command_output(log, t)
+
     def _switchboard_active(self, log: ConversationLog) -> None:
         active = self._switchboard().active() or self._current_session_id()
         if not active:
             log.add_info("No active switchboard session yet.")
             return
         self._switchboard_info([active], log)
+
     def _switchboard_switch(self, tokens: list[str], log: ConversationLog) -> None:
         if not tokens:
             self._show_switchboard_graph(log)
@@ -174,6 +179,7 @@ class SwitchboardMixin:
             self._handle_resume_session(record["session_id"], log)
         except Exception:
             pass
+
     def _switchboard_info(self, tokens: list[str], log: ConversationLog) -> None:
         target = tokens[0] if tokens else ""
         try:
@@ -211,6 +217,7 @@ class SwitchboardMixin:
                 t.append(f"{child.get('agent_id') or '-':<16}", style=THEME["purple"])
                 t.append(f"{child.get('title') or ''}\n", style=THEME["text"])
         self._show_command_output(log, t)
+
     def _switchboard_history(self, tokens: list[str], log: ConversationLog) -> None:
         target = tokens[0] if tokens else ""
         limit = 12
@@ -232,6 +239,7 @@ class SwitchboardMixin:
             t.append(f"  {role:<10}", style=f"bold {THEME['cyan']}")
             t.append(f"{content[:220]}\n", style=THEME["text"])
         self._show_command_output(log, t)
+
     def _switchboard_children(self, tokens: list[str], log: ConversationLog) -> None:
         target = tokens[0] if tokens else ""
         try:
@@ -250,6 +258,7 @@ class SwitchboardMixin:
             t.append(f"{child.get('agent_id') or '-':<16}", style=THEME["purple"])
             t.append(f"{child.get('title') or ''}\n", style=THEME["text"])
         self._show_command_output(log, t)
+
     @staticmethod
     def _parse_switchboard_options(tokens: list[str]) -> tuple[list[str], dict[str, str | bool]]:
         positionals: list[str] = []
@@ -269,6 +278,7 @@ class SwitchboardMixin:
                 positionals.append(token)
                 i += 1
         return positionals, options
+
     def _switchboard_handoff(self, tokens: list[str], log: ConversationLog) -> None:
         positionals, options = self._parse_switchboard_options(tokens)
         source = positionals[0] if positionals else ""
@@ -295,6 +305,7 @@ class SwitchboardMixin:
                 self._show_command_output(log, Text(packet.to_message()))
         except Exception as exc:
             log.add_error(f"Could not create handoff: {exc}")
+
     def _switchboard_fork_agent(self, tokens: list[str], log: ConversationLog) -> None:
         positionals, options = self._parse_switchboard_options(tokens)
         source = positionals[0] if positionals else ""
@@ -318,6 +329,7 @@ class SwitchboardMixin:
         log.add_success(
             f"Forked to {payload['session']['session_id']} for {agent}; handoff {payload['handoff']['id']}"
         )
+
     def _switchboard_approval_inbox(self, log: ConversationLog) -> None:
         try:
             sessions = self._switchboard().list_sessions()
@@ -350,6 +362,7 @@ class SwitchboardMixin:
         t.append(":reject", style=THEME["cyan"])
         t.append(" controls, or switch to the parent session first.\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _switchboard_share_tree(self, tokens: list[str], log: ConversationLog) -> None:
         session_arg, path_arg = self._parse_share_session_and_path(tokens)
         try:

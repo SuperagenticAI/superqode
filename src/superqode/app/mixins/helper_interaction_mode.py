@@ -23,6 +23,7 @@ class HelperInteractionModeMixin:
         ):
             return "plan", "Plan first. No native tools until you approve execution."
         return "build", SelectionAwareInput.DEFAULT_PLACEHOLDER
+
     def _refresh_prompt_mode_label(self) -> None:
         """Keep the prompt label in sync with Chat, Build, and Plan modes."""
         status_mode, placeholder = self._prompt_interaction_mode()
@@ -46,6 +47,7 @@ class HelperInteractionModeMixin:
                 input_widget.placeholder = placeholder
         except Exception:  # noqa: BLE001
             pass
+
     def _set_approval_mode(self, args: str, log: ConversationLog):
         """Set the approval mode for agent actions."""
         mode = args.strip().lower()
@@ -101,12 +103,14 @@ class HelperInteractionModeMixin:
         else:
             log.add_error(f"Invalid mode: {mode}")
             log.add_system("Valid modes: auto, ask, deny")
+
     def _current_interaction_mode_name(self) -> str:
         if getattr(self, "_chat_mode", False):
             return "chat"
         if getattr(self, "_plan_mode_enabled", False):
             return "plan"
         return "build"
+
     def _apply_interaction_mode(self, mode: str, log: ConversationLog) -> None:
         mode = (mode or "").strip().lower()
         self._awaiting_mode_selection = False

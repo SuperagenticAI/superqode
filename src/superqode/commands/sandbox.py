@@ -12,6 +12,8 @@ import click
 def sandbox():
     """Inspect and run sandbox execution backends."""
     pass
+
+
 @sandbox.command("doctor")
 @click.argument("backend", required=False)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
@@ -47,6 +49,8 @@ def sandbox_doctor(backend, json_output):
     for item in payload:
         marker = "ready" if item["available"] else "missing"
         click.echo(f"{item['backend']}  {marker}  {item['detail']}")
+
+
 @sandbox.command("run", context_settings={"ignore_unknown_options": True})
 @click.argument(
     "backend",

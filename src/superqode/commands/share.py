@@ -11,6 +11,8 @@ import click
 def share():
     """Create and import local portable session share artifacts."""
     pass
+
+
 @share.command("create")
 @click.argument("session_id")
 @click.option("--output", "-o", type=click.Path(), help="Write artifact to this path")
@@ -24,6 +26,8 @@ def share_create(session_id, output, include_tree):
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"Created share artifact: {path}")
+
+
 @share.command("export")
 @click.argument("session_id")
 @click.option("--format", "fmt", type=click.Choice(["markdown", "json"]), default="markdown")
@@ -37,6 +41,8 @@ def share_export(session_id, fmt, output):
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"Exported session: {path}")
+
+
 @share.command("import")
 @click.argument("artifact", type=click.Path(exists=True))
 @click.option("--session-id", help="New session id to create")
@@ -49,6 +55,8 @@ def share_import(artifact, session_id):
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"Imported session: {imported_id}")
+
+
 @share.command("list")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def share_list(json_output):
@@ -77,6 +85,8 @@ def share_list(json_output):
     for artifact in artifacts:
         suffix = f"  session {artifact.source_session_id}" if artifact.source_session_id else ""
         click.echo(f"{artifact.path}{suffix}")
+
+
 @share.command("revoke")
 @click.argument("artifact")
 def share_revoke(artifact):

@@ -38,8 +38,10 @@ class CommandImplMixin:
             f"This command modifies: {env.target}\n"
             f"Run: {command}"
         )
+
     def _vim_enabled(self) -> bool:
         return bool(getattr(self, "_vim_experience_enabled", False))
+
     def _vim_cmd(self, args: str, log: ConversationLog) -> None:
         arg = (args or "").strip().lower()
         if arg in {"on", "1", "true", "yes"}:
@@ -72,6 +74,7 @@ class CommandImplMixin:
             self._show_command_output(log, t)
             return
         log.add_info("Usage: :vim [on|off|status]")
+
     def _set_cmd(self, args: str, log: ConversationLog) -> None:
         arg = (args or "").strip().lower()
         if arg in {"vim", "vim on"}:
@@ -84,6 +87,7 @@ class CommandImplMixin:
             self._vim_cmd("status", log)
             return
         log.add_info("Usage: :set vim | :set novim")
+
     def _vim_command_history(self, log: ConversationLog) -> None:
         entries = [
             entry
@@ -104,6 +108,7 @@ class CommandImplMixin:
         t.append("@:", style=THEME["cyan"])
         t.append(".\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _vim_search(self, log: ConversationLog, query: str, *, reverse: bool = False) -> None:
         query = (query or "").strip()
         if not query:
@@ -131,6 +136,7 @@ class CommandImplMixin:
         self._set_vim_search_highlight(log, query)
         self._vim_search_index = len(matches) - 1 if reverse else 0
         self._scroll_to_vim_search_match(log)
+
     def _vim_search_next(self, log: ConversationLog, *, reverse: bool = False) -> None:
         matches = getattr(self, "_vim_search_matches", [])
         if not matches:
@@ -140,6 +146,7 @@ class CommandImplMixin:
         direction = -1 if reverse else 1
         self._vim_search_index = (self._vim_search_index + direction) % len(matches)
         self._scroll_to_vim_search_match(log)
+
     def _vim_search_feedback(self, log: ConversationLog, message: str) -> None:
         try:
             self.notify(message, timeout=2)
@@ -150,6 +157,7 @@ class CommandImplMixin:
             log.add_info(message)
         except Exception:
             pass
+
     async def _compare_cmd(self, args: str, log: ConversationLog) -> None:
         """Fan the last user message across several models concurrently.
 
@@ -188,6 +196,7 @@ class CommandImplMixin:
 
         results = await run_parallel_compare(prompt, specs, default_compare_runner)
         self._render_compare_results(results, log)
+
     def _skills_cmd(self, args: str, log: ConversationLog):
         """Handle local skill inventory and setup commands.
 
@@ -414,9 +423,11 @@ class CommandImplMixin:
         log.add_info(
             "Usage: :skills [list|info <name>|add <name>|import <path>|optimize <name> --harness <path> --tasks <path> --live|remove <name>]"
         )
+
     async def _skills_optimize_cmd(self, tokens: list[str], log: ConversationLog) -> None:
         """Run the GEPA skill optimizer from the TUI without blocking input."""
         await self._superqode_cli_cmd(["skills", "optimize", *tokens], log, "Skill optimization")
+
     def _skillopt_cmd(self, args: str, log: ConversationLog) -> None:
         """Run legacy SkillOpt workspace/check commands from the TUI."""
         try:
@@ -430,6 +441,7 @@ class CommandImplMixin:
             )
             return
         self.run_worker(self._superqode_cli_cmd(["skillopt", *tokens], log, "SkillOpt command"))
+
     async def _superqode_cli_cmd(
         self,
         command_parts: list[str],
@@ -472,6 +484,7 @@ class CommandImplMixin:
             log.add_error(f"{label} failed with exit code {completed.returncode}.")
             if output:
                 log.write(Text(output + "\n", style=THEME["error"], overflow="fold"))
+
     def _skills_doctor(self, skills_root: Path, log: ConversationLog) -> None:
         """Validate local skill files and show actionable issues."""
         t = Text()
@@ -535,6 +548,7 @@ class CommandImplMixin:
             if len(issues) > 30:
                 t.append(f"  ... and {len(issues) - 30} more issue(s)\n", style=THEME["dim"])
         self._show_command_output(log, t)
+
     async def _recipe_cmd(self, args: str, log: ConversationLog):
         """Handle reusable local workflow recipes."""
         try:
@@ -587,6 +601,7 @@ class CommandImplMixin:
             return
 
         log.add_info("Usage: :recipe [list|info <name>|doctor [name]|run <name> [input]]")
+
     def _recipe_prompt_text(self, recipe: LocalRecipe, extra: str = "") -> str:
         prompt = recipe.prompt
         if recipe.prompt_file and recipe.path:
@@ -602,6 +617,7 @@ class CommandImplMixin:
         if extra:
             prompt += "\n\nUser input:\n" + extra
         return prompt.strip()
+
     def _recipe_issues(self, recipe: LocalRecipe) -> list[str]:
         issues: list[str] = []
         if not recipe.prompt and not recipe.prompt_file:
@@ -642,6 +658,7 @@ class CommandImplMixin:
             if not harness_path.exists():
                 issues.append(f"harness spec not found: {recipe.harness}")
         return issues
+
     @staticmethod
     def _runtime_completion_candidates() -> list[PromptCompletionCandidate]:
         """Runtime names for `:runtime <name>` completion, with install status."""
@@ -671,12 +688,15 @@ class CommandImplMixin:
                 )
             )
         return candidates
+
     @staticmethod
     def _recipe_dirs() -> list[Path]:
         return [Path.cwd() / ".superqode" / "recipes", Path.cwd() / ".agents" / "recipes"]
+
     @staticmethod
     def _recipe_completion_candidates() -> list[PromptCompletionCandidate]:
         from superqode.app_main import SuperQodeApp
+
         return [
             PromptCompletionCandidate(
                 value=recipe.name,
@@ -686,6 +706,7 @@ class CommandImplMixin:
             )
             for recipe in SuperQodeApp._load_local_recipes().values()
         ]
+
     def _attach_cmd(self, args: str, log: ConversationLog):
         """Insert file or URL references into the next prompt."""
         value = args.strip()
@@ -748,6 +769,7 @@ class CommandImplMixin:
         self._attached_refs = list(dict.fromkeys(self._attached_refs))
         self._sync_attachment_prefill()
         log.add_info(f"Attached {len(refs)} reference(s) to the next prompt.")
+
     def _prompt_file_cmd(self, args: str, log: ConversationLog):
         """Load a prompt file into the input buffer."""
         value = args.strip()
@@ -775,8 +797,10 @@ class CommandImplMixin:
             return
         self._set_prompt_prefill(content)
         log.add_info(f"Loaded prompt file into input: {path}")
+
     def _share_dir(self) -> Path:
         return Path(".superqode") / "shares"
+
     def _share_create(self, tokens: list[str], log: ConversationLog) -> None:
         include_tree = False
         cleaned: list[str] = []
@@ -801,6 +825,7 @@ class CommandImplMixin:
         log.add_info(
             "Send this file to another SuperQode user; they can import it with :share import."
         )
+
     def _share_export(self, tokens: list[str], log: ConversationLog) -> None:
         from superqode.headless import export_session
 
@@ -826,6 +851,7 @@ class CommandImplMixin:
             log.add_error(f"Could not export share file: {exc}")
             return
         log.add_success(f"Exported {fmt} session -> {out_path}")
+
     def _share_output_path(
         self,
         session_id: str,
@@ -842,6 +868,7 @@ class CommandImplMixin:
         stamp = time.strftime("%Y%m%d-%H%M%S")
         safe_id = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in session_id)
         return self._share_dir() / f"{stem}-{safe_id}-{stamp}{suffix}"
+
     def _share_import(self, tokens: list[str], log: ConversationLog) -> None:
         if not tokens:
             log.add_info("Usage: :share import <artifact.superqode-share.json> [new-session-id]")
@@ -857,6 +884,7 @@ class CommandImplMixin:
             return
         log.add_success(f"Imported shared session -> {imported_id}")
         log.add_info(f"Resume it with :resume {imported_id[:8]}")
+
     def _share_list(self, log: ConversationLog) -> None:
         from superqode.session.share_artifacts import list_share_artifacts
 
@@ -880,6 +908,7 @@ class CommandImplMixin:
         t.append(":share import .superqode/shares/<file>", style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _share_revoke(self, tokens: list[str], log: ConversationLog) -> None:
         from superqode.session.share_artifacts import revoke_share_artifact
 
@@ -895,6 +924,7 @@ class CommandImplMixin:
             log.add_error(f"Could not revoke share artifact: {exc}")
             return
         log.add_success(f"Revoked local share artifact -> {path}")
+
     def _runtime_cmd(self, args: str, log) -> None:
         """Handle :runtime / :runtime list / :runtime <name>.
 
@@ -1046,6 +1076,7 @@ class CommandImplMixin:
                 f"Runtime swapped: {current} → {sub}. "
                 "Next message will reconnect with the new backend."
             )
+
     # ---- Claude Agent SDK :claude command surface --------------------------
     def _claude_cmd(self, args: str, log) -> None:
         """Handle :claude / :claude <subcommand> (Claude Agent SDK, API key)."""
@@ -1096,6 +1127,7 @@ class CommandImplMixin:
             log.add_info(
                 "Usage: :claude [status|model|permission|sessions|resume|rename|tag|commands|command|review]"
             )
+
     # ---- Google Antigravity CLI :antigravity command surface -----------------
     def _antigravity_cmd(self, args: str, log) -> None:
         """Handle Antigravity CLI handoff/profile commands.
@@ -1124,8 +1156,10 @@ class CommandImplMixin:
         else:
             log.add_error(f"Unknown antigravity command: {sub}")
             log.add_info("Usage: :antigravity [cli|sdk|superqode|status|migrate|launch|help]")
+
     def _antigravity_command_line(self) -> str:
         return f"cd {shlex.quote(str(Path.cwd()))} && agy"
+
     def _antigravity_version(self) -> str:
         agy = shutil.which("agy")
         if not agy:
@@ -1139,6 +1173,7 @@ class CommandImplMixin:
             if result.returncode == 0 and text:
                 return text.splitlines()[0].strip()
         return ""
+
     # ---- xAI Grok Build :grok command surface ------------------------------
     def _grok_cmd(self, args: str, log) -> None:
         """Handle Grok Build ACP and the explicit native-harness opt-in."""
@@ -1171,6 +1206,7 @@ class CommandImplMixin:
                 "Usage: :grok [connect [model]|model [name]|models|api [model|off]|"
                 "status|login|help] (ACP: :connect acp grok)"
             )
+
     def _grok_api_cmd(self, rest: str, log) -> None:
         """Connect SuperQode harness using the Grok CLI subscription session.
 
@@ -1207,6 +1243,7 @@ class CommandImplMixin:
             "Remove token anytime with :grok api off."
         )
         self._connect_byok_mode("grok-cli", model, log)
+
     def _claude_runtime_action(self, log, label: str, action) -> None:
         try:
             runtime = self._claude_runtime_or_connect(log)
@@ -1214,6 +1251,7 @@ class CommandImplMixin:
             log.add_success(f"Claude {label}")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not {label}: {exc}")
+
     def _claude_status(self, log) -> None:
         import importlib.util
         import shutil
@@ -1263,6 +1301,7 @@ class CommandImplMixin:
             text.append('uv tool install "superqode[claude-agent-sdk]"', style=THEME["cyan"])
             text.append(" + install Claude Code + export ANTHROPIC_API_KEY\n", style=THEME["muted"])
         log.write(text)
+
     def _claude_permission_cmd(self, mode: str, log) -> None:
         modes = ("default", "acceptEdits", "plan", "bypassPermissions", "dontAsk", "auto")
         if not mode:
@@ -1276,6 +1315,7 @@ class CommandImplMixin:
             log.add_success(f"Claude permission mode set to {mode}")
         except Exception as exc:  # noqa: BLE001
             log.add_error(f"Could not set permission mode: {exc}")
+
     def _claude_sessions_cmd(self, log) -> None:
         try:
             runtime = self._claude_runtime_or_connect(log)
@@ -1298,6 +1338,7 @@ class CommandImplMixin:
         t.append("\n  Resume with ", style=THEME["muted"])
         t.append(":claude resume <session-id>\n", style=THEME["cyan"])
         log.write(t)
+
     def _claude_commands_cmd(self, log) -> None:
         runtime = getattr(getattr(self, "_pure_mode", None), "_runtime", None)
         cmds = list(getattr(runtime, "slash_commands", []) or []) if runtime else []
@@ -1314,6 +1355,7 @@ class CommandImplMixin:
         t.append("\n  Run with ", style=THEME["muted"])
         t.append(":claude command <name> [args]\n", style=THEME["cyan"])
         log.write(t)
+
     def _harness_cmd(self, args: str, log) -> None:
         """Handle :harness status/list/templates/off/<path>."""
         import os as _os
@@ -1540,6 +1582,7 @@ class CommandImplMixin:
         log.add_info(
             "Reconnect with :connect byok or :connect local to run the TUI through this spec."
         )
+
     def _harness_wizard_cmd(self, args: str, log) -> None:
         """Create a HarnessSpec from wizard answers supplied as TUI flags."""
         try:
@@ -1737,10 +1780,12 @@ class CommandImplMixin:
 
         if load_after_write:
             self._harness_cmd(f"load {path}", log)
+
     @staticmethod
     def _harness_wizard_next(state: dict[str, Any], next_step: str) -> None:
         state.setdefault("history", []).append(state["step"])
         state["step"] = next_step
+
     @staticmethod
     def _harness_wizard_choice(
         raw: str,
@@ -1759,6 +1804,7 @@ class CommandImplMixin:
                 return key
         matches = [key for key in keys if key.lower().startswith(value)]
         return matches[0] if len(matches) == 1 else None
+
     def _harness_event_style(self, event_type: str) -> str:
         """Return a theme color for a harness event type."""
         if "failed" in event_type or "error" in event_type:
@@ -1784,6 +1830,7 @@ class CommandImplMixin:
         if event_type.startswith("approval"):
             return THEME["warning"]
         return THEME["text"]
+
     def _harness_event_preview(self, event) -> str:
         """Build a compact one-line event preview."""
         data = getattr(event, "data", {}) or {}
@@ -1822,11 +1869,13 @@ class CommandImplMixin:
         preview = "  ".join(fields)
         preview = preview.replace("\n", " ")
         return preview[:137] + "..." if len(preview) > 140 else preview
+
     def _workflow_steps_from_spec(self, spec, prompt: str):
         """Build runnable workflow steps from HarnessSpec agents and a user prompt."""
         from superqode.harness import workflow_steps_from_spec
 
         return workflow_steps_from_spec(spec, prompt)
+
     def _workflow_preview_text(self, spec, prompt: str) -> Text:
         """Render a preflight preview for the active HarnessSpec workflow."""
         from superqode.harness import apply_workflow_preset
@@ -1941,6 +1990,7 @@ class CommandImplMixin:
                 style=THEME["cyan"],
             )
         return t
+
     def _workflow_timeline_text(
         self,
         *,
@@ -1979,6 +2029,7 @@ class CommandImplMixin:
                 t.append(f"  {details[step_id]}", style=THEME["muted"])
             t.append("\n")
         return t
+
     async def _workflow_cmd(self, args: str, log) -> None:
         """Handle HarnessSpec workflow status and explicit workflow runs."""
         try:
@@ -2096,6 +2147,7 @@ class CommandImplMixin:
             done.append(result.content, style=THEME["text"])
             done.append("\n", style="")
         log.write(done)
+
     async def _approval_cmd(self, action: str, args: str, log) -> None:
         """Handle :approve / :reject for the OpenAI Agents HITL flow.
 
@@ -2169,6 +2221,7 @@ class CommandImplMixin:
             log.add_error(f"Run failed: {response.error}")
         elif response.content:
             log.add_info(response.content)
+
     def _hub_cmd(self, args: str, log: ConversationLog):
         """Model-search mode: type a model name to find it (no `:local search`).
 
@@ -2209,6 +2262,7 @@ class CommandImplMixin:
             log.write(t)
         else:
             log.add_info("Model search OFF. Back to normal input.")
+
     def _chat_cmd(self, args: str, log: ConversationLog):
         """Toggle raw direct-to-model chat mode (no repo context, no tools)."""
         arg = (args or "").strip().lower()
@@ -2250,6 +2304,7 @@ class CommandImplMixin:
             log.write(t)
         else:
             log.add_info("Chat mode OFF. Back to the full coding harness.")
+
     def _build_cmd(self, args: str, log: ConversationLog):
         """Return prompts to the repo-aware coding harness."""
         self._chat_mode = False
@@ -2259,6 +2314,7 @@ class CommandImplMixin:
         self._refresh_plan_status_badge()
         log.add_success("Build mode ON. Repo context and tools are available for coding tasks.")
         log.add_info("Use :chat on for direct model chat, or :plan on to plan before edits.")
+
     def _mode_cmd(self, args: str, log: ConversationLog) -> None:
         """Switch or pick Chat, Build, or Plan mode."""
         mode = (args or "").strip().lower()
@@ -2279,6 +2335,7 @@ class CommandImplMixin:
             self._show_mode_picker(log)
             return
         log.add_info("Usage: :mode [chat|build|plan]")
+
     def _providers_cmd(self, args: str, log: ConversationLog):
         """Show provider setup, labels, and representative models."""
         from superqode.providers.recommendations import provider_doctor_cards
@@ -2357,6 +2414,7 @@ class CommandImplMixin:
         )
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     async def _providers_free_cmd(self, args: str, log: ConversationLog):
         """Show free/local inference options from the TUI."""
         from superqode.providers.free_inference import (
@@ -2416,6 +2474,7 @@ class CommandImplMixin:
             log,
             self._format_free_inference_offers(offers, offer_status),
         )
+
     async def _providers_smoke_cmd(self, args: str, log: ConversationLog):
         """Run a local provider smoke check from the TUI."""
         from superqode.providers.local.smoke import all_local_provider_ids, smoke_local_provider
@@ -2445,6 +2504,7 @@ class CommandImplMixin:
             tool_test=not no_tool_test,
         )
         self._show_command_output(log, self._format_local_smoke_result(payload))
+
     def _recommend_cmd(self, args: str, log: ConversationLog):
         """Recommend providers/models for a task."""
         from superqode.providers.recommendations import normalize_task, recommend_models
@@ -2493,6 +2553,7 @@ class CommandImplMixin:
         t.append(":connect <provider>/<model>", style=THEME["cyan"])
         t.append(".\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _sandbox_cmd(self, args: str, log: ConversationLog):
         """Show sandbox provider readiness in the TUI."""
         try:
@@ -2541,6 +2602,7 @@ class CommandImplMixin:
         t.append("superqode sandbox run docker -- pytest -q", style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _plugins_cmd(self, args: str, log: ConversationLog):
         """Manage project plugin manifests."""
         from superqode.plugins import (
@@ -2703,6 +2765,7 @@ class CommandImplMixin:
         t.append(":plugins enable|disable <id>", style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _memory_cmd(self, args: str, log: ConversationLog):
         """Manage SuperQode agent memory from the TUI."""
         from superqode.memory import available_memory_providers, create_memory_provider
@@ -2844,6 +2907,7 @@ class CommandImplMixin:
             return
 
         log.add_info("Usage: :memory [status|providers|doctor|remember|search|forget|export]")
+
     def _benchmark_cmd(self, args: str, log: ConversationLog):
         """Show benchmark harness status and optional task-file guidance."""
         try:
@@ -2878,6 +2942,7 @@ class CommandImplMixin:
                 style=THEME["dim"],
             )
         self._show_command_output(log, t)
+
     def _usage_cmd(self, args: str, log: ConversationLog):
         """Handle :usage command - Show token/cost usage."""
         from superqode.providers.usage import get_usage_tracker
@@ -2953,9 +3018,11 @@ class CommandImplMixin:
         t.append(" to reset stats\n", style=THEME["muted"])
 
         log.write(t)
+
     def _health_cmd(self, args: str, log: ConversationLog):
         """Handle :health command - Check provider connectivity."""
         self.run_worker(self._check_provider_health(log))
+
     def _acp_cmd(self, args: str, log: ConversationLog):
         """Handle :acp command with subcommands (list, install, model, doctor).
 
@@ -2989,6 +3056,7 @@ class CommandImplMixin:
         else:
             # ":acp grok" / ":acp opencode" → connect that ACP agent by short name
             self._connect_acp_cmd(args.strip(), log)
+
     def _agents_cmd(self, args: str, log: ConversationLog):
         """Handle :agents as an alias for ACP agent management."""
         parts = args.split(maxsplit=1) if args else []
@@ -3008,6 +3076,7 @@ class CommandImplMixin:
             self._connect_acp_cmd(subargs, log)
         else:
             self._run_cli_group("agents", args, log, "Agents command")
+
     async def _acp_doctor_cmd(self, args: str, log: ConversationLog):
         """Run ACP agent diagnostics from the TUI."""
         from superqode.acp.doctor import acp_doctor
@@ -3028,6 +3097,7 @@ class CommandImplMixin:
             return
 
         self._show_command_output(log, self._format_acp_doctor_results(results, live=live))
+
     async def _a2a_cmd(self, args: str, log: ConversationLog):
         """Handle :a2a commands."""
         parts = args.split(maxsplit=1)
@@ -3045,6 +3115,7 @@ class CommandImplMixin:
                 return
 
         await self._a2a_commands.handle_command(subcommand, subargs, log)
+
     def _doctor_cmd(self, args: str, log: ConversationLog):
         """Show readiness for the current or requested provider."""
         from superqode.providers.recommendations import provider_doctor_cards
@@ -3107,6 +3178,7 @@ class CommandImplMixin:
         t.append(provider, style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _work_cmd(self, args: str, log: ConversationLog):
         """Show the tools, files, and commands from the last completed run."""
         summary = getattr(self, "_last_run_summary", {}) or {}
@@ -3196,6 +3268,7 @@ class CommandImplMixin:
         t.append(":retry", style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _session_cmd(self, args: str, log: ConversationLog):
         """Show the current coding session or recent sessions."""
         sub = (args or "").strip().lower()

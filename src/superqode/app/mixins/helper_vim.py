@@ -18,6 +18,7 @@ class HelperVimMixin:
         if normalized in {":", ":history"}:
             return
         self._last_ex_command = normalized
+
     def _repeat_last_ex_command(self, log: ConversationLog) -> None:
         command = getattr(self, "_last_ex_command", "")
         if not command:
@@ -25,6 +26,7 @@ class HelperVimMixin:
             return
         log.add_info(f"Repeating {command}")
         self._handle_command(command, log)
+
     def _try_vim_search_input(self, text: str, log: ConversationLog) -> bool:
         if text in {"n", "N"}:
             self._vim_search_next(log, reverse=(text == "N"))
@@ -36,6 +38,7 @@ class HelperVimMixin:
             self._vim_search(log, text[1:].strip(), reverse=False)
             return True
         return False
+
     def _scroll_to_vim_search_match(self, log: ConversationLog) -> None:
         matches = getattr(self, "_vim_search_matches", [])
         if not matches or self._vim_search_index < 0:
@@ -59,6 +62,7 @@ class HelperVimMixin:
             f"Match {self._vim_search_index + 1}/{len(matches)} for {query!r}. "
             "Use n/N to navigate.",
         )
+
     def _set_vim_search_highlight(self, log: ConversationLog, query: str) -> None:
         setter = getattr(log, "set_search_highlight", None)
         if callable(setter):

@@ -35,6 +35,7 @@ class HelperRecipesSkillsMixin:
             if f"name: {name.lower()}" in head:
                 return path
         return None
+
     def _set_skill_enabled(self, skills_root: Path, name: str, *, enabled: bool) -> bool:
         """Toggle a skill's frontmatter enabled flag."""
         path = self._find_skill_file(skills_root, name)
@@ -63,6 +64,7 @@ class HelperRecipesSkillsMixin:
             return True
         except Exception:
             return False
+
     def _find_recipe(self, name: str) -> LocalRecipe | None:
         recipes = self._load_local_recipes()
         recipe = recipes.get(name)
@@ -70,6 +72,7 @@ class HelperRecipesSkillsMixin:
             return recipe
         lowered = name.lower()
         return next((item for item in recipes.values() if item.name.lower() == lowered), None)
+
     @staticmethod
     def _string_tuple(value: Any) -> tuple[str, ...]:
         if value is None:
@@ -79,9 +82,11 @@ class HelperRecipesSkillsMixin:
         if isinstance(value, (list, tuple)):
             return tuple(str(item) for item in value if str(item).strip())
         return ()
+
     @staticmethod
     def _load_recipe_file(path: Path) -> LocalRecipe | None:
         from superqode.app_main import SuperQodeApp
+
         try:
             raw = path.read_text(encoding="utf-8")
             if path.suffix.lower() == ".json":

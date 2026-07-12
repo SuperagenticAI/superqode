@@ -30,8 +30,6 @@ from textual import events
 from textual.timer import Timer
 
 
-
-
 from superqode.app.recipes import PromptCompletionCandidate, LocalRecipe  # noqa: F401
 
 
@@ -158,7 +156,28 @@ from superqode.app.mixins.slash_commands import SlashCommandMixin
 from superqode.app.mixins.helpers import HelpersMixin
 
 
-class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMixin, DialogsMixin, CodexMixin, LocalModelsMixin, ModelCatalogMixin, FormattingMixin, PickerNavigationMixin, CompletionMixin, MiscActionsMixin, EventHandlerMixin, ConnectMixin, McpMixin, HuggingFaceMixin, SwitchboardMixin, FactoryMixin, SidebarMixin, App):
+class SuperQodeApp(
+    HelpersMixin,
+    SlashCommandMixin,
+    AgentRunMixin,
+    CommandImplMixin,
+    DialogsMixin,
+    CodexMixin,
+    LocalModelsMixin,
+    ModelCatalogMixin,
+    FormattingMixin,
+    PickerNavigationMixin,
+    CompletionMixin,
+    MiscActionsMixin,
+    EventHandlerMixin,
+    ConnectMixin,
+    McpMixin,
+    HuggingFaceMixin,
+    SwitchboardMixin,
+    FactoryMixin,
+    SidebarMixin,
+    App,
+):
     CSS = APP_CSS
     TITLE = "SuperQode"
 
@@ -352,7 +371,6 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
         # LiteLLM prewarm is delayed until after the first screen paints so
         # background imports do not compete with TUI startup.
 
-
     def compose(self) -> ComposeResult:
         # Import resizable divider
         from superqode.widgets.resizable_sidebar import ResizableDivider
@@ -442,7 +460,6 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
         if os.getenv("SUPERQODE_CONNECT", "").strip():
             self.set_timer(1.0, self._run_startup_connect)
 
-
     def _run_startup_connect(self) -> None:
         """Dispatch the connection profile named in SUPERQODE_CONNECT (--connect)."""
         profile_id = os.environ.pop("SUPERQODE_CONNECT", "").strip()
@@ -478,7 +495,6 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
         "rewind",
     }
 
-
     def _focus_input_on_ready(self):
         """Focus the input box once widgets are ready."""
         try:
@@ -507,11 +523,9 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
             except Exception:
                 pass
 
-
     def _run_startup_health_check(self):
         """Run provider health check in background on startup."""
         self.run_worker(self._startup_health_check())
-
 
     async def _startup_health_check(self):
         """Check provider health on startup."""
@@ -533,7 +547,6 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
             # Silent failure - health check is optional
             pass
 
-
     def on_resize(self, event: events.Resize) -> None:
         """Re-flow the welcome screen when only it is shown and the size changes."""
         if not getattr(self, "_welcome_active", False):
@@ -547,11 +560,9 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
         # Debounce: resize fires rapidly while dragging the terminal edge.
         self._welcome_resize_timer = self.set_timer(0.12, self._rerender_welcome)
 
-
     # ========================================================================
     # Sidebar Toggle & File Selection
     # ========================================================================
-
 
     def action_leader_key(self):
         """Activate leader key mode (Ctrl+X) - show popup with shortcuts."""
@@ -583,7 +594,6 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
         except Exception:
             self._ensure_input_focus()
 
-
     def action_scroll_log_page_up(self) -> None:
         """Scroll the conversation log up while keeping input focused."""
         log = self._conversation_log()
@@ -611,7 +621,6 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
         if log is not None:
             log.scroll_end(animate=False)
             log.auto_scroll = True
-
 
     def on_key(self, event: events.Key) -> None:
         """Handle key events globally - intercept arrow keys during selection modes."""
@@ -766,7 +775,6 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
     # Ctrl+T cycles through these thinking-log states in order.
     _THINKING_CYCLE = ("normal", "verbose", "off")
 
-
     def action_smart_cancel(self):
         """Cancel agent if running, cancel selection mode, or do nothing (don't exit)."""
         # First check if we're in any selection mode
@@ -872,7 +880,6 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
             else:
                 log.add_info("💡 Press Esc again to rewind the conversation  •  :exit to quit")
 
-
     def action_focus_input(self):
         """Focus the input box - always available via Ctrl+I or when needed."""
         self._ensure_input_focus()
@@ -881,35 +888,28 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
     # Enhanced Thinking Animation
     # ========================================================================
 
-
     # ========================================================================
     # Type-ahead message queue
     # ========================================================================
-
 
     # ========================================================================
     # Input Handling
     # ========================================================================
 
-
     # ========================================================================
     # Shell with Danger Detection
     # ========================================================================
 
-
     # ========================================================================
     # Command Handling
     # ========================================================================
-
 
     # Matches a trailing "@token" mention being typed, anywhere in the prompt.
     # The "@" must start the line or follow whitespace so emails/handles inside a
     # word do not trigger the file picker.
     _MENTION_QUERY_RE = re.compile(r"(?:^|\s)@([\w./\-]*)$")
 
-
     _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff"}
-
 
     def on_paste(self, event) -> None:
         """Auto-attach when an image file path is pasted into the terminal."""
@@ -929,13 +929,11 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
             except Exception:
                 pass
 
-
     # Runtimes that are self-contained (own model + auth) and can be used in the
     # TUI without a separate :connect step.
     _SELF_CONTAINED_RUNTIMES = frozenset(
         {"codex-sdk", "claude-agent-sdk", "antigravity-sdk", "antigravity-cli"}
     )
-
 
     def action_clear_screen(self):
         log = self.query_one("#log", ConversationLog)
@@ -956,21 +954,17 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
         # Ensure focus returns to input
         self.set_timer(0.1, self._ensure_input_focus)
 
-
     # ========================================================================
     # Model Query Interception
     # ========================================================================
-
 
     # ========================================================================
     # Message Handling
     # ========================================================================
 
-
     # ========================================================================
     # Permission Handling
     # ========================================================================
-
 
     # Phrases the agent loop emits purely as bookkeeping. In normal mode these
     # are folded into the live throbber instead of spamming the scrollback.
@@ -982,7 +976,6 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
         "response complete",
         "reached maximum iterations",
     )
-
 
     # ── Calm-mode presentation ──────────────────────────────────────────────
     # In calm mode (anything but :thinking verbose) we don't dump raw reasoning
@@ -1003,21 +996,17 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
         "think": "💭",
     }
 
-
     # ========================================================================
     # Provider session commands
     # ========================================================================
-
 
     # =========================================================================
     # BYOK ENHANCED COMMANDS
     # =========================================================================
 
-
     # ========================================================================
     # Local Provider Commands
     # ========================================================================
-
 
     _LOCAL_ENGINE_NAMES = {
         "ollama": "Ollama",
@@ -1027,16 +1016,13 @@ class SuperQodeApp(HelpersMixin, SlashCommandMixin, AgentRunMixin, CommandImplMi
         "llama.cpp": "llama.cpp",
     }
 
-
     # ========================================================================
     # HuggingFace Commands
     # ========================================================================
 
-
     # ========================================================================
     # Help & Utility
     # ========================================================================
-
 
     def action_quit(self) -> None:
         """Handle quit action (Ctrl+C) - clean up properly before exit."""

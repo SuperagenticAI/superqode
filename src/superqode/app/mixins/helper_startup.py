@@ -48,6 +48,7 @@ class HelperStartupMixin:
         except Exception as e:
             # Fallback to basic agents if discovery fails
             return self._fallback_agents()
+
     def _fallback_agents(self) -> List[AgentInfo]:
         """Basic agents used when async discovery cannot run synchronously."""
         return [
@@ -76,6 +77,7 @@ class HelperStartupMixin:
                 status=AgentStatus.AVAILABLE,
             ),
         ]
+
     def _load_custom_keybindings(self) -> None:
         """Apply user keybinding overrides from ~/.superqode/keybindings.json.
 
@@ -108,6 +110,7 @@ class HelperStartupMixin:
                 )
             except Exception:
                 pass
+
     def _build_palette_commands(self) -> list[PaletteCommand]:
         """Build the command palette from the real TUI command surface."""
         return [
@@ -508,6 +511,7 @@ class HelperStartupMixin:
             ),
             PaletteCommand("quit", "Quit", "Exit SuperQode", "✕", "Ctrl+C", "system"),
         ]
+
     def _init_undo_manager(self):
         """Initialize the undo manager for checkpoint/restore."""
         try:
@@ -515,6 +519,7 @@ class HelperStartupMixin:
             self._undo_manager.initialize()
         except Exception:
             self._undo_manager = None
+
     @work(exclusive=False)
     async def _discover_acp_agents(self):
         """Discover available ACP agents in background - truly async and non-blocking."""
@@ -535,6 +540,7 @@ class HelperStartupMixin:
                 self.set_timer(0.1, lambda: self._show_discovered_agents(available))
         except Exception:
             self._discovered_acp_agents = {}
+
     def _prewarm_litellm(self):
         """Prewarm LiteLLM in background for faster first LLM call."""
         try:
@@ -543,6 +549,7 @@ class HelperStartupMixin:
             LiteLLMGateway.prewarm()
         except ImportError:
             pass  # LiteLLM not available
+
     def _init_animation_manager(self):
         """Initialize the animation manager for throttled animations."""
         try:
@@ -557,10 +564,12 @@ class HelperStartupMixin:
             self._animation_manager.start()
         except ImportError:
             pass  # Animation manager not available
+
     @property
     def animation_manager(self):
         """Get the animation manager instance."""
         return self._animation_manager
+
     def _sync_approval_mode(self):
         """Sync approval mode to the hints bar and mode badge."""
         try:
@@ -573,11 +582,13 @@ class HelperStartupMixin:
             badge.approval_mode = self.approval_mode
         except Exception:
             pass
+
     @work(thread=True)
     def _load_welcome(self):
         # Agents are now lazy loaded - no need to preload
         team_name = Path.cwd().name or "SuperQode"
         self._call_ui(self._show_welcome, team_name)
+
     def _welcome_width(self, log) -> Optional[int]:
         """Usable inner width of the log, used to lay the welcome out responsively."""
         try:
@@ -585,6 +596,7 @@ class HelperStartupMixin:
             return w if w and w > 0 else None
         except Exception:
             return None
+
     def _rerender_welcome(self) -> None:
         if not getattr(self, "_welcome_active", False):
             return
@@ -601,9 +613,11 @@ class HelperStartupMixin:
         )
         log.scroll_home(animate=False)
         self.set_timer(0.2, lambda: setattr(log, "auto_scroll", True))
+
     @staticmethod
     def _onboarding_marker() -> Path:
         return Path.home() / ".superqode" / ".onboarded"
+
     def _maybe_show_onboarding(self, log: ConversationLog) -> None:
         """Show a one-time getting-started card on the very first launch."""
         marker = self._onboarding_marker()
@@ -664,6 +678,7 @@ class HelperStartupMixin:
             marker.write_text("1", encoding="utf-8")
         except Exception:
             pass
+
     def _init_config(self, args: str, log: ConversationLog):
         """Initialize superqode.yaml and local-first starter harnesses."""
         from pathlib import Path
@@ -701,11 +716,13 @@ class HelperStartupMixin:
         t.append("Generate a hardware-tuned local harness when ready\n", style=THEME["dim"])
         t.append("\n", style="")
         log.write(t)
+
     def _has_superqode_config(self) -> bool:
         """Return True when a superqode.yaml configuration exists."""
         from superqode.config.loader import find_config_file
 
         return bool(find_config_file() or (Path.cwd() / "superqode.yaml").exists())
+
     async def _warmup_ds4(self, client, model: str, log: ConversationLog) -> None:
         """Pre-load the DS4 model on connect, with a live elapsed-time indicator.
 

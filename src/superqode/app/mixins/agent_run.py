@@ -49,6 +49,7 @@ class AgentRunMixin:
         if not self.show_thinking_logs:
             return "off"
         return "verbose" if self.thinking_verbosity == "verbose" else "normal"
+
     def _apply_thinking_state(self, state: str) -> None:
         """Set the reactive flags for a thinking state ('normal'|'verbose'|'off')."""
         if state == "off":
@@ -59,6 +60,7 @@ class AgentRunMixin:
         # Mirror onto the current TUI logger if one exists.
         if getattr(self, "_current_tui_logger", None):
             self._current_tui_logger.logger.config.show_thinking = self.show_thinking_logs
+
     def action_toggle_thinking(self):
         """Cycle thinking-log detail: Normal → Verbose → Off."""
         current = self._current_thinking_state()
@@ -73,6 +75,7 @@ class AgentRunMixin:
             "off": "Thinking: OFF — compact stream view, only tool calls and the answer",
         }
         log.add_info(blurbs[nxt])
+
     def _start_stream_animation(self, log: ConversationLog):
         """Start animation during agent streaming."""
         self._stream_animation_frame = 0
@@ -112,6 +115,7 @@ class AgentRunMixin:
             thinking_wave_bottom.add_class("visible")
         except Exception:
             pass
+
     def _stop_stream_animation(self):
         """Stop the streaming animation."""
         self.is_busy = False
@@ -149,6 +153,7 @@ class AgentRunMixin:
             thinking_wave_bottom.remove_class("visible")
         except Exception:
             pass
+
     def _start_thinking(self, msg: str = "🧠 Thinking..."):
         self.is_busy = True
         self._thinking_start = time.time()
@@ -191,6 +196,7 @@ class AgentRunMixin:
             prompt_area.add_class("hidden")
         except Exception:
             pass
+
     def _stop_thinking(self, show_done: bool = False):
         """Stop the thinking animation.
 
@@ -243,6 +249,7 @@ class AgentRunMixin:
         if show_done:
             elapsed = time.time() - self._thinking_start
             self.query_one("#log", ConversationLog).add_success(f"Done in {elapsed:.1f}s ✨")
+
     @work(exclusive=True, thread=True)
     def _run_shell(self, cmd: str, log: ConversationLog):
         import os
@@ -289,6 +296,7 @@ class AgentRunMixin:
             self._call_ui(log.add_error, str(e))
         finally:
             self._call_ui(lambda: setattr(self, "is_busy", False))
+
     def _run_cli_passthrough(
         self,
         command_parts: list[str],
@@ -297,6 +305,7 @@ class AgentRunMixin:
     ) -> None:
         """Run a CLI-backed command from the TUI."""
         self.run_worker(self._superqode_cli_cmd(command_parts, log, label))
+
     def _run_cli_group(self, group: str, args: str, log: ConversationLog, label: str) -> None:
         """Run `superqode <group> ...` from a TUI command handler."""
         try:
@@ -305,6 +314,7 @@ class AgentRunMixin:
             log.add_error(f"Could not parse :{group} arguments: {exc}")
             return
         self._run_cli_passthrough([group, *tokens], log, label)
+
     async def _run_recipe(self, recipe: LocalRecipe, extra: str, log: ConversationLog) -> None:
         issues = self._recipe_issues(recipe)
         if issues:
@@ -381,6 +391,7 @@ class AgentRunMixin:
             self._set_prompt_prefill(prompt)
             log.add_info(f"Loaded recipe prompt: {recipe.name}")
             log.add_info("Connect a model, then press Enter to run it.")
+
     async def _send_chat_message(self, text: str, log: ConversationLog):
         """Stream a raw model reply and report speed (TTFT + decode tok/s)."""
         from time import monotonic
@@ -467,6 +478,7 @@ class AgentRunMixin:
         finally:
             # Stops the indicator + scanning waves and restores the prompt.
             self._call_ui(self._stop_thinking)
+
     @work(exclusive=True)
     async def _send_to_pure_mode(self, text: str, log: ConversationLog):
         """Send message to provider session with streaming output."""
@@ -1159,6 +1171,7 @@ class AgentRunMixin:
 
         self._active_plan_mode_for_current_message = False
         self.is_busy = False
+
     @work(exclusive=True, thread=True)
     def _send_to_agent(self, text: str, name: str, log: ConversationLog):
         """Send message to agent with real-time streaming output."""
@@ -1291,6 +1304,7 @@ class AgentRunMixin:
             else:
                 self._call_ui(self._stop_thinking)
                 self._call_ui(log.add_info, f"🚧 {name} integration coming soon!")
+
     def _run_agent_unified(
         self,
         message: str,
@@ -1543,6 +1557,7 @@ class AgentRunMixin:
             self._call_ui(self._stop_thinking)
             self._call_ui(self._stop_stream_animation)
             self._call_ui(log.add_error, f"❌ Error: {str(e)}")
+
     def _run_fast_agent_cli(
         self,
         message: str,
@@ -1657,6 +1672,7 @@ class AgentRunMixin:
         finally:
             self._agent_process = None
             self._call_ui(self._stop_stream_animation)
+
     def _run_acp_jsonrpc_client(
         self,
         message: str,
@@ -2432,6 +2448,7 @@ class AgentRunMixin:
                 False,  # failed
                 f"❌ Error: {str(e)}",
             )
+
     # Legacy method - calls the unified runner
     def _run_opencode_unified(
         self,
@@ -2450,6 +2467,7 @@ class AgentRunMixin:
             log=log,
             persona_context=persona_context,
         )
+
     def _run_claude_acp(
         self,
         message: str,
@@ -3025,6 +3043,7 @@ class AgentRunMixin:
             self._call_ui(self._stop_thinking)
             self._call_ui(self._stop_stream_animation)
             self._call_ui(log.add_error, f"❌ Error: {str(e)}")
+
     def _run_openhands_acp(
         self,
         message: str,
@@ -3590,6 +3609,7 @@ class AgentRunMixin:
             self._call_ui(self._stop_thinking)
             self._call_ui(self._stop_stream_animation)
             self._call_ui(log.add_error, f"❌ Error: {str(e)}")
+
     def _send_permission_response(self, process, response: str):
         """Send a permission response to the process."""
         try:
@@ -3598,6 +3618,7 @@ class AgentRunMixin:
                 process.stdin.flush()
         except Exception:
             pass
+
     def _thinking_loop_status(self, text: str) -> Optional[str]:
         """If `text` is agent-loop bookkeeping, return a compact live-status label.
 
@@ -3615,6 +3636,7 @@ class AgentRunMixin:
         if match:
             return f"Working… (step {match.group(1)})"
         return "Working…"
+
     def _set_thinking_status(self, status: str) -> None:
         """Update the live throbber's steady status label (normal thinking mode)."""
         try:
@@ -3622,6 +3644,7 @@ class AgentRunMixin:
             indicator.status = status
         except Exception:
             pass
+
     def _calm_verb_target(self, name: str, args: Optional[dict] = None) -> tuple:
         """Map a tool name + args to a friendly (verb, short target) pair."""
         args = args or {}
@@ -3646,6 +3669,7 @@ class AgentRunMixin:
         if len(target) > 52:
             target = "…" + target[-51:]
         return verb, target
+
     def _maybe_show_thinking_hint(self, log: ConversationLog) -> None:
         """Once per session, tell the user how to see full detail."""
         if getattr(self, "_thinking_hint_shown", False):
@@ -3658,6 +3682,7 @@ class AgentRunMixin:
         t.append(":thinking verbose", style=f"bold {THEME['cyan']}")
         t.append(" to see full reasoning & tool detail\n", style=THEME["muted"])
         log.write(t)
+
     def _calm_tool_running(self, name: str, args: Optional[dict], log: ConversationLog) -> None:
         """Update the live throbber with the in-progress action."""
         verb, target = self._calm_verb_target(name, args)
@@ -3666,6 +3691,7 @@ class AgentRunMixin:
         status = f"{icon} {label} {target}…" if target else f"{icon} {label}…"
         self._set_thinking_status(status)
         self._maybe_show_thinking_hint(log)
+
     def _calm_tool_done(
         self, name: str, args: Optional[dict], log: ConversationLog, ok: bool = True
     ) -> None:
@@ -3681,6 +3707,7 @@ class AgentRunMixin:
             t.append(f" {target}", style=THEME["muted"])
         t.append("\n", style="")
         log.write(t)
+
     def _show_thinking_line(self, line: str, log: ConversationLog):
         """Show a thinking/log line - SuperQode quantum style.
 
@@ -3746,6 +3773,7 @@ class AgentRunMixin:
 
         # Write the text - ensure console width is unlimited
         log.write(text)
+
     def _agent_session_label(self, provider: str) -> str:
         """Session-banner label that names what actually runs the turn.
 

@@ -12,6 +12,8 @@ import click
 def connect():
     """Connect to models via ACP agents, BYOK providers, or LOCAL providers."""
     pass
+
+
 @connect.command("acp")
 @click.argument("agent", metavar="AGENT")
 @click.option("--project-dir", "-d", metavar="DIR", help="Project directory to work in")
@@ -20,6 +22,8 @@ def connect_acp(agent, project_dir):
     from superqode.commands.acp import connect_agent
 
     exit(connect_agent(agent, project_dir))
+
+
 @connect.command("byok")
 @click.argument("provider", metavar="PROVIDER", required=False)
 @click.argument("model", metavar="MODEL", required=False)
@@ -28,6 +32,8 @@ def connect_byok(provider, model):
     from superqode.commands.providers import connect_provider
 
     exit(connect_provider(provider, model))
+
+
 @connect.command("local")
 @click.argument("provider", metavar="PROVIDER", required=False)
 @click.argument("model", metavar="MODEL", required=False)
@@ -36,6 +42,8 @@ def connect_local(provider, model):
     from superqode.commands.providers import connect_local_provider
 
     exit(connect_local_provider(provider, model))
+
+
 @connect.command("setup")
 @click.argument("provider", metavar="PROVIDER")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")

@@ -8,10 +8,14 @@ def get_session():
     from superqode.main import session
 
     return session
+
+
 def get_mode():
     from superqode.main import current_mode
 
     return current_mode
+
+
 def set_mode(mode: str):
     import superqode.main as m
 

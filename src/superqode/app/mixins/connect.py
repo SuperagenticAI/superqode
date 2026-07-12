@@ -81,6 +81,7 @@ class ConnectMixin:
             t = Text()
             t.append(f"\n  ⚠️  Error refreshing: {str(e)}", style=THEME["error"])
             log.write(t)
+
     def action_navigate_connect_type_up(self):
         """Navigate to previous connection type (arrow up)."""
         if not getattr(self, "_awaiting_connect_type", False):
@@ -94,6 +95,7 @@ class ConnectMixin:
             self._show_connect_type_picker(log, clear_log=False)
             # Ensure input stays focused
             self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_connect_type_down(self):
         """Navigate to next connection type (arrow down)."""
         if not getattr(self, "_awaiting_connect_type", False):
@@ -109,6 +111,7 @@ class ConnectMixin:
             self._show_connect_type_picker(log, clear_log=False)
             # Ensure input stays focused
             self.set_timer(0.05, self._ensure_input_focus)
+
     def action_select_highlighted_connect_type(self):
         """Select the currently highlighted connection type (Enter key)."""
         if not getattr(self, "_awaiting_connect_type", False):
@@ -127,6 +130,7 @@ class ConnectMixin:
         log.scroll_home(animate=False)
         log.auto_scroll = True
         self._dispatch_connection_profile(profiles[idx], log)
+
     def _reset_connect_selection_states(self) -> None:
         """Clear transient connect-flow selection state so flows don't interfere."""
         self._awaiting_connect_type = False
@@ -149,6 +153,7 @@ class ConnectMixin:
         ):
             if hasattr(self, attr):
                 delattr(self, attr)
+
     def _dispatch_connection_profile(self, profile, log: ConversationLog) -> None:
         """Route a chosen connection profile to its connector.
 
@@ -185,6 +190,7 @@ class ConnectMixin:
                 )
         else:
             log.add_error(f"Unknown connection type: {getattr(profile, 'id', profile)}")
+
     def _select_byok_model_by_number(self, num: int):
         """Select a BYOK model by number."""
         if not getattr(self, "_awaiting_byok_model", False):
@@ -201,6 +207,7 @@ class ConnectMixin:
                 log = self.query_one("#log", ConversationLog)
                 self._awaiting_byok_model = False
                 self._connect_byok_mode(provider_id, model, log)
+
     def _track_byok_usage(self, input_text: str, response: str, tool_calls: int = 0):
         """Track BYOK usage and update status bar."""
         from superqode.providers.usage import get_usage_tracker
@@ -217,6 +224,7 @@ class ConnectMixin:
 
         # Update status bar
         self._update_byok_status_bar()
+
     def _update_byok_status_bar(self):
         """Update status bar with current BYOK usage."""
         from superqode.providers.usage import get_usage_tracker
@@ -238,6 +246,7 @@ class ConnectMixin:
                 )
         except Exception:
             pass
+
     @staticmethod
     def _connect_profile_completion_candidates() -> list[PromptCompletionCandidate]:
         """Connection sources for `:connect <profile>` completion, with status."""
@@ -257,10 +266,13 @@ class ConnectMixin:
                 )
             )
         return candidates
+
     @staticmethod
     def _byok_provider_completion_candidates() -> list[PromptCompletionCandidate]:
         from superqode.app_main import SuperQodeApp
+
         return SuperQodeApp._provider_completion_candidates(local=False)
+
     @staticmethod
     def _byok_provider_ids() -> list[str]:
         try:
@@ -275,6 +287,7 @@ class ConnectMixin:
             ]
         except Exception:
             return []
+
     def _announce_self_contained_connection(self, runtime_name: str, log: ConversationLog) -> None:
         """Write a clear 'connected' panel for a self-contained runtime and
         resolve its active model in the background (so the user can see which
@@ -350,6 +363,7 @@ class ConnectMixin:
         self._set_status_model("")  # model fills in once resolved
         if runtime_name == "codex-sdk":
             self.run_worker(self._resolve_codex_active_model(log), exclusive=False)
+
     def _show_antigravity_connect(self, log) -> None:
         agy_path = shutil.which("agy")
         command = self._antigravity_command_line()
@@ -392,6 +406,7 @@ class ConnectMixin:
                 padding=(1, 2),
             )
         )
+
     def _claude_runtime_or_connect(self, log):
         pure = getattr(self, "_pure_mode", None)
         runtime = getattr(pure, "_runtime", None) if pure is not None else None
@@ -407,6 +422,7 @@ class ConnectMixin:
         if runtime is None or getattr(pure, "runtime_name", "") != "claude-agent-sdk":
             raise RuntimeError("Claude Agent SDK runtime is not connected")
         return runtime
+
     def _connect_pure_mode(self, provider: str, model: str, level, log: ConversationLog):
         """Connect to provider session with specified provider/model."""
         from superqode.pure_mode import PureMode
@@ -448,6 +464,7 @@ class ConnectMixin:
 
         # Clear screen and show fresh workspace
         self._clear_for_workspace(log, f"PURE • {provider}")
+
     def _show_byok_thinking_line(self, text: str, log: ConversationLog):
         """Show thinking line for BYOK - handles threading correctly.
 
@@ -465,6 +482,7 @@ class ConnectMixin:
             else:
                 # Re-raise other errors
                 raise
+
     def _handle_byok_provider_selection(self, selection: str, log: ConversationLog):
         """Handle provider selection from :connect picker."""
         # Only process if we're actually awaiting provider selection
@@ -519,6 +537,7 @@ class ConnectMixin:
                 return True
 
         return False
+
     def _handle_byok_model_selection(self, selection: str, log: ConversationLog):
         """Handle model selection from :connect picker with search support."""
         if not hasattr(self, "_byok_selected_provider"):
@@ -590,6 +609,7 @@ class ConnectMixin:
         self._awaiting_byok_model = False
         self._connect_byok_mode(provider_id, model, log)
         return True
+
     async def _refresh_catalog_then_connect_byok(
         self, provider: str, model: str, log: ConversationLog, resolved_role=None
     ) -> None:
@@ -613,6 +633,7 @@ class ConnectMixin:
                 _catalog_refresh_attempted=True,
             )
         )
+
     def _connect_byok_mode(
         self,
         provider: str,
@@ -891,6 +912,7 @@ class ConnectMixin:
             self.run_worker(self._test_local_connection(provider, model, log, quiet=True))
         else:
             log.add_info("Ready to chat! Type your message below.")
+
     def _show_connection_summary(
         self,
         log: ConversationLog,
@@ -936,6 +958,7 @@ class ConnectMixin:
                 padding=(1, 2),
             )
         )
+
     def _connect_byok_cmd(self, args: str, log: ConversationLog):
         """Handle :connect byok command - Interactive provider/model picker."""
         args = args.strip()
@@ -1035,6 +1058,7 @@ class ConnectMixin:
                 # Show models for this provider - always use numbered list
                 self._show_provider_models(provider, log, use_picker=False)
             return
+
     def _connect_previous(self, log: ConversationLog):
         """Switch to previous provider/model."""
         if hasattr(self, "_previous_provider") and self._previous_provider:
@@ -1043,6 +1067,7 @@ class ConnectMixin:
         else:
             log.add_info("No previous provider to switch to")
             log.add_system("Use :connect to select a provider")
+
     def _connect_history(self, log: ConversationLog):
         """Show connection history."""
         history = self._load_byok_history()
@@ -1069,6 +1094,7 @@ class ConnectMixin:
         t.append(" to reconnect\n", style=THEME["muted"])
 
         log.write(t)
+
     def _connect_last(self, log: ConversationLog):
         """Connect to the last used provider/model."""
         config = self._load_byok_config()
@@ -1078,6 +1104,7 @@ class ConnectMixin:
         else:
             log.add_info("No previous connection saved")
             log.add_system("Use :connect to select a provider")
+
     def _show_connect_type_picker(self, log: ConversationLog, clear_log: bool = True):
         """Show picker to choose between ACP, BYOK, and LOCAL connection types.
 
@@ -1161,6 +1188,7 @@ class ConnectMixin:
 
         # Ensure input stays focused for keyboard navigation
         self.set_timer(0.05, self._ensure_input_focus)
+
     def _show_byok_providers(self, log: ConversationLog, clear_log: bool = True):
         """Show BYOK provider picker - alias for _show_connect_picker."""
         # CRITICAL: Explicitly clear ALL state that might cause it to skip to models
@@ -1184,6 +1212,7 @@ class ConnectMixin:
             self.set_timer(0.5, lambda: setattr(self, "_just_showed_byok_picker", False))
         # Now show the provider picker - it will set _awaiting_byok_provider = True
         self._show_connect_picker(log, clear_log=clear_log)
+
     def _show_connect_picker(self, log: ConversationLog, clear_log: bool = True):
         """Show interactive provider picker with model counts and API key guidance."""
         from superqode.providers.registry import PROVIDERS, ProviderCategory, get_free_providers
@@ -1502,6 +1531,7 @@ class ConnectMixin:
 
         # Ensure input stays focused for keyboard navigation
         self.set_timer(0.05, self._ensure_input_focus)
+
     def _set_byok_model(self, model: str, log: ConversationLog):
         """Switch model without reconnecting."""
         session = get_session()
@@ -1516,6 +1546,7 @@ class ConnectMixin:
 
         # Reconnect with new model
         self._connect_byok_mode(provider, model, log)
+
     def _load_byok_config(self) -> dict:
         """Load BYOK config from file."""
         import json
@@ -1529,6 +1560,7 @@ class ConnectMixin:
         except Exception:
             pass
         return {}
+
     def _save_byok_config(self, provider: str, model: str):
         """Save BYOK config to file."""
         import json
@@ -1561,10 +1593,12 @@ class ConnectMixin:
             config_path.write_text(json.dumps(data, indent=2))
         except Exception:
             pass
+
     def _load_byok_history(self) -> list:
         """Load BYOK connection history."""
         config = self._load_byok_config()
         return config.get("history", [])
+
     def _connect_acp_cmd(self, args: str, log: ConversationLog):
         """Handle :connect acp command - Connect to ACP agent."""
         if not args:
@@ -1590,6 +1624,7 @@ class ConnectMixin:
         agent_name = parts[0]
         model_hint = parts[1] if len(parts) > 1 else None
         self._connect_agent(agent_name, model_hint)
+
     @work(exclusive=True)
     async def _connect_agent(self, agent_id: str, model_hint: str = None):
         log = self.query_one("#log", ConversationLog)

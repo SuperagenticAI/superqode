@@ -49,6 +49,7 @@ class LocalModelsMixin:
         if provider not in local_providers:
             return "", ""
         return provider, model
+
     def _teardown_local_model_runtime(self, provider: str = "", model: str = "") -> None:
         """Stop local generation resources owned or warmed by this TUI session."""
         provider = (provider or "").strip().lower()
@@ -76,6 +77,7 @@ class LocalModelsMixin:
                 ServerManager().stop(engine)
             except Exception:
                 pass
+
     def _scroll_to_highlighted_local_model(self, log: ConversationLog, highlighted_idx: int):
         """Scroll the local-model picker so the highlighted multi-line row is visible."""
         try:
@@ -92,6 +94,7 @@ class LocalModelsMixin:
             pass
         finally:
             log.auto_scroll = True
+
     def action_navigate_local_provider_up(self):
         """Navigate to previous local provider (arrow up)."""
         if not getattr(self, "_awaiting_local_provider", False):
@@ -111,6 +114,7 @@ class LocalModelsMixin:
             self._scroll_to_highlighted_item(log, new_idx, len(provider_list))
             # Ensure input stays focused
             self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_local_provider_down(self):
         """Navigate to next local provider (arrow down)."""
         if not getattr(self, "_awaiting_local_provider", False):
@@ -130,6 +134,7 @@ class LocalModelsMixin:
             self._scroll_to_highlighted_item(log, new_idx, len(provider_list))
             # Ensure input stays focused
             self.set_timer(0.05, self._ensure_input_focus)
+
     def action_select_highlighted_local_provider(self):
         """Select the currently highlighted local provider (Enter key)."""
         if not getattr(self, "_awaiting_local_provider", False):
@@ -147,6 +152,7 @@ class LocalModelsMixin:
             # Reset local model highlight index when entering a new provider
             self._local_highlighted_model_index = 0
             self.run_worker(self._show_local_provider_models(provider_id, log))
+
     def action_navigate_local_model_up(self):
         """Navigate to previous local model (arrow up)."""
         if not getattr(self, "_awaiting_local_model", False):
@@ -165,6 +171,7 @@ class LocalModelsMixin:
             self._scroll_to_highlighted_local_model(log, new_idx)
             # Ensure input stays focused
             self.set_timer(0.05, self._ensure_input_focus)
+
     def action_navigate_local_model_down(self):
         """Navigate to next local model (arrow down)."""
         if not getattr(self, "_awaiting_local_model", False):
@@ -183,6 +190,7 @@ class LocalModelsMixin:
             self._scroll_to_highlighted_local_model(log, new_idx)
             # Ensure input stays focused
             self.set_timer(0.05, self._ensure_input_focus)
+
     def action_select_highlighted_local_model(self):
         """Select the currently highlighted local model (Enter key)."""
         if not getattr(self, "_awaiting_local_model", False):
@@ -200,9 +208,11 @@ class LocalModelsMixin:
                 log = self.query_one("#log", ConversationLog)
                 self._awaiting_local_model = False
                 self._connect_local_mode(provider_id, model_id, log)
+
     @staticmethod
     def _load_local_recipes() -> dict[str, LocalRecipe]:
         from superqode.app_main import SuperQodeApp
+
         recipes: dict[str, LocalRecipe] = {}
         for directory in SuperQodeApp._recipe_dirs():
             if not directory.exists():
@@ -214,10 +224,13 @@ class LocalModelsMixin:
                 if recipe:
                     recipes[recipe.name] = recipe
         return recipes
+
     @staticmethod
     def _local_provider_completion_candidates() -> list[PromptCompletionCandidate]:
         from superqode.app_main import SuperQodeApp
+
         return SuperQodeApp._provider_completion_candidates(local=True)
+
     @staticmethod
     def _local_skill_names() -> list[str]:
         try:
@@ -226,9 +239,11 @@ class LocalModelsMixin:
             return [skill.name for skill in load_skills(Path.cwd()).values()]
         except Exception:
             return []
+
     @staticmethod
     def _all_local_skill_names() -> list[str]:
         from superqode.app_main import SuperQodeApp
+
         names = set(SuperQodeApp._local_skill_names())
         skills_root = Path.cwd() / ".agents" / "skills"
         if not skills_root.exists():
@@ -248,6 +263,7 @@ class LocalModelsMixin:
                         break
             names.add(name)
         return sorted(names)
+
     @staticmethod
     def _local_provider_ids() -> list[str]:
         try:
@@ -260,6 +276,7 @@ class LocalModelsMixin:
             ]
         except Exception:
             return []
+
     def _pin_local_prompt_to_input(
         self,
         placeholder: str,
@@ -283,6 +300,7 @@ class LocalModelsMixin:
                 self.notify(notify, severity="warning", timeout=6)
             except Exception:
                 pass
+
     def _should_show_thinking_for_local(self, text: str) -> bool:
         """Determine if a thinking log should be shown for local models.
 
@@ -343,6 +361,7 @@ class LocalModelsMixin:
         # Only show explicit AgentLoop status messages and tool status, everything else is noise
         # This includes all model thinking content, code lines, and verbose output
         return False
+
     def _handle_local_provider_selection(self, selection: str, log: ConversationLog):
         """Handle local provider selection from :connect local picker."""
         # Check for _local_provider_list (from :connect local command)
@@ -381,6 +400,7 @@ class LocalModelsMixin:
                 return True  # Return True to prevent further processing
 
         return False
+
     def _handle_local_model_selection(self, selection: str, log: ConversationLog):
         """Handle local model selection from :connect local picker."""
         if not hasattr(self, "_local_selected_provider"):
@@ -428,6 +448,7 @@ class LocalModelsMixin:
         self._awaiting_local_model = False
         self._connect_local_mode(provider_id, model, log)
         return True
+
     def _local_provider_host(self, provider: str) -> str:
         import os
 
@@ -446,6 +467,7 @@ class LocalModelsMixin:
         if provider == "tgi":
             return os.getenv("TGI_HOST", "http://127.0.0.1:8080/v1")
         return ""
+
     async def _test_local_connection(
         self,
         provider: str,
@@ -571,6 +593,7 @@ class LocalModelsMixin:
             # Ensure focus returns to input even after error
             # Use set_timer since we're in the app's event loop, not a separate thread
             self.set_timer(0.1, self._ensure_input_focus)
+
     async def _warmup_local_generation(
         self,
         provider: str,
@@ -627,6 +650,7 @@ class LocalModelsMixin:
         elapsed = time.monotonic() - started
         log.add_success(f"✓ Local model warm — {elapsed:.1f}s")
         log.add_info("Ready to chat! Type your message below.")
+
     def _connect_local_cmd(self, args: str, log: ConversationLog):
         """Handle :connect local command - Interactive local provider/model picker."""
         args = args.strip()
@@ -687,6 +711,7 @@ class LocalModelsMixin:
 
         # Now show the provider picker
         self._show_local_provider_picker(log)
+
     def _connect_local_mode(self, provider: str, model: str, log: ConversationLog):
         """Connect to LOCAL mode with specified provider/model.
 
@@ -728,11 +753,13 @@ class LocalModelsMixin:
         # Local providers use the same connection mechanism as BYOK
         # but are identified by ProviderCategory.LOCAL
         self._connect_byok_mode(provider, model, log)
+
     @staticmethod
     def _local_serve_command(engine: str, model: str) -> str:
         import shlex
 
         return f":local serve {engine} --model {shlex.quote(model)}"
+
     @staticmethod
     def _native_local_server_command(
         engine: str,
@@ -816,6 +843,7 @@ class LocalModelsMixin:
             return shlex.join(cmd)
 
         return q(f":local serve {engine}")
+
     def _prompt_local_connect_start(
         self, provider: str, engine: str, model: str, log: ConversationLog
     ) -> None:
@@ -875,6 +903,7 @@ class LocalModelsMixin:
             log,
             notify=f"{engine} is stopped. Start it yourself, or press Enter for help.",
         )
+
     def _handle_local_connect_start_input(self, text: str, log: ConversationLog) -> bool:
         pending = getattr(self, "_awaiting_local_connect_start", None)
         if not pending:
@@ -922,6 +951,7 @@ class LocalModelsMixin:
         self._reset_input_placeholder()
         self.run_worker(self._start_local_then_connect(provider, engine, model, log))
         return True
+
     async def _start_local_then_connect(
         self, provider: str, engine: str, model: str, log: ConversationLog
     ):
@@ -976,6 +1006,7 @@ class LocalModelsMixin:
         # llama-server serves the GGUF under its basename; MLX serves the HF id.
         connect_model = _Path(model).name if engine == "llama.cpp" else model
         self._call_ui(self._connect_byok_mode, provider, connect_model, log)
+
     def _show_local_provider_picker(self, log: ConversationLog, clear_log: bool = True):
         """Show interactive local provider picker with discovery.
 
@@ -1186,6 +1217,7 @@ class LocalModelsMixin:
 
         # Ensure input stays focused for keyboard navigation
         self.set_timer(0.05, self._ensure_input_focus)
+
     async def _show_local_provider_models(self, provider_id: str, log: ConversationLog):
         """Show models for a local provider by discovering them."""
         from superqode.providers.registry import PROVIDERS
@@ -1503,6 +1535,7 @@ class LocalModelsMixin:
 
         # Ensure input stays focused for keyboard navigation
         self.set_timer(0.05, self._ensure_input_focus)
+
     def _redraw_local_provider_models(self, log: ConversationLog):
         """Redraw the local provider models list with updated highlighting.
 
@@ -1661,6 +1694,7 @@ class LocalModelsMixin:
         log.write(t)
         log.scroll_home(animate=False)
         log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
+
     def _format_local_smoke_result(self, payload: dict) -> Text:
         """Render local provider smoke result for TUI."""
         t = Text()
@@ -1742,6 +1776,7 @@ class LocalModelsMixin:
             t.append(" to run a real completion\n", style=THEME["muted"])
 
         return t
+
     def _local_cmd(self, args: str, log: ConversationLog):
         """Local Agentic Coding stack commands: doctor and packs."""
         sub = (args or "").strip().lower()
@@ -1763,6 +1798,7 @@ class LocalModelsMixin:
             self._show_command_output(log, t)
         else:
             log.add_info("Usage: :local [doctor|packs]")
+
     async def _run_local_doctor(self, log: ConversationLog):
         """Run the Local Stack Doctor off the event loop and render its report."""
         import asyncio as _asyncio
@@ -1786,6 +1822,7 @@ class LocalModelsMixin:
         t.append("\n  Generate a tuned harness: ", style=THEME["muted"])
         t.append("superqode local doctor --generate harness.yaml\n", style=THEME["cyan"])
         self._show_command_output(log, t)
+
     def _local_cmd(self, args: str, log: ConversationLog):
         """Handle :local command - Manage local LLM providers."""
         args = args.strip()
@@ -1902,6 +1939,7 @@ class LocalModelsMixin:
                 log.add_error(f"Could not parse :local arguments: {exc}")
                 return
             self._run_cli_passthrough(["local", *tokens], log, "Local command")
+
     @staticmethod
     def _parse_local_kv_args(subargs: str) -> dict:
         import shlex
@@ -1954,6 +1992,7 @@ class LocalModelsMixin:
                 opts["_pos"].append(tok)
         opts.pop("_expect", None)
         return opts
+
     async def _local_init(self, subargs: str, log: ConversationLog):
         """Run the MVP local setup path from the TUI."""
         import asyncio
@@ -2035,6 +2074,7 @@ class LocalModelsMixin:
         t.append("  Start coding with: ", style=THEME["muted"])
         t.append(f"superqode --harness {output}\n", style=THEME["cyan"])
         self._show_command_output(log, t)
+
     async def _local_setup(self, subargs: str, log: ConversationLog):
         """Show the non-mutating local model setup guide from the TUI."""
         import asyncio
@@ -2065,6 +2105,7 @@ class LocalModelsMixin:
                 style = f"bold {THEME['cyan']}"
             t.append(f"  {line}\n", style=style)
         self._show_command_output(log, t)
+
     async def _local_migrate(self, subargs: str, log: ConversationLog):
         """Show a non-mutating local migration plan from the TUI."""
         import asyncio
@@ -2097,6 +2138,7 @@ class LocalModelsMixin:
             style = f"bold {THEME['text']}" if line.startswith("SuperQode") else THEME["text"]
             t.append(f"  {line}\n", style=style)
         self._show_command_output(log, t)
+
     async def _local_pack_init(self, subargs: str, log: ConversationLog):
         """Create or preview a project-owned model policy pack from the TUI."""
         import asyncio
@@ -2143,6 +2185,7 @@ class LocalModelsMixin:
                 style=THEME["muted"],
             )
         self._show_command_output(log, t)
+
     async def _local_build(self, subargs: str, log: ConversationLog):
         """Run the non-live local harness builder from the TUI."""
         import asyncio
@@ -2179,6 +2222,7 @@ class LocalModelsMixin:
             style = f"bold {THEME['text']}" if line.startswith("SuperQode") else THEME["text"]
             t.append(f"  {line}\n", style=style)
         self._show_command_output(log, t)
+
     async def _local_smoke(self, subargs: str, log: ConversationLog):
         """Run the non-destructive local coding readiness test from the TUI."""
         import asyncio
@@ -2212,6 +2256,7 @@ class LocalModelsMixin:
         for line in render_smoke(report).splitlines():
             t.append(f"  {line}\n", style=THEME["text"])
         self._show_command_output(log, t)
+
     async def _local_labs(self, subargs: str, log: ConversationLog):
         """Show trusted models.dev local labs in the TUI."""
         import asyncio
@@ -2259,6 +2304,7 @@ class LocalModelsMixin:
             if row.recommended_for_local and row.install_hint:
                 t.append(f"      install: {row.install_hint}\n", style=THEME["cyan"])
         self._show_command_output(log, t)
+
     async def _local_search(self, query: str, log: ConversationLog):
         """Search the trusted catalog for a model + how to get it, in the TUI.
 
@@ -2364,6 +2410,7 @@ class LocalModelsMixin:
         t.append("  For the full first-run path: ", style=THEME["muted"])
         t.append(f":local setup {query}\n", style=f"bold {THEME['cyan']}")
         self._call_ui(self._show_command_output, log, t)
+
     async def _local_warm(self, subargs: str, log: ConversationLog):
         """Warm a local model and show first-token latency in the TUI."""
         import asyncio
@@ -2420,6 +2467,7 @@ class LocalModelsMixin:
             style=THEME["text"],
         )
         self._show_command_output(log, t)
+
     async def _local_serve(self, subargs: str, log: ConversationLog):
         """Start a local model server from the TUI as a managed daemon."""
         import asyncio
@@ -2497,6 +2545,7 @@ class LocalModelsMixin:
         t.append("      Connect with: ", style=THEME["muted"])
         t.append(f":connect {engine}\n", style=THEME["success"])
         log.write(t)
+
     async def _local_servers(self, log: ConversationLog):
         """Show status of every known local server."""
         import asyncio
@@ -2524,6 +2573,7 @@ class LocalModelsMixin:
         t.append(":local serve <engine>", style=THEME["success"])
         t.append(" to start one\n", style=THEME["muted"])
         log.write(t)
+
     async def _local_stop(self, engine: str, log: ConversationLog):
         """Stop a server SuperQode started (adopted servers are left running)."""
         import asyncio
@@ -2538,6 +2588,7 @@ class LocalModelsMixin:
             log.add_info(f"Stopped {engine}")
         else:
             log.add_info(f"Nothing to stop for {engine} (not managed by SuperQode)")
+
     async def _render_local_server_state(self, engine: str, log: ConversationLog) -> bool:
         """Tell the developer whether the server is up, stopped, or not installed.
 
@@ -2786,6 +2837,7 @@ class LocalModelsMixin:
         t.append(f"{readiness.start_hint}\n", style=f"bold {THEME['success']}")
         log.write(t)
         return False
+
     def _handle_local_server_start_input(self, text: str, log: ConversationLog) -> bool:
         """Handle the inline start prompt for a stopped local server.
 
@@ -2826,6 +2878,7 @@ class LocalModelsMixin:
         self._reset_input_placeholder()
         self.run_worker(self._start_local_server_then_list(engine, opts, log))
         return True
+
     def _handle_local_dep_install_input(self, text: str, log: ConversationLog) -> bool:
         """Handle the inline 'install mlx-lm?' prompt. Enter=install, n=skip."""
         engine = getattr(self, "_awaiting_local_dep_install", None)
@@ -2860,6 +2913,7 @@ class LocalModelsMixin:
         self._reset_input_placeholder()
         self.run_worker(self._install_local_dep_then_continue(engine, log))
         return True
+
     async def _install_local_dep_then_continue(self, engine: str, log: ConversationLog):
         """Install a missing engine dependency (mlx-lm), then re-list models."""
         import asyncio
@@ -2896,6 +2950,7 @@ class LocalModelsMixin:
 
         # Re-enter the picker: MLX is now installed, so it lists models.
         await self._show_local_provider_models(engine, log)
+
     async def _start_local_server_then_list(self, engine: str, opts: dict, log: ConversationLog):
         """Start a local server from the inline prompt, then list its models."""
         import asyncio
@@ -2954,6 +3009,7 @@ class LocalModelsMixin:
 
         # Now that the server is up, list its models in the same picker.
         await self._show_local_provider_models(engine, log)
+
     async def _local_status(self, log: ConversationLog):
         """Show status of all local providers."""
         from superqode.providers.local import (
@@ -3015,6 +3071,7 @@ class LocalModelsMixin:
 
         # We are running in the app's event loop here, so write directly
         log.write(t)
+
     async def _local_scan(self, log: ConversationLog):
         """Scan for running local providers."""
         from superqode.providers.local import get_discovery_service
@@ -3041,6 +3098,7 @@ class LocalModelsMixin:
             t.append("  Ports scanned: 11434, 1234, 8000, 8080, 30000, 5000\n", style=THEME["dim"])
 
         log.write(t)
+
     async def _local_models(self, log: ConversationLog):
         """List all models from discovered local providers."""
         from superqode.providers.local import (
@@ -3097,6 +3155,7 @@ class LocalModelsMixin:
         t.append(" to test tool calling\n", style=THEME["muted"])
 
         log.write(t)
+
     async def _local_test(self, model_id: str, log: ConversationLog):
         """Test tool calling capability for a model."""
         from superqode.providers.local import (
@@ -3152,6 +3211,7 @@ class LocalModelsMixin:
             t2.append(f"    Note: {result.notes}\n", style=THEME["muted"])
 
         log.write(t2)
+
     async def _local_info(self, model_id: str, log: ConversationLog):
         """Show detailed info about a local model."""
         from superqode.providers.local import (
@@ -3202,6 +3262,7 @@ class LocalModelsMixin:
             t.append(f"  ○ Model not found\n", style=THEME["error"])
 
         log.write(t)
+
     def _local_recommend(self, log: ConversationLog):
         """Show recommended local models for coding."""
         from superqode.providers.local import get_recommended_coding_models

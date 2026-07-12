@@ -37,6 +37,7 @@ class HelperClipboardMixin:
             except Exception:
                 continue
         return False
+
     def _copy_text_to_clipboard(self, text: str) -> bool:
         """Copy ``text`` to the clipboard as reliably as possible.
 

@@ -16,6 +16,8 @@ class PromptCompletionCandidate:
     label: str
     description: str = ""
     kind: str = "command"
+
+
 @dataclass
 class LocalRecipe:
     """A local reusable TUI workflow recipe."""

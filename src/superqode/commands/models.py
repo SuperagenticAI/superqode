@@ -102,6 +102,8 @@ def models(
         return
 
     click.echo(render_models_table(shown, total=total))
+
+
 @models.command("providers")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def models_providers(json_output):
@@ -131,6 +133,8 @@ def models_providers(json_output):
         )
         return
     click.echo(render_providers_table())
+
+
 @models.command("show")
 @click.argument("model_ref")
 def models_show(model_ref):
@@ -176,12 +180,16 @@ def models_show(model_ref):
         click.echo(
             f"\n({len(matches)} models matched; showing first. Use provider/model to disambiguate.)"
         )
+
+
 def _fmt_bytes(n: int) -> str:
     for unit in ("B", "KB", "MB", "GB", "TB"):
         if n < 1024 or unit == "TB":
             return f"{n:.1f}{unit}" if unit != "B" else f"{n}B"
         n /= 1024
     return f"{n:.1f}TB"
+
+
 @models.command("hub")
 @click.argument("query", required=False, default="")
 @click.option("--gguf", is_flag=True, help="Only GGUF models (Ollama / llama.cpp)")
@@ -243,6 +251,8 @@ def models_hub(query, gguf, mlx, sort, limit, json_output):
     for row in rows:
         click.echo("  ".join(str(c).ljust(widths[i]) for i, c in enumerate(row)))
     click.echo(f"\n{len(rows)} model(s). Download: superqode models download <model-id>")
+
+
 @models.command("download")
 @click.argument("repo_id", metavar="REPO_ID")
 @click.option(
@@ -340,6 +350,8 @@ def models_download(repo_id, target, quant, target_dir, ollama_name, register, y
                 click.echo(f"  Use via the transformers/HF-local provider, or serve with vLLM/TGI.")
     except HFNotInstalled as exc:
         raise click.ClickException(str(exc))
+
+
 @models.command("convert-mlx")
 @click.argument("hf_path", metavar="HF_PATH")
 @click.option("--q-bits", type=click.Choice(["4", "8"]), default="8", show_default=True)
@@ -375,6 +387,8 @@ def models_convert_mlx(hf_path, q_bits, no_quantize, out_dir, upload_repo):
     click.echo(
         f"  Use it: superqode models download {upload_repo or path} --to mlx  (then connect to mlx)"
     )
+
+
 @models.command("cached")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def models_cached(json_output):
@@ -410,6 +424,8 @@ def models_cached(json_output):
         total += r.size_bytes
         click.echo(f"  {r.repo_id.ljust(width)}  {r.size_display:>9}  ({r.nb_files} files)")
     click.echo(f"\n{len(repos)} repo(s).  Remove with: superqode models rm <substring>")
+
+
 @models.command("rm")
 @click.argument("pattern", metavar="PATTERN")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation")

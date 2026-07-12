@@ -52,6 +52,7 @@ class FactoryMixin:
             t.append(f"  {command:<62}", style=f"bold {THEME['cyan']}")
             t.append(f"{desc}\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _factory_status(self, tokens: list[str], log: ConversationLog) -> None:
         target = tokens[0] if tokens else ""
         try:
@@ -100,6 +101,7 @@ class FactoryMixin:
         t.append(":factory switch-harness", style=THEME["cyan"])
         t.append(".\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _factory_policy(self, log: ConversationLog) -> None:
         try:
             factory_obj = self._factory()
@@ -121,6 +123,7 @@ class FactoryMixin:
                 t.append(f"  prefer={prefer}", style=THEME["dim"])
             t.append("\n")
         self._show_command_output(log, t)
+
     def _factory_init_policy(self, tokens: list[str], log: ConversationLog) -> None:
         force = any(token.lower() == "--force" for token in tokens)
         try:
@@ -129,6 +132,7 @@ class FactoryMixin:
             log.add_error(f"Could not initialize factory policy: {exc}")
             return
         log.add_success(f"Factory policy ready: {path}")
+
     def _factory_routes(self, log: ConversationLog) -> None:
         try:
             routes = self._factory().routes()
@@ -144,6 +148,7 @@ class FactoryMixin:
             t.append(f"{tags}\n", style=THEME["purple"])
             t.append(f"    {route.get('description')}\n", style=THEME["muted"])
         self._show_command_output(log, t)
+
     def _factory_mode(self, tokens: list[str], log: ConversationLog) -> None:
         if not tokens:
             self._factory_routes(log)
@@ -156,6 +161,7 @@ class FactoryMixin:
             log.add_error(f"Could not set factory mode: {exc}")
             return
         log.add_success(f"Factory mode for {payload['session_id']} -> {mode}")
+
     def _factory_switch_model(self, tokens: list[str], log: ConversationLog) -> None:
         if not tokens:
             log.add_info("Usage: :factory switch-model <provider/model> [session-id]")
@@ -171,6 +177,7 @@ class FactoryMixin:
         log.add_info("Factory intent recorded for the next turn. Use :factory to inspect it.")
         for warning in payload.get("privacy_warnings") or []:
             log.add_warning(warning)
+
     def _factory_switch_harness(self, tokens: list[str], log: ConversationLog) -> None:
         if not tokens:
             log.add_info("Usage: :factory switch-harness <harness> [session-id]")
@@ -184,6 +191,7 @@ class FactoryMixin:
             return
         log.add_success(f"Session {payload['session']['session_id']} harness -> {harness}")
         log.add_info("Factory harness intent recorded for the next turn.")
+
     def _factory_fork_model(self, tokens: list[str], log: ConversationLog) -> None:
         positionals, options = self._parse_switchboard_options(tokens)
         source = positionals[0] if positionals else ""
@@ -204,6 +212,7 @@ class FactoryMixin:
             log.add_error(f"Could not fork model worker: {exc}")
             return
         log.add_success(f"Forked model worker -> {payload['fork']['session']['session_id']}")
+
     def _factory_fork_harness(self, tokens: list[str], log: ConversationLog) -> None:
         positionals, options = self._parse_switchboard_options(tokens)
         source = positionals[0] if positionals else ""
@@ -224,6 +233,7 @@ class FactoryMixin:
             log.add_error(f"Could not fork harness worker: {exc}")
             return
         log.add_success(f"Forked harness worker -> {payload['fork']['session']['session_id']}")
+
     def _factory_lineage(self, tokens: list[str], log: ConversationLog) -> None:
         target = tokens[0] if tokens else ""
         try:

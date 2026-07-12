@@ -51,11 +51,13 @@ class HelperMessageQueueMixin:
         except Exception:
             pass
         self._render_queued_input()
+
     def _clear_message_queue(self, log: ConversationLog | None = None) -> None:
         self._typeahead_queue = []
         self._render_queued_input()
         if log is not None:
             log.add_info("Cleared the queued messages.")
+
     def _drain_message_queue(self) -> None:
         """Send the next queued message if the agent is idle."""
         queue = getattr(self, "_typeahead_queue", [])
