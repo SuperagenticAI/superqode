@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.17] - 2026-07-12
+
 ### Fixed
 
 - **Conservative fast-chat routing** - Only greetings, social openers, and runtime identity questions now disable repository tools. Open-ended questions such as "Which tests are failing?" remain on the tool-capable path, and empty model responses are no longer replaced with a fabricated greeting.
@@ -14,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Accurate Grok ownership and discovery** - Current help surfaces identify Grok Build as xAI's ACP harness and `:grok api` as the native SuperQode opt-in. CLI model discovery runs off the UI thread, ignores failed command output, and no longer invents capabilities for unknown models.
 - **Codex protocol fallback** - Safe Codex metadata reads fall back from a newer incompatible local CLI to the SDK-pinned app-server. Set `SUPERQODE_CODEX_PREFER_LOCAL_CLI=0` to use the pinned server from startup; agent turns are never replayed automatically.
 - **Release tag gate** - Tag builds now wait for lint, tests, and packaging, then verify the tag matches all package and ACP release metadata.
+
+### Changed
+
+- **Release metadata** - Bumped the package version, runtime `__version__`, lockfile package entry, and ACP registry metadata to `0.2.17`.
 
 ## [0.2.16] - 2026-07-11
 

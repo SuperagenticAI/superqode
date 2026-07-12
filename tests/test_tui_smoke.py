@@ -154,8 +154,11 @@ class FakeACPClient:
 
 
 def render_plain(renderable) -> str:
-    console = Console(record=True, width=140)
-    console.print(renderable)
+    # soft_wrap=True maps to no_wrap + overflow=ignore so long command lines and
+    # helper phrases are not mid-word wrapped in export_text (width-sensitive
+    # substring asserts in this file would otherwise flake on narrow terminals).
+    console = Console(record=True, width=140, force_terminal=True)
+    console.print(renderable, soft_wrap=True)
     return console.export_text()
 
 
