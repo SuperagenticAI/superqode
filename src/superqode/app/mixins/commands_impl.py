@@ -1000,10 +1000,20 @@ class CommandImplMixin:
                         "subscription route is unavailable."
                     )
                     log.add_info("Install it:  npm i -g @openai/codex")
-                else:
-                    log.add_error(
-                        "Codex is installed but not signed in (~/.codex/auth.json missing)."
-                    )
+                    log.add_info("Sign in with `codex login`, then re-run :connect codex.")
+                    log.add_info("No subscription? Use BYOK instead: :connect byok openai <model>")
+                    return
+                # Codex is installed but signed out: launch `codex login`
+                # (device auth) and auto-resume the connect once it lands.
+                started = self._begin_subscription_login(
+                    "codex",
+                    log,
+                    on_success=lambda: self._runtime_cmd("codex-sdk", log),
+                    reason="Codex is installed but not signed in (~/.codex/auth.json missing).",
+                )
+                if started:
+                    return
+                log.add_error("Codex is installed but not signed in (~/.codex/auth.json missing).")
                 log.add_info("Sign in with `codex login`, then re-run :connect codex.")
                 log.add_info("No subscription? Use BYOK instead: :connect byok openai <model>")
                 return
@@ -1231,7 +1241,7 @@ class CommandImplMixin:
                 model = model[len(prefix) :]
                 break
 
-        if not self._import_grok_token(log):
+        if not self._import_grok_token(log, on_login_success=lambda: self._grok_api_cmd(rest, log)):
             return
 
         log.add_info(

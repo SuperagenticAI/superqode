@@ -33,6 +33,52 @@ async def test_status_setters_update_mounted_status_bar():
         assert "gpt-5.5" in rendered  # full, not shortened
 
 
+async def test_mouse_drag_selection_copies_to_clipboard():
+    """Dragging the mouse over the answer must auto-copy it to the clipboard.
+
+    Regression guard: ``on_text_selected`` is dispatched by Textual's name-based
+    convention. Decorating it with ``@on(events.TextSelected)`` on a plain mixin
+    silently disables it (the refactor that moved it into a mixin broke
+    mouse-drag copy this way). This drives a real drag through the mounted app
+    and asserts the clipboard write actually happens.
+    """
+    from textual import events
+    from textual.geometry import Offset
+
+    copies: list[str] = []
+    app = SuperQodeApp()
+    app._copy_text_to_clipboard = lambda text: (copies.append(text), True)[1]
+
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        app._welcome_active = False
+        log = app.query_one("#log", ConversationLog)
+        log.clear()
+        log.reset_response_stream("qwen")
+        log.write_final_response("Mouse selectable answer body here.", agent="qwen")
+        await pilot.pause()
+        await pilot.pause()
+
+        ty = next(
+            y
+            for y in range(len(log.lines))
+            if "selectable answer" in "".join(s.text for s in log.render_line(y))
+        )
+        r = log.region
+        sy = r.y + ty - log.scroll_offset[1]
+        x0 = r.x + 4
+        await pilot._post_mouse_events([events.MouseDown], offset=Offset(x0, sy), button=1)
+        await pilot._post_mouse_events([events.MouseMove], offset=Offset(x0 + 10, sy), button=1)
+        await pilot._post_mouse_events(
+            [events.MouseMove, events.MouseUp], offset=Offset(x0 + 24, sy), button=1
+        )
+        for _ in range(5):
+            await pilot.pause()
+
+        assert copies, "mouse-drag selection did not trigger a clipboard copy"
+        assert "select" in copies[0]  # copied a chunk of the answer text
+
+
 async def test_status_runtime_hides_builtin():
     """builtin is the default — no runtime badge clutter for it."""
     app = SuperQodeApp()

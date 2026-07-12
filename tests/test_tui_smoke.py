@@ -57,6 +57,9 @@ class FakeLog:
     def add_success(self, text):
         self.items.append(text)
 
+    def add_meta(self, text, icon="·"):
+        self.items.append(text)
+
     def add_error(self, text):
         self.items.append(text)
 
@@ -767,6 +770,7 @@ def test_connection_summary_renders_compact_local_card():
 
 def test_colorful_status_bar_shows_local_provider_and_full_model():
     from superqode.app.widgets import ColorfulStatusBar
+    from superqode import __version__
 
     bar = ColorfulStatusBar()
     bar.update_byok_status("ollama", "gemma4:12b-mlx")
@@ -776,6 +780,18 @@ def test_colorful_status_bar_shows_local_provider_and_full_model():
     assert "ollama" in plain
     assert "gemma4:12b-mlx" in plain
     assert "CHAT" in plain
+    assert f"v{__version__}" in plain
+
+
+def test_colorful_status_bar_keeps_context_out_of_transcript():
+    from superqode.app.widgets import ColorfulStatusBar
+
+    bar = ColorfulStatusBar()
+    bar.update_context_usage(12_000, 200_000)
+
+    plain = bar.render().plain
+    assert "ctx 6%" in plain
+    assert "12K/200K" in plain
 
 
 def test_work_command_renders_last_run_trace():
@@ -3049,12 +3065,80 @@ def test_conversation_log_clearly_separates_question_and_answer():
     log.write_final_response("Chat skips repo context.\n\nBuild uses tools.", agent="ollama/qwen")
 
     rendered = "\n".join(render_plain(item) for item in writes)
-    assert "YOU" in rendered
+    assert "▌ You" in rendered
     assert "How does chat mode differ from build mode?" in rendered
-    assert "AGENT" in rendered
+    assert "✦" in rendered  # prominent answer marker
     assert "ollama/qwen" in rendered
     assert rendered.count("Chat skips repo context.") == 1
     assert "Build uses tools." in rendered
+
+
+def test_user_turn_uses_compact_transcript_style():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.add_user("First line\nSecond line")
+
+    assert len(writes) == 1
+    rendered = render_plain(writes[0])
+    assert "▌ You" in rendered
+    assert "╭" not in rendered
+    assert "╰" not in rendered
+    assert "  ▌ You   First line" in rendered
+    assert "  ▌       Second line" in rendered
+
+
+def test_add_meta_renders_dim_chrome_line():
+    """Non-context transcript chrome uses the quiet add_meta line."""
+    log = ConversationLog()
+    feedback = []
+    log._write_feedback = lambda content, *a, **k: feedback.append(content)
+
+    log.add_meta("ACP mode: code")
+
+    rendered = "\n".join(render_plain(item) for item in feedback)
+    assert "ACP mode: code" in rendered
+    # Recorded as meta, not as loud info/success.
+    assert log._messages[-1][0] == "meta"
+
+
+def test_final_outcome_displays_streamed_token_count():
+    app = make_app()
+    app.set_timer = lambda *args, **kwargs: None
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    app._show_final_outcome(
+        "The answer.",
+        "BYOK ollama/qwen",
+        {"duration": 1.2, "total_tokens": 1540},
+        log,
+    )
+
+    rendered = "\n".join(render_plain(item) for item in writes)
+    assert "✦ Answer · BYOK ollama/qwen" in rendered
+    assert rendered.index("The answer.") < rendered.index("Done")
+    assert rendered.index("Done") < rendered.index("1,540 toks")
+    assert "1,540 toks" in rendered
+
+
+def test_answer_body_is_indented_under_marker():
+    """The answer body renders indented so it groups apart from flush-left chrome."""
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.reset_response_stream("qwen")
+    log.write_final_response("The result is 42.", agent="qwen")
+
+    rendered = [render_plain(item) for item in writes]
+    joined = "\n".join(rendered)
+    assert "✦ Answer · qwen" in joined  # prominent, explicit answer marker
+    # Body block is left-padded (indented) relative to the flush-left header.
+    body = next(r for r in rendered if "The result is 42." in r)
+    assert body.startswith("  ")
 
 
 def test_final_response_does_not_duplicate_fully_streamed_answer():
@@ -3068,7 +3152,7 @@ def test_final_response_does_not_duplicate_fully_streamed_answer():
 
     rendered = "\n".join(render_plain(item) for item in writes)
     assert rendered.count("Already shown.") == 1
-    assert rendered.count("AGENT") == 1
+    assert rendered.count("✦") == 1  # answer header renders exactly once
 
 
 def test_streaming_renders_completed_paragraphs_live():
@@ -4433,6 +4517,7 @@ def test_tui_local_warmup_sends_tiny_generation(monkeypatch):
     import superqode.providers.gateway.litellm_gateway as gateway_mod
 
     app = make_app()
+    app._call_ui = lambda func, *args: func(*args)
     log = FakeLog()
     calls = []
 
@@ -4450,7 +4535,8 @@ def test_tui_local_warmup_sends_tiny_generation(monkeypatch):
     assert calls[0]["model"] == "qwen3:8b"
     assert calls[0]["max_tokens"] == 4
     rendered = "\n".join(str(item) for item in log.items)
-    assert "Local model warm" in rendered
+    assert "Ready · ollama/qwen3:8b · warm" in rendered
+    assert "Warming local model" not in rendered
 
 
 def test_tui_local_build(monkeypatch, tmp_path):
@@ -5068,6 +5154,60 @@ def test_codex_connect_without_cli_shows_install_steps(tmp_path, monkeypatch):
     assert "npm i -g @openai/codex" in joined
     assert "codex login" in joined
     assert ":connect byok openai" in joined
+
+
+def test_codex_connect_when_installed_but_signed_out_launches_login(tmp_path, monkeypatch):
+    """:connect codex with the CLI installed but no auth should launch login."""
+    import superqode.app_main as am
+    import superqode.runtime as rt
+    from superqode.runtime import RuntimeInfo
+
+    monkeypatch.setenv("HOME", str(tmp_path))  # no ~/.codex/auth.json
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("CODEX_API_KEY", raising=False)
+    monkeypatch.setattr(
+        am.shutil, "which", lambda name: "/usr/bin/codex" if name == "codex" else None
+    )
+    monkeypatch.setattr(
+        rt,
+        "list_runtimes",
+        lambda: [
+            RuntimeInfo(
+                name="codex-sdk",
+                description="Codex SDK runtime",
+                installed=True,
+                install_hint=None,
+                implemented=True,
+            )
+        ],
+    )
+
+    class _Log:
+        def __init__(self):
+            self.lines = []
+
+        def add_error(self, msg):
+            self.lines.append(msg)
+
+        def add_info(self, msg):
+            self.lines.append(msg)
+
+    class _Stub:
+        def __init__(self):
+            self.login_launched = []
+
+        def _begin_subscription_login(
+            self, product, log, *, on_success=None, reason="", force=False
+        ):
+            self.login_launched.append({"product": product, "reason": reason})
+            return True
+
+    stub, log = _Stub(), _Log()
+    am.SuperQodeApp._runtime_cmd(stub, "codex-sdk", log)
+
+    # Installed + signed out → interactive login launched, connect not attempted.
+    assert len(stub.login_launched) == 1
+    assert stub.login_launched[0]["product"] == "codex"
 
 
 def test_calm_mode_skips_partial_tool_output_chunks():

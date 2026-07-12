@@ -14,6 +14,7 @@ from superqode.providers.gateway.base import (
     Message,
     StreamChunk,
     ToolDefinition,
+    Usage,
 )
 from superqode.tools.base import ToolRegistry
 
@@ -21,8 +22,13 @@ from superqode.tools.base import ToolRegistry
 class ScriptedGateway(GatewayInterface):
     """Gateway that returns a scripted sequence of responses."""
 
-    def __init__(self, responses: List[GatewayResponse]):
+    def __init__(
+        self,
+        responses: List[GatewayResponse],
+        stream_chunks: Optional[List[StreamChunk]] = None,
+    ):
         self.responses = responses
+        self.stream_chunks = stream_chunks
         self.calls: List[List[Message]] = []
         self.tools_seen: List[Optional[List[ToolDefinition]]] = []
 
@@ -56,6 +62,10 @@ class ScriptedGateway(GatewayInterface):
     ) -> AsyncIterator[StreamChunk]:
         self.calls.append(messages)
         self.tools_seen.append(tools)
+        if self.stream_chunks is not None:
+            for chunk in self.stream_chunks:
+                yield chunk
+            return
         yield StreamChunk(content="streamed")
 
     async def test_connection(self, provider: str, model: Optional[str] = None) -> Dict[str, Any]:
@@ -289,6 +299,31 @@ async def test_local_simple_chat_streaming_fast_path(monkeypatch):
     assert chunks == ["streamed"]
     assert gateway.tools_seen == [None]
     assert [m.role for m in gateway.calls[0]] == ["system", "user"]
+
+
+@pytest.mark.asyncio
+async def test_streaming_run_exposes_provider_token_usage():
+    gateway = ScriptedGateway(
+        [],
+        stream_chunks=[
+            StreamChunk(content="hello "),
+            StreamChunk(
+                content="world",
+                usage=Usage(prompt_tokens=1200, completion_tokens=340, total_tokens=1540),
+            ),
+        ],
+    )
+    loop = _loop(gateway)
+
+    chunks = [chunk async for chunk in loop.run_streaming("hi")]
+
+    assert "".join(chunks) == "hello world"
+    assert loop.last_stream_stats == {
+        "prompt_tokens": 1200,
+        "completion_tokens": 340,
+        "total_tokens": 1540,
+        "total_cost": 0.0,
+    }
 
 
 @pytest.mark.asyncio

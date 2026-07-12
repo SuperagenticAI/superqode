@@ -877,7 +877,9 @@ class ModelCatalogMixin:
         model connects grok-cli/<model> on the subscription without switching
         to the Grok CLI.
         """
-        if not self._import_grok_token(log):
+        if not self._import_grok_token(
+            log, on_login_success=lambda: self._show_grok_model_picker(log)
+        ):
             return
         self.run_worker(self._show_grok_model_picker_async(log), exclusive=False)
 

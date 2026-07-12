@@ -1733,13 +1733,12 @@ class DialogsMixin:
         # Store the response for :copy command
         self._last_response = response_text
 
-        # Header separator
+        # Dim chrome: a single subtle rule + quiet completion note, so the
+        # answer that follows is what stands out (not the separator).
         sep = Text()
         sep.append("\n")
-        sep.append("  ━" * 30 + "\n", style="#a855f7")
-        sep.append(f"  ✅ {name} ", style="bold #22c55e")
-        sep.append(f"completed in {duration:.1f}s\n", style="#71717a")
-        sep.append("  ━" * 30 + "\n", style="#a855f7")
+        sep.append("  " + "─" * 44 + "\n", style=THEME["dim"])
+        sep.append(f"  Done · {name} · {duration:.1f}s\n", style=THEME["dim"])
         log.write(sep)
 
         if response_text.strip():
@@ -1777,6 +1776,7 @@ class DialogsMixin:
         files_modified = summary.get("files_modified", [])
         files_read = summary.get("files_read", [])
         file_diffs = summary.get("file_diffs", {})  # NEW: Get diff data
+        total_tokens = int(summary.get("total_tokens", 0) or 0)
 
         # Only report files this turn actually changed (tracked by the agent).
         # We intentionally do NOT fall back to the ambient git working tree:
@@ -1784,19 +1784,28 @@ class DialogsMixin:
         # even when the repo already has unrelated uncommitted edits. Use
         # ``:diff`` or the Changes sidebar to inspect the full working tree.
 
-        # Keep prior turns in the log so users can scroll back through the
-        # whole conversation (PgUp/PgDn). Instead of wiping the view each turn,
-        # divide completed turns with a subtle separator.
         log.auto_scroll = True
+
+        # Commit any buffered streaming tail immediately beneath the answer
+        # marker. The completion summary belongs after the answer; placing it
+        # first made short buffered replies appear detached from their label.
+        if response_text.strip():
+            log.write_final_response(response_text, agent=name, success=True)
+
+        # Keep prior turns in the log so users can scroll back through the
+        # whole conversation (PgUp/PgDn). The subtle rule closes the answer and
+        # introduces its quiet completion metadata.
         separator = Text()
         separator.append("\n")
         separator.append("  " + "─" * 44 + "\n", style=SQ_COLORS.text_muted)
         log.write(separator)
 
+        # Dim chrome: this roll-up is SuperQode meta, not the answer — keep it
+        # quiet so the response above it stays the prominent thing.
         header = Text()
-        header.append("  Done", style=f"bold {SQ_COLORS.success}")
-        header.append("  •  ", style=SQ_COLORS.text_muted)
-        header.append(name, style=f"bold {SQ_COLORS.text_primary}")
+        header.append("  Done", style=SQ_COLORS.text_ghost)
+        header.append("  •  ", style=SQ_COLORS.text_ghost)
+        header.append(name, style=SQ_COLORS.text_muted)
 
         total_additions = sum(d.get("additions", 0) for d in file_diffs.values())
         total_deletions = sum(d.get("deletions", 0) for d in file_diffs.values())
@@ -1811,14 +1820,13 @@ class DialogsMixin:
             if total_additions > 0 or total_deletions > 0:
                 change_label += f" (+{total_additions}/-{total_deletions})"
             facts.append(change_label)
+        if total_tokens > 0:
+            facts.append(f"{total_tokens:,} toks")
         header.append("  •  ", style=SQ_COLORS.text_muted)
         header.append("  •  ".join(facts), style=SQ_COLORS.text_muted)
         header.append("\n\n")
 
         log.write(header)
-
-        if response_text.strip():
-            log.write_final_response(response_text, agent=name, success=True)
 
         # File changes are HIDDEN by default: a turn shows only a one-line
         # summary the user can expand. The full file panel and inline diffs
@@ -1842,21 +1850,6 @@ class DialogsMixin:
         elif files_modified:
             # Collapsed one-liner (normal and minimal modes).
             self._write_collapsed_changes_line(log, files_modified, file_diffs)
-
-        footer = Text()
-        footer.append("  Actions: ", style=SQ_COLORS.text_muted)
-        footer.append(":work", style=f"bold {SQ_COLORS.info}")
-        footer.append(" summary", style=SQ_COLORS.text_muted)
-        if files_modified:
-            footer.append("  •  ", style=SQ_COLORS.text_muted)
-            footer.append(":diff", style=f"bold {SQ_COLORS.info}")
-            footer.append(" changes", style=SQ_COLORS.text_muted)
-            footer.append("  •  ", style=SQ_COLORS.text_muted)
-            footer.append(":undo", style=f"bold {SQ_COLORS.info}")
-        footer.append("  •  ", style=SQ_COLORS.text_muted)
-        footer.append(":select response", style=f"bold {SQ_COLORS.info}")
-        footer.append("\n", style=SQ_COLORS.text_muted)
-        log.write(footer)
 
         # NEW: Trigger sidebar auto-navigation if files were modified
         if files_modified:

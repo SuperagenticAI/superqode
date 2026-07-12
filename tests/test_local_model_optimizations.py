@@ -453,6 +453,8 @@ async def test_mlx_stream_extracts_inline_tool_calls(monkeypatch):
     assert final.finish_reason == "tool_calls"
     assert final.tool_calls is not None
     assert final.tool_calls[0]["function"]["name"] == "list_directory"
+    assert final.usage is not None
+    assert final.usage.total_tokens == 2
 
 
 def test_extract_arguments_string_form_preserved():

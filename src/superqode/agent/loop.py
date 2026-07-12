@@ -2611,6 +2611,16 @@ class AgentLoop:
 
         Performance: Uses cached message conversion and parallel tool execution.
         """
+        # Per-run usage is exposed after the async iterator is exhausted so
+        # PureMode/TUI callers can render real provider token counts without
+        # changing the public text-chunk streaming contract.
+        self.last_stream_stats = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "total_cost": 0.0,
+        }
+
         fast_chat = self._use_fast_chat_path(user_message)
         # Resolve the real (loaded, for local) context window once so adaptive
         # compaction in this streaming run is sized correctly. Obvious local
@@ -2660,6 +2670,27 @@ class AgentLoop:
         auto_continues: int,
         fast_chat: bool = False,
     ) -> AsyncIterator[str]:
+        def record_usage(response_or_chunk) -> None:
+            usage = getattr(response_or_chunk, "usage", None)
+            if usage is not None:
+                prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+                completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+                total_tokens = int(getattr(usage, "total_tokens", 0) or 0)
+                if total_tokens <= 0:
+                    total_tokens = prompt_tokens + completion_tokens
+                self.last_stream_stats["prompt_tokens"] += prompt_tokens
+                self.last_stream_stats["completion_tokens"] += completion_tokens
+                self.last_stream_stats["total_tokens"] += total_tokens
+
+            cost = getattr(response_or_chunk, "cost", None)
+            if cost is not None:
+                total_cost = float(getattr(cost, "total_cost", 0.0) or 0.0)
+                if total_cost == 0.0:
+                    total_cost = float(getattr(cost, "input_cost", 0.0) or 0.0) + float(
+                        getattr(cost, "output_cost", 0.0) or 0.0
+                    )
+                self.last_stream_stats["total_cost"] += total_cost
+
         _cap = self.config.max_iterations
         while _cap <= 0 or iterations < _cap:
             # Check for cancellation
@@ -2717,6 +2748,7 @@ class AgentLoop:
             tool_calls = []
             had_content = False
             stream_finish_reason: Optional[str] = None
+            stream_usage_chunk = None
 
             # Buffer for accumulating thinking content chunks
             # Local models stream thinking in tiny pieces - accumulate for readable display
@@ -2776,6 +2808,15 @@ class AgentLoop:
                     if chunk.finish_reason:
                         stream_finish_reason = chunk.finish_reason
 
+                    # OpenAI-compatible streams normally attach usage to the
+                    # final chunk. Keep the latest value and count it once per
+                    # provider request rather than once per emitted text chunk.
+                    if chunk.usage is not None or chunk.cost is not None:
+                        stream_usage_chunk = chunk
+
+                if stream_usage_chunk is not None:
+                    record_usage(stream_usage_chunk)
+
                 # Flush any remaining thinking content after streaming completes
                 if thinking_buffer.strip() and self.on_thinking:
                     await self.on_thinking(thinking_buffer.strip())
@@ -2802,6 +2843,7 @@ class AgentLoop:
                         reasoning_effort=self.config.reasoning_effort,
                         **self._profile_kwargs(),
                     )
+                    record_usage(fallback)
                     if fallback.tool_calls:
                         tool_calls.extend(fallback.tool_calls)
                     if fallback.content and fallback.content.strip():
@@ -2835,6 +2877,7 @@ class AgentLoop:
                         max_tokens=self.config.max_tokens,
                         **self._profile_kwargs(),
                     )
+                    record_usage(fallback)
                     if fallback.tool_calls:
                         tool_calls.extend(fallback.tool_calls)
                     if fallback.content and fallback.content.strip():

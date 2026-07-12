@@ -91,6 +91,7 @@ class PureMode:
         self.on_permission_request: Optional[Callable[[str, dict[str, Any]], bool]] = None
         self._runtime_tool_delta_buffers: dict[str, dict[str, Any]] = {}
         self._runtime_seen_tool_calls: set = set()
+        self._last_stats: dict[str, int | float] = {}
 
     def _load_env_harness(self) -> None:
         reference = os.getenv("SUPERQODE_HARNESS", "").strip() or "core"
@@ -459,6 +460,9 @@ class PureMode:
 
     async def run_streaming(self, prompt: str, plan_mode: Optional[bool] = None):
         """Run a task with streaming output."""
+        # Never let a provider/runtime without usage metadata display figures
+        # left over from the previous turn.
+        self._last_stats = {}
         if self._harness_spec is not None:
             provider, model = self._resolve_harness_route()
             session = await self._ensure_harness_session()
@@ -515,6 +519,8 @@ class PureMode:
                 yield chunk
         finally:
             self._agent.config.plan_mode = previous_plan_mode
+
+        self._last_stats = dict(getattr(self._agent, "last_stream_stats", {}) or {})
 
         self.session.total_requests += 1
 
@@ -736,6 +742,7 @@ class PureMode:
                 "total_requests": self.session.total_requests,
                 "total_tool_calls": self.session.total_tool_calls,
                 "total_iterations": self.session.total_iterations,
+                **self._last_stats,
             },
             "tools": [t.name for t in self.tools.list()],
             "tool_profile": self.tool_profile,

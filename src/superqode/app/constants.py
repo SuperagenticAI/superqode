@@ -32,6 +32,7 @@ THEME = {
     "border": "#1a1a1a",
     "border_active": "#2a2a2a",
     "purple": "#a855f7",
+    "user_prompt_bg": "#20162e",
     "magenta": "#d946ef",
     "pink": "#ec4899",
     "rose": "#fb7185",

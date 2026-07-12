@@ -20,6 +20,7 @@ from superqode.app.widgets import (
     BottomScanningLine,
     StreamingThinkingIndicator,
     ConversationLog,
+    ColorfulStatusBar,
 )
 from superqode.danger import (
     analyze_command,
@@ -998,6 +999,7 @@ class AgentRunMixin:
                     # Get stats for display
                     stats = self._pure_mode.get_status()["stats"]
                     tool_count = max(stats.get("total_tool_calls", 0), len(tool_actions))
+                    total_tokens = int(stats.get("total_tokens", 0) or 0)
 
                     # Merge tool-tracked writes with git changes detected after the run.
                     try:
@@ -1032,6 +1034,7 @@ class AgentRunMixin:
                             "provider": provider,
                             "model": model,
                             "prompt": text,
+                            "total_tokens": total_tokens,
                             "skip_git_fallback": True,
                         },
                         log,
@@ -1048,6 +1051,7 @@ class AgentRunMixin:
                         "model": model,
                         "prompt": text,
                         "response": response_text,
+                        "total_tokens": total_tokens,
                         "skip_git_fallback": True,
                     }
 
@@ -2158,22 +2162,27 @@ class AgentRunMixin:
         async def on_available_commands(commands: list[dict]) -> None:
             """Remember agent-advertised commands without spamming the transcript."""
             if commands:
-                self._call_ui(log.add_info, f"Agent commands available: {len(commands)}")
+                self._call_ui(log.add_meta, f"Agent commands available: {len(commands)}")
 
         async def on_mode_update(mode_id: str) -> None:
             """Surface ACP mode changes from the agent."""
             if mode_id:
-                self._call_ui(log.add_info, f"ACP mode: {mode_id}")
+                self._call_ui(log.add_meta, f"ACP mode: {mode_id}")
 
         async def on_usage_update(usage: dict) -> None:
-            """Surface compact ACP context usage updates."""
+            """Keep ACP context usage in the persistent top status line."""
             used = usage.get("used")
             size = usage.get("size")
             if isinstance(used, int) and isinstance(size, int) and size:
-                pct = (used / size) * 100
-                self._call_ui(
-                    log.add_info, f"Context: {used / 1000:.1f}K/{size / 1000:.1f}K ({pct:.1f}%)"
-                )
+
+                def update_context_status() -> None:
+                    try:
+                        status_bar = self.query_one("#status-bar", ColorfulStatusBar)
+                        status_bar.update_context_usage(used, size)
+                    except Exception:
+                        pass
+
+                self._call_ui(update_context_status)
 
         async def on_permission_request(options: list[dict], tool_call: dict) -> str:
             tool_name = tool_call.get("title", "unknown")

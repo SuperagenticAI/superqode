@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Guided subscription sign-in** - Added consent-gated Codex and Grok CLI login flows that surface device-auth instructions in the TUI and resume the requested connection after successful authentication.
+- **Visible TUI version** - Added the installed SuperQode version beside the product name in the persistent top status line so users can immediately identify the build they are running.
+
+### Changed
+
+- **Answer-focused conversation styling** - Replaced the heavy boxed `YOU` prompt with a compact purple `▌ You` transcript row and a restrained aubergine highlight behind only the prompt text, added an explicit accented `✦ Answer · agent` rule, kept the response directly beneath that marker and moved completion metadata after it, deduplicated repeated ACP context updates, and made mode, token, and completion chrome visually quieter.
+- **Quieter startup and context chrome** - Moved local-model warmup progress into the transient activity indicator, collapsed successful connection startup into one dim readiness line, kept failures visible as warnings, and moved ACP context usage exclusively into a compact persistent top-line meter.
+
+### Fixed
+
+- **Mouse selection clipboard copy** - Restored Textual's name-based `TextSelected` dispatch after the mixin refactor so dragging across selectable TUI text copies the selection again.
+- **Streaming token totals** - Preserved terminal provider usage chunks across LiteLLM, Ollama, MLX, the agent loop, and Pure Mode so the final dim completion line shows the real per-turn token total.
+
 ## [0.2.18] - 2026-07-12
 
 ### Added

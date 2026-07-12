@@ -13,9 +13,11 @@ from textual.widgets import Static, RichLog
 from textual.reactive import reactive
 from rich.text import Text
 from rich.panel import Panel
+from rich.padding import Padding
 from rich.console import Group
 from rich.box import ROUNDED, HEAVY
 
+from superqode import __version__
 from superqode.rendering.markdown import render_agent_markdown
 from superqode.tools.display import format_tool_call_compact
 
@@ -143,6 +145,7 @@ class ColorfulStatusBar(Static):
     byok_model: reactive[str] = reactive("")
     byok_tokens: reactive[int] = reactive(0)
     byok_cost: reactive[float] = reactive(0.0)
+    context_used: reactive[int] = reactive(0)
     context_window: reactive[int] = reactive(0)
     # Active runtime + model (e.g. self-contained runtimes like codex-sdk). Shown
     # in full (no shortening) so the user can see exactly what's selected.
@@ -171,6 +174,7 @@ class ColorfulStatusBar(Static):
         for i, char in enumerate("Qode"):
             color = qode_colors[i % len(qode_colors)]
             result.append(char, style=f"bold {color}")
+        result.append(f" v{__version__}", style="#71717a")
         result.append(" ✨", style="bold #fbbf24")
         result.append(" ", style="")
         result.append("Harness Engineering frameworks for Coding Agents", style="")
@@ -187,24 +191,6 @@ class ColorfulStatusBar(Static):
                 result.append("  ", style="")
                 result.append(self._format_token_count(self.byok_tokens), style="#06b6d4")
                 result.append(" tok", style="#52525b")
-
-            # Live context window meter: how full the model's context is.
-            if self.context_window > 0 and self.byok_tokens > 0:
-                pct = min(100, round(100 * self.byok_tokens / self.context_window))
-                if pct < 60:
-                    gauge_color = "#22c55e"
-                elif pct < 85:
-                    gauge_color = "#fbbf24"
-                else:
-                    gauge_color = "#ef4444"
-                filled = min(8, round(pct / 100 * 8))
-                result.append("  ", style="")
-                result.append("▰" * filled, style=gauge_color)
-                result.append("▱" * (8 - filled), style="#3f3f46")
-                result.append(f" {pct}%", style=gauge_color)
-                result.append(
-                    f" of {self._format_token_count(self.context_window)}", style="#52525b"
-                )
 
             # Show cost
             if self.byok_cost > 0:
@@ -223,6 +209,27 @@ class ColorfulStatusBar(Static):
             if self.active_model:
                 sep = " · " if self.active_runtime else ""
                 result.append(f"{sep}{self.active_model}", style="#a1a1aa")
+
+        # Context belongs in persistent chrome rather than conversation
+        # history. ACP supplies exact used/size values; BYOK falls back to the
+        # session token count when that is the only available signal.
+        context_used = self.context_used or self.byok_tokens
+        if self.context_window > 0 and context_used > 0:
+            pct = min(100, round(100 * context_used / self.context_window))
+            if pct < 60:
+                context_color = "#22c55e"
+            elif pct < 85:
+                context_color = "#fbbf24"
+            else:
+                context_color = "#ef4444"
+            result.append("  │  ", style="#3f3f46")
+            result.append("ctx ", style="#71717a")
+            result.append(f"{pct}%", style=context_color)
+            result.append(
+                f" · {self._format_token_count(context_used)}/"
+                f"{self._format_token_count(self.context_window)}",
+                style="#71717a",
+            )
 
         mode = (self.interaction_mode or "").strip().lower()
         if mode:
@@ -262,7 +269,13 @@ class ColorfulStatusBar(Static):
         self.byok_model = model
         self.byok_tokens = tokens
         self.byok_cost = cost
+        self.context_used = tokens if context_window > 0 else 0
         self.context_window = context_window
+
+    def update_context_usage(self, used: int = 0, size: int = 0) -> None:
+        """Update the persistent context meter from an exact runtime payload."""
+        self.context_used = max(0, int(used or 0))
+        self.context_window = max(0, int(size or 0))
 
 
 class GradientTagline(Static):
@@ -1095,18 +1108,20 @@ class ConversationLog(RichLog):
 
     def add_user(self, text: str):
         self._messages.append(("user", text, ""))
+        # One compact transcript row: the purple rail clearly marks user input
+        # without a separate header or a full-width box competing with answers.
+        lines = (str(text).strip() or "(empty)").splitlines() or ["(empty)"]
         question = Text()
-        question.append(str(text).strip() or "(empty)", style=THEME["text"])
-        panel = Panel(
-            question,
-            title=f"[bold {THEME['cyan']}]YOU[/]",
-            border_style=THEME["cyan"],
-            box=ROUNDED,
-            padding=(0, 1),
-            width=None,
-        )
-        self.write(Text("\n"))
-        self.write(panel)
+        for index, line in enumerate(lines):
+            question.append("▌ ", style=THEME["purple"])
+            question.append("You  " if index == 0 else "     ", style=f"bold {THEME['purple']}")
+            question.append(
+                f" {line} ",
+                style=f"{THEME['text']} on {THEME['user_prompt_bg']}",
+            )
+            if index < len(lines) - 1:
+                question.append("\n")
+        self.write(Padding(question, (1, 0, 0, 2)))
 
     def add_agent(self, text: str, agent: str = "Agent"):
         color = AGENT_COLORS.get(agent.lower(), THEME["purple"])
@@ -1193,6 +1208,16 @@ class ConversationLog(RichLog):
     def add_info(self, text: str):
         self._messages.append(("info", text, ""))
         self._write_feedback(Text(f"  ℹ️ {text}", style=THEME["cyan"]))
+
+    def add_meta(self, text: str, icon: str = "·"):
+        """Dim SuperQode transcript chrome line (mode, commands, etc.).
+
+        Deliberately quieter than ``add_info`` so SuperQode's own status output
+        recedes and the agent's response stands out. Same feedback-write path,
+        rendered in the subtle ``dim`` tone with a small glyph.
+        """
+        self._messages.append(("meta", text, ""))
+        self._write_feedback(Text(f"  {icon} {text}", style=THEME["dim"]))
 
     def add_warning(self, text: str):
         self._messages.append(("warning", text, ""))
@@ -1440,18 +1465,39 @@ class ConversationLog(RichLog):
         self.write(header)
 
     def _write_answer_header(self, agent: str = "Assistant") -> None:
-        """Render a stable answer divider before assistant content."""
+        """Render a stable, prominent divider before assistant content.
+
+        The answer is the one thing that must be easy to find, so it gets a
+        full-width rule with a bright marker while SuperQode's own chrome
+        (tokens, "Done", context usage) is rendered dim. The rule uses the
+        subtle ``dim`` tone; the ``✦ {agent}`` marker uses the agent's accent
+        colour so the eye lands on where the response begins.
+        """
         if self._answer_header_shown:
             return
         self._answer_header_shown = True
+        marker = AGENT_COLORS.get(str(agent).lower(), THEME["success"])
+        label = str(agent) or "Agent"
+        rule = "─" * 8
         header = Text()
         header.append("\n  ")
-        header.append("AGENT", style=f"bold {THEME['success']} reverse")
-        if agent:
-            header.append("  ", style="")
-            header.append(str(agent), style=f"bold {THEME['muted']}")
+        header.append(f"{rule}  ", style=THEME["dim"])
+        header.append("✦ Answer", style=f"bold {marker}")
+        header.append(" · ", style=THEME["dim"])
+        header.append(label, style=f"bold {marker}")
+        header.append(f"  {rule}", style=THEME["dim"])
         header.append("\n", style="")
         self.write(header)
+
+    def _render_answer_block(self, block: str):
+        """Render one assistant markdown block indented as the answer body.
+
+        A small left indent groups the response into a single visual column,
+        set apart from the flush-left status/chrome lines. Left padding is
+        width-safe: Rich reflows code panels and tables within the remaining
+        width. Shared by the streaming and final-commit paths so both match.
+        """
+        return Padding(render_agent_markdown(block), (0, 0, 0, 2))
 
     def add_thinking(self, text: str, category: str = "general"):
         """
@@ -1595,7 +1641,7 @@ class ConversationLog(RichLog):
             self._streamed_offset += flush_len
             if block:
                 self._rendered_response_text += flushed
-                self.write(render_agent_markdown(block))
+                self.write(self._render_answer_block(block))
 
     def reset_response_stream(self, agent: str = "Assistant") -> None:
         """Reset per-response streaming buffers before a new streamed answer."""
@@ -1675,7 +1721,7 @@ class ConversationLog(RichLog):
             remaining = remaining.strip("\n")
             if remaining:
                 self._write_answer_header(agent)
-                self.write(render_agent_markdown(remaining))
+                self.write(self._render_answer_block(remaining))
                 self._rendered_response_text = text
         else:
             self.write(Text(f"  ✕ {text}\n", style=THEME["error"], overflow="fold"))
@@ -2281,7 +2327,8 @@ class ConversationLog(RichLog):
 
         summary_content = Text()
         if success:
-            summary_content.append("Done", style=f"bold {THEME['success']}")
+            # Dim chrome: the roll-up should recede behind the actual answer.
+            summary_content.append("Done", style=THEME["dim"])
         else:
             summary_content.append("Failed", style=f"bold {THEME['error']}")
 
@@ -2316,19 +2363,6 @@ class ConversationLog(RichLog):
 
         summary_content.append("\n")
         self.write(summary_content)
-
-        footer = Text()
-        footer.append("  ", style=THEME["dim"])
-        footer.append(":work verbose", style=THEME["cyan"])
-        footer.append(" details", style=THEME["dim"])
-        if files_mod:
-            footer.append("  •  ", style=THEME["dim"])
-            footer.append(":diff", style=THEME["cyan"])
-            footer.append(" changes", style=THEME["dim"])
-        footer.append("  •  ", style=THEME["dim"])
-        footer.append(":select response", style=THEME["cyan"])
-        footer.append(" copy\n", style=THEME["dim"])
-        self.write(footer)
 
     def get_thinking_text(self) -> str:
         """Get all thinking text for copying."""

@@ -2170,6 +2170,17 @@ class LiteLLMGateway(GatewayInterface):
                 role=message.get("role"),
                 finish_reason="tool_calls" if tool_calls else choice.get("finish_reason"),
                 tool_calls=tool_calls,
+                usage=(
+                    Usage(
+                        prompt_tokens=int(response_data.get("usage", {}).get("prompt_tokens") or 0),
+                        completion_tokens=int(
+                            response_data.get("usage", {}).get("completion_tokens") or 0
+                        ),
+                        total_tokens=int(response_data.get("usage", {}).get("total_tokens") or 0),
+                    )
+                    if response_data.get("usage")
+                    else None
+                ),
             )
 
         except Exception as e:
@@ -2542,6 +2553,12 @@ class LiteLLMGateway(GatewayInterface):
             "timeout": self.timeout,
         }
 
+        # Ollama's OpenAI-compatible chat stream can include exact prompt and
+        # completion counts on its terminal usage chunk. Ask LiteLLM to retain
+        # that chunk so the TUI can show real per-turn tokens.
+        if provider == "ollama":
+            request_kwargs["stream_options"] = {"include_usage": True}
+
         if temperature is not None:
             request_kwargs["temperature"] = temperature
         if max_tokens is not None:
@@ -2638,7 +2655,26 @@ class LiteLLMGateway(GatewayInterface):
                         if total > 0:
                             budget_for_credit.credit(total)
                             credited = True
+                chunk_usage = getattr(chunk, "usage", None)
+                usage_obj: Optional[Usage] = None
+                if chunk_usage is not None:
+                    prompt_tokens = int(getattr(chunk_usage, "prompt_tokens", 0) or 0)
+                    completion_tokens = int(getattr(chunk_usage, "completion_tokens", 0) or 0)
+                    total_tokens = int(getattr(chunk_usage, "total_tokens", 0) or 0)
+                    if total_tokens <= 0:
+                        total_tokens = prompt_tokens + completion_tokens
+                    usage_obj = Usage(
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        total_tokens=total_tokens,
+                    )
+
+                # OpenAI-compatible APIs commonly send usage in a final chunk
+                # with no choices. Do not discard it just because it has no
+                # text delta.
                 if not chunk.choices:
+                    if usage_obj is not None:
+                        yield StreamChunk(usage=usage_obj)
                     continue
 
                 choice = chunk.choices[0]
@@ -2699,6 +2735,7 @@ class LiteLLMGateway(GatewayInterface):
                     content=content,
                     role=delta.role if delta and hasattr(delta, "role") else None,
                     finish_reason=choice.finish_reason,
+                    usage=usage_obj,
                     thinking_content=thinking_content,
                 )
 

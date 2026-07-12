@@ -738,24 +738,30 @@ class HelperStartupMixin:
         if os.getenv("SUPERQODE_DS4_WARMUP", "1").strip().lower() in ("0", "false", "no", "off"):
             return
 
-        log.add_info("⏳ Loading model into memory (first start can be slow on a cold cache)…")
+        self._call_ui(self._start_thinking, "Loading DS4 model…")
+        self._call_ui(self._set_thinking_status, "Loading DS4 model…")
         task = asyncio.ensure_future(client.warmup(model))
         start = time.monotonic()
         next_tick = 10.0
-        while not task.done():
-            await asyncio.sleep(0.5)
-            elapsed = time.monotonic() - start
-            if elapsed >= next_tick:
-                log.add_info(f"   …still loading the model ({int(elapsed)}s)")
-                next_tick += 10.0
+        try:
+            while not task.done():
+                await asyncio.sleep(0.5)
+                elapsed = time.monotonic() - start
+                if elapsed >= next_tick:
+                    self._call_ui(
+                        self._set_thinking_status,
+                        f"Loading DS4 model… {int(elapsed)}s",
+                    )
+                    next_tick += 10.0
 
-        result = await task
-        if result.get("ok"):
-            log.add_success(f"✓ DS4 ready (warm) — {result.get('elapsed', 0.0):.0f}s")
-            log.add_info("Ready to chat! Type your message below.")
-        else:
-            # Don't block usage — the model will simply load on the first prompt.
-            log.add_warning(
-                "DS4 warmup did not complete "
-                f"({result.get('error') or 'unknown error'}); the first prompt may be slow."
-            )
+            result = await task
+            if result.get("ok"):
+                log.add_meta(f"Ready · ds4/{model} · warm {result.get('elapsed', 0.0):.0f}s")
+            else:
+                # Don't block usage — the model will simply load on the first prompt.
+                log.add_warning(
+                    "DS4 warmup did not complete "
+                    f"({result.get('error') or 'unknown error'}); the first prompt may be slow."
+                )
+        finally:
+            self._call_ui(self._stop_thinking)

@@ -1,5 +1,7 @@
 """Tests for LiteLLM gateway model compatibility fallbacks."""
 
+from types import SimpleNamespace
+
 import pytest
 
 from superqode.providers.gateway.base import GatewayResponse, Message
@@ -132,6 +134,52 @@ async def test_ds4_streaming_uses_direct_local_gateway(monkeypatch):
     assert "".join(c.content for c in chunks) == "streamed ok"
     assert chunks[-1].tool_calls
     assert chunks[-1].finish_reason == "tool_use"
+
+
+@pytest.mark.asyncio
+async def test_ollama_stream_preserves_terminal_usage_chunk(monkeypatch):
+    gateway = LiteLLMGateway()
+    captured = {}
+
+    async def stream():
+        yield SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    delta=SimpleNamespace(content="answer", role="assistant", tool_calls=None),
+                    finish_reason="stop",
+                )
+            ],
+            usage=None,
+        )
+        yield SimpleNamespace(
+            choices=[],
+            usage=SimpleNamespace(
+                prompt_tokens=1200,
+                completion_tokens=340,
+                total_tokens=1540,
+            ),
+        )
+
+    async def fake_completion(kwargs):
+        captured.update(kwargs)
+        return stream()
+
+    monkeypatch.setattr(gateway, "_get_litellm", lambda: object())
+    monkeypatch.setattr(gateway, "_acompletion_with_retry", fake_completion)
+
+    chunks = [
+        chunk
+        async for chunk in gateway.stream_completion(
+            messages=[Message(role="user", content="hello")],
+            model="qwen3:8b",
+            provider="ollama",
+        )
+    ]
+
+    assert captured["stream_options"] == {"include_usage": True}
+    assert "".join(chunk.content for chunk in chunks) == "answer"
+    assert chunks[-1].usage is not None
+    assert chunks[-1].usage.total_tokens == 1540
 
 
 def test_ds4_thinking_default_omits_field(monkeypatch):

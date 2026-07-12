@@ -624,32 +624,35 @@ class LocalModelsMixin:
         from superqode.providers.gateway.base import Message
         from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
 
-        log.add_info("⏳ Warming local model with a tiny request...")
+        self._call_ui(self._start_thinking, "Warming local model…")
+        self._call_ui(self._set_thinking_status, "Warming local model…")
         gateway = LiteLLMGateway()
         started = time.monotonic()
         try:
-            await asyncio.wait_for(
-                gateway.chat_completion(
-                    messages=[Message(role="user", content="Reply with exactly: ok")],
-                    model=model,
-                    provider=provider,
-                    max_tokens=4,
-                    temperature=0.0,
-                ),
-                timeout=float(os.getenv("SUPERQODE_LOCAL_WARMUP_TIMEOUT", "45")),
-            )
-        except asyncio.TimeoutError:
-            log.add_warning(
-                "Local warmup timed out; connected, but the first prompt may still be slow."
-            )
-            return
-        except Exception as exc:  # noqa: BLE001
-            log.add_warning(f"Local warmup skipped: {exc}")
-            return
+            try:
+                await asyncio.wait_for(
+                    gateway.chat_completion(
+                        messages=[Message(role="user", content="Reply with exactly: ok")],
+                        model=model,
+                        provider=provider,
+                        max_tokens=4,
+                        temperature=0.0,
+                    ),
+                    timeout=float(os.getenv("SUPERQODE_LOCAL_WARMUP_TIMEOUT", "45")),
+                )
+            except asyncio.TimeoutError:
+                log.add_warning(
+                    "Local warmup timed out; connected, but the first prompt may still be slow."
+                )
+                return
+            except Exception as exc:  # noqa: BLE001
+                log.add_warning(f"Local warmup skipped: {exc}")
+                return
 
-        elapsed = time.monotonic() - started
-        log.add_success(f"✓ Local model warm — {elapsed:.1f}s")
-        log.add_info("Ready to chat! Type your message below.")
+            elapsed = time.monotonic() - started
+            log.add_meta(f"Ready · {provider}/{model} · warm {elapsed:.1f}s")
+        finally:
+            self._call_ui(self._stop_thinking)
 
     def _connect_local_cmd(self, args: str, log: ConversationLog):
         """Handle :connect local command - Interactive local provider/model picker."""

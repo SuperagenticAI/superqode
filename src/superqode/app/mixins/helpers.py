@@ -616,13 +616,252 @@ class HelpersMixin(
         except Exception:  # noqa: BLE001
             pass
 
-    def _import_grok_token(self, log) -> bool:
+    def _subscription_login_in_progress(self) -> bool:
+        return bool(getattr(self, "_subscription_login_busy", False))
+
+    def _begin_subscription_login(
+        self,
+        product: str,
+        log: ConversationLog,
+        *,
+        on_success: Optional[Any] = None,
+        reason: str = "",
+        force: bool = False,
+    ) -> bool:
+        """Start interactive vendor CLI login when credentials are missing.
+
+        Returns True when a login worker was started (caller should stop), or
+        False when the product is already signed in / cannot launch login.
+        ``on_success`` is a zero-arg callback invoked on the UI thread after a
+        successful login so connect can continue automatically.
+
+        ``force=True`` re-runs login even when an auth file already exists
+        (used for expired Grok sessions).
+        """
+        from superqode.providers.subscription_login import (
+            get_login_spec,
+            login_ready,
+            binary_path,
+        )
+
+        try:
+            spec = get_login_spec(product)
+        except KeyError:
+            log.add_error(f"Unknown subscription login: {product}")
+            return False
+
+        if not force and login_ready(spec):
+            return False
+
+        if self._subscription_login_in_progress():
+            log.add_info(f"{spec.label} sign-in is already running — finish it, then retry.")
+            return True
+
+        if getattr(self, "_awaiting_subscription_login", None):
+            log.add_info(
+                "A sign-in prompt is already waiting — press Enter to start it or type 'n' to cancel."
+            )
+            return True
+
+        if binary_path(spec) is None:
+            log.add_error(
+                f"The {spec.label} CLI is not installed, so the subscription route is unavailable."
+            )
+            for line in spec.install_hint.splitlines():
+                if line.strip():
+                    log.add_info(line)
+            if spec.id == "codex":
+                log.add_info("No subscription? Use BYOK instead: :connect byok openai <model>")
+            elif spec.id == "grok":
+                log.add_info("No subscription? Use BYOK instead: :connect byok xai grok-4.5")
+            return True  # handled (failed setup); caller should not continue connect
+
+        # Consent gate: never run the vendor login (or open a browser) without
+        # an explicit go-ahead. Stash the intent; the prompt handler launches it
+        # only after the user confirms.
+        self._awaiting_subscription_login = {
+            "product": spec.id,
+            "on_success": on_success,
+            "force": force,
+        }
+
+        t = Text()
+        t.append("\n  🔐 ", style=f"bold {THEME['cyan']}")
+        t.append(f"Sign in to {spec.label}?\n\n", style=f"bold {THEME['text']}")
+        if reason:
+            t.append(f"  {reason}\n\n", style=THEME["muted"])
+        t.append("  SuperQode can run the official CLI login for you:\n", style=THEME["muted"])
+        t.append(f"    {spec.binary} {' '.join(spec.login_args)}\n\n", style=THEME["cyan"])
+        t.append(
+            "  It prints a sign-in link and one-time code — you open the link yourself.\n"
+            "  SuperQode will not open a browser automatically.\n\n",
+            style=THEME["muted"],
+        )
+        t.append("  Press ", style=THEME["muted"])
+        t.append("Enter", style=f"bold {THEME['success']}")
+        t.append(" to start, or type ", style=THEME["muted"])
+        t.append("n", style=f"bold {THEME['cyan']}")
+        t.append(" to cancel.\n", style=THEME["muted"])
+        t.append("  Prefer to do it yourself? Run ", style=THEME["dim"])
+        t.append(f"{spec.binary} login", style=THEME["cyan"])
+        t.append(" in a terminal, then retry.\n", style=THEME["dim"])
+        try:
+            log.write_feedback(t)
+        except Exception:  # noqa: BLE001 - some logs only have write/add_*
+            log.write(t)
+
+        try:
+            self._set_input_placeholder(f"Run `{spec.binary} login`?  Enter = yes, n = cancel")
+        except Exception:  # noqa: BLE001 - placeholder is cosmetic
+            pass
+        return True
+
+    def _handle_subscription_login_input(self, text: str, log: ConversationLog) -> bool:
+        """Resolve the pending subscription-login consent prompt.
+
+        Enter / yes launches the vendor CLI login worker; ``n`` cancels. Returns
+        True when it handled the input (so the caller stops dispatching).
+        """
+        pending = getattr(self, "_awaiting_subscription_login", None)
+        if not pending:
+            return False
+
+        from superqode.providers.subscription_login import get_login_spec
+
+        product = pending["product"]
+        try:
+            spec = get_login_spec(product)
+            label, binary = spec.label, spec.binary
+        except KeyError:
+            label = binary = product
+
+        choice = (text or "").strip().lower()
+        if choice in ("n", "no", "cancel", "skip", "q"):
+            self._awaiting_subscription_login = None
+            self._reset_input_placeholder()
+            log.add_info(f"{label} sign-in cancelled. Run `{binary} login` yourself, then retry.")
+            return True
+
+        if choice not in ("", "y", "yes", "ok", "start", "go"):
+            log.add_error("Press Enter to run the vendor login, or type 'n' to cancel.")
+            try:
+                self._set_input_placeholder(f"Run `{binary} login`?  Enter = yes, n = cancel")
+            except Exception:  # noqa: BLE001
+                pass
+            return True
+
+        # Confirmed → launch the vendor login worker.
+        self._awaiting_subscription_login = None
+        self._reset_input_placeholder()
+        self._subscription_login_busy = True
+        self._subscription_login_on_success = pending.get("on_success")
+        self._subscription_login_product = product
+        self._subscription_login_force = bool(pending.get("force"))
+
+        t = Text()
+        t.append("\n  🔐 ", style=f"bold {THEME['cyan']}")
+        t.append(f"Starting {label} sign-in…\n", style=f"bold {THEME['text']}")
+        t.append(
+            "  Open the link printed below and enter the one-time code. "
+            "Waiting up to 15 minutes.\n",
+            style=THEME["dim"],
+        )
+        try:
+            log.write_feedback(t)
+        except Exception:  # noqa: BLE001
+            log.write(t)
+
+        self.run_worker(self._subscription_login_worker(product, log), exclusive=False)
+        return True
+
+    async def _subscription_login_worker(self, product: str, log: ConversationLog) -> None:
+        """Background worker: run vendor device-auth login, then resume connect."""
+        from superqode.providers.subscription_login import (
+            get_login_spec,
+            run_subscription_login,
+        )
+
+        try:
+            spec = get_login_spec(product)
+        except KeyError as exc:
+            self._call_ui(log.add_error, str(exc))
+            self._subscription_login_busy = False
+            return
+
+        def _on_line(line: str) -> None:
+            # Device codes / URLs from the vendor CLI — surface them immediately.
+            text = (line or "").rstrip()
+            if not text:
+                return
+
+            def _write() -> None:
+                try:
+                    log.add_info(text)
+                except Exception:  # noqa: BLE001
+                    pass
+
+            self._call_ui(_write)
+
+        force = bool(getattr(self, "_subscription_login_force", False))
+        try:
+            # open_browser=False: honour user consent — surface the link/code and
+            # let them open it, rather than launching a browser automatically.
+            result = await run_subscription_login(
+                product, on_line=_on_line, force=force, open_browser=False
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._call_ui(log.add_error, f"{spec.label} login failed: {exc}")
+            self._subscription_login_busy = False
+            self._subscription_login_on_success = None
+            self._subscription_login_force = False
+            return
+
+        on_success = getattr(self, "_subscription_login_on_success", None)
+        self._subscription_login_busy = False
+        self._subscription_login_on_success = None
+        self._subscription_login_force = False
+
+        if not result.ok:
+            self._call_ui(log.add_error, result.reason or f"{spec.label} login did not complete.")
+            if spec.id == "codex":
+                self._call_ui(
+                    log.add_info,
+                    "You can also run `codex login` in a terminal, then :connect codex.",
+                )
+            elif spec.id == "grok":
+                self._call_ui(
+                    log.add_info,
+                    "You can also run `grok login` in a terminal, then :connect grok.",
+                )
+            return
+
+        if result.opened_browser:
+            self._call_ui(log.add_info, "Browser opened for sign-in.")
+        self._call_ui(log.add_success, spec.success_hint)
+
+        if callable(on_success):
+
+            def _resume() -> None:
+                try:
+                    on_success()
+                except Exception as exc:  # noqa: BLE001
+                    log.add_error(f"Sign-in succeeded but reconnect failed: {exc}")
+
+            self._call_ui(_resume)
+
+    def _import_grok_token(self, log, *, on_login_success: Optional[Any] = None) -> bool:
         """Import the local `grok login` session into the auth store.
 
         Shared by connect and the model picker. Returns False (with guidance
         written to the log) when there is no usable CLI login.
+
+        When credentials are missing (or expired) and the Grok CLI is installed,
+        SuperQode launches ``grok login --device-auth`` (browser + one-time code)
+        and returns False. Pass ``on_login_success`` to auto-retry the original
+        action after the user finishes sign-in.
         """
         from superqode.providers import grok_cli_auth
+        from superqode.providers.subscription_login import GROK_LOGIN, has_local_login
 
         # Someone without the product installed should get install steps, not
         # be told to run a command that does not exist on their machine.
@@ -638,6 +877,16 @@ class HelpersMixin(
             log.add_info("No subscription? Use BYOK instead: :connect byok xai grok-4.5")
             return False
 
+        if not has_local_login(GROK_LOGIN):
+            started = self._begin_subscription_login(
+                "grok",
+                log,
+                on_success=on_login_success,
+                reason="No local Grok login found (~/.grok/auth.json).",
+            )
+            if started:
+                return False
+
         auth = grok_cli_auth.import_cli_token()
         if auth is None:
             log.add_error("No Grok CLI login found (~/.grok/auth.json).")
@@ -646,6 +895,15 @@ class HelpersMixin(
             return False
         if auth.is_expired():
             grok_cli_auth.remove_cli_token()
+            started = self._begin_subscription_login(
+                "grok",
+                log,
+                on_success=on_login_success,
+                reason="The Grok CLI session looks expired (sessions last ~7 days).",
+                force=True,
+            )
+            if started:
+                return False
             log.add_error("The Grok CLI session looks expired (CLI sessions last ~7 days).")
             log.add_info("Run `grok login` again, then re-run :connect grok.")
             return False

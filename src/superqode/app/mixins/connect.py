@@ -913,7 +913,7 @@ class ConnectMixin:
         if is_local:
             self.run_worker(self._test_local_connection(provider, model, log, quiet=True))
         else:
-            log.add_info("Ready to chat! Type your message below.")
+            log.add_meta(f"Ready · {provider}/{model}")
 
     def _show_connection_summary(
         self,

@@ -108,9 +108,13 @@ class EventHandlerMixin:
         else:
             log.add_error(f"No handler for palette command: {event.command.label}")
 
-    @on(events.TextSelected)
     async def on_text_selected(self) -> None:
         """Automatically copy selected text to the clipboard on mouse-drag select.
+
+        NOTE: dispatched by Textual's name-based convention (``on_<event>``) —
+        do NOT add ``@on(events.TextSelected)``. On a plain mixin the decorator's
+        registration is not collected, and it also suppresses name-based
+        dispatch, so decorating this method silently disables mouse-drag copy.
 
         Dragging the mouse over the conversation (or anywhere selectable) copies
         the highlighted text straight to the system clipboard — no ``:copy``
@@ -246,6 +250,10 @@ class EventHandlerMixin:
                 self._handle_local_connect_start_input("", log)
                 event.input.value = ""
                 return
+            if getattr(self, "_awaiting_subscription_login", None):
+                self._handle_subscription_login_input("", log)
+                event.input.value = ""
+                return
 
             if getattr(self, "_awaiting_agent_question", False):
                 self._handle_agent_question_input(text, log)
@@ -367,9 +375,11 @@ class EventHandlerMixin:
                 or getattr(self, "_awaiting_session_resume", False)
                 or getattr(self, "_awaiting_mode_selection", False)
                 or getattr(self, "_awaiting_harness_wizard", False)
+                or getattr(self, "_awaiting_subscription_login", None)
             ):
                 # Cancel selection mode
                 self._awaiting_connect_type = False
+                self._awaiting_subscription_login = None
                 self._awaiting_runtime_selection = False
                 self._awaiting_acp_agent_selection = False
                 self._awaiting_byok_provider = False
@@ -427,6 +437,9 @@ class EventHandlerMixin:
                 return
         if getattr(self, "_awaiting_local_connect_start", None):
             if self._handle_local_connect_start_input(text, log):
+                return
+        if getattr(self, "_awaiting_subscription_login", None):
+            if self._handle_subscription_login_input(text, log):
                 return
 
         # Check if awaiting connect type selection (profile-driven)

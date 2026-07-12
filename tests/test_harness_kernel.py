@@ -321,6 +321,36 @@ async def test_pure_mode_can_stream_through_harness_spec(monkeypatch, tmp_path: 
 
 
 @pytest.mark.asyncio
+async def test_pure_mode_propagates_builtin_stream_usage():
+    from types import SimpleNamespace
+
+    from superqode.pure_mode import PureMode
+
+    class UsageAgent:
+        config = SimpleNamespace(plan_mode=False)
+        last_stream_stats = {
+            "prompt_tokens": 1200,
+            "completion_tokens": 340,
+            "total_tokens": 1540,
+            "total_cost": 0.0,
+        }
+
+        def reset_cancellation(self):
+            pass
+
+        async def run_streaming(self, prompt: str):
+            yield f"answer:{prompt}"
+
+    pure = PureMode()
+    pure._agent = UsageAgent()
+
+    chunks = [chunk async for chunk in pure.run_streaming("hello")]
+
+    assert chunks == ["answer:hello"]
+    assert pure.get_status()["stats"]["total_tokens"] == 1540
+
+
+@pytest.mark.asyncio
 async def test_pure_mode_harness_primary_overrides_active_connection(monkeypatch, tmp_path: Path):
     from superqode.pure_mode import PureMode
 

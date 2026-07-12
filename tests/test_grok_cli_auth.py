@@ -212,19 +212,27 @@ class _Log:
 class _AppStub:
     def __init__(self):
         self.connected = []
+        self.login_launched = []
 
     def _connect_byok_mode(self, provider, model, log):
         self.connected.append((provider, model))
+
+    def _begin_subscription_login(self, product, log, *, on_success=None, reason="", force=False):
+        # Record instead of launching a real vendor login subprocess/browser.
+        self.login_launched.append(
+            {"product": product, "reason": reason, "force": force, "on_success": on_success}
+        )
+        return True
 
     def _grok_api_cmd(self, rest, log):
         from superqode.app_main import SuperQodeApp
 
         SuperQodeApp._grok_api_cmd(self, rest, log)
 
-    def _import_grok_token(self, log):
+    def _import_grok_token(self, log, **kwargs):
         from superqode.app_main import SuperQodeApp
 
-        return SuperQodeApp._import_grok_token(self, log)
+        return SuperQodeApp._import_grok_token(self, log, **kwargs)
 
 
 def test_grok_cmd_routes_api_subcommand():
@@ -291,18 +299,24 @@ def test_grok_api_strips_provider_prefixes(tmp_path, isolated_auth_store, monkey
     assert stub.connected == [("grok-cli", "grok-4.5")]
 
 
-def test_grok_api_without_cli_login_errors(tmp_path, isolated_auth_store, monkeypatch):
+def test_grok_api_without_cli_login_launches_login(tmp_path, isolated_auth_store, monkeypatch):
     _fake_grok_cli_installed(monkeypatch)
     monkeypatch.setattr(grok_cli_auth, "GROK_AUTH_FILE", tmp_path / "missing.json")
 
     stub, log = _AppStub(), _Log()
     stub._grok_api_cmd("", log)
 
+    # No local login but the CLI is installed → launch `grok login` (not force),
+    # and do not connect until it completes.
     assert stub.connected == []
-    assert any("No Grok CLI login" in e for e in log.errors)
+    assert len(stub.login_launched) == 1
+    assert stub.login_launched[0]["product"] == "grok"
+    assert stub.login_launched[0]["force"] is False
 
 
-def test_grok_api_expired_session_errors_and_cleans_up(tmp_path, isolated_auth_store, monkeypatch):
+def test_grok_api_expired_session_relogs_in_and_cleans_up(
+    tmp_path, isolated_auth_store, monkeypatch
+):
     _fake_grok_cli_installed(monkeypatch)
     auth_file = _write_cli_auth(
         tmp_path,
@@ -313,9 +327,15 @@ def test_grok_api_expired_session_errors_and_cleans_up(tmp_path, isolated_auth_s
     stub, log = _AppStub(), _Log()
     stub._grok_api_cmd("", log)
 
+    # Expired session: no connect, stale imported token cleaned up, and an
+    # interactive re-login is launched (force=True) instead of a dead-end error.
     assert stub.connected == []
-    assert any("expired" in e.lower() for e in log.errors)
     assert isolated_auth_store.get("grok-cli") is None
+    assert len(stub.login_launched) == 1
+    launch = stub.login_launched[0]
+    assert launch["product"] == "grok"
+    assert launch["force"] is True
+    assert "expired" in launch["reason"].lower()
 
 
 def test_grok_api_off_removes_token(isolated_auth_store):
@@ -538,9 +558,16 @@ def test_grok_model_picker_requires_login(tmp_path, isolated_auth_store, monkeyp
     class _Stub:
         def __init__(self):
             self.picker_calls = []
+            self.login_launched = []
 
-        def _import_grok_token(self, log):
-            return SuperQodeApp._import_grok_token(self, log)
+        def _begin_subscription_login(
+            self, product, log, *, on_success=None, reason="", force=False
+        ):
+            self.login_launched.append({"product": product, "force": force})
+            return True
+
+        def _import_grok_token(self, log, **kwargs):
+            return SuperQodeApp._import_grok_token(self, log, **kwargs)
 
         def _show_provider_models(self, provider, log, use_picker=False):
             self.picker_calls.append(provider)
@@ -551,10 +578,13 @@ def test_grok_model_picker_requires_login(tmp_path, isolated_auth_store, monkeyp
         def run_worker(self, coroutine, **_kwargs):
             asyncio.run(coroutine)
 
+    # Signed out with the CLI installed → launch login (not a dead-end error),
+    # and do not open the picker until credentials land.
     stub, log = _Stub(), _Log()
     SuperQodeApp._show_grok_model_picker(stub, log)
     assert stub.picker_calls == []
-    assert any("No Grok CLI login" in e for e in log.errors)
+    assert len(stub.login_launched) == 1
+    assert stub.login_launched[0]["product"] == "grok"
 
     # With a login present the BYOK picker opens for grok-cli.
     auth_file = _write_cli_auth(tmp_path, {"https://accounts.x.ai/sign-in": {"key": "sess-ok"}})
@@ -562,3 +592,4 @@ def test_grok_model_picker_requires_login(tmp_path, isolated_auth_store, monkeyp
     stub, log = _Stub(), _Log()
     SuperQodeApp._show_grok_model_picker(stub, log)
     assert stub.picker_calls == ["grok-cli"]
+    assert stub.login_launched == []
