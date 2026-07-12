@@ -216,6 +216,7 @@ providers:
 | Provider | API Key Variable |
 |----------|------------------|
 | `deepseek` | `DEEPSEEK_API_KEY` |
+| `zai` | `ZAI_API_KEY` ([setup](zai.md)) |
 | `zhipu` | `ZHIPU_API_KEY` |
 | `alibaba` | `ALIBABA_API_KEY` |
 

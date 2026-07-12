@@ -26,6 +26,18 @@ def test_wizard_glm_starter():
     assert spec.model_policy.pack == "glm"
 
 
+def test_wizard_glm52_zai_starter():
+    spec = build_wizard_spec(WizardAnswers(name="g52", starter="glm52-coding"))
+
+    assert spec.model_policy.primary == "zai/glm-5.2"
+    assert spec.model_policy.fallbacks == ("zai/glm-5.1", "zai/glm-5")
+    assert spec.model_policy.pack == "glm"
+    assert spec.model_policy.reasoning == "max"
+    assert spec.model_policy.context_window == 1_000_000
+    assert spec.model_policy.config["parallel_tools"] is True
+    assert spec.metadata["api_endpoint"] == "general"
+
+
 def test_wizard_minimax_starter():
     spec = build_wizard_spec(WizardAnswers(name="mm", starter="minimax-coding"))
     assert spec.model_policy.pack == "minimax"

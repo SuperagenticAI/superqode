@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.18] - 2026-07-12
+
+### Added
+
+- **First-party Z.AI GLM support** - Added the `zai` BYOK provider on Z.AI's general OpenAI-compatible API, direct CLI/TUI connection surfaces, GLM-5.2 reasoning and streamed-tool-call shaping, current GLM-5.x model metadata, and mocked plus opt-in live protocol coverage. The restricted GLM Coding Plan endpoint is intentionally excluded.
+- **GLM-5.2 coding harness** - Added the `glm52-coding` template with first-party Z.AI routing, GLM-family policy tuning, 1M context, max reasoning, parallel native tools, and GLM-5.1/5 fallbacks.
+
+### Changed
+
+- **Maintainable CLI and TUI entry points** - Split the oversized Textual application into focused mixins and moved inline Click command groups into dedicated command modules while preserving existing imports, method signatures, command ordering, options, and help output.
+- **Focused helper and harness modules** - Split the remaining TUI helper catch-all into cohesive helper mixins and organized the harness CLI into a small command package whose largest module is roughly 600 lines.
+- **CLI compatibility contract** - Added a regression test covering all 208 commands and the byte-identical rendered help tree so future structural changes cannot silently alter the public CLI.
+- **Release metadata** - Bumped the package version, runtime `__version__`, lockfile package entry, and ACP registry metadata to `0.2.18`.
+
 ## [0.2.17] - 2026-07-12
 
 ### Fixed

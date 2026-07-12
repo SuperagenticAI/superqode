@@ -92,6 +92,18 @@ superqode connect byok google gemini-3.1-pro-preview
 
 **Documentation**: [ai.google.dev](https://ai.google.dev)
 
+#### Z.AI (GLM)
+
+```bash
+export ZAI_API_KEY=...
+superqode connect zai glm-5.2
+```
+
+The `zai` provider uses the first-party general endpoint
+`https://api.z.ai/api/paas/v4`. It does not use the restricted GLM Coding Plan
+endpoint. See the [Z.AI provider guide](zai.md) for the TUI connection and the
+`glm52-coding` harness.
+
 #### Meta (Muse Spark)
 
 ```bash

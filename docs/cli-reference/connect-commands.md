@@ -239,6 +239,18 @@ normalize to the `huggingface` provider. GLM-5.2 aliases include `glm52`,
 `glm52-hf-fireworks`, `glm52-hf-together`, `glm52-hf-novita`,
 `glm52-hf-zai`, and `glm52-hf-deepinfra`.
 
+### First-party Z.AI route
+
+```bash
+export ZAI_API_KEY=your-general-api-key
+superqode connect zai glm-5.2
+```
+
+This uses Z.AI's general API endpoint. It does not consume GLM Coding Plan
+subscription quota. In the TUI, use `:connect zai` or
+`:connect zai/glm-5.2`. The model alias `glm52-zai` resolves to the same
+first-party route.
+
 ---
 
 ## connect local

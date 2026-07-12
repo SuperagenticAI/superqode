@@ -254,6 +254,7 @@ COMMANDS = [
     ":connect claude",
     ":connect antigravity",
     ":connect grok",
+    ":connect zai",
     ":connect byok",
     ":connect local",
     ":connect acp",
