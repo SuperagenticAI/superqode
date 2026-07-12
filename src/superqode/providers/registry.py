@@ -239,12 +239,37 @@ PROVIDERS: Dict[str, ProviderDef] = {
     # =========================================================================
     # 🇨🇳 CHINA LABS - Tier 1
     # =========================================================================
+    "zai": ProviderDef(
+        id="zai",
+        name="Z.AI (GLM)",
+        tier=ProviderTier.TIER1,
+        category=ProviderCategory.CHINA_LABS,
+        env_vars=["ZAI_API_KEY"],
+        litellm_prefix="openai/",
+        base_url_env="ZAI_API_BASE",
+        default_base_url="https://api.z.ai/api/paas/v4",
+        docs_url="https://docs.z.ai/guides/overview/quick-start",
+        example_models=[
+            "glm-5.2",
+            "glm-5.1",
+            "glm-5-turbo",
+            "glm-5",
+            "glm-4.7",
+            "glm-4.7-flashx",
+            "glm-4.7-flash",
+        ],
+        notes=(
+            "First-party Z.AI general API (OpenAI-compatible). This route intentionally "
+            "does not use the restricted GLM Coding Plan endpoint."
+        ),
+        dynamic=True,
+    ),
     "zhipu": ProviderDef(
         id="zhipu",
         name="Z.AI / Zhipu AI (GLM)",
         tier=ProviderTier.TIER1,
         category=ProviderCategory.CHINA_LABS,
-        env_vars=["ZHIPU_API_KEY", "GLM_API_KEY"],
+        env_vars=["ZHIPU_API_KEY", "ZHIPUAI_API_KEY", "GLM_API_KEY"],
         litellm_prefix="zhipuai/",
         docs_url="https://open.bigmodel.cn/",
         example_models=[

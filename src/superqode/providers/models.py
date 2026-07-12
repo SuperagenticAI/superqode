@@ -92,6 +92,7 @@ class ModelInfo:
     description: str = ""
     recommended_for: List[str] = field(default_factory=list)
     released: str = ""  # Release date
+    pricing_known: bool = True
 
     @property
     def supports_tools(self) -> bool:
@@ -112,6 +113,8 @@ class ModelInfo:
     @property
     def price_display(self) -> str:
         """Display-friendly pricing."""
+        if not self.pricing_known:
+            return "Unknown"
         if self.input_price == 0 and self.output_price == 0:
             return "Free"
         return f"${self.input_price:.2f}/${self.output_price:.2f}"
@@ -656,6 +659,110 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
             description="Latest Gemini Flash alias listed by models.dev",
             recommended_for=["quick tasks", "high volume", "coding"],
             released="2025-09",
+        ),
+    },
+    # =========================================================================
+    # Z.AI (first-party general API)
+    # =========================================================================
+    "zai": {
+        "glm-5.2": ModelInfo(
+            id="glm-5.2",
+            name="GLM-5.2",
+            provider="zai",
+            pricing_known=False,
+            context_window=1_000_000,
+            max_output=131_072,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Latest Z.AI agentic engineering model; public API pricing pending",
+            recommended_for=["long-horizon coding", "large codebases", "agent workflows"],
+            released="2026-07",
+        ),
+        "glm-5.1": ModelInfo(
+            id="glm-5.1",
+            name="GLM-5.1",
+            provider="zai",
+            input_price=1.4,
+            output_price=4.4,
+            context_window=200_000,
+            max_output=131_072,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Z.AI flagship model for sustained agentic coding",
+            recommended_for=["coding", "long-running tasks", "repository work"],
+            released="2026-05",
+        ),
+        "glm-5-turbo": ModelInfo(
+            id="glm-5-turbo",
+            name="GLM-5 Turbo",
+            provider="zai",
+            input_price=1.2,
+            output_price=4.0,
+            context_window=200_000,
+            max_output=131_072,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Faster GLM-5 variant for iterative agent workflows",
+            recommended_for=["coding", "iteration", "agent workflows"],
+            released="2026-02",
+        ),
+        "glm-5": ModelInfo(
+            id="glm-5",
+            name="GLM-5",
+            provider="zai",
+            input_price=1.0,
+            output_price=3.2,
+            context_window=200_000,
+            max_output=131_072,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Agentic engineering model for planning, coding, and debugging",
+            recommended_for=["coding", "planning", "debugging"],
+            released="2026-02",
+        ),
+        "glm-4.7": ModelInfo(
+            id="glm-4.7",
+            name="GLM-4.7",
+            provider="zai",
+            input_price=0.6,
+            output_price=2.2,
+            context_window=200_000,
+            max_output=131_072,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Cost-effective Z.AI agentic coding model",
+            recommended_for=["coding", "general", "cost-sensitive workloads"],
+            released="2025-12",
         ),
     },
     # =========================================================================

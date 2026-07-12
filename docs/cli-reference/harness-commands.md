@@ -103,13 +103,13 @@ superqode harness init team --template coding --minimal
 
 | Option | Description |
 | --- | --- |
-| `-t, --template` | `coding`, `no-tool`, `qwen-coding`, `glm-coding`, `gemma4-coding`, `gemma4-no-tool`, `ds4-coding`, `ds4-fast-local` (default `coding`) |
+| `-t, --template` | `coding`, `no-tool`, `qwen-coding`, `glm-coding`, `glm52-coding`, `gemma4-coding`, `gemma4-no-tool`, `ds4-coding`, `ds4-fast-local` (default `coding`) |
 | `-o, --output PATH` | Spec file to write (default `harness.yaml`) |
 | `--preset` | `single`, `plan-implement-review`, `fix-and-verify`, `parallel-review`, `security-review`, `release-check`, `router`, `evaluator-optimizer` |
 | `--minimal` | Write a small spec with `inherits: <template>` instead of a fully expanded template |
 | `--force` | Overwrite an existing file |
 
-The `qwen-coding` and `glm-coding` templates reference a model-policy pack, so the matching tuning (temperature, parallel tools, history budget) is applied automatically.
+The `qwen-coding`, `glm-coding`, and `glm52-coding` templates reference a model-policy pack, so the matching tuning (temperature, parallel tools, history budget) is applied automatically. `glm52-coding` routes through the first-party Z.AI general API.
 
 Specs can also compose from templates or relative files:
 

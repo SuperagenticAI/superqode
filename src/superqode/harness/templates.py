@@ -262,6 +262,37 @@ def glm_coding_template() -> HarnessSpec:
     )
 
 
+def glm52_coding_template() -> HarnessSpec:
+    """GLM-5.2 harness for Z.AI's first-party general API."""
+    base = coding_template(name="glm52-coding")
+    return HarnessSpec(
+        **{
+            **base.__dict__,
+            "description": (
+                "GLM-5.2 long-horizon coding harness via the first-party Z.AI general API."
+            ),
+            "model_policy": ModelPolicySpec(
+                primary="zai/glm-5.2",
+                fallbacks=("zai/glm-5.1", "zai/glm-5"),
+                profile="glm52-coding",
+                pack="glm",
+                temperature=0.2,
+                context_window=1_000_000,
+                reasoning="max",
+                config={
+                    "parallel_tools": True,
+                    "session_history_limit": 30,
+                },
+            ),
+            "metadata": {
+                "template": "glm52-coding",
+                "provider": "zai",
+                "api_endpoint": "general",
+            },
+        }
+    )
+
+
 def minimax_coding_template() -> HarnessSpec:
     """MiniMax optimized coding harness starting point."""
     base = coding_template(name="minimax-coding")
@@ -337,6 +368,8 @@ BUILTIN_TEMPLATES = {
     "ds4-fast_local": ds4_fast_local_template,
     "qwen-coding": qwen_coding_template,
     "glm-coding": glm_coding_template,
+    "glm52-coding": glm52_coding_template,
+    "glm52_coding": glm52_coding_template,
     "minimax-coding": minimax_coding_template,
 }
 

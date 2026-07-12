@@ -162,6 +162,7 @@ class ProviderManager:
             "openrouter": "OPENROUTER_API_KEY",
             "qwen": "DASHSCOPE_API_KEY",
             "deepseek": "DEEPSEEK_API_KEY",
+            "zai": "ZAI_API_KEY",
             "github-copilot": "GITHUB_TOKEN",
             "together": "TOGETHER_API_KEY",
             "deepinfra": "DEEPINFRA_API_KEY",
@@ -1031,6 +1032,23 @@ class ProviderManager:
 
         providers.append(
             ProviderInfo(
+                id="zai",
+                name="Z.AI",
+                description="First-party GLM-5.2/5.x models via the Z.AI general API",
+                requires_api_key=True,
+                configured=self._is_provider_configured("zai"),
+                models=[
+                    ModelInfo("glm-5.2", "GLM-5.2", "zai", context_size=1_000_000),
+                    ModelInfo("glm-5.1", "GLM-5.1", "zai", context_size=200_000),
+                    ModelInfo("glm-5-turbo", "GLM-5 Turbo", "zai", context_size=200_000),
+                    ModelInfo("glm-5", "GLM-5", "zai", context_size=200_000),
+                    ModelInfo("glm-4.7", "GLM-4.7", "zai", context_size=200_000),
+                ],
+            )
+        )
+
+        providers.append(
+            ProviderInfo(
                 id="zhipu",
                 name="Zhipu AI",
                 description="GLM models (GLM-4, ChatGLM, etc.) - Tsinghua University",
@@ -1305,6 +1323,7 @@ class ProviderManager:
                     "openrouter": "OPENROUTER_API_KEY",
                     "qwen": "DASHSCOPE_API_KEY",
                     "deepseek": "DEEPSEEK_API_KEY",
+                    "zai": "ZAI_API_KEY",
                     "github-copilot": "GITHUB_TOKEN",
                     "together": "TOGETHER_API_KEY",
                     "deepinfra": "DEEPINFRA_API_KEY",

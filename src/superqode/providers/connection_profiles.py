@@ -6,7 +6,7 @@ profile declares a ``connector`` that the TUI/CLI dispatches on:
 
     runtime      self-contained runtime (own model+auth), e.g. codex-sdk
     acp          a specific ACP agent by short_name, e.g. "claude" or "grok"
-    byok         the BYOK provider/model picker
+    byok         the BYOK provider/model picker, optionally pinned to one provider
     local        the local provider/model picker
     acp-picker   the generic "pick any ACP agent" list
     external-cli a local vendor TUI that does not expose ACP/headless events yet
@@ -38,6 +38,7 @@ class ConnectionProfile:
     connector: str  # runtime | acp | byok | local | acp-picker | external-cli
     runtime: Optional[str] = None  # for connector == "runtime"
     acp_agent: Optional[str] = None  # for connector == "acp"
+    byok_provider: Optional[str] = None  # for connector == "byok"
     self_contained: bool = False
     # Probe (no network) for whether this source is ready to use right now.
     detect: Optional[Callable[[], bool]] = None
@@ -83,6 +84,14 @@ def _grok_cli_ready() -> bool:
     return shutil.which("grok") is not None and (Path.home() / ".grok" / "auth.json").exists()
 
 
+def _zai_ready() -> bool:
+    """A first-party Z.AI general-API key is available locally."""
+    from .credentials import provider_api_key
+    from .registry import PROVIDERS
+
+    return bool(provider_api_key(PROVIDERS["zai"]))
+
+
 _BYOK_KEY_ENVS = (
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
@@ -92,6 +101,7 @@ _BYOK_KEY_ENVS = (
     "MISTRAL_API_KEY",
     "OPENROUTER_API_KEY",
     "XAI_API_KEY",
+    "ZAI_API_KEY",
 )
 
 
@@ -101,7 +111,8 @@ def _byok_ready() -> bool:
 
 # --- registry -----------------------------------------------------------------
 
-# Display order (local-first product positioning): Local, BYOK, ACP, Codex, Claude, Antigravity, Grok.
+# Preserve the established picker positions. New profiles are appended so
+# keyboard navigation and users' muscle memory do not change.
 _PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="local",
@@ -177,6 +188,16 @@ _PROFILES: List[ConnectionProfile] = [
         acp_agent="grok",
         detect=_grok_cli_ready,
         unavailable_hint="install the Grok CLI, then run `grok login` (or `grok login --device-auth`)",
+    ),
+    ConnectionProfile(
+        id="zai",
+        label="Z.AI GLM API",
+        description="GLM-5.2/5.x with the SuperQode harness via Z.AI's general API",
+        connector="byok",
+        runtime="builtin",
+        byok_provider="zai",
+        detect=_zai_ready,
+        unavailable_hint=("set ZAI_API_KEY (general API key, not a restricted Coding Plan key)"),
     ),
 ]
 

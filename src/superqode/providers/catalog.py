@@ -91,9 +91,9 @@ def filter_models(
             continue
         if capability and capability not in m.capabilities:
             continue
-        if free and not (m.input_price == 0 and m.output_price == 0):
+        if free and not (m.pricing_known and m.input_price == 0 and m.output_price == 0):
             continue
-        if max_input_price is not None and m.input_price > max_input_price:
+        if max_input_price is not None and (not m.pricing_known or m.input_price > max_input_price):
             continue
         if curated_only and not is_curated_provider(m.provider):
             continue
@@ -102,7 +102,7 @@ def filter_models(
         out.append(m)
 
     if sort == "price":
-        out.sort(key=lambda m: (m.input_price, m.provider, m.id))
+        out.sort(key=lambda m: (not m.pricing_known, m.input_price, m.provider, m.id))
     elif sort == "context":
         out.sort(key=lambda m: (-m.context_window, m.provider, m.id))
     else:  # provider (default): curated first, then alphabetical
@@ -142,7 +142,11 @@ def render_models_table(models: List[ModelInfo], *, total: Optional[int] = None)
                 f"{marker}{m.provider}",
                 m.id,
                 _fmt_ctx(m.context_window),
-                f"{_fmt_price(m.input_price)}/{_fmt_price(m.output_price)}",
+                (
+                    f"{_fmt_price(m.input_price)}/{_fmt_price(m.output_price)}"
+                    if m.pricing_known
+                    else "?/?"
+                ),
                 caps_str(m),
             )
         )

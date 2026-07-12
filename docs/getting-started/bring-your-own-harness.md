@@ -104,6 +104,7 @@ superqode harness init my-coder -t qwen-coding
 | --- | --- |
 | `qwen-coding` | Qwen Coder (low temperature, native tools, long agentic sessions) |
 | `glm-coding` | GLM 4.x/5.x (strong agentic coder, native tools) |
+| `glm52-coding` | GLM-5.2 via Z.AI general API (long horizon, native tools) |
 | `gemma4-coding` | Gemma 4 local (strict-JSON tool calls, MLX) |
 | `ds4-coding` | DeepSeek/DS4 (compact-JSON tool calls) |
 | `ds4-fast-local` | DS4 fast local iteration starter |
