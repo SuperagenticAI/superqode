@@ -14,8 +14,27 @@ from superqode.providers.connection_profiles import (
 
 def test_registry_has_expected_profiles():
     ids = connection_profile_ids()
-    # Local-first display order: Local, BYOK, ACP, Codex, Claude, Antigravity, Grok.
-    assert ids == ["local", "byok", "acp", "codex", "claude", "antigravity", "grok"]
+    # Preserve all established picker positions; new profiles append at the end.
+    assert ids == [
+        "local",
+        "byok",
+        "acp",
+        "codex",
+        "claude",
+        "antigravity",
+        "grok",
+        "zai",
+    ]
+
+
+def test_zai_profile_targets_first_party_byok_provider(monkeypatch):
+    monkeypatch.setenv("ZAI_API_KEY", "test-key")
+    zai = get_connection_profile("zai")
+
+    assert zai.connector == "byok"
+    assert zai.byok_provider == "zai"
+    assert zai.available is True
+    assert "general api" in zai.description.lower()
 
 
 def test_codex_profile_is_runtime_connector():
@@ -147,6 +166,9 @@ class _DispatchStub:
     def _show_byok_providers(self, log):
         self.calls.append(("byok",))
 
+    def _connect_byok_cmd(self, args, log):
+        self.calls.append(("byok-cmd", args))
+
     def _show_local_provider_picker(self, log):
         self.calls.append(("local",))
 
@@ -192,6 +214,12 @@ def test_dispatch_antigravity_routes_to_cli_runtime(_dispatch):
     stub = _DispatchStub()
     _dispatch(stub, get_connection_profile("antigravity"), log=None)
     assert ("runtime", "antigravity-cli") in stub.calls
+
+
+def test_dispatch_zai_routes_to_zai_provider_models(_dispatch):
+    stub = _DispatchStub()
+    _dispatch(stub, get_connection_profile("zai"), log=None)
+    assert ("byok-cmd", "zai") in stub.calls
 
 
 def test_antigravity_commands_select_explicit_harness_routes():
@@ -308,9 +336,10 @@ def test_connect_profiles_in_commands_and_completion():
     assert ":connect claude" in COMMANDS
     assert ":connect antigravity" in COMMANDS
     assert ":connect grok" in COMMANDS
+    assert ":connect zai" in COMMANDS
     assert ":grok status" in COMMANDS
     values = {c.value for c in SuperQodeApp._connect_profile_completion_candidates()}
-    assert {"codex", "claude", "antigravity", "grok", "byok", "local", "acp"} <= values
+    assert {"codex", "claude", "antigravity", "grok", "zai", "byok", "local", "acp"} <= values
 
 
 def test_no_duplicate_acp_claude_profile():

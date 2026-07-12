@@ -170,6 +170,10 @@ class ConnectMixin:
             # A specific ACP agent by short_name (Claude, Grok Build, …).
             self._connect_acp_cmd(profile.acp_agent or "", log)
         elif conn == "byok":
+            provider = getattr(profile, "byok_provider", None)
+            if provider:
+                self._connect_byok_cmd(provider, log)
+                return
             self._byok_highlighted_provider_index = 0
             self._byok_highlighted_model_index = 0
             self._just_showed_byok_picker = True
@@ -712,11 +716,9 @@ class ConnectMixin:
             and provider_def.category != ProviderCategory.LOCAL
             and provider_def.env_vars
         ):
-            has_key = False
-            for env_var in provider_def.env_vars:
-                if os.environ.get(env_var):
-                    has_key = True
-                    break
+            from superqode.providers.credentials import provider_api_key
+
+            has_key = bool(provider_api_key(provider_def))
 
             if not has_key:
                 t = Text()

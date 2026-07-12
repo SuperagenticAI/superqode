@@ -681,6 +681,13 @@ class LiteLLMGateway(GatewayInterface):
         if hf_glm52 is not None:
             return hf_glm52
 
+        if provider == "zai":
+            thinking_type = "disabled" if level == "off" else "enabled"
+            result: Dict[str, Any] = {"extra_body": {"thinking": {"type": thinking_type}}}
+            if (model or "").lower().split("/")[-1] == "glm-5.2":
+                result["reasoning_effort"] = "none" if level == "off" else level
+            return result
+
         model_lower = (model or "").lower()
         is_anthropic_shape = (
             provider == "anthropic" or provider == "ds4" or "deepseek-v4" in model_lower
@@ -700,6 +707,20 @@ class LiteLLMGateway(GatewayInterface):
             # o-series/GPT-5 doesn't expose a "max" tier on this field.
             return {"reasoning_effort": "high" if level == "max" else level}
         return {}
+
+    @staticmethod
+    def _apply_zai_stream_shaping(
+        provider: str,
+        request_kwargs: Dict[str, Any],
+        *,
+        has_tools: bool,
+    ) -> None:
+        """Enable Z.AI's streamed function-call deltas when tools are present."""
+        if provider != "zai" or not has_tools:
+            return
+        extra_body = dict(request_kwargs.get("extra_body") or {})
+        extra_body.setdefault("tool_stream", True)
+        request_kwargs["extra_body"] = extra_body
 
     def _resolve_hf_glm52_reasoning_effort(
         self,
@@ -2410,6 +2431,8 @@ class LiteLLMGateway(GatewayInterface):
             # Check message for thinking fields (Claude format)
             if not thinking_content and hasattr(message, "thinking"):
                 thinking_content = message.thinking
+            if not thinking_content and hasattr(message, "reasoning_content"):
+                thinking_content = message.reasoning_content
 
             # Check for stop_reason indicating thinking (Claude extended thinking)
             if not thinking_content and choice.finish_reason == "thinking":
@@ -2553,6 +2576,12 @@ class LiteLLMGateway(GatewayInterface):
             )
             request_kwargs.pop("_structured_output_mode", None)
 
+        self._apply_zai_stream_shaping(
+            provider,
+            request_kwargs,
+            has_tools=bool(tools),
+        )
+
         # Strip budget marker; pre-check already happened above.
         budget_for_credit: Optional[TaskTokenBudget] = kwargs.pop("task_budget", None)
 
@@ -2619,6 +2648,8 @@ class LiteLLMGateway(GatewayInterface):
                 thinking_content = None
                 if hasattr(delta, "thinking") and delta.thinking:
                     thinking_content = delta.thinking
+                elif hasattr(delta, "reasoning_content") and delta.reasoning_content:
+                    thinking_content = delta.reasoning_content
                 elif hasattr(choice, "thinking") and choice.thinking:
                     thinking_content = choice.thinking
 

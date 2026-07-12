@@ -44,6 +44,18 @@ def connect_local(provider, model):
     exit(connect_local_provider(provider, model))
 
 
+@connect.command("zai")
+@click.argument("model", metavar="MODEL", required=False)
+def connect_zai(model):
+    """Connect to Z.AI GLM models through the general API.
+
+    This does not use the restricted GLM Coding Plan endpoint.
+    """
+    from superqode.commands.providers import connect_provider
+
+    exit(connect_provider("zai", model))
+
+
 @connect.command("setup")
 @click.argument("provider", metavar="PROVIDER")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")

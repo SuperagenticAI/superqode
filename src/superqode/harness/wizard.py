@@ -18,6 +18,7 @@ WIZARD_STARTERS: tuple[tuple[str, str], ...] = (
     ("coding", "Model-agnostic harness (recommended: choose your own model and pack)"),
     ("qwen-coding", "Qwen Coder (local, native tools, low temperature)"),
     ("glm-coding", "GLM 4.x/5.x (strong agentic coder, native tools)"),
+    ("glm52-coding", "GLM-5.2 via Z.AI general API (long horizon, native tools)"),
     ("minimax-coding", "MiniMax M-series (long context, reasoning/coding)"),
     ("gemma4-coding", "Gemma 4 (local MLX, strict-JSON tool calls)"),
     ("ds4-coding", "DeepSeek/DS4 (compact-JSON tool calls)"),

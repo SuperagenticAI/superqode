@@ -7,6 +7,7 @@ HARNESS_TEMPLATE_CHOICES = (
     "no-tool",
     "qwen-coding",
     "glm-coding",
+    "glm52-coding",
     "gemma4-coding",
     "gemma4-no-tool",
     "ds4-coding",

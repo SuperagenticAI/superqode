@@ -9,8 +9,8 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 208
-EXPECTED_HELP_TREE_SHA256 = "09fb2a77b9541b24091289ec2ca21605ea33dc142c3f7e3b2f1172dc4df07fdc"
+EXPECTED_COMMAND_COUNT = 209
+EXPECTED_HELP_TREE_SHA256 = "17f40dbc84c324b9b6048f814f08270e5af27a90fb87a689558cb0d51c4c7ceb"
 
 
 def _render_help_tree() -> tuple[int, str]:

@@ -178,6 +178,7 @@ nav:
   - 🔌 Models & Providers:
     - providers/index.md
     - 🔑 BYOK Providers: providers/byok.md
+    - 🧠 Z.AI GLM: providers/zai.md
     - 🚀 Google Antigravity: providers/antigravity.md
     - 🤖 ACP Agents: providers/acp.md
     - 🔁 A2A Providers: providers/a2a.md

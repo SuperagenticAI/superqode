@@ -401,12 +401,13 @@ runtimes.
 | --- | --- |
 | `qwen-coding` | Qwen Coder pack: low temperature, native tools, long agentic sessions, sequential tools |
 | `glm-coding` | GLM pack: native tools, longer history budget, sequential tools |
+| `glm52-coding` | Z.AI GLM-5.2: native tools, 1M context, max reasoning, longer history |
 | `gemma4-coding` | minimal prompt, compact local tool surface, strict JSON tool-call hints, low temperature, sequential tools |
 | `gemma4-no-tool` | model-only prompt, no tools, low temperature, short history, reasoning disabled where supported |
 | `ds4-coding` | DS4 prompt path, compact tool surface, low temperature, low reasoning, sequential tools |
 | `ds4-fast-local` | DS4 coding with tighter iteration and history budgets for fast local loops |
 
-The `qwen-coding` and `glm-coding` templates set `model_policy.pack`, so the matching model-policy pack (temperature, parallel-tools, history budget) is layered on automatically. List every built-in template with `superqode harness list-templates`.
+The `qwen-coding`, `glm-coding`, and `glm52-coding` templates set `model_policy.pack`, so the matching model-policy pack (temperature, parallel-tools, history budget) is layered on automatically. `glm52-coding` explicitly uses the Z.AI general API route. List every built-in template with `superqode harness list-templates`.
 
 No-tool policy also sets `reasoning=off`. For Anthropic-shape providers such as DS4, this maps to the provider
 thinking-disable field. Providers without that capability ignore the setting safely.
