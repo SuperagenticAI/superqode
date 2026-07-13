@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from superqode.app.constants import (
     COMMANDS,
+    CONNECT_COMPLETION_COMMANDS,
 )
 from superqode.app.recipes import PromptCompletionCandidate
 
@@ -88,54 +89,110 @@ class HelperCompletionHelpersMixin:
                 break
         return candidates
 
-    @staticmethod
-    def _static_command_candidates(value: str) -> list[PromptCompletionCandidate]:
+    def _agent_command_metadata(self) -> dict[str, tuple[str, str]]:
+        """Return shortcut -> (name, description) for known ACP agents."""
+        metadata: dict[str, tuple[str, str]] = {}
+
+        for agent in getattr(self, "_agents", None) or []:
+            short_name = str(getattr(agent, "short_name", "") or "").strip().lower()
+            if short_name:
+                metadata[short_name] = (
+                    str(getattr(agent, "name", "") or short_name),
+                    str(getattr(agent, "description", "") or ""),
+                )
+
+        for short_name, agent in (getattr(self, "_discovered_acp_agents", {}) or {}).items():
+            key = str(short_name or "").strip().lower()
+            if key:
+                metadata[key] = (
+                    str(getattr(agent, "name", "") or key),
+                    str(getattr(agent, "description", "") or ""),
+                )
+
+        try:
+            from superqode.agents.registry import AGENTS
+
+            for short_name, agent in AGENTS.items():
+                key = str(short_name or "").strip().lower()
+                if key:
+                    metadata.setdefault(
+                        key,
+                        (
+                            str(getattr(agent, "name", "") or key),
+                            str(getattr(agent, "description", "") or ""),
+                        ),
+                    )
+        except Exception:
+            pass
+
+        return metadata
+
+    def _completion_command_values(self) -> tuple[str, ...]:
+        """Merge static commands with live agent shortcuts without duplicates."""
+        values = list(COMMANDS)
+        values.extend(f":{name}" for name in self._agent_command_metadata())
+        return tuple(dict.fromkeys(values))
+
+    def _static_command_candidates(self, value: str) -> list[PromptCompletionCandidate]:
         from superqode.app_main import SuperQodeApp
 
         lowered = value.lower()
-        if lowered in {":c", ":co", ":con", ":conn", ":conne", ":connec"}:
+        all_commands = self._completion_command_values()
+        agent_metadata = self._agent_command_metadata()
+
+        def description(command: str) -> str:
+            agent = agent_metadata.get(command.removeprefix(":").lower())
+            if agent is not None:
+                name, detail = agent
+                return detail or f"Connect to {name} through ACP"
+            return SuperQodeApp._command_description(command)
+
+        if lowered in {":c", ":co", ":con", ":conn", ":conne", ":connec", ":connect"}:
+            priority = list(CONNECT_COMPLETION_COMMANDS)
             commands = [
-                ":connect",
-                ":connect acp",
-                ":connect antigravity",
-                ":connect grok",
-                ":connect byok",
-                ":connect local",
+                *priority,
+                *sorted(
+                    command
+                    for command in all_commands
+                    if command.startswith(":connect ") and command not in priority
+                ),
             ]
             return [
                 PromptCompletionCandidate(
                     value=command,
                     label=command,
-                    description=SuperQodeApp._command_description(command),
+                    description=description(command),
                     kind="command",
                 )
                 for command in commands
-                if command != value
+                if command != value or lowered == ":connect"
             ]
         matches = [
             PromptCompletionCandidate(
                 value=command,
                 label=command,
-                description=SuperQodeApp._command_description(command),
+                description=description(command),
                 kind="command",
             )
             for command in sorted(
-                dict.fromkeys(COMMANDS),
+                all_commands,
                 key=lambda command: SuperQodeApp._command_completion_sort_key(lowered, command),
             )
             if command.lower().startswith(lowered) and command != value
         ]
-        if value in COMMANDS and matches:
+        if value in all_commands and matches and lowered != ":q":
             matches.insert(
                 0,
                 PromptCompletionCandidate(
                     value=value,
                     label=value,
-                    description=SuperQodeApp._command_description(value),
+                    description=description(value),
                     kind="command",
                 ),
             )
-        return matches[:8]
+        # The renderer pages eight rows at a time; retain every match here so
+        # up/down navigation can reach the full command surface.
+        return matches
 
     @staticmethod
     def _command_description(command: str) -> str:

@@ -212,16 +212,39 @@ class ConnectMixin:
                 self._awaiting_byok_model = False
                 self._connect_byok_mode(provider_id, model, log)
 
-    def _track_byok_usage(self, input_text: str, response: str, tool_calls: int = 0):
-        """Track BYOK usage and update status bar."""
+    def _track_byok_usage(
+        self,
+        input_text: str,
+        response: str,
+        tool_calls: int = 0,
+        *,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        total_tokens: int = 0,
+        total_cost: float | None = None,
+    ):
+        """Track BYOK usage, preferring exact provider totals when available."""
         from superqode.providers.usage import get_usage_tracker
 
-        # Estimate tokens (rough: 4 chars per token)
-        input_tokens = len(input_text) // 4
-        output_tokens = len(response) // 4
+        input_tokens = max(0, int(prompt_tokens or 0))
+        output_tokens = max(0, int(completion_tokens or 0))
+        reported_total = max(0, int(total_tokens or 0))
+
+        if reported_total > 0:
+            # Some providers include reasoning/cache tokens in total_tokens.
+            # Preserve the authoritative total even when the input/output
+            # breakdown does not add up to it exactly.
+            if input_tokens > reported_total:
+                input_tokens = 0
+            output_tokens = reported_total - input_tokens
+        elif input_tokens + output_tokens == 0:
+            # Older/non-reporting gateways still get a clearly documented
+            # fallback rather than losing usage tracking entirely.
+            input_tokens = len(input_text) // 4
+            output_tokens = len(response) // 4
 
         tracker = get_usage_tracker()
-        tracker.add_usage(input_tokens, output_tokens)
+        tracker.add_usage(input_tokens, output_tokens, cost=total_cost)
 
         for _ in range(tool_calls):
             tracker.add_tool_call()

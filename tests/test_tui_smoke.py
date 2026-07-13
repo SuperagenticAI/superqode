@@ -789,9 +789,109 @@ def test_colorful_status_bar_keeps_context_out_of_transcript():
     bar = ColorfulStatusBar()
     bar.update_context_usage(12_000, 200_000)
 
-    plain = bar.render().plain
+    plain = bar._render_for_width(120).plain
     assert "ctx 6%" in plain
     assert "12K/200K" in plain
+
+
+def test_colorful_status_bar_compacts_by_width():
+    from superqode import __version__
+    from superqode.app.widgets import ColorfulStatusBar
+
+    bar = ColorfulStatusBar()
+    bar.update_byok_status(
+        "ollama",
+        "a-very-long-qwen-coder-model-name-that-needs-compaction",
+        tokens=12_000,
+        context_window=200_000,
+    )
+    bar.interaction_mode = "build"
+
+    wide = bar._render_for_width(140).plain
+    medium = bar._render_for_width(90).plain
+    narrow = bar._render_for_width(58).plain
+
+    assert f"SuperQode v{__version__}" in wide
+    assert "Harness Engineering frameworks" not in wide
+    assert "\n" not in wide
+    assert "ollama/" in wide
+    assert "runtime builtin" not in wide
+    assert "12K/200K" in wide
+    assert "ctx 6%" in medium
+    assert "12K/200K" not in medium
+    assert "runtime builtin" not in medium
+    assert "ctx" not in narrow
+    assert "BUILD" in narrow
+    assert "…" in narrow
+
+
+def test_colorful_status_bar_makes_disconnected_state_explicit():
+    from superqode import __version__
+    from superqode.app.widgets import ColorfulStatusBar
+
+    plain = ColorfulStatusBar()._render_for_width(90).plain
+
+    assert f"SuperQode v{__version__}" in plain
+    assert "Harness Engineering frameworks" not in plain
+    assert "No model" in plain
+    assert "runtime builtin" not in plain
+    assert "BUILD" in plain
+
+
+def test_byok_usage_prefers_exact_provider_token_total(monkeypatch):
+    import superqode.providers.usage as usage_module
+
+    calls = []
+
+    class Tracker:
+        def add_usage(self, input_tokens, output_tokens, cost=None):
+            calls.append((input_tokens, output_tokens, cost))
+
+        def add_tool_call(self):
+            pass
+
+    monkeypatch.setattr(usage_module, "get_usage_tracker", lambda: Tracker())
+    app = SuperQodeApp.__new__(SuperQodeApp)
+    app._update_byok_status_bar = lambda: None
+
+    SuperQodeApp._track_byok_usage(
+        app,
+        "short prompt",
+        "short answer",
+        prompt_tokens=400,
+        completion_tokens=100,
+        total_tokens=513,
+        total_cost=0.012,
+    )
+
+    assert calls == [(400, 113, 0.012)]
+
+
+def test_local_connection_failure_is_prominent_near_prompt():
+    app = SuperQodeApp.__new__(SuperQodeApp)
+    notifications = []
+    placeholders = []
+    app.notify = lambda message, **kwargs: notifications.append((message, kwargs))
+    app._set_input_placeholder = placeholders.append
+    app._ensure_input_focus = lambda: None
+    log = FakeLog()
+
+    SuperQodeApp._surface_local_connection_failure(app, log, "Ollama connection failed: offline")
+
+    assert log.items == ["Ollama connection failed: offline"]
+    assert notifications == [
+        ("Ollama connection failed: offline", {"severity": "error", "timeout": 10})
+    ]
+    assert placeholders == ["Connection failed — fix the issue, then reconnect"]
+
+
+def test_home_mode_badge_does_not_repeat_product_identity():
+    from superqode.app.widgets import ModeBadge
+
+    plain = ModeBadge().render().plain
+
+    assert plain == ""
+    assert "SUPERQODE" not in plain
 
 
 def test_work_command_renders_last_run_trace():
@@ -1168,7 +1268,7 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":permissions" in COMMANDS
     assert ":policy" in COMMANDS
     assert ":c" not in COMMANDS
-    assert ":q" not in COMMANDS
+    assert ":q" in COMMANDS
     slash_values = {command.command for command in DEFAULT_COMMANDS}
     assert ":harness inspect" in slash_values
     assert ":harness doctor" in slash_values
@@ -1225,7 +1325,74 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":permissions" in slash_values
     assert ":policy" in slash_values
     assert ":c" not in slash_values
-    assert ":q" not in slash_values
+    assert ":q" in slash_values
+
+
+def test_tui_completion_covers_every_dispatched_colon_command():
+    """Adding a dispatch branch without autocomplete must fail this guard."""
+    import ast
+
+    from superqode.app.constants import COMMANDS
+
+    source = Path("src/superqode/app/mixins/slash_commands.py").read_text()
+    tree = ast.parse(source)
+    dispatched: set[str] = set()
+
+    class DispatchVisitor(ast.NodeVisitor):
+        def visit_Compare(self, node):
+            if isinstance(node.left, ast.Name) and node.left.id == "c":
+                for operator, comparator in zip(node.ops, node.comparators):
+                    if (
+                        isinstance(operator, ast.Eq)
+                        and isinstance(comparator, ast.Constant)
+                        and isinstance(comparator.value, str)
+                    ):
+                        dispatched.add(comparator.value)
+                    elif isinstance(operator, ast.In) and isinstance(
+                        comparator, (ast.Tuple, ast.List, ast.Set)
+                    ):
+                        dispatched.update(
+                            item.value
+                            for item in comparator.elts
+                            if isinstance(item, ast.Constant) and isinstance(item.value, str)
+                        )
+            self.generic_visit(node)
+
+    DispatchVisitor().visit(tree)
+    completed_roots = {command[1:].split()[0] for command in COMMANDS if command.startswith(":")}
+
+    assert dispatched - completed_roots == set()
+
+
+def test_prompt_completion_keeps_all_commands_and_live_agent_shortcuts():
+    app = make_app()
+    app._discovered_acp_agents = {
+        "zed": SimpleNamespace(name="Zed Agent", description="Custom ACP coding agent")
+    }
+
+    all_candidates = app._prompt_completion_candidates_for(":")
+    zed_candidates = app._prompt_completion_candidates_for(":ze")
+
+    assert len(all_candidates) > 8
+    assert any(candidate.value == ":zed" for candidate in all_candidates)
+    assert [candidate.value for candidate in zed_candidates] == [":zed"]
+    assert zed_candidates[0].description == "Custom ACP coding agent"
+
+
+def test_live_agent_shortcut_dispatches_when_selected():
+    app = make_app()
+    app._discovered_acp_agents = {
+        "zed": SimpleNamespace(name="Zed Agent", description="Custom ACP coding agent")
+    }
+    connected = []
+    app._acp_client = None
+    app._record_ex_command = lambda *_args: None
+    app._connect_agent = connected.append
+    app.set_timer = lambda *_args, **_kwargs: None
+
+    app._handle_command(":zed", FakeLog())
+
+    assert connected == ["zed"]
 
 
 def test_tui_static_commands_cover_cli_surface_except_tui_launcher():
@@ -2399,14 +2566,18 @@ def test_prompt_completion_prioritizes_full_connect_and_quit_commands():
         ":connect byok",
         ":connect local",
     ]
-    assert connect_values == [
+    assert connect_values[:9] == [
         ":connect",
         ":connect acp",
         ":connect antigravity",
         ":connect grok",
         ":connect byok",
         ":connect local",
+        ":connect codex",
+        ":connect claude",
+        ":connect zai",
     ]
+    assert ":connect setup" in connect_values
     assert quit_values[0] == ":quit"
     assert all(not value.startswith(":qe") for value in quit_values)
     assert SuperQodeApp._should_submit_prompt_without_completion(":c") is False

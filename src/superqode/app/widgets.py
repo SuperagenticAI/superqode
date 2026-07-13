@@ -162,10 +162,28 @@ class ColorfulStatusBar(Static):
             return f"{tokens / 1000:.1f}K".replace(".0K", "K")
         return str(tokens)
 
-    def render(self) -> Text:
+    @staticmethod
+    def _truncate_status_value(value: str, limit: int) -> str:
+        value = str(value or "")
+        if len(value) <= limit:
+            return value
+        if limit < 8:
+            return value[: max(1, limit - 1)] + "…"
+        left = (limit - 1) // 2
+        right = limit - left - 1
+        return f"{value[:left]}…{value[-right:]}"
+
+    def _render_for_width(self, width: int) -> Text:
+        """Render one compact identity and operational status line."""
+        width = max(1, int(width or 120))
+        wide = width >= 110
+        medium = width >= 72
         result = Text()
 
-        # Logo part - with gradient colors
+        def separator() -> None:
+            result.append(" │ ", style="#3f3f46")
+
+        # Compact branded identity. Version is retained at every width.
         super_colors = ["#a855f7", "#b366f9", "#c177fb", "#cf88fd", "#dd99ff"]
         for i, char in enumerate("Super"):
             color = super_colors[i % len(super_colors)]
@@ -176,61 +194,51 @@ class ColorfulStatusBar(Static):
             result.append(char, style=f"bold {color}")
         result.append(f" v{__version__}", style="#71717a")
         result.append(" ✨", style="bold #fbbf24")
-        result.append(" ", style="")
-        result.append("Harness Engineering frameworks for Coding Agents", style="")
 
-        # BYOK status (if connected)
+        # Connection and model are always explicit, including before the user
+        # has selected one. Long names compact, but the state never disappears.
+        model_limit = 42 if wide else 24 if medium else 15 if width >= 64 else 10
+        provider_limit = 24 if medium else 12 if width >= 64 else 8
         if self.byok_provider:
-            result.append("  │  ", style="#3f3f46")
-            result.append(f"{self.byok_provider}", style="bold #10b981")
-            if self.byok_model:
-                result.append(f"/{self.byok_model}", style="#a1a1aa")
-
-            # Show usage
-            if self.byok_tokens > 0:
-                result.append("  ", style="")
-                result.append(self._format_token_count(self.byok_tokens), style="#06b6d4")
-                result.append(" tok", style="#52525b")
-
-            # Show cost
-            if self.byok_cost > 0:
-                result.append("  ", style="")
-                if self.byok_cost >= 0.01:
-                    result.append(f"${self.byok_cost:.2f}", style="#fbbf24")
-                else:
-                    result.append(f"${self.byok_cost:.3f}", style="#fbbf24")
-
-        # Active runtime + model (full, not shortened), e.g. "codex-sdk · gpt-5.5"
-        if self.active_runtime or self.active_model:
-            result.append("  │  ", style="#3f3f46")
-            result.append("🔧 ", style="#06b6d4")
-            if self.active_runtime:
-                result.append(self.active_runtime, style="bold #06b6d4")
-            if self.active_model:
-                sep = " · " if self.active_runtime else ""
-                result.append(f"{sep}{self.active_model}", style="#a1a1aa")
-
-        # Context belongs in persistent chrome rather than conversation
-        # history. ACP supplies exact used/size values; BYOK falls back to the
-        # session token count when that is the only available signal.
-        context_used = self.context_used or self.byok_tokens
-        if self.context_window > 0 and context_used > 0:
-            pct = min(100, round(100 * context_used / self.context_window))
-            if pct < 60:
-                context_color = "#22c55e"
-            elif pct < 85:
-                context_color = "#fbbf24"
-            else:
-                context_color = "#ef4444"
-            result.append("  │  ", style="#3f3f46")
-            result.append("ctx ", style="#71717a")
-            result.append(f"{pct}%", style=context_color)
+            separator()
+            result.append("● ", style="#22c55e")
             result.append(
-                f" · {self._format_token_count(context_used)}/"
-                f"{self._format_token_count(self.context_window)}",
-                style="#71717a",
+                self._truncate_status_value(self.byok_provider, provider_limit),
+                style="bold #10b981",
             )
+            if self.byok_model:
+                result.append(
+                    f"/{self._truncate_status_value(self.byok_model, model_limit)}",
+                    style="#a1a1aa",
+                )
+        elif self.active_model:
+            separator()
+            result.append("● ", style="#22c55e")
+            result.append(
+                self._truncate_status_value(self.active_model, model_limit),
+                style="bold #10b981",
+            )
+        elif self.active_runtime:
+            separator()
+            result.append("● ", style="#22c55e")
+            result.append(
+                self._truncate_status_value(self.active_runtime, model_limit),
+                style="bold #10b981",
+            )
+        else:
+            separator()
+            result.append("○ No model", style="#71717a")
 
+        # A specialized runtime is useful when a model is also named. The
+        # default built-in runtime is intentionally omitted as visual noise.
+        runtime = (self.active_runtime or "").strip()
+        if runtime and self.active_model:
+            separator()
+            result.append("rt ", style="#52525b")
+            runtime_limit = 20 if medium else 7
+            result.append(self._truncate_status_value(runtime, runtime_limit), style="#06b6d4")
+
+        # Interaction mode is always visible.
         mode = (self.interaction_mode or "").strip().lower()
         if mode:
             mode_label = {"chat": "CHAT", "plan": "PLAN", "build": "BUILD"}.get(mode, mode.upper())
@@ -239,8 +247,33 @@ class ColorfulStatusBar(Static):
                 "plan": "#fbbf24",
                 "build": "#22c55e",
             }.get(mode, "#a855f7")
-            result.append("  │  ", style="#3f3f46")
+            separator()
             result.append(mode_label, style=f"bold {mode_color} reverse")
+
+        # Usage remains visible whenever known. Figures compact on narrower
+        # terminals, while connection/runtime/mode retain priority.
+        context_used = self.context_used or self.byok_tokens
+        if medium and self.context_window > 0 and context_used > 0:
+            pct = min(100, round(100 * context_used / self.context_window))
+            if pct < 60:
+                context_color = "#22c55e"
+            elif pct < 85:
+                context_color = "#fbbf24"
+            else:
+                context_color = "#ef4444"
+            separator()
+            result.append("ctx ", style="#71717a")
+            result.append(f"{pct}%", style=context_color)
+            if wide:
+                result.append(
+                    f" · {self._format_token_count(context_used)}/"
+                    f"{self._format_token_count(self.context_window)}",
+                    style="#71717a",
+                )
+        elif medium and self.byok_tokens > 0:
+            separator()
+            result.append(self._format_token_count(self.byok_tokens), style="#06b6d4")
+            result.append(" tok", style="#52525b")
 
         if self.plan_state:
             state = self.plan_state.strip()
@@ -250,11 +283,19 @@ class ColorfulStatusBar(Static):
                 "active": "#06b6d4",
                 "approved": "#22c55e",
             }.get(state, "#a855f7")
-            result.append("  │  ", style="#3f3f46")
+            separator()
             result.append("PLAN", style=f"bold {color}")
             result.append(f" {state}", style=color)
 
+        if self.byok_cost > 0 and medium:
+            separator()
+            cost = f"${self.byok_cost:.2f}" if self.byok_cost >= 0.01 else f"${self.byok_cost:.3f}"
+            result.append(cost, style="#fbbf24")
+
         return result
+
+    def render(self) -> Text:
+        return self._render_for_width(self.size.width or 120)
 
     def update_byok_status(
         self,
@@ -722,8 +763,10 @@ class ModeBadge(Static):
             t.append("  ", style="")
             t.append(f"{approval_icon}", style=approval_color)
         else:
-            t.append("🏠 ", style=f"bold {THEME['purple']}")
-            t.append("SUPERQODE", style=f"bold {THEME['purple']}")
+            # Product identity already lives in the persistent status header.
+            # An empty home badge avoids repeating it above the prompt while
+            # preserving this widget for useful agent/role connection state.
+            return Text("")
 
         return t
 

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.19] - 2026-07-13
+
 ### Added
 
 - **Guided subscription sign-in** - Added consent-gated Codex and Grok CLI login flows that surface device-auth instructions in the TUI and resume the requested connection after successful authentication.
@@ -16,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Answer-focused conversation styling** - Replaced the heavy boxed `YOU` prompt with a compact purple `▌ You` transcript row and a restrained aubergine highlight behind only the prompt text, added an explicit accented `✦ Answer · agent` rule, kept the response directly beneath that marker and moved completion metadata after it, deduplicated repeated ACP context updates, and made mode, token, and completion chrome visually quieter.
 - **Quieter startup and context chrome** - Moved local-model warmup progress into the transient activity indicator, collapsed successful connection startup into one dim readiness line, kept failures visible as warnings, and moved ACP context usage exclusively into a compact persistent top-line meter.
+- **Compact top status header** - Consolidated version, connection/model, specialized runtime, mode, usage, cost, and plan state into one responsive line; disconnected sessions show a quiet `No model` state, while default-runtime noise, the redundant home-screen `SUPERQODE` badge, and the persistent marketing tagline are omitted.
+- **Clearer TUI status feedback** - Added a small breathing row above the compact header, switched its session token figure from character-count estimates to exact provider-reported streaming usage when available, and surfaced local connection failures through a persistent error entry, focused recovery prompt, and prominent error notification.
+- **Complete TUI command autocomplete** - Kept every matching `:` command keyboard-reachable through the paged completion panel, synchronized dispatcher aliases across both completion surfaces, and added live ACP agent shortcuts—including discovered or custom agents—to suggestions.
+- **Release metadata** - Bumped the package version, runtime `__version__`, lockfile package entry, and ACP registry metadata to `0.2.19`.
 
 ### Fixed
 

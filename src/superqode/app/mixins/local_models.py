@@ -301,6 +301,23 @@ class LocalModelsMixin:
             except Exception:
                 pass
 
+    def _surface_local_connection_failure(
+        self,
+        log: ConversationLog,
+        message: str,
+    ) -> None:
+        """Keep a local connection failure visible in transcript and chrome."""
+        log.add_error(message)
+        try:
+            self.notify(message, severity="error", timeout=10)
+        except Exception:
+            pass
+        try:
+            self._set_input_placeholder("Connection failed — fix the issue, then reconnect")
+            self._ensure_input_focus()
+        except Exception:
+            pass
+
     def _should_show_thinking_for_local(self, text: str) -> bool:
         """Determine if a thinking log should be shown for local models.
 
@@ -503,7 +520,10 @@ class LocalModelsMixin:
                         # paying the one-time cold load (~81GB paged from disk).
                         await self._warmup_ds4(client, model, log)
                     else:
-                        log.add_warning(f"DS4 server not ready: {health.error or 'unavailable'}")
+                        self._surface_local_connection_failure(
+                            log,
+                            f"DS4 connection failed: {health.error or 'server unavailable'}",
+                        )
                 elif provider == "ollama":
                     from superqode.providers.local.ollama import OllamaClient
 
@@ -516,7 +536,10 @@ class LocalModelsMixin:
                             log.add_success(f"✓ Ollama server ready at {ollama_host}")
                         await self._warmup_local_generation(provider, model, log)
                     else:
-                        log.add_warning(f"Ollama server not ready: {health.error or 'unavailable'}")
+                        self._surface_local_connection_failure(
+                            log,
+                            f"Ollama connection failed: {health.error or 'server unavailable'}",
+                        )
                 else:
                     if not quiet:
                         log.add_info(
@@ -557,7 +580,10 @@ class LocalModelsMixin:
 
             error_msg = str(e)
             error_type = type(e).__name__
-            log.add_error(f"✗ Connection test failed ({error_type}): {error_msg}")
+            self._surface_local_connection_failure(
+                log,
+                f"Connection failed ({error_type}): {error_msg}",
+            )
 
             # Show full traceback for debugging
             if hasattr(self, "show_thinking_logs") and self.show_thinking_logs:
@@ -646,7 +672,10 @@ class LocalModelsMixin:
                 )
                 return
             except Exception as exc:  # noqa: BLE001
-                log.add_warning(f"Local warmup skipped: {exc}")
+                self._surface_local_connection_failure(
+                    log,
+                    f"Local model check failed: {exc}",
+                )
                 return
 
             elapsed = time.monotonic() - started

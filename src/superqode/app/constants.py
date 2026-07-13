@@ -19,6 +19,20 @@ COMPACT_LOGO = """ ____  _   _ ____  _____ ____   ___    ___  ____  _____
 TAGLINE_PART1 = "Local and Open Models  ·  Bring Your Own Harness  ·  Connect Anything"
 TAGLINE_PART2 = "ACP · MCP · A2A · BYOK · SDKs"
 
+# First-page order for the product-level connection choices. The root plus
+# these eight profiles fit exactly in the nine-row prompt completion page.
+CONNECT_COMPLETION_COMMANDS = (
+    ":connect",
+    ":connect acp",
+    ":connect antigravity",
+    ":connect grok",
+    ":connect byok",
+    ":connect local",
+    ":connect codex",
+    ":connect claude",
+    ":connect zai",
+)
+
 # Normal purple → pink → orange gradient for ASCII logo
 GRADIENT = ["#7c3aed", "#a855f7", "#c084fc", "#ec4899", "#f97316", "#fb923c"]
 
@@ -675,3 +689,49 @@ COMMANDS = [
     ":mode deny",
     ":mode",
 ]
+
+# Root aliases accepted by ``SlashCommandMixin._handle_command``.  Keep these
+# visible in completion even when the canonical command already appears above;
+# the completion catalog de-duplicates them while preserving priority order.
+TUI_COMMAND_ALIASES = [
+    ":a2a",
+    ":acp",
+    ":agent",
+    ":benchmarks",
+    ":catalog",
+    ":checkpoints",
+    ":clone",
+    ":compact",
+    ":demo",
+    ":diagnostics",
+    ":doctor-current",
+    ":edit",
+    ":fork",
+    ":health",
+    ":hf",
+    ":image",
+    ":img",
+    ":log",
+    ":m",
+    ":model-guide",
+    ":plugin",
+    ":provider",
+    ":q",
+    ":recommend",
+    ":redo",
+    ":retry",
+    ":sessions-current",
+    ":status",
+    ":summary",
+    ":thinking",
+    ":usage",
+    ":work",
+    ":workflows",
+    ":workspace",
+    ":xai-grok",
+    # Contextual picker navigation commands handled before normal dispatch.
+    ":back",
+    ":cancel",
+]
+
+COMMANDS.extend(command for command in TUI_COMMAND_ALIASES if command not in COMMANDS)

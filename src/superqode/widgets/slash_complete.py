@@ -13,6 +13,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
+from superqode.app.constants import COMMANDS, CONNECT_COMPLETION_COMMANDS
 from superqode.utils.fuzzy import FuzzySearch
 
 
@@ -347,6 +348,16 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":quit", "Exit SuperQode", "Ctrl+C", category="system"),
 ]
 
+# The colon-command list is authoritative for the live TUI.  Supplement this
+# older overlay catalog automatically so newly added commands and aliases do
+# not disappear from one of the two completion surfaces.
+_default_command_values = {command.command for command in DEFAULT_COMMANDS}
+DEFAULT_COMMANDS.extend(
+    SlashCommand(command, "SuperQode TUI command", category="system")
+    for command in COMMANDS
+    if command.startswith(":") and command not in _default_command_values
+)
+
 
 def _command_sort_key(query: str, command: str) -> tuple[int, str]:
     query = query.lower()
@@ -410,18 +421,15 @@ def filter_slash_commands(
 
     query_lower = query.lower()
     if query_lower in {":c", ":co", ":con", ":conn", ":conne", ":connec"}:
-        connect_order = [
-            ":connect",
-            ":connect acp",
-            ":connect antigravity",
-            ":connect grok",
-            ":connect byok",
-            ":connect local",
-        ]
+        connect_order = list(CONNECT_COMPLETION_COMMANDS)
         by_command = {command.command: command for command in commands}
-        return [by_command[command] for command in connect_order if command in by_command][
-            :max_results
-        ]
+        ordered = [by_command[command] for command in connect_order if command in by_command]
+        ordered.extend(
+            command
+            for command in commands
+            if command.command.startswith(":connect ") and command.command not in connect_order
+        )
+        return ordered[:max_results]
     seen: set[str] = set()
     prefix_matches = []
     for command in commands:

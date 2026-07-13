@@ -342,9 +342,9 @@ class SlashCommandMixin:
             self._hf_cmd(args, log)
         else:
             # Agent shortcut
-            agent = next((a for a in self.agents if a.short_name == c), None)
-            if agent:
-                self._connect_agent(agent.short_name)
+            agent_commands = self._agent_command_metadata()
+            if c in agent_commands:
+                self._connect_agent(c)
             else:
                 log.add_error(f"Unknown command: {c}")
                 log.add_system("Type :help for available commands")

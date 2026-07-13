@@ -65,10 +65,10 @@ CollapsibleSidebar CollapsibleTitle:hover {
 
 /* Status bar - ALWAYS visible at top, never hidden */
 #status-bar {
-    height: 5;
-    min-height: 5;
+    height: 3;
+    min-height: 3;
     background: #0a0a0a;
-    padding: 2 2 1 2;
+    padding: 1 1 0 1;
     content-align: left middle;
     border-bottom: solid #27272a;
 }
@@ -109,14 +109,14 @@ ConversationLog {
 /* Prompt area - at TOP (below SuperQode logo), hidden when agent is thinking */
 #prompt-area { height: auto; padding: 0 1; background: #000000; margin-top: 0; border-bottom: solid #1a1a1a; }
 #prompt-area.hidden { display: none; }
-#mode-badge { height: auto; text-align: center; margin-bottom: 0; }
+#mode-badge { display: none; }
 #input-box {
     height: auto;
     min-height: 4;
     max-height: 10;
     width: 100%;
     background: #0a0a0f;
-    border: heavy #52525b;
+    border: heavy #7c3aed;
     border-title-color: #a855f7;
     border-subtitle-color: #52525b;
     margin: 1 2 0 2;

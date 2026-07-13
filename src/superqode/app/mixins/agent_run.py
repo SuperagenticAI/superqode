@@ -1056,7 +1056,15 @@ class AgentRunMixin:
                     }
 
                     # Track usage
-                    self._track_byok_usage(text, response_text, tool_count)
+                    self._track_byok_usage(
+                        text,
+                        response_text,
+                        tool_count,
+                        prompt_tokens=int(stats.get("prompt_tokens", 0) or 0),
+                        completion_tokens=int(stats.get("completion_tokens", 0) or 0),
+                        total_tokens=total_tokens,
+                        total_cost=float(stats.get("total_cost", 0.0) or 0.0) or None,
+                    )
             elif chunk_count > 0:
                 # Got chunks but no content - might be tool calls only
                 log.add_warning(

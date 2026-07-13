@@ -33,6 +33,36 @@ async def test_status_setters_update_mounted_status_bar():
         assert "gpt-5.5" in rendered  # full, not shortened
 
 
+async def test_mounted_status_header_keeps_identity_and_operational_state():
+    """The real header reserves two content rows and never looks empty."""
+    from superqode import __version__
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(90, 30)) as pilot:
+        bar = app.query_one("#status-bar", ColorfulStatusBar)
+        await pilot.pause()
+
+        rendered = bar.render().plain
+        assert bar.outer_size.height == 3  # top breathing row + content + bottom border
+        assert bar.content_region.y == bar.region.y + 1
+        assert "\n" not in rendered
+        assert f"SuperQode v{__version__}" in rendered
+        assert "Harness Engineering frameworks" not in rendered
+        assert "No model" in rendered
+        assert "runtime builtin" not in rendered
+        assert "BUILD" in rendered
+
+
+async def test_idle_mode_badge_does_not_reserve_a_prompt_row():
+    app = SuperQodeApp()
+    async with app.run_test(size=(90, 30)) as pilot:
+        badge = app.query_one("#mode-badge")
+        await pilot.pause()
+
+        assert badge.display is False
+        assert badge.size.height == 0
+
+
 async def test_mouse_drag_selection_copies_to_clipboard():
     """Dragging the mouse over the answer must auto-copy it to the clipboard.
 

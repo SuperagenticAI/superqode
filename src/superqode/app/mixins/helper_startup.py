@@ -36,14 +36,15 @@ class HelperStartupMixin:
             agents_data = asyncio.run(read_agents())
             return [
                 AgentInfo(
-                    identity=short_name,
+                    identity=identity,
                     name=agent.get("name", short_name),
                     short_name=short_name,
                     description=agent.get("description", ""),
                     author=agent.get("author", "SuperQode"),
                     status=AgentStatus.AVAILABLE,
                 )
-                for short_name, agent in agents_data.items()
+                for identity, agent in agents_data.items()
+                for short_name in [str(agent.get("short_name") or identity)]
             ]
         except Exception as e:
             # Fallback to basic agents if discovery fails

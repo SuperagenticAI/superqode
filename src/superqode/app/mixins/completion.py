@@ -161,6 +161,8 @@ class CompletionMixin:
         if not text.startswith(("/", ":")):
             return False
         lowered = text.lower()
+        if lowered == ":q":
+            return False
         if lowered in {
             ":connect acp",
             ":connect byok",
@@ -236,7 +238,7 @@ class CompletionMixin:
             self._hide_prompt_completion_panel()
             return
         total = len(self._prompt_completion_candidates)
-        page_size = 8
+        page_size = 9
         selected_index = self._prompt_completion_index
         start = max(0, min(selected_index - page_size // 2, total - page_size))
         end = min(total, start + page_size)

@@ -47,6 +47,8 @@ class CommandSuggester(Suggester):
             return None
 
         value_lower = value.lower()
+        if value_lower == ":q":
+            return ":quit"
         if value_lower in self._colon_commands_lower:
             return None
         if value_lower in {":c", ":co", ":con", ":conn", ":conne", ":connec"}:
