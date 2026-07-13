@@ -350,6 +350,26 @@ async def test_prompt_accepts_dictated_text_like_normal_input():
         assert prompt.value == "Please summarize the failing test period"
 
 
+async def test_local_stop_ds4_submits_from_active_model_picker(monkeypatch):
+    """The digit in ds4 remains text instead of becoming model choice 4."""
+    app = SuperQodeApp()
+    submitted: list[str] = []
+    monkeypatch.setattr(app, "_handle_command", lambda text, log: submitted.append(text))
+
+    async with app.run_test() as pilot:
+        prompt = app.query_one(SelectionAwareInput)
+        app._awaiting_local_model = True
+        app._local_model_list = ["model-one", "model-two"]
+        prompt.focus()
+        prompt.load_text(":local stop ds")
+        prompt.cursor_location = prompt.document.end
+
+        await pilot.press("4", "enter")
+        await pilot.pause()
+
+        assert submitted == [":local stop ds4"]
+
+
 async def test_prompt_ctrl_u_clears_entire_multiline_buffer():
     """Ctrl+U must wipe the whole prompt, not just the current line.
 

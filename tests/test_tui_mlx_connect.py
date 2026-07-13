@@ -57,7 +57,7 @@ def test_mlx_with_server_down_prompts_before_starting(monkeypatch):
     assert app._started == []
     assert app._connected == []
     assert app._awaiting_local_connect_start["engine"] == "mlx"
-    assert "mlx_lm server --model mlx-community/phi-2" in log.text
+    assert "mlx_lm.server --model mlx-community/phi-2" in log.text
     assert ":local serve mlx --model mlx-community/phi-2" in log.text
 
 

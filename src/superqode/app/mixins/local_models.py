@@ -819,12 +819,12 @@ class LocalModelsMixin:
 
         if engine == "ollama":
             env = [f"OLLAMA_HOST={host}:{port}"]
-            if ctx:
-                env.append(f"OLLAMA_CONTEXT_LENGTH={ctx}")
+            # Ollama recommends at least 64K for coding and agent workloads.
+            env.append(f"OLLAMA_CONTEXT_LENGTH={ctx or 64000}")
             return " ".join([*env, "ollama", "serve"])
 
         if engine == "lmstudio":
-            cmd = ["lms", "server", "start", "-p", str(port)]
+            cmd = ["lms", "server", "start", "--port", str(port)]
             if host not in ("127.0.0.1", "localhost"):
                 cmd += ["--bind", host]
             return shlex.join(cmd)
@@ -833,8 +833,7 @@ class LocalModelsMixin:
             cmd = [
                 sys.executable,
                 "-m",
-                "mlx_lm",
-                "server",
+                "mlx_lm.server",
                 "--model",
                 model or "<model-id>",
                 "--host",
@@ -852,7 +851,9 @@ class LocalModelsMixin:
                 "--port",
                 str(port),
                 "--ctx",
-                str(ctx or DS4_DEFAULT_CTX),
+                # Current DS4 agent-client guidance uses 100K. The managed
+                # fallback remains conservative at DS4_DEFAULT_CTX.
+                str(ctx or 100000),
                 "--kv-disk-dir",
                 str(DS4_DEFAULT_KV_DIR),
                 "--kv-disk-space-mb",
@@ -875,6 +876,38 @@ class LocalModelsMixin:
             return shlex.join(cmd)
 
         return q(f":local serve {engine}")
+
+    @staticmethod
+    def _local_server_docs_url(engine: str) -> str:
+        """Return the upstream server guide used for the displayed command."""
+        return {
+            "ollama": "https://docs.ollama.com/context-length",
+            "lmstudio": "https://lmstudio.ai/docs/developer/core/server",
+            "mlx": "https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/SERVER.md",
+            "ds4": "https://github.com/antirez/ds4#server",
+            "llama.cpp": "https://github.com/ggml-org/llama.cpp/tree/master/tools/server",
+            "vllm": "https://docs.vllm.ai/en/stable/serving/openai_compatible_server/",
+            "sglang": (
+                "https://github.com/sgl-project/sglang/blob/main/docs/advanced_features/"
+                "server_arguments.md"
+            ),
+            "tgi": "https://huggingface.co/docs/text-generation-inference/basic_tutorials/using_cli",
+        }.get(engine, "")
+
+    @staticmethod
+    def _advanced_local_server_command(provider: str) -> str:
+        """Vendor-documented manual start template for externally managed servers."""
+        return {
+            "vllm": "vllm serve <model-id-or-path> --host 127.0.0.1 --port 8000",
+            "sglang": (
+                "python -m sglang.launch_server --model-path <model-id-or-path> "
+                "--host 127.0.0.1 --port 30000"
+            ),
+            "tgi": (
+                "text-generation-launcher --model-id <model-id-or-path> "
+                "--hostname 127.0.0.1 --port 8080"
+            ),
+        }.get(provider, "")
 
     def _prompt_local_connect_start(
         self, provider: str, engine: str, model: str, log: ConversationLog
@@ -905,10 +938,17 @@ class LocalModelsMixin:
         t.append("      ", style="")
         t.append(native_command, style=THEME["cyan"])
         t.append("\n", style="")
+        docs_url = self._local_server_docs_url(engine)
+        if docs_url:
+            t.append("      Vendor guide: ", style=THEME["muted"])
+            t.append(f"{docs_url}\n", style=THEME["cyan"])
         t.append(
             "      Edit the model, port, or context if your setup needs it.\n", style=THEME["dim"]
         )
-        t.append("      SuperQode managed fallback: ", style=THEME["muted"])
+        t.append(
+            "      If a separate terminal is impractical, managed fallback: ",
+            style=THEME["muted"],
+        )
         t.append(command, style=THEME["cyan"])
         t.append("\n", style="")
         t.append("  SuperQode can also help by starting a managed server.\n", style=THEME["muted"])
@@ -1123,6 +1163,14 @@ class LocalModelsMixin:
         t.append(" · ", style=THEME["dim"])
         t.append(":local labs", style=THEME["cyan"])
         t.append("\n\n", style="")
+        t.append(
+            "  Start and supervise local model servers in their own terminal when possible.\n",
+            style=f"bold {THEME['text']}",
+        )
+        t.append(
+            "  SuperQode connects to your server; managed startup is a convenience fallback.\n\n",
+            style=THEME["muted"],
+        )
 
         if not local_providers:
             t.append("  ⚠️  No local providers configured\n", style=THEME["warning"])
@@ -1418,7 +1466,7 @@ class LocalModelsMixin:
         if filtered_embeddings and not models and provider_id == "lmstudio":
             log.add_info(
                 "Only embedding models are loaded in LM Studio. Load a chat model: "
-                "lms load <model-key> -c <ctx>   (or pick one in the LM Studio app)"
+                "lms load <model-key> --context-length <ctx>   (or pick one in the LM Studio app)"
             )
 
         t = Text()
@@ -1539,11 +1587,30 @@ class LocalModelsMixin:
                 t.append(f"    1. Start LM Studio application\n", style=THEME["cyan"])
                 t.append(f"    2. Download and load a model\n", style=THEME["cyan"])
                 t.append(f"    3. Start the local server (Local Server tab)\n", style=THEME["cyan"])
+                t.append("       or: lms server start --port 1234\n", style=THEME["cyan"])
                 if not server_running:
                     t.append(
                         f"\n  ⚠️  LM Studio server is not running. Start the server in LM Studio first!\n",
                         style=THEME["warning"],
                     )
+            elif provider_id in ("vllm", "sglang", "tgi"):
+                command = self._advanced_local_server_command(provider_id)
+                docs_url = self._local_server_docs_url(provider_id)
+                t.append(
+                    "  💡 Start and supervise this server in a separate terminal:\n",
+                    style=THEME["muted"],
+                )
+                t.append(f"    {command}\n", style=THEME["cyan"])
+                t.append(
+                    "    Replace <model-id-or-path> and tune GPU/context settings for your machine.\n",
+                    style=THEME["dim"],
+                )
+                t.append("    Vendor guide: ", style=THEME["muted"])
+                t.append(f"{docs_url}\n", style=THEME["cyan"])
+                t.append(
+                    "    Stop it from that terminal with Ctrl+C, then reconnect here when restarted.\n",
+                    style=THEME["dim"],
+                )
             model_list = []
 
         if not model_list:
@@ -2576,6 +2643,14 @@ class LocalModelsMixin:
             t.append(f"      • {note}\n", style=THEME["muted"])
         t.append("      Connect with: ", style=THEME["muted"])
         t.append(f":connect {engine}\n", style=THEME["success"])
+        if handle.adopted:
+            t.append(
+                "      Already running externally; SuperQode will not stop this process.\n",
+                style=THEME["dim"],
+            )
+        else:
+            t.append("      Stop with: ", style=THEME["muted"])
+            t.append(f":local stop {engine}\n", style=f"bold {THEME['success']}")
         log.write(t)
 
     async def _local_servers(self, log: ConversationLog):
@@ -2655,7 +2730,7 @@ class LocalModelsMixin:
         # Per-engine note on what --ctx does, reused below.
         ctx_note = {
             "ollama": "--ctx sets OLLAMA_CONTEXT_LENGTH",
-            "lmstudio": "--ctx applies when the model loads (lms load -c)",
+            "lmstudio": "--ctx applies when the model loads (lms load --context-length)",
             "ds4": "--ctx sets the KV window",
             "mlx": "context is fixed by the model (no --ctx)",
             "llama.cpp": "--ctx maps to -c",
@@ -2689,7 +2764,7 @@ class LocalModelsMixin:
                         style=THEME["muted"],
                     )
                     t.append("      ", style="")
-                    t.append("lms server start -p 1234", style=THEME["cyan"])
+                    t.append("lms server start --port 1234", style=THEME["cyan"])
                     t.append("\n", style="")
                     t.append("  Need SuperQode to run that command? Press ", style=THEME["muted"])
                     t.append("Enter", style=f"bold {THEME['success']}")
@@ -2705,12 +2780,12 @@ class LocalModelsMixin:
                     t.append('open -a "LM Studio"', style=THEME["cyan"])
                     t.append("\n", style="")
                     t.append("  Optional CLI after the app is open: ", style=THEME["muted"])
-                    t.append("lms server start -p 1234", style=THEME["cyan"])
+                    t.append("lms server start --port 1234", style=THEME["cyan"])
                     t.append("\n", style="")
                 t.append(
                     "  If you load by CLI, adjust model/context as needed: ", style=THEME["muted"]
                 )
-                t.append("lms load <model-key> -c <ctx>", style=THEME["cyan"])
+                t.append("lms load <model-key> --context-length <ctx>", style=THEME["cyan"])
                 t.append("\n", style="")
                 if not readiness.startable and not getattr(readiness, "cli_available", False):
                     t.append("  Optional CLI setup: ", style=THEME["muted"])
@@ -2749,14 +2824,49 @@ class LocalModelsMixin:
                 t.append("      ", style="")
                 t.append(native_command, style=THEME["cyan"])
                 t.append(f"  # default port {default_port}\n", style=THEME["dim"])
+                docs_url = self._local_server_docs_url(engine)
+                if docs_url:
+                    t.append("      Vendor guide: ", style=THEME["muted"])
+                    t.append(f"{docs_url}\n", style=THEME["cyan"])
                 t.append(
                     "      Edit the model, port, or context if your setup needs it.\n",
                     style=THEME["dim"],
                 )
-                t.append("      SuperQode managed fallback: ", style=THEME["muted"])
+                t.append(
+                    "      If a separate terminal is impractical, managed fallback: ",
+                    style=THEME["muted"],
+                )
                 t.append(managed_command, style=THEME["cyan"])
                 t.append("\n", style="")
-                t.append("  Need SuperQode to start a managed server? Press ", style=THEME["muted"])
+                if engine == "ds4":
+                    t.append(
+                        "  Experimental convenience: SuperQode can run DS4 as a detached process.\n",
+                        style=THEME["warning"],
+                    )
+                    t.append(
+                        "    It binds to 127.0.0.1:8000 with a 32,768-token context, uses an\n",
+                        style=THEME["muted"],
+                    )
+                    t.append(
+                        "    8 GB disk KV cache under ~/.superqode/ds4-kv, writes logs to\n",
+                        style=THEME["muted"],
+                    )
+                    t.append(
+                        "    ~/.superqode/servers/ds4.log, then waits for /v1/models.\n",
+                        style=THEME["muted"],
+                    )
+                    t.append(
+                        "    It will not build DS4 or download model weights in this step.\n",
+                        style=THEME["dim"],
+                    )
+                    t.append("    Stop the managed server with: ", style=THEME["muted"])
+                    t.append(":local stop ds4\n", style=f"bold {THEME['success']}")
+                    t.append("  Try the experimental managed start? Press ", style=THEME["muted"])
+                else:
+                    t.append(
+                        "  Need SuperQode to start a managed server? Press ",
+                        style=THEME["muted"],
+                    )
                 t.append("Enter", style=f"bold {THEME['success']}")
                 t.append(f" to launch it on port {default_port}", style=THEME["muted"])
                 t.append("   ·   ", style=THEME["dim"])
@@ -2825,6 +2935,10 @@ class LocalModelsMixin:
 
             self._awaiting_local_dep_install = "mlx"
             self._awaiting_local_model = False
+            # The dependency prompt owns the next input. Leaving the provider
+            # picker active makes SelectionAwareInput consume Enter as another
+            # provider selection before this prompt can handle it.
+            self._awaiting_local_provider = False
             env = environment_info()
             command = mlx_install_command(sys.executable)
             t.append("\n  🔴 ", style=THEME["error"])
@@ -2846,6 +2960,14 @@ class LocalModelsMixin:
             t.append("   ·   ", style=THEME["dim"])
             t.append("'n'", style=THEME["warning"])
             t.append(" to skip\n", style=THEME["muted"])
+            t.append(
+                "    Prefer to install it yourself? Copy the command above into another terminal,\n",
+                style=THEME["muted"],
+            )
+            t.append(
+                "    then restart SuperQode and run :connect local again.\n",
+                style=THEME["dim"],
+            )
             log.write(t)
             self._pin_local_prompt_to_input(
                 "Install MLX: Enter runs the shown command, n skips",
@@ -2999,8 +3121,22 @@ class LocalModelsMixin:
         t0.append(f"Starting {engine}{detail}", style=f"bold {THEME['text']}")
         if engine == "lmstudio":
             t0.append(" — running ", style=THEME["muted"])
-            t0.append("lms server start -p 1234", style=THEME["cyan"])
+            t0.append("lms server start --port 1234", style=THEME["cyan"])
             t0.append(" and checking the Local Server endpoint...\n", style=THEME["muted"])
+        elif engine == "ds4":
+            command = self._native_local_server_command(
+                "ds4",
+                host=opts.get("host"),
+                port=opts.get("port"),
+                ctx=opts.get("ctx"),
+            )
+            t0.append("\n    command: ", style=THEME["muted"])
+            t0.append(command, style=THEME["cyan"])
+            t0.append("\n    log: ~/.superqode/servers/ds4.log\n", style=THEME["dim"])
+            t0.append(
+                "    Launching it in the background, recording its PID, and waiting for /v1/models...\n",
+                style=THEME["muted"],
+            )
         else:
             t0.append(
                 " — launching the server and waiting for it to bind...\n",
@@ -3037,6 +3173,14 @@ class LocalModelsMixin:
             t.append(f"      pid {handle.pid} · log {handle.log_path}\n", style=THEME["dim"])
         for note in handle.notes:
             t.append(f"      • {note}\n", style=THEME["muted"])
+        if handle.adopted:
+            t.append(
+                "      Already running externally; SuperQode will not stop this process.\n",
+                style=THEME["dim"],
+            )
+        else:
+            t.append("      Stop with: ", style=THEME["muted"])
+            t.append(f":local stop {engine}\n", style=f"bold {THEME['success']}")
         log.write(t)
 
         # Now that the server is up, list its models in the same picker.

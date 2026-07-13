@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.20] - 2026-07-13
+
+### Changed
+
+- **Release metadata** - Bumped the package version, runtime `__version__`, lockfile package entry, and ACP registry metadata to `0.2.20`.
+
+### Fixed
+
+- **Clean-install Ollama tool calls** - Bypassed LiteLLM's optional proxy MCP handler for SuperQode-managed tools so standard `uv tool install superqode` environments no longer require the undeclared FastAPI proxy dependency to call Ollama or other tool-capable providers.
+- **MLX installation prompt** - Fixed Enter being intercepted by stale local-provider picker state, so the confirmed `mlx-lm` installation now starts; the prompt also explains how to copy the exact command into another terminal and reconnect manually.
+- **DS4 managed-server guidance** - Made manual startup the recommended path, documented exactly what the experimental managed start launches and stores, and now shows `:local stop ds4` after SuperQode starts the server.
+- **Local server guidance** - Made user-managed servers the preferred workflow across local providers, refreshed Ollama, LM Studio, MLX, DS4, llama.cpp, vLLM, SGLang, and TGI commands from their current vendor documentation, and kept SuperQode-managed startup as a clearly secondary convenience fallback.
+- **Commands inside model pickers** - Digits in commands such as `:local stop ds4` are no longer intercepted as numeric model selections, so managed local servers can be stopped directly from the active picker.
+
 ## [0.2.19] - 2026-07-13
 
 ### Added

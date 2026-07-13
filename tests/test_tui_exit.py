@@ -57,3 +57,29 @@ def test_plain_text_still_selects_highlighted():
 def test_command_bypasses_even_with_no_active_picker():
     # No picker active: a command line is not consumed as a selection.
     assert _handle(_Stub(":exit"), _App()) is False
+
+
+def test_digit_inside_command_is_not_buffered_as_model_selection():
+    """The ``4`` in ``:local stop ds4`` must remain command text."""
+
+    class _InputStub:
+        value = ":local stop ds"
+
+        def __init__(self, app):
+            self.app = app
+
+    class _KeyEvent:
+        key = "4"
+
+        def stop(self):
+            raise AssertionError("command digit must not be consumed")
+
+        def prevent_default(self):
+            raise AssertionError("command digit must remain normal input")
+
+    app = _App(_awaiting_local_model=True)
+    app._queue_selection_digit = lambda digit: (_ for _ in ()).throw(
+        AssertionError(f"command digit was buffered: {digit}")
+    )
+
+    SelectionAwareInput.on_key(_InputStub(app), _KeyEvent())

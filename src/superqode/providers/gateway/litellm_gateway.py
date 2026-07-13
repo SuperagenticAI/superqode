@@ -361,6 +361,12 @@ class LiteLLMGateway(GatewayInterface):
         Non-transient errors propagate immediately so the caller's
         model-candidate failover logic can handle them.
         """
+        # LiteLLM 1.85 imports its proxy MCP handler whenever *any* tools are
+        # present, before it checks whether they are MCP tools. That optional
+        # proxy path imports FastAPI, which is intentionally absent from a
+        # normal SuperQode tool install. SuperQode owns MCP orchestration and
+        # sends ordinary model tool definitions here, so bypass that handler.
+        request_kwargs.setdefault("_skip_mcp_handler", True)
         litellm = self._get_litellm()
         retries = self._rate_limit_retries()
         attempt = 0

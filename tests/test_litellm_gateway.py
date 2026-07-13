@@ -8,6 +8,33 @@ from superqode.providers.gateway.base import GatewayResponse, Message
 from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
 
 
+@pytest.mark.asyncio
+async def test_litellm_completion_skips_optional_proxy_mcp_handler(monkeypatch):
+    """Tool calls must not require FastAPI in a standard SuperQode install."""
+    gateway = LiteLLMGateway()
+    seen = {}
+
+    async def fake_acompletion(**kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace()
+
+    monkeypatch.setattr(
+        gateway,
+        "_get_litellm",
+        lambda: SimpleNamespace(acompletion=fake_acompletion),
+    )
+
+    await gateway._acompletion_with_retry(
+        {
+            "model": "ollama/gemma4:12b-mlx",
+            "messages": [{"role": "user", "content": "hello"}],
+            "tools": [{"type": "function", "function": {"name": "read_file"}}],
+        }
+    )
+
+    assert seen["_skip_mcp_handler"] is True
+
+
 def test_openai_gpt54_fallback_candidates():
     """GPT-5.4 should fall back to the prior flagship if rollout lags."""
     gateway = LiteLLMGateway()

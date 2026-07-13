@@ -19,8 +19,8 @@ Engine notes:
                 time. We own the pid but usually adopt an already-running daemon.
 - ``lmstudio``  ``lms server start``; the LM Studio backend owns the process, so
                 we do not track a pid. Stop with ``lms server stop``. Per-model
-                context is set later at load time (``lms load -c``).
-- ``mlx``       ``<venv-python> -m mlx_lm server``. MUST use the venv interpreter
+                context is set later at load time (``lms load --context-length``).
+- ``mlx``       ``<venv-python> -m mlx_lm.server``. MUST use the venv interpreter
                 so we never pick up a stray ``mlx_lm.server`` from another
                 environment (e.g. miniconda). Requires the ``superqode[mlx]``
                 extra installed in this environment.
@@ -585,12 +585,13 @@ class ServerManager:
 
         if engine == "ollama":
             env = {"OLLAMA_HOST": f"{host}:{port}"}
-            if ctx:
-                env["OLLAMA_CONTEXT_LENGTH"] = str(ctx)
+            # Ollama's current guidance recommends at least 64K for coding,
+            # web-search, and agent tool workloads.
+            env["OLLAMA_CONTEXT_LENGTH"] = str(ctx or 64000)
             return (["ollama", "serve", *extra_args], env, None)
 
         if engine == "lmstudio":
-            cmd = ["lms", "server", "start", "-p", str(port)]
+            cmd = ["lms", "server", "start", "--port", str(port)]
             if host not in ("127.0.0.1", "localhost"):
                 cmd += ["--bind", host]
             return (cmd + extra_args, {}, None)
@@ -600,8 +601,7 @@ class ServerManager:
             cmd = [
                 sys.executable,
                 "-m",
-                "mlx_lm",
-                "server",
+                "mlx_lm.server",
                 "--model",
                 str(model),
                 "--host",
@@ -869,7 +869,7 @@ class ServerManager:
             return ["lms CLI not found; load the model from the LM Studio app"]
         cmd = ["lms", "load", model, "-y"]
         if ctx:
-            cmd += ["-c", str(ctx)]
+            cmd += ["--context-length", str(ctx)]
         try:
             result = subprocess.run(  # noqa: S603
                 cmd, capture_output=True, text=True, timeout=timeout, check=False

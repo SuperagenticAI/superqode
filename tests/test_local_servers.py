@@ -44,16 +44,21 @@ def test_build_command_ollama_sets_host_and_ctx_env(manager: ServerManager):
     assert cwd is None
 
 
+def test_build_command_ollama_defaults_to_vendor_coding_context(manager: ServerManager):
+    _cmd, env, _cwd = manager.build_command("ollama", host="127.0.0.1", port=11434)
+    assert env["OLLAMA_CONTEXT_LENGTH"] == "64000"
+
+
 def test_build_command_lmstudio_uses_lms_server_start(manager: ServerManager):
     cmd, _env, _cwd = manager.build_command("lmstudio", host="127.0.0.1", port=1234)
-    assert cmd == ["lms", "server", "start", "-p", "1234"]
+    assert cmd == ["lms", "server", "start", "--port", "1234"]
 
 
 def test_build_command_mlx_uses_venv_interpreter_not_path(manager: ServerManager):
     cmd, _env, _cwd = manager.build_command("mlx", host="127.0.0.1", port=8080, model="org/model")
-    # Must invoke `python -m mlx_lm server`, never a bare mlx_lm.server on PATH.
+    # Must invoke the documented module with this environment's interpreter.
     assert cmd[0].endswith("python") or "python" in cmd[0]
-    assert cmd[1:4] == ["-m", "mlx_lm", "server"]
+    assert cmd[1:3] == ["-m", "mlx_lm.server"]
     assert "--model" in cmd and "org/model" in cmd
 
 
@@ -193,7 +198,7 @@ def test_start_lmstudio_runs_cli_and_captures_output(manager, monkeypatch):
     assert handle.engine == "lmstudio"
     assert handle.pid is None
     assert handle.base_url == "http://127.0.0.1:1234/v1"
-    assert calls[0][0] == ["lms", "server", "start", "-p", "1234"]
+    assert calls[0][0] == ["lms", "server", "start", "--port", "1234"]
     assert calls[0][1]["capture_output"] is True
     assert "server started" in Path(handle.log_path).read_text()
 
@@ -323,7 +328,14 @@ def test_lms_load_builds_context_command(manager, monkeypatch):
 
     monkeypatch.setattr(servers.subprocess, "run", fake_run)
     notes = manager._lms_load("qwen3-coder", 12000)
-    assert captured["cmd"] == ["lms", "load", "qwen3-coder", "-y", "-c", "12000"]
+    assert captured["cmd"] == [
+        "lms",
+        "load",
+        "qwen3-coder",
+        "-y",
+        "--context-length",
+        "12000",
+    ]
     assert any("loaded qwen3-coder" in n and "12,000" in n for n in notes)
 
 

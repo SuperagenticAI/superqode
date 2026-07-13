@@ -341,6 +341,7 @@ def test_lmstudio_app_only_prompt_does_not_arm_enter_start(monkeypatch):
     monkeypatch.setattr(servers, "get_manager", lambda: _Manager())
 
     app = SuperQodeApp.__new__(SuperQodeApp)
+    app._awaiting_local_provider = True
     pinned = []
     app._pin_local_prompt_to_input = lambda placeholder, log, **kwargs: pinned.append(
         (placeholder, kwargs)
@@ -354,7 +355,7 @@ def test_lmstudio_app_only_prompt_does_not_arm_enter_start(monkeypatch):
     assert getattr(app, "_awaiting_local_server_start", None) is None
     assert "First open LM Studio" in text
     assert 'open -a "LM Studio"' in text
-    assert "lms server start -p 1234" in text
+    assert "lms server start --port 1234" in text
     assert "npx lmstudio install-cli" in text
     assert pinned
 
@@ -394,7 +395,7 @@ def test_lmstudio_cli_but_app_closed_prompt_asks_user_to_open_app_first(monkeypa
     assert getattr(app, "_awaiting_local_server_start", None) is None
     assert "First open LM Studio" in text
     assert 'open -a "LM Studio"' in text
-    assert "lms server start -p 1234" in text
+    assert "lms server start --port 1234" in text
     assert "Need SuperQode to run that command? Press Enter" not in text
     assert "npx lmstudio install-cli" not in text
     assert pinned
@@ -436,7 +437,7 @@ def test_lmstudio_open_with_cli_offers_enter_start(monkeypatch):
     assert app._awaiting_local_server_start == "lmstudio"
     assert "LM Studio is open and the lms CLI is available" in text
     assert "Need SuperQode to run that command? Press Enter" in text
-    assert "lms server start -p 1234" in text
+    assert "lms server start --port 1234" in text
     assert 'open -a "LM Studio"' not in text
     assert pinned
 
@@ -474,13 +475,83 @@ def test_startable_local_server_prompt_is_manual_first(monkeypatch):
     assert handled is True
     assert app._awaiting_local_server_start == "ollama"
     assert "Recommended: start it yourself" in text
-    assert "OLLAMA_HOST=127.0.0.1:11434 ollama serve" in text
+    assert "OLLAMA_CONTEXT_LENGTH=64000 ollama serve" in text
+    assert "https://docs.ollama.com/context-length" in text
     assert ":local serve ollama" in text
     assert "Edit the model, port, or context if your setup needs it." in text
     assert "Need SuperQode to start a managed server? Press Enter" in text
     assert "to start it now" not in text
     assert pinned
     assert "Start ollama yourself" in pinned[-1][0]
+
+
+def test_ds4_managed_start_prompt_explains_actions_and_stop_command(monkeypatch):
+    import superqode.local.servers as servers
+    from superqode.local.servers import LocalReadiness
+
+    class _Manager:
+        def precheck(self, engine):
+            assert engine == "ds4"
+            return LocalReadiness(
+                engine="ds4",
+                installed=True,
+                running=False,
+                base_url="http://127.0.0.1:8000/v1",
+                state="stopped",
+                start_hint=":local serve ds4",
+                needs_model=False,
+                startable=True,
+            )
+
+    monkeypatch.setattr(servers, "get_manager", lambda: _Manager())
+
+    app = SuperQodeApp.__new__(SuperQodeApp)
+    app._pin_local_prompt_to_input = lambda *args, **kwargs: None
+    log = FakeLog()
+
+    handled = asyncio.run(SuperQodeApp._render_local_server_state(app, "ds4", log))
+    text = "\n".join(render_plain(item) for item in log.items)
+
+    assert handled is True
+    assert "Recommended: start it yourself" in text
+    assert "ds4-server --host 127.0.0.1 --port 8000 --ctx 100000" in text
+    assert "https://github.com/antirez/ds4#server" in text
+    assert "Experimental convenience" in text
+    assert "32,768-token context" in text
+    assert "8 GB disk KV cache" in text
+    assert "~/.superqode/servers/ds4.log" in text
+    assert "will not build DS4 or download model weights" in text
+    assert ":local stop ds4" in text
+
+
+def test_ds4_managed_start_progress_and_success_show_stop_command(monkeypatch):
+    import superqode.local.servers as servers
+
+    class _Manager:
+        def start(self, engine, **opts):
+            assert engine == "ds4"
+            return SimpleNamespace(
+                adopted=False,
+                base_url="http://127.0.0.1:8000/v1",
+                pid=1234,
+                log_path="/tmp/ds4.log",
+                notes=["context window set to 32,768"],
+            )
+
+    monkeypatch.setattr(servers, "get_manager", lambda: _Manager())
+
+    app = SuperQodeApp()
+    app._show_local_provider_models = lambda *args, **kwargs: asyncio.sleep(0)
+    log = FakeLog()
+
+    asyncio.run(SuperQodeApp._start_local_server_then_list(app, "ds4", {}, log))
+    text = "\n".join(render_plain(item) for item in log.items)
+
+    assert "command: ds4-server" in text
+    assert "recording its PID" in text
+    assert "waiting for /v1/models" in text
+    assert "Started ds4" in text
+    assert "Stop with: :local stop ds4" in text
 
 
 def test_missing_mlx_prompt_shows_environment_and_exact_command(monkeypatch):
@@ -534,11 +605,14 @@ def test_missing_mlx_prompt_shows_environment_and_exact_command(monkeypatch):
 
     assert handled is True
     assert app._awaiting_local_dep_install == "mlx"
+    assert app._awaiting_local_provider is False
     assert "SuperQode is running from: SuperQode dev checkout" in text
     assert "This will modify: the SuperQode checkout at /tmp/superqode" in text
     assert "Exact command:" in text
     assert "uv pip install --python /tmp/superqode/.venv/bin/python" in text
     assert "Press Enter to run that exact command" in text
+    assert "Copy the command above into another terminal" in text
+    assert "restart SuperQode and run :connect local again" in text
     assert pinned
 
 
@@ -616,6 +690,24 @@ def test_connect_local_picker_lists_ds4():
     assert "DwarfStar 4" in text
     assert "ds4" in text
     assert "recommended" in text
+    assert "Start and supervise local model servers in their own terminal" in text
+    assert "managed startup is a convenience fallback" in text
+
+
+def test_advanced_local_server_guidance_matches_vendor_cli_shapes():
+    assert SuperQodeApp._advanced_local_server_command("vllm") == (
+        "vllm serve <model-id-or-path> --host 127.0.0.1 --port 8000"
+    )
+    assert "sglang.launch_server --model-path" in SuperQodeApp._advanced_local_server_command(
+        "sglang"
+    )
+    assert "--host 127.0.0.1 --port 30000" in SuperQodeApp._advanced_local_server_command("sglang")
+    assert "text-generation-launcher --model-id" in (
+        SuperQodeApp._advanced_local_server_command("tgi")
+    )
+    assert "--hostname 127.0.0.1 --port 8080" in (
+        SuperQodeApp._advanced_local_server_command("tgi")
+    )
 
 
 def test_prompt_mode_label_tracks_chat_build_and_plan(monkeypatch):
