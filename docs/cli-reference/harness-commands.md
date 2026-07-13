@@ -574,18 +574,23 @@ Use `harness optimize-inspect RUN_DIR` to summarize a completed meta-harness run
 
 ### `harness run`
 
-Run a task through a spec. Single-prompt specs execute one turn through the kernel; non-single workflow specs execute their topology (chain, parallel, router, orchestrator, evaluator-optimizer). Use `--single-step` to force one prompt regardless of topology.
+Run a task through a spec or an installed Python harness. Single-prompt specs
+execute one turn through the kernel; non-single workflow specs execute their
+topology. Installed harnesses are addressed by name.
 
 ```bash
 superqode harness run --spec harness.yaml \
   --provider ollama --model qwen3-coder \
   -p "Read README.md and summarize this project."
+
+superqode harness run my-harness "Read README.md and summarize this project."
 ```
 
 | Option | Description |
 | --- | --- |
-| `--spec PATH` | Spec file (required) |
-| `-p, --prompt TEXT` | Prompt to run (required) |
+| `HARNESS [TASK]` | Installed harness name or spec path and task |
+| `--spec PATH` | Spec file; alternative to the positional harness |
+| `-p, --prompt TEXT` | Prompt; alternative to the positional task |
 | `--provider TEXT` | Provider (default `openai`) |
 | `--model TEXT` | Model (default `gpt-4o-mini`) |
 | `--runtime TEXT` | Override runtime or backend |
@@ -828,6 +833,39 @@ superqode harness worker --spec harness.yaml --session <id> \
 | `--recover-stale / --no-recover-stale` | Recover stale running inputs on startup (default on) |
 | `--stale-after INTEGER` | Recover running inputs older than this many seconds (default `300`) |
 | `--json` | Emit JSON when the worker exits |
+
+---
+
+## Harness Protocol
+
+### `harness protocol`
+
+Inspect Harness Protocol v1 and validate its deterministic reference adapter.
+
+```bash
+superqode harness protocol list
+superqode harness protocol describe
+superqode harness protocol describe acp --json
+superqode harness protocol conformance
+superqode harness protocol conformance my-harness
+```
+
+| Subcommand | Purpose |
+| --- | --- |
+| `list` | List built-in and installed Python harness adapters |
+| `describe [core\|python\|acp]` | Show the protocol event vocabulary and declared reference-adapter capabilities |
+| `conformance [harness-id]` | Run lifecycle, envelope, ledger, export, resume, and checkpoint checks |
+
+Installed package harnesses can use the normal run command:
+
+```bash
+superqode harness run my-harness "review this diff"
+```
+
+With no harness ID, conformance uses a deterministic offline reference. With an
+ID, it executes that installed harness. Live model or ACP adapters may require
+provider credentials or a running agent. See
+[Harness Protocol v1](../advanced/harness-protocol.md).
 
 ---
 

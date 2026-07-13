@@ -341,17 +341,59 @@ class SlashCommandMixin:
         elif c == "hf":
             self._hf_cmd(args, log)
         else:
-            # Agent shortcut
-            agent_commands = self._agent_command_metadata()
-            if c in agent_commands:
-                self._connect_agent(c)
+            # Python extensions receive unknown commands before the legacy
+            # agent-shortcut fallback. Creating PureMode here also applies the
+            # same project-trust gate used for extension tools and hooks.
+            pure = self._ensure_pure_mode()
+            extension_runtime = getattr(pure, "_extension_runtime", None)
+            if extension_runtime is not None and c in extension_runtime.commands:
+                self.run_worker(self._invoke_extension_command(c, args, log))
             else:
-                log.add_error(f"Unknown command: {c}")
-                log.add_system("Type :help for available commands")
+                # Agent shortcut
+                agent_commands = self._agent_command_metadata()
+                if c in agent_commands:
+                    self._connect_agent(c)
+                else:
+                    log.add_error(f"Unknown command: {c}")
+                    log.add_system("Type :help for available commands")
 
         # Always return focus to input after command completes
         # Use a small delay to ensure command output is displayed first
         self.set_timer(0.1, self._ensure_input_focus)
+
+    async def _invoke_extension_command(
+        self, command: str, args: str, log: ConversationLog
+    ) -> None:
+        """Run one trusted extension command with isolated error reporting."""
+        import json
+
+        from superqode.extensions import ExtensionContext
+
+        pure = self._ensure_pure_mode()
+        runtime = pure._extension_runtime
+        session = getattr(pure, "session", None)
+        context = ExtensionContext(
+            root=Path.cwd(),
+            harness_id=str(getattr(session, "harness_name", "") or "core"),
+            provider=str(getattr(session, "provider", "") or ""),
+            model=str(getattr(session, "model", "") or ""),
+            session_id=str(pure.get_current_session_id() or ""),
+        )
+        try:
+            result = await runtime.invoke_command(command, args, context=context)
+        except Exception as exc:
+            log.add_error(f"Extension command :{command} failed: {exc}")
+            return
+        if result is None:
+            return
+        if isinstance(result, str):
+            output = result
+        elif isinstance(result, (dict, list, tuple, bool, int, float)):
+            output = json.dumps(result, ensure_ascii=False, indent=2, default=str)
+        else:
+            output = str(result)
+        if output:
+            log.add_system(output)
 
     def _handle_timeline(self, log: ConversationLog):
         """Open a replay-style timeline of the current TUI session."""

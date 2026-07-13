@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "superqode-example-extension"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["superqode>=0.2.21,<1.0"]
+
+[project.entry-points."superqode.extensions"]
+example = "superqode_example_extension:extension"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/superqode_example_extension"]

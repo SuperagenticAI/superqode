@@ -56,8 +56,14 @@ class SkillsLoader:
 
     DEFAULT_SKILLS_DIR = ".agents/skills"
 
-    def __init__(self, root: str | Path = "."):
+    def __init__(
+        self,
+        root: str | Path = ".",
+        *,
+        extra_paths: Optional[List[str | Path]] = None,
+    ):
         self.root = Path(root).expanduser().resolve()
+        self.extra_paths = [Path(path).expanduser().resolve() for path in (extra_paths or [])]
         self._skills: Dict[str, Skill] = {}
         self._loaded = False
 
@@ -66,13 +72,20 @@ class SkillsLoader:
         if self._loaded:
             return self._skills
 
+        # Extension skills load first; project-local skills intentionally win
+        # on name collisions so a repository can override package defaults.
+        paths: list[Path] = []
+        for extra in self.extra_paths:
+            if extra.is_dir():
+                paths.extend(sorted(extra.rglob("*.md")))
+            elif extra.is_file() and extra.suffix.lower() == ".md":
+                paths.append(extra)
+
         directory = self._resolve_skills_dir(skills_dir)
+        if directory.exists():
+            paths.extend(sorted(directory.rglob("*.md")))
 
-        if not directory.exists():
-            self._loaded = True
-            return self._skills
-
-        for path in sorted(directory.rglob("*.md")):
+        for path in paths:
             skill = self._parse_skill(path)
             if skill and skill.enabled:
                 self._skills[skill.name] = skill
@@ -153,7 +166,7 @@ def get_skills_loader(root: str | Path = ".") -> SkillsLoader:
     """Get or create the global skills loader."""
     global _skills_loader
     if _skills_loader is None:
-        _skills_loader = SkillsLoader(root)
+        _skills_loader = SkillsLoader(root, extra_paths=_extension_skill_paths(root))
     return _skills_loader
 
 
@@ -161,8 +174,19 @@ def load_skills(
     root: str | Path = ".", skills_dir: Optional[str | Path] = None
 ) -> Dict[str, Skill]:
     """Load skills from a directory."""
-    loader = SkillsLoader(root)
+    loader = SkillsLoader(root, extra_paths=_extension_skill_paths(root))
     return loader.load(skills_dir)
+
+
+def _extension_skill_paths(root: str | Path) -> List[Path]:
+    """Return trusted extension skill paths without making skills mandatory."""
+    try:
+        from .extensions import load_extension_runtime
+
+        runtime = load_extension_runtime(root)
+        return [path for extension in runtime.extensions for path in extension.skills]
+    except Exception:
+        return []
 
 
 def load_project_instructions(root: str | Path = ".") -> str:

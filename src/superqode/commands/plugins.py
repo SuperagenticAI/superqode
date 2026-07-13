@@ -70,7 +70,13 @@ def plugins_validate(path):
 
 @plugins.command("doctor")
 @click.argument("path", required=False, type=click.Path())
-def plugins_doctor(path):
+@click.option(
+    "--runtime",
+    "runtime_check",
+    is_flag=True,
+    help="Trust-gated import and activation check for discovered extensions",
+)
+def plugins_doctor(path, runtime_check):
     """Validate all discoverable plugin manifests, or one path."""
     from superqode.plugins import (
         discover_plugin_manifests,
@@ -87,7 +93,8 @@ def plugins_doctor(path):
         paths = discover_plugin_manifests(Path.cwd())
     if not paths:
         click.echo("No plugin manifests found.")
-        return
+        if not runtime_check:
+            return
     ok_count = 0
     failed = False
     for manifest_path in paths:
@@ -106,6 +113,23 @@ def plugins_doctor(path):
             ok_count += 1
             click.echo(f"OK {label}")
     click.echo(f"{ok_count}/{len(paths)} manifests valid.")
+    if runtime_check:
+        from superqode.extensions import load_extension_runtime
+        from superqode.project_trust import is_project_trusted
+
+        if not is_project_trusted(Path.cwd()):
+            raise click.ClickException(
+                "Runtime checks execute extension code. Run `superqode trust yes` first."
+            )
+        runtime = load_extension_runtime(Path.cwd())
+        for extension in runtime.extensions:
+            capabilities = ", ".join(extension.capabilities) or "metadata-only"
+            click.echo(f"ACTIVE {extension.id} ({capabilities})")
+        for skipped in runtime.skipped:
+            click.echo(f"SKIP {skipped}")
+        for error in runtime.errors:
+            failed = True
+            click.echo(f"RUNTIME-FAIL {error.extension_id} [{error.capability}] {error.message}")
     if failed:
         raise click.ClickException("Plugin doctor found issues")
 

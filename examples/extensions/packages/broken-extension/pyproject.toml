@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "superqode-example-broken-extension"
+version = "0.1.0"
+description = "Deliberately broken extension used to validate failure isolation"
+requires-python = ">=3.12"
+dependencies = ["superqode>=0.2.21"]
+
+[project.entry-points."superqode.extensions"]
+broken-probe = "superqode_example_broken:extension"
+
+[tool.setuptools.packages.find]
+where = ["src"]

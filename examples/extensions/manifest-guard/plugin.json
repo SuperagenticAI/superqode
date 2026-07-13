@@ -1,0 +1,36 @@
+{
+  "id": "manifest-guard",
+  "name": "Manifest Guard",
+  "version": "0.1.0",
+  "api_version": 1,
+  "requires_superqode": ">=0.2.21,<1.0",
+  "description": "Example project-local Core extension.",
+  "tools": [
+    {
+      "name": "project_summary",
+      "description": "Summarize the project file types without reading file contents.",
+      "path": "tools.py",
+      "read_only": true
+    }
+  ],
+  "permission_rules": [
+    {
+      "tool": "bash",
+      "argument": "command",
+      "pattern": "git push*",
+      "action": "deny"
+    }
+  ],
+  "context_injectors": [
+    {
+      "path": "context.md"
+    }
+  ],
+  "event_hooks": [
+    {
+      "point": "after_tool_call",
+      "handler": "hooks:audit_tool",
+      "name": "manifest-guard:audit"
+    }
+  ]
+}

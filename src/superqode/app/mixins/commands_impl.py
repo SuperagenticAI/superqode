@@ -1379,6 +1379,7 @@ class CommandImplMixin:
         try:
             from superqode.harness import (
                 BUILTIN_TEMPLATES,
+                discover_harness_adapters,
                 get_harness_template,
                 list_harnesses,
                 resolve_harness,
@@ -1406,13 +1407,20 @@ class CommandImplMixin:
             return
 
         if sub in ("list", "available"):
+            known: set[str] = set()
             for entry in list_harnesses(Path.cwd()):
+                known.add(entry.id)
                 marker = "*" if entry.default else " "
                 status = "ready" if entry.available else (entry.issue or "unavailable")
                 log.add_info(
                     f"{marker} {entry.id:18} {entry.source:10} {entry.runtime:14} "
                     f"tools={len(entry.tools):2} {status}"
                 )
+            for entry in discover_harness_adapters(include_builtins=False):
+                if entry.id in known:
+                    continue
+                status = "ready" if entry.available else (entry.issue or "unavailable")
+                log.add_info(f"  {entry.id:18} python     protocol       tools= 0 {status}")
             return
 
         if sub == "show":
@@ -1422,7 +1430,21 @@ class CommandImplMixin:
             try:
                 entry = resolve_harness(subargs, root=Path.cwd())
             except Exception as exc:
-                log.add_error(f"Could not resolve harness: {exc}")
+                try:
+                    from superqode.harness import load_harness_adapter
+
+                    adapter = load_harness_adapter(subargs)
+                except Exception:
+                    log.add_error(f"Could not resolve harness: {exc}")
+                    return
+                enabled = [
+                    name
+                    for name, supported in adapter.descriptor.capabilities.to_dict().items()
+                    if supported
+                ]
+                log.add_info(f"Harness: {adapter.descriptor.name} (Python package)")
+                log.add_info(adapter.descriptor.description)
+                log.add_info(f"Capabilities: {', '.join(enabled) or 'none'}")
                 return
             log.add_info(
                 f"Harness: {_harness_display_name(entry.id)} ({entry.source}, "
@@ -1536,6 +1558,7 @@ class CommandImplMixin:
             "validate",
             "worker",
             "observability",
+            "protocol",
         }
         if sub in cli_backed_harness_subcommands:
             try:
@@ -2648,6 +2671,9 @@ class CommandImplMixin:
             except Exception as exc:
                 log.add_error(f"Could not install plugin: {exc}")
                 return
+            pure = getattr(self, "_pure_mode", None)
+            if pure is not None:
+                self._completion_extension_runtime = pure.reload_extensions()
             log.add_success(f"Installed plugin {plugin.id} -> .superqode/plugins/{plugin.id}")
             return
 
@@ -2672,9 +2698,14 @@ class CommandImplMixin:
                     if changed
                     else f"Plugin {plugin_id} was already disabled"
                 )
+            pure = getattr(self, "_pure_mode", None)
+            if pure is not None:
+                self._completion_extension_runtime = pure.reload_extensions()
             return
 
         if subcommand in {"doctor", "validate"}:
+            runtime_check = "--runtime" in subargs
+            subargs = [value for value in subargs if value != "--runtime"]
             paths = discover_plugin_manifests(Path.cwd())
             if subargs:
                 target = Path(subargs[0]).expanduser()
@@ -2685,7 +2716,7 @@ class CommandImplMixin:
                 paths = [target]
             t = Text()
             t.append("\n  Plugin Doctor\n\n", style=f"bold {THEME['purple']}")
-            if not paths:
+            if not paths and not runtime_check:
                 t.append("  No plugin manifests found.\n", style=THEME["muted"])
                 t.append("  Install one with ", style=THEME["muted"])
                 t.append(":plugins add <path>", style=THEME["cyan"])
@@ -2709,6 +2740,25 @@ class CommandImplMixin:
                     for issue in issues:
                         t.append(f"       - {issue}\n", style=THEME["warning"])
             t.append(f"\n  {ok_count}/{len(paths)} manifests valid.\n", style=THEME["muted"])
+            if runtime_check:
+                if not self._ensure_project_trusted_for(log, "execute plugin runtime checks"):
+                    return
+                from superqode.extensions import load_extension_runtime
+
+                runtime = load_extension_runtime(Path.cwd())
+                t.append("\n  Runtime activation\n", style=f"bold {THEME['text']}")
+                for extension in runtime.extensions:
+                    capabilities = ", ".join(extension.capabilities) or "metadata-only"
+                    t.append(f"  ACTIVE {extension.id}", style=THEME["success"])
+                    t.append(f"  {capabilities}\n", style=THEME["muted"])
+                for skipped in runtime.skipped:
+                    t.append(f"  SKIP   {skipped}\n", style=THEME["warning"])
+                for error in runtime.errors:
+                    t.append(
+                        f"  FAIL   {error.extension_id} [{error.capability}] ",
+                        style=THEME["error"],
+                    )
+                    t.append(f"{error.message}\n", style=THEME["warning"])
             self._show_command_output(log, t)
             return
 
@@ -2724,10 +2774,11 @@ class CommandImplMixin:
             except Exception as exc:
                 load_errors.append((path, str(exc)))
         disabled = disabled_plugin_ids(Path.cwd())
+        runtime = self._ensure_pure_mode()._extension_runtime
         t = Text()
         t.append("\n  ◇ ", style=f"bold {THEME['purple']}")
         t.append("Plugins\n\n", style=f"bold {THEME['text']}")
-        if not plugins and not load_errors:
+        if not plugins and not load_errors and not runtime.extensions and not runtime.errors:
             t.append("  No plugins found.\n", style=THEME["muted"])
             t.append(
                 "  Expected manifests under .superqode/plugins/*/plugin.json.\n", style=THEME["dim"]
@@ -2767,6 +2818,20 @@ class CommandImplMixin:
         for path, error in load_errors:
             t.append(f"  broken manifest  {path}\n", style=THEME["error"])
             t.append(f"    {error}\n", style=THEME["warning"])
+        if runtime.extensions:
+            t.append("\n  Active runtime extensions\n", style=f"bold {THEME['text']}")
+            for extension in runtime.extensions:
+                capabilities = ", ".join(extension.capabilities) or "metadata-only"
+                t.append(f"  {extension.id:<24}", style=f"bold {THEME['cyan']}")
+                t.append(f"{capabilities}\n", style=THEME["muted"])
+        for skipped in runtime.skipped:
+            t.append(f"  skipped  {skipped}\n", style=THEME["warning"])
+        for error in runtime.errors:
+            t.append(
+                f"  runtime error  {error.extension_id} [{error.capability}]\n",
+                style=THEME["error"],
+            )
+            t.append(f"    {error.message}\n", style=THEME["warning"])
         t.append("\n  Commands: ", style=THEME["muted"])
         t.append(":plugins doctor", style=THEME["cyan"])
         t.append(", ", style=THEME["muted"])

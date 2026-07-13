@@ -43,6 +43,8 @@ Every plugin is defined by a `plugin.json` manifest file:
   "id": "my-plugin",
   "name": "My Plugin",
   "version": "1.0.0",
+  "api_version": 1,
+  "requires_superqode": ">=0.2.21,<1.0",
   "description": "Adds custom tools and hooks",
   "tools": [],
   "commands": [],
@@ -62,8 +64,10 @@ Every plugin is defined by a `plugin.json` manifest file:
 | `name` | Human-readable display name |
 | `version` | Semantic version string |
 | `description` | Short description of plugin functionality |
+| `api_version` | Extension API compatibility version (currently `1`) |
+| `requires_superqode` | Optional SuperQode version constraint |
 | `tools` | Custom tool definitions the plugin contributes |
-| `commands` | Custom CLI commands the plugin contributes |
+| `commands` | Custom TUI slash/colon commands the plugin contributes |
 | `skills` | Skill definitions the plugin contributes |
 | `providers` | Provider configurations the plugin registers |
 | `permission_rules` | Additional permission rules for the plugin |
@@ -190,7 +194,9 @@ superqode plugins validate .superqode/plugins/my-plugin/plugin.json
 
 ## plugins doctor
 
-Validate all discoverable plugin manifests (or a specific path).
+Validate all discoverable plugin manifests (or a specific path). This default
+check does not import executable plugin code. Use `--runtime` in a trusted
+project to import contributions and report activation failures.
 
 ```bash
 superqode plugins doctor [PATH]
@@ -210,6 +216,10 @@ superqode plugins doctor
 
 # Validate a specific directory
 superqode plugins doctor .superqode/plugins/my-plugin
+
+# Import and activate trusted extension contributions
+superqode trust yes
+superqode plugins doctor --runtime
 ```
 
 ---

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.21] - 2026-07-13
+
+### Added
+
+- **Harness Protocol v1** - Added a versioned internal lifecycle, canonical durable event envelope, capability contract, portable session export, shared controller, and Core, direct-Python, and ACP reference adapters.
+- **Harness adapter conformance** - Added a reusable conformance API and `superqode harness protocol describe|conformance` commands covering ordering, terminal states, message preservation, persistence, export, resume, and checkpoints.
+- **Python harness packages** - Added `superqode.harnesses` entry-point discovery, automatic function-to-adapter wrapping, failure isolation, unified list/show/run commands, named conformance checks, and a real install/run/uninstall package fixture.
+- **Extensible native Core** - Added the public Python `Extension` API and `superqode.extensions` package entry-point contract for opt-in tools, TUI commands, skills, lifecycle hooks, bounded context, permission rules, and providers while preserving Core's four-tool default.
+- **Runtime plugin activation checks** - Added `superqode plugins doctor --runtime` to import trusted contributions and report active capabilities, skipped extensions, compatibility failures, and isolated activation errors.
+- **Extension examples and package conformance** - Added manifest-based and Python-package references plus three independent tool, policy, and skill distributions, an upgrade fixture, and a temporary-environment lifecycle checker under `examples/extensions/`.
+
+### Changed
+
+- **Functional plugin manifests** - Existing `plugin.json` contributions now activate in native Core and headless runs instead of remaining declarative-only; project-local executable contributions remain trust-gated and enable/disable changes rebuild the active native runtime.
+- **Release metadata** - Bumped the package version, runtime `__version__`, lockfile package entry, ACP registry metadata, and extension package compatibility declarations to `0.2.21`.
+
 ## [0.2.20] - 2026-07-13
 
 ### Changed

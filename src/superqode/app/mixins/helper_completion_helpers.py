@@ -128,8 +128,21 @@ class HelperCompletionHelpersMixin:
         return metadata
 
     def _completion_command_values(self) -> tuple[str, ...]:
-        """Merge static commands with live agent shortcuts without duplicates."""
+        """Merge static, extension, and live-agent commands without duplicates."""
         values = list(COMMANDS)
+        runtime = getattr(getattr(self, "_pure_mode", None), "_extension_runtime", None)
+        if runtime is None:
+            runtime = getattr(self, "_completion_extension_runtime", None)
+        if runtime is None:
+            try:
+                from superqode.extensions import load_extension_runtime
+
+                runtime = load_extension_runtime(Path.cwd())
+            except Exception:
+                runtime = False
+            self._completion_extension_runtime = runtime
+        if runtime:
+            values.extend(f":{name}" for name in runtime.commands)
         values.extend(f":{name}" for name in self._agent_command_metadata())
         return tuple(dict.fromkeys(values))
 
@@ -141,6 +154,11 @@ class HelperCompletionHelpersMixin:
         agent_metadata = self._agent_command_metadata()
 
         def description(command: str) -> str:
+            runtime = getattr(getattr(self, "_pure_mode", None), "_extension_runtime", None)
+            runtime = runtime or getattr(self, "_completion_extension_runtime", None)
+            extension_command = runtime.commands.get(command.removeprefix(":")) if runtime else None
+            if extension_command is not None:
+                return extension_command.description or "SuperQode extension command"
             agent = agent_metadata.get(command.removeprefix(":").lower())
             if agent is not None:
                 name, detail = agent

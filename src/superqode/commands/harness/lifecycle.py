@@ -12,21 +12,41 @@ from ._helpers import _diff_dicts, _permission_config_to_dict
 @harness.command("list")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def harness_list(json_output):
-    """List selectable built-in, project, and registry harnesses."""
-    from superqode.harness import list_harnesses
+    """List built-in, file, registry, and installed Python harnesses."""
+    from superqode.harness import discover_harness_adapters, list_harnesses
 
-    rows = [entry.to_dict() for entry in list_harnesses(Path.cwd())]
+    rows = [{**entry.to_dict(), "kind": "spec"} for entry in list_harnesses(Path.cwd())]
+    known = {str(row["id"]) for row in rows}
+    for entry in discover_harness_adapters(include_builtins=False):
+        if entry.id in known:
+            continue
+        rows.append(
+            {
+                **entry.to_dict(),
+                "display_name": entry.name,
+                "runtime": "protocol",
+                "default": False,
+                "tools": [],
+                "tool_count": 0,
+                "digest": "",
+                "path": None,
+                "kind": "python",
+            }
+        )
     if json_output:
         click.echo(json.dumps(rows, indent=2))
         return
-    click.echo(f"{'ID':<20} {'DEFAULT':<8} {'SOURCE':<10} {'RUNTIME':<16} {'TOOLS':>5}  STATUS")
+    click.echo(
+        f"{'ID':<20} {'TYPE':<8} {'DEFAULT':<8} {'SOURCE':<20} {'RUNTIME':<12} {'TOOLS':>5}  STATUS"
+    )
     for row in rows:
         status = "ready" if row["available"] else str(row["issue"] or "unavailable")
         click.echo(
             f"{str(row['id']):<20} "
+            f"{str(row['kind']):<8} "
             f"{('*' if row['default'] else ''):<8} "
-            f"{str(row['source']):<10} "
-            f"{str(row['runtime']):<16} "
+            f"{str(row['source']):<20} "
+            f"{str(row['runtime']):<12} "
             f"{int(row['tool_count']):>5}  {status}"
         )
 
@@ -36,12 +56,37 @@ def harness_list(json_output):
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def harness_show(reference, json_output):
     """Show one selectable harness by name or spec path."""
-    from superqode.harness import harness_spec_to_dict, resolve_harness
+    from superqode.harness import (
+        harness_spec_to_dict,
+        load_harness_adapter,
+        resolve_harness,
+    )
 
     try:
         entry = resolve_harness(reference, root=Path.cwd())
-    except Exception as exc:
-        raise click.ClickException(str(exc)) from exc
+    except Exception:
+        try:
+            adapter = load_harness_adapter(reference)
+        except Exception as exc:
+            raise click.ClickException(str(exc)) from exc
+        payload = {
+            **adapter.descriptor.to_dict(),
+            "source": "python-package",
+            "kind": "python",
+        }
+        if json_output:
+            click.echo(json.dumps(payload, indent=2))
+            return
+        click.echo(f"Harness: {adapter.descriptor.id}")
+        click.echo(f"Description: {adapter.descriptor.description}")
+        click.echo("Source: Python package")
+        enabled = [
+            name
+            for name, supported in adapter.descriptor.capabilities.to_dict().items()
+            if supported
+        ]
+        click.echo(f"Capabilities: {', '.join(enabled) or 'none'}")
+        return
     payload = {**entry.to_dict(), "spec": harness_spec_to_dict(entry.spec)}
     if json_output:
         click.echo(json.dumps(payload, indent=2))

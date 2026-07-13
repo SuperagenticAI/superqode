@@ -93,6 +93,13 @@ from .worker import (
 
 from .evidence import harness_evidence
 
+from .protocol import (
+    harness_protocol,
+    harness_protocol_list,
+    harness_protocol_describe,
+    harness_protocol_conformance,
+)
+
 from .observability import (
     harness_observability,
     harness_observability_status,

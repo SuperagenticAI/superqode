@@ -166,6 +166,33 @@ superqode harness graph <run-id>
 superqode harness graph <run-id> --json
 ```
 
+Harness Protocol v1 provides one versioned session and evidence contract for
+native Core, direct Python harnesses, and ACP agents. Inspect the reference
+adapters or run the deterministic offline conformance suite:
+
+```bash
+superqode harness protocol describe
+superqode harness protocol conformance
+```
+
+An independently installed Python harness needs only one async function and one
+entry point:
+
+```toml
+[project.entry-points."superqode.harnesses"]
+my-harness = "my_package:run"
+```
+
+```bash
+pip install -e .
+superqode harness list
+superqode harness run my-harness "review this diff"
+superqode harness protocol conformance my-harness
+```
+
+See [Harness Protocol v1](docs/advanced/harness-protocol.md) for the Python API,
+capability boundaries, canonical events, and current limits.
+
 Use `doctor` before sharing a harness with a team. It checks backend availability, spec compatibility, sandbox policy, event-store readiness, approval support, MCP config paths, and rich event graph support.
 
 ### Common Harness Choices
@@ -201,6 +228,8 @@ superqode harness run --spec harness.yaml --runtime codex-sdk --prompt "summariz
 
 - **Harness specification**: One portable spec controls runtime, model policy, tools, memory, search, sandbox, approvals, workflow, and output.
 - **Harness independence**: Inspect, version, measure, and improve the agent loop as your own repository artifact instead of depending on a locked product harness.
+- **Harness Protocol v1**: Run native Core, package-style Python harnesses, and ACP agents through one versioned lifecycle and durable evidence envelope without pretending their optional capabilities are identical.
+- **Extensible minimal Core**: Start with only `read`, `write`, `edit`, and `bash`, then opt into trusted Python packages or project plugins that contribute tools, commands, skills, context, lifecycle hooks, permission rules, and providers.
 - **Model routing**: Use Open Models or closed models, local endpoints or remote providers, small utility models or large coding models.
 - **Local first Open Model support**: Detect local engines, probe context windows, generate starter harnesses, run smoke checks, and benchmark local candidates.
 - **Local dynamic workflows with RLM**: Run recursive local-model analysis over large logs, traces, diffs, and repo slices with `context_handle`, `spawn_harness`, and bounded dynamic workflow scripts.
@@ -251,7 +280,7 @@ Inside the TUI, start with `:help` and these commands:
 :share create         # portable superqode-share-v1 artifact
 :export markdown      # copyable transcript export
 :trust doctor         # project-local plugins/MCP/hooks audit
-:plugins doctor       # plugin manifest validation
+:plugins doctor       # non-executing plugin manifest validation
 :plan fix the tests   # planning-only review before tools run
 :plan approve         # execute the last planned request
 :plan edit ...        # adjust the pending request before execution
@@ -269,6 +298,7 @@ superqode trust doctor
 superqode trust yes
 superqode plugins add ./my-plugin
 superqode plugins doctor
+superqode plugins doctor --runtime  # trust-gated import and activation check
 superqode memory remember "Use pnpm in this repo; do not use npm" --kind preference
 superqode memory search "package manager"
 superqode memory providers  # local default; optional mem0/cognee/supermemory disabled until configured

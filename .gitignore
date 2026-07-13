@@ -67,6 +67,10 @@ cover/
 .benchmark/
 .benchmarks/
 
+# Local research and real-model validation evidence
+validation/
+scripts/run_real_harness_validation.py
+
 # Translations
 *.mo
 *.pot

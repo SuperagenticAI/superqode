@@ -81,6 +81,12 @@ class PureMode:
         self._harness_kernel = None
         self._harness_session = None
         self._harness_session_id = ""
+        # Extensions are discovered once per PureMode instance. Project-local
+        # executable manifests are trust-gated by load_extension_runtime;
+        # installed Python entry points are explicit user installations.
+        from .extensions import load_extension_runtime
+
+        self._extension_runtime = load_extension_runtime(Path.cwd())
         self._load_env_harness()
 
         # Callbacks for UI updates
@@ -115,6 +121,8 @@ class PureMode:
             profile = "none" if definition.id == "no-tool" else "coding"
         self.tool_profile = self._tool_profile_env or profile
         self.tools = ToolRegistry.for_profile(self.tool_profile)
+        if definition.source == "built-in" and definition.id != "no-tool":
+            self._extension_runtime.apply_tools(self.tools)
         self._harness_kernel = None
         self._harness_session = None
         self._harness_session_id = ""
@@ -152,6 +160,44 @@ class PureMode:
     def clear_harness(self) -> None:
         """Return to the built-in core harness."""
         self.select_harness("core")
+
+    def reload_extensions(self):
+        """Reload enabled extensions and rebuild the active native runtime.
+
+        Plugin state changes are expected to take effect immediately in the
+        TUI. Preserve the current provider/model/session while reconstructing
+        the tool registry, hooks and bounded extension context.
+        """
+        from .extensions import load_extension_runtime
+
+        definition = self._harness_definition
+        reference: str | Path = "core"
+        if definition is not None:
+            reference = definition.path or definition.id
+        was_connected = self.session.connected
+        provider = self.session.provider
+        model = self.session.model
+        system_level = self.session.system_level
+        working_directory = self.session.working_directory
+        session_id = self.get_current_session_id()
+
+        self._extension_runtime = load_extension_runtime(working_directory or Path.cwd())
+        self.select_harness(reference)
+        if (
+            was_connected
+            and provider
+            and model
+            and definition is not None
+            and definition.source == "built-in"
+        ):
+            self.connect(
+                provider,
+                model,
+                system_level,
+                working_directory=working_directory,
+                session_id=session_id,
+            )
+        return self._extension_runtime
 
     def _sync_harness_session_fields(self) -> None:
         """Mirror the loaded HarnessSpec into user-visible session status."""
@@ -301,11 +347,22 @@ class PureMode:
             parallel_tools = True
 
         # Create agent loop with job description if provided
+        from .extensions import ExtensionContext
+
+        extension_context = ExtensionContext(
+            root=self.session.working_directory,
+            harness_id=selected_id,
+            provider=provider,
+            model=model,
+            session_id=session_id or "",
+        )
+        extension_prompt = self._extension_runtime.context_text(extension_context)
         config = AgentConfig(
             provider=provider,
             model=model,
             system_prompt_level=system_level,
             working_directory=self.session.working_directory,
+            custom_system_prompt=extension_prompt or None,
             job_description=job_description,
             max_iterations=max_iterations,
             enable_session_storage=True,
@@ -322,6 +379,8 @@ class PureMode:
         runtime_kwargs: dict[str, Any] = {}
         if self.runtime_name in ("codex-sdk", "claude-agent-sdk"):
             runtime_kwargs["approval_callback"] = self.on_permission_request
+        if self.runtime_name == "builtin":
+            runtime_kwargs["hooks"] = self._extension_runtime.build_hooks()
 
         self._dispose_runtime()
         self._runtime = create_runtime(

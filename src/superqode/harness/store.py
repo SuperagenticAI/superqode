@@ -6,11 +6,11 @@ import json
 import secrets
 import sqlite3
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from .events import HarnessEvent
+from .events import HarnessEvent, generate_event_id
 from .spec import HarnessSpec
 
 _ULID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
@@ -516,6 +516,7 @@ class MemoryHarnessStore:
     def append_event(self, run_id: str, event: HarnessEvent) -> HarnessRunRecord:
         record = self._require_run(run_id)
         event_index = len(record.events)
+        event = _event_for_store(record, event, event_index)
         node = _graph_node_from_event(run_id, event_index, event)
         graph = self.get_event_graph(run_id)
         edges = list(graph.edges)
@@ -916,6 +917,7 @@ class FileHarnessStore:
     def append_event(self, run_id: str, event: HarnessEvent) -> HarnessRunRecord:
         record = self._require_run(run_id)
         event_index = len(record.events)
+        event = _event_for_store(record, event, event_index)
         node = _graph_node_from_event(run_id, event_index, event)
         graph = self.get_event_graph(run_id)
         edges = list(graph.edges)
@@ -1441,13 +1443,14 @@ class SQLiteHarnessStore:
         return record
 
     def append_event(self, run_id: str, event: HarnessEvent) -> HarnessRunRecord:
-        self._require_run(run_id)
+        record = self._require_run(run_id)
         with self._connect() as conn:
             row = conn.execute(
                 "select coalesce(max(position), -1) + 1 as position from events where run_id = ?",
                 (run_id,),
             ).fetchone()
             position = int(row["position"])
+            event = _event_for_store(record, event, position)
             node = _graph_node_from_event(run_id, position, event)
             previous = conn.execute(
                 """
@@ -1458,8 +1461,11 @@ class SQLiteHarnessStore:
             ).fetchone()
             conn.execute(
                 """
-                insert into events(run_id, position, type, timestamp, session_id, data)
-                values (?, ?, ?, ?, ?, ?)
+                insert into events(
+                    run_id, position, type, timestamp, session_id, data,
+                    protocol_version, event_id, sequence, harness_id, parent_event_id
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id,
@@ -1468,6 +1474,11 @@ class SQLiteHarnessStore:
                     event.timestamp,
                     event.session_id,
                     json.dumps(event.data, sort_keys=True),
+                    event.protocol_version,
+                    event.event_id,
+                    event.sequence,
+                    event.harness_id,
+                    event.parent_event_id,
                 ),
             )
             conn.execute(
@@ -1699,6 +1710,11 @@ class SQLiteHarnessStore:
                     timestamp real not null,
                     session_id text,
                     data text not null,
+                    protocol_version text not null default '1.0',
+                    event_id text not null default '',
+                    sequence integer not null default 0,
+                    harness_id text,
+                    parent_event_id text,
                     primary key(run_id, position)
                 );
                 create index if not exists idx_events_run_position
@@ -1727,6 +1743,11 @@ class SQLiteHarnessStore:
             _ensure_sqlite_column(conn, "runs", "root_run_id", "text not null default ''")
             _ensure_sqlite_column(conn, "inputs", "owner_id", "text not null default ''")
             _ensure_sqlite_column(conn, "inputs", "lease_expires_at", "real")
+            _ensure_sqlite_column(conn, "events", "protocol_version", "text not null default '1.0'")
+            _ensure_sqlite_column(conn, "events", "event_id", "text not null default ''")
+            _ensure_sqlite_column(conn, "events", "sequence", "integer not null default 0")
+            _ensure_sqlite_column(conn, "events", "harness_id", "text")
+            _ensure_sqlite_column(conn, "events", "parent_event_id", "text")
 
 
 def create_harness_store(
@@ -1785,12 +1806,19 @@ def _run_metadata_with_prompt(
 
 
 def _event_from_dict(data: dict[str, Any]) -> HarnessEvent:
+    timestamp = float(data.get("timestamp") or time.time())
+    sequence = int(data.get("sequence") or 0)
     return HarnessEvent(
         type=str(data["type"]),
         data=dict(data.get("data") or {}),
-        timestamp=float(data.get("timestamp") or time.time()),
+        timestamp=timestamp,
         session_id=data.get("session_id"),
         run_id=data.get("run_id"),
+        protocol_version=str(data.get("protocol_version") or "1.0"),
+        event_id=str(data.get("event_id") or _legacy_event_id(data, timestamp, sequence)),
+        sequence=sequence,
+        harness_id=data.get("harness_id"),
+        parent_event_id=data.get("parent_event_id"),
     )
 
 
@@ -1848,13 +1876,69 @@ def _ensure_sqlite_column(
 
 
 def _event_from_row(row: sqlite3.Row) -> HarnessEvent:
+    keys = set(row.keys())
+    timestamp = float(row["timestamp"])
+    sequence = int(row["sequence"] or 0) if "sequence" in keys else 0
+    legacy_data = {
+        "run_id": row["run_id"],
+        "type": row["type"],
+        "position": row["position"] if "position" in keys else sequence,
+    }
     return HarnessEvent(
         type=row["type"],
         data=json.loads(row["data"] or "{}"),
-        timestamp=float(row["timestamp"]),
+        timestamp=timestamp,
         session_id=row["session_id"],
         run_id=row["run_id"],
+        protocol_version=(
+            str(row["protocol_version"] or "1.0") if "protocol_version" in keys else "1.0"
+        ),
+        event_id=(
+            str(row["event_id"] or _legacy_event_id(legacy_data, timestamp, sequence))
+            if "event_id" in keys
+            else _legacy_event_id(legacy_data, timestamp, sequence)
+        ),
+        sequence=sequence,
+        harness_id=row["harness_id"] if "harness_id" in keys else None,
+        parent_event_id=(row["parent_event_id"] if "parent_event_id" in keys else None),
     )
+
+
+def _event_for_store(
+    record: HarnessRunRecord,
+    event: HarnessEvent,
+    position: int,
+) -> HarnessEvent:
+    """Fill durable protocol context without changing legacy event names."""
+    previous = record.events[-1] if record.events else None
+    return replace(
+        event,
+        event_id=event.event_id or generate_event_id(),
+        session_id=event.session_id or record.session_id,
+        run_id=event.run_id or record.run_id,
+        sequence=position + 1,
+        harness_id=event.harness_id or record.harness,
+        parent_event_id=(
+            event.parent_event_id
+            if event.parent_event_id is not None
+            else (previous.event_id if previous is not None else None)
+        ),
+    )
+
+
+def _legacy_event_id(data: dict[str, Any], timestamp: float, sequence: int) -> str:
+    """Build a stable identity when reading a pre-protocol event record."""
+    import uuid
+
+    identity = ":".join(
+        (
+            str(data.get("run_id") or ""),
+            str(data.get("position") or sequence),
+            str(timestamp),
+            str(data.get("type") or "event"),
+        )
+    )
+    return f"evt_legacy_{uuid.uuid5(uuid.NAMESPACE_URL, identity).hex}"
 
 
 def _graph_from_events(run_id: str, events: tuple[HarnessEvent, ...]) -> HarnessEventGraph:

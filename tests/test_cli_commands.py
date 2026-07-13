@@ -2654,6 +2654,31 @@ class TestPluginsCommand:
             assert "FAIL broken" in result.output
             assert "missing.py" in result.output
 
+    def test_plugins_runtime_doctor_reports_active_capabilities(
+        self, runner, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("SUPERQODE_TRUST_STORE", str(tmp_path / "trust.json"))
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            plugin_dir = Path(".superqode/plugins/demo")
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "context.md").write_text("Be concise.", encoding="utf-8")
+            (plugin_dir / "plugin.json").write_text(
+                json.dumps(
+                    {
+                        "id": "demo",
+                        "name": "Demo",
+                        "context_injectors": [{"path": "context.md"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            assert runner.invoke(cli_main, ["trust", "yes"]).exit_code == 0
+
+            result = runner.invoke(cli_main, ["plugins", "doctor", "--runtime"])
+
+            assert result.exit_code == 0
+            assert "ACTIVE demo (context)" in result.output
+
 
 class TestAuthCommand:
     """Tests for auth commands."""

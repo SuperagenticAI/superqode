@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "superqode-hello-harness"
+version = "0.1.0"
+description = "Minimal independently installable SuperQode harness"
+requires-python = ">=3.12"
+dependencies = ["superqode>=0.2.21,<1.0"]
+
+[project.entry-points."superqode.harnesses"]
+hello = "superqode_hello_harness:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/superqode_hello_harness"]

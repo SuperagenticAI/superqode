@@ -9,8 +9,10 @@ from ._group import harness
 
 
 @harness.command("run")
-@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path), required=True)
-@click.option("--prompt", "-p", required=True, help="Prompt to run")
+@click.argument("reference", required=False)
+@click.argument("task", required=False)
+@click.option("--spec", "spec_path", type=click.Path(exists=True, path_type=Path))
+@click.option("--prompt", "-p", help="Prompt to run")
 @click.option("--provider", envvar="SUPERQODE_PROVIDER", default="openai", show_default=True)
 @click.option(
     "--model", "model_name", envvar="SUPERQODE_MODEL", default="gpt-4o-mini", show_default=True
@@ -39,6 +41,8 @@ from ._group import harness
 )
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 def harness_run(
+    reference,
+    task,
     spec_path,
     prompt,
     provider,
@@ -52,7 +56,7 @@ def harness_run(
     single_step,
     json_output,
 ):
-    """Run a task through a HarnessSpec."""
+    """Run a HarnessSpec or installed Python harness."""
     import asyncio
 
     from superqode.harness import (
@@ -64,7 +68,20 @@ def harness_run(
         workflow_steps_from_spec,
     )
 
-    async def _run():
+    if reference and spec_path:
+        raise click.UsageError("Pass either a harness name/path or --spec, not both")
+    if task and prompt and task != prompt:
+        raise click.UsageError("Pass the task as an argument or --prompt, not both")
+    prompt = prompt or task
+    if reference and Path(reference).is_file():
+        spec_path = Path(reference)
+        reference = None
+    if not prompt:
+        raise click.UsageError("A task is required; pass it as an argument or --prompt")
+    if not reference and spec_path is None:
+        raise click.UsageError("A harness name/path or --spec is required")
+
+    async def _run_spec():
         spec = load_harness_spec(spec_path)
         store = create_harness_store(
             store_kind or spec.observability.run_store,
@@ -193,8 +210,80 @@ def harness_run(
                 click.echo("Use the TUI to approve or reject the paused tool call.")
         return result
 
+    async def _run_adapter():
+        from superqode.harness import (
+            HarnessCreateRequest,
+            HarnessProtocolController,
+            create_harness_store,
+            load_harness_adapter,
+        )
+
+        adapter = load_harness_adapter(reference)
+        resolved_store_kind = store_kind or "file"
+        store_path = (
+            Path(".superqode/sessions/store.sqlite3")
+            if resolved_store_kind == "sqlite"
+            else Path(".superqode/sessions")
+        )
+        store = create_harness_store(resolved_store_kind, store_path)
+        controller = HarnessProtocolController([adapter], store=store)
+        if session_id and store.get_session(session_id) is not None:
+            session = await controller.resume(session_id)
+        else:
+            session = await controller.create(
+                HarnessCreateRequest(
+                    harness_id=adapter.descriptor.id,
+                    provider=provider,
+                    model=model_name,
+                    working_directory=working_dir,
+                    session_id=session_id,
+                )
+            )
+        events = []
+        async for event in controller.send(session, prompt):
+            events.append(event)
+            if stream:
+                if json_output:
+                    click.echo(json.dumps(event.to_dict()))
+                elif event.type == "message.delta":
+                    click.echo(event.data.get("text", ""), nl=False)
+        terminal = events[-1] if events else None
+        if terminal is None or terminal.type != "run.completed":
+            detail = terminal.data.get("error") if terminal is not None else "no events"
+            raise RuntimeError(f"Harness run failed: {detail}")
+        assistant = next(
+            (
+                event
+                for event in reversed(events)
+                if event.type == "message.created" and event.data.get("role") == "assistant"
+            ),
+            None,
+        )
+        content = str(assistant.data.get("content") or "") if assistant else ""
+        if stream:
+            if not json_output:
+                click.echo()
+            return events
+        if json_output:
+            click.echo(
+                json.dumps(
+                    {
+                        "content": content,
+                        "session_id": session.session_id,
+                        "run_id": terminal.run_id,
+                        "harness": adapter.descriptor.id,
+                        "events": [event.to_dict() for event in events],
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            click.echo(content)
+            click.echo(f"\nRun: {terminal.run_id}  Session: {session.session_id}")
+        return events
+
     try:
-        asyncio.run(_run())
+        asyncio.run(_run_adapter() if reference else _run_spec())
     except Exception as exc:
         if json_output:
             click.echo(json.dumps({"error": str(exc), "success": False}, indent=2))

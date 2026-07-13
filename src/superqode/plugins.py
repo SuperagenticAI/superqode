@@ -43,6 +43,8 @@ class PluginManifest:
     name: str
     version: str = "0.1.0"
     description: str = ""
+    api_version: int = 1
+    requires_superqode: str = ""
     tools: List[Dict[str, Any]] = field(default_factory=list)
     commands: List[Dict[str, Any]] = field(default_factory=list)
     skills: List[str] = field(default_factory=list)
@@ -63,6 +65,10 @@ class PluginManifest:
             name=name,
             version=str(data.get("version", "0.1.0")),
             description=str(data.get("description", "")),
+            api_version=int(data.get("api_version", data.get("apiVersion", 1))),
+            requires_superqode=str(
+                data.get("requires_superqode", data.get("requiresSuperqode", ""))
+            ),
             tools=list(data.get("tools", [])),
             commands=list(data.get("commands", [])),
             skills=list(data.get("skills", [])),
@@ -79,6 +85,8 @@ class PluginManifest:
             "name": self.name,
             "version": self.version,
             "description": self.description,
+            "api_version": self.api_version,
+            "requires_superqode": self.requires_superqode,
             "tools": self.tools,
             "commands": self.commands,
             "skills": self.skills,
@@ -367,6 +375,8 @@ def validate_plugin_manifest(path: str | Path) -> List[str]:
         issues.append("name is required")
     if not manifest.version:
         issues.append("version is required")
+    if manifest.api_version < 1:
+        issues.append("api_version must be a positive integer")
 
     for collection_name in [
         "tools",

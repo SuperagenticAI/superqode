@@ -17,6 +17,9 @@ Features:
 
 __all__ = [
     "__version__",
+    "Extension",
+    "ExtensionCompatibility",
+    "ExtensionContext",
     # Core modules
     "danger",
     "diff_view",
@@ -30,4 +33,9 @@ __all__ = [
     "sidebar",
 ]
 
-__version__ = "0.2.20"
+__version__ = "0.2.21"
+
+# Stable, lightweight public extension surface.  Importing this package does
+# not discover or execute third-party extensions; discovery happens only when
+# a native harness runtime is constructed.
+from .extensions import Extension, ExtensionCompatibility, ExtensionContext

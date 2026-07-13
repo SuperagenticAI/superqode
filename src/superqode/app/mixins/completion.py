@@ -172,7 +172,15 @@ class CompletionMixin:
             "/connect local",
         }:
             return True
-        return lowered in {candidate.lower() for candidate in COMMANDS}
+        known = {candidate.lower() for candidate in COMMANDS}
+        try:
+            from superqode.extensions import load_extension_runtime
+
+            runtime = load_extension_runtime(Path.cwd())
+            known.update(f":{name}" for name in runtime.commands)
+        except Exception:
+            pass
+        return lowered in known
 
     def _selected_prompt_completion_value(self) -> str:
         """Return the currently highlighted completion value, if any."""

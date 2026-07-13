@@ -136,15 +136,18 @@ def get_harness_profiles() -> Dict[str, HarnessProfile]:
     }
 
 
-def create_tool_registry(profile: HarnessProfile) -> ToolRegistry:
+def create_tool_registry(profile: HarnessProfile, *, extensions=None) -> ToolRegistry:
     """Create a tool registry for a profile."""
     if profile.name == "core":
-        return ToolRegistry.core()
-    if profile.name == "workbench":
-        return ToolRegistry.coding()
-    registry = ToolRegistry.full()
-    if profile.tools is not None:
-        return registry.filtered(profile.tools)
+        registry = ToolRegistry.core()
+    elif profile.name == "workbench":
+        registry = ToolRegistry.coding()
+    else:
+        registry = ToolRegistry.full()
+        if profile.tools is not None:
+            registry = registry.filtered(profile.tools)
+    if extensions is not None and profile.name != "no-tool":
+        extensions.apply_tools(registry)
     return registry
 
 
@@ -261,6 +264,18 @@ async def run_headless(
 
     assert profile is not None
 
+    from .extensions import ExtensionContext, load_extension_runtime
+
+    extension_runtime = load_extension_runtime(requested_working_directory)
+    extension_context = ExtensionContext(
+        root=active_working_directory,
+        harness_id=profile.name,
+        provider=provider,
+        model=model,
+        session_id=session_id or "",
+    )
+    extension_prompt = extension_runtime.context_text(extension_context)
+
     loop_policy = (
         core_loop_policy() if profile.name in {"core", "no-tool"} else workbench_loop_policy()
     )
@@ -275,6 +290,7 @@ async def run_headless(
         model=model,
         system_prompt_level=system_level or profile.system_level,
         working_directory=active_working_directory,
+        custom_system_prompt=extension_prompt or None,
         job_description=profile.job_description,
         plan_mode=profile.name == "plan",
         enable_session_storage=True,
@@ -288,16 +304,21 @@ async def run_headless(
         tool_contract_version=("core-tools-v1" if profile.name == "core" else "workbench-v1"),
     )
 
+    runtime_name = resolve_runtime_name(cli=runtime)
+    runtime_kwargs: dict[str, Any] = {}
+    if runtime_name == "builtin":
+        runtime_kwargs["hooks"] = extension_runtime.build_hooks()
     runtime_obj = create_runtime(
-        resolve_runtime_name(cli=runtime),
+        runtime_name,
         gateway=LiteLLMGateway(),
-        tools=create_tool_registry(profile),
+        tools=create_tool_registry(profile, extensions=extension_runtime),
         config=config,
         parallel_tools=True,
         include_mcp=_env_flag("SUPERQODE_MCP_SEARCH") and loop_policy.mcp,
         permission_manager=PermissionManager(
             apply_backend_permissions(profile.permissions, sandbox_backend)
         ),
+        **runtime_kwargs,
     )
     try:
         response = await runtime_obj.run(prompt)

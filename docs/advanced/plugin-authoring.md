@@ -2,6 +2,87 @@
 
 SuperQode plugins let you extend the agent with custom tools, CLI commands, skills, event hook handlers, permission policies, providers, and context injectors. This guide covers every part of the plugin system.
 
+The native `core` harness always starts with only `read`, `write`, `edit`, and
+`bash`. Enabled extensions are applied after that stable base contract, so users
+pay the prompt and tool-schema cost only for capabilities they deliberately
+install. Extension failures are isolated and reported without taking down the
+agent loop.
+
+There are two distribution formats:
+
+- **Python packages** using the `superqode.extensions` entry-point group. This
+  is the preferred format for reusable extensions.
+- **Project plugin manifests** under `.superqode/plugins/`. These are convenient
+  for repository-specific extensions and execute only after project trust is
+  granted.
+
+## Python Package Extensions
+
+Create an extension with the public decorator API:
+
+```python
+from superqode import Extension, ExtensionContext
+
+extension = Extension("company-tools", version="0.1.0")
+
+
+@extension.tool(description="Search approved internal documentation", read_only=True)
+def search_internal_docs(query: str) -> str:
+    return search_company_index(query)
+
+
+@extension.before_tool
+def check_policy(ctx, name: str = "", arguments=None):
+    return None
+
+
+@extension.command("extension-info")
+def extension_info(args: str, context: ExtensionContext) -> str:
+    return f"company-tools is active for {context.root}"
+
+
+@extension.context
+def company_context(context: ExtensionContext) -> str:
+    return "Follow the company's repository validation policy."
+```
+
+Expose the object through `pyproject.toml`:
+
+```toml
+[project.entry-points."superqode.extensions"]
+company-tools = "company_superqode:extension"
+```
+
+An entry point may expose an `Extension` directly or a zero-argument function
+that returns one. Installed entry points are explicit user installations;
+project-local manifest code remains trust-gated. See
+`examples/extensions/python-package/` for a complete package.
+
+### Package conformance checkpoint
+
+The repository ships three independent distributions under
+`examples/extensions/packages/`: a typed tool, a permission policy, and a
+Markdown skill. A fourth wheel represents an in-place upgrade of the tool
+package. The lifecycle checker builds the current SuperQode wheel, creates a temporary virtual environment and
+verifies real package metadata and entry-point discovery, execution, policy
+decisions, skill loading, disable/re-enable, and upgrade behaviour:
+
+```bash
+uv run python scripts/check_extension_packages.py
+```
+
+Core is asserted to contain exactly four tools before the installed packages
+activate. The temporary environment is deleted after the check and the
+development environment is not modified.
+
+### Current stable boundary
+
+Extension API version 1 covers tools, TUI commands, Markdown skills, lifecycle
+hooks, bounded context sources, declarative permission rules, and `ProviderDef`
+registrations for the native harness. Compaction strategies, custom output
+renderers, subagent implementations, validators, MCP-server contributions, and
+portable custom harness loops are not part of API version 1 yet.
+
 ---
 
 ## Plugin Manifest
@@ -15,6 +96,8 @@ Every plugin is defined by a `plugin.json` manifest file. The only required fiel
   "id": "my-plugin",
   "name": "My Plugin",
   "version": "0.1.0",
+  "api_version": 1,
+  "requires_superqode": ">=0.2.21,<1.0",
   "description": "Extends SuperQode with custom code review capabilities.",
   "tools": [
     {
@@ -76,6 +159,8 @@ Every plugin is defined by a `plugin.json` manifest file. The only required fiel
 | `name` | string | same as `id` | Human-readable display name |
 | `version` | string | `"0.1.0"` | Semantic version |
 | `description` | string | `""` | Short summary of plugin functionality |
+| `api_version` | integer | `1` | SuperQode extension API compatibility version |
+| `requires_superqode` | string | `""` | Optional comma-separated version constraints |
 | `tools` | array | `[]` | Custom tool definitions (see Defining Tools) |
 | `commands` | array | `[]` | Custom CLI command definitions (see Defining Slash Commands) |
 | `skills` | array | `[]` | Skill file paths relative to the plugin directory (see Defining Skills) |
@@ -225,7 +310,7 @@ The `path` is relative to the plugin directory. The module must define a class w
 
 ## Defining Slash Commands
 
-Plugin commands appear as slash commands in the SuperQode TUI and CLI. Each command entry in the `commands` array specifies:
+Plugin commands are dispatched as slash/colon commands in the SuperQode TUI. Each command entry in the `commands` array specifies:
 
 ```json
 {
@@ -598,6 +683,16 @@ superqode plugins list
 superqode plugins list --all    # include disabled plugins
 superqode plugins list --json   # machine-readable output
 ```
+
+To import executable contributions and verify capability activation, run the
+trust-gated runtime doctor:
+
+```bash
+superqode trust yes
+superqode plugins doctor --runtime
+```
+
+The normal doctor validates manifests without importing plugin code.
 
 ### Validation
 
