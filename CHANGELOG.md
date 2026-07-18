@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.22] - 2026-07-18
+
+### Added
+
+- **Kimi K3 first-party support** - Added Moonshot's global OpenAI-compatible API route, K3 and current Kimi model metadata, API-key aliases, provider discovery, and a `kimi-k3-coding` harness with 1M context, max reasoning, parallel tools, cache-friendly history, and coding-model fallbacks.
+- **Complete Kimi K3 guide** - Documented Moonshot API and Kimi Code subscription boundaries, setup, pricing, model IDs, reasoning, streaming, tools, vision and video, structured output, Partial Mode, context caching, open-weight status, benchmark interpretation, supported feature gaps, and troubleshooting.
+
+### Fixed
+
+- **K3 request compatibility** - Preserved `reasoning_content` across tool turns, normalized K3 to its current max-only reasoning contract, removed incompatible sampling overrides, and translated completion limits to `max_completion_tokens` on streaming and non-streaming requests.
+
+### Changed
+
+- **Release metadata** - Bumped the package version, runtime `__version__`, lockfile package entry, ACP registry metadata, release-package check, and extension compatibility examples to `0.2.22`.
+
 ## [0.2.21] - 2026-07-13
 
 ### Added
