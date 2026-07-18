@@ -540,6 +540,8 @@ class LiteLLMGateway(GatewayInterface):
                 m["tool_calls"] = self._normalize_tool_calls(msg.tool_calls)
             if msg.tool_call_id:
                 m["tool_call_id"] = msg.tool_call_id
+            if msg.reasoning_content:
+                m["reasoning_content"] = msg.reasoning_content
             result.append(m)
         return result
 
@@ -694,6 +696,12 @@ class LiteLLMGateway(GatewayInterface):
                 result["reasoning_effort"] = "none" if level == "off" else level
             return result
 
+        if provider == "moonshot" and (model or "").lower().split("/")[-1] == "kimi-k3":
+            # K3's pay-as-you-go API currently exposes only max effort and
+            # always has thinking enabled. Collapse the provider-neutral
+            # effort vocabulary to the one value the endpoint accepts.
+            return {"reasoning_effort": "max"}
+
         model_lower = (model or "").lower()
         is_anthropic_shape = (
             provider == "anthropic" or provider == "ds4" or "deepseek-v4" in model_lower
@@ -727,6 +735,22 @@ class LiteLLMGateway(GatewayInterface):
         extra_body = dict(request_kwargs.get("extra_body") or {})
         extra_body.setdefault("tool_stream", True)
         request_kwargs["extra_body"] = extra_body
+
+    @staticmethod
+    def _apply_kimi_k3_request_shaping(
+        provider: str,
+        model: str,
+        request_kwargs: Dict[str, Any],
+    ) -> None:
+        """Apply the fixed sampling contract of Moonshot's Kimi K3 API."""
+        if provider != "moonshot" or (model or "").lower().split("/")[-1] != "kimi-k3":
+            return
+
+        for key in ("temperature", "top_p", "n", "presence_penalty", "frequency_penalty"):
+            request_kwargs.pop(key, None)
+
+        if "max_tokens" in request_kwargs:
+            request_kwargs.setdefault("max_completion_tokens", request_kwargs.pop("max_tokens"))
 
     def _resolve_hf_glm52_reasoning_effort(
         self,
@@ -2338,6 +2362,7 @@ class LiteLLMGateway(GatewayInterface):
         # Local-model tuning (Ollama num_ctx, keep_alive, tool-temp clamp).
         # Applied after kwargs merge so user overrides via extra kwargs win.
         self._apply_local_request_shaping(provider, model, request_kwargs, bool(tools))
+        self._apply_kimi_k3_request_shaping(provider, model, request_kwargs)
 
         try:
             model_candidates = self._get_model_candidates(provider, model)
@@ -2612,6 +2637,7 @@ class LiteLLMGateway(GatewayInterface):
 
         # Local-model tuning. Same rationale as in chat_completion.
         self._apply_local_request_shaping(provider, model, request_kwargs, bool(tools))
+        self._apply_kimi_k3_request_shaping(provider, model, request_kwargs)
 
         try:
             model_candidates = self._get_model_candidates(provider, model)

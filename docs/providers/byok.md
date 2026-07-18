@@ -122,6 +122,38 @@ provider from the catalog.
 
 **Documentation**: [dev.meta.ai/docs](https://dev.meta.ai/docs)
 
+#### Moonshot AI (Kimi K3)
+
+```bash
+export MOONSHOT_API_KEY=...
+superqode connect byok moonshot kimi-k3
+```
+
+| Model | Context | Price (in/out per 1M) | Best For |
+|-------|---------|-----------------------|----------|
+| `kimi-k3` | 1,048,576 | $3.00 / $15.00 | Long-horizon coding, frontend work, and large repositories |
+| `kimi-k2.7-code-highspeed` | 262K | $0.95 / $4.00 | Faster iterative coding loops |
+
+SuperQode routes this provider directly to Moonshot's global OpenAI-compatible
+API at `https://api.moonshot.ai/v1` (override with `MOONSHOT_API_BASE`). K3 has
+thinking permanently enabled; the current pay-as-you-go API accepts only
+`reasoning_effort: max`. It automatically caches stable prompt prefixes, so
+keep the same harness and reasoning effort within a session.
+
+Create a K3-tuned harness with:
+
+```bash
+superqode harness init kimi-project --template kimi-k3-coding --output harness.yaml
+```
+
+The preset selects `moonshot/kimi-k3`, its 1M context, max reasoning, native
+parallel tools, and a longer cache-friendly session history. Full open weights
+are scheduled for July 27, 2026; until compatible serving stacks publish K3
+support, this preset targets Moonshot's hosted API.
+
+**Documentation**: [Complete Kimi K3 provider and feature guide](kimi.md) ·
+[Official Kimi K3 API guide](https://platform.kimi.ai/docs/guide/kimi-k3-quickstart)
+
 ---
 
 ### Tier 1 (First-Class Support) continued
@@ -342,6 +374,7 @@ superqode connect byok fireworks accounts/fireworks/models/llama-v3p3-70b-instru
 | Groq | `GROQ_API_KEY` | Required |
 | Mistral | `MISTRAL_API_KEY` | Required |
 | xAI | `XAI_API_KEY` | Required |
+| Moonshot AI | `MOONSHOT_API_KEY` or `KIMI_API_KEY` | Required |
 
 ### Configuration File
 

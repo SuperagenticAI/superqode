@@ -170,7 +170,7 @@ class ProviderManager:
             "mistral": "MISTRAL_API_KEY",
             "cerebras": "CEREBRAS_API_KEY",
             "zhipu": "ZHIPU_API_KEY",
-            "moonshot": "MOONSHOT_API_KEY",
+            "moonshot": ["MOONSHOT_API_KEY", "KIMI_API_KEY"],
             "minimax": "MINIMAX_API_KEY",
             "baidu": "BAIDU_API_KEY",
             "tencent": "TENCENT_API_KEY",
@@ -1066,15 +1066,24 @@ class ProviderManager:
             ProviderInfo(
                 id="moonshot",
                 name="Moonshot AI",
-                description="Kimi models (Kimi-2, Kimi-K2, etc.)",
+                description="Kimi K3 and Kimi coding models via the first-party global API",
                 requires_api_key=True,
                 configured=self._is_provider_configured("moonshot"),
                 models=[
-                    ModelInfo("moonshot-v1-8k", "Moonshot v1 8K", "moonshot", context_size=8192),
-                    ModelInfo("moonshot-v1-32k", "Moonshot v1 32K", "moonshot", context_size=32768),
+                    ModelInfo("kimi-k3", "Kimi K3", "moonshot", context_size=1_048_576),
                     ModelInfo(
-                        "moonshot-v1-128k", "Moonshot v1 128K", "moonshot", context_size=131072
+                        "kimi-k2.7-code-highspeed",
+                        "Kimi K2.7 Code Highspeed",
+                        "moonshot",
+                        context_size=262_144,
                     ),
+                    ModelInfo(
+                        "kimi-k2.7-code",
+                        "Kimi K2.7 Code",
+                        "moonshot",
+                        context_size=262_144,
+                    ),
+                    ModelInfo("kimi-k2.6", "Kimi K2.6", "moonshot", context_size=262_144),
                 ],
             )
         )
@@ -1331,7 +1340,7 @@ class ProviderManager:
                     "mistral": "MISTRAL_API_KEY",
                     "cerebras": "CEREBRAS_API_KEY",
                     "zhipu": "ZHIPU_API_KEY",
-                    "moonshot": "MOONSHOT_API_KEY",
+                    "moonshot": "MOONSHOT_API_KEY or KIMI_API_KEY",
                     "minimax": "MINIMAX_API_KEY",
                     "baidu": "BAIDU_API_KEY",
                     "tencent": "TENCENT_API_KEY",

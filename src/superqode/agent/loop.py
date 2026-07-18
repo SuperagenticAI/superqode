@@ -185,7 +185,7 @@ def _message_to_tuple(m: "AgentMessage") -> Tuple:
         tool_calls_tuple = None
     # content may be a multimodal list (text + image parts) - make it hashable.
     content = m.content if isinstance(m.content, str) else _make_hashable(m.content)
-    return (m.role, content, tool_calls_tuple, m.tool_call_id, m.name)
+    return (m.role, content, tool_calls_tuple, m.tool_call_id, m.name, m.reasoning_content)
 
 
 def _code_intent_keyword_re() -> re.Pattern[str]:
@@ -582,6 +582,7 @@ class AgentMessage:
     tool_calls: Optional[List[Dict]] = None
     tool_call_id: Optional[str] = None
     name: Optional[str] = None  # Tool name for tool messages
+    reasoning_content: Optional[str] = None
 
 
 def repair_dangling_tool_calls(messages: List["AgentMessage"]) -> List["AgentMessage"]:
@@ -1114,6 +1115,7 @@ class AgentLoop:
                 tool_calls=m.tool_calls,
                 tool_call_id=m.tool_call_id,
                 name=m.name,
+                reasoning_content=m.reasoning_content,
             )
         return self._message_cache[key]
 
@@ -1912,6 +1914,7 @@ class AgentLoop:
             tool_calls=msg.tool_calls,
             tool_call_id=msg.tool_call_id,
             name=msg.name,
+            reasoning_content=msg.reasoning_content,
         )
 
     @staticmethod
@@ -2373,6 +2376,7 @@ class AgentLoop:
                         role="assistant",
                         content=response_content,
                         tool_calls=response.tool_calls,
+                        reasoning_content=response.thinking_content,
                     )
                 )
 
@@ -2753,6 +2757,7 @@ class AgentLoop:
             # Buffer for accumulating thinking content chunks
             # Local models stream thinking in tiny pieces - accumulate for readable display
             thinking_buffer = ""
+            full_thinking_content = ""
             import time as _time
 
             last_thinking_emit = _time.time()
@@ -2776,6 +2781,7 @@ class AgentLoop:
 
                     # Handle thinking content if available - BUFFER for readable display
                     if chunk.thinking_content:
+                        full_thinking_content += chunk.thinking_content
                         thinking_buffer += chunk.thinking_content
                         current_time = _time.time()
 
@@ -2846,6 +2852,8 @@ class AgentLoop:
                     record_usage(fallback)
                     if fallback.tool_calls:
                         tool_calls.extend(fallback.tool_calls)
+                    if fallback.thinking_content:
+                        full_thinking_content = fallback.thinking_content
                     if fallback.content and fallback.content.strip():
                         full_content = fallback.content
                         yield fallback.content
@@ -2880,6 +2888,8 @@ class AgentLoop:
                     record_usage(fallback)
                     if fallback.tool_calls:
                         tool_calls.extend(fallback.tool_calls)
+                    if fallback.thinking_content:
+                        full_thinking_content = fallback.thinking_content
                     if fallback.content and fallback.content.strip():
                         full_content = fallback.content
                         yield fallback.content
@@ -2914,6 +2924,7 @@ class AgentLoop:
                         role="assistant",
                         content=full_content,
                         tool_calls=tool_calls,
+                        reasoning_content=full_thinking_content or None,
                     )
                 )
                 if self._session_manager:

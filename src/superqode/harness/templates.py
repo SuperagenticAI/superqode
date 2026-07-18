@@ -313,6 +313,37 @@ def minimax_coding_template() -> HarnessSpec:
     )
 
 
+def kimi_k3_coding_template() -> HarnessSpec:
+    """Kimi K3 long-horizon coding harness for Moonshot's global API."""
+    base = coding_template(name="kimi-k3-coding")
+    return HarnessSpec(
+        **{
+            **base.__dict__,
+            "description": (
+                "Kimi K3 long-horizon coding harness with 1M context, max reasoning, "
+                "native tools, and cache-friendly extended history."
+            ),
+            "model_policy": ModelPolicySpec(
+                primary="moonshot/kimi-k3",
+                fallbacks=("moonshot/kimi-k2.7-code-highspeed", "moonshot/kimi-k2.7-code"),
+                profile="kimi-k3-coding",
+                context_window=1_048_576,
+                reasoning="max",
+                config={
+                    "parallel_tools": True,
+                    "session_history_limit": 40,
+                },
+            ),
+            "metadata": {
+                "template": "kimi-k3-coding",
+                "provider": "moonshot",
+                "api_endpoint": "global",
+                "automatic_context_caching": True,
+            },
+        }
+    )
+
+
 _BENCHMARK_STANCE = """You are running unattended in a headless benchmark environment.
 
 - There is NO user available. Never ask questions, never request confirmation, and
@@ -371,6 +402,8 @@ BUILTIN_TEMPLATES = {
     "glm52-coding": glm52_coding_template,
     "glm52_coding": glm52_coding_template,
     "minimax-coding": minimax_coding_template,
+    "kimi-k3-coding": kimi_k3_coding_template,
+    "kimi_k3_coding": kimi_k3_coding_template,
 }
 
 

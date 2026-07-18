@@ -20,6 +20,7 @@ class Message:
     name: Optional[str] = None
     tool_calls: Optional[List[Dict[str, Any]]] = None
     tool_call_id: Optional[str] = None
+    reasoning_content: Optional[str] = None
 
 
 @dataclass
