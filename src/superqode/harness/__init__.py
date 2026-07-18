@@ -10,6 +10,13 @@ from .loader import (
     save_harness_spec,
 )
 from .model_policy import EffectiveModelPolicy, resolve_harness_model_policy
+from .model_routes import (
+    MODEL_FAMILY_ROUTES,
+    ModelFamilyRoute,
+    get_model_family_route,
+    list_model_family_routes,
+    model_policy_for_route,
+)
 from .output import (
     RESULT_END,
     RESULT_START,

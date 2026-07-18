@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from difflib import get_close_matches
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -16,7 +17,7 @@ from ..agent.loop_policy import (
 from .loader import harness_spec_to_dict, load_harness_spec
 from .registry import list_registry_specs
 from .spec import HarnessSpec
-from .templates import core_template, no_tool_template, workbench_template
+from .templates import BUILTIN_TEMPLATES, core_template, no_tool_template, workbench_template
 
 
 DEFAULT_HARNESS_ID = "core"
@@ -53,6 +54,35 @@ class HarnessDefinition:
         payload = json.dumps(harness_spec_to_dict(self.spec), sort_keys=True, separators=(",", ":"))
         return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
+    @property
+    def category(self) -> str:
+        """Human-facing catalogue group."""
+        explicit = str(self.spec.metadata.get("category") or "").strip()
+        if explicit:
+            return explicit
+        if self.source == "built-in":
+            return "workflow"
+        if self.source == "built-in-template":
+            return "model-preset" if self.spec.model_policy.primary else "workflow"
+        return self.source
+
+    @property
+    def provider(self) -> str:
+        explicit = str(self.spec.metadata.get("provider") or "").strip()
+        if explicit:
+            return explicit
+        primary = str(self.spec.model_policy.primary or "")
+        return primary.split("/", 1)[0] if "/" in primary else ""
+
+    @property
+    def model(self) -> str:
+        primary = str(self.spec.model_policy.primary or "")
+        return primary.split("/", 1)[1] if "/" in primary else primary
+
+    @property
+    def deprecated(self) -> bool:
+        return bool(self.spec.metadata.get("deprecated", False))
+
     def to_dict(self) -> dict[str, object]:
         return {
             "id": self.id,
@@ -65,6 +95,10 @@ class HarnessDefinition:
             "available": self.available,
             "issue": self.issue,
             "default": self.default,
+            "category": self.category,
+            "provider": self.provider,
+            "model": self.model,
+            "deprecated": self.deprecated,
             "tools": list(self.tools),
             "tool_count": len(self.tools),
             "digest": self.digest,
@@ -76,7 +110,7 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     core = core_template()
     workbench = workbench_template()
     no_tool = no_tool_template(name="no-tool")
-    return (
+    workflows = (
         HarnessDefinition(
             id="core",
             display_name="Core",
@@ -109,6 +143,32 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
             aliases=("no_tool",),
         ),
     )
+    reserved = {entry.id for entry in workflows}
+    reserved.update(alias for entry in workflows for alias in entry.aliases)
+    presets: list[HarnessDefinition] = []
+    seen_factories: set[object] = set()
+    for template_id, factory in BUILTIN_TEMPLATES.items():
+        if "_" in template_id or template_id in reserved or factory in seen_factories:
+            continue
+        seen_factories.add(factory)
+        spec = factory()
+        presets.append(
+            HarnessDefinition(
+                id=template_id,
+                display_name=template_id,
+                description=spec.description,
+                runtime=spec.runtime.backend,
+                source="built-in-template",
+                spec=spec,
+                loop_policy=(
+                    core_loop_policy()
+                    if spec.flavor.value == "no_tool"
+                    else workbench_loop_policy()
+                ),
+                aliases=(template_id.replace("-", "_"),),
+            )
+        )
+    return workflows + tuple(presets)
 
 
 def _candidate_paths(root: Path) -> Iterable[Path]:
@@ -189,8 +249,12 @@ def resolve_harness(
     for entry in list_harnesses(root):
         if normalized == entry.id or normalized in entry.aliases:
             return entry
-    available = ", ".join(entry.id for entry in list_harnesses(root))
-    raise ValueError(f"Unknown harness {raw!r}. Available harnesses: {available}")
+    entries = list_harnesses(root)
+    available = ", ".join(entry.id for entry in entries)
+    names = [name for entry in entries for name in (entry.id, *entry.aliases)]
+    matches = get_close_matches(normalized, names, n=3, cutoff=0.55)
+    suggestion = f" Did you mean {', '.join(repr(item) for item in matches)}?" if matches else ""
+    raise ValueError(f"Unknown harness {raw!r}.{suggestion} Available harnesses: {available}")
 
 
 __all__ = [

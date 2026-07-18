@@ -19,6 +19,7 @@ from superqode.harness import (
     HarnessSpec,
     WorkflowMode,
     WorkflowSpec,
+    list_harnesses,
     load_harness_spec,
 )
 from superqode.tools.question_tool import Question, QuestionType
@@ -1537,6 +1538,29 @@ def test_tui_harness_wizard_writes_and_loads_spec(tmp_path, monkeypatch):
     assert app._pure_mode.harness_enabled
 
 
+def test_tui_harness_customize_creates_safe_editable_copy(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    app = make_app()
+    log = FakeLog()
+
+    app._harness_cmd("customize kimi-coding", log)
+
+    output = tmp_path / ".superqode" / "harnesses" / "kimi-coding-custom.yaml"
+    assert output.exists()
+    spec = load_harness_spec(output)
+    assert spec.name == "kimi-coding-custom"
+    assert spec.model_policy.primary == "moonshot/kimi-k3"
+    assert spec.metadata["route"] == "kimi"
+    assert spec.metadata["category"] == "file"
+    assert spec.metadata["customized_from"] == "kimi-coding"
+
+    discovered = {entry.id for entry in list_harnesses(tmp_path)}
+    assert "kimi-coding-custom" in discovered
+
+    app._harness_cmd("customize kimi-coding", log)
+    assert any("Refusing to overwrite" in str(item) for item in log.items)
+
+
 def test_tui_harness_wizard_guided_steps_write_and_load_spec(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     app = make_app()
@@ -2631,6 +2655,19 @@ def test_prompt_completion_suggests_provider_and_model():
 
     assert app._suggest_prompt_completion(":connect byok anthrop") == ":connect byok anthropic"
     assert app._suggest_prompt_completion(":model switch anthropic") == ":model switch anthropic/"
+
+
+def test_prompt_completion_lists_harness_catalogue():
+    app = make_app()
+
+    candidates = app._prompt_completion_candidates_for(":harness use kimi")
+
+    assert [candidate.value for candidate in candidates] == [
+        ":harness use kimi-coding",
+        ":harness use kimi-k3-coding",
+    ]
+    assert candidates[0].kind == "model-family"
+    assert "moonshot/kimi-k3" in candidates[0].description
 
 
 def test_prompt_completion_prioritizes_full_connect_and_quit_commands():

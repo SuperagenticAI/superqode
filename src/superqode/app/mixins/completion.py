@@ -103,6 +103,9 @@ class CompletionMixin:
         if lowered.startswith(":codex "):
             return self._codex_subcommand_completion_candidates(value)
         context_specs = [
+            (":harness use ", self._harness_completion_candidates),
+            (":harness show ", self._harness_completion_candidates),
+            (":harness customize ", self._harness_completion_candidates),
             (":mcp connect ", self._mcp_server_completion_candidates),
             (":mcp disconnect ", self._mcp_server_completion_candidates),
             (":mcp reconnect ", self._mcp_server_completion_candidates),
@@ -138,6 +141,29 @@ class CompletionMixin:
             return self._model_switch_candidates(value, ":model switch ")
 
         return self._static_command_candidates(value)
+
+    @staticmethod
+    def _harness_completion_candidates() -> list[PromptCompletionCandidate]:
+        """Harnesses from the same unified catalogue used by CLI and TUI."""
+        try:
+            from superqode.harness import list_harnesses
+
+            return [
+                PromptCompletionCandidate(
+                    value=entry.id,
+                    label=entry.id,
+                    description=(
+                        f"{entry.provider}/{entry.model} · {entry.description}"
+                        if entry.provider and entry.model
+                        else entry.description
+                    ),
+                    kind=entry.category,
+                )
+                for entry in list_harnesses(Path.cwd())
+                if entry.available
+            ]
+        except Exception:
+            return []
 
     @staticmethod
     def _theme_completion_candidates() -> list[PromptCompletionCandidate]:

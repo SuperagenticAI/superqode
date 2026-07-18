@@ -157,6 +157,25 @@ async def test_byok_picker_keyboard_navigation_keeps_selection_visible():
         assert log.scroll_y <= selected_y < log.scroll_y + visible_height
 
 
+async def test_harness_command_opens_keyboard_catalog_completion():
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 32)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+
+        app._harness_cmd("", log)
+        await pilot.pause()
+        await pilot.pause()
+
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        values = [candidate.value for candidate in app._prompt_completion_candidates]
+        rendered = "\n".join(line.text for line in log.lines)
+
+        assert prompt.value == ":harness use "
+        assert app._prompt_completion_visible is True
+        assert ":harness use kimi-coding" in values
+        assert "Harness Catalog" in rendered
+
+
 async def test_claude_agent_badge_on_mounted_status_bar():
     app = SuperQodeApp()
     async with app.run_test() as pilot:

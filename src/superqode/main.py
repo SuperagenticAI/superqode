@@ -717,7 +717,23 @@ def cli_main(
     if effective_runtime:
         _os.environ["SUPERQODE_RUNTIME"] = effective_runtime
     effective_harness = str(harness_path or yaml_harness or "core")
-    _os.environ["SUPERQODE_HARNESS"] = effective_harness
+    # A model-aware harness is directly runnable: when provider/model were not
+    # explicitly supplied, inherit its exact curated target. Explicit CLI or
+    # environment choices still win.
+    try:
+        from click.core import ParameterSource
+        from superqode.harness import resolve_harness
+
+        definition = resolve_harness(effective_harness, root=Path.cwd())
+        primary = str(definition.spec.model_policy.primary or "")
+        if (
+            "/" in primary
+            and ctx.get_parameter_source("provider") == ParameterSource.DEFAULT
+            and ctx.get_parameter_source("model_name") == ParameterSource.DEFAULT
+        ):
+            provider, model_name = primary.split("/", 1)
+    except (FileNotFoundError, ValueError):
+        pass
     """SuperQode - coding agent harness for developer workflows.
 
     Use the TUI for interactive coding work or headless mode for one-shot tasks.
@@ -836,6 +852,9 @@ def cli_main(
         print("\r" + " " * 50 + "\r", end="", flush=True)
 
         # Import and run the TUI
+        _os.environ["SUPERQODE_HARNESS"] = effective_harness
+        _os.environ["SUPERQODE_PROVIDER"] = provider
+        _os.environ["SUPERQODE_MODEL"] = model_name
         from superqode.app import run_textual_app
 
         run_textual_app()

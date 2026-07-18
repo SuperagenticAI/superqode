@@ -153,6 +153,15 @@ class TestHarnessCommand:
         assert detail["runtime"] == "builtin"
         assert detail["spec"]["model_policy"]["config"]["tool_profile"] == "core"
 
+    def test_harness_list_includes_maintained_and_pinned_kimi_presets(self, runner):
+        result = runner.invoke(cli_main, ["harness", "list", "--json"])
+
+        assert result.exit_code == 0
+        entries = {item["id"]: item for item in json.loads(result.output)}
+        assert entries["kimi-coding"]["category"] == "model-family"
+        assert entries["kimi-coding"]["model"] == "kimi-k3"
+        assert entries["kimi-k3-coding"]["deprecated"] is True
+
     def test_harness_use_writes_project_default(self, runner):
         with runner.isolated_filesystem():
             result = runner.invoke(cli_main, ["harness", "use", "workbench"])
@@ -2359,6 +2368,29 @@ class TestHeadlessCommand:
 
         assert result.exit_code == 0
         assert result.output.strip() == "summary"
+
+    def test_model_aware_harness_supplies_default_provider_and_model(self, runner, monkeypatch):
+        """A family harness should run directly without duplicate model flags."""
+        import superqode.headless as headless
+
+        async def fake_run_headless(**kwargs):
+            assert kwargs["provider"] == "moonshot"
+            assert kwargs["model"] == "kimi-k3"
+            assert kwargs["profile_name"] == "kimi-coding"
+            return AgentResponse(
+                content="ready",
+                messages=[],
+                tool_calls_made=0,
+                iterations=1,
+                stopped_reason="complete",
+            )
+
+        monkeypatch.setattr(headless, "run_headless", fake_run_headless)
+
+        result = runner.invoke(cli_main, ["-p", "--harness", "kimi-coding", "demo"])
+
+        assert result.exit_code == 0
+        assert result.output.strip() == "ready"
 
     def test_json_mode_outputs_structured_result(self, runner, monkeypatch):
         """`superqode --mode json` should emit a stable JSON object."""

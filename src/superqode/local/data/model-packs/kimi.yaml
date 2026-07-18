@@ -1,0 +1,11 @@
+# Moonshot Kimi coding-family pack.
+name: kimi
+description: "Kimi coding family: max reasoning, parallel tools, extended cache-friendly history"
+match: [kimi-k3, kimi-k2.7-code, kimi-code]
+policy:
+  reasoning: max
+  parallel_tools: true
+  session_history_limit: 40
+notes:
+  - "Kimi K3 fixes sampling parameters server-side; omit temperature and top-p overrides."
+  - "Use the kimi-coding family harness for maintained stable routing, or kimi-k3-coding to pin K3."

@@ -140,16 +140,18 @@ thinking permanently enabled; the current pay-as-you-go API accepts only
 `reasoning_effort: max`. It automatically caches stable prompt prefixes, so
 keep the same harness and reasoning effort within a session.
 
-Create a K3-tuned harness with:
+Use the maintained Kimi-family harness directly, or create an editable copy:
 
 ```bash
-superqode harness init kimi-project --template kimi-k3-coding --output harness.yaml
+superqode --harness kimi-coding -p "Review this repository"
+superqode harness init kimi-project --template kimi-coding --output harness.yaml
 ```
 
-The preset selects `moonshot/kimi-k3`, its 1M context, max reasoning, native
+The current stable route selects `moonshot/kimi-k3`, its 1M context, max reasoning, native
 parallel tools, and a longer cache-friendly session history. Full open weights
 are scheduled for July 27, 2026; until compatible serving stacks publish K3
 support, this preset targets Moonshot's hosted API.
+Use `kimi-k3-coding` only when the project must remain explicitly pinned to K3.
 
 **Documentation**: [Complete Kimi K3 provider and feature guide](kimi.md) ·
 [Official Kimi K3 API guide](https://platform.kimi.ai/docs/guide/kimi-k3-quickstart)

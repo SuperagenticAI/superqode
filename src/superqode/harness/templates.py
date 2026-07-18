@@ -11,6 +11,7 @@ from .spec import (
     RuntimeSpec,
     ChecksSpec,
 )
+from .model_routes import model_policy_for_route
 
 
 def core_template(*, name: str = "core", backend: str = "builtin") -> HarnessSpec:
@@ -314,7 +315,7 @@ def minimax_coding_template() -> HarnessSpec:
 
 
 def kimi_k3_coding_template() -> HarnessSpec:
-    """Kimi K3 long-horizon coding harness for Moonshot's global API."""
+    """Frozen Kimi K3 harness retained for reproducible configurations."""
     base = coding_template(name="kimi-k3-coding")
     return HarnessSpec(
         **{
@@ -337,6 +338,32 @@ def kimi_k3_coding_template() -> HarnessSpec:
             "metadata": {
                 "template": "kimi-k3-coding",
                 "provider": "moonshot",
+                "api_endpoint": "global",
+                "automatic_context_caching": True,
+                "deprecated": True,
+                "replaced_by": "kimi-coding",
+            },
+        }
+    )
+
+
+def kimi_coding_template() -> HarnessSpec:
+    """Stable Kimi-family coding harness maintained by SuperQode."""
+    base = coding_template(name="kimi-coding")
+    return HarnessSpec(
+        **{
+            **base.__dict__,
+            "description": (
+                "Stable Kimi-family coding harness with long context, max reasoning, "
+                "native tools, and cache-friendly extended history."
+            ),
+            "model_policy": model_policy_for_route("kimi", profile="kimi-coding"),
+            "metadata": {
+                "template": "kimi-coding",
+                "category": "model-family",
+                "provider": "moonshot",
+                "route": "kimi",
+                "channel": "stable",
                 "api_endpoint": "global",
                 "automatic_context_caching": True,
             },
@@ -402,6 +429,8 @@ BUILTIN_TEMPLATES = {
     "glm52-coding": glm52_coding_template,
     "glm52_coding": glm52_coding_template,
     "minimax-coding": minimax_coding_template,
+    "kimi-coding": kimi_coding_template,
+    "kimi_coding": kimi_coding_template,
     "kimi-k3-coding": kimi_k3_coding_template,
     "kimi_k3_coding": kimi_k3_coding_template,
 }

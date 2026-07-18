@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.23] - 2026-07-19
+
+### Added
+
+- **Stable model-family routes** - Added an explicit curated route registry and a `kimi-coding` family harness that tracks the validated stable Kimi release without requiring a new harness name for every model launch.
+- **Unified harness catalog** - Made built-in model templates directly selectable alongside Core, Workbench, discovered files, registry entries, and Python adapters; catalog records now expose category, provider, model, and pinned/deprecated state.
+- **TUI harness picker and autocomplete** - Bare `:harness` now opens the shared keyboard-navigable catalog, and `use`, `show`, and `customize` complete dynamically from the same source used by CLI listing and resolution.
+- **Editable preset copies** - Added `:harness customize <name> [output.yaml]` to safely create a project-owned copy without overwriting an existing file.
+
+### Changed
+
+- **Direct model-aware activation** - `--harness kimi-coding` now supplies its curated provider/model when those flags were not explicitly set, and TUI activation connects the preset's exact target directly.
+- **Pinned K3 compatibility** - Retained `kimi-k3-coding` as a frozen reproducibility preset while recommending the maintained `kimi-coding` family route for normal use.
+- **Release metadata** - Bumped package, runtime, lockfile, ACP registry, package checks, and extension compatibility examples to `0.2.23`.
+
 ## [0.2.22] - 2026-07-18
 
 ### Added

@@ -123,8 +123,11 @@ superqode --harness workbench --print "inspect this repository"
 superqode harness use workbench   # persist the project default in superqode.yaml
 ```
 
-In the TUI, use `:harness list`, `:harness use core`, or `:harness use workbench`.
-Named harnesses and HarnessSpec files use the same `--harness` option.
+In the TUI, enter `:harness` for a keyboard-navigable catalog, or use
+`:harness use core`, `:harness use workbench`, or a maintained model-family preset
+such as `:harness use kimi-coding`. Named harnesses, built-in templates, and
+HarnessSpec files use the same `--harness` option. Use `:harness customize <name>`
+to create a project-owned editable copy.
 
 ### Your First Harness Run
 

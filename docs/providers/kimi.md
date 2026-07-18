@@ -17,7 +17,7 @@ route, because their endpoints, credentials, and model IDs are not interchangeab
 | Kimi Code subscription, Anthropic-compatible | `https://api.kimi.com/coding/` | `k3` | Kimi Code membership quota | The connected coding client |
 | Kimi CLI over ACP | Local process: `kimi --acp` | Chosen by Kimi CLI | Kimi CLI configuration | Kimi CLI |
 
-The built-in `moonshot` provider and `kimi-k3-coding` harness use the first row.
+The built-in `moonshot` provider and `kimi-coding` family harness use the first row.
 Do not put a Kimi Code membership token in `MOONSHOT_API_KEY` or change
 `MOONSHOT_API_BASE` to the subscription endpoint: the subscription service uses a
 different model namespace and client contract.
@@ -56,21 +56,33 @@ export MOONSHOT_API_BASE=https://your-approved-proxy.example/v1
 The default is `https://api.moonshot.ai/v1`. The provider uses the standard
 `/chat/completions` request shape through SuperQode's OpenAI-compatible gateway.
 
-## K3 coding harness
+## Kimi family coding harness
 
-Run the built-in template directly:
+Run the maintained family preset directly. It currently resolves its explicit
+stable channel to K3, so no duplicate `--provider` or `--model` flags are needed:
 
 ```bash
-superqode --harness kimi-k3-coding -p "Review this repository and fix the failing tests"
+superqode --harness kimi-coding -p "Review this repository and fix the failing tests"
+```
+
+In the TUI, enter `:harness` to browse with the arrow keys, or activate it directly:
+
+```text
+:harness use kimi-coding
 ```
 
 Or create a project-owned harness file that can be inspected and versioned:
 
 ```bash
-superqode harness init kimi-project --template kimi-k3-coding --output harness.yaml
+superqode harness init kimi-project --template kimi-coding --output harness.yaml
 superqode harness inspect --spec harness.yaml --json
 superqode --harness harness.yaml -p "Implement the requested feature"
 ```
+
+The generated file freezes the current exact route. Use `kimi-k3-coding` when you
+explicitly want the built-in K3-pinned compatibility preset. When Moonshot ships a
+later model, SuperQode can promote the validated `kimi-coding` stable route without
+renaming the harness or changing the pinned K3 preset.
 
 The preset provides:
 
@@ -265,7 +277,7 @@ Or from the TUI:
 ```
 
 This starts `kimi --acp`. Kimi CLI then owns model selection, tools, authentication,
-and its agent loop. The `kimi-k3-coding` SuperQode harness is not applied to an ACP
+and its agent loop. The `kimi-coding` SuperQode harness is not applied to an ACP
 session.
 
 See the [Kimi Code documentation](https://www.kimi.com/code/docs/en/) for current
@@ -278,7 +290,7 @@ It also describes K3 as a 2.8-trillion-parameter mixture-of-experts model and
 indicates that production deployment is a multi-node, data-center-scale task.
 
 SuperQode does not currently ship an Ollama, vLLM, SGLang, or local K3 preset. The
-`kimi-k3-coding` template targets Moonshot's hosted global API. Add a local preset
+`kimi-coding` and `kimi-k3-coding` target Moonshot's hosted global API. Add a local preset
 only after weights, a compatible serving stack, supported request semantics, and a
 realistic hardware topology are published and verified.
 

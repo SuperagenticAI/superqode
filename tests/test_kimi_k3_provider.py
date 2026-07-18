@@ -62,6 +62,19 @@ def test_kimi_k3_harness_template():
     assert policy.session_history_limit == 40
 
 
+def test_kimi_family_harness_uses_maintained_route_and_pack():
+    spec = get_harness_template("kimi-coding")
+    policy = resolve_harness_model_policy(spec, provider="moonshot", model="kimi-k3")
+
+    assert spec.model_policy.primary == "moonshot/kimi-k3"
+    assert spec.model_policy.pack == "kimi"
+    assert spec.metadata["route"] == "kimi"
+    assert spec.metadata["channel"] == "stable"
+    assert policy.reasoning == "max"
+    assert policy.parallel_tools is True
+    assert policy.session_history_limit == 40
+
+
 def test_kimi_k3_reasoning_and_fixed_sampling_shaping():
     gateway = LiteLLMGateway()
     assert gateway._resolve_reasoning_effort("moonshot", "kimi-k3", "low") == {

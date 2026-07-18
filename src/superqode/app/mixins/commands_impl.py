@@ -1367,9 +1367,12 @@ class CommandImplMixin:
         log.write(t)
 
     def _harness_cmd(self, args: str, log) -> None:
-        """Handle :harness status/list/templates/off/<path>."""
+        """Handle the interactive harness catalogue and harness operations."""
         import os as _os
 
+        if not args.strip():
+            self._show_harness_catalog(log, open_picker=True)
+            return
         parts = args.split(maxsplit=1)
         sub = parts[0].strip() if parts else "status"
         subargs = parts[1].strip() if len(parts) > 1 else ""
@@ -1379,9 +1382,7 @@ class CommandImplMixin:
         try:
             from superqode.harness import (
                 BUILTIN_TEMPLATES,
-                discover_harness_adapters,
                 get_harness_template,
-                list_harnesses,
                 resolve_harness,
             )
         except Exception as exc:
@@ -1407,20 +1408,7 @@ class CommandImplMixin:
             return
 
         if sub in ("list", "available"):
-            known: set[str] = set()
-            for entry in list_harnesses(Path.cwd()):
-                known.add(entry.id)
-                marker = "*" if entry.default else " "
-                status = "ready" if entry.available else (entry.issue or "unavailable")
-                log.add_info(
-                    f"{marker} {entry.id:18} {entry.source:10} {entry.runtime:14} "
-                    f"tools={len(entry.tools):2} {status}"
-                )
-            for entry in discover_harness_adapters(include_builtins=False):
-                if entry.id in known:
-                    continue
-                status = "ready" if entry.available else (entry.issue or "unavailable")
-                log.add_info(f"  {entry.id:18} python     protocol       tools= 0 {status}")
+            self._show_harness_catalog(log, open_picker=False)
             return
 
         if sub == "show":
@@ -1581,10 +1569,49 @@ class CommandImplMixin:
             )
             return
 
+        if sub in ("customize", "copy"):
+            tokens = shlex.split(subargs)
+            if not tokens:
+                log.add_error("Usage: :harness customize <name> [output.yaml]")
+                return
+            try:
+                entry = resolve_harness(tokens[0], root=Path.cwd())
+                from dataclasses import replace
+
+                from superqode.harness import save_harness_spec
+
+                output = (
+                    Path(tokens[1]).expanduser()
+                    if len(tokens) > 1
+                    else Path(".superqode/harnesses") / f"{entry.id}-custom.yaml"
+                )
+                if output.exists():
+                    log.add_error(f"Refusing to overwrite existing harness: {output}")
+                    return
+                custom_id = output.stem.strip().lower() or f"{entry.id}-custom"
+                custom_spec = replace(
+                    entry.spec,
+                    name=custom_id,
+                    metadata={
+                        **entry.spec.metadata,
+                        "category": "file",
+                        "customized_from": entry.id,
+                    },
+                )
+                saved = save_harness_spec(custom_spec, output)
+            except Exception as exc:
+                log.add_error(f"Could not customize harness: {exc}")
+                return
+            log.add_success(f"Editable harness created: {saved}")
+            log.add_info(f"Activate it with :harness use {saved}")
+            return
+
         if sub in ("load", "use"):
             reference = subargs
+            auto_connect = sub == "use"
         else:
             reference = args.strip()
+            auto_connect = False
 
         if not reference:
             log.add_info(
@@ -1604,17 +1631,94 @@ class CommandImplMixin:
             pure.select_harness(str(entry.path or entry.id))
         else:
             pure.set_harness(entry.spec, path=entry.path)
-        if pure.session.connected:
-            pure.disconnect()
         self._refresh_harness_panel()
 
         log.add_success(
             f"✓ Harness: {_harness_display_name(entry.id)} loaded "
             f"({entry.spec.flavor.value}, runtime={entry.runtime}, tools={len(entry.tools)})"
         )
-        log.add_info(
-            "Reconnect with :connect byok or :connect local to run the TUI through this spec."
+        primary = str(entry.spec.model_policy.primary or "")
+        if "/" in primary and auto_connect:
+            provider_id, model_id = primary.split("/", 1)
+            from superqode.providers.dynamic import resolve_provider_def
+            from superqode.providers.registry import ProviderCategory
+
+            provider_def = resolve_provider_def(provider_id)
+            if provider_def is not None and provider_def.category == ProviderCategory.LOCAL:
+                self._connect_local_mode(provider_id, model_id, log)
+            else:
+                self._connect_byok_mode(provider_id, model_id, log)
+            log.add_meta(f"Harness {entry.id} is active.")
+        elif pure.session.connected:
+            pure.disconnect()
+            log.add_info("Reconnect with :connect byok or :connect local to use this harness.")
+        else:
+            log.add_info("Connect with :connect byok or :connect local to use this harness.")
+
+    def _show_harness_catalog(self, log, *, open_picker: bool) -> None:
+        """Render the unified catalogue and optionally open keyboard completion."""
+        from superqode.harness import discover_harness_adapters, list_harnesses
+
+        entries = list_harnesses(Path.cwd())
+        current = str(os.getenv("SUPERQODE_HARNESS", "core") or "core")
+        groups = {
+            "workflow": "Workflows",
+            "model-family": "Maintained model families",
+            "model-preset": "Pinned model presets",
+            "file": "Project and user harnesses",
+            "registry": "Registry harnesses",
+        }
+        text = Text()
+        text.append("\n  Harness Catalog\n", style=f"bold {THEME['purple']}")
+        text.append(
+            "  Maintained family presets track stable releases; pinned presets stay reproducible.\n",
+            style=THEME["muted"],
         )
+        for category in groups:
+            members = [entry for entry in entries if entry.category == category]
+            if not members:
+                continue
+            text.append(f"\n  {groups[category]}\n", style=f"bold {THEME['text']}")
+            for entry in members:
+                marker = "●" if current in {entry.id, str(entry.path or "")} else "○"
+                text.append(f"  {marker} {entry.id:<22}", style=THEME["cyan"])
+                if entry.provider and entry.model:
+                    text.append(f"{entry.provider}/{entry.model:<28}", style=THEME["dim"])
+                else:
+                    text.append(f"{entry.runtime:<38}", style=THEME["dim"])
+                label = " pinned" if entry.deprecated else ""
+                text.append(f" {len(entry.tools):>2} tools{label}\n", style=THEME["muted"])
+        known = {entry.id for entry in entries}
+        adapters = [
+            adapter
+            for adapter in discover_harness_adapters(include_builtins=False)
+            if adapter.id not in known
+        ]
+        if adapters:
+            text.append("\n  Python harness adapters\n", style=f"bold {THEME['text']}")
+            for adapter in adapters:
+                status = "ready" if adapter.available else (adapter.issue or "unavailable")
+                text.append(f"  ○ {adapter.id:<22} protocol  {status}\n", style=THEME["muted"])
+        text.append("\n  :harness show <name>       inspect\n", style=THEME["dim"])
+        text.append("  :harness customize <name>  create an editable copy\n", style=THEME["dim"])
+        if open_picker:
+            text.append("  ↑↓ choose, Enter accept, Enter again activate\n", style=THEME["success"])
+        log.write(text)
+        if open_picker:
+
+            def _prime_picker() -> None:
+                try:
+                    from superqode.app.inputs import SelectionAwareInput
+
+                    prompt = self.query_one("#prompt-input", SelectionAwareInput)
+                    prompt.value = ":harness use "
+                    prompt.cursor_position = len(prompt.value)
+                    prompt.focus()
+                    self._update_prompt_completion_panel(prompt.value)
+                except Exception:
+                    pass
+
+            self.call_later(_prime_picker)
 
     def _harness_wizard_cmd(self, args: str, log) -> None:
         """Create a HarnessSpec from wizard answers supplied as TUI flags."""

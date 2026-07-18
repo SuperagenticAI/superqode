@@ -16,6 +16,7 @@ from .templates import BUILTIN_TEMPLATES, get_harness_template
 # Model-family starters surfaced by the wizard, in the order shown.
 WIZARD_STARTERS: tuple[tuple[str, str], ...] = (
     ("coding", "Model-agnostic harness (recommended: choose your own model and pack)"),
+    ("kimi-coding", "Kimi family (maintained stable release, long-context coding)"),
     ("qwen-coding", "Qwen Coder (local, native tools, low temperature)"),
     ("glm-coding", "GLM 4.x/5.x (strong agentic coder, native tools)"),
     ("glm52-coding", "GLM-5.2 via Z.AI general API (long horizon, native tools)"),

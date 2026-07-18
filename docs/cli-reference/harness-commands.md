@@ -17,6 +17,7 @@ superqode harness COMMAND [OPTIONS]
 | `list` | List selectable built-in and discovered harnesses |
 | `show` | Show the resolved tools and policy for a selectable harness |
 | `use` | Persist a project default harness in `superqode.yaml` |
+| `customize` (TUI) | Copy a catalog preset to editable project YAML |
 | `wizard` | Build a spec interactively, no hand-written YAML |
 | `init` | Scaffold a spec from a built-in template |
 | `list-templates` | List built-in templates |
@@ -63,15 +64,22 @@ from the broader native search, patch, web, planning, and coordination toolset.
 superqode harness list
 superqode harness show core
 superqode --harness workbench --print "fix the failing test"
+superqode --harness kimi-coding --print "fix the failing test"
 superqode harness use workbench
 ```
 
 `harness use` stores the choice under `superqode.harness` in `superqode.yaml`.
 An explicit `--harness` name or HarnessSpec path takes precedence. In the TUI, the
-equivalent commands are `:harness list` and `:harness use <name-or-path>`.
+equivalent commands are `:harness list` and `:harness use <name-or-path>`. Enter
+`:harness` with no arguments to open the keyboard-navigable catalog picker; its
+entries and autocomplete values come from the same catalog as the CLI.
 
-The selectable harness catalogue is different from `list-templates`: catalogue
-entries can be activated directly, while templates scaffold new HarnessSpec files.
+Built-in templates also appear in the selectable catalog and can be activated
+directly. `list-templates` remains available for authoring and compatibility.
+Maintained family presets such as `kimi-coding` track the validated stable model;
+versioned presets such as `kimi-k3-coding` stay pinned for reproducibility. In the
+TUI, `:harness customize kimi-coding` creates an editable project copy under
+`.superqode/harnesses/`.
 
 ---
 
@@ -103,7 +111,7 @@ superqode harness init team --template coding --minimal
 
 | Option | Description |
 | --- | --- |
-| `-t, --template` | `coding`, `no-tool`, `qwen-coding`, `glm-coding`, `glm52-coding`, `gemma4-coding`, `gemma4-no-tool`, `ds4-coding`, `ds4-fast-local` (default `coding`) |
+| `-t, --template` | `coding`, `no-tool`, `kimi-coding`, `kimi-k3-coding`, `qwen-coding`, `glm-coding`, `glm52-coding`, `gemma4-coding`, `gemma4-no-tool`, `ds4-coding`, `ds4-fast-local` (default `coding`) |
 | `-o, --output PATH` | Spec file to write (default `harness.yaml`) |
 | `--preset` | `single`, `plan-implement-review`, `fix-and-verify`, `parallel-review`, `security-review`, `release-check`, `router`, `evaluator-optimizer` |
 | `--minimal` | Write a small spec with `inherits: <template>` instead of a fully expanded template |
