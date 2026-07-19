@@ -71,10 +71,11 @@ superqode harness use workbench
 
 `harness use` stores the choice under `superqode.harness` in `superqode.yaml`.
 An explicit `--harness` name or HarnessSpec path takes precedence. In the TUI, the
-equivalent commands are `:harness list` and `:harness use <name-or-path>`. Enter
-`:harness` with no arguments opens the keyboard-navigable recommended picker. It
-shows stable workflows, maintained provider/model families, and your project or
-user harnesses without flooding the normal selection path with frozen releases.
+equivalent commands are `:harness list` and `:harness use <name-or-path>`.
+Entering `:harness` with no arguments opens the keyboard-navigable recommended
+picker. It shows stable workflows, maintained provider/model families, and your
+project or user harnesses without flooding the normal selection path with frozen
+releases.
 Enter `:harness all` for the complete picker, including pinned compatibility and
 specialized presets. The CLI keeps `superqode harness list` complete for scripting
 compatibility; add `--recommended` to match the default TUI view.
