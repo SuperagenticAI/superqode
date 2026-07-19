@@ -11,11 +11,21 @@ from ._helpers import _diff_dicts, _permission_config_to_dict
 
 @harness.command("list")
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
-def harness_list(json_output):
+@click.option(
+    "--recommended",
+    is_flag=True,
+    help="Show the curated picker view instead of the complete compatibility catalog",
+)
+def harness_list(json_output, recommended):
     """List built-in, file, registry, and installed Python harnesses."""
-    from superqode.harness import discover_harness_adapters, list_harnesses
+    from superqode.harness import (
+        discover_harness_adapters,
+        list_harnesses,
+        recommended_harnesses,
+    )
 
-    rows = [{**entry.to_dict(), "kind": "spec"} for entry in list_harnesses(Path.cwd())]
+    entries = recommended_harnesses(Path.cwd()) if recommended else list_harnesses(Path.cwd())
+    rows = [{**entry.to_dict(), "kind": "spec"} for entry in entries]
     known = {str(row["id"]) for row in rows}
     for entry in discover_harness_adapters(include_builtins=False):
         if entry.id in known:
@@ -37,14 +47,14 @@ def harness_list(json_output):
         click.echo(json.dumps(rows, indent=2))
         return
     click.echo(
-        f"{'ID':<20} {'TYPE':<8} {'DEFAULT':<8} {'SOURCE':<20} {'RUNTIME':<12} {'TOOLS':>5}  STATUS"
+        f"{'ID':<20} {'TIER':<14} {'TYPE':<8} {'SOURCE':<20} {'RUNTIME':<12} {'TOOLS':>5}  STATUS"
     )
     for row in rows:
         status = "ready" if row["available"] else str(row["issue"] or "unavailable")
         click.echo(
             f"{str(row['id']):<20} "
+            f"{str(row.get('catalog_tier') or 'installed'):<14} "
             f"{str(row['kind']):<8} "
-            f"{('*' if row['default'] else ''):<8} "
             f"{str(row['source']):<20} "
             f"{str(row['runtime']):<12} "
             f"{int(row['tool_count']):>5}  {status}"

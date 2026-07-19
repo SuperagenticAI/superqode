@@ -83,6 +83,22 @@ class HarnessDefinition:
     def deprecated(self) -> bool:
         return bool(self.spec.metadata.get("deprecated", False))
 
+    @property
+    def catalog_tier(self) -> str:
+        """Visibility tier used by curated pickers without affecting resolution."""
+        if self.category == "model-preset":
+            return "compatibility"
+        if self.category == "specialized":
+            return "specialized"
+        if self.source in {"file", "registry"}:
+            return "user"
+        return "recommended"
+
+    @property
+    def recommended(self) -> bool:
+        """Whether this entry belongs in the default human-facing picker."""
+        return self.catalog_tier in {"recommended", "user"}
+
     def to_dict(self) -> dict[str, object]:
         return {
             "id": self.id,
@@ -99,6 +115,8 @@ class HarnessDefinition:
             "provider": self.provider,
             "model": self.model,
             "deprecated": self.deprecated,
+            "catalog_tier": self.catalog_tier,
+            "recommended": self.recommended,
             "tools": list(self.tools),
             "tool_count": len(self.tools),
             "digest": self.digest,
@@ -226,6 +244,11 @@ def list_harnesses(root: str | Path = ".") -> list[HarnessDefinition]:
     return entries
 
 
+def recommended_harnesses(root: str | Path = ".") -> list[HarnessDefinition]:
+    """Return the curated default view while keeping the full catalog resolvable."""
+    return [entry for entry in list_harnesses(root) if entry.recommended]
+
+
 def resolve_harness(
     reference: str | Path | None = None, *, root: str | Path = "."
 ) -> HarnessDefinition:
@@ -262,5 +285,6 @@ __all__ = [
     "HarnessDefinition",
     "builtin_harnesses",
     "list_harnesses",
+    "recommended_harnesses",
     "resolve_harness",
 ]

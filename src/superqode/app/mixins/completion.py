@@ -102,10 +102,19 @@ class CompletionMixin:
             return self._codex_sandbox_completion_candidates(value)
         if lowered.startswith(":codex "):
             return self._codex_subcommand_completion_candidates(value)
+        if lowered.startswith(":harness use-all "):
+            return self._harness_candidates_after_prefix(
+                value, ":harness use-all ", include_all=True
+            )
+        if lowered.startswith(":harness use "):
+            return self._harness_candidates_after_prefix(value, ":harness use ", include_all=False)
+        if lowered.startswith(":harness show "):
+            return self._harness_candidates_after_prefix(value, ":harness show ", include_all=True)
+        if lowered.startswith(":harness customize "):
+            return self._harness_candidates_after_prefix(
+                value, ":harness customize ", include_all=True
+            )
         context_specs = [
-            (":harness use ", self._harness_completion_candidates),
-            (":harness show ", self._harness_completion_candidates),
-            (":harness customize ", self._harness_completion_candidates),
             (":mcp connect ", self._mcp_server_completion_candidates),
             (":mcp disconnect ", self._mcp_server_completion_candidates),
             (":mcp reconnect ", self._mcp_server_completion_candidates),
@@ -143,27 +152,38 @@ class CompletionMixin:
         return self._static_command_candidates(value)
 
     @staticmethod
-    def _harness_completion_candidates() -> list[PromptCompletionCandidate]:
-        """Harnesses from the same unified catalogue used by CLI and TUI."""
+    def _harness_candidates_after_prefix(
+        value: str, prefix: str, *, include_all: bool
+    ) -> list[PromptCompletionCandidate]:
+        """Complete from the curated or complete catalog without losing group order."""
         try:
-            from superqode.harness import list_harnesses
+            from superqode.harness import list_harnesses, recommended_harnesses
 
-            return [
-                PromptCompletionCandidate(
-                    value=entry.id,
-                    label=entry.id,
-                    description=(
-                        f"{entry.provider}/{entry.model} · {entry.description}"
-                        if entry.provider and entry.model
-                        else entry.description
-                    ),
-                    kind=entry.category,
-                )
-                for entry in list_harnesses(Path.cwd())
-                if entry.available
-            ]
+            entries = (
+                list_harnesses(Path.cwd()) if include_all else recommended_harnesses(Path.cwd())
+            )
         except Exception:
             return []
+        partial = value[len(prefix) :].lower()
+        candidates: list[PromptCompletionCandidate] = []
+        for entry in entries:
+            if not entry.available or not entry.id.lower().startswith(partial):
+                continue
+            replacement = prefix + entry.id
+            if replacement == value:
+                continue
+            route = f"{entry.provider}/{entry.model} · " if entry.provider and entry.model else ""
+            source = "project · " if entry.source == "file" else ""
+            kind = "project" if entry.source == "file" else entry.category
+            candidates.append(
+                PromptCompletionCandidate(
+                    value=replacement,
+                    label=entry.id,
+                    description=f"{route}{source}{entry.description}",
+                    kind=kind,
+                )
+            )
+        return candidates
 
     @staticmethod
     def _theme_completion_candidates() -> list[PromptCompletionCandidate]:

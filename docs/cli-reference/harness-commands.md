@@ -62,6 +62,7 @@ from the broader native search, patch, web, planning, and coordination toolset.
 
 ```bash
 superqode harness list
+superqode harness list --recommended
 superqode harness show core
 superqode --harness workbench --print "fix the failing test"
 superqode --harness kimi-coding --print "fix the failing test"
@@ -71,8 +72,12 @@ superqode harness use workbench
 `harness use` stores the choice under `superqode.harness` in `superqode.yaml`.
 An explicit `--harness` name or HarnessSpec path takes precedence. In the TUI, the
 equivalent commands are `:harness list` and `:harness use <name-or-path>`. Enter
-`:harness` with no arguments to open the keyboard-navigable catalog picker; its
-entries and autocomplete values come from the same catalog as the CLI.
+`:harness` with no arguments opens the keyboard-navigable recommended picker. It
+shows stable workflows, maintained provider/model families, and your project or
+user harnesses without flooding the normal selection path with frozen releases.
+Enter `:harness all` for the complete picker, including pinned compatibility and
+specialized presets. The CLI keeps `superqode harness list` complete for scripting
+compatibility; add `--recommended` to match the default TUI view.
 
 Built-in templates also appear in the selectable catalog and can be activated
 directly. `list-templates` remains available for authoring and compatibility.

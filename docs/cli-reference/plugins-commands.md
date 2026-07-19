@@ -44,7 +44,7 @@ Every plugin is defined by a `plugin.json` manifest file:
   "name": "My Plugin",
   "version": "1.0.0",
   "api_version": 1,
-  "requires_superqode": ">=0.2.23,<1.0",
+  "requires_superqode": ">=0.2.24,<1.0",
   "description": "Adds custom tools and hooks",
   "tools": [],
   "commands": [],

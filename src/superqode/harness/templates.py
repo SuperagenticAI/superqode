@@ -405,7 +405,7 @@ def benchmark_coding_template() -> HarnessSpec:
                 allow_write=True,
                 allow_shell=True,
             ),
-            "metadata": {"template": "benchmark-coding"},
+            "metadata": {"template": "benchmark-coding", "category": "specialized"},
         }
     )
 

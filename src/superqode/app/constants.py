@@ -580,6 +580,7 @@ COMMANDS = [
     ":harness list",
     ":harness show",
     ":harness use",
+    ":harness all",
     ":harness customize",
     ":harness status",
     ":harness inspect",

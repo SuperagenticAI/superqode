@@ -112,6 +112,8 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:local labs` - Browse trusted models.dev Labs recommendations
 - `:local warm <engine>` - Warm a local model and show first-token latency
 - `:chat` - Raw direct-to-model chat: no repo/tools, shows TTFT + tok/s (off by default)
+- `:harness` - Open the recommended keyboard-navigable harness picker
+- `:harness all` - Open the complete picker, including pinned and specialized presets
 - `:harness <path>` - Load a HarnessSpec
 - `:harness status` - Show the active harness
 - `:harness templates` - List built-in harness templates

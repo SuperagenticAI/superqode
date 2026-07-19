@@ -64,6 +64,7 @@ from .catalog import (
     HarnessDefinition,
     builtin_harnesses,
     list_harnesses,
+    recommended_harnesses,
     resolve_harness,
 )
 

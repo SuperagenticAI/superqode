@@ -17,6 +17,14 @@ def release_metadata_errors(tag: str | None = None) -> list[str]:
     version = str(pyproject["project"]["version"])
     errors: list[str] = []
 
+    expected_entry = "superqode.main:cli_main"
+    scripts = pyproject.get("project", {}).get("scripts", {})
+    for command in ("superqode", "sq"):
+        if scripts.get(command) != expected_entry:
+            errors.append(
+                f"project script {command!r} is {scripts.get(command)!r}, expected {expected_entry!r}"
+            )
+
     package_text = (ROOT / "src/superqode/__init__.py").read_text(encoding="utf-8")
     package_match = re.search(r'^__version__\s*=\s*"([^"]+)"', package_text, re.MULTILINE)
     package_version = package_match.group(1) if package_match else ""

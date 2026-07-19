@@ -2662,12 +2662,15 @@ def test_prompt_completion_lists_harness_catalogue():
 
     candidates = app._prompt_completion_candidates_for(":harness use kimi")
 
-    assert [candidate.value for candidate in candidates] == [
-        ":harness use kimi-coding",
-        ":harness use kimi-k3-coding",
-    ]
+    assert [candidate.value for candidate in candidates] == [":harness use kimi-coding"]
     assert candidates[0].kind == "model-family"
     assert "moonshot/kimi-k3" in candidates[0].description
+
+    complete = app._prompt_completion_candidates_for(":harness use-all kimi")
+    assert [candidate.value for candidate in complete] == [
+        ":harness use-all kimi-coding",
+        ":harness use-all kimi-k3-coding",
+    ]
 
 
 def test_prompt_completion_prioritizes_full_connect_and_quit_commands():

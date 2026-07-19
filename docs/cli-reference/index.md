@@ -15,6 +15,13 @@ SuperQode provides a CLI for your portable coding agent harness: coding sessions
 superqode [OPTIONS] COMMAND [ARGS]...
 ```
 
+!!! tip "Short command for humans"
+    An installed SuperQode release also provides `sq` as an exact shortcut, so
+    `sq harness list` and `superqode harness list` run the same command. This
+    reference keeps the explicit `superqode` spelling for scripts and agents. If
+    another program already provides `sq`, use `superqode` to avoid a `PATH`
+    collision.
+
 ## Command Group References
 
 | Group | Reference |

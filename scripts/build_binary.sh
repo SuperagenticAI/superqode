@@ -5,5 +5,6 @@ python -m pip install --upgrade pip
 python -m pip install -e . pyinstaller pyinstaller-hooks-contrib
 
 pyinstaller -y superqode.spec
+ln -sfn superqode dist/superqode/sq
 
-echo "Built binary: dist/superqode"
+echo "Built binaries: dist/superqode/superqode and dist/superqode/sq"

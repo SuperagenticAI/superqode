@@ -50,7 +50,14 @@ def main() -> None:
         _run([uv, "venv", str(venv)])
         python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         executable = venv / ("Scripts/superqode.exe" if os.name == "nt" else "bin/superqode")
+        short_executable = venv / ("Scripts/sq.exe" if os.name == "nt" else "bin/sq")
         _run([uv, "pip", "install", "--python", str(python), str(superqode_wheel)])
+        canonical_version = _capture([str(executable), "--version"], cwd=workspace)
+        short_version = _capture([str(short_executable), "--version"], cwd=workspace)
+        if canonical_version.replace("superqode", "sq", 1) != short_version:
+            raise AssertionError(
+                f"sq and superqode report different versions: {short_version!r} != {canonical_version!r}"
+            )
         _run(
             [
                 uv,

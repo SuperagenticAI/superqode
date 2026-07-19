@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.24] - 2026-07-19
+
+### Added
+
+- **`sq` command shortcut** - Installed packages and standalone archives now expose `sq` as an equivalent, human-friendly shortcut for every `superqode` CLI command while retaining the canonical executable for scripts and agents.
+- **Catalog visibility tiers** - Harness catalog records now distinguish recommended, user-owned, specialized, and pinned compatibility entries without changing direct name or path resolution.
+
+### Changed
+
+- **Focused TUI harness picker** - Bare `:harness` and `:harness use` autocomplete now show maintained families, general workflows, and user harnesses; `:harness all` opens the complete keyboard-navigable catalog, while CLI `harness list` remains complete and adds `--recommended`.
+- **Release metadata** - Bumped package, runtime, lockfile, ACP registry, package checks, and extension compatibility examples to `0.2.24`.
+
 ## [0.2.23] - 2026-07-19
 
 ### Added

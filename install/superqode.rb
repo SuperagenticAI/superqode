@@ -18,10 +18,12 @@ class Superqode < Formula
 
     # The executable is inside the extracted superqode folder.
     # We create a symlink in the standard Homebrew bin directory.
-    bin.install_symlink libexec/"superqode"
+    bin.install_symlink libexec/"superqode"/"superqode" => "superqode"
+    bin.install_symlink libexec/"superqode"/"superqode" => "sq"
   end
 
   test do
     system "#{bin}/superqode", "--version"
+    system "#{bin}/sq", "--version"
   end
 end

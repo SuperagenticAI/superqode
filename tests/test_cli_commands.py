@@ -40,6 +40,13 @@ class TestCLIVersion:
         assert result.exit_code == 0
         assert "0.1.0" in result.output or "version" in result.output.lower()
 
+    def test_sq_short_name_uses_the_same_cli(self, runner):
+        canonical = runner.invoke(cli_main, ["--version"])
+        result = runner.invoke(cli_main, ["--version"], prog_name="sq")
+
+        assert result.exit_code == 0
+        assert result.output == canonical.output
+
 
 class TestCLIHelp:
     """Tests for help command."""
@@ -161,6 +168,17 @@ class TestHarnessCommand:
         assert entries["kimi-coding"]["category"] == "model-family"
         assert entries["kimi-coding"]["model"] == "kimi-k3"
         assert entries["kimi-k3-coding"]["deprecated"] is True
+
+    def test_harness_list_recommended_matches_the_default_tui_picker(self, runner):
+        result = runner.invoke(cli_main, ["harness", "list", "--recommended", "--json"])
+
+        assert result.exit_code == 0
+        entries = {item["id"]: item for item in json.loads(result.output)}
+        assert entries["core"]["catalog_tier"] == "recommended"
+        assert entries["kimi-coding"]["recommended"] is True
+        assert "kimi-k3-coding" not in entries
+        assert "gemma4-coding" not in entries
+        assert "benchmark-coding" not in entries
 
     def test_harness_use_writes_project_default(self, runner):
         with runner.isolated_filesystem():

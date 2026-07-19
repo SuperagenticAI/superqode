@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.2.23"
+version = "0.2.24"
 description = "SuperQode: harness engineering framework for coding agents, optimized for local and open models"
 readme = "README.md"
 license = "Apache-2.0"
@@ -193,6 +193,7 @@ Changelog = "https://github.com/SuperagenticAI/superqode/blob/main/CHANGELOG.md"
 
 [project.scripts]
 superqode = "superqode.main:cli_main"
+sq = "superqode.main:cli_main"
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]

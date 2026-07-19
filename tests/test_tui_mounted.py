@@ -173,7 +173,28 @@ async def test_harness_command_opens_keyboard_catalog_completion():
         assert prompt.value == ":harness use "
         assert app._prompt_completion_visible is True
         assert ":harness use kimi-coding" in values
+        assert ":harness use kimi-k3-coding" not in values
+        assert ":harness use gemma4-coding" not in values
         assert "Harness Catalog" in rendered
+
+
+async def test_harness_all_opens_complete_keyboard_catalog_completion():
+    app = SuperQodeApp()
+    async with app.run_test(size=(100, 32)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+
+        app._harness_cmd("all", log)
+        await pilot.pause()
+        await pilot.pause()
+
+        prompt = app.query_one("#prompt-input", SelectionAwareInput)
+        values = [candidate.value for candidate in app._prompt_completion_candidates]
+        rendered = "\n".join(line.text for line in log.lines)
+
+        assert prompt.value == ":harness use-all "
+        assert ":harness use-all kimi-k3-coding" in values
+        assert ":harness use-all benchmark-coding" in values
+        assert "Complete Harness Catalog" in rendered
 
 
 async def test_claude_agent_badge_on_mounted_status_bar():

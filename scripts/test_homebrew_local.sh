@@ -53,11 +53,14 @@ class Superqode < Formula
   sha256 "${SHA256}"
 
   def install
-    bin.install "superqode"
+    libexec.install Dir["*"]
+    bin.install_symlink libexec/"superqode"/"superqode" => "superqode"
+    bin.install_symlink libexec/"superqode"/"superqode" => "sq"
   end
 
   test do
     system "\#{bin}/superqode", "--version"
+    system "\#{bin}/sq", "--version"
   end
 end
 EOF
@@ -77,6 +80,14 @@ if command -v superqode >/dev/null; then
     echo "✅ Successfully installed: ${VERSION}"
 else
     echo "❌ Installation failed: superqode command not found"
+    exit 1
+fi
+
+if command -v sq >/dev/null; then
+    SQ_VERSION=$(sq --version)
+    echo "✅ Shortcut installed: ${SQ_VERSION}"
+else
+    echo "❌ Installation failed: sq command not found"
     exit 1
 fi
 

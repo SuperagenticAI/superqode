@@ -65,7 +65,8 @@ stable channel to K3, so no duplicate `--provider` or `--model` flags are needed
 superqode --harness kimi-coding -p "Review this repository and fix the failing tests"
 ```
 
-In the TUI, enter `:harness` to browse with the arrow keys, or activate it directly:
+In the TUI, enter `:harness` to browse maintained families with the arrow keys, or
+activate it directly:
 
 ```text
 :harness use kimi-coding
@@ -82,7 +83,9 @@ superqode --harness harness.yaml -p "Implement the requested feature"
 The generated file freezes the current exact route. Use `kimi-k3-coding` when you
 explicitly want the built-in K3-pinned compatibility preset. When Moonshot ships a
 later model, SuperQode can promote the validated `kimi-coding` stable route without
-renaming the harness or changing the pinned K3 preset.
+renaming the harness or changing the pinned K3 preset. Pinned presets remain
+directly resolvable and appear under `:harness all`, but stay out of the recommended
+default picker.
 
 The preset provides:
 

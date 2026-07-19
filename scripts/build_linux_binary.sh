@@ -16,6 +16,7 @@ python -m pip install -e . pyinstaller pyinstaller-hooks-contrib toml
 
 # 3. Build with PyInstaller (using the updated .spec which is now One-Dir)
 pyinstaller --clean -y superqode.spec
+ln -sfn superqode dist/superqode/sq
 
 # 4. Package for distribution
 BINARY_NAME="superqode"

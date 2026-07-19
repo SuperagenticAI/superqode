@@ -78,6 +78,11 @@ This installs the latest [SuperQode release](https://pypi.org/project/superqode/
 
 SuperQode uses [uv](https://docs.astral.sh/uv/) for installs, development, and release checks. If uv is new to you, start with the official uv documentation before installing extras or working from source.
 
+Installed releases provide both `superqode` and the shorter `sq` command. They are
+equivalent, so humans can use commands such as `sq`, `sq harness list`, and
+`sq --harness workbench`; documentation, scripts, and agents can keep using the
+explicit `superqode` name.
+
 ### Run SuperQode
 
 **Interactive TUI (Explore)**
@@ -123,11 +128,12 @@ superqode --harness workbench --print "inspect this repository"
 superqode harness use workbench   # persist the project default in superqode.yaml
 ```
 
-In the TUI, enter `:harness` for a keyboard-navigable catalog, or use
+In the TUI, enter `:harness` for a keyboard-navigable recommended catalog, or use
 `:harness use core`, `:harness use workbench`, or a maintained model-family preset
 such as `:harness use kimi-coding`. Named harnesses, built-in templates, and
 HarnessSpec files use the same `--harness` option. Use `:harness customize <name>`
-to create a project-owned editable copy.
+to create a project-owned editable copy. Enter `:harness all` when you need pinned
+compatibility or specialized presets.
 
 ### Your First Harness Run
 

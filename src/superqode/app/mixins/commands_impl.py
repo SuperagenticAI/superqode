@@ -1371,7 +1371,7 @@ class CommandImplMixin:
         import os as _os
 
         if not args.strip():
-            self._show_harness_catalog(log, open_picker=True)
+            self._show_harness_catalog(log, open_picker=True, include_all=False)
             return
         parts = args.split(maxsplit=1)
         sub = parts[0].strip() if parts else "status"
@@ -1408,7 +1408,12 @@ class CommandImplMixin:
             return
 
         if sub in ("list", "available"):
-            self._show_harness_catalog(log, open_picker=False)
+            include_all = subargs.lower() not in {"recommended", "curated"}
+            self._show_harness_catalog(log, open_picker=False, include_all=include_all)
+            return
+
+        if sub in ("all", "legacy", "compatibility"):
+            self._show_harness_catalog(log, open_picker=True, include_all=True)
             return
 
         if sub == "show":
@@ -1606,9 +1611,9 @@ class CommandImplMixin:
             log.add_info(f"Activate it with :harness use {saved}")
             return
 
-        if sub in ("load", "use"):
+        if sub in ("load", "use", "use-all"):
             reference = subargs
-            auto_connect = sub == "use"
+            auto_connect = sub in {"use", "use-all"}
         else:
             reference = args.strip()
             auto_connect = False
@@ -1655,23 +1660,34 @@ class CommandImplMixin:
         else:
             log.add_info("Connect with :connect byok or :connect local to use this harness.")
 
-    def _show_harness_catalog(self, log, *, open_picker: bool) -> None:
+    def _show_harness_catalog(self, log, *, open_picker: bool, include_all: bool) -> None:
         """Render the unified catalogue and optionally open keyboard completion."""
-        from superqode.harness import discover_harness_adapters, list_harnesses
+        from superqode.harness import (
+            discover_harness_adapters,
+            list_harnesses,
+            recommended_harnesses,
+        )
 
-        entries = list_harnesses(Path.cwd())
+        entries = list_harnesses(Path.cwd()) if include_all else recommended_harnesses(Path.cwd())
         current = str(os.getenv("SUPERQODE_HARNESS", "core") or "core")
         groups = {
             "workflow": "Workflows",
             "model-family": "Maintained model families",
-            "model-preset": "Pinned model presets",
             "file": "Project and user harnesses",
             "registry": "Registry harnesses",
         }
+        if include_all:
+            groups["specialized"] = "Specialized harnesses"
+            groups["model-preset"] = "Pinned compatibility presets"
         text = Text()
-        text.append("\n  Harness Catalog\n", style=f"bold {THEME['purple']}")
+        title = "Complete Harness Catalog" if include_all else "Harness Catalog"
+        text.append(f"\n  {title}\n", style=f"bold {THEME['purple']}")
         text.append(
-            "  Maintained family presets track stable releases; pinned presets stay reproducible.\n",
+            (
+                "  All directly resolvable harnesses, including pinned compatibility presets.\n"
+                if include_all
+                else "  Recommended workflows, maintained families, and your own harnesses.\n"
+            ),
             style=THEME["muted"],
         )
         for category in groups:
@@ -1686,7 +1702,7 @@ class CommandImplMixin:
                     text.append(f"{entry.provider}/{entry.model:<28}", style=THEME["dim"])
                 else:
                     text.append(f"{entry.runtime:<38}", style=THEME["dim"])
-                label = " pinned" if entry.deprecated else ""
+                label = " pinned" if entry.catalog_tier == "compatibility" else ""
                 text.append(f" {len(entry.tools):>2} tools{label}\n", style=THEME["muted"])
         known = {entry.id for entry in entries}
         adapters = [
@@ -1701,6 +1717,11 @@ class CommandImplMixin:
                 text.append(f"  ○ {adapter.id:<22} protocol  {status}\n", style=THEME["muted"])
         text.append("\n  :harness show <name>       inspect\n", style=THEME["dim"])
         text.append("  :harness customize <name>  create an editable copy\n", style=THEME["dim"])
+        if not include_all:
+            text.append(
+                "  :harness all               browse pinned and specialized presets\n",
+                style=THEME["dim"],
+            )
         if open_picker:
             text.append("  ↑↓ choose, Enter accept, Enter again activate\n", style=THEME["success"])
         log.write(text)
@@ -1711,7 +1732,7 @@ class CommandImplMixin:
                     from superqode.app.inputs import SelectionAwareInput
 
                     prompt = self.query_one("#prompt-input", SelectionAwareInput)
-                    prompt.value = ":harness use "
+                    prompt.value = ":harness use-all " if include_all else ":harness use "
                     prompt.cursor_position = len(prompt.value)
                     prompt.focus()
                     self._update_prompt_completion_panel(prompt.value)

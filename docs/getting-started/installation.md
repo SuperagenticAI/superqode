@@ -28,6 +28,20 @@ That's it. If you installed the tool, verify with:
 superqode --version
 ```
 
+The installed package exposes two equivalent commands:
+
+```bash
+superqode harness list
+sq harness list
+```
+
+`sq` is the human-friendly shorthand for every `superqode` command. The longer
+name remains the clearest choice for documentation, automation, and agents. For a
+one-off shorthand invocation without installing, use `uvx --from superqode sq`;
+`uvx sq` refers to a package named `sq`, not to SuperQode. If another application
+already owns `sq` on your `PATH`, continue using the unambiguous `superqode`
+command.
+
 ---
 
 ## System Requirements

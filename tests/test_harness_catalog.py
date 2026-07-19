@@ -4,6 +4,7 @@ from superqode.harness import (
     DEFAULT_HARNESS_ID,
     get_model_family_route,
     list_harnesses,
+    recommended_harnesses,
     resolve_harness,
 )
 
@@ -34,6 +35,23 @@ def test_catalogue_exposes_templates_as_directly_runnable_harnesses(tmp_path):
     assert entries["kimi-coding"].deprecated is False
     assert entries["kimi-k3-coding"].deprecated is True
     assert entries["qwen-coding"].source == "built-in-template"
+
+
+def test_recommended_catalogue_hides_pinned_and_specialized_presets(tmp_path):
+    complete = {entry.id: entry for entry in list_harnesses(tmp_path)}
+    recommended = {entry.id: entry for entry in recommended_harnesses(tmp_path)}
+
+    assert complete["core"].catalog_tier == "recommended"
+    assert complete["kimi-coding"].catalog_tier == "recommended"
+    assert complete["kimi-k3-coding"].catalog_tier == "compatibility"
+    assert complete["benchmark-coding"].catalog_tier == "specialized"
+    assert {"core", "workbench", "no-tool", "kimi-coding"} <= recommended.keys()
+    assert "kimi-k3-coding" not in recommended
+    assert "gemma4-coding" not in recommended
+    assert "benchmark-coding" not in recommended
+
+    # Visibility never changes direct resolution for reproducible configurations.
+    assert resolve_harness("kimi-k3-coding", root=tmp_path).id == "kimi-k3-coding"
 
 
 def test_kimi_family_route_is_curated_and_versioned_preset_stays_pinned(tmp_path):
