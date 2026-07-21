@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.2.24"
+version = "0.2.25"
 description = "SuperQode: harness engineering framework for coding agents, optimized for local and open models"
 readme = "README.md"
 license = "Apache-2.0"
@@ -124,6 +124,9 @@ pydanticai = [
 pydanticai-logfire = [
     "pydantic-ai>=1.98.0,<2.0.0",
     "logfire>=4.0.0",
+]
+rlm-code = [
+    "rlm-code[llm-all]>=0.1.11,<0.2.0",
 ]
 mem0 = [
     "mem0ai>=2.0.4,<3.0.0",

@@ -23,6 +23,7 @@ superqode harness run --spec examples/harnesses/coding.yaml --prompt "summarize 
 | `google-adk.yaml` | You want to run through the Google ADK backend with SuperQode tool and permission policy. | `adk` |
 | `gemma4.yaml` | You want a local Gemma-style coding profile with strict JSON tool calls and compact context. | `builtin` |
 | `ds4.yaml` | You want fast local DS4 iteration with compact JSON tools and short session history. | `builtin` |
+| `rlm-code-lid.yaml` | You want RLM Code v0.1.11 LID execution with opaque root observations, offloaded history, and trajectory evidence. | `rlm-code` |
 
 ## Validate All Examples
 
@@ -59,6 +60,7 @@ uv tool install "superqode[pydanticai]"
 uv tool install "superqode[deepagents]"
 uv tool install "superqode[openai-agents]"
 uv tool install "superqode[adk]"
+uv tool install "superqode[rlm-code]"
 ```
 
 Run `doctor` after installing:

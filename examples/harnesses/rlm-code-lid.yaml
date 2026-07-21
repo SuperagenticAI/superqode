@@ -1,0 +1,83 @@
+version: 1
+name: rlm-code-lid
+description: RLM Code v0.1.11 LID harness for evidence-grounded analysis of large repositories.
+flavor: coding
+runtime:
+  backend: rlm-code
+  config:
+    rlm_code:
+      profile: lid
+      context_profile: evidence
+      max_steps: 12
+      exec_timeout: 90
+      sandbox_backend: docker
+      root_observation_mode: opaque
+      history_policy: offload
+      decomposition_hint: true
+      max_root_history_chars: 40000
+      history_preserve_last: 2
+      max_iteration_output_chars: 12000
+      output_mode: summarize
+      max_depth: 0
+      parallelism: 2
+model_policy:
+  primary: qwen3:8b
+  profile: local-recursive-analysis
+  temperature: 0.1
+  reasoning: medium
+  config:
+    provider: ollama
+execution_policy:
+  sandbox: docker
+  approval_profile: deny
+  allow_read: true
+  allow_write: false
+  allow_shell: false
+  allow_network: false
+  blocked_categories:
+    - destructive
+    - credential-access
+agents:
+  - id: rlm-root
+    role: recursive repository analyst
+    system_prompt: |
+      Inspect repository evidence programmatically. Decompose semantic work into
+      focused subcalls, keep domain-bearing results in REPL variables, and cite
+      the files or evidence used for the final answer.
+    max_iterations: 12
+workflow:
+  mode: single
+  max_task_depth: 1
+  parallelism: 1
+  merge_strategy: summary
+context:
+  instruction_files:
+    - AGENTS.md
+    - SUPERQODE.md
+  session_storage: .superqode/sessions
+  prompt_persistence: preview
+checks:
+  enabled: false
+observability:
+  events: true
+  traces: true
+  run_store: file
+optimization:
+  enabled: false
+  require_human_apply: true
+  editable_surfaces:
+    - runtime.config.rlm_code.context_profile
+    - runtime.config.rlm_code.max_steps
+    - runtime.config.rlm_code.history_policy
+    - runtime.config.rlm_code.decomposition_hint
+    - model_policy
+  protected_surfaces:
+    - runtime.config.rlm_code.root_observation_mode
+    - execution_policy
+    - checks
+  heldout_fraction: 0.3
+metadata:
+  example: rlm-code-lid
+  install: uv tool install "superqode[rlm-code]"
+  requires: rlm-code>=0.1.11
+  best_for: large repository analysis, context isolation, and harness-generalization experiments

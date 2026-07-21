@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.25] - 2026-07-21
+
+### Added
+
+- **RLM Code v0.1.11 integration** - Added an optional `rlm-code` HarnessSpec backend and Harness Protocol adapter that preserve RLM Code as the recursive execution engine while normalizing context selection, REPL steps, root/submodel usage, LID exposure metrics, and native JSONL trajectories into SuperQode evidence.
+- **RLM Code LID example and guide** - Added a Docker-first, read-only `rlm-code-lid` HarnessSpec plus installation, configuration, architecture, conformance, evaluation, optimization, safety, demo, and limitations documentation.
+
+### Changed
+
+- **Release metadata** - Bumped package, runtime, lockfile, ACP registry, package checks, extension compatibility examples, and plugin documentation to `0.2.25`.
+
 ## [0.2.24] - 2026-07-19
 
 ### Added

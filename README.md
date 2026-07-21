@@ -165,7 +165,7 @@ superqode harness doctor --spec harness.yaml
 superqode harness run --spec harness.yaml --prompt "summarize the architecture"
 ```
 
-Prefer to start from a complete file? See [`examples/harnesses`](examples/harnesses) for ready-to-run specs covering builtin, no-tool, PydanticAI, DeepAgents, OpenAI Agents SDK, Google ADK, Gemma4, and DS4.
+Prefer to start from a complete file? See [`examples/harnesses`](examples/harnesses) for ready-to-run specs covering builtin, no-tool, PydanticAI, DeepAgents, RLM Code, OpenAI Agents SDK, Google ADK, Gemma4, and DS4.
 
 After a run, inspect what happened:
 
@@ -223,6 +223,7 @@ uv tool install "superqode[openai-agents]"
 uv tool install "superqode[codex-sdk]"
 uv tool install "superqode[deepagents]"
 uv tool install "superqode[pydanticai]"
+uv tool install "superqode[rlm-code]"
 ```
 
 Then select a backend in a spec or at run time:
@@ -231,6 +232,7 @@ Then select a backend in a spec or at run time:
 superqode harness run --spec harness.yaml --runtime pydanticai --prompt "review this design"
 superqode harness run --spec harness.yaml --runtime openai-agents --prompt "make the smallest safe fix"
 superqode harness run --spec harness.yaml --runtime codex-sdk --prompt "summarize this repository"
+superqode harness run --spec examples/harnesses/rlm-code-lid.yaml --provider ollama --model qwen3:8b --prompt "map this repository with evidence"
 ```
 
 ## Key Features
@@ -242,10 +244,11 @@ superqode harness run --spec harness.yaml --runtime codex-sdk --prompt "summariz
 - **Model routing**: Use Open Models or closed models, local endpoints or remote providers, small utility models or large coding models.
 - **Local first Open Model support**: Detect local engines, probe context windows, generate starter harnesses, run smoke checks, and benchmark local candidates.
 - **Local dynamic workflows with RLM**: Run recursive local-model analysis over large logs, traces, diffs, and repo slices with `context_handle`, `spawn_harness`, and bounded dynamic workflow scripts.
+- **First-class RLM Code backend**: Run RLM Code v0.1.11+ `reference`, `repo_evidence`, or `lid` profiles through HarnessSpec and Harness Protocol while preserving root/submodel usage, exposure metrics, and native JSONL trajectories.
 - **Measure and optimize**: Use harness tests, eval scorecards, local route optimization, harness optimization, and skill optimization with regression gates.
 - **Local code intelligence**: Use bounded reads, local code search, multi repo search, semantic search, offline indexes, and post edit verification.
 - **Configurable memory**: Keep local memory by default, then connect provider neutral memory systems when needed.
-- **Pluggable runtimes**: Run the same harness on the builtin engine, ADK, OpenAI Agents SDK, Codex SDK, Claude Agent SDK, DeepAgents, or PydanticAI.
+- **Pluggable runtimes**: Run the same harness on the builtin engine, ADK, OpenAI Agents SDK, Codex SDK, Claude Agent SDK, DeepAgents, PydanticAI, or RLM Code.
 - **Policy and safety**: Gate file access, shell commands, network access, approvals, sandboxing, plugins, MCP, and project trust through explicit policy.
 - **Headless and CI ready**: Run coding tasks, provider checks, evals, schema validated outputs, event exports, and change summaries from scripts.
 

@@ -14,6 +14,7 @@ from .base import (
 from .deepagents import DeepAgentsHarnessBackend
 from .managed import ManagedAgentHarnessBackend
 from .pydanticai import PydanticAIHarnessBackend
+from .rlm_code import RLMCodeHarnessBackend
 from .runtime import (
     ADKHarnessBackend,
     ClaudeAgentSDKHarnessBackend,
@@ -32,6 +33,7 @@ _OPTIONAL_BACKENDS = {
     "deepagents",
     "google-agent-engine",
     "pydanticai",
+    "rlm-code",
 }
 
 
@@ -52,6 +54,8 @@ def create_harness_backend(name: str | None) -> HarnessBackend:
         return DeepAgentsHarnessBackend()
     if resolved == "pydanticai":
         return PydanticAIHarnessBackend()
+    if resolved == "rlm-code":
+        return RLMCodeHarnessBackend()
     if resolved in {"google-agent-engine", "anthropic-managed"}:
         return ManagedAgentHarnessBackend(resolved)
     valid = ", ".join(known_harness_backend_names())
@@ -157,6 +161,7 @@ def _with_availability(capabilities: HarnessBackendCapabilities) -> HarnessBacke
         "codex-sdk": ("openai_codex", "codex-sdk"),
         "deepagents": ("deepagents", "deepagents"),
         "pydanticai": ("pydantic_ai", "pydanticai"),
+        "rlm-code": ("rlm_code", "rlm-code"),
     }
     module_name, extra = packages.get(capabilities.backend, (None, None))
     hint = install_command(extra) if extra else None

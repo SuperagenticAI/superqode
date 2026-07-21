@@ -63,6 +63,8 @@ def discover_harness_adapters(
     known: set[str] = set()
     if include_builtins:
         from .catalog import builtin_harnesses
+        from .backends.rlm_code import rlm_code_installation_status
+        from .rlm_code_adapter import RLMCodeHarnessProtocolAdapter
 
         for harness in builtin_harnesses():
             adapter = CoreHarnessProtocolAdapter(harness.spec, adapter_id=harness.id)
@@ -77,6 +79,23 @@ def discover_harness_adapters(
                 )
             )
             known.add(harness.id)
+
+        rlm_available, rlm_issue = rlm_code_installation_status()
+        rlm_adapter = RLMCodeHarnessProtocolAdapter() if rlm_available else None
+        entries.append(
+            HarnessAdapterDefinition(
+                id="rlm-code",
+                name="RLM Code",
+                description=(
+                    "Recursive Language Model harness with LID context and trajectory evidence"
+                ),
+                source="optional:rlm-code",
+                available=rlm_available,
+                adapter=rlm_adapter,
+                issue=rlm_issue,
+            )
+        )
+        known.add("rlm-code")
 
     for entry_point in _harness_entry_points():
         source = _entry_point_source(entry_point)

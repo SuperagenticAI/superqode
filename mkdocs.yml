@@ -158,6 +158,7 @@ nav:
     - 🧭 What Is Harness Engineering: harness-engineering.md
     - 🏗️ Harness System: advanced/harness-system.md
     - 🔗 Harness Protocol v1: advanced/harness-protocol.md
+    - 🌀 RLM Code Integration: advanced/rlm-code.md
     - 🧪 Harness Examples: examples.md
     - 📈 Run, Measure, Optimize: advanced/harness-optimization.md
     - 🧠 Self-Improving Harnesses: advanced/self-improving-harness.md
