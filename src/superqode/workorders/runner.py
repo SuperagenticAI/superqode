@@ -694,9 +694,7 @@ def _aggregate_harness_usage(results: tuple[Any, ...]) -> dict[str, Any]:
     cost_rows = [item for item in results if item.cost_usd is not None]
     all_tokens_reported = bool(results) and len(token_rows) == len(results)
     all_costs_reported = bool(results) and len(cost_rows) == len(results)
-    currencies = {
-        item.response.cost_currency for item in cost_rows if item.response.cost_currency
-    }
+    currencies = {item.response.cost_currency for item in cost_rows if item.response.cost_currency}
     return {
         "tokens_in": sum(int(item.tokens_in or 0) for item in token_rows)
         if all_tokens_reported

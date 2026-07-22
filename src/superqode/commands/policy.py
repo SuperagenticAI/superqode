@@ -53,10 +53,7 @@ def policy_show(repo: Path, json_output: bool) -> None:
     guardrails = payload["guardrails"]
     click.echo(f"layers: {len(payload['policy']['layers'])}")
     for layer in payload["policy"]["layers"]:
-        click.echo(
-            f"- {layer['name']}: {layer['source']} "
-            f"({len(layer['rules'])} rule(s))"
-        )
+        click.echo(f"- {layer['name']}: {layer['source']} ({len(layer['rules'])} rule(s))")
     click.echo(
         f"shell_env={guardrails['shell_env']} "
         f"network_strict={str(guardrails['network_strict']).lower()} "

@@ -386,8 +386,7 @@ def _gateway_for_request(provider: str, model: str):
     if fixture == "silent":
         return SilentGateway()
     raise ValueError(
-        "Synthetic harness runs support model 'passthrough' or 'silent'; "
-        f"received {model!r}"
+        f"Synthetic harness runs support model 'passthrough' or 'silent'; received {model!r}"
     )
 
 

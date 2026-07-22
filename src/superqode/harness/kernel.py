@@ -162,9 +162,7 @@ class HarnessSession:
         from superqode.governance import active_governance, governance_scope, load_governance
 
         if active_governance() is None:
-            bundle = load_governance(
-                working_directory or Path.cwd(), harness_spec=self.kernel.spec
-            )
+            bundle = load_governance(working_directory or Path.cwd(), harness_spec=self.kernel.spec)
             with governance_scope(bundle):
                 async for event in self.stream(
                     prompt,
@@ -297,9 +295,7 @@ class HarnessSession:
         from superqode.governance import active_governance, governance_scope, load_governance
 
         if active_governance() is None:
-            bundle = load_governance(
-                request.working_directory, harness_spec=self.kernel.spec
-            )
+            bundle = load_governance(request.working_directory, harness_spec=self.kernel.spec)
             with governance_scope(bundle):
                 return await self.run(request)
         runtime_name = request.runtime or self.kernel.spec.runtime.backend
@@ -607,9 +603,7 @@ class HarnessSession:
             status="failed",
             metadata={"policy_decision": decision.to_dict()},
         )
-        raise PermissionError(
-            f"Contextual policy {decision.action} at {phase}: {decision.reason}"
-        )
+        raise PermissionError(f"Contextual policy {decision.action} at {phase}: {decision.reason}")
 
 
 def _status_from_stopped_reason(stopped_reason: str) -> str:

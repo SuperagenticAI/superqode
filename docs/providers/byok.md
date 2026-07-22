@@ -232,7 +232,7 @@ superqode --connect grok
 Inside the TUI:
 
 ```text
-:connect grok                 # Grok Build, xAI's own agent (ACP) — default
+:connect grok                 # Grok Build, xAI's own agent (ACP), default
 :grok api                     # SuperQode's harness on the subscription (opt-in)
 :grok api grok-4.5            # ...pinned to a specific model
 :grok model                   # ...or pick from a menu of subscription models

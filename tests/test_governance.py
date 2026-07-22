@@ -72,9 +72,7 @@ def test_layered_policy_uses_deny_overrides_and_keeps_trace():
         )
     )
 
-    decision = engine.evaluate(
-        PolicyRequest(phase="tool_call", tool="bash", risk="high")
-    )
+    decision = engine.evaluate(PolicyRequest(phase="tool_call", tool="bash", risk="high"))
 
     assert decision.action == "deny"
     assert decision.reason == "organization blocks high-risk tools"

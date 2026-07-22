@@ -284,17 +284,11 @@ def work_usage(ctx: click.Context, work_order_id: str, json_output: bool) -> Non
         f"(in={payload['tokens_in']}, out={payload['tokens_out']}, "
         f"unreported={payload['unknown_token_runs']})"
     )
+    click.echo(f"cost: ${payload['cost_usd']:.6f} (unreported={payload['unknown_cost_runs']})")
     click.echo(
-        f"cost: ${payload['cost_usd']:.6f} "
-        f"(unreported={payload['unknown_cost_runs']})"
+        f"tool calls: {payload['tool_calls']} (unreported={payload['unknown_tool_call_runs']})"
     )
-    click.echo(
-        f"tool calls: {payload['tool_calls']} "
-        f"(unreported={payload['unknown_tool_call_runs']})"
-    )
-    click.echo(
-        f"iterations: {payload['iterations']}  latency: {payload['latency_ms']}ms"
-    )
+    click.echo(f"iterations: {payload['iterations']}  latency: {payload['latency_ms']}ms")
 
 
 @work.command("policy")
@@ -314,9 +308,7 @@ def work_usage(ctx: click.Context, work_order_id: str, json_output: bool) -> Non
 )
 @click.option("--add-cost", type=click.FloatRange(min=0), default=0.0, show_default=True)
 @click.option("--add-tokens", type=click.IntRange(min=0), default=0, show_default=True)
-@click.option(
-    "--add-tool-calls", type=click.IntRange(min=0), default=0, show_default=True
-)
+@click.option("--add-tool-calls", type=click.IntRange(min=0), default=0, show_default=True)
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
 @click.pass_context
 def work_policy(

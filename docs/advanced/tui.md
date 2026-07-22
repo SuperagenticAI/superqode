@@ -342,7 +342,7 @@ Antigravity CLI handoff:
 Grok subscription (official Grok CLI login):
 
 ```text
-:connect grok                 # Grok Build, xAI's own agent (ACP) — default
+:connect grok                 # Grok Build, xAI's own agent (ACP), default
 :grok                         # same as :connect grok
 :grok connect [model]         # ...with an optional model hint
 :grok api [model]             # SuperQode's harness on the subscription (opt-in)

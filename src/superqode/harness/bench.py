@@ -107,9 +107,7 @@ async def run_harness_bench(
         "specs": {path: _sha256_file(Path(path)) for path in manifest.specs},
     }
     normalized_manifest = {**manifest.to_dict(), "live": effective_live}
-    fingerprint = _sha256_json(
-        {"manifest": normalized_manifest, "sources": source_digests}
-    )
+    fingerprint = _sha256_json({"manifest": normalized_manifest, "sources": source_digests})
     started_at = datetime.now(timezone.utc).isoformat()
     runs: list[dict[str, Any]] = []
     for repetition in range(1, manifest.repetitions + 1):
@@ -156,9 +154,7 @@ async def run_harness_bench(
     index = {
         "schema_version": HARNESS_BENCH_SCHEMA_VERSION,
         "fingerprint": fingerprint,
-        "artifacts": {
-            str(path.relative_to(root)): _sha256_file(path) for path in indexed_paths
-        },
+        "artifacts": {str(path.relative_to(root)): _sha256_file(path) for path in indexed_paths},
     }
     _write_json(root / "artifacts.json", index)
     return {
@@ -261,7 +257,12 @@ def verify_harness_bench(output_dir: str | Path) -> dict[str, Any]:
         actual = _sha256_file(path)
         if actual != expected:
             failures.append(
-                {"path": relative, "error": "digest_mismatch", "expected": expected, "actual": actual}
+                {
+                    "path": relative,
+                    "error": "digest_mismatch",
+                    "expected": expected,
+                    "actual": actual,
+                }
             )
     scorecard_path = root / "scorecard.json"
     if scorecard_path.is_file():

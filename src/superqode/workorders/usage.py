@@ -45,9 +45,7 @@ class WorkOrderUsage:
             tokens_out=_optional_int(data.get("tokens_out")),
             total_tokens=_optional_int(data.get("total_tokens")),
             cost_usd=_optional_float(data.get("cost_usd")),
-            cost_currency=(
-                str(data.get("cost_currency")) if data.get("cost_currency") else None
-            ),
+            cost_currency=(str(data.get("cost_currency")) if data.get("cost_currency") else None),
             tool_calls=_optional_int(data.get("tool_calls")),
             iterations=_optional_int(data.get("iterations")),
             latency_ms=_optional_int(data.get("latency_ms")),
@@ -140,9 +138,7 @@ def usage_from_result(
     """Normalize one harness result dictionary into WorkOrder accounting."""
     nested = result.get("usage") if isinstance(result.get("usage"), dict) else {}
     tokens_in = _first_int(result, nested, "tokens_in", "input_tokens", "prompt_tokens")
-    tokens_out = _first_int(
-        result, nested, "tokens_out", "output_tokens", "completion_tokens"
-    )
+    tokens_out = _first_int(result, nested, "tokens_out", "output_tokens", "completion_tokens")
     total_tokens = _first_int(result, nested, "total_tokens")
     if total_tokens is None and (tokens_in is not None or tokens_out is not None):
         total_tokens = int(tokens_in or 0) + int(tokens_out or 0)
@@ -155,9 +151,7 @@ def usage_from_result(
         tokens_out=tokens_out,
         total_tokens=total_tokens,
         cost_usd=cost_usd,
-        cost_currency=str(
-            result.get("cost_currency") or nested.get("cost_currency") or "USD"
-        )
+        cost_currency=str(result.get("cost_currency") or nested.get("cost_currency") or "USD")
         if cost_usd is not None
         else None,
         tool_calls=_first_int(result, nested, "tool_calls", "tool_calls_made"),

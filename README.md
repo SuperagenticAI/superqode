@@ -5,8 +5,8 @@
 <h1 align="center">SuperQode</h1>
 
 <p align="center">
-  <strong>The harness engineering framework for coding agents, optimized for local and open models</strong><br>
-  <em>Build your own coding harness. Measure it. Extend it. Optimize it. Use any model, open or closed, small or large, local or remote, without giving up control of the agent loop.</em>
+  <strong>The terminal-first Software Factory for coding agents</strong><br>
+  <em>Orchestrate multiple harnesses. Run durable work. Evaluate every result. Govern and improve how agents operate. Use local or cloud runtimes from one CLI.</em>
 </p>
 
 <p align="center">
@@ -36,9 +36,11 @@
 
 ## What is SuperQode?
 
-SuperQode is a **harness engineering framework for coding agents**, optimized for local and open models. The harness is the software around the model that decides what it can see, which tools it can call, how it remembers, and how its work is checked. After prompt engineering and context engineering, the harness is the layer that now decides whether a coding agent is reliable.
+SuperQode is a **terminal-first Software Factory for coding agents**. It combines multi-harness orchestration with durable execution, evaluation, governance, and guarded optimization. Builders can define how agents work, run them across local or cloud runtimes, verify the resulting changes, and improve the harness from recorded evidence.
 
-Most coding products ship a finished harness you cannot see, tuned to keep you on one model. Open Models ship with no harness at all. SuperQode gives you one you own: model routing, tools, memory, context, search, approvals, sandboxing, workflows, evals, and optimization, written as a YAML artifact that lives in your repo.
+The harness is the software around the model that determines what it can see, which tools it can call, how it remembers, and how its work is checked. SuperQode treats that harness as a repository-owned engineering artifact instead of a hidden part of a closed agent product.
+
+Many coding products ship a finished harness that cannot be inspected or moved between runtimes. Open models often ship without a complete coding harness. SuperQode provides a portable `HarnessSpec` for model routing, tools, memory, context, search, approvals, sandboxing, workflows, evaluation, and optimization. The specification lives in the repository and remains under the team's control.
 
 You do four things with a harness you own:
 

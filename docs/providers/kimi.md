@@ -148,8 +148,8 @@ harness run without producing an invalid K3 request.
 
 During streaming, K3 returns chain-of-thought data in `reasoning_content` and the
 answer in `content`. SuperQode preserves that separation. When K3 calls a tool,
-SuperQode also replays the complete assistant turn—including reasoning and tool
-calls—before the tool-result message. This is required for reliable multi-turn K3
+SuperQode also replays the complete assistant turn, including reasoning and tool
+calls, before the tool-result message. This is required for reliable multi-turn K3
 tool use.
 
 Reasoning content is model-generated data. Do not treat it as an audit log, a
@@ -189,7 +189,7 @@ creation call. Cache hits are most likely when all of the following remain stabl
 
 Changing the model or reasoning effort invalidates the relevant cache prefix. The
 K3 harness's extended history is designed to keep a stable session prefix, but
-Moonshot—not SuperQode—decides whether any request receives cached pricing.
+Moonshot, not SuperQode, decides whether any request receives cached pricing.
 
 ## Vision and video details
 

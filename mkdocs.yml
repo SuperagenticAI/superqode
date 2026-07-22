@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
-site_description: "A harness engineering framework for coding agents, optimized for local and open models. Build, measure, extend, and optimize a coding harness you own, across local endpoints, closed models, and remote runtimes."
+site_description: "A terminal-first Software Factory for coding agents. Orchestrate multiple harnesses, run durable work, evaluate results, enforce policy, and improve agent behavior across local and cloud runtimes."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode

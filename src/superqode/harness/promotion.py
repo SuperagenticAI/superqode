@@ -212,9 +212,7 @@ def harness_promotion_state(
     resolved_candidate = candidate_id or (
         str(matching[-1].get("candidate_id") or "") if matching else ""
     )
-    selected = [
-        item for item in matching if item.get("candidate_id") == resolved_candidate
-    ]
+    selected = [item for item in matching if item.get("candidate_id") == resolved_candidate]
     if not selected:
         label = candidate_id or str(base_spec or "")
         raise ValueError(f"harness promotion not found: {label}")

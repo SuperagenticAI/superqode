@@ -22,6 +22,8 @@ jobs:
         run: uv run ruff check .
       - name: Ruff format check
         run: uv run ruff format --check .
+      - name: Public documentation style
+        run: uv run python scripts/check_public_docs_style.py
 
   test:
     runs-on: ubuntu-latest

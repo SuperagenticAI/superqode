@@ -4,6 +4,8 @@ If you already understand Omnigent, this page explains which ideas are shared, w
 
 This is not a claim that one product should reproduce every feature of the other. Both products make multiple coding-agent harnesses easier to use, but they optimize for different working styles.
 
+In one sentence: both products orchestrate multiple coding-agent harnesses, while SuperQode extends that foundation into a terminal-first Software Factory with durable WorkOrders, evaluation, governance, and guarded optimization. Omnigent places greater emphasis on persistent collaborative sessions across terminal, web, mobile, and desktop clients.
+
 ## The shared idea
 
 Omnigent and SuperQode start from several similar beliefs:
@@ -35,7 +37,7 @@ checks, review, and an exact candidate gate delivery
 evaluation and improvement make the harness better
 ```
 
-SuperQode does not need to reproduce Omnigent's full web, mobile, and desktop client suite. Its primary experience remains CLI and TUI, with smaller remote-control options for builders who need to step away from the terminal.
+SuperQode does not reproduce Omnigent's full web, mobile, and desktop client suite. Its primary experience remains the CLI and TUI, with focused remote-control options for builders who need to step away from the terminal.
 
 ## Similar concepts, different implementations
 
@@ -190,7 +192,7 @@ Use both formats when Omnigent agent definitions are useful inputs but SuperQode
 
 ## A concise public description
 
-> SuperQode and Omnigent share the goal of making multiple coding-agent harnesses portable and manageable. Omnigent centers the persistent collaborative session across devices. SuperQode centers the builder's terminal, repository-owned harnesses, reliable WorkOrders, evidence-backed delivery, and continuous harness improvement.
+> SuperQode and Omnigent both orchestrate multiple coding-agent harnesses. Omnigent centers the persistent collaborative session across devices. SuperQode is a terminal-first Software Factory centered on repository-owned harnesses, reliable WorkOrders, evidence-backed delivery, governance, and guarded optimization.
 
 ## Official Omnigent references
 

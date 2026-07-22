@@ -43,9 +43,7 @@ def harness_bench(
     try:
         manifest = load_harness_bench_manifest(manifest_path)
         destination = output_dir or default_harness_bench_output(manifest.bench_id)
-        payload = asyncio.run(
-            run_harness_bench(manifest, output_dir=destination, live=live)
-        )
+        payload = asyncio.run(run_harness_bench(manifest, output_dir=destination, live=live))
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     if json_output:

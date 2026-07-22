@@ -1224,9 +1224,7 @@ def test_work_order_usage_is_normalized_and_accumulated(tmp_path):
         ),
     ],
 )
-def test_work_order_usage_limits_block_at_task_completion(
-    tmp_path, budget, usage, violation
-):
+def test_work_order_usage_limits_block_at_task_completion(tmp_path, budget, usage, violation):
     store = WorkOrderStore(tmp_path / f"{violation}.sqlite3")
     order = WorkOrder(
         work_order_id=generate_work_order_id(),

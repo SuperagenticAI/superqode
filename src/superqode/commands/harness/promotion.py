@@ -20,7 +20,9 @@ def harness_promote() -> None:
 @click.option(
     "--candidate", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True
 )
-@click.option("--tasks", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True)
+@click.option(
+    "--tasks", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True
+)
 @click.option(
     "--eval-result",
     "eval_results",
@@ -220,9 +222,7 @@ def harness_promote_rollback(
     show_default=True,
 )
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
-def harness_promote_status(
-    candidate_id: str, registry: Path, json_output: bool
-) -> None:
+def harness_promote_status(candidate_id: str, registry: Path, json_output: bool) -> None:
     """Show current promotion state and its append-only history."""
     from superqode.harness import harness_promotion_state
 
@@ -243,16 +243,12 @@ def harness_promote_status(
     show_default=True,
 )
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON")
-def harness_promote_select(
-    base_spec: Path, key: str, registry: Path, json_output: bool
-) -> None:
+def harness_promote_select(base_spec: Path, key: str, registry: Path, json_output: bool) -> None:
     """Explain deterministic canary selection for a routing key."""
     from superqode.harness import select_harness_promotion
 
     try:
-        payload = select_harness_promotion(
-            base_spec, key=key, registry_path=registry
-        )
+        payload = select_harness_promotion(base_spec, key=key, registry_path=registry)
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     _emit(payload, json_output, f"Selected {payload.get('selected') or 'stable'}")

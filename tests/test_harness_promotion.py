@@ -94,9 +94,7 @@ def test_harness_promotion_canary_activation_and_verified_rollback(tmp_path):
     selected = None
     stable = None
     for index in range(1000):
-        choice = select_harness_promotion(
-            base, key=f"work-{index}", registry_path=registry
-        )
+        choice = select_harness_promotion(base, key=f"work-{index}", registry_path=registry)
         if choice["selected"] == "candidate":
             selected = choice
         else:
@@ -118,9 +116,10 @@ def test_harness_promotion_canary_activation_and_verified_rollback(tmp_path):
 
     assert base.read_text() == candidate.read_text()
     assert activated["activated_digest"] == _sha(base)
-    assert harness_promotion_state(
-        staged["candidate_id"], registry_path=registry
-    )["status"] == "active"
+    assert (
+        harness_promotion_state(staged["candidate_id"], registry_path=registry)["status"]
+        == "active"
+    )
 
     rolled_back = rollback_harness_promotion(
         staged["candidate_id"],
@@ -131,9 +130,10 @@ def test_harness_promotion_canary_activation_and_verified_rollback(tmp_path):
 
     assert rolled_back["restored"]
     assert base.read_text() == original
-    assert harness_promotion_state(
-        staged["candidate_id"], registry_path=registry
-    )["status"] == "rolled_back"
+    assert (
+        harness_promotion_state(staged["candidate_id"], registry_path=registry)["status"]
+        == "rolled_back"
+    )
 
 
 def test_harness_promotion_rejects_dry_or_regressing_evidence(tmp_path):

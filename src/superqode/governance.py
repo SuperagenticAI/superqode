@@ -279,9 +279,7 @@ class CredentialBroker:
         }
 
     def to_public_dict(self) -> dict[str, Any]:
-        return {
-            "bindings": [item.to_public_dict() for item in self.bindings.values()]
-        }
+        return {"bindings": [item.to_public_dict() for item in self.bindings.values()]}
 
 
 @dataclass(frozen=True)
@@ -371,11 +369,17 @@ def load_governance(
         documents.append(("project", str(project_path), _load_policy_file(project_path)))
     if harness_spec is not None:
         documents.append(
-            ("harness", f"HarnessSpec:{getattr(harness_spec, 'name', 'unknown')}", _harness_policy(harness_spec))
+            (
+                "harness",
+                f"HarnessSpec:{getattr(harness_spec, 'name', 'unknown')}",
+                _harness_policy(harness_spec),
+            )
         )
     metadata = getattr(work_order, "metadata", {}) if work_order is not None else {}
     if isinstance(metadata, Mapping) and isinstance(metadata.get("governance"), Mapping):
-        documents.append(("work_order", f"WorkOrder:{work_order.work_order_id}", dict(metadata["governance"])))
+        documents.append(
+            ("work_order", f"WorkOrder:{work_order.work_order_id}", dict(metadata["governance"]))
+        )
     if session_policy:
         documents.append(("session", "session", dict(session_policy)))
 
@@ -399,8 +403,7 @@ def load_governance(
         engine=ContextualPolicyEngine(layers),
         broker=CredentialBroker(bindings.values()),
         shell_env=str(
-            guardrails.get("shell_env")
-            or ("filter-secrets" if secure_defaults else "inherit")
+            guardrails.get("shell_env") or ("filter-secrets" if secure_defaults else "inherit")
         ),
         network_strict=bool(guardrails.get("network_strict", secure_defaults)),
         allowed_hosts=_strings(guardrails.get("allowed_hosts") or ()),
@@ -507,14 +510,20 @@ def _rule_matches(rule: ContextualPolicyRule, request: PolicyRequest) -> bool:
         return False
     if rule.risks and request.risk not in rule.risks:
         return False
-    if rule.providers and not any(fnmatch.fnmatchcase(request.provider, item) for item in rule.providers):
+    if rule.providers and not any(
+        fnmatch.fnmatchcase(request.provider, item) for item in rule.providers
+    ):
         return False
-    if rule.runtimes and not any(fnmatch.fnmatchcase(request.runtime, item) for item in rule.runtimes):
+    if rule.runtimes and not any(
+        fnmatch.fnmatchcase(request.runtime, item) for item in rule.runtimes
+    ):
         return False
     for argument, patterns in rule.argument_patterns.items():
         if argument == "*" and patterns == ("*",):
             continue
-        values = request.arguments.values() if argument == "*" else (request.arguments.get(argument),)
+        values = (
+            request.arguments.values() if argument == "*" else (request.arguments.get(argument),)
+        )
         if not any(
             fnmatch.fnmatchcase(str(value), pattern)
             for value in values

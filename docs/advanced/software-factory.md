@@ -1,8 +1,8 @@
 # Terminal-First Software Factory
 
-SuperQode's Software Factory is the complete terminal-first system for defining how coding agents work, running them as isolated workers, deciding whether their output is acceptable, and improving the harness from recorded evidence.
+SuperQode is a terminal-first Software Factory for coding agents. It orchestrates multiple harnesses and provides the execution, evaluation, governance, and optimization controls required to deliver verified repository changes.
 
-It is the umbrella product category. It is not only the `sq factory` command group, and it is not a claim that one autonomous chat session is a complete factory.
+The Software Factory is the umbrella product category. It is broader than the `sq factory` command group, and it does not treat one autonomous chat session as a complete delivery system.
 
 ```text
 Build the harness

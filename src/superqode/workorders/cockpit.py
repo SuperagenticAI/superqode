@@ -226,8 +226,7 @@ def _render_budget(snapshot: dict[str, Any]) -> str:
     limits = [
         f"workers={budget['max_workers']}" if budget.get("max_workers") is not None else "",
         (
-            f"cost=${float(usage.get('cost_usd') or 0):.4f}/"
-            f"${budget['max_cost_usd']:.2f}"
+            f"cost=${float(usage.get('cost_usd') or 0):.4f}/${budget['max_cost_usd']:.2f}"
             if budget.get("max_cost_usd") is not None
             else f"cost=${float(usage.get('cost_usd') or 0):.4f}"
         ),

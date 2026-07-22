@@ -11,9 +11,9 @@ hide:
 
 # SuperQode
 
-<p class="sq-kicker">The <span class="sq-gradient-text">harness engineering</span> framework for coding agents, optimized for local and <span class="sq-gradient-text">open</span> models</p>
+<p class="sq-kicker">The <span class="sq-gradient-text">terminal-first Software Factory</span> for coding agents</p>
 
-<p class="sq-tagline">Build your own coding harness. Measure it. Extend it. Optimize it. Use any model, open or closed, small or large, local or remote, without giving up control of the agent loop.</p>
+<p class="sq-tagline">Orchestrate multiple harnesses. Run durable work. Evaluate every result. Govern and improve how agents operate. Use local or cloud runtimes from one CLI.</p>
 
 <p class="sq-badges">
   <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/v/superqode?style=flat-square&color=7c3aed" alt="PyPI version"></a>
@@ -67,9 +67,9 @@ want the guided builder for a specific model, endpoint, or model pack.
 
 ## Overview
 
-SuperQode is a harness engineering framework for coding agents, optimized for local and open models. It turns the harness around a coding agent into a repository artifact: model routing, tools, memory, context, search, approvals, sandboxing, workflows, evals, and optimization.
+SuperQode is a terminal-first Software Factory for coding agents. It combines multi-harness orchestration with durable execution, evaluation, governance, and guarded optimization. Builders can define how agents work, run them across local or cloud runtimes, verify the resulting changes, and improve the harness from recorded evidence.
 
-Most coding products ship a finished agent loop. SuperQode gives teams the framework to define that loop, run it local first, and connect any model route without giving up the harness. Harness engineering is the practice. Harness independence is the outcome.
+The core artifact is a repository-owned `HarnessSpec` that defines model routing, tools, memory, context, search, approvals, sandboxing, workflows, evaluation, and optimization. Harness engineering is the practice. Reliable delivery and harness independence are the outcomes.
 
 ---
 
