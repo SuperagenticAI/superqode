@@ -132,7 +132,7 @@ opencode /connect
 claude-code login
 ```
 
-SuperQode doesn't see or store agent credentials.
+SuperQode does not access or store agent credentials.
 
 ---
 
@@ -202,7 +202,7 @@ superqode ...  # Uses key Y
 # List keys (masked)
 superqode auth list
 
-# View raw file (full keys visible!)
+# View raw file (full keys visible)
 cat ~/.superqode/auth.json
 ```
 
@@ -300,7 +300,7 @@ You → superqode → LiteLLM (local) → Provider API
 You → superqode → Agent subprocess → Provider API
          │              │
          │              └── Agent uses its own credentials
-         └── SuperQode doesn't see agent credentials
+         └── SuperQode does not access agent credentials
 ```
 
 ### Local Providers (Ollama, LM Studio)
@@ -353,7 +353,7 @@ The best pattern for SuperQode is a hybrid:
 
 ### Does SuperQode send my keys anywhere?
 
-No. Keys are only sent to the LLM provider you're using (Anthropic, OpenAI, etc.) via their official APIs.
+No. Keys are sent only to the configured model provider through its API.
 
 ### Where is my key stored if I use `auth login`?
 

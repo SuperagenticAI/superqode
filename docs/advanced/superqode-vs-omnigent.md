@@ -4,7 +4,7 @@ If you already understand Omnigent, this page explains which ideas are shared, w
 
 This is not a claim that one product should reproduce every feature of the other. Both products make multiple coding-agent harnesses easier to use, but they optimize for different working styles.
 
-In one sentence: both products orchestrate multiple coding-agent harnesses, while SuperQode extends that foundation into a terminal-first Software Factory with durable WorkOrders, evaluation, governance, and guarded optimization. Omnigent places greater emphasis on persistent collaborative sessions across terminal, web, mobile, and desktop clients.
+In one sentence: both products orchestrate multiple coding-agent harnesses, while SuperQode applies Agent Engineering to durable WorkOrders, evaluation, governance, guarded optimization, and software factory workflows. Omnigent places greater emphasis on persistent collaborative sessions across terminal, web, mobile, and desktop clients.
 
 ## The shared idea
 
@@ -192,7 +192,7 @@ Use both formats when Omnigent agent definitions are useful inputs but SuperQode
 
 ## A concise public description
 
-> SuperQode and Omnigent both orchestrate multiple coding-agent harnesses. Omnigent centers the persistent collaborative session across devices. SuperQode is a terminal-first Software Factory centered on repository-owned harnesses, reliable WorkOrders, evidence-backed delivery, governance, and guarded optimization.
+> SuperQode and Omnigent both orchestrate multiple coding-agent harnesses. Omnigent centers the persistent collaborative session across devices. SuperQode centers terminal-first Agent Engineering, repository-owned specifications, reliable WorkOrders, evidence-backed delivery, governance, optimization, and software factory workflows.
 
 ## Official Omnigent references
 

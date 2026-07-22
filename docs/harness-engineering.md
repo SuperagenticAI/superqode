@@ -5,19 +5,17 @@ decides what the model sees, which tools it can call, how it remembers, how its
 work is checked, and what it is allowed to do. The harness, not the model
 alone, determines how the agent behaves.
 
-Harness engineering is the practice of treating that surrounding system as a
-real engineering artifact: something you design, write down, measure, and
-improve, instead of a hidden default you inherit from a product.
+Harness engineering treats that surrounding system as a versioned engineering
+artifact that can be specified, measured, reviewed, and improved.
 
-SuperQode is a harness engineering framework for coding agents, optimized for local and open models. This page
-explains the idea, why it matters now, and the four moves SuperQode gives you on
-a harness you own.
+SuperQode is the open-source, terminal-first Agent Engineering framework for your code, with first-class support for local and open models. Harness engineering is one discipline within that larger lifecycle. This page
+defines the discipline and documents the SuperQode harness lifecycle.
 
 ---
 
-## The third layer
+## Relationship to prompts and context
 
-The way teams get value out of models has moved through three layers:
+Coding-agent behavior depends on three related engineering layers:
 
 1. **Prompt engineering.** Write a better instruction.
 2. **Context engineering.** Assemble the right context around the instruction.
@@ -25,38 +23,33 @@ The way teams get value out of models has moved through three layers:
    tools, memory, search, approvals, sandbox, workflow, checks, and model
    routing.
 
-Each layer wraps the one before it. A great prompt inside a weak harness still
-produces an unreliable agent, because the harness is what controls retries,
-tool calls, context limits, and verification. The harness is now the layer that
-decides whether a coding agent works on real code.
+Each layer includes the preceding layer. A well-designed prompt inside an
+incomplete harness can still produce unreliable behavior because the harness
+controls retries, tool calls, context limits, and verification.
 
 ---
 
-## Why this matters most for local and open models
+## Local and open model considerations
 
-Closed coding products ship a large, fixed harness tuned to one model family.
-You cannot see it, version it, or change it, and it is built to keep you on that
-vendor's model. That harness can be very good, but it is theirs.
+Closed coding products commonly provide a fixed harness optimized for one model
+family. Its configuration may not be inspectable, versionable, or portable to
+other runtimes.
 
-Open Models are in the opposite position. The weights are yours to run, but they
-arrive with **no harness at all**. A local model dropped into a harness designed
-for a frontier API will look weak, not because it cannot code, but because the
-harness wastes its context, assumes a native tool head it does not have, and
-never verifies its edits.
+Open-weight model distributions commonly provide model weights without a
+complete coding harness. A harness designed for a hosted frontier model can
+misconfigure a local model by overusing context, assuming unsupported native
+tool calls, or omitting edit verification.
 
-This is the gap SuperQode closes. It treats the harness as the product you own,
-and it is tuned for the realities of local and Open Models. See
+SuperQode stores the harness as a repository-owned artifact and accounts for
+the operational constraints of local and open models. See
 [Local Agentic Coding](local-agentic-coding.md) for the model-by-model details.
 
-> The model is the part you can swap. The harness is the part you build. Own it.
-
 ---
 
-## A harness is a file you own
+## Repository-owned HarnessSpec
 
-In SuperQode a harness is a single YAML artifact that lives in your repository.
-It can be reviewed in code review, committed to version control, and run
-anywhere the same way.
+In SuperQode, a harness is a YAML artifact stored in the repository. It can be
+reviewed, committed to version control, and executed across supported runtimes.
 
 ```yaml
 # harness.yaml: the portable run contract
@@ -79,7 +72,7 @@ agents:
     tools: [read_file, grep, glob, repo_search, edit_file, patch, bash]
 ```
 
-Read exactly what any harness will do, in plain English, before you run it:
+Inspect the normalized harness configuration before execution:
 
 ```bash
 superqode harness explain --spec harness.yaml
@@ -87,14 +80,13 @@ superqode harness explain --spec harness.yaml
 
 ---
 
-## The four moves
+## Harness lifecycle
 
-Harness engineering in SuperQode is four repeatable actions on that file.
+SuperQode supports five repeatable operations on a HarnessSpec.
 
 ### Build
 
-Author a harness without writing YAML from scratch. Answer a few questions with
-the wizard, or start from a model-family template and edit from there.
+Create a HarnessSpec with the interactive wizard or a model-family template.
 
 ```bash
 superqode harness wizard
@@ -105,11 +97,24 @@ superqode harness explain --spec harness.yaml
 See [Bring Your Own Harness](getting-started/bring-your-own-harness.md) and the
 [Harness System](advanced/harness-system.md) reference.
 
-### Measure
+### Run
 
-A harness you cannot measure is a guess. Run an eval task file to produce a
-scorecard, and use it as a regression gate: a candidate that breaks a task the
-baseline solved fails the gate.
+Execute the same HarnessSpec through builtin, OpenAI Agents, Google ADK, Codex
+SDK, Claude Agent SDK, DeepAgents, or PydanticAI runtimes. MCP tools, ACP agents,
+and A2A workflows can be connected without changing the repository-owned
+contract.
+
+```bash
+superqode harness run --spec harness.yaml --runtime codex-sdk --prompt "review this repo"
+```
+
+See [Runtime Backends](runtimes.md) and [Connection Modes](concepts/modes.md).
+
+### Evaluate
+
+Run an evaluation task file to produce a scorecard. The scorecard can be used
+as a regression gate so that a candidate fails when it breaks a task completed
+by the baseline.
 
 ```bash
 superqode harness eval --spec harness.yaml --tasks eval-tasks.yaml --live --json > baseline.json
@@ -119,25 +124,26 @@ superqode local bench --agentic
 See [Run, Measure, Optimize](advanced/harness-optimization.md) and the
 [Benchmark Runner](advanced/benchmark-runner.md).
 
-### Extend
+### Govern
 
-The same harness contract runs across runtimes and connects outward when you
-choose: builtin, OpenAI Agents, Google ADK, Codex SDK, Claude Agent SDK,
-DeepAgents, and PydanticAI, plus MCP tools, ACP agents, and A2A workflows. Only
-the route changes; the contract stays the same.
+Apply explicit tool permissions, sandbox policy, budgets, credential controls,
+approval requirements, and delivery gates. Policy decisions are recorded with
+the run evidence and can be inspected before approval or promotion.
 
 ```bash
-superqode harness run --spec harness.yaml --runtime codex-sdk --prompt "review this repo"
+superqode policy init
+superqode policy show
+superqode policy explain tool_call --tool bash
 ```
 
-See [Runtime Backends](runtimes.md) and [Connection Modes](concepts/modes.md).
+See [Contextual Policy](advanced/contextual-policy.md) and
+[Safety and Permissions](advanced/safety-permissions.md).
 
 ### Optimize
 
-Improve the harness with evidence instead of guesswork. Every optimizer follows
-the same safe contract: start from a versioned artifact, measure it, stage a
-candidate, gate it against regressions, and let a human adopt it. The live agent
-never rewrites itself blindly.
+Optimization starts from a versioned artifact, measures candidate changes,
+checks them for regressions, and requires explicit human adoption. A live agent
+does not modify its active HarnessSpec without this process.
 
 ```bash
 superqode local optimize                 # best local/open model routing per role
@@ -150,11 +156,11 @@ See the [Optimization Story](advanced/optimization.md) and
 
 ---
 
-## Why build a custom harness
+## Integration with existing coding agents
 
-You can. SuperQode connects to hosted providers, Codex, Claude Code, and other
-agents through [BYOK](providers/byok.md), [ACP](providers/acp.md), and runtime
-SDKs. The difference is who owns the contract.
+SuperQode connects to hosted providers, Codex, Claude Code, and other agents
+through [BYOK](providers/byok.md), [ACP](providers/acp.md), and runtime SDKs.
+The HarnessSpec remains under repository ownership.
 
 | | Closed coding agents | Open-source coding agents | SuperQode |
 |---|---|---|---|
@@ -164,7 +170,7 @@ SDKs. The difference is who owns the contract.
 | Measure the harness | No | No | Eval scorecards and regression gates |
 | Optimize the harness | No | No | Staged candidates with human adoption |
 
-### A harness you own, not a harness you rent
+### Harness deployment and ownership
 
 The harness is a distinct layer of the agent stack and is also available as a
 managed cloud service. In this model, users declare an agent in configuration
@@ -176,10 +182,10 @@ with the rest of the codebase, and its behavior remains consistent across local
 models, hosted providers, and remote runtimes. This approach is intended for
 teams that require direct control over harness configuration and execution.
 
-Even when you borrow another agent's strengths, SuperQode stays the controlling
-harness. It can import an [Omnigent](advanced/omnigent-compat.md) spec, for
-example, and convert it into a portable `HarnessSpec` rather than handing control
-to another runtime.
+When an external coding agent is used, SuperQode retains the repository-owned
+contract. For example, it can import an
+[Omnigent](advanced/omnigent-compat.md) specification and convert it into a
+portable `HarnessSpec`.
 
 ---
 

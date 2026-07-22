@@ -224,7 +224,7 @@ The `~/.superqode/auth.json` file format:
 ### Inspecting Your Auth File
 
 ```bash
-# View the file (keys will be visible!)
+# View the file (keys will be visible)
 cat ~/.superqode/auth.json
 
 # Check permissions

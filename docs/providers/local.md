@@ -124,7 +124,7 @@ superqode local search minimax --hub
 superqode local search qwen3-coder --hub --gguf
 ```
 
-In the TUI, type `:hub` to enter **model-search mode**, then just type a model name (no `:local search` prefix needed). `:hub <name>` does a one-shot search, and `:hub off` exits. Add `--hub` on a line for live Hugging Face results.
+In the TUI, type `:hub` to enter **model-search mode**, then type a model name without the `:local search` prefix. `:hub <name>` performs a one-shot search, and `:hub off` exits. Add `--hub` on a line for live Hugging Face results.
 
 For each match it lists the real native download command for every engine the model can run on, plus a one-line `superqode models download` alternative that auto-picks the engine:
 
@@ -151,7 +151,7 @@ It checks that the server is reachable, a chat model (not an embedding model) is
 
 ### Common Failure Messages
 
-`local init` and `local smoke` diagnose problems instead of just erroring. Typical messages and their fix:
+`local init` and `local smoke` report diagnostic information with errors. The following table lists common messages and corrective actions:
 
 | Message | What to do |
 |---------|-----------|
@@ -380,7 +380,7 @@ superqode -p --provider ds4 "how does this project's router compare to react's? 
 - Writes/edits/shell stay confined to your working directory - reference repos
   cannot be modified.
 - Address a reference repo by its **absolute path**. The configured roots are
-  listed in the local model's system prompt so it knows they're available.
+  listed in the local model's system prompt so it knows they are available.
 
 ---
 

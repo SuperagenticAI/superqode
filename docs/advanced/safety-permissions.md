@@ -455,7 +455,7 @@ All operations are logged for audit:
 
 ### For Users
 
-1. **Review Approvals** - Don't blindly approve all operations
+1. **Review approvals**: Review each operation before approval
 2. **Use Quick Mode First** - Start with limited scope
 3. **Check Artifacts** - Review suggested changes before applying
 4. **Set Allowed Lists** - Configure allowed commands/paths

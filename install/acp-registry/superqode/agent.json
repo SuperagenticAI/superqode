@@ -1,8 +1,8 @@
 {
   "id": "superqode",
   "name": "SuperQode",
-  "version": "0.2.30",
-  "description": "Harness engineering coding agent for local and open models. The agent loop is a versioned HarnessSpec in your repository: model routing, tools, approvals, sandbox, and evals you can measure and optimize.",
+  "version": "0.2.31",
+  "description": "The open-source, terminal-first Agent Engineering framework for your code. Engineer reliable coding agents with portable harnesses, context, memory, tools, and control loops.",
   "repository": "https://github.com/SuperagenticAI/superqode",
   "website": "https://super-agentic.ai/superqode",
   "authors": [
@@ -11,7 +11,7 @@
   "license": "Apache-2.0",
   "distribution": {
     "uvx": {
-      "package": "superqode==0.2.30",
+      "package": "superqode==0.2.31",
       "args": [
         "serve",
         "acp"

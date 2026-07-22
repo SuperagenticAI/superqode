@@ -1,6 +1,6 @@
 # Inside the Agent Loop
 
-This page walks through what actually happens when SuperQode's builtin runtime works on your prompt, and every guard that keeps a run healthy, especially on local models. Read it top to bottom once and you'll know where every behavior comes from and which knob controls it.
+This page describes the SuperQode builtin runtime lifecycle and its execution safeguards, with emphasis on local-model behavior. It identifies the configuration associated with each stage.
 
 The builtin loop lives in `superqode/agent/loop.py` (`AgentLoop`). Other runtimes (ADK, OpenAI Agents, Codex SDK, DeepAgents, PydanticAI) replace this engine but keep the same harness contract.
 
@@ -28,7 +28,7 @@ your prompt
   └─ final answer
 ```
 
-The rest of this page goes feature by feature, in that order.
+The following sections describe each lifecycle stage in order.
 
 ## 1. Context windows that match reality
 
@@ -42,11 +42,11 @@ Try it in the TUI:
 :context detect    # re-probe
 ```
 
-## 2-3. Steering: talk to a run in progress
+## 2-3. Input during an active run
 
 You can send input while the agent is running. For built-in local and BYOK connections, SuperQode injects the message **between the agent's tool calls**, allowing it to affect the current run. The log records this event as `steering the current run`. If the message arrives while the model is completing a response, the run continues with the new input.
 
-On connections that can't be steered (ACP agents, codex-sdk), messages fall back to the type-ahead queue and send when the agent is free (`:queue clear` empties it).
+On connections that cannot be steered, including ACP agents and `codex-sdk`, messages enter the type-ahead queue and are sent when the agent becomes available. Use `:queue clear` to empty the queue.
 
 From Python, the same mechanism:
 
@@ -56,14 +56,14 @@ loop.steer("also check the README")   # thread-safe; returns True if a run is li
 
 ## 4. Deferred tools and `tool_search`
 
-Every tool schema you advertise costs prompt tokens **on every call**. On an 8K local model, 20 schemas can eat a quarter of the window. Deferred loading keeps heavy tools registered but unadvertised until the model asks for them:
+Every advertised tool schema consumes prompt tokens on every call. On an 8K local model, 20 schemas can consume a significant portion of the context window. Deferred loading keeps large tool schemas registered but unadvertised until the model requests them:
 
 ```bash
 export SUPERQODE_DEFERRED_TOOLS=auto    # defer the heavy set, local providers only
 # or =all (every provider), or =web_fetch,view_image (exactly these)
 ```
 
-With anything deferred, the model gets a tiny `tool_search` tool instead. When it needs web access it calls `tool_search(query="fetch a web page")`, the matching tools activate, and their full schemas appear on its very next step. The core coding loop (read/edit/apply_patch/bash/grep/glob/todo) is never deferred.
+When deferred loading is enabled, the model receives the smaller `tool_search` schema. A call such as `tool_search(query="fetch a web page")` activates matching tools, whose full schemas are available on the next step. The core coding tools for reading, editing, patching, shell execution, search, and task tracking are not deferred.
 
 ## 5. System reminders
 
@@ -76,29 +76,29 @@ A third reminder is opt-in: **memory recall** (`SUPERQODE_AUTO_RECALL=1`) search
 
 Disable with `SUPERQODE_REMINDERS=0`.
 
-## 6. Model calls that survive bad days
+## 6. Model-call retry and fallback behavior
 
 - **Rate limits and overload** (429, 503, 529, "overloaded"): retried with exponential backoff, honoring `Retry-After`/`retry-after-ms` headers. `SUPERQODE_RATE_LIMIT_RETRIES` (default 3) controls attempts; a provider demanding a pause over 60s surfaces as an error instead of hanging your session.
 - **Streaming failures**: one automatic fallback to a non-streaming completion before reporting the error.
 - **Empty responses**: retried once non-streaming.
 
-## 7. Tool-call parsing that forgives local models
+## 7. Tool-call argument normalization
 
-Hosted frontier models emit clean JSON arguments. Local models emit variations. The argument parser repairs, in order: markdown code fences, double-encoded JSON strings, Python-dict syntax (`'single quotes'`, `True/None`), trailing commas, and prose wrapped around an otherwise-valid object. If the arguments are still unrecoverable, the tool is **not** executed with `{}`. Instead, the model gets a precise error and a format example, and almost always self-corrects on the next step.
+Tool-call arguments can vary across models. The parser normalizes Markdown code fences, double-encoded JSON strings, Python dictionary syntax (`'single quotes'`, `True/None`), trailing commas, and prose surrounding an otherwise valid object. If normalization fails, the tool is not executed with empty arguments. The model receives an error and a valid format example.
 
-**Doom-loop guard:** the third consecutive *identical* tool call (same tool, same arguments) is intercepted, and the model gets corrective feedback instead of the same result again. If it immediately repeats the exact call anyway, the run stops with `stopped_reason="loop_detected"` rather than burning tokens forever. Identical calls separated by a different call never trip it (read → edit → read-again is fine). Tune with `doom_loop_threshold` in `AgentConfig` or `SUPERQODE_DOOM_LOOP_THRESHOLD` (0 disables).
+**Repeated-call guard:** the third consecutive identical tool call, with the same tool and arguments, is intercepted and replaced with corrective feedback. If the model immediately repeats the call, the run stops with `stopped_reason="loop_detected"`. Calls separated by a different operation do not trigger the guard. Configure the threshold with `doom_loop_threshold` in `AgentConfig` or `SUPERQODE_DOOM_LOOP_THRESHOLD`; a value of `0` disables it.
 
 ## 8. Mutation-safe parallelism
 
 Tools declare `read_only`. A turn's tool calls run **concurrently only when every call is read-only** ("read these 5 files" stays fast). Any batch containing an edit, write, shell command, or unknown/MCP tool runs sequentially in call order, so two edits can never race the same file.
 
-## 9. Context economy: three lines of defense
+## 9. Context management
 
-1. **Bounded tool output.** `read_file` caps at 2000 lines / 50KB with `N:` line numbers and explicit continue-from hints. Bash output beyond the model-sized cap is **spilled to disk in full** (`~/.superqode/tool-output`, 7-day retention, `SUPERQODE_TOOL_OUTPUT_DIR` to relocate) and the model gets a head+tail preview plus the path, so it can `grep` or `read_file` the spill instead of re-running the command. A loop-level guard applies the same bound to tools that don't self-limit (MCP, web).
-2. **Free pruning.** When the conversation nears the window, stale tool outputs older than the protected recent tail are stubbed out first. No LLM call is needed and the conversation skeleton survives. The current turn's results are always protected.
-3. **LLM compaction.** Only if pruning wasn't enough, earlier turns are summarized into a structured 9-section report. Thresholds auto-scale to the detected window; `SUPERQODE_AUTO_COMPACT=0` opts out.
+1. **Bounded tool output.** `read_file` caps output at 2,000 lines or 50 KB with `N:` line numbers and continuation hints. Shell output beyond the model-sized cap is stored in full under `~/.superqode/tool-output`, with seven-day retention and `SUPERQODE_TOOL_OUTPUT_DIR` available as an override. The model receives a head-and-tail preview and the stored path. A loop-level guard applies the same bound to tools that do not enforce their own limits, including MCP and web tools.
+2. **Deterministic pruning.** When the conversation approaches the context limit, stale tool outputs older than the protected recent tail are replaced with bounded placeholders. This operation does not require a model call, and current-turn results remain available.
+3. **Model-based compaction.** If pruning does not recover sufficient context, earlier turns are summarized into a structured nine-section report. Thresholds scale to the detected context window. Set `SUPERQODE_AUTO_COMPACT=0` to disable compaction.
 
-**Turn diff:** after every turn that changed files you'll see `Turn changed 2 file(s) (+45/-12): ...` in the thinking trace; the combined unified diff is on `loop.last_turn_diff` for UIs and hooks.
+**Turn diff:** after a turn changes files, the thinking trace includes `Turn changed 2 file(s) (+45/-12): ...`. The combined unified diff is available through `loop.last_turn_diff` for interfaces and hooks.
 
 ## 10. Auto-continue on token-limit cuts
 
@@ -106,7 +106,7 @@ When a response stops with `finish_reason="length"` (output token limit) and no 
 
 ## 12. Rubric self-grading
 
-Declare *what done looks like* and let a grader hold the agent to it:
+Define completion criteria with a rubric:
 
 ```bash
 superqode -p --rubric "All tests pass. The fix includes a regression test. No TODO left behind." \
@@ -114,7 +114,7 @@ superqode -p --rubric "All tests pass. The fix includes a regression test. No TO
 # or --rubric @rubric.txt
 ```
 
-Each time the agent would finish, a separate grader call judges the transcript against the rubric. `needs_revision` feedback re-enters the loop (at most `max_rubric_rounds`, default 2); `satisfied` or `failed` lets the run end. The grader fails *open*: a flaky grader can never trap a run.
+Before the run completes, a separate grader call evaluates the transcript against the rubric. `needs_revision` feedback re-enters the loop up to `max_rubric_rounds`, which defaults to 2. A `satisfied` or `failed` result ends grading. Grader failures do not prevent the run from terminating.
 
 From Python: `AgentConfig(rubric="...", max_rubric_rounds=2)`.
 

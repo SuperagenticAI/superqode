@@ -11,9 +11,13 @@ hide:
 
 # SuperQode
 
-<p class="sq-kicker">The <span class="sq-gradient-text">terminal-first Software Factory</span> for coding agents</p>
+<p class="sq-kicker">The <span class="sq-gradient-text">Agent Engineering Framework</span> for Your Code</p>
 
-<p class="sq-tagline">Orchestrate multiple harnesses. Run durable work. Evaluate every result. Govern and improve how agents operate. Use local or cloud runtimes from one CLI.</p>
+<p class="sq-tagline">Engineer reliable coding agents with portable harnesses, context, memory, tools, and control loops. Use any agent or model, from terminal sessions to software factories.</p>
+
+<p><strong>Code engineering for the agent-driven world</strong></p>
+
+<p>Terminal-first · Any agent · Any model · Local or cloud · Open source</p>
 
 <p class="sq-badges">
   <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/v/superqode?style=flat-square&color=7c3aed" alt="PyPI version"></a>
@@ -26,13 +30,13 @@ hide:
 [Optimize Local Models](local-agentic-coding.md){ .md-button }
 [Read Harness Engineering](harness-engineering.md){ .md-button }
 
-<img src="assets/superqode-hero.png" alt="SuperQode harness engineering workbench" class="sq-hero-image" />
+<img src="assets/superqode-hero.png" alt="SuperQode Agent Engineering terminal workbench" class="sq-hero-image" />
 
 </div>
 
 ---
 
-## Up and running in 60 seconds
+## Installation and first run
 
 ```bash
 uv tool install superqode    # or run without installing: uvx superqode
@@ -42,7 +46,7 @@ superqode
 
 This installs the latest [SuperQode release](https://pypi.org/project/superqode/) from PyPI.
 
-That launches the interactive TUI. Connect a model, then start working:
+The command starts the interactive TUI. Connect a model with one of the following commands:
 
 ```text
 :connect local ollama <open-model>      # a local server you run
@@ -50,32 +54,35 @@ That launches the interactive TUI. Connect a model, then start working:
 :connect acp <agent>                    # an installed ACP coding agent
 ```
 
-Prefer scripts and CI? See the headless examples below.
+For noninteractive execution and CI, see the headless examples below.
 
-For local and Open Model work, generate a starter harness that belongs to your
-repo:
+For local and open models, generate a repository-owned starter harness:
 
 ```bash
 superqode local init --repo .
 superqode --harness superqode.local.yaml
 ```
 
-Use `local init` for the fastest owned-harness path. Use `local build` when you
-want the guided builder for a specific model, endpoint, or model pack.
+Use `local init` to detect the current system and generate a default HarnessSpec.
+Use `local build` to select a specific model, endpoint, or model pack.
 
 ---
 
 ## Overview
 
-SuperQode is a terminal-first Software Factory for coding agents. It combines multi-harness orchestration with durable execution, evaluation, governance, and guarded optimization. Builders can define how agents work, run them across local or cloud runtimes, verify the resulting changes, and improve the harness from recorded evidence.
+SuperQode is the open-source, terminal-first Agent Engineering framework for your code. It provides the lifecycle for building, running, evaluating, governing, and optimizing reliable coding agents and software factories.
 
-The core artifact is a repository-owned `HarnessSpec` that defines model routing, tools, memory, context, search, approvals, sandboxing, workflows, evaluation, and optimization. Harness engineering is the practice. Reliable delivery and harness independence are the outcomes.
+[Agent Engineering](https://agentengineering.world/) is the discipline of designing, building, evaluating, governing, and operating agents as reliable systems. SuperQode applies that discipline to the complete system that produces code, from one coding agent working on a codebase to a multi-agent software factory.
+
+Harness engineering is one discipline within Agent Engineering. The repository-owned `HarnessSpec` defines model routing, tools, memory, context, search, approvals, sandboxing, workflows, evaluation, and optimization. Reliable delivery and harness independence are the outcomes.
+
+SuperQode is **terminal-first by design**. The CLI and TUI are the complete primary product surfaces for building harnesses, coordinating sessions and WorkOrders, reviewing evidence, and approving delivery. Browser rendering, the local companion API, and chat channels provide optional remote access without creating a separate web or mobile product direction.
 
 ---
 
-## Build. Measure. Extend. Optimize.
+## Agent Engineering lifecycle
 
-Harness engineering is the discipline after prompt engineering and context engineering: design the system around the model so it works reliably. SuperQode gives you four moves on a harness you own.
+Agent Engineering treats the complete agent lifecycle as an engineering system. SuperQode provides five connected capabilities for a coding harness you own.
 
 <div class="grid cards" markdown>
 
@@ -87,21 +94,29 @@ Harness engineering is the discipline after prompt engineering and context engin
 
     [:octicons-arrow-right-24: Bring Your Own Harness](getting-started/bring-your-own-harness.md)
 
--   :octicons-graph-16:{ .lg .middle } **Measure**
+-   :octicons-plug-16:{ .lg .middle } **Run**
 
     ---
 
-    Prove behavior before you trust it: eval scorecards, agentic benchmarks, and regression gates that fail a candidate which breaks a task the baseline solved.
+    Execute the same contract across runtimes, providers, MCP, ACP, and A2A. Swap models, memory, search, or tools without rewriting the workflow.
+
+    [:octicons-arrow-right-24: Runtime Backends](runtimes.md)
+
+-   :octicons-graph-16:{ .lg .middle } **Evaluate**
+
+    ---
+
+    Prove behavior before you trust it with eval scorecards, agentic benchmarks, and regression gates that reject candidates which break tasks the baseline solved.
 
     [:octicons-arrow-right-24: Run, Measure, Optimize](advanced/harness-optimization.md)
 
--   :octicons-plug-16:{ .lg .middle } **Extend**
+-   :octicons-shield-lock-16:{ .lg .middle } **Govern**
 
     ---
 
-    Run the same contract across runtimes, providers, MCP, ACP, and A2A. Swap models, memory, search, or tools without rewriting the workflow.
+    Control permissions, sandbox policy, budgets, credentials, approvals, and delivery gates with explicit, reviewable rules.
 
-    [:octicons-arrow-right-24: Runtime Backends](runtimes.md)
+    [:octicons-arrow-right-24: Policies & Safety](advanced/policies.md)
 
 -   :octicons-rocket-16:{ .lg .middle } **Optimize**
 

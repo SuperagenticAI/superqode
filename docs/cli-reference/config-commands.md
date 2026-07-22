@@ -15,7 +15,7 @@ superqode config init --force
 |--------|-------------|
 | `--force` | Overwrite existing configuration |
 
-Creates `./superqode.yaml` and `.superqode/` runtime directory if they don't exist. The generated config is local first: `default.mode` is `local`, the default provider is `ollama`, and the starter model is `qwen3:8b`.
+Creates `./superqode.yaml` and the `.superqode/` runtime directory if they do not exist. The generated configuration is local-first: `default.mode` is `local`, the default provider is `ollama`, and the starter model is `qwen3:8b`.
 
 `superqode.yaml` is project configuration. It stores provider hints, endpoint configuration, MCP servers, memory providers, aliases, and default connection settings.
 

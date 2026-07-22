@@ -184,7 +184,7 @@ superqode local search qwen3-coder --hub --gguf
 | `--mlx` | With `--hub`: only MLX (Apple Silicon) |
 | `--json` | Emit results as JSON |
 
-In the TUI this is `:local search <name>`, or enter `:hub` model-search mode and just type names.
+In the TUI, use `:local search <name>` or enter `:hub` model-search mode and type a model name.
 
 ### `local labs`
 

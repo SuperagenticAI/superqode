@@ -6,13 +6,13 @@ SuperQode separates the harness you configure from the runtime that executes it.
 run is allowed to do, which model policy to use, which tools are available, how approvals work, where events
 are stored, and what output should be returned.
 
-!!! tip "New to harnesses?"
+!!! tip "Harness overview"
     [Bring Your Own Harness](../getting-started/bring-your-own-harness.md) is the friendly, step-by-step guide: create a harness, read it in plain English with `harness explain`, edit it, verify it, and run it against a local model. [Configuration vs Harness](../concepts/configuration-vs-harness.md) explains how `harness.yaml` differs from `superqode.yaml`, walks the full lifecycle from `harness init` to `harness events`, and lists every surface a harness runs on (CLI, TUI, workflows, MCP, A2A, Python). This page is the detailed spec reference.
 
-!!! tip "Explain any harness in plain English"
+!!! tip "Harness explanation"
     `superqode harness explain --spec harness.yaml` reads the resolved policy (the same one the runtime enforces) and describes, in words, which tools the model gets, what it may read/write/run, how approvals work, and why a given tool-call format was chosen.
 
-!!! tip "Run vs measure vs optimize"
+!!! tip "Execution, measurement, and optimization"
     SuperQode runs a harness and measures it (`harness test` / `eval` / `auto-bench`). Improving the harness over many iterations is a separate, optional job: `superqode harness optimize` bridges to the optional [metaharness](harness-optimization.md) tool, while `superqode harness improve` adds failure mining, logbook memory, candidate audit gates, and accepted/rejected candidate history. See [Running, Measuring, and Optimizing a Harness](harness-optimization.md) and [Self-Improving Harnesses](self-improving-harness.md) for the distinction.
 
 ---
@@ -712,7 +712,7 @@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
 ## Expose Harnesses Over MCP
 
-A harness isn't only runnable from the TUI: you can expose your HarnessSpec
+A HarnessSpec can also be exposed outside the TUI
 workflows as **MCP tools** so any MCP client (Claude Desktop, IDEs, other agents)
 can discover and run them. This complements the A2A and ACP servers.
 

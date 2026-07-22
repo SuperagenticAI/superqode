@@ -276,7 +276,7 @@ superqode harness run --spec harness.yaml \
 
 The agent now behaves exactly as `explain` described. If your harness blocks shell commands, the model cannot run them even if it tries.
 
-## What Happens Under The Hood
+## Runtime behavior
 
 Nothing here is cosmetic. When you load a harness, SuperQode turns your YAML into real runtime rules:
 

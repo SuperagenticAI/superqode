@@ -7,7 +7,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_FILES = (ROOT / "README.md", ROOT / "mkdocs.yml", ROOT / "pyproject.toml")
-EM_DASH = chr(0x2014)
+PROHIBITED_DASHES = {
+    chr(0x2013): "en dash",
+    chr(0x2014): "em dash",
+}
 
 
 def iter_public_files() -> list[Path]:
@@ -24,11 +27,12 @@ def public_docs_style_errors() -> list[str]:
             errors.append(f"missing public documentation file: {path.relative_to(ROOT)}")
             continue
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            if EM_DASH in line:
-                errors.append(
-                    f"{path.relative_to(ROOT)}:{line_number}: replace the em dash "
-                    "with standard punctuation"
-                )
+            for character, name in PROHIBITED_DASHES.items():
+                if character in line:
+                    errors.append(
+                        f"{path.relative_to(ROOT)}:{line_number}: replace the {name} "
+                        "with standard punctuation"
+                    )
     return errors
 
 

@@ -1,18 +1,17 @@
 # Local Context & Compaction
 
-SuperQode is tuned to get the best out of **local models** (approximately 10B-120B), where the
-single biggest failure mode is **running out of context**. It solves this
-automatically: it detects each model's *real loaded* context window and compacts
-the conversation before it overflows: no configuration required.
+SuperQode configures context management for local models of approximately 10B
+to 120B parameters. It detects the loaded context window and compacts the
+conversation before the configured limit is reached.
 
 ---
 
-## Why this matters for local models
+## Loaded context limits
 
-A local model "supports 128K context" on its model card, but the server may have
+A model card can specify a 128K context window while the local server has
 **loaded it with a much smaller window** (e.g. Ollama `num_ctx=4096`). The
-*loaded* window is the only number that's true: and on a large model (120B)
-there's less VRAM for the KV cache, so the practical window is often *smaller*
+loaded window is the effective limit. A large model can leave less VRAM for the
+KV cache, so its practical context window can be smaller
 than on a 10B model. Overflowing it produces garbage output or hard errors.
 
 SuperQode reads the loaded window directly from the server and sizes everything
@@ -34,9 +33,9 @@ On the first coding-agent message of a session, SuperQode:
     | vLLM / DS4 / OpenAI-compatible | `GET /v1/models` | `max_model_len` / `context_length` |
 
     Server URLs come from each provider's env override (`OLLAMA_HOST`,
-    `LMSTUDIO_HOST`, `DS4_HOST`, ...) or its default port. If the window can't be
-    read, SuperQode stays **conservative (8K)** rather than risk an overflow: it
-    never assumes the model-card maximum for a local model.
+    `LMSTUDIO_HOST`, `DS4_HOST`, ...) or its default port. If the window cannot be
+    read, SuperQode uses a conservative 8K fallback and does not assume the
+    model-card maximum.
 
 2. **Compacts adaptively** as the conversation grows. Compaction triggers at
    `window − reserve` and keeps a **token-budgeted** tail of recent turns,
@@ -87,7 +86,7 @@ Example:
 ```
 
 The `source` tells you where the number came from: `loaded (<endpoint>)`,
-`configured` (you pinned it), `local-fallback` (couldn't detect → conservative),
+`configured` (manually set), `local-fallback` (detection failed, conservative),
 or `model-info` (BYOK catalog). The live status-bar meter shows fill % against
 this window as you work.
 
@@ -106,9 +105,9 @@ fine control (0 = auto).
 
 ---
 
-## Choosing a good `num_ctx`
+## Selecting `num_ctx`
 
-If you're picking a context size when loading a local model:
+When selecting a context size for a local model:
 
 - **8K-16K** is the practical range for most local coding models: enough for
   real work, small enough to stay fast and fit in VRAM.

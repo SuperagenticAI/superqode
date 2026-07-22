@@ -5,9 +5,13 @@
 <h1 align="center">SuperQode</h1>
 
 <p align="center">
-  <strong>The terminal-first Software Factory for coding agents</strong><br>
-  <em>Orchestrate multiple harnesses. Run durable work. Evaluate every result. Govern and improve how agents operate. Use local or cloud runtimes from one CLI.</em>
+  <strong>The Agent Engineering Framework for Your Code</strong><br>
+  <em>Engineer reliable coding agents with portable harnesses, context, memory, tools, and control loops. Use any agent or model, from terminal sessions to software factories.</em>
 </p>
+
+<p align="center"><strong>Code engineering for the agent-driven world</strong></p>
+
+<p align="center">Terminal-first · Any agent · Any model · Local or cloud · Open source</p>
 
 <p align="center">
   <a href="https://pypi.org/project/superqode/"><img src="https://img.shields.io/pypi/v/superqode?style=flat-square&color=blue" alt="PyPI"></a>
@@ -23,37 +27,42 @@
 </p>
 
 <p align="center">
-  <a href="https://superagenticai.github.io/superqode/">📚 Documentation</a> •
-  <a href="https://github.com/SuperagenticAI/superqode/issues">🐛 Report Bug</a> •
-  <a href="https://github.com/SuperagenticAI/superqode/discussions">💬 Discussions</a>
+  <a href="https://superagenticai.github.io/superqode/">Documentation</a> •
+  <a href="https://github.com/SuperagenticAI/superqode/issues">Report an issue</a> •
+  <a href="https://github.com/SuperagenticAI/superqode/discussions">Discussions</a>
 </p>
 
 <p align="center">
-  <img src="assets/superqode-hero.png" alt="SuperQode harness engineering workbench" width="920">
+  <img src="assets/superqode-hero.png" alt="SuperQode Agent Engineering terminal workbench" width="920">
 </p>
 
 ---
 
 ## What is SuperQode?
 
-SuperQode is a **terminal-first Software Factory for coding agents**. It combines multi-harness orchestration with durable execution, evaluation, governance, and guarded optimization. Builders can define how agents work, run them across local or cloud runtimes, verify the resulting changes, and improve the harness from recorded evidence.
+SuperQode is the **open-source, terminal-first Agent Engineering framework for your code**. It provides the lifecycle for building, running, evaluating, governing, and optimizing reliable coding agents and software factories.
 
-The harness is the software around the model that determines what it can see, which tools it can call, how it remembers, and how its work is checked. SuperQode treats that harness as a repository-owned engineering artifact instead of a hidden part of a closed agent product.
+[Agent Engineering](https://agentengineering.world/) is the discipline of designing, building, evaluating, governing, and operating agents as reliable systems. SuperQode applies that discipline to the complete system that produces code, from one coding agent working on a codebase to a multi-agent software factory.
+
+Harness engineering is one discipline within Agent Engineering. The harness is the software around the model that determines what it can see, which tools it can call, how it remembers, and how its work is checked. SuperQode treats that harness as a repository-owned engineering artifact instead of a hidden part of a closed agent product.
 
 Many coding products ship a finished harness that cannot be inspected or moved between runtimes. Open models often ship without a complete coding harness. SuperQode provides a portable `HarnessSpec` for model routing, tools, memory, context, search, approvals, sandboxing, workflows, evaluation, and optimization. The specification lives in the repository and remains under the team's control.
 
-You do four things with a harness you own:
+SuperQode is **terminal-first by design**. The CLI and TUI are the complete primary product surfaces for building harnesses, coordinating sessions and WorkOrders, reviewing evidence, and approving delivery. Browser rendering, the local companion API, and chat channels provide optional remote access without turning SuperQode into a separate web or mobile platform.
+
+SuperQode brings five connected Agent Engineering capabilities to a harness you own:
 
 - **Build** it as a versioned file, with a wizard, model-family templates, and a plain-English `explain`.
-- **Measure** it with eval scorecards, agentic benchmarks, and regression gates before you trust it.
-- **Extend** it across runtimes, providers, MCP, ACP, and A2A without changing the contract.
+- **Run** it across runtimes, providers, MCP, ACP, and A2A without changing the contract.
+- **Evaluate** it with scorecards, agentic benchmarks, and regression gates before you trust it.
+- **Govern** it with explicit permissions, sandbox policy, budgets, credentials, approvals, and delivery gates.
 - **Optimize** it with staged candidates a human adopts, so a failure gets fixed once instead of retried.
 
-Use SuperQode when you want harness independence: the freedom to inspect, version, measure, and improve the system that makes a model useful on your codebase, with any model you choose, open or closed, small or large, local or remote.
+SuperQode provides harness independence by keeping the agent configuration inspectable, versioned, measurable, and portable across local and hosted models.
 
 Run `superqode` for the terminal workbench, then `:local init` to detect your hardware, generate a local first starter harness, and run a readiness smoke test. The CLI mirrors the same path with `superqode local init --repo .`. Run `superqode local optimize` to benchmark candidates and generate role specific routing for planner, implementer, reviewer, and utility agents.
 
-One TUI and CLI, consistent tool policies, event logging, and session management across every agent type. Define your harness once as a portable spec. Swap runtimes, models, memory, search, or tools without changing your workflow. Run the same contract locally, on a team machine, through remote runtimes, or in CI.
+The TUI and CLI apply consistent tool policies, event logging, and session management across supported agent types. A portable HarnessSpec can be executed locally, on a team host, through remote runtimes, or in CI while allowing independent changes to runtimes, models, memory, search, and tools.
 
 For work that must reliably finish across several harnesses, use a durable WorkOrder. A WorkOrder adds investigator, implementer, synthesizer, reviewer and tester roles, bounded parallel workers, isolated task worktrees, deterministic patch integration, leases and crash recovery, acceptance commands, typed evidence, and an explicit human decision without requiring a web control plane:
 
@@ -89,7 +98,7 @@ SuperQode separates agent systems into interchangeable pieces: the **harness** c
 
 **Primary (Recommended)**
 ```bash
-# Using uv (best performance)
+# Install with uv
 uv tool install superqode
 
 # Or run without installing
@@ -107,7 +116,7 @@ explicit `superqode` name.
 
 ### Run SuperQode
 
-**Interactive TUI (Explore)**
+**Interactive TUI**
 ```bash
 cd your-project
 superqode
@@ -231,7 +240,7 @@ Use `doctor` before sharing a harness with a team. It checks backend availabilit
 | Goal | Start with |
 |------|------------|
 | Let SuperQode edit, search, and run shell commands under policy | `superqode harness init app --template coding` |
-| Bet on model capability without tools or repository access | `superqode harness init reasoner --template no-tool` |
+| Evaluate model capability without tools or repository access | `superqode harness init reasoner --template no-tool` |
 | Start from an Open Model family pack | `superqode harness list-templates` |
 | Generate a local first harness for this machine | `superqode local init --repo .` |
 
@@ -362,7 +371,7 @@ HARNESS LIFECYCLE
 6. OUTPUT     Return text, typed data, workflow results, and validation state
 ```
 
-The default coding harness keeps repository work practical. The no-tool harness lets you bet directly on model capability. Optional runtimes let teams bring their preferred agent framework without replacing the SuperQode harness contract.
+The default coding harness supports repository operations. The no-tool harness evaluates model capability without repository or tool access. Optional runtimes allow teams to use an existing agent framework without replacing the SuperQode harness contract.
 
 ## Rich Runtime Observability
 
@@ -393,7 +402,7 @@ Highlights:
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 Development uses [uv](https://docs.astral.sh/uv/) for dependency management and command execution.
 
 ```bash

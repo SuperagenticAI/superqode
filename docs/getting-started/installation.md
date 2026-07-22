@@ -22,7 +22,7 @@ uvx superqode
 
 This installs the latest [SuperQode release](https://pypi.org/project/superqode/) from PyPI.
 
-That's it. If you installed the tool, verify with:
+Verify the installed tool:
 
 ```bash
 superqode --version
@@ -35,7 +35,7 @@ superqode harness list
 sq harness list
 ```
 
-`sq` is the human-friendly shorthand for every `superqode` command. The longer
+`sq` is the short alias for every `superqode` command. The longer
 name remains the clearest choice for documentation, automation, and agents. For a
 one-off shorthand invocation without installing, use `uvx --from superqode sq`;
 `uvx sq` refers to a package named `sq`, not to SuperQode. If another application
@@ -93,7 +93,7 @@ If you need to install Python 3.12+:
 
 ### Method 1: uv (Primary Recommendation)
 
-**Best for performance and security.** Use `uv` for the fastest installation and perfectly isolated tooling.
+Use `uv` for an isolated tool installation managed separately from project environments.
 
 ```bash
 # Install uv if needed

@@ -226,7 +226,7 @@ gateway = GatewayFactory.create(
     reasoning_effort="medium",
     truncation="auto",
     timeout=300.0,
-    track_costs=False  # Local providers typically don't charge
+    track_costs=False  # Local providers typically do not charge
 )
 ```
 
@@ -480,7 +480,7 @@ response = await gateway.chat_completion(
 
 ### Provider Not Compatible
 
-**Problem**: Provider doesn't support OpenResponses
+**Problem**: Provider does not support OpenResponses
 
 **Solution**: Use standard gateway instead:
 
@@ -492,7 +492,7 @@ gateway = LiteLLMGateway()  # Standard gateway
 
 ### Reasoning Not Available
 
-**Problem**: Provider doesn't support reasoning
+**Problem**: Provider does not support reasoning
 
 **Solution**: Reasoning will be empty; output still works:
 

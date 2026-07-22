@@ -1,6 +1,6 @@
 # Running, Measuring, and Optimizing a Harness
 
-These are three different jobs. SuperQode does the first two. A separate, optional tool, `metaharness`, does the third. Keeping them clear avoids a common confusion: "is `harness eval` the same as harness optimization?" No. They answer different questions.
+Running, measuring, and optimizing a harness are separate operations. SuperQode performs execution and measurement. The optional `metaharness` integration performs iterative optimization.
 
 For the broader picture across local model routing, harness specs, markdown
 skills, and custom optimizers, see [Optimization Story](optimization.md).
@@ -41,15 +41,15 @@ The failure digest from `harness test` also tags each failure with one of nine h
 
 ## Optimize: `harness optimize` + metaharness (optional)
 
-Optimizing is a different, heavier job: an outer loop that **rewrites the harness for you** (the `HarnessSpec` plus instruction files like `AGENTS.md`, setup scripts, validation scripts, test scripts, routing) and keeps the best version, with stored evidence for every attempt.
+Optimization uses an outer loop to modify the `HarnessSpec` and related instruction, setup, validation, test, and routing files. It retains the highest-scoring candidate and stores evidence for every attempt.
 
-SuperQode does not do this itself. The optimizer is a separate, **optional** tool, [`metaharness`](https://github.com/SuperagenticAI/metaharness) (an open-source implementation of the Meta Harness paper). You only install it when you want optimization:
+The optimizer is the separate, optional [`metaharness`](https://github.com/SuperagenticAI/metaharness) package, an open-source implementation of the Meta Harness paper. Install it only on systems that require optimization:
 
 ```bash
 uv tool install superagentic-metaharness
 ```
 
-SuperQode bridges to it with one command, `harness optimize`, so you stay in the SuperQode workflow. It exports your spec and tasks into a metaharness project, runs the optimization, and can apply the winning spec back:
+The `harness optimize` command exports the specification and tasks to a metaharness project, runs the optimization, and can apply the selected specification:
 
 ```bash
 # Export a metaharness project from your harness + tasks, run it on a local model,
@@ -72,15 +72,15 @@ Useful options:
 | `--backend` | `codex` (validated), plus experimental `gemini` / `omnigent`; `fake` for a dry run |
 | `--oss --local-provider {ollama,lmstudio} --model` | Optimize using your local models, not a hosted API |
 
-If `metaharness` is not installed, `harness optimize` tells you how to install it rather than failing silently. So optimization is genuinely optional: you never need it to run or measure, but it is the recommended path when you want the harness itself improved automatically, on your own models, with inspectable evidence.
+If `metaharness` is unavailable, `harness optimize` reports the required installation command. Optimization is not required for harness execution or measurement.
 
-## Which one do I use?
+## Operation selection
 
-- Just getting a model working and answering tasks? **Run** it with SuperQode.
-- Want to know if your harness is good, or compare two harnesses? **Measure** with `harness test` / `eval`.
-- Measured it, it is not good enough, and you want the harness and its scripts improved for you? **Optimize** with `superqode harness optimize` (which uses the optional `metaharness`). This is the recommended path for serious harness improvement, and it is optional: you never need it to run or measure.
+- Use **Run** to execute tasks with a configured harness.
+- Use **Measure** to assess one harness or compare multiple harnesses with `harness test` and `harness eval`.
+- Use **Optimize** to generate and evaluate changes to the harness and its associated scripts with the optional `metaharness` package.
 
-A natural end-to-end flow:
+Example end-to-end flow:
 
 ```text
 superqode local init                          # author a local harness

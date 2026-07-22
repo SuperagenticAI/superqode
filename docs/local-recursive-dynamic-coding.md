@@ -130,9 +130,8 @@ For dynamic runs, these commands show:
 - normal parent/child lineage
 - OTEL-shaped spans for the root run and each child run
 
-That is the product proof: the local model did not just produce an answer; it
-left a replayable and exportable tree showing which bounded child runs
-inspected which evidence.
+The resulting replayable and exportable tree records each bounded child run and
+the evidence it inspected.
 
 ## Tool Choice
 

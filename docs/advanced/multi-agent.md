@@ -1,14 +1,14 @@
 # Multi-Agent Workflows
 
-SuperQode has three ways to put more than one agent on a problem, from cheapest to most powerful: **sub-agents** (one task, one result), **peer agents** (long-lived, addressable coworkers), and **A2A** (external agents over the Agent-to-Agent protocol). This page shows when to reach for each and exactly how they behave.
+SuperQode supports three multi-agent mechanisms: **sub-agents** for isolated tasks, **peer agents** for persistent addressable workers, and **A2A** for external agents that implement the Agent-to-Agent protocol. This page describes the execution and coordination behavior of each mechanism.
 
-## Sub-agents: fire-and-forget delegation
+## Sub-agents
 
-The `sub_agent` tool spawns an isolated child loop for one task and returns its single result. The child gets its own conversation (the parent's context is not consumed), optionally a restricted tool list, and a maximum delegation depth of 3. Use it for "go figure X out and tell me the answer": open-ended exploration whose intermediate steps the parent doesn't need.
+The `sub_agent` tool starts an isolated child loop for one task and returns one result. The child receives a separate conversation, can receive a restricted tool list, and has a maximum delegation depth of 3. Use it for self-contained tasks whose intermediate steps are not required by the parent.
 
 `task_coordinator` builds on it for splitting a goal into parallel one-shot subtasks.
 
-## Peer agents: coworkers you can talk to
+## Peer agents
 
 Peer agents stay alive across the parent's turns, keep their own context, and are addressable by name. Five tools, available in the `full` tool profile:
 
@@ -20,7 +20,7 @@ Peer agents stay alive across the parent's turns, keep their own context, and ar
 | `list_agents()` | ids, names, statuses, queued inputs, last-result previews. |
 | `close_agent(agent)` | Shut a peer down. All peers are closed when the parent exits. |
 
-A typical exchange the model drives on its own:
+A typical model-directed exchange:
 
 ```text
 spawn_agent(task_name="fix_tests",  message="make the failing date tests pass")
@@ -34,10 +34,10 @@ close_agent(agent="fix_tests")
 
 Design guarantees:
 
-- **One level deep.** Peers cannot spawn peers (or sub-agents spawn peers): the hierarchy stays comprehensible and bounded.
-- **Crash isolation.** A peer that throws becomes `status: error` with the message as its result; the parent is never taken down.
+- **One level deep.** Peers and sub-agents cannot spawn peers, which keeps the hierarchy bounded.
+- **Crash isolation.** An unhandled peer error produces `status: error` and does not terminate the parent.
 - **Same policies.** Peers inherit the parent's gateway, tool registry, permission manager, and sandbox: there is no privilege escalation by delegation.
-- **Steering, not polling.** `send_input` to a busy peer reuses the same in-run steering mechanism you get when typing into the TUI mid-run.
+- **In-run steering.** `send_input` to a busy peer uses the same steering mechanism as TUI input submitted during a run.
 
 ## A2A: external agents
 
@@ -45,7 +45,7 @@ Design guarantees:
 
 ## Quality control: rubric self-grading
 
-Multi-agent runs are usually long and unattended, which is exactly where a [rubric](agent-loop.md#12-rubric-self-grading) earns its keep:
+For long or unattended multi-agent runs, a [rubric](agent-loop.md#12-rubric-self-grading) defines completion criteria:
 
 ```bash
 superqode -p \
@@ -57,10 +57,10 @@ The grader reviews the *parent's* final answer; revision feedback re-enters the 
 
 ## Choosing the right mechanism
 
-| You want... | Use |
+| Requirement | Mechanism |
 |---|---|
-| an answer to a self-contained question, cheaply | `sub_agent` |
-| parallel workstreams you'll follow up on | peer agents |
-| to redirect a worker that's going down the wrong path | `send_input(interrupt=true)` |
-| capability that lives in another product/process | A2A |
+| Low-overhead execution of a self-contained task | `sub_agent` |
+| Persistent parallel workstreams | peer agents |
+| Redirection of an active worker | `send_input(interrupt=true)` |
+| A capability provided by an external process or product | A2A |
 | unattended quality enforcement | `--rubric` |

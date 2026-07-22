@@ -429,7 +429,7 @@ superqode:
     show_after_task: true
 ```
 
-After each task, you'll see:
+After each task, the output includes:
 
 ```text
 Cost Summary:
@@ -453,7 +453,7 @@ Cost Summary:
 ### API Key Management
 
 ```bash
-# Don't commit API keys
+# Do not commit API keys
 echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
 echo ".env" >> .gitignore
 ```

@@ -2,7 +2,7 @@
 
 The architecture behind SuperQode's tools: registries, profiles, contexts, results, and how to extend them.
 
-!!! tip "Looking for what each tool does?"
+!!! tip "Tool reference"
     The [Tools Catalog](tools-catalog.md) is the complete user-facing reference for every builtin tool, including the edit dialects, interactive shell sessions, vision, peer agents, and the guarantees that hold across all of them. This page covers the system underneath.
 
 ---
@@ -14,7 +14,7 @@ SuperQode provides a complete tool system for AI agents:
 - **35+ tools**: Files, three edit dialects, search, shell (one-shot and interactive sessions), network, vision, diagnostics, agents
 - **Transparent**: No hidden prompts or context injection
 - **Standard format**: OpenAI-compatible tool definitions
-- **Extensible**: Easy to add custom tools
+- **Extensible**: Supports custom tool registration
 - **Policy controlled**: Permissions, exec-policy rules, and env filtering before anything runs
 - **Deferred loading**: Heavy schemas stay out of the prompt until the model activates them via `tool_search`
 
@@ -90,11 +90,11 @@ limits.
 | `read_skill` | Read a skill's full instructions |
 | `create_skill` | Author a new reusable skill at runtime |
 
-`create_skill` makes the agent **self-extensible**: when it discovers a workflow
-worth reusing, it can write a new `SKILL.md` (name, description, instructions)
-that is hot-loaded and immediately invocable via `skill(action="invoke", ...)` -
-without restarting the session. Skills are Markdown instructions, not executable
-code, so authoring one is safe. Skills are stored under `.agents/skills/`.
+`create_skill` allows an agent to write a reusable `SKILL.md` containing a name,
+description, and instructions. The skill is loaded without restarting the
+session and can be invoked with `skill(action="invoke", ...)`. Skills contain
+Markdown instructions rather than executable code and are stored under
+`.agents/skills/`.
 
 ### LSP
 

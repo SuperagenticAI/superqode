@@ -21,7 +21,7 @@ The pattern is borrowed from
 collapsed into a single struct: SuperQode does not split
 model-construction from runtime behaviour the way LangChain does.
 
-## When to reach for a profile
+## Profile selection
 
 | You want to... | Use a profile |
 |---|---|
@@ -98,7 +98,7 @@ are merged with model-level fields winning. The merge rules:
 
 ## How profiles plug into the agent loop
 
-You don't call profiles directly. The loop applies them at three points:
+Profiles are not called directly. The loop applies them at three points:
 
 1. **System-prompt assembly**: `system_prompt_suffix` is appended to the
    final prompt with a blank-line separator.
@@ -133,7 +133,7 @@ Applies a `system_prompt_suffix` with three blocks drawn from Anthropic's
 - `<use_parallel_tool_calls>`: encourages parallel tool calls when there
   are no dependencies between them.
 - `<investigate_before_answering>`: discourages speculation about files
-  the model hasn't read.
+  the model has not read.
 - `<tool_result_reflection>`: encourages reflection between tool calls.
 
 ### OpenRouter
@@ -143,7 +143,7 @@ Registered under: `openrouter`
 Uses `init_kwargs_factory` to inject `app_url` and `app_title` headers when
 the corresponding env vars are unset. Set `OPENROUTER_APP_URL` or
 `OPENROUTER_APP_TITLE` to override: an explicitly empty string is treated
-as "user-set, don't override".
+as "user-set, do not override".
 
 ## Examples
 

@@ -76,7 +76,7 @@ def run_lifecycle() -> None:
         policy = _wheel(dist, "superqode-example-policy-extension", "0.1.0")
         skill = _wheel(dist, "superqode-example-skill-extension", "0.1.0")
         broken = _wheel(dist, "superqode-example-broken-extension", "0.1.0")
-        superqode = _wheel(dist, "superqode", "0.2.30")
+        superqode = _wheel(dist, "superqode", "0.2.31")
 
         venv = temp / "venv"
         _run([uv, "venv", str(venv)])

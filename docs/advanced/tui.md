@@ -108,7 +108,7 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:local airplane smoke` - Verify offline harness and local search readiness
 - `:local smoke` - Run non-destructive local coding readiness checks
 - `:local search <name>` - Find a model + how to get it on every engine (size + fit)
-- `:hub` - Model-search mode: just type a model name (off by default)
+- `:hub`: Enter model-search mode and type a model name (off by default)
 - `:local labs` - Browse trusted models.dev Labs recommendations
 - `:local warm <engine>` - Warm a local model and show first-token latency
 - `:chat` - Raw direct-to-model chat: no repo/tools, shows TTFT + tok/s (off by default)

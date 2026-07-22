@@ -1,39 +1,36 @@
 # Local Agentic Coding
 
-**Local Agentic Coding** is agentic software engineering on open models running
-on your own hardware: an agent that reads, edits, tests, and ships code, where
-the model weights, the context, and the transcript never leave your machine.
+**Local Agentic Coding** uses open models on user-controlled hardware to read,
+edit, and test code. Model weights, context, and transcripts remain on the
+local system.
 
-SuperQode is built to be the first choice for it. Cloud-first harnesses treat
-local models as a degraded fallback. SuperQode treats them as the design
-center, and treats the cloud as the thing you connect to when you choose to.
+SuperQode treats local models as a primary execution target. Hosted providers
+remain available through explicit configuration.
 
 ---
 
-## Why local, and why now
+## Local execution characteristics
 
 Three things changed:
 
-1. **Open models got serious.** Current open-weight coders solve a majority of
-   real software engineering benchmark tasks on hardware a developer can own.
-   MoE architectures deliver large-model quality at small-model decode cost.
-2. **Local serving got fast.** MLX on Apple Silicon, continuous batching,
-   prefix caching, and accelerator-aware runtimes turned local inference from
-   a demo into a daily driver.
-3. **The privacy and cost math flipped.** An agent loop resends a growing
-   context every turn. On metered APIs that compounds; on your own hardware it
-   is free, and the code never leaves the building.
+1. **Open-weight coding models.** Current models can execute repository tasks on
+   developer-managed hardware. Mixture-of-experts architectures reduce active
+   parameter and decode requirements.
+2. **Local serving infrastructure.** MLX on Apple Silicon, continuous batching,
+   prefix caching, and accelerator-aware runtimes improve local inference
+   throughput.
+3. **Data control and predictable infrastructure cost.** Local execution keeps
+   code and context on controlled systems and avoids per-token API billing.
 
-What did not change: local models are less forgiving than frontier APIs. They
-have smaller loaded context windows, weaker tool-calling heads, tighter prompt
-budgets, and wildly different sweet spots per family. A harness that ignores
-this produces a bad agent. SuperQode is engineered for exactly these realities.
+Local models can have smaller loaded context windows, less reliable tool-call
+formats, tighter prompt budgets, and model-specific operating constraints.
+SuperQode exposes configuration for these constraints in the HarnessSpec.
 
 ---
 
 ## From zero to a local harness you own
 
-One command starts the guided MVP path:
+The following commands create and run a local HarnessSpec:
 
 ```bash
 superqode local init --repo .

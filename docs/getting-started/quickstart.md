@@ -1,6 +1,6 @@
 # Quick Start
 
-Get a SuperQode harness running in a few minutes.
+This guide installs SuperQode and starts a coding harness.
 
 SuperQode is your portable coding agent harness. A harness defines the run contract: model policy, runtime backend, tool access, sandbox policy, workflow shape, events, and output handling.
 
@@ -36,7 +36,7 @@ Before starting the TUI, make sure you have one of these ready:
 See [BYOK providers](../providers/byok.md) or [Local providers](../providers/local.md) for setup guides.
 
 !!! tip "No config file needed"
-    SuperQode runs without a `superqode.yaml`. Just connect a model and start asking.
+    SuperQode runs without a `superqode.yaml`. Connect a model to start a session.
     Project defaults and MCP servers live in `superqode.yaml`. Repeatable run
     behavior lives in a HarnessSpec such as `harness.yaml` or
     `superqode.local.yaml`. Add them when you need durable project configuration

@@ -309,7 +309,7 @@ Python SDK does not provide a generic "run a Codex slash command" passthrough.
 read-only turn with a review prompt. The lower-level `review/start` protocol is
 not used until the Python SDK exposes a stable public wrapper for it.
 
-Programmatically, the `superqode.codex` helpers wrap the runtime so you don't
+Programmatically, the `superqode.codex` helpers wrap the runtime so callers do not
 hand-build an `AgentConfig`:
 
 ```python

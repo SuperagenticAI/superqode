@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.31] - 2026-07-22
+
+### Changed
+
+- **Product positioning** - Established SuperQode as the Agent Engineering framework for your code, with a concise message centered on reliable coding agents, portable harnesses, context, memory, tools, control loops, and freedom to use any agent or model.
+- **Public documentation** - Aligned the README, documentation home page, concepts, getting started, harness engineering, Software Factory, and Omnigent relationship pages around the terminal-first Agent Engineering product theme.
+- **Documentation style** - Replaced conversational and promotional wording with direct technical descriptions and expanded the public documentation check to reject en and em dashes.
+- **Release metadata** - Bumped the package, runtime, lockfile, ACP registry, package checks, extension compatibility examples, and plugin documentation to `0.2.31`.
+
 ## [0.2.30] - 2026-07-22
 
 ### Added

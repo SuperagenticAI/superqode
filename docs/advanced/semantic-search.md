@@ -74,7 +74,7 @@ Parameters:
 | `paths` | all | Path globs, for example `["src/superqode/tools/*"]`. |
 | `refresh` | `false` | Re-index changed files before searching (slower). |
 
-If `cocoindex-code` is not installed the tool is simply not registered, so there
+If `cocoindex-code` is not installed, the tool is not registered, so there
 is no failure and no hard dependency.
 
 For local-first coding harnesses, prefer an Ollama embedding model such as

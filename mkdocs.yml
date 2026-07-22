@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
-site_description: "A terminal-first Software Factory for coding agents. Orchestrate multiple harnesses, run durable work, evaluate results, enforce policy, and improve agent behavior across local and cloud runtimes."
+site_description: "The open-source, terminal-first Agent Engineering framework for your code. Engineer reliable coding agents with portable harnesses, context, memory, tools, and control loops."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode

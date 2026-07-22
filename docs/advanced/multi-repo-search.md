@@ -1,7 +1,7 @@
 # Multi-Repo Search & Edit Safety
 
-SuperQode gives local models fast, accurate code search: across **one repo or
-many**: and an immediate feedback loop after every edit so they self-correct.
+SuperQode provides code search across one or more repositories and can run
+bounded verification after each edit.
 
 ---
 
@@ -30,8 +30,8 @@ subagent and to batch speculative searches in one turn.
 
 ## Searching across many repositories
 
-Register the repos you want searchable, then search them all in **one fast
-pass** (ripgrep is multi-threaded and takes many roots at once).
+Register each searchable repository, then query all registered roots in one
+multi-threaded ripgrep invocation.
 
 ```text
 :workspace add ~/code/api
@@ -51,8 +51,8 @@ Found 2 match(es) across 2 repos:
   web/lib/api/client.ts:88:  const s = await createSession(
 ```
 
-(Under the hood the tools take an `all_repos` parameter; the registered repos are
-also exposed to read/search as additional roots.)
+The tools use the `all_repos` parameter to include registered repositories as
+additional read and search roots.
 
 ### Absolute paths
 
@@ -71,9 +71,8 @@ addition to the `:workspace` registry: useful for one-off setups.
 
 ## Post-edit verification
 
-After the agent writes or edits a file, SuperQode runs a **fast, single-file
-check** and feeds any findings straight back to the model so it fixes mistakes
-immediately instead of shipping a broken edit:
+After the agent writes or edits a file, SuperQode runs a bounded single-file
+check and returns any findings to the model:
 
 ```text
 Successfully wrote 14 bytes to app.py
@@ -92,9 +91,10 @@ Checks by language:
 | Go | `gofmt -e` (syntax) |
 | JSON / YAML | parse validation |
 
-It's fast (single file, bounded), **silent on clean files**, and best-effort: it
-can never break the underlying edit. It applies to SuperQode's built-in / BYOK /
-local edit tools (ACP and SDK runtimes use their own editing).
+Verification is bounded to one file and produces no output for a clean result.
+It does not alter the result of the underlying edit. It applies to SuperQode's
+builtin, BYOK, and local edit tools; ACP and SDK runtimes use their own editing
+implementations.
 
 | Variable | Effect |
 |---|---|
