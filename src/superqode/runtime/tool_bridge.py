@@ -121,7 +121,9 @@ def make_bridged_tool_class():
             if denial is not None:
                 return _format_tool_result(denial)
             ctx = self._ctx_factory()
-            result = await self._sq_tool.execute(args, ctx)
+            from ..tools.governed import execute_governed_tool
+
+            result = await execute_governed_tool(self._sq_tool, args, ctx)
             return _format_tool_result(result)
 
     return BridgedSuperQodeTool

@@ -143,7 +143,9 @@ def _bridge_one(
 
         ctx = ctx_factory()
         try:
-            result = await sq_tool.execute(args, ctx)
+            from ..tools.governed import execute_governed_tool
+
+            result = await execute_governed_tool(sq_tool, args, ctx)
         except Exception as exc:  # noqa: BLE001 — surface as tool error
             logger.exception("Tool %s raised", sq_tool.name)
             return f"ERROR: {type(exc).__name__}: {exc}"

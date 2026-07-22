@@ -112,6 +112,30 @@ Advanced SuperQode features for users who want more control over tools, safety, 
 
     [:octicons-arrow-right-24: Skill Optimization](skill-optimization.md)
 
+-   **HarnessBench**
+
+    ---
+
+    Produce verifiable same-model harness comparisons with repeated raw runs, variance, Pareto scorecards, and artifact checksums.
+
+    [:octicons-arrow-right-24: HarnessBench](harnessbench.md)
+
+-   **Contextual Policy and Credentials**
+
+    ---
+
+    Layer organization, project, harness, WorkOrder, and session rules while keeping host-bound secrets outside model context.
+
+    [:octicons-arrow-right-24: Contextual Policy](contextual-policy.md)
+
+-   **Harness Promotion**
+
+    ---
+
+    Move audited candidates through deterministic canaries, live held-out gates, activation, and verified rollback.
+
+    [:octicons-arrow-right-24: Harness Promotion](harness-promotion.md)
+
 -   **Omnigent Compatibility**
 
     ---
@@ -119,6 +143,22 @@ Advanced SuperQode features for users who want more control over tools, safety, 
     Import Omnigent `agent.yaml` files into SuperQode harness specs while keeping SuperQode as the controlling harness.
 
     [:octicons-arrow-right-24: Omnigent Compatibility](omnigent-compat.md)
+
+-   **Terminal-First Software Factory**
+
+    ---
+
+    Understand how HarnessSpecs, sessions, WorkOrders, workers, evidence, delivery gates, evaluation, and optimization form one builder system.
+
+    [:octicons-arrow-right-24: Software Factory](software-factory.md)
+
+-   **SuperQode and Omnigent**
+
+    ---
+
+    Understand the ideas both products share, their different design priorities, SuperQode's remote-control options, and the Omnigent import path.
+
+    [:octicons-arrow-right-24: SuperQode and Omnigent](superqode-vs-omnigent.md)
 
 -   **Session Management**
 

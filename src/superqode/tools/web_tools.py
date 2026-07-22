@@ -601,6 +601,10 @@ Useful for reading documentation, API responses, web pages, etc."""
                     "type": "string",
                     "description": "CSS-like selector to extract specific content (e.g., 'article', 'main')",
                 },
+                "credential": {
+                    "type": "string",
+                    "description": "Named host-bound SuperQode credential binding (secret is injected at execution time)",
+                },
             },
             "required": ["url"],
         }
@@ -611,6 +615,7 @@ Useful for reading documentation, API responses, web pages, etc."""
         extract_main = args.get("extract_main", True)
         max_length = args.get("max_length", 50000)
         selector = args.get("selector", "")
+        headers = args.get("headers", {})
         local_model = _context_uses_local_model(ctx)
         timeout = self.LOCAL_TIMEOUT if local_model else self.DEFAULT_TIMEOUT
         max_size = self.LOCAL_MAX_SIZE if local_model else self.MAX_SIZE
@@ -629,8 +634,13 @@ Useful for reading documentation, API responses, web pages, etc."""
 
         try:
             loop = asyncio.get_event_loop()
+            fetch_call = (
+                (lambda: self._sync_fetch(url, timeout, max_size, headers))
+                if headers
+                else (lambda: self._sync_fetch(url, timeout, max_size))
+            )
             result = await asyncio.wait_for(
-                loop.run_in_executor(None, lambda: self._sync_fetch(url, timeout, max_size)),
+                loop.run_in_executor(None, fetch_call),
                 timeout=timeout + 5,
             )
 
@@ -672,7 +682,11 @@ Useful for reading documentation, API responses, web pages, etc."""
             return ToolResult(success=False, output="", error=f"Fetch error: {str(e)}")
 
     def _sync_fetch(
-        self, url: str, timeout: int | float | None = None, max_size: int | None = None
+        self,
+        url: str,
+        timeout: int | float | None = None,
+        max_size: int | None = None,
+        headers: Dict[str, str] | None = None,
     ) -> Dict[str, Any]:
         """Synchronous fetch implementation."""
         timeout = timeout or self.DEFAULT_TIMEOUT
@@ -685,6 +699,8 @@ Useful for reading documentation, API responses, web pages, etc."""
             )
             req.add_header("Accept-Language", "en-US,en;q=0.9")
             req.add_header("Accept-Encoding", "gzip, deflate")
+            for key, value in (headers or {}).items():
+                req.add_header(key, value)
 
             ctx = ssl.create_default_context()
 

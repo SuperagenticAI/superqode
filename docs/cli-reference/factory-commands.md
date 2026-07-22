@@ -2,6 +2,8 @@
 
 `superqode factory` manages model, harness, and route lineage for the local Software Factory.
 
+This command group is the routing and lineage module, not the entire factory. Harness authoring, WorkOrders, headless workers, delivery gates, evaluation, and optimization have their own command groups. Start with [Terminal-First Software Factory](../advanced/software-factory.md) for the complete product model and builder walkthrough.
+
 The factory layer does not replace sessions. It annotates the durable session graph so work can move
 between local OSS models, BYOK models, proprietary runtimes, and different harnesses without losing
 history.
@@ -130,3 +132,5 @@ Events include mode changes, model switches, and harness switches.
 
 Factory commands record durable intent and lineage. The active session graph records
 `factory.next_turn`, which runtime and picker flows can consume safely on the next turn.
+
+Continue with [WorkOrder Commands](work-commands.md) when work needs a durable task graph, worker leases, isolated delivery, checks, review, and a final merge decision.

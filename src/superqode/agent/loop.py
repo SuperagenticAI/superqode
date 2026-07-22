@@ -1443,11 +1443,13 @@ class AgentLoop:
         ctx = self._create_tool_context()
 
         try:
+            from ..tools.governed import execute_governed_tool
+
             # Set this call's id as the parent for anything it spawns.
             # ContextVar propagates through asyncio.create_task automatically,
             # so SubAgentTool's background _execute_subtask sees it too.
             with acp_tool_call_context(parent_tool_call_id=tool_call_id):
-                result = await tool.execute(arguments, ctx)
+                result = await execute_governed_tool(tool, arguments, ctx)
             return await _finalize(result)
         except Exception as e:
             return await _finalize(

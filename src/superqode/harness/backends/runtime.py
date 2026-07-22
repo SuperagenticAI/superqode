@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 from ...agent.loop import AgentConfig
 from ...providers.gateway.litellm_gateway import LiteLLMGateway
+from ...providers.gateway.synthetic import PassthroughGateway, SilentGateway
 from ...runtime import create_runtime
 from ...tools.base import ToolResult
 from ...tools.base import ToolRegistry
@@ -295,6 +297,9 @@ def _create_runtime_for_request(
     from ...agent.loop_policy import core_loop_policy, workbench_loop_policy
 
     is_core = model_policy.profile == "core"
+    session_storage = Path(request.spec.context.session_storage).expanduser()
+    if not session_storage.is_absolute():
+        session_storage = request.working_directory / session_storage
     config = AgentConfig(
         provider=request.provider,
         model=request.model,
@@ -307,7 +312,7 @@ def _create_runtime_for_request(
         temperature=model_policy.temperature,
         reasoning_effort=model_policy.reasoning,
         enable_session_storage=True,
-        session_storage_dir=request.spec.context.session_storage,
+        session_storage_dir=str(session_storage.resolve()),
         session_id=request.session_id,
         session_history_limit=model_policy.session_history_limit,
         tool_call_format=model_policy.tool_call_format,
@@ -341,9 +346,10 @@ def _create_runtime_for_request(
         )
         hook_kwargs = {"hooks": registry}
 
+    gateway = _gateway_for_request(request.provider, request.model)
     return runtime_name, create_runtime(
         runtime_name,
-        gateway=LiteLLMGateway(),
+        gateway=gateway,
         tools=_tool_registry_for_request(request, profile, model_policy),
         config=config,
         harness_spec=request.spec,
@@ -367,6 +373,21 @@ def _create_runtime_for_request(
         permission_manager=PermissionManager(
             apply_backend_permissions(profile.permissions, request.sandbox_backend)
         ),
+    )
+
+
+def _gateway_for_request(provider: str, model: str):
+    """Select the deterministic fixture gateway without weakening normal routing."""
+    if provider.strip().lower() != "synthetic":
+        return LiteLLMGateway()
+    fixture = model.strip().lower()
+    if fixture in {"", "passthrough"}:
+        return PassthroughGateway()
+    if fixture == "silent":
+        return SilentGateway()
+    raise ValueError(
+        "Synthetic harness runs support model 'passthrough' or 'silent'; "
+        f"received {model!r}"
     )
 
 

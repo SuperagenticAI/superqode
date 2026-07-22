@@ -78,6 +78,15 @@ class GitWorktreeManager:
 
     def __init__(self, project_root: Path):
         self.project_root = project_root.resolve()
+        configured_home = os.environ.get("SUPERQODE_HOME", "").strip()
+        if configured_home:
+            self.worktree_root = Path(configured_home).expanduser().resolve() / "working"
+            self.session_registry = self.worktree_root / "_sessions"
+        else:
+            # Keep the class attributes as compatibility seams for callers and tests
+            # that already redirect the legacy global worktree location.
+            self.worktree_root = self.WORKTREE_ROOT
+            self.session_registry = self.SESSION_REGISTRY
         self._git_root: Optional[Path] = None
         self._repo_name: Optional[str] = None
 
@@ -101,7 +110,7 @@ class GitWorktreeManager:
     @property
     def worktree_base(self) -> Path:
         """Base directory for this repo's worktrees."""
-        return self.WORKTREE_ROOT / self.repo_name / "workspace"
+        return self.worktree_root / self.repo_name / "workspace"
 
     def _find_git_root(self) -> Path:
         """Find the git repository root."""
@@ -349,7 +358,7 @@ class GitWorktreeManager:
         """List all workspace worktrees for this repository."""
         worktrees = []
 
-        registry_file = self.SESSION_REGISTRY / f"{self.repo_name}.json"
+        registry_file = self.session_registry / f"{self.repo_name}.json"
         if not registry_file.exists():
             return worktrees
 
@@ -386,8 +395,8 @@ class GitWorktreeManager:
 
     async def _register_worktree(self, info: WorktreeInfo) -> None:
         """Register worktree in session registry."""
-        self.SESSION_REGISTRY.mkdir(parents=True, exist_ok=True)
-        registry_file = self.SESSION_REGISTRY / f"{self.repo_name}.json"
+        self.session_registry.mkdir(parents=True, exist_ok=True)
+        registry_file = self.session_registry / f"{self.repo_name}.json"
 
         data = {"worktrees": []}
         if registry_file.exists():
@@ -406,7 +415,7 @@ class GitWorktreeManager:
 
     async def _unregister_worktree(self, session_id: str) -> None:
         """Remove worktree from session registry."""
-        registry_file = self.SESSION_REGISTRY / f"{self.repo_name}.json"
+        registry_file = self.session_registry / f"{self.repo_name}.json"
 
         if not registry_file.exists():
             return

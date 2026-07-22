@@ -167,6 +167,14 @@ Harness engineering is the discipline after prompt engineering and context engin
 
     [:octicons-arrow-right-24: Optimization Story](advanced/optimization.md)
 
+-   :octicons-workflow-16:{ .lg .middle } **Terminal-first Software Factory**
+
+    ---
+
+    Move from a repo-owned HarnessSpec to durable role-aware WorkOrders, isolated workers, terminal operations, verified delivery, and evidence-backed harness improvement.
+
+    [:octicons-arrow-right-24: Software Factory](advanced/software-factory.md)
+
 -   :octicons-search-16:{ .lg .middle } **Local code intelligence**
 
     ---
@@ -227,6 +235,8 @@ you are changing, then use the CLI reference when you need exact flags.
 | Tools, search, MCP, and permissions | [Tools Catalog](advanced/tools-catalog.md) |
 | Safety, sandboxing, and approvals | [Safety & Permissions](advanced/safety-permissions.md) |
 | Sessions, sharing, memory, and logging | [Session Management](advanced/session-management.md) |
+| Software Factory, WorkOrders, workers, and delivery gates | [Terminal-First Software Factory](advanced/software-factory.md) |
+| Omnigent similarities, differences, and interoperability | [How SuperQode Relates to Omnigent](advanced/superqode-vs-omnigent.md) |
 | Plugins, skills, and optimization | [Plugin Authoring](advanced/plugin-authoring.md) |
 | Automation, channels, MCP, ACP, and A2A | [Advanced Workflows](advanced/index.md) |
 | Environment variables and YAML config | [Configuration](configuration/index.md) |
@@ -317,8 +327,9 @@ Each step builds on the previous one.
 2. **Connect your models**: [Providers](providers/index.md) for hosted APIs, [Local Models](providers/local.md) for Ollama, LM Studio, MLX, vLLM, and DS4
 3. **Understand the engine**: [Inside the Agent Loop](advanced/agent-loop.md) and the [Tools Catalog](advanced/tools-catalog.md)
 4. **Make it yours**: [Harness System](advanced/harness-system.md) for portable run contracts, [Policies & Safety](advanced/policies.md) for guardrails
-5. **Automate**: [Headless & CI](advanced/headless-ci.md) for scripts, pipelines, and schema-validated output
-6. **Go further**: [Developer Workflows](developer-workflows.md), [Multi-Agent Workflows](advanced/multi-agent.md), [Runtime Backends](runtimes.md), [Plugin Authoring](advanced/plugin-authoring.md)
+5. **Build the factory**: [Terminal-First Software Factory](advanced/software-factory.md) for WorkOrders, workers, evidence, delivery, and improvement
+6. **Automate**: [Headless & CI](advanced/headless-ci.md) for scripts, pipelines, and schema-validated output
+7. **Go further**: [Developer Workflows](developer-workflows.md), [Multi-Agent Workflows](advanced/multi-agent.md), [Runtime Backends](runtimes.md), [Plugin Authoring](advanced/plugin-authoring.md)
 
 ---
 

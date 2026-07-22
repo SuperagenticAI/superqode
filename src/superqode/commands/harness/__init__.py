@@ -42,6 +42,9 @@ from .evaluation import (
     harness_mine_failures,
 )
 
+from .bench import harness_bench, harness_bench_verify
+from .promotion import harness_promote
+
 from .logbook import (
     harness_logbook,
     harness_logbook_update,

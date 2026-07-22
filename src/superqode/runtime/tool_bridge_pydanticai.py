@@ -134,7 +134,9 @@ def make_superqode_toolset_class():
                 if self._on_tool_result is not None:
                     self._on_tool_result(name, denial)
                 return _format_tool_result(denial)
-            result = await sq_tool.execute(tool_args, self._ctx_factory())
+            from ..tools.governed import execute_governed_tool
+
+            result = await execute_governed_tool(sq_tool, tool_args, self._ctx_factory())
             if self._on_tool_result is not None:
                 self._on_tool_result(name, result)
             return _format_tool_result(result)

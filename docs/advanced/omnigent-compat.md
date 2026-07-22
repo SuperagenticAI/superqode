@@ -80,19 +80,10 @@ Common Omnigent harness names are mapped to SuperQode runtime backend names:
 Unknown harness names are preserved as backend names so custom integrations can
 still be inspected and adapted.
 
-## What SuperQode Should Borrow Next
+## Interop boundary
 
-The importer is the low-risk compatibility layer. The higher-value ideas to
-bring into SuperQode natively are:
+The importer is a format and execution bridge, not an emulator for Omnigent's server, synchronized clients, collaboration permissions, or managed runner hosts.
 
-- **Layered policies**: session, harness, and admin policy levels with
-  `allow`, `deny`, and `ask` verdicts.
-- **Policy phases**: evaluate request, response, tool call, tool result,
-  shell, and file mutation events consistently across runtimes.
-- **Live session coordination**: browser attach, fork, co-drive, comments, and
-  terminal/resource streams as a SuperQode server feature.
-- **Agent spec ergonomics**: keep concise YAML authoring while compiling into
-  SuperQode's richer `HarnessSpec`.
+SuperQode compiles compatible agent structure into its richer `HarnessSpec`, preserves unsupported Omnigent fields in metadata, and then owns execution through its runtimes, events, WorkOrders, evaluation, contextual policy, credential-safe tools, HarnessBench, and guarded promotion. Reproducing Omnigent's web, mobile, and desktop suite is not the terminal-first product priority.
 
-Those are product and architecture ideas to adopt directly in SuperQode, not a
-reason to make Omnigent the controlling runtime.
+See [How SuperQode Relates to Omnigent](superqode-vs-omnigent.md) for the ideas the products share, their different priorities, SuperQode's existing remote-access options, and when the import path is useful.

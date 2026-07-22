@@ -41,6 +41,7 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | `memory` | [Memory Commands](memory-commands.md) |
 | `models` | [Models Commands](models-commands.md) |
 | `plugins` | [Plugins Commands](plugins-commands.md) |
+| `policy` | [Policy Commands](policy-commands.md) |
 | `profiles` | [Profiles and Tools Commands](profiles-commands.md) |
 | `providers` | [Provider Commands](provider-commands.md) |
 | `runtime` | [Runtime Commands](runtime-commands.md) |
@@ -52,6 +53,7 @@ superqode [OPTIONS] COMMAND [ARGS]...
 | `skills` | [Skills Commands](skills-commands.md) |
 | `tools` | [Tools Commands](tools-commands.md) |
 | `trust` | [Trust Commands](trust-commands.md) |
+| `work` | [WorkOrder Commands](work-commands.md) |
 
 ### Global Options
 
@@ -121,6 +123,19 @@ superqode factory switch-model ollama/qwen3-coder
 superqode factory switch-harness review
 superqode factory fork-model --model local/deepseek-coder --role coder
 superqode factory lineage
+```
+
+Durable WorkOrders:
+
+```bash
+superqode work create "Implement and review the change" --repo . --queue
+superqode work worker --id builder-01 --concurrency 2
+superqode work watch work_...
+superqode work check work_...
+superqode work prepare work_...
+superqode work diff work_...
+superqode work approve work_... --actor maintainer
+superqode work merge work_... --actor maintainer --cleanup
 ```
 
 Portable session handoff:
@@ -396,6 +411,14 @@ superqode mcp --http --port 8765
 
     [:octicons-arrow-right-24: Factory Commands](factory-commands.md)
 
+-   **WorkOrder Commands (superqode work)**
+
+    ---
+
+    Schedule dependency-aware harness work with leases, evidence, checks, and decisions.
+
+    [:octicons-arrow-right-24: WorkOrder Commands](work-commands.md)
+
 -   **Share Commands (superqode share)**
 
     ---
@@ -443,6 +466,13 @@ superqode mcp --http --port 8765
 | `superqode factory routes` | List Software Factory routing presets |
 | `superqode factory switch-model <provider/model>` | Record model/provider movement on a session |
 | `superqode factory switch-harness <name>` | Record harness movement on a session |
+| `superqode work create <goal> --queue` | Create and queue durable multi-harness work |
+| `superqode work run <work-id>` | Execute dependency-ready WorkOrder tasks |
+| `superqode work worker [work-id]` | Run a persistent terminal-first WorkOrder worker |
+| `superqode work watch <work-id>` | Watch tasks, leases, gates, evidence, and events live |
+| `superqode work check <work-id>` | Run deterministic WorkOrder acceptance commands |
+| `superqode work prepare <work-id>` | Build and conflict-check the integration candidate |
+| `superqode work merge <work-id>` | Apply the exact approved candidate safely |
 | `superqode share create <session-id>` | Create a portable local session artifact |
 | `superqode memory status` | Show memory provider status |
 | `superqode memory remember "..."` | Store an explicit project fact or preference |
@@ -573,6 +603,7 @@ For detailed documentation of each command group:
 - [Memory Commands](memory-commands.md) - Agent memory operations
 - [Session Commands](sessions-commands.md) - Session listing and inspection
 - [Factory Commands](factory-commands.md) - Model, harness, and route lineage
+- [WorkOrder Commands](work-commands.md) - Durable task scheduling, evidence, and decisions
 - [Share Commands](share-commands.md) - Portable session artifact management
 - [Trust Commands](trust-commands.md) - Project trust management
 - [Sandbox Commands](sandbox-commands.md) - Sandbox provider diagnostics

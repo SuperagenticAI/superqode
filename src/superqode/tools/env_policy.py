@@ -35,6 +35,14 @@ _ALWAYS_KEEP = {
 
 
 def env_policy() -> str:
+    try:
+        from superqode.governance import active_governance
+
+        bundle = active_governance()
+        if bundle is not None and bundle.shell_env:
+            return bundle.shell_env.strip().lower()
+    except Exception:
+        pass
     return os.environ.get(POLICY_ENV, "").strip().lower() or "inherit"
 
 

@@ -58,6 +58,27 @@ def main() -> None:
             raise AssertionError(
                 f"sq and superqode report different versions: {short_version!r} != {canonical_version!r}"
             )
+        synthetic_run = json.loads(
+            _capture(
+                [
+                    str(executable),
+                    "harness",
+                    "run",
+                    "no-tool",
+                    "package-check",
+                    "--provider",
+                    "synthetic",
+                    "--model",
+                    "passthrough",
+                    "--store",
+                    "memory",
+                    "--json",
+                ],
+                cwd=workspace,
+            )
+        )
+        if synthetic_run["content"] != "package-check":
+            raise AssertionError(f"unexpected synthetic package response: {synthetic_run}")
         _run(
             [
                 uv,

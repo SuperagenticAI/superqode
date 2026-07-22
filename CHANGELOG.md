@@ -7,13 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.30] - 2026-07-22
+
+### Added
+
+- **Durable WorkOrder kernel** - Added repository-scoped WorkOrders with dependency-aware tasks, atomic worker claims, concurrency limits, leases, heartbeats, bounded retries, stale-worker recovery, typed artifacts, append-only events, deterministic acceptance commands, and explicit accept/reject/cancel decisions.
+- **Terminal WorkOrder execution** - Added `sq work` commands to create, queue, run, inspect, recover, check, and decide work. Ready tasks execute through their assigned HarnessSpecs in a reusable WorkOrder-scoped Git worktree when available, preserve patch and harness run/session evidence, and keep acceptance decisions in the terminal without requiring a web or mobile control plane.
+- **Verified WorkOrder delivery** - Added content-addressed integration candidates, source-drift and file-conflict detection, exact-patch review and approval, crash-recoverable merge intent, post-apply tree verification, guarded rollback, and explicit managed-worktree cleanup. Delivery never stages or commits the user's checkout.
+- **Live WorkOrder cancellation** - Running WorkOrder processes now observe durable cancellation and cancel the active harness coroutine instead of only updating task state in SQLite.
+- **Parallel isolated WorkOrders** - Added bounded `max_workers` fan-out, one detached Git worktree per task attempt, exact-tree dependency fan-in, process-locked patch integration, deterministic overlapping-file conflict gates, and cleanup across every WorkOrder-owned worktree.
+- **Portable WorkOrder state** - Isolated worktrees and their session registry now honor `SUPERQODE_HOME`, allowing terminal workers to run on CI, container, and enterprise hosts where the operating-system home directory is read-only.
+- **No-tool runtime compatibility** - Normalized the documented `sandbox: none` spelling through the local capability profile while preserving the HarnessSpec's stricter no-read, no-write, and no-shell execution policy.
+- **Offline release smoke provider** - Connected the packaged synthetic passthrough and silent gateways to HarnessSpec execution so CI can exercise complete harness and WorkOrder plumbing without credentials or network access.
+- **Workspace-scoped harness sessions** - Relative HarnessSpec session storage now resolves inside the active task workspace, preventing unrelated repositories or repeated test runs from sharing session history.
+- **Role-aware WorkOrder pipelines** - Added investigator, implementer, synthesizer, reviewer, tester, and custom task contracts; bounded dependency evidence propagation; evidence-only workspace enforcement; typed review artifacts; structured approval/changes-requested verdicts; and a review gate that low-level completion cannot bypass.
+- **Headless worker service** - Added a persistent terminal-first WorkOrder worker with stable identities, duplicate-process locks, bounded global concurrency, per-WorkOrder admission limits, automatic stale-lease recovery, graceful signal draining, ephemeral CI limits, and durable atomic heartbeat snapshots.
+- **Live terminal cockpit** - Added `sq work watch` and `sq work workers` for task DAG state, attempts, lease time, budgets, review/check/integration gates, artifact counts, worker health, and the latest append-only lifecycle events, including a JSON snapshot for external monitoring.
+- **Enforced WorkOrder accounting** - Added normalized per-run and cumulative token, cost, tool-call, iteration, and latency evidence; fail-closed task-boundary budget gates; role-derived or explicit task risk admission; terminal usage inspection; read-only policy simulation; and observed-versus-limit cockpit visibility.
+- **Layered contextual governance** - Added organization, project, HarnessSpec, WorkOrder, and session policy layers with deny-overrides decisions across request, response, tool-call, tool-result, and promotion phases; added read-only terminal explanations and runtime decision evidence.
+- **Credential-safe execution** - Added secure WorkOrder shell defaults, project network guardrails, model-supplied credential-header blocking, and symbolic host-bound credential injection for `fetch` and `web_fetch` without exposing secret values in model context or evidence.
+- **Reproducible HarnessBench** - Added fixed-model multi-harness manifests, repeated raw runs, variance and Pareto scorecards, source fingerprints, artifact checksums, Markdown reports, and offline tamper verification.
+- **Guarded harness delivery** - Added audited staging, digest-addressed rollback snapshots, deterministic WorkOrder canaries, live held-out HarnessBench activation gates, contextual promotion policy, atomic activation, and rollback protection against later human changes.
+- **Software Factory product guide** - Reframed the Software Factory as the umbrella over HarnessSpecs, runtime portability, interactive coordination, durable WorkOrders, workers, evidence, verified delivery, evaluation, and guarded optimization; added a complete builder quickstart, operator runbook, plain-language reliability concepts, and a neutral guide to shared and different Omnigent ideas.
+
+### Changed
+
+- **Release metadata** - Bumped package, runtime, lockfile, ACP registry, package checks, extension compatibility examples, and plugin documentation to `0.2.30` for the complete pre-`0.3.0` validation release.
+
 ## [0.2.25] - 2026-07-21
 
 ### Added
 
 - **RLM Code v0.1.11 integration** - Added an optional `rlm-code` HarnessSpec backend and Harness Protocol adapter that preserve RLM Code as the recursive execution engine while normalizing context selection, REPL steps, root/submodel usage, LID exposure metrics, and native JSONL trajectories into SuperQode evidence.
 - **RLM Code LID example and guide** - Added a Docker-first, read-only `rlm-code-lid` HarnessSpec plus installation, configuration, architecture, conformance, evaluation, optimization, safety, demo, and limitations documentation.
-
 ### Changed
 
 - **Release metadata** - Bumped package, runtime, lockfile, ACP registry, package checks, extension compatibility examples, and plugin documentation to `0.2.25`.

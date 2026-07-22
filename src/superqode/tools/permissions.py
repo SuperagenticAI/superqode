@@ -245,6 +245,28 @@ class PermissionManager:
         if self._matches_deny_pattern(tool_name, arguments):
             return Permission.DENY
 
+        # Organization/project/session contextual policy can only tighten the
+        # normal harness permission. Explicit contextual allow never bypasses
+        # dangerous-command checks or an existing harness DENY.
+        try:
+            from superqode.governance import evaluate_active_policy
+
+            contextual = evaluate_active_policy(
+                "tool_call",
+                tool=tool_name,
+                tool_group=(TOOL_GROUPS[tool_name].value if tool_name in TOOL_GROUPS else ""),
+                risk=self.get_risk_level(tool_name, arguments),
+                arguments=arguments,
+            )
+            if contextual.enforced and contextual.action == "deny":
+                return Permission.DENY
+            if contextual.enforced and contextual.action == "ask":
+                return Permission.ASK
+        except Exception:
+            # Invalid policy is rejected while loading a governed harness. A
+            # non-governed interactive session keeps its existing permissions.
+            pass
+
         # Check allow patterns
         if self._matches_allow_pattern(tool_name, arguments):
             return Permission.ALLOW

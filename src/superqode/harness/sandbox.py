@@ -388,7 +388,15 @@ def get_sandbox_capabilities(
     backend: str | SandboxCapabilityBackend,
 ) -> SandboxCapabilities:
     """Return capabilities for a sandbox backend profile."""
-    selected = SandboxCapabilityBackend(backend)
+    # HarnessSpecs use ``sandbox: none`` to mean that no isolation backend is
+    # requested. Capability clamping must still run, so treat that spelling as
+    # the unrestricted local capability profile; the HarnessSpec's own
+    # execution policy remains authoritative and can (as no-tool does) deny
+    # every model-callable capability.
+    normalized = backend.value if isinstance(backend, SandboxCapabilityBackend) else str(backend)
+    if normalized.strip().lower() in {"none", "full", "full_access"}:
+        normalized = SandboxCapabilityBackend.LOCAL.value
+    selected = SandboxCapabilityBackend(normalized)
     capabilities: dict[SandboxCapabilityBackend, SandboxCapabilities] = {
         SandboxCapabilityBackend.LOCAL: SandboxCapabilities(
             selected, True, True, True, True, "Local workspace with no sandbox isolation."

@@ -103,6 +103,10 @@ class FetchTool(Tool):
                 },
                 "timeout": {"type": "integer", "description": "Timeout in seconds (default: 30)"},
                 "headers": {"type": "object", "description": "Additional HTTP headers to send"},
+                "credential": {
+                    "type": "string",
+                    "description": "Named host-bound SuperQode credential binding (secret is injected at execution time)",
+                },
                 "max_size": {
                     "type": "integer",
                     "description": "Maximum response size in bytes (default: 1MB)",

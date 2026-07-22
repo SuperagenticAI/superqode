@@ -53,6 +53,26 @@ Run `superqode` for the terminal workbench, then `:local init` to detect your ha
 
 One TUI and CLI, consistent tool policies, event logging, and session management across every agent type. Define your harness once as a portable spec. Swap runtimes, models, memory, search, or tools without changing your workflow. Run the same contract locally, on a team machine, through remote runtimes, or in CI.
 
+For work that must reliably finish across several harnesses, use a durable WorkOrder. A WorkOrder adds investigator, implementer, synthesizer, reviewer and tester roles, bounded parallel workers, isolated task worktrees, deterministic patch integration, leases and crash recovery, acceptance commands, typed evidence, and an explicit human decision without requiring a web control plane:
+
+```bash
+sq work create "Implement and review the authentication fix" \
+  --repo . --harness coding \
+  --acceptance-test "uv run pytest -q tests/test_auth.py" \
+  --queue
+sq work worker --id builder-01 --concurrency 2
+sq work watch work_...
+sq work check work_...
+sq work prepare work_...
+sq work diff work_...
+sq work approve work_... --actor maintainer
+sq work merge work_... --actor maintainer --cleanup
+```
+
+This is the durable execution layer inside SuperQode's terminal-first Software Factory. Read the [complete Software Factory guide](https://superagentic.ai/superqode/advanced/software-factory/) for the product architecture and end-to-end builder workflow, or [How SuperQode Relates to Omnigent](https://superagentic.ai/superqode/advanced/superqode-vs-omnigent/) for shared ideas, different priorities, remote access, and interoperability.
+
+For controlled unattended work, `sq policy init` enables layered contextual policy, secret-filtered shells, strict network destinations, and named host-bound HTTP credentials. Use `sq harness bench` to publish a reproducible same-model harness comparison, then deliver an audited improvement through `sq harness promote stage`, `canary`, `activate`, and `rollback`.
+
 ```bash
 cd your-project && superqode
 ```

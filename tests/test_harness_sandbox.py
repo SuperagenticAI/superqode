@@ -101,6 +101,18 @@ def test_harness_sandbox_capabilities_are_single_source():
     assert caps.can_network is False
 
 
+def test_no_sandbox_alias_keeps_no_tool_execution_policy_authoritative():
+    spec = get_harness_template("no-tool")
+
+    caps = get_sandbox_capabilities(spec.execution_policy.sandbox)
+    policy = sandbox_policy_from_execution_policy(spec.execution_policy)
+
+    assert caps.backend is SandboxCapabilityBackend.LOCAL
+    assert policy.allow_read is False
+    assert policy.allow_write is False
+    assert policy.allow_shell is False
+
+
 def test_harness_apply_backend_permissions_clamps_tools():
     config = PermissionConfig(
         groups={ToolGroup.WRITE: Permission.ALLOW, ToolGroup.SHELL: Permission.ALLOW},

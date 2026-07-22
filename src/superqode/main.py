@@ -1040,6 +1040,16 @@ from superqode.commands.factory import factory
 cli_main.add_command(factory, name="factory")
 
 
+from superqode.commands.work import work
+
+cli_main.add_command(work, name="work")
+
+
+from superqode.commands.policy import policy
+
+cli_main.add_command(policy, name="policy")
+
+
 from superqode.commands.share import share
 
 cli_main.add_command(share, name="share")

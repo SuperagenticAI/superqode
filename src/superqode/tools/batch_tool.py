@@ -94,7 +94,9 @@ class BatchTool(Tool):
             if not tool:
                 return ToolResult(success=False, output="", error=f"Unknown tool: {name}")
             try:
-                return await tool.execute(params, ctx)
+                from .governed import execute_governed_tool
+
+                return await execute_governed_tool(tool, params, ctx)
             except Exception as e:
                 return ToolResult(success=False, output="", error=f"Tool error: {str(e)}")
 

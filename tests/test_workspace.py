@@ -22,6 +22,20 @@ from superqode.workspace import (
     SnapshotManager,
 )
 from superqode.workspace.manager import WorkspaceSessionConfig, WorkspaceMode
+from superqode.workspace.worktree import GitWorktreeManager
+
+
+def test_worktree_manager_honors_superqode_home(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    superqode_home = tmp_path / "state"
+    monkeypatch.setenv("SUPERQODE_HOME", str(superqode_home))
+
+    manager = GitWorktreeManager(project)
+
+    assert manager.worktree_root == superqode_home / "working"
+    assert manager.session_registry == superqode_home / "working" / "_sessions"
+    assert manager.worktree_base.parent.parent == superqode_home / "working"
 
 
 class TestSnapshotManager:

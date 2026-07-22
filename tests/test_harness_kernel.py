@@ -22,6 +22,26 @@ class TriageResult(BaseModel):
     summary: str
 
 
+@pytest.mark.asyncio
+async def test_kernel_synthetic_passthrough_runs_without_network(tmp_path: Path):
+    store = FileHarnessStore(tmp_path / "synthetic-store")
+    kernel = await init_harness(get_harness_template("no-tool"), store=store)
+    session = await kernel.session("synthetic-session")
+
+    result = await session.prompt(
+        "release smoke",
+        provider="synthetic",
+        model="passthrough",
+        working_directory=tmp_path,
+    )
+
+    assert result.content == "release smoke"
+    assert result.response.stopped_reason == "complete"
+    assert result.tool_calls_made == 0
+    assert result.total_tokens is not None
+    assert (tmp_path / ".superqode" / "sessions").is_dir()
+
+
 class FakeRuntime:
     name = "fake"
 

@@ -84,6 +84,14 @@ def load_allowlist() -> set[str]:
     """Default allowlist plus any domains from ``SUPERQODE_NET_ALLOW`` (CSV)."""
     extra = os.environ.get("SUPERQODE_NET_ALLOW", "")
     domains = set(DEFAULT_ALLOWED_DOMAINS)
+    try:
+        from superqode.governance import active_governance
+
+        bundle = active_governance()
+        if bundle is not None:
+            domains.update(item.lower() for item in bundle.allowed_hosts)
+    except Exception:
+        pass
     for item in extra.split(","):
         item = item.strip().lower()
         if item:
@@ -138,4 +146,12 @@ def check_network(command: str, allowlist: set[str] | None = None) -> NetworkVer
 
 def strict_mode() -> bool:
     """When set, untrusted network destinations are denied rather than prompted."""
+    try:
+        from superqode.governance import active_governance
+
+        bundle = active_governance()
+        if bundle is not None and bundle.network_strict:
+            return True
+    except Exception:
+        pass
     return os.environ.get("SUPERQODE_NET_STRICT", "").strip().lower() in ("1", "true", "yes")

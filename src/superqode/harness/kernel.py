@@ -159,6 +159,25 @@ class HarnessSession:
         metadata: dict[str, Any] | None = None,
     ) -> AsyncIterator[HarnessEvent]:
         """Stream one prompt through this harness session as normalized events."""
+        from superqode.governance import active_governance, governance_scope, load_governance
+
+        if active_governance() is None:
+            bundle = load_governance(
+                working_directory or Path.cwd(), harness_spec=self.kernel.spec
+            )
+            with governance_scope(bundle):
+                async for event in self.stream(
+                    prompt,
+                    provider=provider,
+                    model=model,
+                    working_directory=working_directory,
+                    runtime=runtime,
+                    sandbox_backend=sandbox_backend,
+                    system_level=system_level,
+                    metadata=metadata,
+                ):
+                    yield event
+            return
         runtime_name = runtime or self.kernel.spec.runtime.backend
         self.kernel.store.open_session(
             self.session_id,
@@ -204,6 +223,13 @@ class HarnessSession:
                 "model": model,
                 "stream": True,
             },
+        )
+        self._enforce_contextual_policy(
+            "request",
+            run_id,
+            arguments={"prompt": prompt},
+            provider=provider,
+            runtime=runtime_name,
         )
         backend = create_harness_backend(runtime or self.kernel.spec.runtime.backend)
         try:
@@ -268,6 +294,14 @@ class HarnessSession:
 
     async def run(self, request: HarnessRunRequest) -> HarnessRunResult:
         """Run one fully specified harness request."""
+        from superqode.governance import active_governance, governance_scope, load_governance
+
+        if active_governance() is None:
+            bundle = load_governance(
+                request.working_directory, harness_spec=self.kernel.spec
+            )
+            with governance_scope(bundle):
+                return await self.run(request)
         runtime_name = request.runtime or self.kernel.spec.runtime.backend
         effective_prompt = build_typed_output_prompt(request.prompt, request.result_schema)
         self.kernel.store.open_session(
@@ -299,6 +333,13 @@ class HarnessSession:
                 "provider": request.provider,
                 "model": request.model,
             },
+        )
+        self._enforce_contextual_policy(
+            "request",
+            run_id,
+            arguments={"prompt": request.prompt},
+            provider=request.provider,
+            runtime=runtime_name,
         )
         backend = create_harness_backend(request.runtime or self.kernel.spec.runtime.backend)
         backend_request = HarnessBackendRequest(
@@ -334,6 +375,16 @@ class HarnessSession:
             raise
         latency_ms = int((time.monotonic() - started_at) * 1000)
         response = backend_result.response
+        self._enforce_contextual_policy(
+            "response",
+            run_id,
+            arguments={
+                "content": response.content,
+                "stopped_reason": response.stopped_reason,
+            },
+            provider=request.provider,
+            runtime=runtime_name,
+        )
         self._capture_pending_approval_state(
             backend_result.metadata,
             run_id=run_id,
@@ -529,6 +580,36 @@ class HarnessSession:
         self._events.append(event)
         self.kernel.store.append_event(run_id, event)
         self.kernel.emit(event)
+
+    def _enforce_contextual_policy(
+        self,
+        phase: str,
+        run_id: str,
+        *,
+        arguments: dict[str, Any],
+        provider: str,
+        runtime: str,
+    ) -> None:
+        from superqode.governance import evaluate_active_policy
+
+        decision = evaluate_active_policy(
+            phase,
+            provider=provider,
+            runtime=runtime,
+            arguments=arguments,
+        )
+        if decision.enforced:
+            self._emit("policy_decision", run_id, decision.to_dict())
+        if decision.action == "allow":
+            return
+        self.kernel.store.end_run(
+            run_id,
+            status="failed",
+            metadata={"policy_decision": decision.to_dict()},
+        )
+        raise PermissionError(
+            f"Contextual policy {decision.action} at {phase}: {decision.reason}"
+        )
 
 
 def _status_from_stopped_reason(stopped_reason: str) -> str:

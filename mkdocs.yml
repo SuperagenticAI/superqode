@@ -163,9 +163,12 @@ nav:
     - 📈 Run, Measure, Optimize: advanced/harness-optimization.md
     - 🧠 Self-Improving Harnesses: advanced/self-improving-harness.md
     - 📊 Optimization Story: advanced/optimization.md
+    - 🧪 HarnessBench: advanced/harnessbench.md
+    - 🚦 Harness Promotion: advanced/harness-promotion.md
     - 🧠 Skill Optimization: advanced/skill-optimization.md
     - 📐 Benchmark Runner: advanced/benchmark-runner.md
     - 🔌 ACP Agent Server: advanced/acp-agent-server.md
+    - 🔀 SuperQode and Omnigent: advanced/superqode-vs-omnigent.md
     - 🔁 Omnigent Compatibility: advanced/omnigent-compat.md
 
   - 🖥️ Local & Open Models:
@@ -205,13 +208,16 @@ nav:
       - 🐍 Monty Python REPL: advanced/monty-python-repl.md
     - 🤝 Workflows & Automation:
       - 🧰 Developer Workflows: developer-workflows.md
+      - 🏭 Terminal-First Software Factory: advanced/software-factory.md
       - 🤝 Multi-Agent Workflows: advanced/multi-agent.md
       - 🔁 Recursive Agent Harness: advanced/recursive-agent-harness.md
       - 🤖 Headless & CI: advanced/headless-ci.md
-      - 🏭 Software Factory: advanced/software-factory.md
+      - 📦 WorkOrders: advanced/workorders.md
+      - ✅ 0.2.30 Validation Contract: advanced/release-0.2.30.md
       - 📱 Chat Channels Remote Control: advanced/channels.md
     - 🛡️ Safety & Memory:
       - 🛡️ Policies & Safety: advanced/policies.md
+      - 🔐 Contextual Policy & Credentials: advanced/contextual-policy.md
       - 🔒 Safety & Permissions: advanced/safety-permissions.md
       - 🧠 Memory & Learning: advanced/memory.md
       - 📜 Logging System: advanced/logging-system.md
@@ -240,6 +246,8 @@ nav:
     - 🔐 Auth: cli-reference/auth-commands.md
     - 🛡️ Trust: cli-reference/trust-commands.md
     - ⏱️ Sessions: cli-reference/sessions-commands.md
+    - 📦 WorkOrders: cli-reference/work-commands.md
+    - 🔐 Policy: cli-reference/policy-commands.md
     - 🏭 Factory: cli-reference/factory-commands.md
     - 📤 Share: cli-reference/share-commands.md
     - 🧠 Memory: cli-reference/memory-commands.md

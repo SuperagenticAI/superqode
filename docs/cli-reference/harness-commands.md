@@ -404,6 +404,17 @@ superqode harness eval-packs local-recursive-smoke
 superqode harness eval --spec harness.yaml --tasks "$(superqode harness eval-packs local-recursive-smoke)" --live
 ```
 
+### `harness bench` and `harness bench-verify`
+
+Run a publishable same-model comparison from a HarnessBench manifest. The output preserves every raw repetition, aggregate quality/cost/latency variance, Pareto membership, source fingerprints, and artifact checksums.
+
+```bash
+superqode harness bench --manifest harnessbench.yaml --output results/july
+superqode harness bench-verify results/july
+```
+
+The manifest fixes the task file, at least two HarnessSpecs, provider, model, runtime, sandbox, split, and repetition count. `--live` or `--dry-run` can override its execution setting. Dry runs validate packaging but are not valid promotion evidence. See [HarnessBench](../advanced/harnessbench.md).
+
 ### `harness auto-bench`
 
 Run the quick model-facing wrapper around `harness test` or `harness eval` and print a recommendation.
@@ -581,6 +592,27 @@ superqode harness optimize-ledger mh-project/runs/superqode-optimize
 When `--trace-evidence` is omitted, SuperQode writes `trace-evidence.md` from the current spec and eval task file. The generated evidence includes the harness runtime, workflow, model policy, permission posture, and task prompts so the optimizer has a useful starting snapshot. Add `--test-result` or `--eval-result` to include previous scorecards and failure digests from prior runs.
 
 Use `harness optimize-inspect RUN_DIR` to summarize a completed meta-harness run. Use `harness optimize-ledger RUN_DIR` to list candidates, objective values, validation state, outcomes, and changed files. Both commands support `--json`. The TUI harness sidebar also shows the latest local meta-harness run under `.superqode/metaharness` or `mh-project` when artifacts are present.
+
+### `harness promote`
+
+Deliver an audited candidate through staging, deterministic WorkOrder canary routing, live held-out evidence, activation, and guarded rollback:
+
+```bash
+superqode harness promote stage \
+  --base harness.yaml --candidate candidate.yaml \
+  --tasks eval-tasks.yaml --eval-result heldout-eval.json \
+  --actor maintainer
+
+superqode harness promote canary cand_... --percent 10 --actor maintainer
+superqode harness promote status cand_... --json
+superqode harness promote select harness.yaml --key work_... --json
+superqode harness promote activate cand_... \
+  --evidence results/canary/scorecard.json --actor maintainer
+superqode harness promote rollback cand_... \
+  --actor maintainer --reason "cost regression"
+```
+
+Activation requires a passing live `held-out` HarnessBench scorecard whose base and candidate digests match the staged files. It rejects regression runs and candidates below the baseline mean. See [Harness Promotion](../advanced/harness-promotion.md).
 
 ---
 

@@ -139,6 +139,8 @@ class SlashCommandMixin:
             self._doctor_cmd(args, log)
         elif c in ("session", "sessions-current"):
             self._session_cmd(args, log)
+        elif c == "work" and args.strip():
+            self._run_cli_group("work", args, log, "WorkOrder")
         elif c in ("work", "summary"):
             self._work_cmd(args, log)
         elif c == "files":
