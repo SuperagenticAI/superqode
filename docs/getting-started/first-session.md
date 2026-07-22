@@ -38,9 +38,9 @@ Useful keys:
 | Key | Action |
 | --- | --- |
 | `Ctrl+K` | Open the command palette |
-| `:` | Enter command mode |
+| `:` | Enter a command, or Command mode when optional Vim mode is enabled |
 | `Ctrl+T` | Toggle thinking/session logs |
-| `Ctrl+Q` | Quit |
+| `Ctrl+C` | Quit |
 | `Escape` | Close a modal or picker |
 
 ---
@@ -68,6 +68,8 @@ Check the current state:
 ```
 
 Use ACP when you want an external coding agent, BYOK when you want a hosted model with your API key, and local when you want Ollama, LM Studio, DS4, MLX, vLLM, or another local server.
+
+For modal keyboard navigation, run `:vim on`. Press `i` to enter a task and `Escape` to return to Normal mode. The setting persists across sessions. The complete reference is in [Vim-Like Terminal Navigation](../advanced/vim-mode.md).
 
 ---
 
@@ -188,6 +190,21 @@ superqode harness graph <run-id> --json
 ---
 
 ## 7. Switch Runtime Or Provider
+
+Switch harnesses without discarding the current conversation:
+
+```text
+:harness
+:harness switch
+:harness switch workbench
+:sessions switch
+```
+
+The first two commands open the interactive Harness Switcher. Select a harness
+with the arrow keys and Enter, or press `F` to create an independent session
+branch before switching. The direct command activates Workbench without opening
+the picker. `:sessions switch` opens the saved-session picker. Selecting a session restores the
+harness, model, and conversation history attached to it.
 
 List available runtimes:
 

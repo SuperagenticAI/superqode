@@ -1,0 +1,30 @@
+identity = "dirac.run"
+name = "Dirac"
+short_name = "dirac"
+url = "https://dirac.run"
+protocol = "acp"
+author_name = "Dirac Delta Labs"
+author_url = "https://dirac.run"
+publisher_name = "SuperQode"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "Open-source coding agent focused on efficient parallel edits and lower model cost."
+tags = ["official-acp", "open-source", "optimization"]
+catalog_tier = "all"
+run_command."*" = "dirac --acp"
+
+help = '''
+# Dirac
+
+Dirac is an open-source coding agent with native ACP support.
+
+## Installation
+
+```bash
+npm install -g dirac-cli
+```
+'''
+
+[actions."*".install]
+command = "npm install -g dirac-cli"
+description = "Install Dirac"

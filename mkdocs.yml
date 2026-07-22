@@ -229,6 +229,7 @@ nav:
       - 🔧 MCP Configuration: configuration/mcp-config.md
       - 🔐 MCP OAuth: advanced/mcp-oauth.md
     - 🧭 TUI Reference: advanced/tui.md
+    - ⌨️ Vim-Like Navigation: advanced/vim-mode.md
 
   - ⚙️ Configuration:
     - configuration/index.md

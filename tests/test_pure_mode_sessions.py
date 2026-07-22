@@ -187,6 +187,28 @@ def test_resume_reuses_resolved_session_id_and_fork_branches_active_session(tmp_
     assert pure._session_manager.current_session_id == "resume-session-branch"
 
 
+def test_resume_harness_spec_carries_session_id_into_kernel(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    manager = SessionManager(".superqode/sessions")
+    manager.start_session(
+        "kimi-session-1234",
+        provider="moonshot",
+        model="kimi-k3",
+        harness_id="kimi-coding",
+        harness_source="built-in-template",
+    )
+    manager.add_user_message("inspect the repository")
+
+    pure = PureMode()
+    pure._session_manager = SessionManager(".superqode/sessions")
+    messages = pure.resume_session("kimi-session")
+
+    assert messages
+    assert pure.session.harness_name == "kimi-coding"
+    assert pure.get_current_session_id() == "kimi-session-1234"
+    assert pure._harness_session_id == "kimi-session-1234"
+
+
 def test_legacy_session_resumes_with_workbench_harness(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("SUPERQODE_HARNESS", raising=False)
@@ -215,6 +237,27 @@ def test_new_session_records_core_harness_contract(tmp_path, monkeypatch):
     assert metadata.harness_source == "built-in"
     assert metadata.harness_digest.startswith("sha256:")
     assert metadata.tool_contract_version == "core-tools-v1"
+    assert metadata.harness_transitions[-1]["to_harness"] == "core"
+
+
+def test_reconnecting_session_records_harness_transition(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+
+    pure = PureMode()
+    pure.connect("ollama", "qwen2.5-coder", session_id="durable-session")
+    pure.select_harness("workbench")
+    pure.connect("ollama", "qwen2.5-coder", session_id="durable-session")
+
+    metadata = SessionManager(".superqode/sessions").get_session_info("durable-session")
+    assert metadata is not None
+    assert metadata.harness_id == "workbench"
+    assert [
+        (item["from_harness"], item["to_harness"]) for item in metadata.harness_transitions
+    ] == [
+        ("", "core"),
+        ("core", "workbench"),
+    ]
 
 
 def test_disconnect_closes_self_contained_runtime():

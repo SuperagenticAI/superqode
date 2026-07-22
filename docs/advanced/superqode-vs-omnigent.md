@@ -1,10 +1,17 @@
-# How SuperQode Relates to Omnigent
+# SuperQode and Omnigent
 
-If you already understand Omnigent, this page explains which ideas are shared, where SuperQode takes a different approach, and how the two formats can work together.
+If you already understand Omnigent, this page maps familiar concepts to
+SuperQode, explains where its terminal workflow differs, and shows how the two
+configuration formats can work together.
 
-This is not a claim that one product should reproduce every feature of the other. Both products make multiple coding-agent harnesses easier to use, but they optimize for different working styles.
+This page is an orientation guide, not a product ranking or feature scorecard.
+Both projects make multiple coding-agent harnesses easier to use, but they
+organize the work around different primary experiences.
 
-In one sentence: both products orchestrate multiple coding-agent harnesses, while SuperQode applies Agent Engineering to durable WorkOrders, evaluation, governance, guarded optimization, and software factory workflows. Omnigent places greater emphasis on persistent collaborative sessions across terminal, web, mobile, and desktop clients.
+In one sentence: both projects orchestrate coding-agent harnesses. Omnigent
+places the persistent collaborative session at the center of its experience,
+while SuperQode places terminal-first Agent Engineering, repository delivery,
+evaluation, governance, and guarded optimization around that session.
 
 ## The shared idea
 
@@ -19,11 +26,13 @@ Omnigent and SuperQode start from several similar beliefs:
 
 An Omnigent user will therefore recognize many SuperQode concepts: declarative agent configuration, harness and model selection, persistent sessions, child workers, tools, policies, sandboxes, and terminal execution.
 
-## The main difference in emphasis
+## Where the workflows differ
 
 Omnigent centers the persistent session. Its public architecture connects a server, runner hosts, and synchronized terminal, web, mobile, and desktop interfaces. This is valuable when people want to open, share, and steer the same live session from different devices.
 
-SuperQode centers the builder's repository and terminal:
+SuperQode centers the builder's repository and terminal. A persistent session
+supports interactive work, while a WorkOrder adds the lifecycle needed to
+deliver and verify repository changes:
 
 ```text
 HarnessSpec defines how the coding agent works
@@ -37,24 +46,78 @@ checks, review, and an exact candidate gate delivery
 evaluation and improvement make the harness better
 ```
 
-SuperQode does not reproduce Omnigent's full web, mobile, and desktop client suite. Its primary experience remains the CLI and TUI, with focused remote-control options for builders who need to step away from the terminal.
+SuperQode does not reproduce Omnigent's full web, mobile, and desktop client
+suite. Its primary experience remains the CLI and TUI, with focused
+remote-control options for builders who need to step away from the terminal.
 
-## Similar concepts, different implementations
+## Continue one session across harnesses
 
-| Need | Omnigent approach | SuperQode approach |
+SuperQode can change the active harness without discarding the current
+SuperQode session. This makes the multi-harness workflow explicit in both the
+CLI and TUI:
+
+```text
+:harness
+:harness switch
+:harness switch workbench
+:harness switch kimi-coding
+```
+
+The first two commands open the interactive Harness Switcher. It marks the
+active harness and supports Enter to continue, `F` to fork and switch, `I` to
+inspect, `A` to show the complete catalog, and Escape to cancel.
+
+The switch retains the SuperQode session ID and normalized conversation
+history. SuperQode updates the active provider, model, and harness binding, then
+records the transition in the session evidence. The TUI status bar shows the
+active harness after the connection is established.
+
+Use a fork when another harness should explore an independent approach:
+
+```text
+:harness switch workbench --fork
+```
+
+The fork copies the conversation into a child session before changing the
+harness. The original session remains available and can be restored later.
+
+The harness catalog reports one of three continuity levels:
+
+- `exact-resume` means the runtime can resume its existing external thread
+- `context-replay` means SuperQode supplies the normalized conversation history
+  to the new harness
+- `fresh-session` means the adapter cannot guarantee either form of continuity
+
+This distinction prevents a runtime-specific limitation from being presented
+as exact thread resumption. SuperQode preserves its own session and transition
+history, while vendor-native thread continuity depends on the selected runtime.
+
+The same information is available outside the TUI:
+
+```bash
+sq harness list
+sq harness current
+sq sessions list
+sq sessions show SESSION_ID
+```
+
+## Concept map for Omnigent users
+
+The following map connects common Omnigent concepts to the corresponding
+SuperQode workflow. It describes product shape rather than relative quality.
+
+| Familiar concept | Related SuperQode concept | How it is used in SuperQode |
 | --- | --- | --- |
-| Define an agent | Concise Omnigent YAML | Repo-owned `HarnessSpec`, templates, wizard, and agent import |
-| Use different harnesses | Common session layer over built-in and custom harnesses | Harness Protocol and runtime adapters behind the same spec and event contracts |
-| Change models or harnesses | Runtime overrides and session switching | Factory routes, switches, forks, task-specific harnesses, and recorded lineage |
-| Keep work persistent | The persistent conversation is the central unit | Persistent sessions for conversation plus WorkOrders for repository delivery |
-| Coordinate multiple agents | Built-in multi-AI and child-agent session coordination | Harness workflows, peer agents, A2A, Switchboard, and WorkOrder task dependencies |
-| Apply guardrails | Contextual policies, server enforcement, and sandboxes | Tool permissions, hooks, sandbox rules, route intent, approvals, and WorkOrder budgets |
-| Work locally | Local runner hosts and local model endpoints | Local-first harnesses, hardware discovery, local routing, airplane mode, and local workers |
-| Access work remotely | Shared server with terminal, web, mobile, and desktop clients | Chat-channel remote control, local companion API, and an optional browser TUI |
-| Decide whether work is ready | Session review, policies, quality protocols, and diffs | Typed reviews, deterministic checks, content-addressed approval, verified merge, and rollback |
-| Improve agent behavior | Agent and meta-harness evolution in the Omnigent ecosystem | Eval scorecards, failure mining, candidate ledger, held-out gates, and guarded optimization |
-
-The table describes product shape, not a scorecard. A team may prefer either approach or use the Omnigent configuration format as input to a SuperQode delivery and evaluation workflow.
+| Agent definition | `HarnessSpec` | Store the harness, model routes, tools, policy, memory, and runtime metadata with the repository |
+| Multiple harnesses | Harness catalog and Harness Protocol | Discover built-in, ACP, SDK, local, and imported harnesses through one terminal workflow |
+| Session switching | Durable session binding | Switch the harness in the same session, fork an alternative, restore earlier work, and inspect transition lineage |
+| Persistent session | Session store and Switchboard graph | Preserve conversation, provider, model, harness, child sessions, handoffs, and transitions |
+| Child-agent coordination | Harness workflows, peers, A2A, and WorkOrder workers | Delegate interactive work or schedule dependent repository tasks |
+| Policies and sandboxes | Permissions, hooks, route intent, approvals, and budgets | Apply controls to tool use, execution, and delivery decisions |
+| Local execution | Local routing, hardware discovery, airplane mode, and local workers | Run local or open models without changing the repository-owned harness contract |
+| Remote supervision | Chat channels, local session API, and optional browser TUI | Supervise terminal work without making web or mobile the primary product surface |
+| Delivery review | Typed reviews, deterministic checks, verified merge, and rollback | Decide whether an exact repository candidate is ready to accept |
+| Harness improvement | Evaluations, failure mining, candidate ledger, and held-out gates | Measure changes and promote an improved harness under explicit controls |
 
 ## Why SuperQode added WorkOrders
 
@@ -182,17 +245,27 @@ sq harness eval --spec harness.yaml --tasks evals/tasks.yaml --live
 
 See [Omnigent Compatibility](omnigent-compat.md) for exact field mapping.
 
-## Which approach fits which workflow?
+## How the workflows can be used together
 
-Choose Omnigent's style when the central need is a persistent shared session that moves fluidly across terminal, browser, phone, desktop, and collaborators.
+Omnigent agent definitions can remain the authoring or collaboration format,
+then be imported into a SuperQode repository when the work needs WorkOrder
+delivery, evaluation, or optimization.
 
-Choose SuperQode's style when the central need is a repository-owned harness, terminal execution, local/open model depth, durable repository delivery, explicit evidence, and safe harness improvement.
+SuperQode can also be used independently when the primary requirements are a
+repository-owned harness, terminal execution, local or open model depth,
+durable repository delivery, explicit evidence, and controlled harness
+improvement.
 
-Use both formats when Omnigent agent definitions are useful inputs but SuperQode's WorkOrder, evaluation, or optimization loop is the desired execution and proof layer.
+This interoperability does not require SuperQode to emulate the Omnigent server
+or client suite. It treats the imported definition as an input to SuperQode's
+Agent Engineering workflow.
 
 ## A concise public description
 
-> SuperQode and Omnigent both orchestrate multiple coding-agent harnesses. Omnigent centers the persistent collaborative session across devices. SuperQode centers terminal-first Agent Engineering, repository-owned specifications, reliable WorkOrders, evidence-backed delivery, governance, optimization, and software factory workflows.
+> SuperQode shares Omnigent's multi-harness foundation and provides a distinct
+> terminal-first Agent Engineering workflow. Sessions can continue across
+> harnesses, branch into independent approaches, and feed repository-owned
+> WorkOrders, evaluation, governance, and guarded optimization.
 
 ## Official Omnigent references
 

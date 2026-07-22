@@ -92,7 +92,7 @@ AGENTS: Dict[str, AgentDef] = {
         docs_url="https://github.com/google-gemini/gemini-cli",
         capabilities=["Large codebases", "Multimodal input", "2M context"],
         connection_type="stdio",
-        command="gemini --experimental-acp",
+        command="gemini --acp",
     ),
     "claude": AgentDef(
         id="claude",
@@ -105,7 +105,7 @@ AGENTS: Dict[str, AgentDef] = {
         docs_url="https://claude.ai/code",
         capabilities=["File editing", "Shell commands", "Extended thinking"],
         connection_type="stdio",
-        command="claude --acp",
+        command="claude-agent-acp",
     ),
     "codex": AgentDef(
         id="codex",
@@ -118,7 +118,7 @@ AGENTS: Dict[str, AgentDef] = {
         docs_url="https://github.com/openai/codex",
         capabilities=["Code generation", "File editing", "Shell commands"],
         connection_type="stdio",
-        command="codex --acp",
+        command="codex-acp",
     ),
     "junie": AgentDef(
         id="junie",
@@ -144,7 +144,7 @@ AGENTS: Dict[str, AgentDef] = {
         docs_url="https://github.com/block/goose",
         capabilities=["Task automation", "MCP tools", "Multi-provider"],
         connection_type="stdio",
-        command="goose mcp",
+        command="goose acp",
     ),
     "kimi": AgentDef(
         id="kimi",
@@ -157,7 +157,7 @@ AGENTS: Dict[str, AgentDef] = {
         docs_url="https://moonshot.cn/",
         capabilities=["Development workflows", "Long context"],
         connection_type="stdio",
-        command="kimi --acp",
+        command="kimi acp",
     ),
     "stakpak": AgentDef(
         id="stakpak",
@@ -170,7 +170,7 @@ AGENTS: Dict[str, AgentDef] = {
         docs_url="https://stakpak.dev",
         capabilities=["Code assistance", "Collaboration"],
         connection_type="stdio",
-        command="stakpak --acp",
+        command="stakpak acp",
     ),
     "vtcode": AgentDef(
         id="vtcode",
@@ -183,7 +183,7 @@ AGENTS: Dict[str, AgentDef] = {
         docs_url="https://vtcode.dev",
         capabilities=["Code editing", "Multi-environment"],
         connection_type="stdio",
-        command="vtcode --acp",
+        command="vtcode acp",
     ),
     "auggie": AgentDef(
         id="auggie",
@@ -277,7 +277,7 @@ AGENTS: Dict[str, AgentDef] = {
         docs_url="https://cline.bot/cli",
         capabilities=["File editing", "Shell commands", "Browser", "Multi-file edits"],
         connection_type="stdio",
-        command="cline",
+        command="cline --acp",
     ),
     "cursor": AgentDef(
         id="cursor",
@@ -290,7 +290,7 @@ AGENTS: Dict[str, AgentDef] = {
         docs_url="https://cursor.com/docs/cli/acp",
         capabilities=["Code completion", "Edit generation", "Chat", "Terminal"],
         connection_type="stdio",
-        command="cursor agent acp",
+        command="cursor-agent acp",
     ),
     "factory": AgentDef(
         id="factory",
@@ -303,7 +303,7 @@ AGENTS: Dict[str, AgentDef] = {
         docs_url="https://factory.ai/product/cli",
         capabilities=["Code analysis", "Autonomous modifications", "Code review"],
         connection_type="stdio",
-        command="droid",
+        command="droid exec --output-format acp-daemon",
     ),
     "dirac": AgentDef(
         id="dirac",
@@ -316,33 +316,33 @@ AGENTS: Dict[str, AgentDef] = {
         docs_url="https://dirac.run",
         capabilities=["Cost optimization", "Fast edits", "AST manipulation", "Parallel edits"],
         connection_type="stdio",
-        command="dirac",
+        command="dirac --acp",
     ),
     "deepagents": AgentDef(
         id="deepagents",
         name="DeepAgents",
         protocol=AgentProtocol.ACP,
-        status=AgentStatus.COMING_SOON,
-        description="Python library for building agents with LangGraph - not a standalone CLI",
+        status=AgentStatus.SUPPORTED,
+        description="LangChain agent runtime exposed through its ACP package",
         auth_info="OPENAI_API_KEY or ANTHROPIC_API_KEY",
-        setup_command="pip install deepagents",
-        docs_url="https://docs.langchain.com/oss/python/deepagents/overview",
+        setup_command="npm install -g deepagents-acp",
+        docs_url="https://docs.langchain.com/oss/javascript/deepagents/overview",
         capabilities=["LangGraph integration", "Sub-agent spawning", "Build custom agents"],
         connection_type="stdio",
-        command="",  # No CLI - library only
+        command="npx -y deepagents-acp",
     ),
     "codebuddy": AgentDef(
         id="codebuddy",
         name="Codebuddy",
         protocol=AgentProtocol.ACP,
-        status=AgentStatus.COMING_SOON,
-        description="Tencent Cloud's official intelligent coding tool (desktop app, not CLI)",
+        status=AgentStatus.SUPPORTED,
+        description="Tencent Cloud's terminal coding agent with ACP support",
         auth_info="TENCENT_CLOUD_API_KEY",
-        setup_command="See https://www.codebuddy.cn/cli/",
+        setup_command="npm install -g @tencent-ai/codebuddy-code",
         docs_url="https://www.codebuddy.cn/cli/",
         capabilities=["Code generation", "Code completion", "Analysis"],
         connection_type="stdio",
-        command="",  # Unverified CLI
+        command="codebuddy --acp",
     ),
     "cortex": AgentDef(
         id="cortex",
@@ -355,7 +355,7 @@ AGENTS: Dict[str, AgentDef] = {
         docs_url="https://docs.snowflake.com/en/user-guide/cortex-code/cortex-code",
         capabilities=["SQL generation", "Data analysis", "Code generation"],
         connection_type="stdio",
-        command="cortex-code --acp",
+        command="cortex acp serve",
     ),
     "agoragentic": AgentDef(
         id="agoragentic",
@@ -531,7 +531,7 @@ def is_agent_available(agent_id: str) -> bool:
 
 
 async def get_all_acp_agents() -> dict[str, "Agent"]:
-    """Get all ACP agents, merging local TOML files with registry.
+    """Get all ACP agents from local definitions and the cached official registry.
 
     Returns:
         Dictionary mapping agent identity to Agent dict.
@@ -539,47 +539,7 @@ async def get_all_acp_agents() -> dict[str, "Agent"]:
     """
     from .discovery import read_agents
 
-    # Get local agents first (without registry to avoid circular import)
-    local_agents = await read_agents(include_registry=False)
-
-    # Get registry agents
-    registry_agents = get_all_registry_agents()
-
-    # Convert registry agents to Agent format and merge
-    for identity, metadata in registry_agents.items():
-        # Skip if already in local agents
-        if identity in local_agents:
-            continue
-
-        # Convert registry metadata to Agent format
-        agent: "Agent" = {
-            "identity": metadata["identity"],
-            "name": metadata["name"],
-            "short_name": metadata["short_name"],
-            "url": metadata["url"],
-            "protocol": "acp",
-            "author_name": metadata["author_name"],
-            "author_url": metadata["author_url"],
-            "publisher_name": "SuperQode Team",
-            "publisher_url": "https://github.com/SuperagenticAI/superqode",
-            "type": "coding",
-            "description": metadata["description"],
-            "tags": [],
-            "help": f"# {metadata['name']}\n\n{metadata['description']}\n\n## Installation\n\n{metadata['installation_instructions']}\n\nRun: `{metadata['installation_command']}`",
-            "run_command": {"*": metadata["run_command"]},
-            "actions": {
-                "*": {
-                    "install": {
-                        "command": metadata["installation_command"],
-                        "description": f"Install {metadata['name']}",
-                    }
-                }
-            },
-        }
-
-        local_agents[identity] = agent
-
-    return local_agents
+    return await read_agents(include_registry=True)
 
 
 async def get_agent_metadata(agent_id: str) -> "Agent | None":

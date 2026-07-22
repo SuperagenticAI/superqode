@@ -34,7 +34,7 @@ Codex is OpenAI's code generation agent with streaming terminal output and commu
 Install Codex ACP adapter via npm:
 
 ```bash
-npm i @zed-industries/codex-acp
+npm install -g @agentclientprotocol/codex-acp
 ```
 
 **Requirements:**
@@ -49,9 +49,9 @@ Codex supports the Agent Client Protocol through the official adapter by Zed Ind
 ---
 
 **For latest install instructions**: https://zed.dev/acp/agent/codex
-**ACP Adapter**: https://github.com/zed-industries/codex-acp
+**ACP Adapter**: https://github.com/agentclientprotocol/codex-acp
 '''
 
 [actions."*".install]
-command = "npm i @zed-industries/codex-acp"
-description = "Install Codex ACP adapter (see https://zed.dev/acp for latest)"
+command = "npm install -g @agentclientprotocol/codex-acp"
+description = "Install the Codex ACP adapter"

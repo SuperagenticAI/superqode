@@ -399,6 +399,9 @@ class ModelCatalogMixin:
             else:
                 log.add_error(f"Invalid selection. Choose 1-{len(self._openhands_models)}")
 
+        if not self._awaiting_model_selection and self.current_model:
+            self._set_acp_status(self.current_model)
+
     def action_select_model_1(self):
         """Select item 1 in current selection mode."""
         self._select_by_number_universal(1)
@@ -821,6 +824,19 @@ class ModelCatalogMixin:
             from superqode.app.widgets import ColorfulStatusBar
 
             self.query_one("#status-bar", ColorfulStatusBar).active_model = model or ""
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _set_acp_status(self, model: str = "") -> None:
+        """Synchronize an ACP connection with the persistent top status bar."""
+        try:
+            from superqode.app.widgets import ColorfulStatusBar
+
+            status = self.query_one("#status-bar", ColorfulStatusBar)
+            # A new ACP connection supersedes any prior local or BYOK display.
+            status.update_byok_status()
+            status.active_runtime = "acp"
+            status.active_model = model or ""
         except Exception:  # noqa: BLE001
             pass
 
@@ -2372,6 +2388,7 @@ class ModelCatalogMixin:
         # Update badge
         badge = self.query_one("#mode-badge", ModeBadge)
         badge.model = badge_model_name
+        self._set_acp_status(badge_model_name)
 
         t = Text()
         t.append(f"\n  ✅ ", style=f"bold {THEME['success']}")

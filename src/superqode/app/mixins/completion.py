@@ -108,12 +108,18 @@ class CompletionMixin:
             )
         if lowered.startswith(":harness use "):
             return self._harness_candidates_after_prefix(value, ":harness use ", include_all=False)
+        if lowered.startswith(":harness switch "):
+            return self._harness_candidates_after_prefix(
+                value, ":harness switch ", include_all=False
+            )
         if lowered.startswith(":harness show "):
             return self._harness_candidates_after_prefix(value, ":harness show ", include_all=True)
         if lowered.startswith(":harness customize "):
             return self._harness_candidates_after_prefix(
                 value, ":harness customize ", include_all=True
             )
+        if lowered.startswith(":connect acp "):
+            return self._acp_candidates_after_prefix(value)
         context_specs = [
             (":mcp connect ", self._mcp_server_completion_candidates),
             (":mcp disconnect ", self._mcp_server_completion_candidates),
@@ -150,6 +156,71 @@ class CompletionMixin:
             return self._model_switch_candidates(value, ":model switch ")
 
         return self._static_command_candidates(value)
+
+    @staticmethod
+    def _acp_completion_candidates() -> list[PromptCompletionCandidate]:
+        """Return registry controls and bundled ACP agent names."""
+        from superqode.agents.acp_registry import get_all_registry_agents
+        from superqode.providers.acp_registry import registry_catalog_tier
+
+        candidates = [
+            PromptCompletionCandidate(
+                value="all",
+                label="all",
+                description="Open the complete official and SuperQode ACP catalog",
+                kind="catalog",
+            ),
+            PromptCompletionCandidate(
+                value="enterprise",
+                label="enterprise",
+                description="Show enterprise ACP agent runtimes",
+                kind="catalog",
+            ),
+            PromptCompletionCandidate(
+                value="refresh",
+                label="refresh",
+                description="Refresh the cached official ACP Registry",
+                kind="command",
+            ),
+        ]
+        seen: set[str] = set()
+        for agent in get_all_registry_agents().values():
+            short_name = str(agent["short_name"])
+            if short_name in seen:
+                continue
+            seen.add(short_name)
+            tier = registry_catalog_tier("", short_name)
+            candidates.append(
+                PromptCompletionCandidate(
+                    value=short_name,
+                    label=short_name,
+                    description=f"{tier} · {agent['name']}",
+                    kind="agent",
+                )
+            )
+        return candidates
+
+    @classmethod
+    def _acp_candidates_after_prefix(cls, value: str) -> list[PromptCompletionCandidate]:
+        """Complete ACP controls first, followed by catalog agents."""
+        prefix = ":connect acp "
+        partial = value[len(prefix) :].casefold()
+        matches: list[PromptCompletionCandidate] = []
+        for candidate in cls._acp_completion_candidates():
+            if not candidate.label.casefold().startswith(partial):
+                continue
+            replacement = prefix + candidate.label
+            if replacement == value:
+                continue
+            matches.append(
+                PromptCompletionCandidate(
+                    value=replacement,
+                    label=candidate.label,
+                    description=candidate.description,
+                    kind=candidate.kind,
+                )
+            )
+        return matches
 
     @staticmethod
     def _harness_candidates_after_prefix(

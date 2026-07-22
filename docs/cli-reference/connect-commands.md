@@ -139,7 +139,9 @@ command can open interactive pickers.
 
 Connect to any ACP-compatible coding agent installed on your system. The CLI
 command requires an agent name. The TUI `:connect acp` command can open an
-interactive picker.
+interactive picker. Installed agents are listed first, followed by the curated
+featured catalog. Use `:connect acp enterprise` for enterprise runtimes and
+`:connect acp all` for the complete registry.
 
 ---
 
@@ -198,6 +200,15 @@ superqode connect acp opencode -d /path/to/project
 
 This command launches a simple CLI interactive session. For the full TUI
 experience, run `superqode` and use `:connect acp <agent>` inside the TUI.
+
+The TUI also supports:
+
+```text
+:connect acp                 # installed and featured agents
+:connect acp enterprise      # enterprise agents
+:connect acp all             # complete registry and SuperQode adapters
+:connect acp refresh         # refresh the official registry cache
+```
 
 ---
 

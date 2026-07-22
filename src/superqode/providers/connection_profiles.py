@@ -158,7 +158,7 @@ _PROFILES: List[ConnectionProfile] = [
         self_contained=True,
         detect=_claude_agent_ready,
         unavailable_hint=missing_extra_hint(
-            "claude-agent-sdk", suffix="add the Claude Code CLI, then set ANTHROPIC_API_KEY"
+            "claude-agent-sdk", suffix="then set ANTHROPIC_API_KEY"
         ),
     ),
     ConnectionProfile(

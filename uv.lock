@@ -6184,6 +6184,12 @@ ui-testing = [
     { name = "playwright" },
     { name = "selenium" },
 ]
+vendor-sdks = [
+    { name = "claude-agent-sdk" },
+    { name = "google-antigravity" },
+    { name = "openai-codex" },
+    { name = "protobuf" },
+]
 web = [
     { name = "textual-serve" },
 ]
@@ -6197,6 +6203,7 @@ requires-dist = [
     { name = "bandit", marker = "extra == 'linters'", specifier = ">=1.8.0" },
     { name = "bandit", marker = "extra == 'testing'", specifier = ">=1.8.0" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-agent-sdk'", specifier = ">=0.2.9,<0.3.0" },
+    { name = "claude-agent-sdk", marker = "extra == 'vendor-sdks'", specifier = ">=0.2.9,<0.3.0" },
     { name = "click", specifier = ">=8.0.0" },
     { name = "cocoindex-code", marker = "extra == 'semantic'", specifier = ">=0.2.35,<0.3" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.0.0" },
@@ -6212,6 +6219,7 @@ requires-dist = [
     { name = "gepa", marker = "extra == 'optimization'", specifier = ">=0.1.1" },
     { name = "google-adk", marker = "extra == 'adk'", specifier = ">=2.1.0,<3.0" },
     { name = "google-antigravity", marker = "extra == 'antigravity-sdk'", specifier = ">=0.1.6,<0.2.0" },
+    { name = "google-antigravity", marker = "extra == 'vendor-sdks'", specifier = ">=0.1.6,<0.2.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "httpx", marker = "extra == 'testing'", specifier = ">=0.28.1" },
     { name = "httpx-sse", specifier = ">=0.4.3" },
@@ -6236,6 +6244,7 @@ requires-dist = [
     { name = "openai-agents", marker = "extra == 'openai-agents'", specifier = ">=0.17.4" },
     { name = "openai-agents", extras = ["litellm"], marker = "extra == 'openai-agents'", specifier = ">=0.17.4" },
     { name = "openai-codex", marker = "extra == 'codex-sdk'", specifier = ">=0.1.0b2,<0.2.0" },
+    { name = "openai-codex", marker = "extra == 'vendor-sdks'", specifier = ">=0.1.0b2,<0.2.0" },
     { name = "opentelemetry-exporter-otlp-proto-grpc", marker = "extra == 'observability'", specifier = ">=1.39.1" },
     { name = "opentelemetry-sdk", marker = "extra == 'observability'", specifier = ">=1.39.1" },
     { name = "pip-audit", marker = "extra == 'linters'", specifier = ">=2.10.0" },
@@ -6243,6 +6252,7 @@ requires-dist = [
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.1.0" },
     { name = "prompt-toolkit", specifier = ">=3.0.52" },
     { name = "protobuf", marker = "extra == 'antigravity-sdk'", specifier = ">=6.31.1" },
+    { name = "protobuf", marker = "extra == 'vendor-sdks'", specifier = ">=6.31.1" },
     { name = "pydantic-ai", marker = "extra == 'pydanticai'", specifier = ">=1.98.0,<2.0.0" },
     { name = "pydantic-ai", marker = "extra == 'pydanticai-logfire'", specifier = ">=1.98.0,<2.0.0" },
     { name = "pydantic-monty", marker = "extra == 'monty'", specifier = ">=0.0.4" },
@@ -6269,7 +6279,7 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'a2a'", specifier = ">=0.32.0" },
     { name = "websocket-client", marker = "extra == 'channels'", specifier = ">=1.6.0" },
 ]
-provides-extras = ["hf", "mlx", "monty", "semantic", "channels", "sandbox-e2b", "sandbox-modal", "sandbox-daytona", "sandbox-cloud", "web", "extras", "a2a", "adk", "openai-agents", "codex-sdk", "claude-agent-sdk", "antigravity-sdk", "deepagents", "pydanticai", "pydanticai-logfire", "rlm-code", "mem0", "supermemory", "memory-providers", "dev", "testing", "linters", "ui-testing", "performance", "docs", "optimization", "observability"]
+provides-extras = ["hf", "mlx", "monty", "semantic", "channels", "sandbox-e2b", "sandbox-modal", "sandbox-daytona", "sandbox-cloud", "web", "extras", "a2a", "adk", "openai-agents", "codex-sdk", "claude-agent-sdk", "antigravity-sdk", "vendor-sdks", "deepagents", "pydanticai", "pydanticai-logfire", "rlm-code", "mem0", "supermemory", "memory-providers", "dev", "testing", "linters", "ui-testing", "performance", "docs", "optimization", "observability"]
 
 [[package]]
 name = "synchronicity"

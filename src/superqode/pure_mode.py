@@ -309,7 +309,31 @@ class PureMode:
         self.session.system_level = system_level
         self.session.working_directory = working_directory or Path.cwd()
         self.session.connected = True
+        if session_id:
+            if self._session_manager is None:
+                self._session_manager = SessionManager(storage_dir=".superqode/sessions")
+            self._session_manager.start_session(
+                session_id=session_id,
+                provider=provider,
+                model=model,
+                harness_id=selected_id,
+                harness_source=getattr(self._harness_definition, "source", "built-in"),
+                harness_digest=getattr(self._harness_definition, "digest", ""),
+                tool_contract_version=(
+                    "core-tools-v1" if selected_id == "core" else "workbench-v1"
+                ),
+                continuity=getattr(
+                    self._harness_definition,
+                    "continuity",
+                    "context-replay",
+                ),
+            )
         if self._harness_spec is not None:
+            # HarnessSpec sessions use the same durable session id as the
+            # underlying runtime. Carry an explicit resume id into the harness
+            # kernel so switching away and back restores the original history.
+            if session_id:
+                self._harness_session_id = session_id
             self.session.harness_name = self._harness_spec.name
             self.session.harness_path = self._harness_path
             self.session.harness_flavor = self._harness_spec.flavor.value
@@ -831,6 +855,7 @@ class PureMode:
                 "display_id": s.session_id[:8],
                 "provider": s.provider,
                 "model": s.model,
+                "harness_id": s.harness_id or "workbench",
                 "message_count": s.message_count,
                 "updated_at": s.updated_at,
             }
@@ -899,6 +924,8 @@ class PureMode:
         """Get current session ID."""
         if self._agent:
             return self._agent.session_id
+        if self._harness_session_id:
+            return self._harness_session_id
         return None
 
     def fork_current_session(self, new_session_id: Optional[str] = None) -> str:

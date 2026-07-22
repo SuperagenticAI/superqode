@@ -99,6 +99,16 @@ class HarnessDefinition:
         """Whether this entry belongs in the default human-facing picker."""
         return self.catalog_tier in {"recommended", "user"}
 
+    @property
+    def continuity(self) -> str:
+        """Conservative context continuity available when selecting this harness."""
+        explicit = str(self.spec.metadata.get("continuity") or "").strip().lower()
+        if explicit in {"exact-resume", "context-replay", "fresh-session"}:
+            return explicit
+        if self.runtime == "builtin":
+            return "context-replay"
+        return "fresh-session"
+
     def to_dict(self) -> dict[str, object]:
         return {
             "id": self.id,
@@ -117,6 +127,7 @@ class HarnessDefinition:
             "deprecated": self.deprecated,
             "catalog_tier": self.catalog_tier,
             "recommended": self.recommended,
+            "continuity": self.continuity,
             "tools": list(self.tools),
             "tool_count": len(self.tools),
             "digest": self.digest,

@@ -10,7 +10,7 @@ publisher_url = "https://github.com"
 type = "coding"
 description = "AI coding assistant with ACP support in public preview."
 tags = ["coding", "github", "acp"]
-run_command."*" = "gh copilot acp"
+run_command."*" = "copilot --acp"
 
 help = '''
 # GitHub Copilot
@@ -20,25 +20,22 @@ AI coding assistant with ACP support (public preview).
 ## Installation
 
 ```bash
-# Install GitHub CLI
-brew install gh
-
-# Install Copilot extension
-gh extension install github/gh-copilot
+# Install the current Copilot CLI
+npm install -g @github/copilot
 
 # Authenticate
-gh auth login
+copilot login
 ```
 
 For ACP mode:
 
 ```bash
-gh copilot acp
+copilot --acp
 ```
 
 See https://github.blog/changelog/2026-01-28-acp-support-in-copilot-cli-is-now-in-public-preview/ for details.
 '''
 
 [actions."*".install]
-command = "brew install gh && gh extension install github/gh-copilot"
-description = "Install GitHub CLI and Copilot extension"
+command = "npm install -g @github/copilot"
+description = "Install GitHub Copilot CLI"

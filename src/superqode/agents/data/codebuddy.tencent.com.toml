@@ -1,0 +1,30 @@
+identity = "codebuddy.tencent.com"
+name = "CodeBuddy Code"
+short_name = "codebuddy"
+url = "https://www.codebuddy.cn/cli/"
+protocol = "acp"
+author_name = "Tencent Cloud"
+author_url = "https://www.tencentcloud.com"
+publisher_name = "SuperQode"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "Tencent Cloud's CodeBuddy terminal coding agent with ACP support."
+tags = ["official-acp"]
+catalog_tier = "all"
+run_command."*" = "codebuddy --acp"
+
+help = '''
+# CodeBuddy Code
+
+CodeBuddy Code is Tencent Cloud's terminal coding agent.
+
+## Installation
+
+```bash
+npm install -g @tencent-ai/codebuddy-code
+```
+'''
+
+[actions."*".install]
+command = "npm install -g @tencent-ai/codebuddy-code"
+description = "Install CodeBuddy Code"

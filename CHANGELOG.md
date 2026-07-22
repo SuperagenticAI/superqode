@@ -7,12 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Optional vendor SDK bundle** - Added the `vendor-sdks` extra for Codex, Claude Agent, and Antigravity SDK runtimes, plus environment-aware `superqode runtime setup` and `:runtime setup` guidance. The default installation remains lightweight, and external Grok and Antigravity subscription CLIs retain their own installation and authentication flows.
+- **Durable harness switching** - Added `:harness switch <name>` with same-session context replay, persistent harness transition history, explicit `--fork` branching, harness continuity states, `superqode harness current`, and a harness-aware `:sessions switch` picker.
+- **Interactive Harness Switcher** - Added a responsive `:harness` and `:harness switch` picker with active-harness state, readiness and continuity details, keyboard and Vim navigation, direct switch or fork actions, complete-catalog toggling, inspection, cancellation, and fresh-runtime confirmation.
+- **ACP registry and runtime catalog** - Connected the official ACP Registry to a durable local cache and bundled offline catalog, corrected current ACP launch commands, expanded automatic discovery, added Devin, Kilo, Harn, Cortex Code, DeepAgents, GLM Agent, CodeBuddy Code, and Dirac definitions, and grouped the TUI into installed, featured, enterprise, and complete catalog views.
+
 ## [0.2.31] - 2026-07-22
 
 ### Changed
 
 - **Product positioning** - Established SuperQode as the Agent Engineering framework for your code, with a concise message centered on reliable coding agents, portable harnesses, context, memory, tools, control loops, and freedom to use any agent or model.
-- **Public documentation** - Aligned the README, documentation home page, concepts, getting started, harness engineering, Software Factory, and Omnigent relationship pages around the terminal-first Agent Engineering product theme.
+- **Product surfaces** - Aligned the README, documentation home page, concepts, getting started, harness engineering, Software Factory, and Omnigent relationship pages around the terminal-first Agent Engineering product theme. Reworked the TUI home screen with current workspace state, context-aware next steps, a concise task prompt, WorkOrder navigation, and an explicit interoperability summary for Local, ACP, MCP, A2A, BYOK, and SDK integrations.
+- **Vim-like terminal navigation** - Expanded the optional Vim mode into persistent Normal, Insert, Command, and Search states with visible mode status, transcript and pane navigation, `j` and `k` picker control, search traversal, leader access, command history, repeat, and an in-product tutor.
 - **Documentation style** - Replaced conversational and promotional wording with direct technical descriptions and expanded the public documentation check to reject en and em dashes.
 - **Release metadata** - Bumped the package, runtime, lockfile, ACP registry, package checks, extension compatibility examples, and plugin documentation to `0.2.31`.
 
@@ -138,7 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Quieter startup and context chrome** - Moved local-model warmup progress into the transient activity indicator, collapsed successful connection startup into one dim readiness line, kept failures visible as warnings, and moved ACP context usage exclusively into a compact persistent top-line meter.
 - **Compact top status header** - Consolidated version, connection/model, specialized runtime, mode, usage, cost, and plan state into one responsive line; disconnected sessions show a quiet `No model` state, while default-runtime noise, the redundant home-screen `SUPERQODE` badge, and the persistent marketing tagline are omitted.
 - **Clearer TUI status feedback** - Added a small breathing row above the compact header, switched its session token figure from character-count estimates to exact provider-reported streaming usage when available, and surfaced local connection failures through a persistent error entry, focused recovery prompt, and prominent error notification.
-- **Complete TUI command autocomplete** - Kept every matching `:` command keyboard-reachable through the paged completion panel, synchronized dispatcher aliases across both completion surfaces, and added live ACP agent shortcuts—including discovered or custom agents—to suggestions.
+- **Complete TUI command autocomplete** - Kept every matching `:` command keyboard-reachable through the paged completion panel, synchronized dispatcher aliases across both completion surfaces, and added live ACP agent shortcuts, including discovered or custom agents, to suggestions.
 - **Release metadata** - Bumped the package version, runtime `__version__`, lockfile package entry, and ACP registry metadata to `0.2.19`.
 
 ### Fixed
@@ -204,7 +212,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Newest models first, everywhere** - BYOK shortlists and full catalogs, the Codex account model picker, and the OpenCode model picker now order entries newest-release-first. Rolling `-latest` aliases stay in the list and win date ties but no longer replace real models — the old exclusive-alias rule hid the brand-new GPT-5.6 family behind stale `gpt-5.x-chat-latest` entries. Realtime audio models are excluded from chat pickers.
+- **Newest models first, everywhere** - BYOK shortlists and full catalogs, the Codex account model picker, and the OpenCode model picker now order entries newest-release-first. Rolling `-latest` aliases stay in the list and win date ties but no longer replace real models - the old exclusive-alias rule hid the brand-new GPT-5.6 family behind stale `gpt-5.x-chat-latest` entries. Realtime audio models are excluded from chat pickers.
 
 ### Fixed
 
@@ -217,7 +225,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Picker feedback messages always visible** - Selecting a needs-setup profile (e.g. "Grok subscription" without a `grok login`) wrote its error and guidance lines below the picker while the viewport stayed pinned to the picker top — Enter looked dead. `add_error` / `add_info` / `add_success` / `add_system` and shell output now re-enable follow-scroll and force the log to reveal the message. Covered by a mounted-TUI regression test that drives the real key flow.
+- **Picker feedback messages always visible** - Selecting a needs-setup profile (e.g. "Grok subscription" without a `grok login`) wrote its error and guidance lines below the picker while the viewport stayed pinned to the picker top - Enter looked dead. `add_error` / `add_info` / `add_success` / `add_system` and shell output now re-enable follow-scroll and force the log to reveal the message. Covered by a mounted-TUI regression test that drives the real key flow.
 - **`add_warning` implemented** - Five call sites (DS4 health, live-model notices) referenced a `ConversationLog.add_warning` that did not exist and would have crashed with `AttributeError` when reached.
 
 ### Changed
@@ -439,79 +447,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`apply_patch` (patch envelopes)** — native support for the `*** Begin Patch` envelope format that GPT-5.x and local gpt-oss models are trained to emit: Add/Delete/Update File, `*** Move to:` renames, `@@` locators, EOF anchors, multi-file patches with all-or-nothing validation, fuzzy context matching (exact → trailing-whitespace → trimmed), markdown-fence/prose stripping, and workspace + post-edit-verification integration. Bash invocations of `apply_patch <<EOF` heredocs are intercepted and routed to the real tool. Registered in every tool profile.
-- **`shell_session` (interactive processes)** — open persistent PTY-backed processes (REPLs, dev servers, debuggers, prompts), `write` to stdin, `poll` new output, `list`, `kill`. Bounded per-call waits with early return on settled output, 2MB rolling buffers with spill-to-disk on return, session reaping, and atexit cleanup so no orphan processes outlive superqode.
-- **`view_image` (multimodal context)** — attach local png/jpg/gif/webp files to the conversation as OpenAI-style `image_url` parts for vision-capable models (including local multimodal models like Gemma 4). Image attachments are token-counted at a flat charge instead of their base64 length, stripped before LLM summarization, and pruned (pixels only) once they age out of the protected context window.
-- **In-run steering** — `AgentLoop.steer()` injects user messages between iterations of a *live* run (and keeps the run going if a message arrives as the model finishes), instead of waiting for the whole run to complete. Thread-safe; peers and UIs share the same mechanism.
-- **Auto-continue on token-limit cuts** — when a response stops with `finish_reason="length"`, the loop asks the model to continue from exactly where it stopped (default 2 continues, `max_auto_continues`), joining the parts into one answer; streaming continues seamlessly.
-- **System reminders** — synthetic `<system-reminder>` notes attached to outgoing requests only (never persisted): files changed externally since last read (each change announced once), and stale-todo nudges (rate-limited). `SUPERQODE_REMINDERS=0` disables.
-- **Deferred tool loading + `tool_search`** — `SUPERQODE_DEFERRED_TOOLS=auto|all|<names>` hides heavy tool schemas (web, images, sessions, LSP, MCP, agents) from the prompt until the model activates them via a lexical `tool_search`; activated schemas appear on the next call. `auto` applies only to local providers, where schema budget matters most.
-- **Peer agents** — long-lived multi-agent suite: `spawn_agent`, `send_input` (steers a busy peer's live run; `interrupt=true` cancels and redirects), `wait_agent`, `list_agents`, `close_agent`. Peers are long-lived AgentLoops with their own context; one level deep (peers cannot spawn peers).
-- **Background bash** — `bash` gains `run_in_background`: starts the command as a persistent session and returns its `session_id` immediately for later `shell_session` poll/write/kill.
-- **Turn diff** — per-turn aggregate of file changes ("Turn changed 3 file(s) (+45/-12): …") emitted to the thinking trace; the combined diff is retained on `AgentLoop.last_turn_diff` for UIs and hooks.
-- **Shell env policy** — `SUPERQODE_SHELL_ENV_POLICY=filter-secrets` strips secret-looking variables (`*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, …) from model-spawned commands, with `SUPERQODE_SHELL_ENV_ALLOW` exceptions.
-- **Exec policy rules** — declarative allow/deny/ask rules for shell commands in `.superqode/execpolicy.yaml` (project), `~/.superqode/execpolicy.yaml` (user), or `SUPERQODE_EXEC_POLICY` (explicit): glob or `re:` patterns, first match wins. User `allow` skips the prompt but can never override built-in dangerous-command denies.
-- **Automatic memory (opt-in)** — `SUPERQODE_AUTO_MEMORY=1` extracts durable preferences/facts/decisions from completed runs in a background task and stores them in the local memory provider (deduplicated, tagged `auto`), where `:memory search` already looks.
-- **Automatic memory recall (opt-in)** — `SUPERQODE_AUTO_RECALL=1` completes the loop: at run start the local memory store is searched with the prompt and the top hits (max 4, relevance-floored) ride along as a clearly labeled `<system-reminder>`, once per prompt, never persisted to history. Only the user-level local store is read, so untrusted repository content can never enter the agent's context through recall.
-- **`request_permissions`** — the model can make one justified request for session-scoped tool permissions; approval through the normal prompt upgrades those tools from ask-each-time to allowed (hard denies are never overridable, grants clear with the session).
-- **`--output-schema`** — headless runs pin the final answer to a JSON Schema: schema embedded in the prompt, lenient extraction + validation, one automatic corrective retry, exit code `2` on validation failure; `--mode json` gains `structured_output`/`schema_errors`/`schema_valid`.
-- **`--rubric`** — self-grading quality gate for headless runs (inline text or `@file`): a separate grader judges the final answer and "needs revision" feedback re-enters the loop (`rubric`/`max_rubric_rounds` on `AgentConfig` for programmatic use; grader fails open).
-- **HTML session export** — `superqode sessions export <id> --format html` renders a self-contained, dark-mode, shareable transcript page.
-- **`tool_call_format: prompt`** — harness model policy now wires through to behavior: tool schemas render into the system prompt and `<tool_call>{…}</tool_call>` blocks are extracted from response text and executed like native calls — for local models with no native tool-calling head (`compact-json`/`strict-json` remain native arg-style hints).
-- **TUI live steering** — typing while a builtin (local/BYOK) run is active now steers the *current* run between tool calls (`↪ steering the current run`); non-steerable connections keep the type-ahead queue.
-- **Documentation** — five new procedural guides (Inside the Agent Loop, Tools Catalog, Policies & Safety, Multi-Agent Workflows, Headless & CI) plus a complete Environment Variables reference, all in the docs nav.
+- **`apply_patch` (patch envelopes)** - native support for the `*** Begin Patch` envelope format that GPT-5.x and local gpt-oss models are trained to emit: Add/Delete/Update File, `*** Move to:` renames, `@@` locators, EOF anchors, multi-file patches with all-or-nothing validation, fuzzy context matching (exact → trailing-whitespace → trimmed), markdown-fence/prose stripping, and workspace + post-edit-verification integration. Bash invocations of `apply_patch <<EOF` heredocs are intercepted and routed to the real tool. Registered in every tool profile.
+- **`shell_session` (interactive processes)** - open persistent PTY-backed processes (REPLs, dev servers, debuggers, prompts), `write` to stdin, `poll` new output, `list`, `kill`. Bounded per-call waits with early return on settled output, 2MB rolling buffers with spill-to-disk on return, session reaping, and atexit cleanup so no orphan processes outlive superqode.
+- **`view_image` (multimodal context)** - attach local png/jpg/gif/webp files to the conversation as OpenAI-style `image_url` parts for vision-capable models (including local multimodal models like Gemma 4). Image attachments are token-counted at a flat charge instead of their base64 length, stripped before LLM summarization, and pruned (pixels only) once they age out of the protected context window.
+- **In-run steering** - `AgentLoop.steer()` injects user messages between iterations of a *live* run (and keeps the run going if a message arrives as the model finishes), instead of waiting for the whole run to complete. Thread-safe; peers and UIs share the same mechanism.
+- **Auto-continue on token-limit cuts** - when a response stops with `finish_reason="length"`, the loop asks the model to continue from exactly where it stopped (default 2 continues, `max_auto_continues`), joining the parts into one answer; streaming continues seamlessly.
+- **System reminders** - synthetic `<system-reminder>` notes attached to outgoing requests only (never persisted): files changed externally since last read (each change announced once), and stale-todo nudges (rate-limited). `SUPERQODE_REMINDERS=0` disables.
+- **Deferred tool loading + `tool_search`** - `SUPERQODE_DEFERRED_TOOLS=auto|all|<names>` hides heavy tool schemas (web, images, sessions, LSP, MCP, agents) from the prompt until the model activates them via a lexical `tool_search`; activated schemas appear on the next call. `auto` applies only to local providers, where schema budget matters most.
+- **Peer agents** - long-lived multi-agent suite: `spawn_agent`, `send_input` (steers a busy peer's live run; `interrupt=true` cancels and redirects), `wait_agent`, `list_agents`, `close_agent`. Peers are long-lived AgentLoops with their own context; one level deep (peers cannot spawn peers).
+- **Background bash** - `bash` gains `run_in_background`: starts the command as a persistent session and returns its `session_id` immediately for later `shell_session` poll/write/kill.
+- **Turn diff** - per-turn aggregate of file changes ("Turn changed 3 file(s) (+45/-12): …") emitted to the thinking trace; the combined diff is retained on `AgentLoop.last_turn_diff` for UIs and hooks.
+- **Shell env policy** - `SUPERQODE_SHELL_ENV_POLICY=filter-secrets` strips secret-looking variables (`*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, …) from model-spawned commands, with `SUPERQODE_SHELL_ENV_ALLOW` exceptions.
+- **Exec policy rules** - declarative allow/deny/ask rules for shell commands in `.superqode/execpolicy.yaml` (project), `~/.superqode/execpolicy.yaml` (user), or `SUPERQODE_EXEC_POLICY` (explicit): glob or `re:` patterns, first match wins. User `allow` skips the prompt but can never override built-in dangerous-command denies.
+- **Automatic memory (opt-in)** - `SUPERQODE_AUTO_MEMORY=1` extracts durable preferences/facts/decisions from completed runs in a background task and stores them in the local memory provider (deduplicated, tagged `auto`), where `:memory search` already looks.
+- **Automatic memory recall (opt-in)** - `SUPERQODE_AUTO_RECALL=1` completes the loop: at run start the local memory store is searched with the prompt and the top hits (max 4, relevance-floored) ride along as a clearly labeled `<system-reminder>`, once per prompt, never persisted to history. Only the user-level local store is read, so untrusted repository content can never enter the agent's context through recall.
+- **`request_permissions`** - the model can make one justified request for session-scoped tool permissions; approval through the normal prompt upgrades those tools from ask-each-time to allowed (hard denies are never overridable, grants clear with the session).
+- **`--output-schema`** - headless runs pin the final answer to a JSON Schema: schema embedded in the prompt, lenient extraction + validation, one automatic corrective retry, exit code `2` on validation failure; `--mode json` gains `structured_output`/`schema_errors`/`schema_valid`.
+- **`--rubric`** - self-grading quality gate for headless runs (inline text or `@file`): a separate grader judges the final answer and "needs revision" feedback re-enters the loop (`rubric`/`max_rubric_rounds` on `AgentConfig` for programmatic use; grader fails open).
+- **HTML session export** - `superqode sessions export <id> --format html` renders a self-contained, dark-mode, shareable transcript page.
+- **`tool_call_format: prompt`** - harness model policy now wires through to behavior: tool schemas render into the system prompt and `<tool_call>{…}</tool_call>` blocks are extracted from response text and executed like native calls - for local models with no native tool-calling head (`compact-json`/`strict-json` remain native arg-style hints).
+- **TUI live steering** - typing while a builtin (local/BYOK) run is active now steers the *current* run between tool calls (`↪ steering the current run`); non-steerable connections keep the type-ahead queue.
+- **Documentation** - five new procedural guides (Inside the Agent Loop, Tools Catalog, Policies & Safety, Multi-Agent Workflows, Headless & CI) plus a complete Environment Variables reference, all in the docs nav.
 
 ### Changed
 
-- **Documentation quality pass** — every code fence now carries a syntax-highlighting language tag; em-dashes and typographic ellipses removed site-wide; landing page gains a numbered progressive learning path and a complete runtime table (codex-sdk, claude-agent-sdk); TUI reference documents live steering, `:context`, `:thinking`, `:queue`, `:workspace`, and `:memory`; serve commands reference now covers the MCP server and A2A server API accurately; tools-system page modernized and cross-linked with the Tools Catalog; strict `mkdocs build` passes clean.
-- **Documentation redesign** — full-width landing page rebuilt to the Material/FastAPI standard: single compact logo hero with gradient title, badge row, action buttons, a 60-second quickstart, eight icon feature cards, tabbed live examples (TUI/headless/harness/CI), and a guided learning path; custom brand palette (light and dark) via Material's supported hooks; Inter + JetBrains Mono typography; the 1,151-line CSS override sheet replaced by a 151-line brand layer; sidebar no longer force-expands; placeholder Google Analytics and the cookie-consent banner removed.
-- **Positioning and completeness** — product positioning updated everywhere (docs landing, site description, README): "the portable coding agent harness framework; define your harness or bring your own; any provider, any model, any runtime, any protocol; optimized for local agentic AI"; the product banner returns to the home page under the hero; dark mode switches to warm amber accents (bright purple was harsh on dark backgrounds); "Three Connection Modes" becomes "Connection Modes" with a fourth SDK mode documented (Codex SDK via ChatGPT subscription, Claude Agent SDK via Claude subscription or Anthropic API key, Antigravity handoff); all 27 previously undocumented `SUPERQODE_*` environment variables added to the reference, bringing code-to-docs coverage of env vars, tools, and CLI commands to 100%.
+- **Documentation quality pass** - every code fence now carries a syntax-highlighting language tag; em-dashes and typographic ellipses removed site-wide; landing page gains a numbered progressive learning path and a complete runtime table (codex-sdk, claude-agent-sdk); TUI reference documents live steering, `:context`, `:thinking`, `:queue`, `:workspace`, and `:memory`; serve commands reference now covers the MCP server and A2A server API accurately; tools-system page modernized and cross-linked with the Tools Catalog; strict `mkdocs build` passes clean.
+- **Documentation redesign** - full-width landing page rebuilt to the Material/FastAPI standard: single compact logo hero with gradient title, badge row, action buttons, a 60-second quickstart, eight icon feature cards, tabbed live examples (TUI/headless/harness/CI), and a guided learning path; custom brand palette (light and dark) via Material's supported hooks; Inter + JetBrains Mono typography; the 1,151-line CSS override sheet replaced by a 151-line brand layer; sidebar no longer force-expands; placeholder Google Analytics and the cookie-consent banner removed.
+- **Positioning and completeness** - product positioning updated everywhere (docs landing, site description, README): "the portable coding agent harness framework; define your harness or bring your own; any provider, any model, any runtime, any protocol; optimized for local agentic AI"; the product banner returns to the home page under the hero; dark mode switches to warm amber accents (bright purple was harsh on dark backgrounds); "Three Connection Modes" becomes "Connection Modes" with a fourth SDK mode documented (Codex SDK via ChatGPT subscription, Claude Agent SDK via Claude subscription or Anthropic API key, Antigravity handoff); all 27 previously undocumented `SUPERQODE_*` environment variables added to the reference, bringing code-to-docs coverage of env vars, tools, and CLI commands to 100%.
 
-- **Spill-to-disk tool output** — oversized bash/tool output is saved in full to `~/.superqode/tool-output` (7-day retention, `SUPERQODE_TOOL_OUTPUT_DIR` to relocate); the model gets a head/tail preview plus the file path and can `read_file`/`grep` the rest instead of re-running the command. A loop-level guard applies the same bound to tools that don't self-limit (MCP, web). Spilled paths are always readable by read/search tools.
-- **Bounded, numbered reads** — `read_file` returns up to 2000 lines / 50KB by default with `N: ` line-number prefixes, clamps overlong lines (minified JS), rejects binary/image files with a clear message, and tells the model exactly how to continue (`start_line=<next>`); accepts `file_path`/`offset`/`limit` aliases that local models trained on other harnesses emit. Edit matching gains a fallback that strips pasted line-number prefixes.
-- **Doom-loop guard** — the Nth consecutive identical tool call (default 3; `doom_loop_threshold` / `SUPERQODE_DOOM_LOOP_THRESHOLD`) is intercepted with corrective feedback instead of executing again; if the model immediately repeats the same call, the run stops with `stopped_reason="loop_detected"`.
-- **Tool-argument repair** — malformed tool-call arguments (markdown fences, Python-dict syntax, trailing commas, double-encoded JSON, prose around the object) are repaired; unrecoverable arguments return a corrective error to the model instead of silently executing the tool with `{}`.
-- **Rate-limit retry** — transient overload errors (429/503/529/overloaded) retry with exponential backoff, honoring `Retry-After`/`retry-after-ms` headers (`SUPERQODE_RATE_LIMIT_RETRIES`, default 3); long provider-requested pauses surface instead of hanging the session.
-- **Tool-output pruning** — a free pre-compaction stage stubs stale tool outputs older than the protected recent window before paying for LLM summarization (the current turn's results are always protected); often avoids the summarization call entirely on local models.
+- **Spill-to-disk tool output** - oversized bash/tool output is saved in full to `~/.superqode/tool-output` (7-day retention, `SUPERQODE_TOOL_OUTPUT_DIR` to relocate); the model gets a head/tail preview plus the file path and can `read_file`/`grep` the rest instead of re-running the command. A loop-level guard applies the same bound to tools that don't self-limit (MCP, web). Spilled paths are always readable by read/search tools.
+- **Bounded, numbered reads** - `read_file` returns up to 2000 lines / 50KB by default with `N: ` line-number prefixes, clamps overlong lines (minified JS), rejects binary/image files with a clear message, and tells the model exactly how to continue (`start_line=<next>`); accepts `file_path`/`offset`/`limit` aliases that local models trained on other harnesses emit. Edit matching gains a fallback that strips pasted line-number prefixes.
+- **Doom-loop guard** - the Nth consecutive identical tool call (default 3; `doom_loop_threshold` / `SUPERQODE_DOOM_LOOP_THRESHOLD`) is intercepted with corrective feedback instead of executing again; if the model immediately repeats the same call, the run stops with `stopped_reason="loop_detected"`.
+- **Tool-argument repair** - malformed tool-call arguments (markdown fences, Python-dict syntax, trailing commas, double-encoded JSON, prose around the object) are repaired; unrecoverable arguments return a corrective error to the model instead of silently executing the tool with `{}`.
+- **Rate-limit retry** - transient overload errors (429/503/529/overloaded) retry with exponential backoff, honoring `Retry-After`/`retry-after-ms` headers (`SUPERQODE_RATE_LIMIT_RETRIES`, default 3); long provider-requested pauses surface instead of hanging the session.
+- **Tool-output pruning** - a free pre-compaction stage stubs stale tool outputs older than the protected recent window before paying for LLM summarization (the current turn's results are always protected); often avoids the summarization call entirely on local models.
 
 ### Changed
 
-- **Mutation-safe parallel tools** — tools now carry a `read_only` flag; a turn's tool calls run concurrently only when every call is read-only. Any batch containing an edit/write/bash/MCP call runs sequentially in call order, so concurrent file mutations can no longer race.
-- **Streaming bash drains to EOF** — output beyond the model-sized cap no longer stops the reader (which could deadlock chatty processes on full pipes); streams are drained, the full output (up to 5MB) is spilled, and the preview stays bounded.
+- **Mutation-safe parallel tools** - tools now carry a `read_only` flag; a turn's tool calls run concurrently only when every call is read-only. Any batch containing an edit/write/bash/MCP call runs sequentially in call order, so concurrent file mutations can no longer race.
+- **Streaming bash drains to EOF** - output beyond the model-sized cap no longer stops the reader (which could deadlock chatty processes on full pipes); streams are drained, the full output (up to 5MB) is spilled, and the preview stays bounded.
 
 ## [0.1.40] - 2026-06-09
 
 ### Added
 
-- **Multi-repo search** — `:workspace add|remove|list` registers repositories (persisted in `~/.superqode/workspace.json`); grep/glob gain an `all_repos` fan-out that searches every registered repo in one ripgrep pass, labeling matches by repo. Absolute paths are honored inside the workspace and permission-gated outside it (`SUPERQODE_ALLOW_EXTERNAL_SEARCH`).
-- **Harness over MCP** — `superqode mcp` (stdio, or `--http`) exposes HarnessSpec workflows as MCP tools (`list_harnesses`, `describe_harness`, `run_harness`) for any MCP client, alongside the existing A2A and ACP servers.
-- **Adaptive context compaction** — compaction threshold and kept-recent window now auto-scale to the model's real context window and run by default (`SUPERQODE_AUTO_COMPACT=0` to disable).
-- **Local context-window detection** — probes the live server for the *loaded* window per backend (Ollama `/api/ps`, llama.cpp `/props`, LM Studio `/api/v1/models`, vLLM/DS4 `/v1/models`). New `:context` command to show/pin/re-detect the window.
-- **Post-edit verification** — fast per-file diagnostics (ruff/py_compile, eslint, gofmt, JSON/YAML) run after the agent edits a file, with findings fed back so it self-corrects (`SUPERQODE_VERIFY_EDITS`, `SUPERQODE_FORMAT_ON_EDIT`).
-- **Dangling tool-call repair** — synthesizes a tool result for any unanswered tool call (interrupted/cancelled/malformed/resumed), keeping the message history provider-valid.
-- **Thinking-log verbosity** — `:thinking normal|verbose|off` (Ctrl+T cycles); calm default folds iterations into a live status with a tidy per-tool trace.
+- **Multi-repo search** - `:workspace add|remove|list` registers repositories (persisted in `~/.superqode/workspace.json`); grep/glob gain an `all_repos` fan-out that searches every registered repo in one ripgrep pass, labeling matches by repo. Absolute paths are honored inside the workspace and permission-gated outside it (`SUPERQODE_ALLOW_EXTERNAL_SEARCH`).
+- **Harness over MCP** - `superqode mcp` (stdio, or `--http`) exposes HarnessSpec workflows as MCP tools (`list_harnesses`, `describe_harness`, `run_harness`) for any MCP client, alongside the existing A2A and ACP servers.
+- **Adaptive context compaction** - compaction threshold and kept-recent window now auto-scale to the model's real context window and run by default (`SUPERQODE_AUTO_COMPACT=0` to disable).
+- **Local context-window detection** - probes the live server for the *loaded* window per backend (Ollama `/api/ps`, llama.cpp `/props`, LM Studio `/api/v1/models`, vLLM/DS4 `/v1/models`). New `:context` command to show/pin/re-detect the window.
+- **Post-edit verification** - fast per-file diagnostics (ruff/py_compile, eslint, gofmt, JSON/YAML) run after the agent edits a file, with findings fed back so it self-corrects (`SUPERQODE_VERIFY_EDITS`, `SUPERQODE_FORMAT_ON_EDIT`).
+- **Dangling tool-call repair** - synthesizes a tool result for any unanswered tool call (interrupted/cancelled/malformed/resumed), keeping the message history provider-valid.
+- **Thinking-log verbosity** - `:thinking normal|verbose|off` (Ctrl+T cycles); calm default folds iterations into a live status with a tidy per-tool trace.
 - Documentation: new *Local Context & Compaction* and *Multi-Repo Search & Edit Safety* guides; harness-over-MCP docs.
 
 ### Changed
 
-- **Search tools** — grep/glob now spawn ripgrep directly with structured `--json` output (no shell), report truncation/partial results, and steer the model toward subagents for open-ended search.
-- **Welcome screen & input box** — responsive centered layout, refreshed messaging, thicker titled prompt box, and trimmed hints bar.
+- **Search tools** - grep/glob now spawn ripgrep directly with structured `--json` output (no shell), report truncation/partial results, and steer the model toward subagents for open-ended search.
+- **Welcome screen & input box** - responsive centered layout, refreshed messaging, thicker titled prompt box, and trimmed hints bar.
 
 ### Fixed
 
-- Streaming agent loop now compacts context — local/BYOK sessions no longer overflow the window (the streaming path previously never compacted).
+- Streaming agent loop now compacts context - local/BYOK sessions no longer overflow the window (the streaming path previously never compacted).
 
 ## [0.1.39] - 2026-06-06
 
 ### Added
 
-- **Plan mode** — new `plan_mode` config flag that blocks tool execution in the agent loop, allowing side-effect-free planning and review before any action is taken.
-- **Memory system overhaul** — new provider-based memory architecture with `LocalAgentMemoryProvider`, `SpecMemProvider`, `Mem0Provider`, `CogneeProvider`, and `SupermemoryProvider`. Configurable via `memory:` section in `superqode.yaml` with provider-specific settings.
-- **Project trust system** — per-user trust store (`~/.superqode/trust.json`) for project workspaces, with risk signal detection for plugins, MCP configs, and hooks. Mark projects trusted/safe via `set_project_trust()`.
-- **Transcript export** — conversation transcripts can now be exported to portable JSON/text formats via `transcript_export.py`.
-- **Session share artifacts** — new `share_artifacts` module for sharing session context across agents.
-- **Pure mode** — `pure_mode.py` for restricted/safe agent operation.
-- **Developer workflow documentation** — new `docs/developer-workflows.md` guide.
+- **Plan mode** - new `plan_mode` config flag that blocks tool execution in the agent loop, allowing side-effect-free planning and review before any action is taken.
+- **Memory system overhaul** - new provider-based memory architecture with `LocalAgentMemoryProvider`, `SpecMemProvider`, `Mem0Provider`, `CogneeProvider`, and `SupermemoryProvider`. Configurable via `memory:` section in `superqode.yaml` with provider-specific settings.
+- **Project trust system** - per-user trust store (`~/.superqode/trust.json`) for project workspaces, with risk signal detection for plugins, MCP configs, and hooks. Mark projects trusted/safe via `set_project_trust()`.
+- **Transcript export** - conversation transcripts can now be exported to portable JSON/text formats via `transcript_export.py`.
+- **Session share artifacts** - new `share_artifacts` module for sharing session context across agents.
+- **Pure mode** - `pure_mode.py` for restricted/safe agent operation.
+- **Developer workflow documentation** - new `docs/developer-workflows.md` guide.
 - **Plan mode tests** (`test_agent_loop_harness.py`), **memory tests** (`test_agent_memory.py`), **project trust tests** (`test_project_trust.py`), **developer workflow doc tests** (`test_developer_workflow_docs.py`), and expanded runtime tests.
 
 ### Changed
@@ -524,18 +532,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **OpenAI Codex SDK runtime** (`codex-sdk`) — drive OpenAI Codex from SuperQode using your ChatGPT/Codex login (`~/.codex`), no API key required. A self-contained runtime that owns its own model and auth, with streamed harness events, tool cards, and approval prompts. Models `gpt-5.5` / `gpt-5.4` / `gpt-5.4-mini`. Install with `pip install "superqode[codex-sdk]"`.
-- **`:codex` command surface** — `status`, `models`, `model`, `effort`, `sandbox`, `review`, `compact`, plus full thread/session management (`thread`, `sessions`, `resume`, `fork`, `rename`, `archive`, `account`).
-- **Claude Agent SDK runtime** (`claude-agent-sdk`) — drive Claude Code from SuperQode using your Anthropic API key (`ANTHROPIC_API_KEY`); the adapter maps the SDK's message/block and permission shapes to SuperQode's harness, with tool cards and approvals. Install with `pip install "superqode[claude-agent-sdk]"` (plus the Claude Code CLI).
-- **`:claude` command surface** — `status`, `model`, `permission`, `sessions`, `commands`, `review`.
-- **Connection profiles in `:connect`** — product/account-first connection sources (ACP agent, BYOK provider, Local model, Codex subscription, Claude Agent SDK, Antigravity CLI, Advanced runtime) with per-source availability detection, so picking *what* to connect to is separated from the underlying execution engine (`providers/connection_profiles.py`).
-- **Antigravity CLI handoff** (`:antigravity` / `:agy`) — `status`, `migrate`, `launch` for Google's local `agy` CLI, offered as a recommended Gemini CLI migration path.
-- **Programmatic SDK helpers** — `superqode.codex` (`run_codex`, `stream_codex`, `codex_session`) and `superqode.claude` (`run_claude`, `stream_claude`, `claude_session`) for running Codex/Claude one-shot, streaming typed harness events, or in multi-turn sessions without hand-building an `AgentConfig`. See `examples/codex_sdk_quickstart.py`.
+- **OpenAI Codex SDK runtime** (`codex-sdk`) - drive OpenAI Codex from SuperQode using your ChatGPT/Codex login (`~/.codex`), no API key required. A self-contained runtime that owns its own model and auth, with streamed harness events, tool cards, and approval prompts. Models `gpt-5.5` / `gpt-5.4` / `gpt-5.4-mini`. Install with `pip install "superqode[codex-sdk]"`.
+- **`:codex` command surface** - `status`, `models`, `model`, `effort`, `sandbox`, `review`, `compact`, plus full thread/session management (`thread`, `sessions`, `resume`, `fork`, `rename`, `archive`, `account`).
+- **Claude Agent SDK runtime** (`claude-agent-sdk`) - drive Claude Code from SuperQode using your Anthropic API key (`ANTHROPIC_API_KEY`); the adapter maps the SDK's message/block and permission shapes to SuperQode's harness, with tool cards and approvals. Install with `pip install "superqode[claude-agent-sdk]"` (plus the Claude Code CLI).
+- **`:claude` command surface** - `status`, `model`, `permission`, `sessions`, `commands`, `review`.
+- **Connection profiles in `:connect`** - product/account-first connection sources (ACP agent, BYOK provider, Local model, Codex subscription, Claude Agent SDK, Antigravity CLI, Advanced runtime) with per-source availability detection, so picking *what* to connect to is separated from the underlying execution engine (`providers/connection_profiles.py`).
+- **Antigravity CLI handoff** (`:antigravity` / `:agy`) - `status`, `migrate`, `launch` for Google's local `agy` CLI, offered as a recommended Gemini CLI migration path.
+- **Programmatic SDK helpers** - `superqode.codex` (`run_codex`, `stream_codex`, `codex_session`) and `superqode.claude` (`run_claude`, `stream_claude`, `claude_session`) for running Codex/Claude one-shot, streaming typed harness events, or in multi-turn sessions without hand-building an `AgentConfig`. See `examples/codex_sdk_quickstart.py`.
 - **Runtime + model status badges** in the TUI status bar, so the active runtime (e.g. `codex-sdk`) and model are always visible.
 
 ### Changed
 
-- **`:connect` is now product-first** — the menu leads with the connection source (ACP → BYOK → Local → Codex → Claude → Antigravity → Advanced); the raw runtime/engine picker moved under *Advanced runtime*.
+- **`:connect` is now product-first** - the menu leads with the connection source (ACP → BYOK → Local → Codex → Claude → Antigravity → Advanced); the raw runtime/engine picker moved under *Advanced runtime*.
 - **`:runtime`** extended to select the new self-contained runtimes (`codex-sdk`, `claude-agent-sdk`) alongside `builtin` / `openai-agents` / `pydanticai` / `adk`, with `:runtime list` reporting availability.
 - Prompt completion and slash-command surfaces updated for the new `:codex`, `:claude`, `:antigravity`, and `:connect <source>` commands.
 - Dependencies: `openai-codex` pinned to `>=0.1.0b2,<0.2.0`; added `claude-agent-sdk>=0.2.9,<0.3.0` (under the `claude-agent-sdk` extra).
@@ -544,36 +552,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Local OS command sandbox** confining shell commands with the operating system's own isolation — macOS Seatbelt (`sandbox-exec`) and Linux Bubblewrap (`bwrap`). Modes via `SUPERQODE_SANDBOX` (`off`, `workspace-write`, `read-only`, `danger-full-access`) and the `:sandbox` command. See [Safety & Permissions](docs/advanced/safety-permissions.md#local-command-sandbox-os-level).
+- **Local OS command sandbox** confining shell commands with the operating system's own isolation - macOS Seatbelt (`sandbox-exec`) and Linux Bubblewrap (`bwrap`). Modes via `SUPERQODE_SANDBOX` (`off`, `workspace-write`, `read-only`, `danger-full-access`) and the `:sandbox` command. See [Safety & Permissions](docs/advanced/safety-permissions.md#local-command-sandbox-os-level).
 - **Command safety classification** that auto-runs known read-only commands (no prompt), gates writes/network, and blocks destructive ones. Obfuscation-aware: commands are canonicalised before analysis, and dynamic constructs (`$(...)`, backticks, `eval`, pipe-to-shell) can never be classified safe.
 - **Network destination allowlist** so trusted installs (PyPI, npm, crates, GitHub, …) run without prompts while arbitrary egress is gated. Extendable via `SUPERQODE_NET_ALLOW`; `SUPERQODE_NET_STRICT` denies untrusted destinations.
 - **Rewind & transcript overlay** (`Ctrl+R`, double-`Esc`, or `:rewind`) that truncates the agent's stored history to an earlier message and reloads it for editing.
-- **`@` file mentions** — a live fuzzy file picker in the prompt that inlines referenced file contents on submit.
+- **`@` file mentions** - a live fuzzy file picker in the prompt that inlines referenced file contents on submit.
 - **Live streaming markdown** so assistant responses render formatted as they stream.
 - **`:theme`** picker with multiple accent themes (persisted to `~/.superqode/config.json`).
 - **`:export`** to write the conversation to a self-contained HTML file.
 - **`:compare <models>`** to re-run the last message across several models/runtimes concurrently and read the answers side by side.
-- **`create_skill` tool** making the agent self-extensible — it can author a new `SKILL.md` that is hot-loaded and immediately invocable.
-- **BYOK via models.dev** — a dynamic provider catalog and on-the-fly provider synthesis (`providers/catalog.py`, `providers/dynamic.py`) so any models.dev provider can be connected with an API key, with new models appearing without manual edits. Live `/v1/models` discovery (`providers/live_models.py`) lists a provider's currently-available models.
-- **Hugging Face model toolchain** (`providers/huggingface/fetch.py`, `convert.py`) — Hub search, dry-run size preview, resumable downloads, local cache scan/delete, and MLX convert + upload. The converter auto-detects text (mlx-lm) vs multimodal (mlx-vlm) models.
-- **`superqode models` command group** — `hub`, `download`, `show`, `providers`, `convert-mlx`, `cached`, `rm`, plus `connect setup` guidance.
+- **`create_skill` tool** making the agent self-extensible - it can author a new `SKILL.md` that is hot-loaded and immediately invocable.
+- **BYOK via models.dev** - a dynamic provider catalog and on-the-fly provider synthesis (`providers/catalog.py`, `providers/dynamic.py`) so any models.dev provider can be connected with an API key, with new models appearing without manual edits. Live `/v1/models` discovery (`providers/live_models.py`) lists a provider's currently-available models.
+- **Hugging Face model toolchain** (`providers/huggingface/fetch.py`, `convert.py`) - Hub search, dry-run size preview, resumable downloads, local cache scan/delete, and MLX convert + upload. The converter auto-detects text (mlx-lm) vs multimodal (mlx-vlm) models.
+- **`superqode models` command group** - `hub`, `download`, `show`, `providers`, `convert-mlx`, `cached`, `rm`, plus `connect setup` guidance.
 - **In-process MLX engine** (`providers/local/mlx_engine.py`, `_mlx_worker.py`) with a family-aware tool-call parser (`mlx_tools.py`) for Qwen / Gemma / generic-JSON formats.
-- **Gemma-optimized harness profiles** — the model policy routes the whole tool-capable Gemma family (Gemma 3 and 4) to a Gemma-tuned profile (minimal system prompt, strict-JSON tool calls).
+- **Gemma-optimized harness profiles** - the model policy routes the whole tool-capable Gemma family (Gemma 3 and 4) to a Gemma-tuned profile (minimal system prompt, strict-JSON tool calls).
 
 ### Changed
 
 - Unified the product tagline to **"Your Portable Coding Agent Harness"** across the TUI welcome screen, README, docs, and package metadata, with a refreshed welcome subheading.
 - Updated the README header image and documentation logo.
-- **Family-based local tool gating** — Gemma 3/4, Qwen 2.5/3, and Llama 3.1+/4 get tools; Gemma 1/2 and Llama 3.0 do not. The agent loop falls back to family detection for custom local tags not in the model registry.
-- **Gemma context windows** — modern Gemma (3/4) now use a practical 32K `num_ctx` (matching the Llama/Qwen treatment) instead of the legacy 8K, and Ollama reports their true 128K capability; Gemma 1/2 stay at 8K.
+- **Family-based local tool gating** - Gemma 3/4, Qwen 2.5/3, and Llama 3.1+/4 get tools; Gemma 1/2 and Llama 3.0 do not. The agent loop falls back to family detection for custom local tags not in the model registry.
+- **Gemma context windows** - modern Gemma (3/4) now use a practical 32K `num_ctx` (matching the Llama/Qwen treatment) instead of the legacy 8K, and Ollama reports their true 128K capability; Gemma 1/2 stay at 8K.
 - Dependencies: `mlx-lm` pinned to `>=0.31` (adds Gemma 4 support) and `mlx-vlm` added for multimodal models.
 
 ### Fixed
 
 - Rewrote the optional `python_repl` (Monty) tool against the real `pydantic-monty` API; it previously targeted a non-existent API and failed at runtime. Each call now runs in a fresh, fully isolated sandbox (no host filesystem, network, or third-party imports), and the `pydantic-monty` version constraint was corrected.
-- **Ollama models not listing** in the TUI — model parsing crashed on `"families": null` (returned by many Ollama models), making model discovery silently return an empty list.
-- **Could not exit the TUI from selection pickers** (local LM Studio / MLX / Ollama, BYOK, ACP) — `:exit` / `:quit` / `:q` now work from any picker, and a command/shell line typed inside a picker is no longer swallowed by item selection.
-- **TUI freeze on quit** — the exit sequence cancelled Textual's own message pump (via `asyncio.all_tasks()`), freezing the app so it had to be killed; it now shuts down cleanly.
+- **Ollama models not listing** in the TUI - model parsing crashed on `"families": null` (returned by many Ollama models), making model discovery silently return an empty list.
+- **Could not exit the TUI from selection pickers** (local LM Studio / MLX / Ollama, BYOK, ACP) - `:exit` / `:quit` / `:q` now work from any picker, and a command/shell line typed inside a picker is no longer swallowed by item selection.
+- **TUI freeze on quit** - the exit sequence cancelled Textual's own message pump (via `asyncio.all_tasks()`), freezing the app so it had to be killed; it now shuts down cleanly.
 
 ## [0.1.35] - 2026-06-02
 
@@ -597,7 +605,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Local code search for DS4/local models: `SUPERQODE_SEARCH_ROOTS` allowlists extra **read-only** repo roots (outside the working directory, `os.pathsep`-separated) that search/read tools (`repo_search`, `grep`, `glob`, `code_search`, `read_file`, `list_directory`) may access — so a local model can search a downloaded/cloned repo. Writes, edits, and shell stay confined to the working directory. See [Local Code Search](docs/providers/local.md#local-code-search-no-web-access).
+- Local code search for DS4/local models: `SUPERQODE_SEARCH_ROOTS` allowlists extra **read-only** repo roots (outside the working directory, `os.pathsep`-separated) that search/read tools (`repo_search`, `grep`, `glob`, `code_search`, `read_file`, `list_directory`) may access - so a local model can search a downloaded/cloned repo. Writes, edits, and shell stay confined to the working directory. See [Local Code Search](docs/providers/local.md#local-code-search-no-web-access).
 - `code_search` (semantic symbol/definition/reference search) added to the DS4/local tool profile.
 - DS4/local system prompts now steer toward local search (`repo_search`/`grep`/`code_search`/`read_file`) and state that no web access is available; configured search roots are listed in the prompt.
 - DS4 connect now warms the model (one-token request) with a live elapsed-time indicator, so the user's first real prompt isn't the one paying DS4's one-time cold-load cost. Opt out with `SUPERQODE_DS4_WARMUP=0`.

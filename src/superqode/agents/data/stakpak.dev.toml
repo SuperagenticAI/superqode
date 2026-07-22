@@ -13,7 +13,7 @@ publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
 description = "An ACP-compatible agent focused on providing comprehensive code assistance and collaboration features."
 tags = ["code-assistance", "collaboration", "acp", "official-acp"]
-run_command."*" = "stakpak --acp"
+run_command."*" = "stakpak acp"
 
 help = '''
 # Stakpak

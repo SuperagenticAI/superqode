@@ -15,7 +15,7 @@ route, because their endpoints, credentials, and model IDs are not interchangeab
 | SuperQode + Moonshot API | `https://api.moonshot.ai/v1` | `kimi-k3` | Moonshot platform pay-as-you-go | SuperQode |
 | Kimi Code subscription, OpenAI-compatible | `https://api.kimi.com/coding/v1` | `k3` | Kimi Code membership quota | Kimi CLI or another supported coding client |
 | Kimi Code subscription, Anthropic-compatible | `https://api.kimi.com/coding/` | `k3` | Kimi Code membership quota | The connected coding client |
-| Kimi CLI over ACP | Local process: `kimi --acp` | Chosen by Kimi CLI | Kimi CLI configuration | Kimi CLI |
+| Kimi CLI over ACP | Local process: `kimi acp` | Chosen by Kimi CLI | Kimi CLI configuration | Kimi CLI |
 
 The built-in `moonshot` provider and `kimi-coding` family harness use the first row.
 Do not put a Kimi Code membership token in `MOONSHOT_API_KEY` or change
@@ -279,7 +279,7 @@ Or from the TUI:
 :connect acp kimi
 ```
 
-This starts `kimi --acp`. Kimi CLI then owns model selection, tools, authentication,
+This starts `kimi acp`. Kimi CLI then owns model selection, tools, authentication,
 and its agent loop. The `kimi-coding` SuperQode harness is not applied to an ACP
 session.
 

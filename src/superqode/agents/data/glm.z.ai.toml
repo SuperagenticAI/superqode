@@ -1,0 +1,30 @@
+identity = "glm.z.ai"
+name = "GLM Agent"
+short_name = "glm"
+url = "https://github.com/stefandevo/glm-acp-agent"
+protocol = "acp"
+author_name = "GLM ACP Agent community"
+author_url = "https://github.com/stefandevo"
+publisher_name = "SuperQode"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "Community ACP coding agent using GLM models as its reasoning engine."
+tags = ["official-acp", "community", "glm"]
+catalog_tier = "all"
+run_command."*" = "glm-acp-agent"
+
+help = '''
+# GLM Agent
+
+GLM Agent is a community-maintained ACP agent. It is not a first-party Z.ai client.
+
+## Installation
+
+```bash
+npm install -g glm-acp-agent
+```
+'''
+
+[actions."*".install]
+command = "npm install -g glm-acp-agent"
+description = "Install the community GLM ACP agent"

@@ -1,9 +1,9 @@
 """Anthropic Claude Agent SDK runtime adapter.
 
 Drives the official ``claude-agent-sdk`` (the Python SDK for Claude Code) behind
-SuperQode's ``AgentRuntime`` shape, using **API-key auth** (``ANTHROPIC_API_KEY``)
-— this is the Agent-SDK path, NOT a Claude subscription. The SDK launches the
-local ``claude`` CLI; ``ClaudeSDKClient`` gives continuous conversations,
+SuperQode's ``AgentRuntime`` shape, using **API-key auth** (``ANTHROPIC_API_KEY``).
+This is the Agent-SDK path, not a Claude subscription. The SDK launches its
+bundled Claude Code executable; ``ClaudeSDKClient`` gives continuous conversations,
 interrupts, ``set_model``/permission-mode control, and session lifecycle.
 
 The SDK is async-native, so (unlike the Codex adapter) the streaming path reads
@@ -64,8 +64,8 @@ def _require_sdk() -> None:
     except ImportError as exc:
         raise RuntimeNotInstalledError(
             "Claude Agent SDK runtime requires the 'claude-agent-sdk' extra. "
-            "Install with: uv tool install 'superqode[claude-agent-sdk]' (and the Claude Code CLI), "
-            "then set ANTHROPIC_API_KEY."
+            "Install with: uv tool install 'superqode[claude-agent-sdk]', then set "
+            "ANTHROPIC_API_KEY."
         ) from exc
 
 

@@ -152,6 +152,7 @@ class TestHarnessCommand:
         core = next(item for item in payload if item["id"] == "core")
         assert core["default"] is True
         assert core["tools"] == ["read", "write", "edit", "bash"]
+        assert core["continuity"] == "context-replay"
         assert any(item["id"] == "workbench" for item in payload)
 
         shown = runner.invoke(cli_main, ["harness", "show", "core", "--json"])
@@ -187,6 +188,17 @@ class TestHarnessCommand:
             assert result.exit_code == 0
             data = __import__("yaml").safe_load(Path("superqode.yaml").read_text())
             assert data["superqode"]["harness"] == "workbench"
+
+    def test_harness_current_reads_project_default(self, runner):
+        with runner.isolated_filesystem():
+            Path("superqode.yaml").write_text("superqode:\n  harness: workbench\n")
+
+            result = runner.invoke(cli_main, ["harness", "current", "--json"])
+
+            assert result.exit_code == 0
+            payload = json.loads(result.output)
+            assert payload["id"] == "workbench"
+            assert payload["continuity"] == "context-replay"
 
     def test_harness_list_templates_json(self, runner):
         result = runner.invoke(cli_main, ["harness", "list-templates", "--json"])
@@ -2445,7 +2457,7 @@ class TestHeadlessCommand:
 
         with runner.isolated_filesystem(temp_dir=tmp_path):
             manager = SessionManager(".superqode/sessions")
-            manager.start_session("abc123", provider="test", model="m")
+            manager.start_session("abc123", provider="test", model="m", harness_id="workbench")
             manager.add_user_message("hello")
 
             result = runner.invoke(cli_main, ["sessions", "list", "--json"])
@@ -2453,6 +2465,7 @@ class TestHeadlessCommand:
             assert result.exit_code == 0
             payload = json.loads(result.output)
             assert payload[0]["session_id"] == "abc123"
+            assert payload[0]["harness_id"] == "workbench"
             assert payload[0]["message_count"] == 1
 
     def test_sessions_export_file(self, runner, tmp_path):

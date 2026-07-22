@@ -115,6 +115,14 @@ antigravity-sdk = [
     # lower bound is too loose; protobuf 5 fails while importing the SDK.
     "protobuf>=6.31.1",
 ]
+# Convenience bundle for users who actively use all supported vendor SDK
+# runtimes. Vendor CLIs such as Grok and agy remain separate installations.
+vendor-sdks = [
+    "openai-codex>=0.1.0b2,<0.2.0",
+    "claude-agent-sdk>=0.2.9,<0.3.0",
+    "google-antigravity>=0.1.6,<0.2.0",
+    "protobuf>=6.31.1",
+]
 deepagents = [
     "deepagents>=0.6.0,<0.7.0",
 ]

@@ -29,10 +29,15 @@ Connection commands:
 :connect local        # Ollama, LM Studio, MLX, vLLM, SGLang, TGI, DS4
 ```
 
-Optional Vim helpers:
+Optional Vim-like terminal navigation:
 
 ```text
 :vim on
+:vim tutor
+:                 # commands
+/pattern          # transcript search
+j / k             # conversation and picker navigation
+gg / G            # transcript beginning or end
 :w
 :e <file>
 :ls
@@ -40,6 +45,8 @@ Optional Vim helpers:
 q:
 @:
 ```
+
+Vim mode is modal and persistent. It provides Normal, Insert, Command, and Search states for operating SuperQode from the keyboard. See [Vim-Like Terminal Navigation](advanced/vim-mode.md).
 
 ## Sessions, Branches, And Export
 

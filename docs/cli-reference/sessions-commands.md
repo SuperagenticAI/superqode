@@ -1,6 +1,6 @@
 # Sessions Commands
 
-Manage SuperQode coding sessions. Sessions are stored as JSONL files in `.superqode/sessions/`, one file per session with structured turn-by-turn logs.
+Manage SuperQode coding sessions. Sessions are stored as JSONL files in `.superqode/sessions/`, one file per session with structured turn-by-turn logs. Session metadata includes the harness used for that conversation.
 
 ---
 
@@ -21,9 +21,9 @@ superqode sessions list [OPTIONS]
 ### Output
 
 ```text
-ID         Provider    Model               Turns  Created
-abc123     anthropic   <anthropic-balanced-model>    12    2026-06-01T10:00:00
-def456     openai      <openai-model>              8    2026-06-02T14:30:00
+ID         Harness      Provider    Model                         Turns  Created
+abc123     workbench    anthropic   <anthropic-balanced-model>    12     2026-06-01T10:00:00
+def456     review       openai      <openai-model>                 8      2026-06-02T14:30:00
 ```
 
 ---
@@ -61,6 +61,12 @@ superqode sessions switch [SESSION_ID] [--json]
 ```
 
 If no session id is provided, SuperQode resolves the current active graph session when possible.
+
+Inside the TUI, `:sessions switch` opens the interactive session picker and
+resumes the selected conversation. The TUI restores the session's harness,
+provider, model, and message history. Use `:harness switch <name>` to continue
+the same session through another harness. Use `:harness switch <name> --fork`
+to create an independent branch first.
 
 ---
 

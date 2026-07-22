@@ -265,6 +265,16 @@ class EventHandlerMixin:
                 event.input.value = ""
                 return
 
+            if getattr(self, "_awaiting_harness_confirmation", False):
+                self.action_confirm_harness_switch()
+                event.input.value = ""
+                return
+
+            if getattr(self, "_awaiting_harness_selection", False):
+                self.action_select_highlighted_harness()
+                event.input.value = ""
+                return
+
             # Check if awaiting ACP agent selection
             if getattr(self, "_awaiting_acp_agent_selection", False):
                 self.action_select_highlighted_acp_agent()
@@ -375,6 +385,8 @@ class EventHandlerMixin:
                 or getattr(self, "_awaiting_session_resume", False)
                 or getattr(self, "_awaiting_mode_selection", False)
                 or getattr(self, "_awaiting_harness_wizard", False)
+                or getattr(self, "_awaiting_harness_selection", False)
+                or getattr(self, "_awaiting_harness_confirmation", False)
                 or getattr(self, "_awaiting_subscription_login", None)
             ):
                 # Cancel selection mode
@@ -388,6 +400,8 @@ class EventHandlerMixin:
                 self._awaiting_session_resume = False
                 self._awaiting_mode_selection = False
                 self._awaiting_harness_wizard = False
+                self._awaiting_harness_selection = False
+                self._awaiting_harness_confirmation = False
                 self._harness_wizard_state = None
                 self._awaiting_local_server_start = None
                 self._awaiting_local_dep_install = None
@@ -404,6 +418,10 @@ class EventHandlerMixin:
                     delattr(self, "_local_provider_list")
                 if hasattr(self, "_session_resume_list"):
                     delattr(self, "_session_resume_list")
+                if hasattr(self, "_harness_selection_list"):
+                    delattr(self, "_harness_selection_list")
+                if hasattr(self, "_harness_pending_entry"):
+                    delattr(self, "_harness_pending_entry")
                 # Handle the command - call _go_home directly for :home to ensure it always works
                 if cmd == "home":
                     self._go_home(log)
@@ -440,6 +458,20 @@ class EventHandlerMixin:
                 return
         if getattr(self, "_awaiting_subscription_login", None):
             if self._handle_subscription_login_input(text, log):
+                return
+
+        if getattr(self, "_awaiting_harness_confirmation", False):
+            choice = text.strip().lower()
+            if choice in {"y", "yes", "continue"}:
+                self.action_confirm_harness_switch()
+            elif choice in {"n", "no", "cancel"}:
+                self.action_cancel_harness_selection()
+            else:
+                log.add_error("Press Enter to continue or Esc to cancel.")
+            return
+
+        if getattr(self, "_awaiting_harness_selection", False):
+            if self._handle_harness_picker_input(text, log):
                 return
 
         # Check if awaiting connect type selection (profile-driven)

@@ -13,7 +13,7 @@ publisher_url = "https://github.com/SuperagenticAI/superqode"
 type = "coding"
 description = "A versatile coding agent implementing ACP for seamless integration with compatible development environments."
 tags = ["versatile", "acp", "integration", "official-acp"]
-run_command."*" = "vtcode --acp"
+run_command."*" = "vtcode acp"
 
 help = '''
 # VT Code

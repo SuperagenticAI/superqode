@@ -31,6 +31,11 @@ def check_agent_installed(agent: "Agent") -> bool:
     # Extract the command name (first part before any spaces or arguments)
     cmd_name = run_command.split()[0]
 
+    # Registry launchers may download a package on demand. Having npx or uvx
+    # installed does not mean the agent itself is installed and authenticated.
+    if cmd_name in {"npx", "uvx"}:
+        return False
+
     # Check if command exists in PATH
     return shutil.which(cmd_name) is not None
 
@@ -171,13 +176,17 @@ def show_agents_store() -> None:
     _console.print(footer)
 
 
-def show_agents_list() -> None:
+def show_agents_list(*, catalog_tier: str = "all", refresh: bool = False) -> None:
     """Show a list of available ACP agents with installation status."""
     import asyncio
     from superqode.config import load_config
     from superqode.agents.registry import get_all_acp_agents, get_agent_installation_info
 
     try:
+        if refresh:
+            from superqode.providers.acp_registry import get_acp_registry_agents
+
+            asyncio.run(get_acp_registry_agents(force_refresh=True))
         agents = asyncio.run(get_all_acp_agents())
     except Exception as e:
         _console.print(f"[red]Error loading agents: {e}[/red]")
@@ -205,7 +214,7 @@ def show_agents_list() -> None:
         is_installed = check_agent_installed(agent_data)
         if is_installed:
             installed_agents.append((agent_id, agent_data))
-        else:
+        elif catalog_tier == "all" or agent_data.get("catalog_tier", "all") == catalog_tier:
             not_installed_agents.append((agent_id, agent_data))
 
     # Show installed agents first
@@ -216,6 +225,7 @@ def show_agents_list() -> None:
         table = Table(show_header=True, header_style="bold green")
         table.add_column("Name", style="cyan", no_wrap=True)
         table.add_column("Short Name", style="green")
+        table.add_column("Group", style="magenta")
         table.add_column("Description", style="white", max_width=50)
         table.add_column("Author", style="yellow")
         table.add_column("Status", style="cyan", no_wrap=True)
@@ -227,6 +237,7 @@ def show_agents_list() -> None:
             table.add_row(
                 agent_data["name"],
                 agent_data["short_name"],
+                str(agent_data.get("catalog_tier", "all")),
                 agent_data["description"][:50] + "..."
                 if len(agent_data["description"]) > 50
                 else agent_data["description"],
@@ -245,6 +256,7 @@ def show_agents_list() -> None:
         table = Table(show_header=True, header_style="bold yellow")
         table.add_column("Name", style="cyan", no_wrap=True)
         table.add_column("Short Name", style="green")
+        table.add_column("Group", style="magenta")
         table.add_column("Description", style="white", max_width=40)
         table.add_column("Install Command", style="magenta", no_wrap=False)
 
@@ -259,6 +271,7 @@ def show_agents_list() -> None:
             table.add_row(
                 agent_data["name"],
                 agent_data["short_name"],
+                str(agent_data.get("catalog_tier", "all")),
                 agent_data["description"][:40] + "..."
                 if len(agent_data["description"]) > 40
                 else agent_data["description"],

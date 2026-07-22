@@ -15,9 +15,9 @@ ASCII_LOGO = """
 COMPACT_LOGO = """ ____  _   _ ____  _____ ____   ___    ___  ____  _____
 |____/ \\___/|_|   |_____|_| \\_\\\\__\\_\\ \\___/|____/|_____|"""
 
-# Welcome subtitle: local-first differentiators (line 1) + connectivity tail (line 2).
-TAGLINE_PART1 = "Local and Open Models  ·  Bring Your Own Harness  ·  Connect Anything"
-TAGLINE_PART2 = "ACP · MCP · A2A · BYOK · SDKs"
+# Compact positioning used by alternate TUI renderers.
+TAGLINE_PART1 = "The Agent Engineering Framework for Your Code"
+TAGLINE_PART2 = "Terminal-first · Any agent or model · Local or cloud"
 
 # First-page order for the product-level connection choices. The root plus
 # these eight profiles fit exactly in the nine-row prompt completion page.
@@ -298,6 +298,7 @@ COMMANDS = [
     ":vim",
     ":vim on",
     ":vim off",
+    ":vim tutor",
     ":set vim",
     ":set novim",
     ":w",
@@ -309,6 +310,7 @@ COMMANDS = [
     ":agents connect",
     ":agents connect opencode",
     ":agents list",
+    ":agents refresh",
     ":agents doctor",
     ":agents show",
     ":agents store",
@@ -350,6 +352,7 @@ COMMANDS = [
     # Runtime backend selection (see ':runtime list' for status)
     ":runtime",
     ":runtime list",
+    ":runtime setup",
     ":runtime builtin",
     ":runtime adk",
     ":runtime openai-agents",
@@ -611,8 +614,10 @@ COMMANDS = [
     ":recipe doctor",
     ":harness",
     ":harness list",
+    ":harness current",
     ":harness show",
     ":harness use",
+    ":harness switch",
     ":harness all",
     ":harness customize",
     ":harness status",

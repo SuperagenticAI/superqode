@@ -33,10 +33,11 @@ async def test_status_setters_update_mounted_status_bar():
         assert "gpt-5.5" in rendered  # full, not shortened
 
 
-async def test_mounted_status_header_keeps_identity_and_operational_state():
+async def test_mounted_status_header_keeps_identity_and_operational_state(monkeypatch):
     """The real header reserves two content rows and never looks empty."""
     from superqode import __version__
 
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
     app = SuperQodeApp()
     async with app.run_test(size=(90, 30)) as pilot:
         bar = app.query_one("#status-bar", ColorfulStatusBar)
@@ -48,8 +49,9 @@ async def test_mounted_status_header_keeps_identity_and_operational_state():
         assert "\n" not in rendered
         assert f"SuperQode v{__version__}" in rendered
         assert "Harness Engineering frameworks" not in rendered
-        assert "No model" in rendered
+        assert "Model: not connected" in rendered
         assert "runtime builtin" not in rendered
+        assert "h core" in rendered
         assert "BUILD" in rendered
 
 
@@ -157,7 +159,7 @@ async def test_byok_picker_keyboard_navigation_keeps_selection_visible():
         assert log.scroll_y <= selected_y < log.scroll_y + visible_height
 
 
-async def test_harness_command_opens_keyboard_catalog_completion():
+async def test_harness_command_opens_native_switcher():
     app = SuperQodeApp()
     async with app.run_test(size=(100, 32)) as pilot:
         log = app.query_one("#log", ConversationLog)
@@ -167,18 +169,19 @@ async def test_harness_command_opens_keyboard_catalog_completion():
         await pilot.pause()
 
         prompt = app.query_one("#prompt-input", SelectionAwareInput)
-        values = [candidate.value for candidate in app._prompt_completion_candidates]
         rendered = "\n".join(line.text for line in log.lines)
 
-        assert prompt.value == ":harness use "
-        assert app._prompt_completion_visible is True
-        assert ":harness use kimi-coding" in values
-        assert ":harness use kimi-k3-coding" not in values
-        assert ":harness use gemma4-coding" not in values
-        assert "Harness Catalog" in rendered
+        assert prompt.value == ""
+        assert app._prompt_completion_visible is False
+        assert app._awaiting_harness_selection is True
+        ids = [entry.id for entry in app._harness_selection_list]
+        assert "kimi-coding" in ids
+        assert "kimi-k3-coding" not in ids
+        assert "gemma4-coding" not in ids
+        assert "Select Harness" in rendered
 
 
-async def test_harness_all_opens_complete_keyboard_catalog_completion():
+async def test_harness_all_opens_complete_native_switcher():
     app = SuperQodeApp()
     async with app.run_test(size=(100, 32)) as pilot:
         log = app.query_one("#log", ConversationLog)
@@ -188,13 +191,16 @@ async def test_harness_all_opens_complete_keyboard_catalog_completion():
         await pilot.pause()
 
         prompt = app.query_one("#prompt-input", SelectionAwareInput)
-        values = [candidate.value for candidate in app._prompt_completion_candidates]
         rendered = "\n".join(line.text for line in log.lines)
 
-        assert prompt.value == ":harness use-all "
-        assert ":harness use-all kimi-k3-coding" in values
-        assert ":harness use-all benchmark-coding" in values
-        assert "Complete Harness Catalog" in rendered
+        assert prompt.value == ""
+        assert app._prompt_completion_visible is False
+        assert app._awaiting_harness_selection is True
+        assert app._harness_include_all is True
+        ids = [entry.id for entry in app._harness_selection_list]
+        assert "kimi-k3-coding" in ids
+        assert "benchmark-coding" in ids
+        assert "Complete catalog" in rendered
 
 
 async def test_claude_agent_badge_on_mounted_status_bar():
@@ -368,13 +374,124 @@ def test_copy_text_to_clipboard_falls_back_to_osc52(monkeypatch):
 # --- prompt box: select-all + clear (escape a huge pasted blob) ---------------
 
 
-async def test_prompt_placeholder_mentions_os_dictation():
+async def test_prompt_placeholder_is_task_focused(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
     app = SuperQodeApp()
     async with app.run_test() as pilot:
         prompt = app.query_one(SelectionAwareInput)
         await pilot.pause()
 
-        assert "dictation" in str(prompt.placeholder).lower()
+        assert str(prompt.placeholder) == "Describe a task or type : for commands."
+
+
+async def test_mounted_harness_switcher_uses_keyboard_navigation(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
+    app = SuperQodeApp()
+
+    async with app.run_test(size=(100, 32)) as pilot:
+        prompt = app.query_one(SelectionAwareInput)
+        log = app.query_one("#log", ConversationLog)
+        app._harness_cmd("switch", log)
+        prompt.focus()
+        await pilot.pause()
+
+        assert app._awaiting_harness_selection is True
+        assert app._harness_selection_list[app._harness_highlighted_index].id == "core"
+
+        await pilot.press("down", "enter")
+        await pilot.pause()
+
+        assert app._awaiting_harness_selection is False
+        assert app._pure_mode.session.harness_name == "workbench"
+        assert "Harness switched: Core -> Workbench" in "\n".join(line.text for line in log.lines)
+
+
+async def test_mounted_harness_switcher_toggles_catalog_and_cancels(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
+    app = SuperQodeApp()
+
+    async with app.run_test(size=(78, 28)) as pilot:
+        prompt = app.query_one(SelectionAwareInput)
+        log = app.query_one("#log", ConversationLog)
+        app._harness_cmd("", log)
+        prompt.focus()
+        await pilot.pause()
+
+        recommended_count = len(app._harness_selection_list)
+        await pilot.press("a")
+        await pilot.pause()
+
+        assert app._harness_include_all is True
+        assert len(app._harness_selection_list) > recommended_count
+
+        await pilot.press("escape")
+        await pilot.pause()
+
+        assert app._awaiting_harness_selection is False
+        assert "Harness selection cancelled." in "\n".join(line.text for line in log.lines)
+
+
+async def test_mounted_vim_mode_switches_between_normal_insert_and_command(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "1")
+    app = SuperQodeApp()
+    async with app.run_test() as pilot:
+        prompt = app.query_one(SelectionAwareInput)
+        bar = app.query_one("#status-bar", ColorfulStatusBar)
+        input_box = app.query_one("#input-box")
+        await pilot.pause()
+
+        assert prompt.read_only is True
+        assert bar.vim_state == "normal"
+        assert input_box.border_title == "Task · NORMAL"
+
+        await pilot.press("i")
+        await pilot.pause()
+        assert prompt.read_only is False
+        assert bar.vim_state == "insert"
+
+        await pilot.press("h")
+        assert prompt.text == "h"
+
+        await pilot.press("escape")
+        await pilot.pause()
+        assert prompt.read_only is True
+        assert prompt.text == "h"
+        assert bar.vim_state == "normal"
+
+        prompt.load_text("")
+        await pilot.press(":")
+        await pilot.pause()
+        assert prompt.text == ":"
+        assert prompt.read_only is False
+        assert bar.vim_state == "command"
+
+        prompt.insert("vim status")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert prompt.text == ""
+        assert prompt.read_only is True
+        assert bar.vim_state == "normal"
+
+
+async def test_mounted_vim_jk_moves_prompt_completion(monkeypatch):
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "1")
+    app = SuperQodeApp()
+    moves = []
+    async with app.run_test() as pilot:
+        prompt = app.query_one(SelectionAwareInput)
+        prompt.focus()
+        app._prompt_completion_visible = True
+        monkeypatch.setattr(app, "_move_prompt_completion", lambda delta: moves.append(delta))
+
+        await pilot.press("j", "k")
+        await pilot.pause()
+
+        assert moves == [1, -1]
+        assert prompt.text == ""
 
 
 async def test_prompt_accepts_dictated_text_like_normal_input():
@@ -392,6 +509,7 @@ async def test_prompt_accepts_dictated_text_like_normal_input():
 
 async def test_local_stop_ds4_submits_from_active_model_picker(monkeypatch):
     """The digit in ds4 remains text instead of becoming model choice 4."""
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
     app = SuperQodeApp()
     submitted: list[str] = []
     monkeypatch.setattr(app, "_handle_command", lambda text, log: submitted.append(text))
@@ -410,13 +528,14 @@ async def test_local_stop_ds4_submits_from_active_model_picker(monkeypatch):
         assert submitted == [":local stop ds4"]
 
 
-async def test_prompt_ctrl_u_clears_entire_multiline_buffer():
+async def test_prompt_ctrl_u_clears_entire_multiline_buffer(monkeypatch):
     """Ctrl+U must wipe the whole prompt, not just the current line.
 
     A user pasted a huge multi-line conversation and could only quit the app to
     get rid of it — TextArea's default Ctrl+U deletes to start of the current
     line only.
     """
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
     app = SuperQodeApp()
     async with app.run_test() as pilot:
         prompt = app.query_one(SelectionAwareInput)

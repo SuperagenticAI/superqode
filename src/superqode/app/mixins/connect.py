@@ -638,7 +638,13 @@ class ConnectMixin:
         return True
 
     async def _refresh_catalog_then_connect_byok(
-        self, provider: str, model: str, log: ConversationLog, resolved_role=None
+        self,
+        provider: str,
+        model: str,
+        log: ConversationLog,
+        resolved_role=None,
+        *,
+        session_id: str | None = None,
     ) -> None:
         """Fetch a models.dev-only provider before retrying a direct connection."""
         try:
@@ -658,6 +664,7 @@ class ConnectMixin:
                 log,
                 resolved_role,
                 _catalog_refresh_attempted=True,
+                session_id=session_id,
             )
         )
 
@@ -669,6 +676,7 @@ class ConnectMixin:
         resolved_role=None,
         *,
         _catalog_refresh_attempted: bool = False,
+        session_id: str | None = None,
     ):
         """Connect to BYOK mode with specified provider/model.
 
@@ -687,7 +695,13 @@ class ConnectMixin:
         if provider_def is None:
             if not _catalog_refresh_attempted:
                 self.run_worker(
-                    self._refresh_catalog_then_connect_byok(provider, model, log, resolved_role)
+                    self._refresh_catalog_then_connect_byok(
+                        provider,
+                        model,
+                        log,
+                        resolved_role,
+                        session_id=session_id,
+                    )
                 )
                 return
             log.add_error(
@@ -877,6 +891,7 @@ class ConnectMixin:
             working_directory=working_dir,
             job_description=job_description,
             role_config=resolved_role,
+            session_id=session_id,
         )
 
         # Update state
@@ -1138,6 +1153,12 @@ class ConnectMixin:
             clear_log: If True, clear the log before writing (default: True).
                       Set to False when updating during navigation to reduce flickering.
         """
+        # Clear any other primary picker state to prevent interference.
+        self._awaiting_harness_selection = False
+        self._awaiting_harness_confirmation = False
+        if hasattr(self, "_harness_selection_list"):
+            delattr(self, "_harness_selection_list")
+
         # Clear any BYOK state to prevent interference
         self._awaiting_byok_provider = False
         self._awaiting_byok_model = False
@@ -1627,8 +1648,19 @@ class ConnectMixin:
     def _connect_acp_cmd(self, args: str, log: ConversationLog):
         """Handle :connect acp command - Connect to ACP agent."""
         if not args:
-            # Show agent list if no agent specified
+            # The default picker is curated. Installed agents are always shown.
             self._show_agents(log)
+            return
+
+        command = args.strip().lower()
+        if command in {"all", "--all"}:
+            self._show_agents(log, include_all=True)
+            return
+        if command in {"enterprise", "--enterprise"}:
+            self._show_agents(log, catalog_tier="enterprise")
+            return
+        if command in {"refresh", "sync"}:
+            self._refresh_acp_registry(log)
             return
 
         # Clear any existing BYOK connection when switching to ACP
@@ -1649,6 +1681,15 @@ class ConnectMixin:
         agent_name = parts[0]
         model_hint = parts[1] if len(parts) > 1 else None
         self._connect_agent(agent_name, model_hint)
+
+    @work(exclusive=True)
+    async def _refresh_acp_registry(self, log: ConversationLog):
+        """Refresh the cached official ACP Registry and reopen the picker."""
+        from superqode.providers.acp_registry import get_acp_registry_agents
+
+        agents = await get_acp_registry_agents(force_refresh=True)
+        log.add_success(f"ACP Registry refreshed: {len(agents)} agents available.")
+        self._show_agents_async(log, clear_log=False)
 
     @work(exclusive=True)
     async def _connect_agent(self, agent_id: str, model_hint: str = None):
@@ -1737,6 +1778,11 @@ class ConnectMixin:
                     badge.role = ""
                     badge.model = self.current_model
                     badge.provider = self.current_provider
+
+                # The legacy mode badge and the mounted top status bar are
+                # separate widgets. Keep both synchronized for every ACP
+                # connection, including the model-selection state.
+                self._set_acp_status(self.current_model)
             else:
                 log.add_error(f"Agent '{agent_id}' not found")
         except Exception as e:

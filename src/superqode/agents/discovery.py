@@ -117,47 +117,50 @@ async def read_agents(include_registry: bool = False) -> dict[str, "Agent"]:
 
     agent_map = {agent["identity"]: agent for agent in agents}
 
-    # Merge with registry if requested
+    # Ensure the bundled catalog has stable terminal groups even before the
+    # first network refresh.
+    from superqode.providers.acp_registry import registry_catalog_tier
+
+    for agent in agent_map.values():
+        short_name = str(agent.get("short_name") or "")
+        tier = str(agent.get("catalog_tier") or registry_catalog_tier("", short_name))
+        agent["catalog_tier"] = tier  # type: ignore[typeddict-item]
+        if tier == "featured":
+            agent["recommended"] = True
+
+    # Merge the cached official ACP registry when requested. Local TOML files
+    # remain authoritative for commands, help text, and user-defined agents.
     if include_registry:
-        # Import here to avoid circular dependency
-        from .acp_registry import get_all_registry_agents
+        from superqode.providers.acp_registry import (
+            convert_registry_agent,
+            get_acp_registry_agents,
+        )
 
-        # Get registry agents and merge
-        registry_agents = get_all_registry_agents()
-
-        # Convert registry agents to Agent format and merge
-        for identity, metadata in registry_agents.items():
-            # Skip if already in local agents
-            if identity in agent_map:
+        registry_agents = await get_acp_registry_agents()
+        identities_by_short_name = {
+            str(agent.get("short_name", "")).casefold(): identity
+            for identity, agent in agent_map.items()
+        }
+        for registry_agent in registry_agents:
+            converted: "Agent" = convert_registry_agent(registry_agent)  # type: ignore[assignment]
+            identity = converted["identity"]
+            short_name = converted["short_name"].casefold()
+            existing_identity = identity if identity in agent_map else identities_by_short_name.get(
+                short_name
+            )
+            if existing_identity:
+                existing = agent_map[existing_identity]
+                existing["registry_id"] = converted.get("registry_id", "")
+                existing["registry_version"] = converted.get("registry_version", "")
+                existing["registry_source"] = converted.get("registry_source", "")
+                existing["catalog_tier"] = converted.get("catalog_tier", "all")
+                existing["recommended"] = converted.get("recommended", False)
+                existing["tags"] = sorted(
+                    set(existing.get("tags", [])) | set(converted.get("tags", []))
+                )
                 continue
-
-            # Convert registry metadata to Agent format
-            agent: "Agent" = {
-                "identity": metadata["identity"],
-                "name": metadata["name"],
-                "short_name": metadata["short_name"],
-                "url": metadata["url"],
-                "protocol": "acp",
-                "author_name": metadata["author_name"],
-                "author_url": metadata["author_url"],
-                "publisher_name": "SuperQode Team",
-                "publisher_url": "https://github.com/SuperagenticAI/superqode",
-                "type": "coding",
-                "description": metadata["description"],
-                "tags": [],
-                "help": f"# {metadata['name']}\n\n{metadata['description']}\n\n## Installation\n\n{metadata['installation_instructions']}\n\nRun: `{metadata['installation_command']}`",
-                "run_command": {"*": metadata["run_command"]},
-                "actions": {
-                    "*": {
-                        "install": {
-                            "command": metadata["installation_command"],
-                            "description": f"Install {metadata['name']}",
-                        }
-                    }
-                },
-            }
-
-            agent_map[identity] = agent
+            agent_map[identity] = converted
+            identities_by_short_name[short_name] = identity
 
     if not agent_map:
         raise AgentReadError("No valid agents found in any data directory")
@@ -221,13 +224,13 @@ def get_agent_by_identity(identity: str) -> "Agent | None":
         new_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(new_loop)
         try:
-            agent_map = new_loop.run_until_complete(read_agents())
+            agent_map = new_loop.run_until_complete(read_agents(include_registry=True))
             return agent_map.get(identity)
         finally:
             new_loop.close()
     except RuntimeError:
         # No running loop, safe to use asyncio.run
-        agent_map = asyncio.run(read_agents())
+        agent_map = asyncio.run(read_agents(include_registry=True))
         return agent_map.get(identity)
 
 
@@ -250,7 +253,7 @@ def get_agent_by_short_name(short_name: str) -> "Agent | None":
         new_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(new_loop)
         try:
-            agents = new_loop.run_until_complete(read_agents())
+            agents = new_loop.run_until_complete(read_agents(include_registry=True))
             for agent in agents.values():
                 if agent.get("short_name", "").lower() == short_name.lower():
                     return agent
@@ -259,7 +262,7 @@ def get_agent_by_short_name(short_name: str) -> "Agent | None":
             new_loop.close()
     except RuntimeError:
         # No running loop, safe to use asyncio.run
-        agents = asyncio.run(read_agents())
+        agents = asyncio.run(read_agents(include_registry=True))
         for agent in agents.values():
             if agent.get("short_name", "").lower() == short_name.lower():
                 return agent

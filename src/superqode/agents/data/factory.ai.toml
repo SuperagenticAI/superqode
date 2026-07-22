@@ -10,7 +10,7 @@ publisher_url = "https://factory.ai"
 type = "coding"
 description = "AI coding agent by Factory with ACP support."
 tags = ["coding", "ai-agent", "acp"]
-run_command."*" = "droid"
+run_command."*" = "droid exec --output-format acp-daemon"
 
 help = '''
 # Factory Droid
@@ -20,12 +20,12 @@ AI coding agent by Factory with ACP support.
 ## Installation
 
 ```bash
-npm install -g @factoryai/droid
+npm install -g droid
 ```
 
 See https://factory.ai/ for details.
 '''
 
 [actions."*".install]
-command = "npm install -g @factoryai/droid"
+command = "npm install -g droid"
 description = "Install Factory Droid"

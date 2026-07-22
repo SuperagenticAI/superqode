@@ -159,12 +159,38 @@ superqode --harness workbench --print "inspect this repository"
 superqode harness use workbench   # persist the project default in superqode.yaml
 ```
 
-In the TUI, enter `:harness` for a keyboard-navigable recommended catalog, or use
-`:harness use core`, `:harness use workbench`, or a maintained model-family preset
-such as `:harness use kimi-coding`. Named harnesses, built-in templates, and
-HarnessSpec files use the same `--harness` option. Use `:harness customize <name>`
-to create a project-owned editable copy. Enter `:harness all` when you need pinned
-compatibility or specialized presets.
+In the TUI, enter `:harness` or `:harness switch` to open the interactive Harness
+Switcher. Use the arrow keys and Enter to continue the current session with the
+selected harness, or press `F` to fork the session before switching. Direct
+commands such as `:harness switch workbench` remain available. Named harnesses,
+built-in templates, and HarnessSpec files use the same `--harness` option. Use
+`:harness customize <name>` to create a project-owned editable copy. Press `A`
+in the switcher when you need pinned compatibility or specialized presets.
+
+The conversation session is durable and the active harness is replaceable.
+Switching harnesses keeps the same session ID and replays the stored context
+through the selected harness. Use `--fork` when the new harness should work on
+an independent copy of the conversation.
+
+```text
+:harness switch workbench
+:harness switch kimi-coding
+:harness switch workbench --fork
+:sessions switch
+```
+
+The same operation is available for a headless CLI turn:
+
+```bash
+superqode --print --resume SESSION_ID --harness workbench "continue the task"
+superqode --print --fork SESSION_ID --harness kimi-coding "try another approach"
+```
+
+The harness catalog reports runtime mode, readiness, continuity, and model
+route. The session picker shows the current harness for every saved session.
+Selecting a session restores its latest harness, model, and conversation
+history. Vendor-owned thread stores remain accessible through runtime commands
+such as `:codex sessions` and `:claude sessions`.
 
 ### Your First Harness Run
 
@@ -252,10 +278,24 @@ Install only the runtimes you need:
 uv tool install "superqode[adk]"
 uv tool install "superqode[openai-agents]"
 uv tool install "superqode[codex-sdk]"
+uv tool install "superqode[claude-agent-sdk]"
+uv tool install "superqode[antigravity-sdk]"
 uv tool install "superqode[deepagents]"
 uv tool install "superqode[pydanticai]"
 uv tool install "superqode[rlm-code]"
 ```
+
+Install the three vendor SDK runtimes together only when you need all of them:
+
+```bash
+uv tool install "superqode[vendor-sdks]"
+```
+
+The default installation stays lightweight. The bundle includes the Codex,
+Claude Agent, and Antigravity SDK runtimes. It does not install the Grok or
+Antigravity subscription CLIs, which retain their own installers and login
+flows. Run `superqode runtime setup` or `:runtime setup` for environment-aware
+commands and authentication steps.
 
 Then select a backend in a spec or at run time:
 
@@ -312,13 +352,16 @@ Inside the TUI, start with `:help` and these commands:
 
 ```text
 :connect codex        # Codex SDK with local Codex login
-:connect claude       # Claude Code through ACP
+:connect claude       # Claude Agent SDK with ANTHROPIC_API_KEY
 :connect antigravity  # signed-in Antigravity CLI (Google OAuth/keyring)
 :connect byok google  # Google API key path
 :connect grok         # Grok Build, xAI's own agent over ACP
 :grok api             # SuperQode core/workbench harness on the same subscription
 :connect byok         # hosted provider/API-key path
 :connect local        # local model provider
+:connect acp          # installed and featured ACP coding agents
+:connect acp all      # complete official registry plus SuperQode adapters
+:connect acp refresh  # refresh the cached official ACP Registry
 :tree                 # saved session branches
 :share create         # portable superqode-share-v1 artifact
 :export markdown      # copyable transcript export
@@ -329,7 +372,11 @@ Inside the TUI, start with `:help` and these commands:
 :plan edit ...        # adjust the pending request before execution
 :memory providers     # local and SpecMem-aware memory status
 :memory remember ...  # explicit local project memory
+:vim on               # optional Vim-like modal terminal navigation
+:vim tutor            # modes and navigation reference
 ```
+
+The optional Vim layer provides Normal, Insert, Command, and Search states for navigating conversations, panes, pickers, sessions, and agent output without leaving the keyboard. See [Vim-Like Terminal Navigation](docs/advanced/vim-mode.md).
 
 CLI equivalents:
 

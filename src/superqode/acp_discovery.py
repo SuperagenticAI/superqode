@@ -55,6 +55,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shlex
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -156,10 +157,10 @@ KNOWN_AGENTS: List[Dict[str, Any]] = [
     {
         "name": "Gemini CLI",
         "short_name": "gemini",
-        "command": ["gemini", "--experimental-acp"],
+        "command": ["gemini", "--acp"],
         "alt_commands": [
-            ["npx", "-y", "@google/gemini-cli", "--experimental-acp"],
-            ["gemini-cli", "--experimental-acp"],
+            ["npx", "-y", "@google/gemini-cli", "--acp"],
+            ["gemini-cli", "--acp"],
         ],
         "icon": "✨",
         "color": "#4285f4",
@@ -178,11 +179,9 @@ KNOWN_AGENTS: List[Dict[str, Any]] = [
     {
         "name": "Claude Code",
         "short_name": "claude-code",
-        "command": ["claude", "--acp"],
+        "command": ["claude-agent-acp"],
         "alt_commands": [
-            ["npx", "-y", "@anthropic-ai/claude-code", "--acp"],
-            ["claude-code-acp"],
-            ["npx", "@anthropic-ai/claude-code-acp"],
+            ["npx", "-y", "@agentclientprotocol/claude-agent-acp"],
         ],
         "icon": "🧡",
         "color": "#d97706",
@@ -198,10 +197,9 @@ KNOWN_AGENTS: List[Dict[str, Any]] = [
     {
         "name": "Codex",
         "short_name": "codex",
-        "command": ["codex", "--acp"],
+        "command": ["codex-acp"],
         "alt_commands": [
-            ["npx", "-y", "@openai/codex", "--acp"],
-            ["npx", "@openai/codex-acp"],
+            ["npx", "-y", "@agentclientprotocol/codex-acp"],
         ],
         "icon": "📜",
         "color": "#10b981",
@@ -250,7 +248,7 @@ KNOWN_AGENTS: List[Dict[str, Any]] = [
     {
         "name": "Goose",
         "short_name": "goose",
-        "command": ["goose", "mcp"],
+        "command": ["goose", "acp"],
         "alt_commands": [
             ["goose", "acp"],
             ["goose", "--acp"],
@@ -269,7 +267,7 @@ KNOWN_AGENTS: List[Dict[str, Any]] = [
     {
         "name": "Kimi CLI",
         "short_name": "kimi",
-        "command": ["kimi", "--acp"],
+        "command": ["kimi", "acp"],
         "alt_commands": [
             ["npx", "-y", "@anthropic-ai/kimi-cli", "--acp"],
             ["kimi-cli", "--acp"],
@@ -306,7 +304,7 @@ KNOWN_AGENTS: List[Dict[str, Any]] = [
     {
         "name": "Stakpak",
         "short_name": "stakpak",
-        "command": ["stakpak", "--acp"],
+        "command": ["stakpak", "acp"],
         "alt_commands": [
             ["npx", "-y", "stakpak", "--acp"],
         ],
@@ -324,7 +322,7 @@ KNOWN_AGENTS: List[Dict[str, Any]] = [
     {
         "name": "VT Code",
         "short_name": "vtcode",
-        "command": ["vtcode", "--acp"],
+        "command": ["vtcode", "acp"],
         "alt_commands": [
             ["vt-code", "--acp"],
             ["npx", "-y", "vtcode", "--acp"],
@@ -431,6 +429,42 @@ KNOWN_AGENTS: List[Dict[str, Any]] = [
         "check_command": ["llmling-agent", "--version"],
     },
 ]
+
+
+def _extend_known_agents_from_catalog() -> None:
+    """Add bundled ACP agents that do not need specialized discovery logic."""
+    from superqode.agents.acp_registry import get_all_registry_agents
+
+    aliases = {"claude": "claude-code", "codeassistant": "code-assistant"}
+    known = {str(agent["short_name"]) for agent in KNOWN_AGENTS}
+    for metadata in get_all_registry_agents().values():
+        short_name = str(metadata["short_name"])
+        if aliases.get(short_name, short_name) in known:
+            continue
+        command = str(metadata["run_command"] or "").strip()
+        if not command:
+            continue
+        argv = shlex.split(command)
+        if not argv:
+            continue
+        KNOWN_AGENTS.append(
+            {
+                "name": metadata["name"],
+                "short_name": short_name,
+                "command": argv,
+                "icon": "🤖",
+                "color": "#a855f7",
+                "description": metadata["description"],
+                "website": metadata["url"],
+                "requires_api_key": False,
+                "api_key_env_vars": [],
+                "check_command": [argv[0], "--version"],
+            }
+        )
+        known.add(short_name)
+
+
+_extend_known_agents_from_catalog()
 
 
 # ============================================================================

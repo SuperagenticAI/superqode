@@ -21,8 +21,8 @@ the TUI and runtime doctor, SuperQode adjusts the hint to the environment that
 is actually running: source checkouts use
 `uv pip install -e ".[<extra>]"`, project virtualenvs use
 `uv add "superqode[<extra>]"`, and plain virtualenvs use
-`uv pip install "superqode[<extra>]"`. Any one-click install prompt prints the
-exact command first and waits for confirmation. See the
+`uv pip install "superqode[<extra>]"`. SuperQode prints the exact command but
+does not install optional runtimes without an explicit user action. See the
 [official uv documentation](https://docs.astral.sh/uv/) for uv installation and
 environment details.
 
@@ -32,9 +32,34 @@ environment details.
 | `adk` | `uv tool install "superqode[adk]"` | Google Agent Development Kit. Uses ADK's `Runner` and `LlmAgent`. |
 | `openai-agents` | `uv tool install "superqode[openai-agents]"` | OpenAI Agents SDK v0.17+. Includes SDK sessions, tool bridging, and HITL support. |
 | `codex-sdk` | `uv tool install "superqode[codex-sdk]"` | Official OpenAI Codex Python SDK runtime. Drives the published `openai-codex` package and its local app-server. |
-| `claude-agent-sdk` | `uv tool install "superqode[claude-agent-sdk]"` | Anthropic Claude Agent SDK runtime (API key via `ANTHROPIC_API_KEY`). Drives `claude-agent-sdk` + the local Claude Code CLI; `:claude` exposes model/permission/sessions/slash-commands. |
+| `claude-agent-sdk` | `uv tool install "superqode[claude-agent-sdk]"` | Anthropic Claude Agent SDK runtime (API key via `ANTHROPIC_API_KEY`). The SDK provides its own Claude Code executable; `:claude` exposes model, permission, session, and slash-command controls. |
+| `antigravity-sdk` | `uv tool install "superqode[antigravity-sdk]"` | Google Antigravity SDK runtime using `GEMINI_API_KEY` or `GOOGLE_API_KEY`. This is separate from the signed-in `agy` CLI route. |
 | `deepagents` | `uv tool install "superqode[deepagents]"` | Optional DeepAgents 0.6 runtime for graph and middleware-heavy coding harnesses. |
 | `pydanticai` | `uv tool install "superqode[pydanticai]"` | Optional PydanticAI runtime with SuperQode JSON-schema tool bridging, approval resume, native MCP config loading, fallback chains, and typed-output-friendly harness support. |
+
+### Vendor SDK Bundle
+
+The default package does not install large vendor SDKs. Install all supported
+vendor SDK runtimes only when you need them together:
+
+```bash
+uv tool install "superqode[vendor-sdks]"
+```
+
+This bundle contains `codex-sdk`, `claude-agent-sdk`, and `antigravity-sdk`.
+It does not contain the Grok CLI or the `agy` CLI. Those products manage their
+own installation, authentication, and update lifecycle. Codex subscription
+authentication also uses the separate Codex CLI and `codex login`.
+
+Use either setup command to see commands adjusted for the current environment:
+
+```bash
+superqode runtime setup
+```
+
+```text
+:runtime setup
+```
 
 Runtime backends implement the same SuperQode harness contract where their underlying framework can honor it. If a backend cannot support a harness policy, it should fail clearly rather than silently degrading the run.
 
@@ -75,6 +100,7 @@ Switch backends from inside a running session without restarting:
 
 ```text
 :runtime list          # list runtimes with status (ready / missing + install hint / stub)
+:runtime setup         # show individual and bundled vendor SDK setup
 :runtime codex-sdk     # swap to a runtime by name; the status-bar badge updates
 ```
 

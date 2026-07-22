@@ -1,0 +1,29 @@
+identity = "cortex.snowflake.com"
+name = "Cortex Code"
+short_name = "cortex"
+url = "https://docs.snowflake.com/en/user-guide/cortex-code/cortex-code"
+protocol = "acp"
+author_name = "Snowflake"
+author_url = "https://snowflake.com"
+publisher_name = "SuperQode"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "Snowflake's Cortex Code terminal agent through its native ACP server."
+tags = ["official-acp", "enterprise"]
+catalog_tier = "enterprise"
+run_command."*" = "cortex acp serve"
+
+help = '''
+# Cortex Code
+
+Cortex Code provides an ACP server for Snowflake development workflows.
+
+## Installation
+
+Install and authenticate Cortex Code using Snowflake's documentation, then run
+`cortex acp serve`.
+'''
+
+[actions."*".install]
+command = ""
+description = "Follow the Cortex Code installation guide"

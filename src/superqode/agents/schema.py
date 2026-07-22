@@ -71,6 +71,14 @@ class Agent(TypedDict):
     """If `True` (default), the agent will be shown in the UI. If `False` the agent will be removed from the UI."""
     recommended: NotRequired[bool]
     """Agent is in recommended set. Set to `True` in main branch only if previously agreed."""
+    catalog_tier: NotRequired[Literal["featured", "enterprise", "all"]]
+    """Terminal catalog group. Installed agents are surfaced independently of this value."""
+    registry_id: NotRequired[str]
+    """Stable id from the official ACP Registry when this agent is registered upstream."""
+    registry_version: NotRequired[str]
+    """Version reported by the official ACP Registry."""
+    registry_source: NotRequired[str]
+    """Catalog provenance, such as ``official-registry`` or ``bundled``."""
     identity: str
     """A unique identifier for this agent. Should be a domain the agent developer owns,
     although it doesn't have to resolve to anything. Must be useable in a filename on all platforms.

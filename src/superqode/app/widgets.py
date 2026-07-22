@@ -151,8 +151,10 @@ class ColorfulStatusBar(Static):
     # in full (no shortening) so the user can see exactly what's selected.
     active_runtime: reactive[str] = reactive("")
     active_model: reactive[str] = reactive("")
+    active_harness: reactive[str] = reactive("")
     interaction_mode: reactive[str] = reactive("build")
     plan_state: reactive[str] = reactive("")
+    vim_state: reactive[str] = reactive("")
 
     @staticmethod
     def _format_token_count(tokens: int) -> str:
@@ -193,7 +195,6 @@ class ColorfulStatusBar(Static):
             color = qode_colors[i % len(qode_colors)]
             result.append(char, style=f"bold {color}")
         result.append(f" v{__version__}", style="#71717a")
-        result.append(" ✨", style="bold #fbbf24")
 
         # Connection and model are always explicit, including before the user
         # has selected one. Long names compact, but the state never disappears.
@@ -227,7 +228,7 @@ class ColorfulStatusBar(Static):
             )
         else:
             separator()
-            result.append("○ No model", style="#71717a")
+            result.append("Model: not connected", style="#71717a")
 
         # A specialized runtime is useful when a model is also named. The
         # default built-in runtime is intentionally omitted as visual noise.
@@ -237,6 +238,16 @@ class ColorfulStatusBar(Static):
             result.append("rt ", style="#52525b")
             runtime_limit = 20 if medium else 7
             result.append(self._truncate_status_value(runtime, runtime_limit), style="#06b6d4")
+
+        harness = (self.active_harness or "").strip()
+        if harness:
+            separator()
+            result.append("harness " if wide else "h ", style="#52525b")
+            harness_limit = 18 if wide else 10 if medium else 6
+            result.append(
+                self._truncate_status_value(harness, harness_limit),
+                style="bold #a855f7",
+            )
 
         # Interaction mode is always visible.
         mode = (self.interaction_mode or "").strip().lower()
@@ -249,6 +260,28 @@ class ColorfulStatusBar(Static):
             }.get(mode, "#a855f7")
             separator()
             result.append(mode_label, style=f"bold {mode_color} reverse")
+
+        # Keep the interaction mode and the optional input mode distinct.
+        vim_state = (self.vim_state or "").strip().lower()
+        if vim_state:
+            vim_label = {
+                "normal": "NORMAL",
+                "insert": "INSERT",
+                "command": "COMMAND",
+                "search": "SEARCH",
+            }.get(vim_state, vim_state.upper())
+            vim_color = {
+                "normal": "#a855f7",
+                "insert": "#06b6d4",
+                "command": "#fbbf24",
+                "search": "#ec4899",
+            }.get(vim_state, "#a855f7")
+            separator()
+            if medium:
+                result.append("VIM ", style="#71717a")
+                result.append(vim_label, style=f"bold {vim_color}")
+            else:
+                result.append(vim_label[:1], style=f"bold {vim_color} reverse")
 
         # Usage remains visible whenever known. Figures compact on narrower
         # terminals, while connection/runtime/mode retain priority.
@@ -772,7 +805,7 @@ class ModeBadge(Static):
 
 
 class HintsBar(Static):
-    """Context hints with gradient colors and emojis."""
+    """Persistent shortcuts for the primary terminal workflows."""
 
     approval_mode = reactive("auto")
 
@@ -782,13 +815,12 @@ class HintsBar(Static):
         # t.append("\n", style="")
 
         hints = [
-            ("🔌 :connect", THEME["pink"]),
-            ("⚙️ :mode", THEME["gold"]),
-            ("🧩 :harness", THEME["purple"]),
-            ("🧠 :memory", THEME["cyan"]),
-            ("🏠 :home", THEME["cyan"]),
-            ("❓ :help", THEME["purple"]),
-            ("👋 :exit", THEME["orange"]),
+            (":connect", THEME["pink"]),
+            (":mode", THEME["gold"]),
+            (":harness", THEME["purple"]),
+            (":work", THEME["success"]),
+            (":memory", THEME["cyan"]),
+            (":help", THEME["purple"]),
         ]
         for i, (hint, color) in enumerate(hints):
             if i > 0:

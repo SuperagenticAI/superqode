@@ -33,6 +33,7 @@ from superqode.design_system import (
 # --- helpers extracted from app_main (A1) ---
 from superqode.app.inputs import SelectionAwareInput
 from superqode.app.session_state import get_session, get_mode
+from superqode.app.welcome import _harness_display_name
 
 
 class SlashCommandMixin:
@@ -1025,7 +1026,23 @@ class SlashCommandMixin:
 
         resolved_id = pure_mode.get_current_session_id() or session_id
         self._awaiting_session_resume = False
-        log.add_info(f"Resumed session {resolved_id[:8]} with {len(messages)} messages.")
+        harness_name = ""
+        try:
+            status = pure_mode.get_status()
+            harness = status.get("harness", {})
+            harness_name = str(harness.get("name") or harness.get("id") or "")
+            definition = getattr(pure_mode, "_harness_definition", None)
+            if definition is not None:
+                os.environ["SUPERQODE_HARNESS"] = str(definition.path or definition.id)
+            self._refresh_harness_panel()
+        except (AttributeError, TypeError):
+            pass
+        log.add_success(f"Resumed session {resolved_id[:8]} with {len(messages)} messages.")
+        if harness_name:
+            log.add_info(
+                f"Restored harness: {_harness_display_name(harness_name)}. "
+                "Other sessions remain saved."
+            )
         for message in messages[-6:]:
             role = str(message.get("role", "?")).upper()
             content = str(message.get("content", "")).replace("\n", " ")[:120]

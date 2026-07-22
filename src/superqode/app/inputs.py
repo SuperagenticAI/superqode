@@ -20,7 +20,7 @@ class SelectionAwareInput(TextArea):
     # Start tall enough to invite longer prompts; grow up to the max, then scroll.
     MIN_PROMPT_HEIGHT = 3
     MAX_PROMPT_HEIGHT = 8
-    DEFAULT_PLACEHOLDER = "Type, paste, or use OS dictation. Type : for commands."
+    DEFAULT_PLACEHOLDER = "Describe a task or type : for commands."
 
     # A prompt box should behave like an ordinary text field. TextArea's defaults
     # are surprising here: Ctrl+A is line-start and Ctrl+U only deletes to the
@@ -116,6 +116,9 @@ class SelectionAwareInput(TextArea):
         event.stop()
         event.prevent_default()
         self.post_message(Input.Submitted(self, value))
+        after_submit = getattr(self.app, "_vim_after_submit", None)
+        if callable(after_submit):
+            after_submit()
 
     def _is_in_selection_mode_for_number_keys(self, app) -> bool:
         """Check if the app is in a selection mode that supports number key shortcuts.
@@ -134,6 +137,7 @@ class SelectionAwareInput(TextArea):
             or getattr(app, "_awaiting_model_selection", False)
             or getattr(app, "_awaiting_session_resume", False)
             or getattr(app, "_awaiting_mode_selection", False)
+            or getattr(app, "_awaiting_harness_selection", False)
             # Excluded: _awaiting_byok_model, _awaiting_local_model
             # Users should type in the input for model selection
         )
@@ -143,6 +147,17 @@ class SelectionAwareInput(TextArea):
         app = self.app
 
         if getattr(app, "_prompt_completion_visible", False):
+            vim_token = getattr(event, "character", None) or event.key
+            if (
+                getattr(app, "_vim_enabled", lambda: False)()
+                and getattr(app, "_vim_input_mode", "insert") == "normal"
+                and vim_token in {"j", "k"}
+            ):
+                if hasattr(app, "_move_prompt_completion"):
+                    app._move_prompt_completion(-1 if vim_token == "k" else 1)
+                event.stop()
+                event.prevent_default()
+                return
             if event.key == "enter":
                 enter_action = getattr(app, "_prompt_completion_enter_action", None)
                 action = enter_action(self.value) if callable(enter_action) else "accept"
@@ -182,6 +197,40 @@ class SelectionAwareInput(TextArea):
                 event.prevent_default()
                 return
 
+        if event.key in {"escape", "ctrl+["} and (
+            getattr(app, "_awaiting_harness_selection", False)
+            or getattr(app, "_awaiting_harness_confirmation", False)
+        ):
+            cancel = getattr(app, "action_cancel_harness_selection", None)
+            if callable(cancel):
+                cancel()
+            event.stop()
+            event.prevent_default()
+            return
+
+        if getattr(app, "_awaiting_harness_selection", False) and not (self.value or "").strip():
+            token = (getattr(event, "character", None) or event.key or "").lower()
+            picker_actions = {
+                "f": "action_select_highlighted_harness",
+                "i": "action_inspect_highlighted_harness",
+                "a": "action_toggle_all_harnesses",
+            }
+            action_name = picker_actions.get(token)
+            if action_name:
+                action = getattr(app, action_name, None)
+                if callable(action):
+                    if token == "f":
+                        action(fork=True)
+                    else:
+                        action()
+                event.stop()
+                event.prevent_default()
+                return
+
+        handle_vim_key = getattr(app, "_handle_vim_key", None)
+        if callable(handle_vim_key) and handle_vim_key(event, self):
+            return
+
         if event.key in ("tab", "right"):
             complete_prompt = getattr(app, "_complete_prompt_input", None)
             if callable(complete_prompt) and complete_prompt(self):
@@ -216,6 +265,7 @@ class SelectionAwareInput(TextArea):
                 or getattr(app, "_awaiting_local_provider", False)
                 or getattr(app, "_awaiting_byok_model", False)
                 or getattr(app, "_awaiting_local_model", False)
+                or getattr(app, "_awaiting_harness_selection", False)
             ):
                 event.stop()
                 event.prevent_default()
@@ -288,6 +338,15 @@ class SelectionAwareInput(TextArea):
                     app.action_navigate_connect_type_up()
                 else:
                     app.action_navigate_connect_type_down()
+                return
+
+            if getattr(app, "_awaiting_harness_selection", False):
+                event.stop()
+                event.prevent_default()
+                if event.key == "up":
+                    app.action_navigate_harness_up()
+                else:
+                    app.action_navigate_harness_down()
                 return
 
             if getattr(app, "_awaiting_runtime_selection", False):
@@ -379,6 +438,17 @@ class SelectionAwareInput(TextArea):
                 app._apply_selection_buffer()
                 return True
 
+        if getattr(app, "_awaiting_harness_selection", False) and typed:
+            handler = getattr(app, "_handle_harness_picker_input", None)
+            if callable(handler):
+                try:
+                    log = app.query_one("#log")
+                    handler(typed, log)
+                    self.value = ""
+                    return True
+                except Exception:
+                    pass
+
         mode_actions = (
             ("_awaiting_acp_agent_selection", "action_select_highlighted_acp_agent"),
             ("_awaiting_byok_model", "action_select_highlighted_model"),
@@ -389,6 +459,8 @@ class SelectionAwareInput(TextArea):
             ("_awaiting_runtime_selection", "action_select_highlighted_runtime"),
             ("_awaiting_session_resume", "action_select_highlighted_session_resume"),
             ("_awaiting_mode_selection", "action_select_highlighted_mode"),
+            ("_awaiting_harness_confirmation", "action_confirm_harness_switch"),
+            ("_awaiting_harness_selection", "action_select_highlighted_harness"),
             ("_awaiting_local_provider", "action_select_highlighted_local_provider"),
             ("_awaiting_local_model", "action_select_highlighted_local_model"),
             ("_awaiting_model_selection", "action_select_highlighted_acp_model"),

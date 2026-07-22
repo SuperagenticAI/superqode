@@ -41,24 +41,61 @@ def harness_list(json_output, recommended):
                 "digest": "",
                 "path": None,
                 "kind": "python",
+                "continuity": (
+                    "exact-resume"
+                    if entry.descriptor and entry.descriptor.capabilities.resume
+                    else "fresh-session"
+                ),
             }
         )
     if json_output:
         click.echo(json.dumps(rows, indent=2))
         return
     click.echo(
-        f"{'ID':<20} {'TIER':<14} {'TYPE':<8} {'SOURCE':<20} {'RUNTIME':<12} {'TOOLS':>5}  STATUS"
+        f"{'ID':<20} {'TYPE':<8} {'RUNTIME':<12} {'STATUS':<14} {'CONTINUITY':<16} {'TOOLS':>5}"
     )
     for row in rows:
-        status = "ready" if row["available"] else str(row["issue"] or "unavailable")
+        status = "available" if row["available"] else str(row["issue"] or "unavailable")
         click.echo(
             f"{str(row['id']):<20} "
-            f"{str(row.get('catalog_tier') or 'installed'):<14} "
             f"{str(row['kind']):<8} "
-            f"{str(row['source']):<20} "
             f"{str(row['runtime']):<12} "
-            f"{int(row['tool_count']):>5}  {status}"
+            f"{status:<14} "
+            f"{str(row['continuity']):<16} "
+            f"{int(row['tool_count']):>5}"
         )
+
+
+@harness.command("current")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def harness_current(json_output):
+    """Show the effective harness for the current project."""
+    import os
+
+    from superqode.harness import resolve_harness
+
+    reference = ""
+    try:
+        from superqode.config.loader import load_config
+
+        reference = str(load_config().superqode.harness or "")
+    except Exception:
+        reference = ""
+    if not reference:
+        reference = os.getenv("SUPERQODE_HARNESS", "").strip()
+    reference = reference or "core"
+    try:
+        entry = resolve_harness(reference, root=Path.cwd())
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    payload = entry.to_dict()
+    if json_output:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    click.echo(f"Harness: {entry.id}")
+    click.echo(f"Runtime: {entry.runtime}")
+    click.echo(f"Source: {entry.source}")
+    click.echo(f"Switch continuity: {entry.continuity}")
 
 
 @harness.command("show")

@@ -1,0 +1,32 @@
+identity = "kilo.ai"
+name = "Kilo"
+short_name = "kilo"
+url = "https://kilo.ai"
+protocol = "acp"
+author_name = "Kilo Code"
+author_url = "https://github.com/Kilo-Org"
+publisher_name = "SuperQode"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "Open-source coding agent with a terminal CLI, broad model support, and native ACP mode."
+tags = ["official-acp", "open-source", "featured"]
+recommended = true
+catalog_tier = "featured"
+run_command."*" = "kilo acp"
+
+help = '''
+# Kilo
+
+Kilo is an open-source coding agent with native ACP support.
+
+## Installation
+
+```bash
+npm install -g @kilocode/cli
+kilo acp
+```
+'''
+
+[actions."*".install]
+command = "npm install -g @kilocode/cli"
+description = "Install Kilo CLI"

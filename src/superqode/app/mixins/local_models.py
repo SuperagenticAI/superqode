@@ -744,7 +744,14 @@ class LocalModelsMixin:
         # Now show the provider picker
         self._show_local_provider_picker(log)
 
-    def _connect_local_mode(self, provider: str, model: str, log: ConversationLog):
+    def _connect_local_mode(
+        self,
+        provider: str,
+        model: str,
+        log: ConversationLog,
+        *,
+        session_id: str | None = None,
+    ):
         """Connect to LOCAL mode with specified provider/model.
 
         This is a wrapper around _connect_byok_mode() that ensures
@@ -784,7 +791,10 @@ class LocalModelsMixin:
 
         # Local providers use the same connection mechanism as BYOK
         # but are identified by ProviderCategory.LOCAL
-        self._connect_byok_mode(provider, model, log)
+        if session_id is None:
+            self._connect_byok_mode(provider, model, log)
+        else:
+            self._connect_byok_mode(provider, model, log, session_id=session_id)
 
     @staticmethod
     def _local_serve_command(engine: str, model: str) -> str:

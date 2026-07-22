@@ -898,6 +898,14 @@ class ACPClient:
                     await self._log_traffic("agent->client", data)
                     if self._is_jsonrpc_response(data):
                         await self._handle_message(data)
+                    elif data.get("id") is None:
+                        # ACP notifications are ordered on the wire. Process
+                        # them in that same order so a session/prompt response
+                        # cannot overtake its final message or usage update.
+                        # Agent requests keep the concurrent path below because
+                        # permission and terminal handlers may wait on the user
+                        # or external work while unrelated responses arrive.
+                        await self._handle_message(data)
                     else:
                         task = asyncio.create_task(self._handle_message(data))
                         self._inbound_tasks.add(task)

@@ -6,7 +6,9 @@ Manage ACP (Agent Client Protocol) coding agents for SuperQode.
 
 ## Overview
 
-The `superqode agents` command group provides commands for discovering, installing, and managing ACP coding agents. ACP agents are external coding assistants that integrate with SuperQode via the Agent Client Protocol.
+The `superqode agents` command group discovers, inspects, installs, and checks
+ACP coding agents. The catalog combines the cached official ACP Registry,
+bundled offline metadata, and user definitions from `~/.superqode/agents`.
 
 ---
 
@@ -23,6 +25,11 @@ superqode agents list [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `--store` | Show agent store interface |
+| `--protocol acp` | Limit output to ACP agents |
+| `--tier featured` | Show installed agents and missing featured agents |
+| `--tier enterprise` | Show installed agents and missing enterprise agents |
+| `--tier all` | Show the complete catalog. This is the default |
+| `--refresh` | Refresh the official ACP Registry cache before listing |
 
 ### Examples
 
@@ -30,9 +37,32 @@ superqode agents list [OPTIONS]
 # List all agents
 superqode agents list
 
+# Show the focused catalog
+superqode agents list --tier featured
+superqode agents list --tier enterprise
+
+# Refresh upstream metadata and versions
+superqode agents list --refresh
+
 # Show agent store
 superqode agents list --store
 ```
+
+Installed agents are always shown regardless of the selected catalog tier.
+
+---
+
+## agents refresh
+
+Refresh the official ACP Registry and write the result to
+`~/.superqode/acp_registry_cache.json`.
+
+```bash
+superqode agents refresh
+```
+
+Normal startup and picker operations do not require network access. If the
+registry cannot be reached, SuperQode uses the stale cache or bundled catalog.
 
 ---
 
@@ -121,4 +151,8 @@ superqode agents store
 ## Related Commands
 
 - `superqode connect acp <agent>` - Connect to an ACP agent
+- `:connect acp` - Open the installed and featured TUI picker
+- `:connect acp enterprise` - Open the enterprise agent picker
+- `:connect acp all` - Open the complete TUI catalog
+- `:connect acp refresh` - Refresh the cache from the TUI
 - `superqode providers list` - List BYOK providers

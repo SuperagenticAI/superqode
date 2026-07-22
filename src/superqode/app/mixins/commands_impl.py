@@ -39,6 +39,53 @@ class CommandImplMixin:
             f"Run: {command}"
         )
 
+    def _show_vendor_runtime_setup(self, log) -> None:
+        """Show optional vendor SDK and external CLI setup without installing."""
+        from superqode.providers.env_introspect import install_command
+
+        text = Text()
+        text.append("\n  Vendor runtime setup\n\n", style=f"bold {THEME['purple']}")
+        text.append("  Install one SDK runtime\n", style=f"bold {THEME['text']}")
+        for label, extra in (
+            ("Codex SDK", "codex-sdk"),
+            ("Claude Agent SDK", "claude-agent-sdk"),
+            ("Antigravity SDK", "antigravity-sdk"),
+        ):
+            text.append(f"    {label:20}", style=THEME["muted"])
+            text.append(f"{install_command(extra)}\n", style=THEME["cyan"])
+
+        text.append("\n  Install all vendor SDK runtimes\n", style=f"bold {THEME['text']}")
+        text.append(f"    {install_command('vendor-sdks')}\n", style=THEME["cyan"])
+        text.append(
+            "    This bundle is optional and is not part of the default installation.\n",
+            style=THEME["muted"],
+        )
+
+        text.append("\n  Authentication after installation\n", style=f"bold {THEME['text']}")
+        text.append("    Codex              ", style=THEME["muted"])
+        text.append("codex login\n", style=THEME["cyan"])
+        text.append("    Codex CLI install  ", style=THEME["muted"])
+        text.append("npm i -g @openai/codex\n", style=THEME["cyan"])
+        text.append("    Claude             ", style=THEME["muted"])
+        text.append("export ANTHROPIC_API_KEY=...\n", style=THEME["cyan"])
+        text.append("    Antigravity SDK    ", style=THEME["muted"])
+        text.append("export GEMINI_API_KEY=...\n", style=THEME["cyan"])
+
+        text.append("\n  External subscription CLIs\n", style=f"bold {THEME['text']}")
+        text.append(
+            "    Antigravity: https://antigravity.google/docs/cli-install, then run agy.\n",
+            style=THEME["muted"],
+        )
+        text.append(
+            "    Grok: https://x.ai/cli, then run `grok login`.\n",
+            style=THEME["muted"],
+        )
+        text.append(
+            "\n  Restart SuperQode after changing installed extras. Use :runtime list to verify.\n",
+            style=THEME["muted"],
+        )
+        self._show_command_output(log, text)
+
     def _vim_enabled(self) -> bool:
         return bool(getattr(self, "_vim_experience_enabled", False))
 
@@ -46,11 +93,20 @@ class CommandImplMixin:
         arg = (args or "").strip().lower()
         if arg in {"on", "1", "true", "yes"}:
             self._vim_experience_enabled = True
-            log.add_success("Vim mode enabled. Use q: for command history and @: to repeat.")
+            self._save_vim_preference(True)
+            self._set_vim_state("normal")
+            log.add_success(
+                "Vim mode enabled. Press i to enter a task, : for commands, or :vim tutor."
+            )
             return
         if arg in {"off", "0", "false", "no"}:
             self._vim_experience_enabled = False
+            self._save_vim_preference(False)
+            self._set_vim_state("insert")
             log.add_success("Vim mode disabled.")
+            return
+        if arg in {"tutor", "help", "keys"}:
+            self._show_vim_tutor(log)
             return
         if arg in {"", "status"}:
             state = "on" if self._vim_enabled() else "off"
@@ -61,6 +117,12 @@ class CommandImplMixin:
                 f"{state}\n",
                 style=f"bold {THEME['success'] if self._vim_enabled() else THEME['muted']}",
             )
+            if self._vim_enabled():
+                t.append("  Input mode: ", style=THEME["muted"])
+                t.append(
+                    f"{getattr(self, '_vim_input_mode', 'normal').upper()}\n",
+                    style=f"bold {THEME['purple']}",
+                )
             t.append("  Toggle: ", style=THEME["muted"])
             t.append(":vim on", style=THEME["cyan"])
             t.append(" / ", style=THEME["muted"])
@@ -71,9 +133,60 @@ class CommandImplMixin:
             t.append("@:\n", style=THEME["cyan"])
             t.append("  Aliases: ", style=THEME["muted"])
             t.append(":w, :e <file>, :ls, :grep <term>\n", style=THEME["cyan"])
+            t.append("  Reference: ", style=THEME["muted"])
+            t.append(":vim tutor\n", style=THEME["cyan"])
             self._show_command_output(log, t)
             return
-        log.add_info("Usage: :vim [on|off|status]")
+        log.add_info("Usage: :vim [on|off|status|tutor]")
+
+    def _show_vim_tutor(self, log: ConversationLog) -> None:
+        """Show the supported modal navigation contract."""
+        t = Text()
+        t.append("\n  Vim Terminal Navigation\n\n", style=f"bold {THEME['purple']}")
+        sections = (
+            (
+                "Modes",
+                (
+                    ("Esc", "return to Normal mode"),
+                    ("i / a / o", "enter Insert mode"),
+                    (":", "enter an Ex command"),
+                    ("/ or ?", "search the transcript"),
+                ),
+            ),
+            (
+                "Conversation",
+                (
+                    ("j / k", "scroll by line"),
+                    ("gg / G", "jump to the top or bottom"),
+                    ("Ctrl+U / Ctrl+D", "scroll by page"),
+                    ("n / N", "move through search matches"),
+                ),
+            ),
+            (
+                "Panes and commands",
+                (
+                    ("h / l", "focus the sidebar or main prompt"),
+                    ("Ctrl+W h/l", "explicit pane navigation"),
+                    ("Space", "open the leader menu"),
+                    ("j / k", "move through an active picker"),
+                    ("q:", "show Ex command history"),
+                    ("@:", "repeat the latest Ex command"),
+                ),
+            ),
+        )
+        for heading, rows in sections:
+            t.append(f"  {heading}\n", style=f"bold {THEME['text']}")
+            width = max(len(key) for key, _ in rows)
+            for key, description in rows:
+                t.append(f"    {key:<{width}}  ", style=f"bold {THEME['cyan']}")
+                t.append(f"{description}\n", style=THEME["muted"])
+            t.append("\n")
+        t.append(
+            "  This mode controls the SuperQode TUI. It does not implement Vim text operators, "
+            "registers, macros, or a Vim plugin runtime.\n",
+            style=THEME["muted"],
+        )
+        self._show_command_output(log, t)
 
     def _set_cmd(self, args: str, log: ConversationLog) -> None:
         arg = (args or "").strip().lower()
@@ -926,7 +1039,7 @@ class CommandImplMixin:
         log.add_success(f"Revoked local share artifact -> {path}")
 
     def _runtime_cmd(self, args: str, log) -> None:
-        """Handle :runtime / :runtime list / :runtime <name>.
+        """Handle :runtime / :runtime list / :runtime setup / :runtime <name>.
 
         With no args: open the RuntimeDialog picker.
         With "list":  print an inline status table.
@@ -939,6 +1052,10 @@ class CommandImplMixin:
 
         if sub.startswith("doctor"):
             self._run_cli_group("runtime", args, log, "Runtime command")
+            return
+
+        if sub == "setup":
+            self._show_vendor_runtime_setup(log)
             return
 
         if sub == "list":
@@ -1275,10 +1392,10 @@ class CommandImplMixin:
             style=THEME["success" if sdk_ok else "error"],
         )
         cli_ok = shutil.which("claude") is not None
-        text.append("  Claude CLI   ", style=THEME["muted"])
+        text.append("  External CLI ", style=THEME["muted"])
         text.append(
-            "found\n" if cli_ok else "not found (install Claude Code)\n",
-            style=THEME["success" if cli_ok else "warning"],
+            "found (optional)\n" if cli_ok else "not on PATH (not required)\n",
+            style=THEME["success" if cli_ok else "muted"],
         )
         key_ok = bool(os.environ.get("ANTHROPIC_API_KEY"))
         text.append("  API key      ", style=THEME["muted"])
@@ -1309,7 +1426,7 @@ class CommandImplMixin:
         if not (sdk_ok and key_ok):
             text.append("\n  Setup: ", style=THEME["muted"])
             text.append('uv tool install "superqode[claude-agent-sdk]"', style=THEME["cyan"])
-            text.append(" + install Claude Code + export ANTHROPIC_API_KEY\n", style=THEME["muted"])
+            text.append(" + export ANTHROPIC_API_KEY\n", style=THEME["muted"])
         log.write(text)
 
     def _claude_permission_cmd(self, mode: str, log) -> None:
@@ -1371,7 +1488,7 @@ class CommandImplMixin:
         import os as _os
 
         if not args.strip():
-            self._show_harness_catalog(log, open_picker=True, include_all=False)
+            self._show_harness_picker(log, include_all=False)
             return
         parts = args.split(maxsplit=1)
         sub = parts[0].strip() if parts else "status"
@@ -1413,7 +1530,18 @@ class CommandImplMixin:
             return
 
         if sub in ("all", "legacy", "compatibility"):
-            self._show_harness_catalog(log, open_picker=True, include_all=True)
+            self._show_harness_picker(log, include_all=True)
+            return
+
+        if sub == "help":
+            log.add_info(
+                "Harness commands: :harness opens the switcher; "
+                ":harness switch <name> changes harness; add --fork to branch; "
+                ":harness list prints the catalog; :harness show <name> inspects a harness."
+            )
+            log.add_info(
+                "Advanced commands are available through :help harness and the CLI reference."
+            )
             return
 
         if sub == "show":
@@ -1611,17 +1739,27 @@ class CommandImplMixin:
             log.add_info(f"Activate it with :harness use {saved}")
             return
 
-        if sub in ("load", "use", "use-all"):
-            reference = subargs
-            auto_connect = sub in {"use", "use-all"}
+        fork_session = False
+        if sub in ("load", "use", "use-all", "switch"):
+            try:
+                switch_tokens = shlex.split(subargs)
+            except ValueError as exc:
+                log.add_error(f"Could not parse :harness {sub} arguments: {exc}")
+                return
+            if sub == "switch" and "--fork" in switch_tokens:
+                fork_session = True
+                switch_tokens = [token for token in switch_tokens if token != "--fork"]
+            reference = " ".join(switch_tokens)
+            auto_connect = sub in {"use", "use-all", "switch"}
+            if not reference and sub in {"use", "use-all", "switch"}:
+                self._show_harness_picker(log, include_all=sub == "use-all")
+                return
         else:
             reference = args.strip()
             auto_connect = False
 
         if not reference:
-            log.add_info(
-                "Usage: :harness <spec.yaml> | :harness wizard [name] --starter <template> --output <path> [--load] | :harness inspect | :harness doctor | :harness graph | :harness replay <run_id> | :harness fork <run_id> | :harness evidence <run_id> | :harness runs | :harness mine-failures --eval-result eval.json | :harness audit-candidate --base <path> --candidate <path> | :harness candidates list | :harness improve --spec <path> --tasks <path> | :harness optimize --spec <path> --tasks <path> | :harness optimize-inspect <run_dir> | :harness optimize-ledger <run_dir> | :harness templates | :harness off"
-            )
+            log.add_info("Open the harness switcher with :harness or use :harness help.")
             return
 
         try:
@@ -1630,18 +1768,32 @@ class CommandImplMixin:
             log.add_error(f"Could not resolve harness: {exc}")
             return
 
-        _os.environ["SUPERQODE_HARNESS"] = str(entry.path or entry.id)
         pure = self._ensure_pure_mode()
+        previous_session_id = pure.get_current_session_id()
+        previous_harness = str(getattr(pure.session, "harness_name", "") or "core")
+        previous_provider = str(getattr(pure.session, "provider", "") or "")
+        previous_model = str(getattr(pure.session, "model", "") or "")
+        previous_working_directory = getattr(pure.session, "working_directory", Path.cwd())
+        was_connected = bool(getattr(pure.session, "connected", False))
+
+        source_session_id = previous_session_id
+        if fork_session:
+            if not previous_session_id:
+                log.add_error("No active session to fork. Start or resume a session first.")
+                return
+            try:
+                previous_session_id = pure.fork_current_session()
+            except Exception as exc:
+                log.add_error(f"Could not fork the active session: {exc}")
+                return
+
+        _os.environ["SUPERQODE_HARNESS"] = str(entry.path or entry.id)
         if hasattr(pure, "select_harness"):
             pure.select_harness(str(entry.path or entry.id))
         else:
             pure.set_harness(entry.spec, path=entry.path)
         self._refresh_harness_panel()
 
-        log.add_success(
-            f"✓ Harness: {_harness_display_name(entry.id)} loaded "
-            f"({entry.spec.flavor.value}, runtime={entry.runtime}, tools={len(entry.tools)})"
-        )
         primary = str(entry.spec.model_policy.primary or "")
         if "/" in primary and auto_connect:
             provider_id, model_id = primary.split("/", 1)
@@ -1650,15 +1802,363 @@ class CommandImplMixin:
 
             provider_def = resolve_provider_def(provider_id)
             if provider_def is not None and provider_def.category == ProviderCategory.LOCAL:
-                self._connect_local_mode(provider_id, model_id, log)
+                self._connect_local_mode(
+                    provider_id,
+                    model_id,
+                    log,
+                    session_id=previous_session_id,
+                )
             else:
-                self._connect_byok_mode(provider_id, model_id, log)
+                self._connect_byok_mode(
+                    provider_id,
+                    model_id,
+                    log,
+                    session_id=previous_session_id,
+                )
             log.add_meta(f"Harness {entry.id} is active.")
+        elif auto_connect and was_connected and previous_provider and previous_model:
+            try:
+                pure.connect(
+                    provider=previous_provider,
+                    model=previous_model,
+                    working_directory=previous_working_directory,
+                    session_id=previous_session_id,
+                )
+            except Exception as exc:
+                log.add_error(f"Harness loaded, but the previous model could not reconnect: {exc}")
+                log.add_info("Reconnect with :connect, then continue with the selected harness.")
+            else:
+                new_session_id = pure.get_current_session_id()
+                if new_session_id:
+                    log.add_success(
+                        f"Session {new_session_id[:8]} continues under "
+                        f"{_harness_display_name(entry.id)}."
+                    )
+                else:
+                    log.add_info(
+                        "A new resumable session will be created under this harness "
+                        "when you send the next message."
+                    )
         elif pure.session.connected:
             pure.disconnect()
             log.add_info("Reconnect with :connect byok or :connect local to use this harness.")
         else:
             log.add_info("Connect with :connect byok or :connect local to use this harness.")
+
+        active_session_id = pure.get_current_session_id() or previous_session_id
+        display_name = _harness_display_name(entry.id)
+        if sub == "switch":
+            if fork_session and source_session_id and active_session_id:
+                log.add_success(f"Harness switched to {display_name} in a new session branch.")
+                log.add_meta(
+                    f"{source_session_id[:8]} -> {active_session_id[:8]} · "
+                    f"{entry.continuity.replace('-', ' ')}"
+                )
+            else:
+                log.add_success(
+                    f"Harness switched: {_harness_display_name(previous_harness)} -> {display_name}"
+                )
+                if active_session_id:
+                    log.add_meta(
+                        f"Session {active_session_id[:8]} · {entry.continuity.replace('-', ' ')}"
+                    )
+        else:
+            log.add_success(
+                f"Harness: {display_name} loaded "
+                f"({entry.spec.flavor.value}, runtime={entry.runtime}, tools={len(entry.tools)})."
+            )
+
+    def _active_harness_reference(self) -> str:
+        """Return the active harness id or path used to mark picker state."""
+        pure = getattr(self, "_pure_mode", None)
+        session = getattr(pure, "session", None)
+        active = str(getattr(session, "harness_name", "") or "").strip()
+        return active or str(os.getenv("SUPERQODE_HARNESS", "core") or "core")
+
+    def _show_harness_picker(
+        self,
+        log,
+        *,
+        include_all: bool = False,
+        clear_log: bool = True,
+    ) -> None:
+        """Render the keyboard-driven harness switcher."""
+        from superqode.harness import list_harnesses, recommended_harnesses
+
+        reset_connect = getattr(self, "_reset_connect_selection_states", None)
+        if callable(reset_connect):
+            reset_connect()
+        for flag in (
+            "_awaiting_runtime_selection",
+            "_awaiting_session_resume",
+            "_awaiting_mode_selection",
+        ):
+            setattr(self, flag, False)
+
+        entries = list_harnesses(Path.cwd()) if include_all else recommended_harnesses(Path.cwd())
+        if not entries:
+            log.add_error("No harnesses are available. Use :harness wizard to create one.")
+            return
+
+        previous_entries = getattr(self, "_harness_selection_list", [])
+        previous_index = int(getattr(self, "_harness_highlighted_index", 0) or 0)
+        previous_id = ""
+        if previous_entries and 0 <= previous_index < len(previous_entries):
+            previous_id = str(previous_entries[previous_index].id)
+
+        active = self._active_harness_reference()
+        selected_index = 0
+        for index, entry in enumerate(entries):
+            if entry.id == previous_id:
+                selected_index = index
+                break
+            if active in {entry.id, str(entry.path or "")}:
+                selected_index = index
+
+        self._harness_selection_list = entries
+        self._harness_highlighted_index = selected_index
+        self._harness_include_all = include_all
+        self._awaiting_harness_selection = True
+        self._awaiting_harness_confirmation = False
+        try:
+            self._hide_prompt_completion_panel()
+        except Exception:
+            pass
+
+        width = int(getattr(getattr(self, "size", None), "width", 100) or 100)
+        wide = width >= 88
+        text = Text()
+        text.append("\n  ◈ Select Harness\n", style=f"bold {THEME['purple']}")
+        text.append(
+            "  Complete catalog\n\n" if include_all else "  Recommended and project harnesses\n\n",
+            style=THEME["muted"],
+        )
+
+        for index, entry in enumerate(entries):
+            number = index + 1
+            highlighted = index == selected_index
+            current = active in {entry.id, str(entry.path or "")}
+            marker = "▶" if highlighted else " "
+            status = "ready" if entry.available else "needs setup"
+            style = f"bold {THEME['success']}" if highlighted else THEME["text"]
+            number_style = self._picker_link_style(style, number)
+            current_label = "  current" if current else ""
+
+            if wide:
+                text.append(f"  {marker} ", style=style)
+                text.append(f"[{number}] ", style=number_style)
+                text.append(f"{entry.display_name[:22]:<23}", style=style)
+                text.append(
+                    f"{status:<13}", style=THEME["success"] if entry.available else THEME["warning"]
+                )
+                text.append(f"{entry.continuity.replace('-', ' '):<17}", style=THEME["muted"])
+                route = (
+                    f"{entry.provider}/{entry.model}"
+                    if entry.provider and entry.model
+                    else entry.runtime
+                )
+                text.append(route[:28], style=THEME["dim"])
+                text.append(f"{current_label}\n", style=THEME["cyan"])
+            else:
+                text.append(f"  {marker} ", style=style)
+                text.append(f"[{number}] ", style=number_style)
+                text.append(entry.display_name, style=style)
+                text.append(f"{current_label}\n", style=THEME["cyan"])
+                text.append(
+                    f"      {status} · {entry.continuity.replace('-', ' ')} · {entry.runtime}\n",
+                    style=THEME["muted"],
+                )
+
+        selected = entries[selected_index]
+        text.append("\n  ", style="")
+        text.append(selected.display_name, style=f"bold {THEME['text']}")
+        text.append(f"\n  {selected.description}\n", style=THEME["muted"])
+        if not selected.available and selected.issue:
+            text.append(f"  Setup: {selected.issue}\n", style=THEME["warning"])
+        if selected.continuity == "fresh-session":
+            text.append(
+                "  This harness starts a fresh runtime thread. SuperQode session lineage is retained.\n",
+                style=THEME["warning"],
+            )
+
+        text.append("\n  ↑↓", style=THEME["cyan"])
+        text.append(" navigate  ", style=THEME["dim"])
+        text.append("Enter", style=THEME["cyan"])
+        text.append(" switch  ", style=THEME["dim"])
+        text.append("F", style=THEME["cyan"])
+        text.append(" fork  ", style=THEME["dim"])
+        text.append("I", style=THEME["cyan"])
+        text.append(" inspect  ", style=THEME["dim"])
+        text.append("A", style=THEME["cyan"])
+        text.append(" all  ", style=THEME["dim"])
+        text.append("Esc", style=THEME["cyan"])
+        text.append(" cancel\n", style=THEME["dim"])
+
+        log.auto_scroll = False
+        if clear_log:
+            log.clear()
+        log.write(text)
+        log.scroll_home(animate=False)
+        log.auto_scroll = True
+        self._scroll_to_highlighted_item(log, selected_index, len(entries))
+        self.set_timer(0.05, self._ensure_input_focus)
+
+    def action_navigate_harness_up(self) -> None:
+        """Move to the previous harness in the switcher."""
+        self._move_harness_selection(-1)
+
+    def action_navigate_harness_down(self) -> None:
+        """Move to the next harness in the switcher."""
+        self._move_harness_selection(1)
+
+    def _move_harness_selection(self, direction: int) -> None:
+        if not getattr(self, "_awaiting_harness_selection", False):
+            return
+        entries = getattr(self, "_harness_selection_list", [])
+        if not entries:
+            return
+        current = int(getattr(self, "_harness_highlighted_index", 0) or 0)
+        new_index = max(0, min(len(entries) - 1, current + direction))
+        if new_index == current:
+            return
+        self._harness_highlighted_index = new_index
+        self._show_harness_picker(
+            self.query_one("#log", ConversationLog),
+            include_all=bool(getattr(self, "_harness_include_all", False)),
+            clear_log=True,
+        )
+
+    def action_select_highlighted_harness(self, *, fork: bool = False) -> None:
+        """Switch to the highlighted harness, optionally after forking."""
+        if not getattr(self, "_awaiting_harness_selection", False):
+            return
+        entries = getattr(self, "_harness_selection_list", [])
+        index = int(getattr(self, "_harness_highlighted_index", 0) or 0)
+        if not entries or not (0 <= index < len(entries)):
+            return
+        entry = entries[index]
+        log = self.query_one("#log", ConversationLog)
+        if not entry.available:
+            log.add_error(f"{entry.display_name} is not ready: {entry.issue or 'check setup'}")
+            return
+        active = self._active_harness_reference()
+        if not fork and active in {entry.id, str(getattr(entry, "path", "") or "")}:
+            self._awaiting_harness_selection = False
+            log.clear()
+            log.add_info(f"Harness {entry.display_name} is already active.")
+            return
+        if entry.continuity == "fresh-session":
+            self._show_harness_confirmation(entry, log, fork=fork)
+            return
+        self._activate_picker_harness(entry, log, fork=fork)
+
+    def _show_harness_confirmation(self, entry, log, *, fork: bool) -> None:
+        self._awaiting_harness_selection = False
+        self._awaiting_harness_confirmation = True
+        self._harness_pending_entry = entry
+        self._harness_pending_fork = bool(fork)
+        text = Text()
+        text.append("\n  Fresh runtime session\n\n", style=f"bold {THEME['warning']}")
+        text.append(f"  {entry.display_name}", style=f"bold {THEME['text']}")
+        text.append(" cannot guarantee native thread resumption.\n", style=THEME["muted"])
+        text.append(
+            "  SuperQode will retain the session record and transition lineage.\n\n",
+            style=THEME["muted"],
+        )
+        text.append("  Enter", style=THEME["cyan"])
+        text.append(" continue  ", style=THEME["dim"])
+        text.append("Esc", style=THEME["cyan"])
+        text.append(" cancel\n", style=THEME["dim"])
+        log.clear()
+        log.write(text)
+        log.scroll_home(animate=False)
+
+    def action_confirm_harness_switch(self) -> None:
+        """Confirm a picker selection that opens a fresh runtime thread."""
+        if not getattr(self, "_awaiting_harness_confirmation", False):
+            return
+        entry = getattr(self, "_harness_pending_entry", None)
+        fork = bool(getattr(self, "_harness_pending_fork", False))
+        log = self.query_one("#log", ConversationLog)
+        if entry is None:
+            self.action_cancel_harness_selection()
+            return
+        self._activate_picker_harness(entry, log, fork=fork)
+
+    def _activate_picker_harness(self, entry, log, *, fork: bool) -> None:
+        self._awaiting_harness_selection = False
+        self._awaiting_harness_confirmation = False
+        log.clear()
+        command = f"switch {shlex.quote(entry.id)}"
+        if fork:
+            command += " --fork"
+        self._harness_cmd(command, log)
+
+    def action_toggle_all_harnesses(self) -> None:
+        """Toggle between recommended and complete harness catalogs."""
+        if not getattr(self, "_awaiting_harness_selection", False):
+            return
+        log = self.query_one("#log", ConversationLog)
+        self._show_harness_picker(
+            log,
+            include_all=not bool(getattr(self, "_harness_include_all", False)),
+            clear_log=True,
+        )
+
+    def action_inspect_highlighted_harness(self) -> None:
+        """Leave the picker and show technical details for its selected harness."""
+        if not getattr(self, "_awaiting_harness_selection", False):
+            return
+        entries = getattr(self, "_harness_selection_list", [])
+        index = int(getattr(self, "_harness_highlighted_index", 0) or 0)
+        if not entries or not (0 <= index < len(entries)):
+            return
+        entry = entries[index]
+        self._awaiting_harness_selection = False
+        log = self.query_one("#log", ConversationLog)
+        log.clear()
+        self._harness_cmd(f"show {shlex.quote(entry.id)}", log)
+
+    def action_cancel_harness_selection(self) -> None:
+        """Close the harness picker or fresh-session confirmation."""
+        was_active = bool(
+            getattr(self, "_awaiting_harness_selection", False)
+            or getattr(self, "_awaiting_harness_confirmation", False)
+        )
+        self._awaiting_harness_selection = False
+        self._awaiting_harness_confirmation = False
+        for attr in (
+            "_harness_selection_list",
+            "_harness_pending_entry",
+            "_harness_pending_fork",
+        ):
+            if hasattr(self, attr):
+                delattr(self, attr)
+        if was_active:
+            log = self.query_one("#log", ConversationLog)
+            log.clear()
+            log.add_info("Harness selection cancelled.")
+
+    def _handle_harness_picker_input(self, value: str, log) -> bool:
+        """Resolve a typed picker number or harness name."""
+        if not getattr(self, "_awaiting_harness_selection", False):
+            return False
+        entries = getattr(self, "_harness_selection_list", [])
+        choice = str(value or "").strip().lower()
+        index = -1
+        if choice.isdigit() and 1 <= int(choice) <= len(entries):
+            index = int(choice) - 1
+        else:
+            for candidate_index, entry in enumerate(entries):
+                if choice in {entry.id.lower(), entry.display_name.lower()}:
+                    index = candidate_index
+                    break
+        if index < 0:
+            log.add_error("Unknown harness. Use the arrow keys or enter an available harness name.")
+            return True
+        self._harness_highlighted_index = index
+        self.action_select_highlighted_harness()
+        return True
 
     def _show_harness_catalog(self, log, *, open_picker: bool, include_all: bool) -> None:
         """Render the unified catalogue and optionally open keyboard completion."""
@@ -1690,6 +2190,10 @@ class CommandImplMixin:
             ),
             style=THEME["muted"],
         )
+        text.append(
+            "  NAME                    MODE          STATUS       CONTINUITY        ROUTE\n",
+            style=f"bold {THEME['text']}",
+        )
         for category in groups:
             members = [entry for entry in entries if entry.category == category]
             if not members:
@@ -1698,12 +2202,22 @@ class CommandImplMixin:
             for entry in members:
                 marker = "●" if current in {entry.id, str(entry.path or "")} else "○"
                 text.append(f"  {marker} {entry.id:<22}", style=THEME["cyan"])
+                text.append(f"{entry.runtime[:12]:<14}", style=THEME["dim"])
+                status = "available" if entry.available else (entry.issue or "unavailable")
+                text.append(
+                    f"{status[:11]:<13}",
+                    style=THEME["success"] if entry.available else THEME["warning"],
+                )
+                text.append(
+                    f"{entry.continuity.replace('-', ' '):<18}",
+                    style=THEME["muted"],
+                )
                 if entry.provider and entry.model:
-                    text.append(f"{entry.provider}/{entry.model:<28}", style=THEME["dim"])
+                    text.append(f"{entry.provider}/{entry.model}", style=THEME["dim"])
                 else:
-                    text.append(f"{entry.runtime:<38}", style=THEME["dim"])
+                    text.append("current route", style=THEME["dim"])
                 label = " pinned" if entry.catalog_tier == "compatibility" else ""
-                text.append(f" {len(entry.tools):>2} tools{label}\n", style=THEME["muted"])
+                text.append(f"  {len(entry.tools):>2} tools{label}\n", style=THEME["muted"])
         known = {entry.id for entry in entries}
         adapters = [
             adapter
@@ -1714,8 +2228,28 @@ class CommandImplMixin:
             text.append("\n  Python harness adapters\n", style=f"bold {THEME['text']}")
             for adapter in adapters:
                 status = "ready" if adapter.available else (adapter.issue or "unavailable")
-                text.append(f"  ○ {adapter.id:<22} protocol  {status}\n", style=THEME["muted"])
+                supports_resume = bool(
+                    adapter.descriptor and adapter.descriptor.capabilities.resume
+                )
+                continuity = "exact resume" if supports_resume else "fresh session"
+                text.append(
+                    f"  ○ {adapter.id:<22}{'protocol':<14}{status[:11]:<13}"
+                    f"{continuity:<18}adapter\n",
+                    style=THEME["muted"],
+                )
         text.append("\n  :harness show <name>       inspect\n", style=THEME["dim"])
+        text.append(
+            "  :harness switch <name>     continue this session with another harness\n",
+            style=THEME["dim"],
+        )
+        text.append(
+            "  :harness switch <name> --fork  branch this session under another harness\n",
+            style=THEME["dim"],
+        )
+        text.append(
+            "  :sessions switch           return to any session with its harness and history\n",
+            style=THEME["dim"],
+        )
         text.append("  :harness customize <name>  create an editable copy\n", style=THEME["dim"])
         if not include_all:
             text.append(
@@ -1732,7 +2266,7 @@ class CommandImplMixin:
                     from superqode.app.inputs import SelectionAwareInput
 
                     prompt = self.query_one("#prompt-input", SelectionAwareInput)
-                    prompt.value = ":harness use-all " if include_all else ":harness use "
+                    prompt.value = ":harness use-all " if include_all else ":harness switch "
                     prompt.cursor_position = len(prompt.value)
                     prompt.focus()
                     self._update_prompt_completion_panel(prompt.value)
@@ -3253,6 +3787,8 @@ class CommandImplMixin:
                 log.add_info("Usage: :acp model <model_id>")
         elif sub in ("doctor", "check"):
             self.run_worker(self._acp_doctor_cmd(subargs, log))
+        elif sub in ("refresh", "sync"):
+            self._refresh_acp_registry(log)
         else:
             # ":acp grok" / ":acp opencode" → connect that ACP agent by short name
             self._connect_acp_cmd(args.strip(), log)
@@ -3274,6 +3810,8 @@ class CommandImplMixin:
                 log.add_info("Usage: :agents install <name>")
         elif sub == "connect":
             self._connect_acp_cmd(subargs, log)
+        elif sub in ("refresh", "sync"):
+            self._refresh_acp_registry(log)
         else:
             self._run_cli_group("agents", args, log, "Agents command")
 

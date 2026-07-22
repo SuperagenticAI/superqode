@@ -14,6 +14,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from ..providers.env_introspect import install_command
 from ..runtime import list_runtimes, resolve_runtime_name
 
 console = Console()
@@ -70,6 +71,26 @@ def list_runtimes_cmd(json_output: bool) -> None:
 
     console.print(table)
     console.print(f"\nActive runtime (current resolution): [bold]{active}[/bold]")
+
+
+@runtime_cmd.command("setup")
+def setup() -> None:
+    """Show optional vendor runtime installation and authentication steps."""
+    click.echo("Optional vendor SDK runtimes")
+    click.echo(f"  Codex SDK:        {install_command('codex-sdk')}")
+    click.echo(f"  Claude Agent SDK: {install_command('claude-agent-sdk')}")
+    click.echo(f"  Antigravity SDK:  {install_command('antigravity-sdk')}")
+    click.echo("\nInstall all vendor SDK runtimes:")
+    click.echo(f"  {install_command('vendor-sdks')}")
+    click.echo("\nAuthentication:")
+    click.echo("  Codex:            codex login")
+    click.echo("  Codex CLI:        npm i -g @openai/codex")
+    click.echo("  Claude:           export ANTHROPIC_API_KEY=...")
+    click.echo("  Antigravity SDK:  export GEMINI_API_KEY=...")
+    click.echo("\nExternal subscription CLIs are not included in the bundle:")
+    click.echo("  Antigravity: https://antigravity.google/docs/cli-install, then run agy")
+    click.echo("  Grok:        https://x.ai/cli, then run grok login")
+    click.echo("\nRestart SuperQode after changing installed extras.")
 
 
 @runtime_cmd.command("doctor")

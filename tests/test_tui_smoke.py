@@ -11,6 +11,7 @@ import sys
 import pytest
 
 from superqode.app_main import SelectionAwareInput, SuperQodeApp, render_welcome
+from superqode.app.welcome import WelcomeState
 from superqode.app.widgets import ConversationLog, HintsBar, StreamingThinkingIndicator
 from superqode.harness import (
     AgentSpec,
@@ -291,23 +292,80 @@ def test_streaming_indicator_skips_generic_thinking_status(monkeypatch):
     assert "💭 Thinking…" not in text
 
 
-def test_welcome_positions_superqode_as_harness_engineering_frameworks():
-    welcome = render_welcome([])
+def test_welcome_uses_agent_engineering_positioning():
+    welcome = render_welcome([], state=WelcomeState(repository="/work/repository"))
 
     text = render_plain(welcome)
 
-    assert "Harness Engineering frameworks for Coding Agents" in text
+    assert "THE AGENT ENGINEERING FRAMEWORK FOR YOUR CODE" in text
     assert ":connect" in text
-    assert ":mode" in text
-    assert ":help" in text
+    assert ":harness" in text
+    assert ":work" in text
     assert ":init" not in text
-    assert "Explore the possibilities of SuperQode" in text
-    assert "Optimized for Local and Open Models" in text
-    assert "Build and Optimize Your Harness" in text
-    assert "Connect Anything" in text
-    assert "Local · ACP · MCP · A2A · BYOK · SDKs" in text
+    assert "Harnesses · Context · Memory · Tools · Evaluations · Control loops" in text
+    assert "Coding agents · Codebases · Software factories" in text
+    assert "Terminal-first · Any agent or model" in text
+    assert "Interoperability: Local · ACP · MCP · A2A · BYOK · SDKs" in text
+    assert "Current workspace" in text
+    assert "/work/repository" in text
+    assert "Not selected" in text
+    assert "Not connected" in text
+    assert "Next steps" in text
+    assert "[1]" not in text
+    assert "Ctrl+C" in text
     assert "Local/open models · Harnesses · ACP/MCP/A2A · BYOK/SDKs" not in text
     assert "Agentic Code Needs Super Quality Engineering" not in text
+
+    lines = [line.strip() for line in text.splitlines()]
+    headline_index = lines.index("THE AGENT ENGINEERING FRAMEWORK FOR YOUR CODE")
+    capabilities_index = lines.index(
+        "Harnesses · Context · Memory · Tools · Evaluations · Control loops"
+    )
+    factories_index = lines.index("Coding agents · Codebases · Software factories")
+    assert lines[headline_index + 1] == ""
+    assert lines[capabilities_index + 1] == ""
+    assert lines[factories_index + 1] == ""
+
+
+def test_welcome_next_steps_follow_workspace_state():
+    state = WelcomeState(
+        repository="/work/repository",
+        harness="review-harness",
+        connection="anthropic/claude-opus",
+        runtime="acp",
+        approval="ask",
+    )
+
+    text = render_plain(render_welcome([], width=100, state=state))
+
+    assert "review-harness" in text
+    assert "anthropic/claude-opus" in text
+    assert "Runtime" in text
+    assert "acp" in text
+    assert "Task" in text
+    assert ":harness inspect" in text
+    assert "select a local, BYOK, or ACP connection" not in text
+
+
+def test_welcome_compacts_for_narrow_terminals():
+    text = render_plain(render_welcome([], width=50))
+
+    assert "SuperQode" in text
+    assert "THE AGENT ENGINEERING FRAMEWORK FOR YOUR CODE" in text
+    assert "Local · ACP · MCP · A2A · BYOK · SDKs" in text
+    assert "Current workspace" not in text
+    assert "Coding agents · Codebases · Software factories" not in text
+    assert ":connect" in text
+
+
+def test_welcome_uses_one_line_headlines_at_small_widths():
+    compact = render_plain(render_welcome([], width=36))
+    narrow = render_plain(render_welcome([], width=24))
+
+    assert "AGENT ENGINEERING FOR YOUR CODE" in compact
+    assert "THE AGENT ENGINEERING FRAMEWORK FOR YOUR CODE" not in compact
+    assert "AGENT ENGINEERING" in narrow
+    assert "FOR YOUR CODE" not in narrow
 
 
 def test_hints_bar_surfaces_mode_switcher():
@@ -317,7 +375,12 @@ def test_hints_bar_surfaces_mode_switcher():
     assert ":init" not in text
     assert ":mode" in text
     assert ":harness" in text
+    assert ":work" in text
     assert ":memory" in text
+    assert ":help" in text
+    assert ":home" not in text
+    assert ":exit" not in text
+    assert "🔌" not in text
 
 
 def test_lmstudio_app_only_prompt_does_not_arm_enter_start(monkeypatch):
@@ -669,8 +732,8 @@ def test_prompt_height_wraps_and_caps_long_text():
     assert SelectionAwareInput._height_for_text("line 1\nline 2", 40) == 3
 
 
-def test_prompt_default_placeholder_mentions_dictation():
-    assert "dictation" in SelectionAwareInput.DEFAULT_PLACEHOLDER.lower()
+def test_prompt_default_placeholder_is_task_focused():
+    assert SelectionAwareInput.DEFAULT_PLACEHOLDER == "Describe a task or type : for commands."
 
 
 def test_connect_local_picker_lists_ds4():
@@ -767,7 +830,7 @@ def test_prompt_mode_label_tracks_chat_build_and_plan(monkeypatch):
     assert status.plan_state == "ON"
 
 
-def test_prompt_border_title_uses_code_not_build(monkeypatch):
+def test_prompt_border_title_uses_task(monkeypatch):
     app = make_app()
 
     class FakeInputBox:
@@ -784,7 +847,7 @@ def test_prompt_border_title_uses_code_not_build(monkeypatch):
 
     app._set_prompt_border_title()
 
-    assert input_box.border_title == "✎ Code"
+    assert input_box.border_title == "Task"
 
 
 def test_mode_picker_switches_with_keyboard(monkeypatch):
@@ -887,6 +950,16 @@ def test_colorful_status_bar_keeps_context_out_of_transcript():
     assert "12K/200K" in plain
 
 
+def test_colorful_status_bar_shows_active_harness():
+    from superqode.app.widgets import ColorfulStatusBar
+
+    bar = ColorfulStatusBar()
+    bar.active_harness = "workbench"
+
+    plain = bar._render_for_width(120).plain
+    assert "harness workbench" in plain
+
+
 def test_colorful_status_bar_compacts_by_width():
     from superqode import __version__
     from superqode.app.widgets import ColorfulStatusBar
@@ -926,9 +999,63 @@ def test_colorful_status_bar_makes_disconnected_state_explicit():
 
     assert f"SuperQode v{__version__}" in plain
     assert "Harness Engineering frameworks" not in plain
-    assert "No model" in plain
+    assert "Model: not connected" in plain
     assert "runtime builtin" not in plain
     assert "BUILD" in plain
+
+
+def test_colorful_status_bar_shows_optional_vim_input_state():
+    from superqode.app.widgets import ColorfulStatusBar
+
+    bar = ColorfulStatusBar()
+    bar.vim_state = "normal"
+
+    medium = bar._render_for_width(90).plain
+    narrow = bar._render_for_width(58).plain
+
+    assert "VIM NORMAL" in medium
+    assert "VIM" not in narrow
+    assert "N" in narrow
+
+
+def test_opencode_acp_model_selection_updates_mounted_status_bar(monkeypatch):
+    from superqode.app.widgets import ColorfulStatusBar
+
+    app = make_app()
+    log = FakeLog()
+    badge = SimpleNamespace(model="", provider="", execution_mode="")
+    status = ColorfulStatusBar()
+    status.update_byok_status("old-provider", "old-model")
+    app.current_agent = "opencode"
+    app.current_model = ""
+    app.current_provider = ""
+    app._awaiting_model_selection = True
+    app._opencode_models = [
+        {
+            "id": "opencode/nemotron-3-ultra-free",
+            "name": "Nemotron 3 Ultra Free",
+            "free": True,
+        }
+    ]
+
+    def query_one(selector, *_args, **_kwargs):
+        return {
+            "#log": log,
+            "#mode-badge": badge,
+            "#status-bar": status,
+        }[selector]
+
+    monkeypatch.setattr(app, "query_one", query_one)
+
+    app._select_model_by_number(1)
+
+    assert status.byok_provider == ""
+    assert status.active_runtime == "acp"
+    assert status.active_model == "opencode/nemotron-3-ultra-free"
+    rendered = status._render_for_width(120).plain
+    assert "opencode/nemotron-3-ultra-free" in rendered
+    assert "rt acp" in rendered
+    assert "Model: not connected" not in rendered
 
 
 def test_byok_usage_prefers_exact_provider_token_total(monkeypatch):
@@ -1561,6 +1688,143 @@ def test_tui_harness_customize_creates_safe_editable_copy(tmp_path, monkeypatch)
     assert any("Refusing to overwrite" in str(item) for item in log.items)
 
 
+def test_tui_harness_commands_open_native_switcher(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+    app = make_app()
+    log = FakeLog()
+    app.set_timer = lambda *_args, **_kwargs: None
+    app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
+
+    app._harness_cmd("", log)
+
+    assert app._awaiting_harness_selection is True
+    picker_ids = [entry.id for entry in app._harness_selection_list]
+    assert picker_ids[:4] == ["core", "workbench", "no-tool", "kimi-coding"]
+    rendered = render_plain(log.items[-1])
+    assert "Select Harness" in rendered
+    assert "Enter switch" in rendered
+    assert "F fork" in rendered
+    assert "Usage: :harness" not in rendered
+
+    app._harness_cmd("switch", log)
+
+    assert app._awaiting_harness_selection is True
+    assert "Select Harness" in render_plain(log.items[-1])
+    assert not any("Usage: :harness" in str(item) for item in log.items)
+
+
+def test_tui_harness_picker_navigates_and_switches_same_session(tmp_path, monkeypatch):
+    from superqode.agent.session_manager import SessionManager
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+    app = make_app()
+    log = FakeLog()
+    app.set_timer = lambda *_args, **_kwargs: None
+    app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
+    app.query_one = lambda *args, **kwargs: log
+    pure = app._ensure_pure_mode()
+    pure.connect("test", "model", session_id="picker-session")
+
+    app._harness_cmd("", log)
+    app.action_navigate_harness_down()
+    assert app._harness_selection_list[app._harness_highlighted_index].id == "workbench"
+
+    app.action_select_highlighted_harness()
+
+    assert app._awaiting_harness_selection is False
+    assert pure.get_current_session_id() == "picker-session"
+    assert pure.session.harness_name == "workbench"
+    saved = SessionManager(".superqode/sessions").get_session_info("picker-session")
+    assert saved is not None
+    assert saved.harness_transitions[-1]["to_harness"] == "workbench"
+    rendered = "\n".join(str(item) for item in log.items)
+    assert "Harness switched: Core -> Workbench" in rendered
+    assert "Usage: :harness" not in rendered
+
+
+def test_tui_harness_picker_confirms_fresh_runtime_and_cancels(monkeypatch):
+    app = make_app()
+    log = FakeLog()
+    app.query_one = lambda *args, **kwargs: log
+    entry = SimpleNamespace(
+        id="external",
+        display_name="External",
+        available=True,
+        issue="",
+        continuity="fresh-session",
+    )
+    app._awaiting_harness_selection = True
+    app._harness_selection_list = [entry]
+    app._harness_highlighted_index = 0
+
+    app.action_select_highlighted_harness()
+
+    assert app._awaiting_harness_selection is False
+    assert app._awaiting_harness_confirmation is True
+    assert "Fresh runtime session" in render_plain(log.items[-1])
+
+    app.action_cancel_harness_selection()
+
+    assert app._awaiting_harness_confirmation is False
+    assert log.items == ["Harness selection cancelled."]
+
+
+def test_tui_harness_switch_continues_same_session_and_reuses_route(tmp_path, monkeypatch):
+    from superqode.agent.session_manager import SessionManager
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+    app = make_app()
+    log = FakeLog()
+    pure = app._ensure_pure_mode()
+    pure.connect("test", "model", session_id="core-session-1234")
+
+    app._harness_cmd("switch workbench", log)
+
+    saved = SessionManager(".superqode/sessions").get_session_info("core-session-1234")
+    assert saved is not None
+    assert saved.harness_id == "workbench"
+    assert saved.harness_transitions[-1]["from_harness"] == "core"
+    assert saved.harness_transitions[-1]["to_harness"] == "workbench"
+    assert saved.harness_transitions[-1]["continuity"] == "context-replay"
+    assert pure.session.harness_name == "workbench"
+    assert pure.session.provider == "test"
+    assert pure.session.model == "model"
+    assert pure.get_current_session_id() == "core-session-1234"
+    rendered = "\n".join(str(item) for item in log.items)
+    assert "core-session-1234"[:8] in rendered
+    assert "context replay" in rendered
+
+
+def test_tui_harness_switch_can_fork_before_changing_harness(tmp_path, monkeypatch):
+    from superqode.agent.session_manager import SessionManager
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+    app = make_app()
+    log = FakeLog()
+    pure = app._ensure_pure_mode()
+    pure.connect("test", "model", session_id="source-session")
+    pure._session_manager.add_user_message("preserve this context")
+
+    app._harness_cmd("switch workbench --fork", log)
+
+    fork_id = pure.get_current_session_id()
+    assert fork_id is not None
+    assert fork_id != "source-session"
+    manager = SessionManager(".superqode/sessions")
+    source = manager.get_session_info("source-session")
+    forked = manager.get_session_info(fork_id)
+    assert source is not None and source.harness_id == "core"
+    assert forked is not None and forked.parent_session_id == "source-session"
+    assert forked.harness_id == "workbench"
+    assert [message.content for message in manager.store.get_messages(fork_id)] == [
+        "preserve this context"
+    ]
+
+
 def test_tui_harness_wizard_guided_steps_write_and_load_spec(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     app = make_app()
@@ -1709,10 +1973,12 @@ def test_tui_help_surfaces_developer_workflows():
     assert ":codex status" in text
     assert ":claude status" in text
     assert ":antigravity status" in text
-    assert "Optional Vim Mode" in text
+    assert "Optional Vim Navigation" in text
+    assert ":vim tutor" in text
 
 
-def test_vim_mode_toggle_and_set_aliases(monkeypatch):
+def test_vim_mode_toggle_and_set_aliases(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("SUPERQODE_VIM_MODE", raising=False)
     app = make_app()
     log = FakeLog()
@@ -1728,6 +1994,190 @@ def test_vim_mode_toggle_and_set_aliases(monkeypatch):
 
     app._handle_command(":set vim", log)
     assert app._vim_enabled() is True
+    saved = json.loads((tmp_path / ".superqode" / "config.json").read_text())
+    assert saved["vim_mode"] is True
+
+
+def test_vim_preference_preserves_other_user_config(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("SUPERQODE_VIM_MODE", raising=False)
+    config = tmp_path / ".superqode" / "config.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(json.dumps({"theme": "nord"}))
+
+    app = make_app()
+    assert app._vim_enabled() is False
+
+    app._save_vim_preference(True)
+
+    saved = json.loads(config.read_text())
+    assert saved == {"theme": "nord", "vim_mode": True}
+    assert make_app()._vim_enabled() is True
+
+
+def test_vim_modal_keys_switch_prompt_states(monkeypatch):
+    app = make_app()
+    app._vim_experience_enabled = True
+    app._vim_input_mode = "normal"
+
+    class Prompt:
+        DEFAULT_PLACEHOLDER = SelectionAwareInput.DEFAULT_PLACEHOLDER
+        value = ""
+        cursor_position = 0
+        placeholder = ""
+        read_only = True
+
+        def focus(self):
+            self.focused = True
+
+        def refresh(self):
+            return None
+
+    class Status:
+        vim_state = ""
+
+    class Box:
+        border_title = ""
+
+    class Key:
+        def __init__(self, key, character=None):
+            self.key = key
+            self.character = character
+            self.stopped = False
+            self.prevented = False
+
+        def stop(self):
+            self.stopped = True
+
+        def prevent_default(self):
+            self.prevented = True
+
+    prompt = Prompt()
+    status = Status()
+    box = Box()
+
+    def query_one(selector, *args, **kwargs):
+        return {
+            "#prompt-input": prompt,
+            "#status-bar": status,
+            "#input-box": box,
+        }[selector]
+
+    monkeypatch.setattr(app, "query_one", query_one)
+
+    command = Key(":", ":")
+    assert app._handle_vim_key(command, prompt) is True
+    assert app._vim_input_mode == "command"
+    assert prompt.value == ":"
+    assert prompt.read_only is False
+    assert status.vim_state == "command"
+    assert box.border_title == "Task · COMMAND"
+
+    escape = Key("escape")
+    assert app._handle_vim_key(escape, prompt) is True
+    assert app._vim_input_mode == "normal"
+    assert prompt.value == ""
+    assert prompt.read_only is True
+
+    insert = Key("i", "i")
+    assert app._handle_vim_key(insert, prompt) is True
+    assert app._vim_input_mode == "insert"
+    assert prompt.read_only is False
+    assert box.border_title == "Task · INSERT"
+
+
+def test_vim_normal_mode_navigation_routes_without_editing(monkeypatch):
+    app = make_app()
+    app._vim_experience_enabled = True
+    app._vim_input_mode = "normal"
+    calls = []
+
+    class Log:
+        scroll_y = 10
+        auto_scroll = True
+
+        def scroll_to(self, **kwargs):
+            calls.append(("line", kwargs["y"]))
+
+    class Key:
+        def __init__(self, key, character=None):
+            self.key = key
+            self.character = character
+
+        def stop(self):
+            return None
+
+        def prevent_default(self):
+            return None
+
+    log = Log()
+    monkeypatch.setattr(app, "query_one", lambda *args, **kwargs: log)
+    monkeypatch.setattr(app, "action_scroll_log_home", lambda: calls.append(("home", 0)))
+    monkeypatch.setattr(app, "action_scroll_log_end", lambda: calls.append(("end", 0)))
+    monkeypatch.setattr(app, "action_scroll_log_page_up", lambda: calls.append(("page-up", 0)))
+    monkeypatch.setattr(app, "action_scroll_log_page_down", lambda: calls.append(("page-down", 0)))
+    monkeypatch.setattr(
+        app,
+        "_vim_search_next",
+        lambda _log, reverse=False: calls.append(("search", reverse)),
+    )
+
+    app._handle_vim_key(Key("j", "j"))
+    app._handle_vim_key(Key("k", "k"))
+    app._handle_vim_key(Key("g", "g"))
+    app._handle_vim_key(Key("g", "g"))
+    app._handle_vim_key(Key("G", "G"))
+    app._handle_vim_key(Key("ctrl+u"))
+    app._handle_vim_key(Key("ctrl+d"))
+    app._handle_vim_key(Key("n", "n"))
+    app._handle_vim_key(Key("N", "N"))
+
+    assert calls == [
+        ("line", 11),
+        ("line", 9),
+        ("home", 0),
+        ("end", 0),
+        ("page-up", 0),
+        ("page-down", 0),
+        ("search", False),
+        ("search", True),
+    ]
+
+
+def test_vim_normal_mode_uses_j_and_k_in_active_picker(monkeypatch):
+    app = make_app()
+    app._vim_experience_enabled = True
+    app._vim_input_mode = "normal"
+    app._awaiting_connect_type = True
+    calls = []
+    monkeypatch.setattr(app, "action_navigate_connect_type_up", lambda: calls.append("up"))
+    monkeypatch.setattr(app, "action_navigate_connect_type_down", lambda: calls.append("down"))
+
+    event = SimpleNamespace(
+        key="j",
+        character="j",
+        stop=lambda: None,
+        prevent_default=lambda: None,
+    )
+    assert app._handle_vim_key(event) is True
+    event.key = "k"
+    event.character = "k"
+    assert app._handle_vim_key(event) is True
+    assert calls == ["down", "up"]
+
+
+def test_vim_tutor_documents_supported_scope():
+    app = make_app()
+    log = FakeLog()
+
+    app._vim_cmd("tutor", log)
+
+    text = render_plain(log.items[-1])
+    assert "Vim Terminal Navigation" in text
+    assert "gg / G" in text
+    assert "Ctrl+W h/l" in text
+    assert "j / k" in text
+    assert "does not implement Vim text operators" in text
 
 
 def test_vim_aliases_route_to_existing_handlers(monkeypatch):
@@ -1865,8 +2315,10 @@ def test_sessions_resume_opens_keyboard_picker_and_selects(tmp_path, monkeypatch
 
     assert app._awaiting_session_resume is True
     rendered = render_plain(log.items[-1])
-    assert "Resume Session" in rendered
-    assert ":sessions resume <id>" in rendered
+    assert "Switch Sessions" in rendered
+    assert "restores its harness" in rendered
+    assert "workbench" in rendered
+    assert ":sessions switch <id>" in rendered
 
     app.action_navigate_session_resume_down()
     expected_id = app._session_resume_list[app._session_resume_highlighted_index].session_id
@@ -2657,6 +3109,23 @@ def test_prompt_completion_suggests_provider_and_model():
     assert app._suggest_prompt_completion(":model switch anthropic") == ":model switch anthropic/"
 
 
+def test_prompt_completion_lists_acp_catalog_controls_and_agents():
+    app = make_app()
+
+    controls = [
+        candidate.value for candidate in app._prompt_completion_candidates_for(":connect acp ")
+    ]
+    qwen = app._prompt_completion_candidates_for(":connect acp qw")
+
+    assert controls[:3] == [
+        ":connect acp all",
+        ":connect acp enterprise",
+        ":connect acp refresh",
+    ]
+    assert [candidate.value for candidate in qwen] == [":connect acp qwen"]
+    assert qwen[0].kind == "agent"
+
+
 def test_prompt_completion_lists_harness_catalogue():
     app = make_app()
 
@@ -2665,6 +3134,9 @@ def test_prompt_completion_lists_harness_catalogue():
     assert [candidate.value for candidate in candidates] == [":harness use kimi-coding"]
     assert candidates[0].kind == "model-family"
     assert "moonshot/kimi-k3" in candidates[0].description
+
+    switch = app._prompt_completion_candidates_for(":harness switch kimi")
+    assert [candidate.value for candidate in switch] == [":harness switch kimi-coding"]
 
     complete = app._prompt_completion_candidates_for(":harness use-all kimi")
     assert [candidate.value for candidate in complete] == [
@@ -4442,6 +4914,101 @@ def test_smart_cancel_prioritizes_active_acp_client_over_stale_byok_session():
     assert any("ACP agent operation" in str(item) for item in log.items)
 
 
+def test_opencode_acp_empty_turn_retries_once_in_fresh_session(monkeypatch):
+    """A transient OpenCode provider stream failure should recover once."""
+
+    class SessionLog(FakeLog):
+        def start_agent_session(self, *args):
+            self.items.append(("start", args))
+
+        def add_response_chunk(self, text):
+            self.items.append(text)
+
+        def end_agent_session(self, success, text="", *args):
+            self.items.append(("end", success, text))
+
+    class EmptyThenSuccessClient:
+        instance = None
+
+        def __init__(self, **kwargs):
+            type(self).instance = self
+            self.model = kwargs.get("model")
+            self._current_model_id = self.model
+            self._process = None
+            self._running = False
+            self._message_buffer = ""
+            self.send_calls = 0
+            self.reset_calls = 0
+
+        def is_running(self):
+            return self._running
+
+        async def start(self):
+            self._running = True
+            return True
+
+        async def send_prompt(self, _message):
+            self.send_calls += 1
+            self._message_buffer = ""
+            if self.send_calls == 2:
+                self._message_buffer = "retry succeeded"
+                await self.on_message("retry succeeded")
+            return "end_turn"
+
+        async def reset_session(self):
+            self.reset_calls += 1
+            return True
+
+        async def cancel(self):
+            return True
+
+        async def stop(self):
+            self._running = False
+
+        def get_message_buffer(self):
+            return self._message_buffer
+
+        def get_stats(self):
+            return SimpleNamespace(
+                tool_count=0,
+                files_modified=[],
+                files_read=[],
+                duration=0.01,
+                prompt_tokens=0,
+                completion_tokens=0,
+                thinking_tokens=0,
+                cost=0.0,
+            )
+
+    app = make_app()
+    log = SessionLog()
+    outcomes = []
+    app._acp_loop_runner = FakeACPLoopRunner()
+    app._call_ui = lambda fn, *args, **kwargs: fn(*args, **kwargs)
+    app._stop_thinking = lambda: None
+    app._start_stream_animation = lambda *_args: None
+    app._stop_stream_animation = lambda: None
+    app._show_final_outcome = lambda text, *_args: outcomes.append(text)
+    monkeypatch.setattr("superqode.acp.client.ACPClient", EmptyThenSuccessClient)
+
+    app._run_acp_jsonrpc_client(
+        "identify the model",
+        "opencode",
+        "nemotron-3-ultra-free",
+        "OpenCode",
+        log,
+    )
+
+    client = EmptyThenSuccessClient.instance
+    assert client is not None
+    assert client.send_calls == 2
+    assert client.reset_calls == 1
+    assert outcomes == ["retry succeeded"]
+    rendered = " ".join(str(item) for item in log.items)
+    assert "ACP session ready with opencode/nemotron-3-ultra-free" in rendered
+    assert "Retrying once in a fresh ACP session" in rendered
+
+
 def test_cleanup_on_exit_cancels_and_tears_down_local_runtime():
     app = make_app()
     pure = FakePureMode()
@@ -5457,6 +6024,27 @@ def test_codex_connect_without_cli_shows_install_steps(tmp_path, monkeypatch):
     assert "npm i -g @openai/codex" in joined
     assert "codex login" in joined
     assert ":connect byok openai" in joined
+
+
+def test_vendor_runtime_setup_shows_bundle_and_authentication():
+    import superqode.app_main as am
+
+    class _Stub:
+        def __init__(self):
+            self.output = None
+
+        def _show_command_output(self, _log, output):
+            self.output = output
+
+    stub = _Stub()
+    am.SuperQodeApp._show_vendor_runtime_setup(stub, None)
+    rendered = stub.output.plain
+    assert "[codex-sdk]" in rendered
+    assert "[claude-agent-sdk]" in rendered
+    assert "[antigravity-sdk]" in rendered
+    assert "[vendor-sdks]" in rendered
+    assert "npm i -g @openai/codex" in rendered
+    assert "grok login" in rendered
 
 
 def test_codex_connect_when_installed_but_signed_out_launches_login(tmp_path, monkeypatch):

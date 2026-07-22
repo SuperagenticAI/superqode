@@ -2,9 +2,6 @@
 
 import json
 import click
-import click
-
-import click
 
 
 # ACP Agent commands
@@ -22,7 +19,15 @@ def agents():
     help="Filter by protocol. The active agents command currently lists ACP agents.",
 )
 @click.option("--supported", is_flag=True, help="Accepted for compatibility; ACP agents are shown.")
-def agents_list(store, protocol, supported):
+@click.option(
+    "--tier",
+    type=click.Choice(["featured", "enterprise", "all"]),
+    default="all",
+    show_default=True,
+    help="Filter the missing-agent catalog. Installed agents are always shown.",
+)
+@click.option("--refresh", is_flag=True, help="Refresh the official ACP Registry cache first.")
+def agents_list(store, protocol, supported, tier, refresh):
     """List all available ACP coding agents."""
     from superqode.commands.acp import show_agents_list, show_agents_store
 
@@ -35,7 +40,19 @@ def agents_list(store, protocol, supported):
     if store:
         show_agents_store()
     else:
-        show_agents_list()
+        show_agents_list(catalog_tier=tier, refresh=refresh)
+
+
+@agents.command("refresh")
+def agents_refresh():
+    """Refresh the cached official ACP Registry."""
+    import asyncio
+
+    from superqode.providers.acp_registry import CACHE_FILE, get_acp_registry_agents
+
+    records = asyncio.run(get_acp_registry_agents(force_refresh=True))
+    click.echo(f"ACP Registry refreshed: {len(records)} agents")
+    click.echo(f"Cache: {CACHE_FILE}")
 
 
 @agents.command("store")

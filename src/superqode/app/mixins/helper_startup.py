@@ -17,7 +17,7 @@ from superqode.app.widgets import (
 )
 from superqode.widgets.command_palette import PaletteCommand
 from superqode.undo_manager import UndoManager
-from superqode.app.welcome import render_welcome
+from superqode.app.welcome import WelcomeState, render_welcome
 
 
 class HelperStartupMixin:
@@ -598,6 +598,48 @@ class HelperStartupMixin:
         except Exception:
             return None
 
+    def _welcome_state(self, team_name: str) -> WelcomeState:
+        """Collect non-blocking operational state for the terminal home screen."""
+        repository = str(Path.cwd())
+        harness_name = ""
+        try:
+            spec, path = self._active_harness_spec()
+            if spec is not None:
+                harness_name = str(getattr(spec, "name", "") or path or "")
+        except Exception:
+            pass
+
+        provider = str(getattr(self, "current_provider", "") or "").strip()
+        model = str(getattr(self, "current_model", "") or "").strip()
+        agent = str(getattr(self, "current_agent", "") or "").strip()
+        connection = ""
+        if provider and model:
+            connection = f"{provider}/{model}"
+        elif model:
+            connection = model
+        elif agent:
+            connection = agent
+        elif provider:
+            connection = provider
+
+        runtime = ""
+        mode = "build"
+        try:
+            status = self.query_one("#status-bar")
+            runtime = str(getattr(status, "active_runtime", "") or "").strip()
+            mode = str(getattr(status, "interaction_mode", "") or "build").strip()
+        except Exception:
+            pass
+
+        return WelcomeState(
+            repository=repository or team_name,
+            harness=harness_name,
+            connection=connection,
+            runtime=runtime,
+            mode=mode,
+            approval=str(getattr(self, "approval_mode", "ask") or "ask"),
+        )
+
     def _rerender_welcome(self) -> None:
         if not getattr(self, "_welcome_active", False):
             return
@@ -609,7 +651,12 @@ class HelperStartupMixin:
         log.auto_scroll = False
         log.clear()
         log.write(
-            render_welcome(self.agents, team_name, width=self._welcome_width(log)),
+            render_welcome(
+                self.agents,
+                team_name,
+                width=self._welcome_width(log),
+                state=self._welcome_state(team_name),
+            ),
             expand=True,
         )
         log.scroll_home(animate=False)

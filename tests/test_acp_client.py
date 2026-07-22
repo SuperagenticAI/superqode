@@ -703,6 +703,78 @@ class TestACPClient:
         ]
 
     @pytest.mark.asyncio
+    async def test_read_loop_preserves_notification_order_before_prompt_response(self, tmp_path):
+        """Prompt completion must not overtake queued message callbacks.
+
+        OpenCode sends the final agent_message_chunk immediately before the
+        session/prompt response. Processing every inbound message in a detached
+        task allowed the response future to resolve first, causing the TUI to
+        report that no response was received even though text was on the wire.
+        """
+
+        class FakeStdout:
+            def __init__(self, lines):
+                self._lines = [line.encode("utf-8") + b"\n" for line in lines]
+                self.eof = asyncio.Event()
+
+            async def readline(self):
+                if self._lines:
+                    return self._lines.pop(0)
+                await self.eof.wait()
+                return b""
+
+        class FakeProcess:
+            def __init__(self, stdout):
+                self.stdout = stdout
+
+        message_can_finish = asyncio.Event()
+        messages = []
+
+        async def on_message(text):
+            await message_can_finish.wait()
+            messages.append(text)
+
+        update = {
+            "jsonrpc": "2.0",
+            "method": "session/update",
+            "params": {
+                "sessionId": "session-1",
+                "update": {
+                    "sessionUpdate": "agent_message_chunk",
+                    "content": {"type": "text", "text": "model reply"},
+                },
+            },
+        }
+        prompt_response = {
+            "jsonrpc": "2.0",
+            "id": 99,
+            "result": {"stopReason": "end_turn"},
+        }
+
+        stdout = FakeStdout([json.dumps(update), json.dumps(prompt_response)])
+        client = ACPClient(
+            project_root=tmp_path,
+            command="opencode acp",
+            on_message=on_message,
+        )
+        client._process = FakeProcess(stdout)
+        pending = asyncio.get_running_loop().create_future()
+        client._pending_requests[99] = pending
+
+        read_task = asyncio.create_task(client._read_loop())
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        assert pending.done() is False
+
+        message_can_finish.set()
+        assert await asyncio.wait_for(pending, timeout=1.0) == {"stopReason": "end_turn"}
+        stdout.eof.set()
+        await asyncio.wait_for(read_task, timeout=1.0)
+
+        assert messages == ["model reply"]
+        assert client.get_message_buffer() == "model reply"
+
+    @pytest.mark.asyncio
     async def test_traffic_logging_to_explicit_path(self, tmp_path):
         """ACP traffic logs raw client/agent JSON when an explicit path is configured."""
 

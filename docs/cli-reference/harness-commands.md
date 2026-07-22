@@ -63,6 +63,7 @@ from the broader native search, patch, web, planning, and coordination toolset.
 ```bash
 superqode harness list
 superqode harness list --recommended
+superqode harness current
 superqode harness show core
 superqode --harness workbench --print "fix the failing test"
 superqode --harness kimi-coding --print "fix the failing test"
@@ -72,13 +73,27 @@ superqode harness use workbench
 `harness use` stores the choice under `superqode.harness` in `superqode.yaml`.
 An explicit `--harness` name or HarnessSpec path takes precedence. In the TUI, the
 equivalent commands are `:harness list` and `:harness use <name-or-path>`.
-Entering `:harness` with no arguments opens the keyboard-navigable recommended
-picker. It shows stable workflows, maintained provider/model families, and your
-project or user harnesses without flooding the normal selection path with frozen
-releases.
-Enter `:harness all` for the complete picker, including pinned compatibility and
-specialized presets. The CLI keeps `superqode harness list` complete for scripting
-compatibility; add `--recommended` to match the default TUI view.
+Entering `:harness` or `:harness switch` without a harness name opens the
+interactive Harness Switcher. It shows stable workflows, maintained
+provider/model families, and project or user harnesses. Use the arrow keys and
+Enter to continue the current session, `F` to fork before switching, `I` to
+inspect the selected harness, `A` to show the complete catalog, and Escape to
+cancel. `:harness all` opens the complete picker directly. The CLI keeps
+`superqode harness list` complete for scripting compatibility; add
+`--recommended` to match the default TUI view.
+
+The list reports each harness runtime, readiness state, and continuity level.
+`superqode harness current` resolves the project default. During an interactive
+TUI session, `:harness switch <name>` changes the harness while retaining the
+session ID and normalized conversation history. Add `--fork` to the switch
+command when the selected harness should receive an independent branch.
+
+For non-interactive work, combine the top-level session and harness options:
+
+```bash
+superqode --print --resume SESSION_ID --harness workbench "continue the task"
+superqode --print --fork SESSION_ID --harness kimi-coding "try another approach"
+```
 
 Built-in templates also appear in the selectable catalog and can be activated
 directly. `list-templates` remains available for authoring and compatibility.

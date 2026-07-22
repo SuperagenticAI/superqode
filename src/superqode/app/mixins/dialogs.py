@@ -59,13 +59,17 @@ class DialogsMixin:
         # expand=True makes the renderable fill the full log width so the
         # centered welcome blocks sit in the middle of the screen, not the left.
         log.write(
-            render_welcome(self.agents, team_name, width=self._welcome_width(log)),
+            render_welcome(
+                self.agents,
+                team_name,
+                width=self._welcome_width(log),
+                state=self._welcome_state(team_name),
+            ),
             expand=True,
         )
         # Mark that the log currently shows only the welcome, so resizes can
         # re-flow it responsively until the user starts interacting.
         self._welcome_active = True
-        self._maybe_show_onboarding(log)
         # Scroll to top so user sees the attractive header first
         log.scroll_home(animate=False)
         # Re-enable auto-scroll for future messages
@@ -415,15 +419,17 @@ class DialogsMixin:
             display_id = session.session_id[:8]
             model = session.model or "unknown"
             provider = session.provider or "-"
+            harness = session.harness_id or "workbench"
+            route = f"{provider}/{model}"
             t.append(f"  {display_id:<10}", style=f"bold {THEME['cyan']}")
-            t.append(f"{provider:<14}", style=THEME["success"])
-            t.append(f"{model:<28}", style=THEME["text"])
+            t.append(f"{harness[:17]:<19}", style=THEME["purple"])
+            t.append(f"{route[:29]:<31}", style=THEME["text"])
             t.append(f"{session.message_count:>3} msgs  ", style=THEME["muted"])
             t.append(f"{session.updated_at[:19]}\n", style=THEME["dim"])
 
         t.append("\n  Use ", style=THEME["muted"])
-        t.append("/resume <id>", style=THEME["cyan"])
-        t.append(" to continue or ", style=THEME["muted"])
+        t.append(":sessions switch <id>", style=THEME["cyan"])
+        t.append(" to restore its harness and history, or ", style=THEME["muted"])
         t.append("/fork <optional-new-id>", style=THEME["cyan"])
         t.append(" to branch the active session.\n", style=THEME["muted"])
         t.append("  Use ", style=THEME["muted"])
@@ -1917,14 +1923,33 @@ class DialogsMixin:
             metadata,
         )
 
-    def _show_agents(self, log: ConversationLog, clear_log: bool = True):
-        """Show all ACP agents with installation status."""
+    def _show_agents(
+        self,
+        log: ConversationLog,
+        clear_log: bool = True,
+        *,
+        include_all: bool = False,
+        catalog_tier: str = "featured",
+    ):
+        """Show the curated ACP picker or a requested catalog tier."""
         # Schedule async execution
-        self._show_agents_async(log, clear_log=clear_log)
+        self._show_agents_async(
+            log,
+            clear_log=clear_log,
+            include_all=include_all,
+            catalog_tier=catalog_tier,
+        )
 
     @work(exclusive=True)
-    async def _show_agents_async(self, log: ConversationLog, clear_log: bool = True):
-        """Show all ACP agents with installation status (async implementation)."""
+    async def _show_agents_async(
+        self,
+        log: ConversationLog,
+        clear_log: bool = True,
+        *,
+        include_all: bool = False,
+        catalog_tier: str = "featured",
+    ):
+        """Show ACP agents with installed agents first and catalog grouping."""
         import traceback
         from superqode.agents.registry import get_all_acp_agents
         from superqode.agents.registry import get_agent_installation_info
@@ -1943,26 +1968,31 @@ class DialogsMixin:
 
         t = Text()
         t.append(f"\n  🤖 ", style=f"bold {THEME['cyan']}")
-        t.append("All ACP Coding Agents\n\n", style=f"bold {THEME['cyan']}")
+        title = "All ACP Coding Agents" if include_all else "ACP Agent Runtimes"
+        if catalog_tier == "enterprise" and not include_all:
+            title = "Enterprise ACP Agents"
+        t.append(f"{title}\n\n", style=f"bold {THEME['cyan']}")
         t.append(f"  💡 ", style=THEME["muted"])
-        t.append(f"Type a number ", style=THEME["dim"])
-        t.append(f"(1-{len(agents)})", style=THEME["cyan"])
-        t.append(" to select, or use ", style=THEME["dim"])
+        t.append("Type a number to select, or use ", style=THEME["dim"])
         t.append(f"↑↓", style=THEME["cyan"])
         t.append(" arrows + ", style=THEME["dim"])
         t.append(f"Enter", style=THEME["cyan"])
         t.append("\n\n", style=THEME["dim"])
 
-        # Separate by installation status
+        # Installed agents are always visible. Missing agents are grouped so
+        # the default view stays useful without becoming a registry dump.
         installed = []
-        not_installed = []
+        missing_by_tier = {"featured": [], "enterprise": [], "all": []}
 
         for agent_id, agent_data in agents.items():
             is_installed = check_agent_installed(agent_data)
             if is_installed:
                 installed.append((agent_id, agent_data))
             else:
-                not_installed.append((agent_id, agent_data))
+                tier = str(agent_data.get("catalog_tier") or "all")
+                if tier not in missing_by_tier:
+                    tier = "all"
+                missing_by_tier[tier].append((agent_id, agent_data))
 
         # ACP agent emojis (from https://agentclientprotocol.com/get-started/agents)
         agent_emojis = {
@@ -2014,23 +2044,40 @@ class DialogsMixin:
         def sort_key(item):
             agent_id, agent_data = item
             agent_short_name = agent_data.get("short_name", agent_id)
-            priority = priority_order.get(agent_id) or priority_order.get(agent_short_name)
+            priority = priority_order.get(agent_id)
+            if priority is None:
+                priority = priority_order.get(agent_short_name)
             if priority is not None:
                 return (0, priority, agent_data["name"])
             return (1, 999, agent_data["name"])
 
-        # Combine into a single numbered list (installed first, then not installed)
-        # But ensure opencode is always first within each group
+        # Build the active view. ``all`` exposes the complete registry; the
+        # default view presents featured agents only.
         installed_sorted = sorted(installed, key=sort_key)
-        not_installed_sorted = sorted(not_installed, key=sort_key)
-        all_agents = installed_sorted + not_installed_sorted
+        visible_groups: list[tuple[str, list]] = []
+        if include_all:
+            visible_groups = [
+                ("Featured", sorted(missing_by_tier["featured"], key=sort_key)),
+                ("Enterprise", sorted(missing_by_tier["enterprise"], key=sort_key)),
+                ("Other registry agents", sorted(missing_by_tier["all"], key=sort_key)),
+            ]
+        elif catalog_tier == "enterprise":
+            visible_groups = [
+                ("Enterprise", sorted(missing_by_tier["enterprise"], key=sort_key))
+            ]
+        else:
+            visible_groups = [
+                ("Featured", sorted(missing_by_tier["featured"], key=sort_key))
+            ]
+        visible_groups = [(label, items) for label, items in visible_groups if items]
+        all_agents = installed_sorted + [item for _, items in visible_groups for item in items]
 
         # Store the list for selection
         self._acp_agent_list = all_agents
         self._awaiting_acp_agent_selection = True
         # Preserve current highlight if already set, otherwise start with first
-        if not hasattr(self, "_acp_highlighted_agent_index"):
-            self._acp_highlighted_agent_index = 0
+        current_highlight = getattr(self, "_acp_highlighted_agent_index", 0)
+        self._acp_highlighted_agent_index = min(current_highlight, max(len(all_agents) - 1, 0))
 
         # Ensure input stays focused for keyboard navigation
         self.set_timer(0.05, self._ensure_input_focus)
@@ -2069,14 +2116,14 @@ class DialogsMixin:
                     t.append(f"{agent_data['name']}\n", style=THEME["muted"])
             t.append("\n", style="")
 
-        # Show not installed agents with numbers and installation commands
-        if not_installed_sorted:
-            start_num = len(installed_sorted) + 1
+        # Show missing agents by catalog group.
+        next_num = len(installed_sorted) + 1
+        for group_name, group_agents in visible_groups:
             t.append(
-                f"  ○ Not Installed ({len(not_installed_sorted)}):\n",
+                f"  ○ {group_name} ({len(group_agents)}):\n",
                 style=f"bold {THEME['warning']}",
             )
-            for num, (agent_id, agent_data) in enumerate(not_installed_sorted, start_num):
+            for num, (agent_id, agent_data) in enumerate(group_agents, next_num):
                 idx = num - 1
                 is_highlighted = idx == getattr(self, "_acp_highlighted_agent_index", 0)
                 install_info = get_agent_installation_info(agent_data)
@@ -2117,6 +2164,7 @@ class DialogsMixin:
                             f"\n             No install command available\n", style=THEME["dim"]
                         )
             t.append("\n", style="")
+            next_num += len(group_agents)
 
         t.append(f"  💡 Quick Actions:\n", style=THEME["muted"])
         t.append(f"    ", style=THEME["dim"])
@@ -2127,6 +2175,15 @@ class DialogsMixin:
         t.append(f"    Use ", style=THEME["dim"])
         t.append(f":connect acp <name>", style=THEME["pink"])
         t.append(f" to connect by name\n", style=THEME["dim"])
+        if not include_all:
+            t.append("    Use ", style=THEME["dim"])
+            t.append(":connect acp all", style=THEME["cyan"])
+            t.append(" for the complete registry or ", style=THEME["dim"])
+            t.append(":connect acp enterprise", style=THEME["cyan"])
+            t.append(" for enterprise agents\n", style=THEME["dim"])
+        t.append("    Use ", style=THEME["dim"])
+        t.append(":connect acp refresh", style=THEME["cyan"])
+        t.append(" to refresh the official registry cache\n", style=THEME["dim"])
         t.append(f"    Use ", style=THEME["dim"])
         t.append(f":acp install <name>", style=THEME["cyan"])
         t.append(f" to install missing agents\n", style=THEME["dim"])
@@ -2495,6 +2552,18 @@ class DialogsMixin:
                         ":harness wizard [name] --starter <template> --output <path>",
                         "Create a HarnessSpec from wizard defaults in the TUI",
                     ),
+                    (
+                        ":harness switch <name>",
+                        "Continue the current session under another harness",
+                    ),
+                    (
+                        ":harness switch <name> --fork",
+                        "Fork the current session under another harness",
+                    ),
+                    (
+                        ":sessions switch",
+                        "Restore a saved session with its harness, model, and history",
+                    ),
                     (":harness replay <run_id>", "Show exact replay readiness and next commands"),
                     (":harness fork <run_id> [event]", "Fork a persisted run at an event index"),
                     (
@@ -2618,7 +2687,7 @@ class DialogsMixin:
                     (":codex status", "Show Codex SDK/app-server/account diagnostics"),
                     (":codex model|effort", "Pick Codex model and reasoning effort"),
                     (":codex sessions|resume|fork", "Manage Codex threads"),
-                    (":connect claude", "Use local Claude Code through ACP"),
+                    (":connect claude", "Use Claude Agent SDK with ANTHROPIC_API_KEY"),
                     (":claude status", "Show Claude Agent SDK status"),
                     (":claude model|permission", "Pick Claude model and permission mode"),
                     (":claude sessions|resume", "Manage Claude Agent SDK sessions"),
@@ -2706,11 +2775,12 @@ class DialogsMixin:
                 ],
             ),
             (
-                "⌨️ Optional Vim Mode",
+                "Optional Vim Navigation",
                 THEME["gold"],
                 [
                     (":vim", "Show optional Vim mode status"),
-                    (":vim on|off", "Enable or disable Vim-style helpers"),
+                    (":vim on|off", "Enable or disable modal terminal navigation"),
+                    (":vim tutor", "Show modes, navigation keys, and supported scope"),
                     (":set vim|novim", "Vim-style mode aliases"),
                     (":w", "Export the current transcript"),
                     (":e <file>", "View a file"),

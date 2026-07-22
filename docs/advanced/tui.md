@@ -16,6 +16,7 @@ SuperQode includes a rich Terminal User Interface (TUI) for interactive coding-a
 - **Agent Switcher**: Switch between agents
 - **Command Palette**: Quick actions
 - **Status Bar**: Session status at a glance
+- **Optional Vim Navigation**: Modal keyboard control for the transcript, panes, searches, and pickers
 
 ## Launching the TUI
 
@@ -82,14 +83,18 @@ Summarize what changed.
 | Key | Action |
 |-----|--------|
 | `Ctrl+K` | Open command palette |
-| `Ctrl+F` | Toggle file browser |
-| `Ctrl+A` | Switch agent |
-| `Ctrl+S` | Save session |
-| `Ctrl+Q` | Quit |
+| `Ctrl+B` | Toggle the repository sidebar |
+| `Ctrl+E` | Open the external prompt editor |
+| `Ctrl+L` | Clear and restore the home screen |
+| `Ctrl+S` | Create a workspace checkpoint |
 | `Ctrl+T` | Toggle agent thinking/session logs |
 | `Ctrl+R` | Open the rewind / transcript overlay |
+| `Ctrl+Shift+C` | Copy the latest response |
+| `Ctrl+C` | Quit |
+| `PageUp` / `PageDown` | Scroll the conversation by page |
+| `Ctrl+Home` / `Ctrl+End` | Jump to the beginning or end of the conversation |
 | `Escape` `Escape` | Rewind the conversation (when the prompt is empty) |
-| `Escape` | Close modal/cancel |
+| `Escape` | Close a modal, cancel an active operation, or enter Vim Normal mode |
 | `Enter` | Submit input |
 | `@` | Open the file-mention picker in the prompt |
 | `Tab` | Accept completion / next widget |
@@ -112,7 +117,8 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:local labs` - Browse trusted models.dev Labs recommendations
 - `:local warm <engine>` - Warm a local model and show first-token latency
 - `:chat` - Raw direct-to-model chat: no repo/tools, shows TTFT + tok/s (off by default)
-- `:harness` - Open the recommended keyboard-navigable harness picker
+- `:harness` - Open the interactive Harness Switcher
+- `:harness switch` - Open the same Harness Switcher
 - `:harness all` - Open the complete picker, including pinned and specialized presets
 - `:harness <path>` - Load a HarnessSpec
 - `:harness status` - Show the active harness
@@ -257,6 +263,10 @@ Use session commands when you want to inspect, branch, or hand off work:
 :tree
 :session
 :session rename <name>
+:harness switch <name>
+:harness switch <name> --fork
+:sessions switch
+:sessions switch <id>
 :resume <id>
 :fork <new-id>
 :share
@@ -266,6 +276,37 @@ Use session commands when you want to inspect, branch, or hand off work:
 :share list
 :share revoke <artifact>
 ```
+
+Open the Harness Switcher with either command:
+
+```text
+:harness
+:harness switch
+```
+
+The default view contains recommended, project, and user harnesses. It marks the
+active harness and reports readiness, continuity, and route information. The
+selected row includes its description and any setup or continuity warning.
+
+| Key | Action |
+| --- | --- |
+| `Up` or `Down` | Move through harnesses |
+| `Enter` | Continue the current session with the selected harness |
+| `F` | Fork the current session, then switch |
+| `I` | Inspect the selected HarnessSpec |
+| `A` | Toggle the recommended and complete catalogs |
+| `Escape` | Cancel without changing the harness |
+
+Vim mode also supports `j` and `k` for navigation. Harnesses that report
+`fresh session` require confirmation because the external runtime cannot
+guarantee native thread resumption. SuperQode still preserves the session
+record and transition lineage.
+
+`:harness switch <name>` keeps the current session ID and activates another
+harness with context replay. Add `--fork` to copy the conversation into a new
+session before changing harnesses. `:sessions switch` opens a picker that labels
+every session with its latest harness. Selecting one restores its harness,
+model, and conversation history.
 
 Share artifacts are local/offline `superqode-share-v1` JSON files. They are
 intended for moving a session between machines or teammates without requiring a
@@ -359,17 +400,24 @@ the same subscription instead, use `:grok api [model]`, which imports the local
 `grok login` session and routes through the CLI chat proxy (see the
 [BYOK provider docs](../providers/byok.md#grok-subscription-official-cli)).
 
-## Optional Vim Helpers
+## Optional Vim Navigation
 
-Vim mode is optional. It adds familiar command aliases without removing the
-normal SuperQode command surface:
+Vim mode is optional. It adds Normal, Insert, Command, and Search states without removing the normal SuperQode command surface:
 
 ```text
 :vim
 :vim on
 :vim off
+:vim tutor
 :set vim
 :set novim
+:                 # enter a SuperQode command
+/pattern          # search the transcript
+j / k             # scroll or move through an active picker
+gg / G            # transcript beginning or end
+Ctrl+U / Ctrl+D   # page navigation
+n / N             # search matches
+h / l             # sidebar or main prompt
 :w [path]
 :e <file>
 :ls
@@ -377,6 +425,8 @@ normal SuperQode command surface:
 q:
 @:
 ```
+
+The active input state is shown in the status bar and task prompt. The preference is persisted in `~/.superqode/config.json`. See [Vim-Like Terminal Navigation](vim-mode.md) for the complete key reference, safety behavior, and supported scope.
 
 ## Compare Models
 

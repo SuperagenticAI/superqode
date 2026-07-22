@@ -13,7 +13,7 @@ publisher_url = "https://zed.dev"
 type = "coding"
 description = "Unleash Claude's raw power directly in your terminal. Search million-line codebases instantly."
 tags = ["anthropic", "claude", "powerful", "official-acp"]
-run_command."*" = "claude-code-acp"
+run_command."*" = "claude-agent-acp"
 
 help = '''
 # Claude Code
@@ -29,18 +29,18 @@ Built for developers. Unleash Claude's raw power directly in your terminal.
 Install Claude Code ACP adapter via npm:
 
 ```bash
-npm i @zed-industries/claude-code-acp
+npm install -g @agentclientprotocol/claude-agent-acp
 ```
 
 **Requirements:**
-- Node.js (v18 or higher)
+- Node.js (v22 or higher)
 - npm
 - ANTHROPIC_API_KEY
 
 ---
 
 **For latest install instructions**: https://zed.dev/acp/agent/claude-code
-**ACP Adapter**: https://github.com/zed-industries/claude-code-acp
+**ACP Adapter**: https://github.com/agentclientprotocol/claude-agent-acp
 '''
 
 welcome = '''
@@ -56,5 +56,5 @@ Just tell me what you'd like to work on!
 '''
 
 [actions."*".install]
-command = "npm i @zed-industries/claude-code-acp"
-description = "Install Claude Code ACP adapter (see https://zed.dev/acp for latest)"
+command = "npm install -g @agentclientprotocol/claude-agent-acp"
+description = "Install the Claude Agent ACP adapter"

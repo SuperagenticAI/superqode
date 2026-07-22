@@ -1,0 +1,31 @@
+identity = "devin.ai"
+name = "Devin"
+short_name = "devin"
+url = "https://docs.devin.ai/cli"
+protocol = "acp"
+author_name = "Cognition"
+author_url = "https://cognition.ai"
+publisher_name = "SuperQode"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "Cognition's Devin CLI coding agent through its native ACP server."
+tags = ["official-acp", "enterprise"]
+catalog_tier = "enterprise"
+run_command."*" = "devin acp"
+
+help = '''
+# Devin
+
+Devin exposes an ACP server from the installed Devin CLI.
+
+## Installation
+
+Install and authenticate the Devin CLI using Cognition's documentation:
+https://docs.devin.ai/cli
+
+Start the ACP server with `devin acp`.
+'''
+
+[actions."*".install]
+command = ""
+description = "Follow the Devin CLI installation guide"

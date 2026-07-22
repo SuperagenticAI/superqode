@@ -10,7 +10,7 @@ publisher_url = "https://cursor.com"
 type = "coding"
 description = "AI-powered code editor with ACP support via its agent CLI."
 tags = ["editor", "coding", "acp"]
-run_command."*" = "agent acp"
+run_command."*" = "cursor-agent acp"
 
 help = '''
 # Cursor
@@ -27,7 +27,7 @@ npm install -g @cursorai/cli
 For ACP mode:
 
 ```bash
-agent acp
+cursor-agent acp
 ```
 
 See https://cursor.com/docs/cli/acp for the full ACP documentation.
@@ -37,13 +37,13 @@ See https://cursor.com/docs/cli/acp for the full ACP documentation.
 Before using ACP mode, authenticate:
 
 ```bash
-agent login
+cursor-agent login
 ```
 
 Or pass an API key:
 
 ```bash
-agent --api-key "$CURSOR_API_KEY" acp
+cursor-agent --api-key "$CURSOR_API_KEY" acp
 ```
 '''
 

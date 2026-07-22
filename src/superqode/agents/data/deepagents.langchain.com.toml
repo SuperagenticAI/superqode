@@ -1,0 +1,30 @@
+identity = "deepagents.langchain.com"
+name = "DeepAgents"
+short_name = "deepagents"
+url = "https://docs.langchain.com/oss/javascript/deepagents/overview"
+protocol = "acp"
+author_name = "LangChain"
+author_url = "https://langchain.com"
+publisher_name = "SuperQode"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "LangChain's general-purpose and coding agent exposed through its ACP package."
+tags = ["official-acp", "framework"]
+catalog_tier = "all"
+run_command."*" = "npx -y deepagents-acp"
+
+help = '''
+# DeepAgents
+
+The JavaScript DeepAgents ACP package runs the agent over standard input and output.
+
+## Installation
+
+```bash
+npm install -g deepagents-acp
+```
+'''
+
+[actions."*".install]
+command = "npm install -g deepagents-acp"
+description = "Install the DeepAgents ACP package"

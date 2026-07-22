@@ -103,7 +103,7 @@ Chat allowlists and defaults live in `~/.superqode/channels.yaml`. See [Chat Cha
 | `SUPERQODE_LOG_VERBOSITY` | `quiet`/`normal`/`verbose` | `normal` | Tool-output verbosity. Set by `--quiet`/`--verbose`; the TUI `:log` command changes it live. |
 | `SUPERQODE_QUIET` | `0`/`1` | off | Same as passing `--quiet`. |
 | `SUPERQODE_VERBOSE` | `0`/`1` | off | Same as passing `--verbose`. |
-| `SUPERQODE_VIM_MODE` | `0`/`1` | off | Enable the optional Vim-style editing helpers in the TUI prompt. |
+| `SUPERQODE_VIM_MODE` | `0`/`1` | saved preference or off | Override the optional Vim-like modal navigation layer for the TUI. |
 
 ## Notes
 

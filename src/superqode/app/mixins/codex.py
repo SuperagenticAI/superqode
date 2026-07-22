@@ -1080,7 +1080,7 @@ class CodexMixin:
 
             # Build command - codex-acp is the ACP adapter
             # Try npx first, then global install
-            cmd = ["npx", "@openai/codex-acp"]
+            cmd = ["npx", "-y", "@agentclientprotocol/codex-acp"]
 
             model_display = f"codex/{model}" if model else "codex/auto"
 
@@ -1634,7 +1634,7 @@ class CodexMixin:
             self._call_ui(self._stop_stream_animation)
             self._call_ui(log.add_error, "❌ codex-acp not found. Install it first:")
             self._call_ui(log.add_info, "  npm install -g @openai/codex")
-            self._call_ui(log.add_info, "  or npx @openai/codex-acp")
+            self._call_ui(log.add_info, "  or npx -y @agentclientprotocol/codex-acp")
         except Exception as e:
             self._agent_process = None
             self._call_ui(self._stop_thinking)

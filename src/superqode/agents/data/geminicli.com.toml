@@ -12,7 +12,7 @@ publisher_url = "https://github.com/google-gemini/gemini-cli"
 type = "coding"
 description = "Google's Gemini CLI ACP implementation. Consumer Google AI Pro/Ultra/free Code Assist users should migrate to Antigravity CLI; enterprise/API-key ACP users can keep this route."
 tags = ["google", "gemini", "multimodal", "acp", "official-acp"]
-run_command."*" = "gemini --experimental-acp"
+run_command."*" = "gemini --acp"
 
 # API key environment variables
 api_key_env_vars = ["GEMINI_API_KEY", "GOOGLE_API_KEY"]
@@ -52,9 +52,9 @@ export GOOGLE_API_KEY=your_api_key_here
 
 ## ACP Mode
 
-Run with experimental ACP support:
+Run the ACP server:
 ```bash
-gemini --experimental-acp
+gemini --acp
 ```
 
 ## Available Models

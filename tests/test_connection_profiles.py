@@ -52,6 +52,8 @@ def test_claude_profile_is_agent_sdk_runtime():
     assert claude.runtime == "claude-agent-sdk"
     assert "api key" in claude.description.lower()
     assert "subscription" not in (claude.label + claude.description).lower()
+    assert "install claude code" not in claude.unavailable_hint.lower()
+    assert "anthropic_api_key" in claude.unavailable_hint.lower()
 
 
 def test_antigravity_profile_is_signed_in_cli_runtime_connector():

@@ -129,15 +129,30 @@ class HelpersMixin(
         return self._agents
 
     def _set_prompt_border_title(self) -> None:
-        """Give the prompt box a neutral code-focused title."""
+        """Give the prompt box a concise task-focused title."""
         try:
             input_box = self.query_one("#input-box")
-            input_box.border_title = "✎ Code"
+            input_box.border_title = "Task"
         except Exception:
             pass
 
     def _refresh_harness_panel(self) -> None:
-        """Refresh the harness workbench sidebar, if mounted."""
+        """Refresh the active harness in the status bar and sidebar."""
+        try:
+            from superqode.app.widgets import ColorfulStatusBar
+
+            pure = getattr(self, "_pure_mode", None)
+            harness = ""
+            if pure is not None:
+                harness = str(pure.get_status().get("harness", {}).get("id") or "")
+            if not harness:
+                from superqode.harness import resolve_harness
+
+                reference = os.getenv("SUPERQODE_HARNESS", "").strip() or "core"
+                harness = resolve_harness(reference, root=Path.cwd()).id
+            self.query_one("#status-bar", ColorfulStatusBar).active_harness = harness
+        except Exception:
+            pass
         try:
             sidebar = self.query_one("#sidebar", CollapsibleSidebar)
             harness_panel = sidebar.get_harness_panel()
@@ -336,6 +351,8 @@ class HelpersMixin(
                 "_awaiting_recommendation_selection",
                 "_awaiting_session_resume",
                 "_awaiting_mode_selection",
+                "_awaiting_harness_selection",
+                "_awaiting_harness_confirmation",
             )
         )
 

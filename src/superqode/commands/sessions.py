@@ -31,6 +31,7 @@ def sessions_list(limit, json_output):
                         "updated_at": item.updated_at,
                         "provider": item.provider,
                         "model": item.model,
+                        "harness_id": item.harness_id or "workbench",
                         "message_count": item.message_count,
                     }
                     for item in items
@@ -45,7 +46,8 @@ def sessions_list(limit, json_output):
 
     for item in items:
         click.echo(
-            f"{item.session_id}  {item.provider or '-'}  {item.model or '-'}  "
+            f"{item.session_id}  {item.harness_id or 'workbench'}  "
+            f"{item.provider or '-'}  {item.model or '-'}  "
             f"{item.message_count} messages  {item.updated_at}"
         )
 

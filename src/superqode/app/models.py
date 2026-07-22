@@ -55,26 +55,15 @@ class AgentInfo:
 
 def check_installed(name: str) -> bool:
     """Check if an agent is installed on the system."""
-    # Map agent short names to their CLI commands
-    cmd_map = {
-        # 14 Official ACP Agents
-        "gemini": "gemini",
-        "claude": "claude",
-        "claude-code": "claude",
-        "codex": "codex",
-        "junie": "junie",
-        "goose": "goose",
-        "kimi": "kimi",
-        "opencode": "opencode",
-        "stakpak": "stakpak",
-        "vtcode": "vtcode",
-        "auggie": "auggie",
-        "code-assistant": "code-assistant",
-        "cagent": "cagent",
-        "fast-agent": "fast-agent",
-        "llmling-agent": "llmling-agent",
-    }
-    return shutil.which(cmd_map.get(name, name)) is not None
+    from superqode.agents.acp_registry import get_registry_agent_by_short_name
+
+    lookup = "claude" if name == "claude-code" else name
+    metadata = get_registry_agent_by_short_name(lookup)
+    command = metadata["run_command"] if metadata else lookup
+    executable = command.split()[0] if command else lookup
+    if executable in {"npx", "uvx"}:
+        return False
+    return shutil.which(executable) is not None
 
 
 def load_agents_sync() -> list[AgentInfo]:

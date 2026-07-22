@@ -358,7 +358,9 @@ class SuperQodeApp(
         self._prompt_completion_visible = False
         self._history_manager = HistoryManager()
         self._plan_manager = PlanManager()
-        self._vim_experience_enabled = self._env_flag("SUPERQODE_VIM_MODE")
+        self._vim_experience_enabled = self._load_vim_preference()
+        self._vim_input_mode = "normal" if self._vim_experience_enabled else "insert"
+        self._vim_pending_key = ""
         self._last_ex_command = ""
         self._vim_search_query = ""
         self._vim_search_matches: list[int] = []
@@ -436,6 +438,8 @@ class SuperQodeApp(
         # Focus input after a short delay to ensure widgets are fully ready
         self.set_timer(0.1, self._focus_input_on_ready)
         self._set_prompt_border_title()
+        self._refresh_harness_panel()
+        self._sync_vim_state()
         self._load_welcome()
         # Sync approval mode to hints bar
         self._sync_approval_mode()
@@ -636,6 +640,12 @@ class SuperQodeApp(
                 self._handle_permission_input(mapping[event.key])
                 self.set_timer(0.05, self._ensure_input_focus)
                 return
+
+        # Modal navigation also works when focus is in the sidebar or another
+        # non-prompt widget. The prompt widget handles and stops the same event
+        # before it bubbles here when it owns focus.
+        if self._handle_vim_key(event):
+            return
 
         # During selection modes, intercept arrow keys and Enter before Input widget gets them
         if event.key in ("up", "down", "enter"):
@@ -942,7 +952,12 @@ class SuperQodeApp(
         # Temporarily disable auto-scroll so we can scroll to top
         log.auto_scroll = False
         log.write(
-            render_welcome(self.agents, team_name, width=self._welcome_width(log)),
+            render_welcome(
+                self.agents,
+                team_name,
+                width=self._welcome_width(log),
+                state=self._welcome_state(team_name),
+            ),
             expand=True,
         )
         # Welcome is the only thing on screen again - allow responsive re-flow.

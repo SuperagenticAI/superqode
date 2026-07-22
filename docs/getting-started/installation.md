@@ -130,8 +130,8 @@ uv run superqode --version
 ### Environment-Aware Extras
 
 Optional extras must be installed into the same Python environment that is running
-SuperQode. The TUI shows that environment before offering any one-click install,
-then prints the exact command it will run and waits for your confirmation.
+SuperQode. The TUI reports that environment and prints the exact command. It does
+not modify the environment until you run that command explicitly.
 
 Use the command that matches how you launched SuperQode:
 
@@ -141,6 +141,16 @@ Use the command that matches how you launched SuperQode:
 | SuperQode source checkout | `uv pip install -e ".[<extra>]"` |
 | Another project venv | `uv add "superqode[<extra>]"` |
 | Plain virtualenv | `uv pip install "superqode[<extra>]"` |
+
+To install the Codex, Claude Agent, and Antigravity SDK runtimes together, use
+the optional `vendor-sdks` extra. It is intentionally excluded from the default
+installation because the vendor packages are large and many users need only one
+of them.
+
+```bash
+uv tool install "superqode[vendor-sdks]"
+superqode runtime setup
+```
 
 For direct package installs such as MLX, SuperQode targets the running interpreter
 explicitly:

@@ -110,6 +110,14 @@ class PickerNavigationMixin:
                 return True
             return False
 
+        if getattr(self, "_awaiting_harness_selection", False):
+            entries = getattr(self, "_harness_selection_list", [])
+            if entries and 1 <= num <= len(entries):
+                self._harness_highlighted_index = num - 1
+                self.action_select_highlighted_harness()
+                return True
+            return False
+
         # 2. Handle ACP agent selection
         if getattr(self, "_awaiting_acp_agent_selection", False):
             agent_list = getattr(self, "_acp_agent_list", [])
@@ -235,6 +243,14 @@ class PickerNavigationMixin:
             modes = self._mode_picker_items()
             if 1 <= num <= len(modes):
                 self._apply_interaction_mode(modes[num - 1][0], log)
+                return True
+            return False
+
+        if getattr(self, "_awaiting_harness_selection", False):
+            entries = getattr(self, "_harness_selection_list", [])
+            if entries and 1 <= num <= len(entries):
+                self._harness_highlighted_index = num - 1
+                self.action_select_highlighted_harness()
                 return True
             return False
 
@@ -609,7 +625,11 @@ class PickerNavigationMixin:
 
         t = Text()
         t.append("\n  📂 ", style=f"bold {THEME['purple']}")
-        t.append("Resume Session\n\n", style=f"bold {THEME['text']}")
+        t.append("Switch Sessions\n", style=f"bold {THEME['text']}")
+        t.append(
+            "  Resuming a session restores its harness, model, and conversation history.\n\n",
+            style=THEME["muted"],
+        )
 
         if not sessions:
             t.append("  No sessions found yet.\n", style=THEME["muted"])
@@ -626,6 +646,8 @@ class PickerNavigationMixin:
             display_id = session.session_id[:8]
             provider = session.provider or "-"
             model = session.model or "unknown"
+            harness = session.harness_id or "workbench"
+            route = f"{provider}/{model}"
             title = session.title or "(unnamed)"
             if highlighted:
                 t.append("  ▶ ", style=f"bold {THEME['success']}")
@@ -642,13 +664,13 @@ class PickerNavigationMixin:
             count_style = THEME["muted"] if not highlighted else style
             title_style = THEME["dim"] if not highlighted else style
             t.append(f"{display_id:<10}", style=id_style)
-            t.append(f"{provider:<12}", style=THEME["success"] if not highlighted else style)
-            t.append(f"{model:<24}", style=style)
+            t.append(f"{harness[:17]:<19}", style=THEME["purple"] if not highlighted else style)
+            t.append(f"{route[:27]:<29}", style=style)
             t.append(f"{session.message_count:>3} msgs  ", style=count_style)
-            t.append(f"{title[:44]}\n", style=title_style)
+            t.append(f"{title[:28]}\n", style=title_style)
 
         t.append("\n  ↑↓ navigate  Enter resume  or type ", style=THEME["muted"])
-        t.append(":sessions resume <id>", style=THEME["cyan"])
+        t.append(":sessions switch <id>", style=THEME["cyan"])
         t.append("\n", style=THEME["muted"])
         self._show_command_output(log, t, clear_log=clear_log)
         self._scroll_to_highlighted_item(log, self._session_resume_highlighted_index, len(sessions))

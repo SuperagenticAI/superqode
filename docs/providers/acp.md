@@ -8,6 +8,11 @@ Agent Client Protocol (ACP) mode connects SuperQode to external coding agents th
 
 ## Overview
 
+An ACP agent is an external runtime such as Codex, Claude Agent, OpenCode, Kimi
+or Qwen Code. A SuperQode HarnessSpec is the run contract around a model or
+runtime. Select the runtime with `:connect acp`; select a SuperQode harness with
+`:harness`.
+
 ACP agents provide:
 
 - **Full capabilities**: File editing, shell execution, MCP tools
@@ -20,19 +25,43 @@ ACP agents provide:
 ## Quick Start
 
 ```bash
-# Connect to OpenCode
+# Inspect the catalog
+superqode agents list --tier featured
+
+# Connect to a specific agent
 superqode connect acp opencode
+```
+
+In the TUI:
+
+```text
+:connect acp                 # installed and featured agents
+:connect acp enterprise      # enterprise agents
+:connect acp all             # complete catalog
+:connect acp refresh         # refresh the official registry cache
 ```
 
 ---
 
 ## Supported Agents
 
-Use `superqode agents list --protocol acp` to see the current list (it’s driven by the built‑in agent registry and any local agent definitions).
+Use `superqode agents list --protocol acp` to see the current list. SuperQode
+combines the cached official ACP Registry, bundled offline definitions, and
+user definitions from `~/.superqode/agents`.
+
+The default TUI picker is intentionally curated:
+
+- **Ready**: installed agents detected on the current machine
+- **Featured**: commonly used terminal coding agents
+- **Enterprise**: enterprise and platform-specific coding agents
+- **All**: the complete official registry plus additional SuperQode adapters
+
+Installed agents are always visible. Registry refresh is explicit so starting
+the TUI does not require network access.
 
 ### OpenCode
 
-[OpenCode](https://github.com/opencode/opencode) is the primary ACP agent:
+[OpenCode](https://github.com/anomalyco/opencode) provides native ACP mode:
 
 ```bash
 # Install OpenCode
@@ -102,29 +131,6 @@ BYOK). See [BYOK Providers → Grok Subscription](byok.md#grok-subscription-offi
 
 ---
 
-### OpenClaw (Enterprise Integration, Experimental)
-
-[OpenClaw](https://openclaw.ai/) provides an ACP bridge backed by the OpenClaw Gateway. This
-integration is available in Enterprise.
-
-```bash
-# Install OpenClaw
-npm install -g moltbot@latest
-
-# Start the gateway (in a separate terminal)
-moltbot gateway --port 18789 --verbose
-
-# Connect via SuperQode
-superqode connect acp moltbot
-```
-
-If your gateway requires auth, pass `--token` or `--password` in the agent command configuration.
-
-**Note:** OpenClaw integration is experimental and intended for self-hosted environments with
-secure, private local models.
-
----
-
 ### Amp
 
 [Amp](https://ampcode.com) is an AI coding agent by Ampcode with full ACP support:
@@ -155,28 +161,48 @@ superqode connect acp amp
 
 ---
 
-### Other ACP-Compatible Agents
+### Curated Agent Groups
 
-SuperQode includes registry entries for these ACP agents (availability depends on local installation):
+The featured catalog includes Codex, Claude Agent, OpenCode, Cursor, Cline,
+GitHub Copilot, Grok Build, Goose, Kimi, Qwen Code, Pi, Amp, Kilo and Harn.
 
-- **Amp** (ACP adapter: `acp-amp` via [acp-amp](https://github.com/SuperagenticAI/acp-amp))
-- **Claude Code** (ACP adapter: `claude-code-acp`)
-- **Codex** (ACP adapter: `npx @openai/codex-acp` or `codex-acp`)
-- **Grok Build** (`grok agent stdio`)
-- **OpenHands** (`openhands acp`)
-- **Gemini CLI** (`gemini --experimental-acp`): enterprise/API-key ACP route. Individual Google AI users should prefer `:connect antigravity`
-- **Goose** (`goose`)
-- **Kimi CLI** (`kimi --acp`)
-- **Augment Code / Auggie** (`auggie --acp`)
-- **Stakpak** (`stakpak`)
-- **VT Code** (`vtcode-acp`)
-- **fast-agent** (ACP entrypoint: `fast-agent-acp -x`)
-- **LLMling-Agent** (`llmling-agent`)
-- **cagent** (`cagent`)
-- **Code Assistant** (see its agent card for the ACP command)
+The enterprise catalog includes Factory Droid, Devin, Cortex Code, Junie,
+Auggie and Poolside. Other official registry entries remain searchable through
+`:connect acp all`.
 
-If an agent requires an ACP adapter, install it first using the setup instructions from
-`superqode agents show <agent>`.
+Representative current ACP commands include:
+
+| Agent | ACP command |
+|---|---|
+| Claude Agent | `claude-agent-acp` |
+| Codex | `codex-acp` |
+| Gemini CLI | `gemini --acp` |
+| GitHub Copilot | `copilot --acp` |
+| Goose | `goose acp` |
+| Grok Build | `grok agent stdio` |
+| Kimi CLI | `kimi acp` |
+| Kilo | `kilo acp` |
+| Qwen Code | `qwen --acp --experimental-skills` |
+| Factory Droid | `droid exec --output-format acp-daemon` |
+| Devin | `devin acp` |
+| Cortex Code | `cortex acp serve` |
+| Harn | `harn serve acp` |
+
+Run `superqode agents show <agent>` for installation and authentication details.
+Some agents use a maintained adapter rather than a native server.
+
+### Registry and Offline Behavior
+
+The official registry cache is stored at
+`~/.superqode/acp_registry_cache.json`. Refresh it with:
+
+```bash
+superqode agents refresh
+```
+
+If refresh fails, SuperQode retains the stale cache. If no cache exists, the
+bundled catalog remains available. Project and user agent definitions are not
+deleted or overwritten by a registry refresh.
 
 ---
 

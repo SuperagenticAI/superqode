@@ -13,7 +13,7 @@ publisher_url = "https://github.com/block/goose"
 type = "coding"
 description = "Goose is a developer tool that helps you write code faster by automating repetitive tasks."
 tags = ["automation", "productivity", "block", "official-acp"]
-run_command."*" = "goose mcp"
+run_command."*" = "goose acp"
 
 help = '''
 # Goose

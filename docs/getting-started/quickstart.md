@@ -24,6 +24,20 @@ uv tool install "superqode[deepagents]"
 uv tool install "superqode[adk]"
 ```
 
+For Codex, Claude Agent SDK, and Antigravity SDK support, install one runtime
+or the optional bundle:
+
+```bash
+uv tool install "superqode[codex-sdk]"
+uv tool install "superqode[claude-agent-sdk]"
+uv tool install "superqode[antigravity-sdk]"
+# Or install all three:
+uv tool install "superqode[vendor-sdks]"
+```
+
+The bundle does not include the Grok or `agy` subscription CLIs. Run
+`superqode runtime setup` for installation and authentication guidance.
+
 ---
 
 ## 2. Prerequisites
@@ -61,6 +75,10 @@ Once the TUI starts, connect a provider or agent:
 
 Choose BYOK (cloud API key), Local (self-hosted model), or ACP (coding agent) from the picker. See [Connection Modes](../concepts/modes.md) for guidance on which to pick.
 
+For ACP coding agents, `:connect acp` shows installed and featured runtimes.
+Use `:connect acp all` to search the complete catalog or `:connect acp refresh`
+to update the cached official registry.
+
 Useful TUI commands after connecting:
 
 | Command | Purpose |
@@ -69,6 +87,7 @@ Useful TUI commands after connecting:
 | `:harness wizard` | Create and optionally load a starter HarnessSpec step by step |
 | `:harness harness.yaml` | Load a HarnessSpec into the session |
 | `:runtime list` | Show runtime backends |
+| `:runtime setup` | Show optional vendor SDK and authentication setup |
 | `:runtime pydanticai` | Switch runtime where available |
 | `:providers` | Inspect provider setup |
 | `:providers free` | Find free/local inference setup paths |

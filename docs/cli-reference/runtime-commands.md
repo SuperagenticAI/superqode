@@ -4,6 +4,27 @@ Manage runtime backends for agent execution.
 
 ---
 
+## runtime setup
+
+Show environment-aware installation commands and authentication steps for the
+Codex, Claude Agent, and Antigravity SDK runtimes.
+
+```bash
+superqode runtime setup
+```
+
+The output includes commands for each SDK extra and the optional
+`superqode[vendor-sdks]` bundle. The bundle does not include external
+subscription CLIs such as Grok or `agy`.
+
+Inside the TUI, use the equivalent command:
+
+```text
+:runtime setup
+```
+
+---
+
 ## runtime list
 
 List available runtime backends with install status.

@@ -505,6 +505,8 @@ The full `local` command group (init, doctor, search, serve, servers, stop, mode
 
 | Command | Description |
 |---------|-------------|
+| `superqode harness list` | List selectable harnesses and continuity states |
+| `superqode harness current` | Show the effective project harness |
 | `superqode harness list-templates` | List built-in harness templates |
 | `superqode harness list-backends` | List harness runtime backends |
 | `superqode harness import-agent <agent.yaml>` | Compile concise SuperQode agent spec to a harness |

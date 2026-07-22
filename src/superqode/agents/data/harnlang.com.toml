@@ -1,0 +1,30 @@
+identity = "harnlang.com"
+name = "Harn"
+short_name = "harn"
+url = "https://harnlang.com"
+protocol = "acp"
+author_name = "Burin Labs"
+author_url = "https://github.com/burin-labs"
+publisher_name = "SuperQode"
+publisher_url = "https://github.com/SuperagenticAI/superqode"
+type = "coding"
+description = "Agent pipeline runtime that serves .harn workflows as a native ACP coding agent."
+tags = ["official-acp", "open-source", "featured", "workflow"]
+recommended = true
+catalog_tier = "featured"
+run_command."*" = "harn serve acp"
+
+help = '''
+# Harn
+
+Harn runs `.harn` agent pipelines and exposes them through ACP over standard input and output.
+
+## Installation
+
+Install Harn from its official releases, then run `harn serve acp`.
+See https://github.com/burin-labs/harn.
+'''
+
+[actions."*".install]
+command = ""
+description = "Install Harn from its official release"

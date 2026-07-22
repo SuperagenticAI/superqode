@@ -33,6 +33,7 @@ class SessionMetadata:
     harness_source: str = ""
     harness_digest: str = ""
     tool_contract_version: str = ""
+    harness_transitions: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -84,6 +85,20 @@ class SessionStore:
             harness_source=harness_source,
             harness_digest=harness_digest,
             tool_contract_version=tool_contract_version,
+            harness_transitions=(
+                [
+                    {
+                        "timestamp": now,
+                        "from_harness": "",
+                        "to_harness": harness_id,
+                        "provider": provider,
+                        "model": model,
+                        "continuity": "new-session",
+                    }
+                ]
+                if harness_id
+                else []
+            ),
         )
         self._save_metadata(metadata)
         self._record_graph(metadata)
@@ -108,6 +123,7 @@ class SessionStore:
                     "harness_source": metadata.harness_source,
                     "harness_digest": metadata.harness_digest,
                     "tool_contract_version": metadata.tool_contract_version,
+                    "harness_transitions": list(metadata.harness_transitions),
                 },
                 indent=2,
             )
@@ -118,8 +134,19 @@ class SessionStore:
         try:
             from superqode.session.switchboard import SessionGraphStore
 
+            record_metadata = dict(updates.pop("record_metadata", None) or {})
+            record_metadata.update(
+                {
+                    "harness_id": metadata.harness_id,
+                    "harness_source": metadata.harness_source,
+                    "harness_transition_count": len(metadata.harness_transitions),
+                }
+            )
             SessionGraphStore(self.base_dir).upsert(
-                metadata.session_id, metadata=metadata, **updates
+                metadata.session_id,
+                metadata=metadata,
+                record_metadata=record_metadata,
+                **updates,
             )
         except Exception:
             # Session JSONL is the primary store; graph recording must never break it.
@@ -133,8 +160,61 @@ class SessionStore:
         try:
             data = json.loads(meta_path.read_text())
             return SessionMetadata(**data)
-        except (json.JSONDecodeError, KeyError):
+        except (json.JSONDecodeError, KeyError, TypeError):
             return None
+
+    def update_execution_binding(
+        self,
+        session_id: str,
+        *,
+        provider: str = "",
+        model: str = "",
+        harness_id: str = "",
+        harness_source: str = "",
+        harness_digest: str = "",
+        tool_contract_version: str = "",
+        continuity: str = "context-replay",
+    ) -> SessionMetadata:
+        """Update the executor attached to a durable conversation session.
+
+        Harness changes are stored as transitions instead of creating a new
+        conversation. Reconnecting the same binding is idempotent.
+        """
+        metadata = self.get_metadata(session_id)
+        if metadata is None:
+            raise FileNotFoundError(f"Session {session_id} not found")
+
+        next_provider = provider or metadata.provider
+        next_model = model or metadata.model
+        next_harness = harness_id or metadata.harness_id
+        changed = (
+            next_provider != metadata.provider
+            or next_model != metadata.model
+            or next_harness != metadata.harness_id
+            or (harness_digest and harness_digest != metadata.harness_digest)
+        )
+        if changed:
+            metadata.harness_transitions.append(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "from_harness": metadata.harness_id,
+                    "to_harness": next_harness,
+                    "provider": next_provider,
+                    "model": next_model,
+                    "continuity": continuity,
+                }
+            )
+
+        metadata.provider = next_provider
+        metadata.model = next_model
+        metadata.harness_id = next_harness
+        metadata.harness_source = harness_source or metadata.harness_source
+        metadata.harness_digest = harness_digest or metadata.harness_digest
+        metadata.tool_contract_version = tool_contract_version or metadata.tool_contract_version
+        metadata.updated_at = datetime.now().isoformat()
+        self._save_metadata(metadata)
+        self._record_graph(metadata, kind="session")
+        return metadata
 
     def append_message(self, session_id: str, message: SessionMessage):
         """Append a message to session."""
@@ -338,10 +418,21 @@ class SessionManager:
         harness_source: str = "",
         harness_digest: str = "",
         tool_contract_version: str = "",
+        continuity: str = "context-replay",
     ) -> str:
         """Start a new session or resume existing."""
         if session_id and self.store.get_metadata(session_id):
             self._current_session_id = session_id
+            self.store.update_execution_binding(
+                session_id,
+                provider=provider,
+                model=model,
+                harness_id=harness_id,
+                harness_source=harness_source,
+                harness_digest=harness_digest,
+                tool_contract_version=tool_contract_version,
+                continuity=continuity,
+            )
             return session_id
 
         # Create new session

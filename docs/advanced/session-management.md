@@ -58,21 +58,71 @@ config = AgentConfig(
 
 ## TUI Commands
 
+### Switch Harnesses Within a Session
+
+Each stored session records its harness, provider, model, conversation history,
+and harness transition history. Switching activates another harness while
+keeping the same session ID. SuperQode uses its normalized session history to
+replay context through the selected harness.
+
+Use `:harness` or `:harness switch` to select a harness interactively. Enter
+continues the current session under the highlighted harness. Press `F` instead
+to create an independent branch before switching. The picker reports whether
+the runtime provides exact resume, context replay, or a fresh runtime session.
+
+```text
+:harness switch workbench
+:harness switch kimi-coding
+```
+
+Create an independent branch when the original harness path must remain
+unchanged:
+
+```text
+:harness switch workbench --fork
+```
+
+The fork copies the stored messages, records the parent session ID, and changes
+the harness only on the new session.
+
+Open the session switcher to return to any saved session:
+
+```text
+:sessions switch
+```
+
+The picker shows the latest harness for every session. Resuming a session
+restores its harness, provider, model, and stored messages. A direct switch is
+also available:
+
+```text
+:sessions switch <session-id>
+```
+
+This is the terminal session-switching workflow. No web or mobile control plane
+is required.
+
+The picker covers sessions stored in SuperQode's normalized JSONL session
+store. Vendor-owned thread stores remain available through their runtime
+commands, including `:codex sessions` and `:claude sessions`. The catalog uses
+`context replay`, `exact resume`, or `fresh session` to state the continuity a
+harness adapter can provide.
+
 ### List Sessions
 
 ```text
 /sessions
 ```
 
-Shows recent sessions with metadata:
+Shows recent sessions with harness metadata:
 
 ```text
 Recent Sessions:
 --------------------------------------------------
-1. abc12345 | <openai-model> | 2026-05-11 10:00 | 5 msgs
-2. def67890 | <anthropic-balanced-model> | 2026-05-10 15:30 | 12 msgs
+1. abc12345 | workbench  | <openai-model> | 5 msgs
+2. def67890 | code-review | <anthropic-balanced-model> | 12 msgs
 --------------------------------------------------
-Use /resume <id> to continue a session
+Use :sessions switch <id> to restore its harness and continue
 ```
 
 ### Resume Session
@@ -81,7 +131,8 @@ Use /resume <id> to continue a session
 /resume <session_id>
 ```
 
-Resumes a previous session and reconnects to the same provider and model.
+Resumes a previous session and restores the same harness, provider, model, and
+conversation history.
 
 ### Compact Context
 

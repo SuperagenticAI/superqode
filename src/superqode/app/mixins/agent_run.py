@@ -1711,7 +1711,7 @@ class AgentRunMixin:
         # Choose command and model display based on agent type
         # All 15 official ACP agents are supported
         if agent_type == "gemini":
-            command = "gemini --experimental-acp"
+            command = "gemini --acp"
             model_display = f"gemini/{model}" if model and model != "auto" else "gemini/auto"
             if "GEMINI_API_KEY" not in os.environ and "GOOGLE_API_KEY" not in os.environ:
                 self._call_ui(self._stop_thinking)
@@ -1722,7 +1722,7 @@ class AgentRunMixin:
                 self._call_ui(log.add_info, "  or export GOOGLE_API_KEY=your_api_key")
                 return
         elif agent_type == "claude":
-            command = "claude --acp"
+            command = "claude-agent-acp"
             model_display = f"claude/{model}" if model else "claude/auto"
             if "ANTHROPIC_API_KEY" not in os.environ:
                 self._call_ui(self._stop_thinking)
@@ -1730,7 +1730,7 @@ class AgentRunMixin:
                 self._call_ui(log.add_info, "  export ANTHROPIC_API_KEY=sk-ant-...")
                 return
         elif agent_type == "codex":
-            command = "codex --acp"
+            command = "codex-acp"
             model_display = f"codex/{model}" if model else "codex/auto"
             if "OPENAI_API_KEY" not in os.environ and "CODEX_API_KEY" not in os.environ:
                 self._call_ui(self._stop_thinking)
@@ -1752,10 +1752,10 @@ class AgentRunMixin:
             command = "junie --acp"
             model_display = f"junie/{model}" if model else "junie/auto"
         elif agent_type == "goose":
-            command = "goose mcp"
+            command = "goose acp"
             model_display = f"goose/{model}" if model else "goose/auto"
         elif agent_type == "kimi":
-            command = "kimi --acp"
+            command = "kimi acp"
             model_display = f"kimi/{model}" if model else "kimi/auto"
             if "MOONSHOT_API_KEY" not in os.environ and "KIMI_API_KEY" not in os.environ:
                 self._call_ui(self._stop_thinking)
@@ -1773,10 +1773,10 @@ class AgentRunMixin:
             model_display = f"openhands/{model}" if model else "openhands/auto"
             # OpenHands reads its own configuration from ~/.openhands/settings.json
         elif agent_type == "stakpak":
-            command = "stakpak --acp"
+            command = "stakpak acp"
             model_display = f"stakpak/{model}" if model else "stakpak/auto"
         elif agent_type == "vtcode":
-            command = "vtcode --acp"
+            command = "vtcode acp"
             model_display = f"vtcode/{model}" if model else "vtcode/auto"
         elif agent_type == "auggie":
             command = "auggie --acp"
@@ -2309,7 +2309,15 @@ class AgentRunMixin:
 
             try:
                 if client.is_running():
-                    self._call_ui(log.add_info, "Reusing warm ACP session. Sending prompt...")
+                    active_model = getattr(client, "_current_model_id", None) or model_id
+                    if active_model:
+                        self._call_ui(self._set_acp_status, active_model)
+                        self._call_ui(
+                            log.add_info,
+                            f"Reusing warm ACP session with {active_model}. Sending prompt...",
+                        )
+                    else:
+                        self._call_ui(log.add_info, "Reusing warm ACP session. Sending prompt...")
                 else:
                     self._call_ui(log.add_info, f"Starting ACP process: {command}")
                     ok = await client.start()
@@ -2330,43 +2338,72 @@ class AgentRunMixin:
                     self._agent_process = client._process  # type: ignore[attr-defined]
 
                 if not text_parts and not tool_actions:
-                    self._call_ui(log.add_info, "ACP session ready. Sending prompt...")
-                prompt_task = asyncio.create_task(client.send_prompt(message))
-                prompt_started_at = time.monotonic()
-                waiting_notice_sent = False
-
-                while not prompt_task.done():
-                    if self._cancel_requested:
-                        try:
-                            await client.cancel()
-                        except Exception:
-                            pass
-                        prompt_task.cancel()
-                        try:
-                            await prompt_task
-                        except asyncio.CancelledError:
-                            pass
-                        await client.stop()
-                        self._acp_client = None
-                        self._acp_client_key = None
-                        self._agent_process = None
-                        stats = client.get_stats().__dict__
-                        stats["duration"] = time.monotonic() - total_start
-                        return "cancelled", stats
-                    if (
-                        not waiting_notice_sent
-                        and time.monotonic() - prompt_started_at > 3.0
-                        and not text_parts
-                        and not tool_actions
-                    ):
+                    active_model = getattr(client, "_current_model_id", None) or model_id
+                    if active_model:
+                        self._call_ui(self._set_acp_status, active_model)
                         self._call_ui(
                             log.add_info,
-                            "Waiting for the ACP agent/model to emit its first update...",
+                            f"ACP session ready with {active_model}. Sending prompt...",
                         )
-                        waiting_notice_sent = True
-                    await asyncio.sleep(0.1)
+                    else:
+                        self._call_ui(log.add_info, "ACP session ready. Sending prompt...")
 
-                stop_reason = await prompt_task
+                async def send_and_wait() -> str | None:
+                    prompt_task = asyncio.create_task(client.send_prompt(message))
+                    prompt_started_at = time.monotonic()
+                    waiting_notice_sent = False
+
+                    while not prompt_task.done():
+                        if self._cancel_requested:
+                            try:
+                                await client.cancel()
+                            except Exception:
+                                pass
+                            prompt_task.cancel()
+                            try:
+                                await prompt_task
+                            except asyncio.CancelledError:
+                                pass
+                            await client.stop()
+                            self._acp_client = None
+                            self._acp_client_key = None
+                            self._agent_process = None
+                            return "cancelled"
+                        if (
+                            not waiting_notice_sent
+                            and time.monotonic() - prompt_started_at > 3.0
+                            and not text_parts
+                            and not tool_actions
+                        ):
+                            self._call_ui(
+                                log.add_info,
+                                "Waiting for the ACP agent/model to emit its first update...",
+                            )
+                            waiting_notice_sent = True
+                        await asyncio.sleep(0.1)
+
+                    return await prompt_task
+
+                stop_reason = await send_and_wait()
+
+                # OpenCode free endpoints can occasionally close a turn with
+                # end_turn after an upstream streaming failure, without an ACP
+                # error or agent message. A single retry on a fresh session is
+                # safe here because no text or tool action was emitted.
+                if (
+                    agent_type == "opencode"
+                    and stop_reason == "end_turn"
+                    and not text_parts
+                    and not tool_actions
+                    and not client.get_message_buffer().strip()
+                ):
+                    self._call_ui(
+                        log.add_info,
+                        "OpenCode returned an empty turn. Retrying once in a fresh ACP session...",
+                    )
+                    if await client.reset_session():
+                        stop_reason = await send_and_wait()
+
                 stats = client.get_stats().__dict__
                 stats["duration"] = time.monotonic() - total_start
                 return stop_reason, stats
@@ -2388,6 +2425,13 @@ class AgentRunMixin:
 
             # Get response text
             response_text = "".join(text_parts) if text_parts else ""
+            if not response_text.strip() and self._acp_client is not None:
+                # The protocol client records message text before invoking UI
+                # callbacks. Use that buffer as a final safeguard if a display
+                # callback was interrupted after the agent response arrived.
+                buffered_response = self._acp_client.get_message_buffer()
+                if buffered_response.strip():
+                    response_text = buffered_response
             if stop_reason == "cancelled":
                 self._call_ui(
                     log.end_agent_session,
@@ -2402,13 +2446,28 @@ class AgentRunMixin:
                 self.is_busy = False
                 return
             if not response_text.strip() and not tool_actions:
+                if agent_type == "opencode":
+                    active_model = (
+                        getattr(self._acp_client, "_current_model_id", None)
+                        or self._normalize_acp_model_id(agent_type, model)
+                        or model_display
+                    )
+                    empty_message = (
+                        f"OpenCode ACP connected to {active_model}, but the model returned "
+                        "an empty turn after one retry. This usually indicates a provider "
+                        "stream failure or rate limit. Retry the prompt or select another "
+                        "model. For OpenCode process errors, restart with "
+                        "SUPERQODE_ACP_PRINT_LOGS=1 and use :log verbose."
+                    )
+                else:
+                    empty_message = (
+                        "The ACP session connected, but the agent returned an empty turn. "
+                        "Check the agent configuration and retry."
+                    )
                 self._call_ui(
                     log.end_agent_session,
                     False,
-                    (
-                        "No response received from the ACP agent. "
-                        "Check the agent configuration and run :log verbose for startup output."
-                    ),
+                    empty_message,
                     stats.get("prompt_tokens", 0),
                     stats.get("completion_tokens", 0),
                     stats.get("thinking_tokens", 0),
@@ -2494,7 +2553,7 @@ class AgentRunMixin:
         persona_context=None,
     ):
         """
-        Run Claude Code using the ACP protocol via claude-code-acp adapter.
+        Run Claude through the maintained Claude Agent ACP adapter.
 
         Claude Code ACP uses full bidirectional JSON-RPC protocol, not simple JSON streaming.
         This method uses subprocess with JSON-RPC communication.
@@ -2550,7 +2609,7 @@ class AgentRunMixin:
                 self._call_ui(self._show_thinking_line, "🔄 Continuing conversation...", log)
             else:
                 # Start new process
-                cmd = ["claude-code-acp"]
+                cmd = ["claude-agent-acp"]
                 process = subprocess.Popen(
                     cmd,
                     stdin=subprocess.PIPE,
@@ -3053,8 +3112,8 @@ class AgentRunMixin:
             self._agent_process = None
             self._call_ui(self._stop_thinking)
             self._call_ui(self._stop_stream_animation)
-            self._call_ui(log.add_error, "❌ claude-code-acp not found. Install it first:")
-            self._call_ui(log.add_info, "  npm install -g @zed-industries/claude-code-acp")
+            self._call_ui(log.add_error, "Claude Agent ACP adapter not found. Install it first:")
+            self._call_ui(log.add_info, "  npm install -g @agentclientprotocol/claude-agent-acp")
         except Exception as e:
             self._agent_process = None
             self._call_ui(self._stop_thinking)
