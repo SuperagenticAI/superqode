@@ -128,3 +128,19 @@ class HelperInteractionModeMixin:
             )
         else:
             log.add_info("Usage: :mode [chat|build|plan]")
+            return
+
+        descriptions = {
+            "chat": "Conversation without repository tools",
+            "build": "Coding harness and tools enabled",
+            "plan": "Planning before native tool execution",
+        }
+        self._announce_transition(
+            title="Mode changed",
+            primary=mode.title(),
+            detail=descriptions[mode],
+            severity="information",
+            log=log,
+            persist=False,
+            dedupe_key=f"interaction-mode:{mode}",
+        )

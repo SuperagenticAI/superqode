@@ -307,11 +307,16 @@ class LocalModelsMixin:
         message: str,
     ) -> None:
         """Keep a local connection failure visible in transcript and chrome."""
-        log.add_error(message)
-        try:
-            self.notify(message, severity="error", timeout=10)
-        except Exception:
-            pass
+        self._announce_transition(
+            title="Local connection failed",
+            primary=message,
+            detail="The selected local model is not ready",
+            severity="error",
+            log=log,
+            guidance="Check the local server, then reconnect with :connect local.",
+            timeout=10,
+            dedupe_key=f"local-connection-error:{message}",
+        )
         try:
             self._set_input_placeholder("Connection failed — fix the issue, then reconnect")
             self._ensure_input_focus()
@@ -519,6 +524,11 @@ class LocalModelsMixin:
                         # Warm the model so the first real prompt isn't the one
                         # paying the one-time cold load (~81GB paged from disk).
                         await self._warmup_ds4(client, model, log)
+                        self._announce_local_model_ready(
+                            provider=provider,
+                            model=model,
+                            log=log,
+                        )
                     else:
                         self._surface_local_connection_failure(
                             log,
@@ -535,6 +545,11 @@ class LocalModelsMixin:
                         if not quiet:
                             log.add_success(f"✓ Ollama server ready at {ollama_host}")
                         await self._warmup_local_generation(provider, model, log)
+                        self._announce_local_model_ready(
+                            provider=provider,
+                            model=model,
+                            log=log,
+                        )
                     else:
                         self._surface_local_connection_failure(
                             log,
@@ -546,6 +561,11 @@ class LocalModelsMixin:
                             "Local provider selected. First prompt will validate generation."
                         )
                     await self._warmup_local_generation(provider, model, log)
+                    self._announce_local_model_ready(
+                        provider=provider,
+                        model=model,
+                        log=log,
+                    )
             else:
                 from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
                 from superqode.providers.gateway.base import Message
@@ -680,6 +700,12 @@ class LocalModelsMixin:
 
             elapsed = time.monotonic() - started
             log.add_meta(f"Ready · {provider}/{model} · warm {elapsed:.1f}s")
+            self._announce_local_model_ready(
+                provider=provider,
+                model=model,
+                log=log,
+                detail=f"warmup {elapsed:.1f}s",
+            )
         finally:
             self._call_ui(self._stop_thinking)
 

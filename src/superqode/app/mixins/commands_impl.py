@@ -1765,7 +1765,14 @@ class CommandImplMixin:
         try:
             entry = resolve_harness(reference, root=Path.cwd())
         except Exception as exc:
-            log.add_error(f"Could not resolve harness: {exc}")
+            self._announce_transition(
+                title="Harness not loaded",
+                primary=reference,
+                detail=str(exc),
+                severity="error",
+                log=log,
+                guidance="Run :harness to review available harnesses.",
+            )
             return
 
         pure = self._ensure_pure_mode()
@@ -1779,12 +1786,25 @@ class CommandImplMixin:
         source_session_id = previous_session_id
         if fork_session:
             if not previous_session_id:
-                log.add_error("No active session to fork. Start or resume a session first.")
+                self._announce_transition(
+                    title="Harness branch not created",
+                    primary=_harness_display_name(entry.id),
+                    detail="There is no active session to fork",
+                    severity="warning",
+                    log=log,
+                    guidance="Start or resume a session, then retry with --fork.",
+                )
                 return
             try:
                 previous_session_id = pure.fork_current_session()
             except Exception as exc:
-                log.add_error(f"Could not fork the active session: {exc}")
+                self._announce_transition(
+                    title="Harness branch failed",
+                    primary=_harness_display_name(entry.id),
+                    detail=str(exc),
+                    severity="error",
+                    log=log,
+                )
                 return
 
         _os.environ["SUPERQODE_HARNESS"] = str(entry.path or entry.id)
@@ -1825,14 +1845,21 @@ class CommandImplMixin:
                     session_id=previous_session_id,
                 )
             except Exception as exc:
-                log.add_error(f"Harness loaded, but the previous model could not reconnect: {exc}")
-                log.add_info("Reconnect with :connect, then continue with the selected harness.")
+                self._announce_transition(
+                    title="Harness loaded, connection unavailable",
+                    primary=_harness_display_name(entry.id),
+                    detail=str(exc),
+                    severity="warning",
+                    log=log,
+                    guidance="Reconnect with :connect, then continue with this harness.",
+                )
             else:
                 new_session_id = pure.get_current_session_id()
                 if new_session_id:
-                    log.add_success(
+                    log.add_meta(
                         f"Session {new_session_id[:8]} continues under "
-                        f"{_harness_display_name(entry.id)}."
+                        f"{_harness_display_name(entry.id)}.",
+                        icon="·",
                     )
                 else:
                     log.add_info(
@@ -1849,23 +1876,38 @@ class CommandImplMixin:
         display_name = _harness_display_name(entry.id)
         if sub == "switch":
             if fork_session and source_session_id and active_session_id:
-                log.add_success(f"Harness switched to {display_name} in a new session branch.")
-                log.add_meta(
-                    f"{source_session_id[:8]} -> {active_session_id[:8]} · "
-                    f"{entry.continuity.replace('-', ' ')}"
+                self._announce_transition(
+                    title="Harness switched",
+                    primary=display_name,
+                    detail=(
+                        f"New branch {active_session_id[:8]} · {entry.continuity.replace('-', ' ')}"
+                    ),
+                    severity="success",
+                    log=log,
+                    dedupe_key=f"harness:{entry.id}:{active_session_id}",
                 )
+                log.add_meta(f"Branched from session {source_session_id[:8]}", icon="↳")
             else:
-                log.add_success(
-                    f"Harness switched: {_harness_display_name(previous_harness)} -> {display_name}"
-                )
+                detail_parts = [f"from {_harness_display_name(previous_harness)}"]
                 if active_session_id:
-                    log.add_meta(
-                        f"Session {active_session_id[:8]} · {entry.continuity.replace('-', ' ')}"
-                    )
+                    detail_parts.append(f"session {active_session_id[:8]}")
+                detail_parts.append(entry.continuity.replace("-", " "))
+                self._announce_transition(
+                    title="Harness switched",
+                    primary=display_name,
+                    detail=" · ".join(detail_parts),
+                    severity="success",
+                    log=log,
+                    dedupe_key=f"harness:{entry.id}:{active_session_id or 'pending'}",
+                )
         else:
-            log.add_success(
-                f"Harness: {display_name} loaded "
-                f"({entry.spec.flavor.value}, runtime={entry.runtime}, tools={len(entry.tools)})."
+            self._announce_transition(
+                title="Harness ready",
+                primary=display_name,
+                detail=(f"{entry.spec.flavor.value} · {entry.runtime} · {len(entry.tools)} tools"),
+                severity="success",
+                log=log,
+                dedupe_key=f"harness:{entry.id}:{active_session_id or 'pending'}",
             )
 
     def _active_harness_reference(self) -> str:

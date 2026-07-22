@@ -914,7 +914,7 @@ def test_connection_summary_renders_compact_local_card():
     )
 
     text = render_plain(log.items[-1])
-    assert "Local Model Connected" in text
+    assert "Local Model Selected" in text
     assert "Method" in text
     assert "Local" in text
     assert "Ollama" in text
@@ -1025,6 +1025,8 @@ def test_opencode_acp_model_selection_updates_mounted_status_bar(monkeypatch):
     log = FakeLog()
     badge = SimpleNamespace(model="", provider="", execution_mode="")
     status = ColorfulStatusBar()
+    notifications = []
+    app.notify = lambda message, **kwargs: notifications.append((message, kwargs))
     status.update_byok_status("old-provider", "old-model")
     app.current_agent = "opencode"
     app.current_model = ""
@@ -1056,6 +1058,18 @@ def test_opencode_acp_model_selection_updates_mounted_status_bar(monkeypatch):
     assert "opencode/nemotron-3-ultra-free" in rendered
     assert "rt acp" in rendered
     assert "Model: not connected" not in rendered
+    assert notifications == [
+        (
+            "Nemotron 3 Ultra Free\nOpenCode via ACP · Free model · opencode/nemotron-3-ultra-free",
+            {
+                "title": "Model ready",
+                "severity": "information",
+                "timeout": 4.0,
+                "markup": False,
+            },
+        )
+    ]
+    assert any("Model ready: Nemotron 3 Ultra Free" in str(item) for item in log.items)
 
 
 def test_byok_usage_prefers_exact_provider_token_total(monkeypatch):
@@ -1098,9 +1112,23 @@ def test_local_connection_failure_is_prominent_near_prompt():
 
     SuperQodeApp._surface_local_connection_failure(app, log, "Ollama connection failed: offline")
 
-    assert log.items == ["Ollama connection failed: offline"]
+    assert log.items == [
+        "Local connection failed: Ollama connection failed: offline · "
+        "The selected local model is not ready",
+        "Check the local server, then reconnect with :connect local.",
+    ]
     assert notifications == [
-        ("Ollama connection failed: offline", {"severity": "error", "timeout": 10})
+        (
+            "Ollama connection failed: offline\n"
+            "The selected local model is not ready\n"
+            "Check the local server, then reconnect with :connect local.",
+            {
+                "title": "Local connection failed",
+                "severity": "error",
+                "timeout": 10,
+                "markup": False,
+            },
+        )
     ]
     assert placeholders == ["Connection failed — fix the issue, then reconnect"]
 
@@ -1660,7 +1688,7 @@ def test_tui_harness_wizard_writes_and_loads_spec(tmp_path, monkeypatch):
         render_plain(item) if not isinstance(item, str) else item for item in log.items
     )
     assert "Harness Wizard" in rendered
-    assert "Harness: Demo loaded" in rendered
+    assert "Harness ready: Demo" in rendered
     assert app._pure_mode is not None
     assert app._pure_mode.harness_enabled
 
@@ -1740,7 +1768,7 @@ def test_tui_harness_picker_navigates_and_switches_same_session(tmp_path, monkey
     assert saved is not None
     assert saved.harness_transitions[-1]["to_harness"] == "workbench"
     rendered = "\n".join(str(item) for item in log.items)
-    assert "Harness switched: Core -> Workbench" in rendered
+    assert "Harness switched: Workbench · from Core" in rendered
     assert "Usage: :harness" not in rendered
 
 
@@ -1908,7 +1936,7 @@ def test_tui_harness_wizard_final_yes_loads_and_exits(tmp_path, monkeypatch):
     rendered = "\n".join(
         render_plain(item) if not isinstance(item, str) else item for item in log.items
     )
-    assert "Harness: My-harness loaded" in rendered
+    assert "Harness ready: My-harness" in rendered
 
 
 def test_tui_harness_wizard_yes_on_output_step_loads_default_path(tmp_path, monkeypatch):
@@ -2326,7 +2354,7 @@ def test_sessions_resume_opens_keyboard_picker_and_selects(tmp_path, monkeypatch
 
     assert resumed == [expected_id]
     assert app._awaiting_session_resume is False
-    assert any("Resumed session" in str(item) for item in log.items)
+    assert any("Session resumed" in str(item) for item in log.items)
 
 
 def test_share_create_import_list_and_revoke(tmp_path, monkeypatch):

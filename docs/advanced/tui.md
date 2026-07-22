@@ -78,6 +78,27 @@ Summarize what changed.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+## State Change Notifications
+
+Consequential selections use three coordinated surfaces:
+
+1. A temporary notification identifies the completed action and active value.
+2. The top status bar retains the active runtime, agent, model, harness, and mode.
+3. The conversation transcript stores a compact receipt for later review.
+
+This applies to provider connections, ACP agents, model selection, local model readiness,
+harness changes, session resume, and interaction mode changes. Connection errors remain
+visible longer and include a recovery command in the transcript.
+
+For example, selecting an OpenCode model produces a `Model ready` notification, updates
+the top bar to show OpenCode, the selected model, and ACP, and records the same selection
+in the transcript. The notification adapts to narrow terminals and does not replace the
+persistent status bar.
+
+Progress messages remain in the activity indicator instead of creating repeated
+notifications. Informational diagnostic output remains in the transcript. This keeps
+notifications limited to state changes that require user awareness.
+
 ## Key Bindings
 
 | Key | Action |

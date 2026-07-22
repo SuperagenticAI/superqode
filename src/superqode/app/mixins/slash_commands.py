@@ -1020,8 +1020,14 @@ class SlashCommandMixin:
         pure_mode = self._ensure_pure_mode()
         messages = pure_mode.resume_session(session_id)
         if not messages:
-            log.add_error(f"Session not found or prefix is ambiguous: {session_id}")
-            log.add_info("Use /sessions to view recent session ids.")
+            self._announce_transition(
+                title="Session not resumed",
+                primary=session_id,
+                detail="The session was not found or the prefix is ambiguous",
+                severity="error",
+                log=log,
+                guidance="Use /sessions to review recent session IDs.",
+            )
             return
 
         resolved_id = pure_mode.get_current_session_id() or session_id
@@ -1029,20 +1035,37 @@ class SlashCommandMixin:
         harness_name = ""
         try:
             status = pure_mode.get_status()
+            provider = str(status.get("provider") or "")
+            model = str(status.get("model") or "")
             harness = status.get("harness", {})
             harness_name = str(harness.get("name") or harness.get("id") or "")
+            self.current_provider = provider
+            self.current_model = model
+            if provider and model:
+                from superqode.app.widgets import ColorfulStatusBar
+
+                self.query_one("#status-bar", ColorfulStatusBar).update_byok_status(
+                    provider=provider,
+                    model=model,
+                )
             definition = getattr(pure_mode, "_harness_definition", None)
             if definition is not None:
                 os.environ["SUPERQODE_HARNESS"] = str(definition.path or definition.id)
             self._refresh_harness_panel()
         except (AttributeError, TypeError):
             pass
-        log.add_success(f"Resumed session {resolved_id[:8]} with {len(messages)} messages.")
+        detail_parts = [f"{len(messages)} messages"]
         if harness_name:
-            log.add_info(
-                f"Restored harness: {_harness_display_name(harness_name)}. "
-                "Other sessions remain saved."
-            )
+            detail_parts.append(_harness_display_name(harness_name))
+        self._announce_transition(
+            title="Session resumed",
+            primary=resolved_id[:8],
+            detail=" · ".join(detail_parts),
+            severity="success",
+            log=log,
+            guidance="Other sessions remain saved.",
+            dedupe_key=f"session-resume:{resolved_id}",
+        )
         for message in messages[-6:]:
             role = str(message.get("role", "?")).upper()
             content = str(message.get("content", "")).replace("\n", " ")[:120]
@@ -1061,7 +1084,14 @@ class SlashCommandMixin:
         except Exception as exc:
             log.add_error(f"Could not fork session: {exc}")
             return
-        log.add_info(f"Forked current session to {fork_id}.")
+        self._announce_transition(
+            title="Session forked",
+            primary=fork_id[:8],
+            detail="The original session remains saved",
+            severity="success",
+            log=log,
+            dedupe_key=f"session-fork:{fork_id}",
+        )
 
     def _handle_compact(self, log: ConversationLog):
         """Compact or enable compaction for the active local provider session."""

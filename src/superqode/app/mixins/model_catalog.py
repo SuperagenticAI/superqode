@@ -280,14 +280,13 @@ class ModelCatalogMixin:
                 badge.provider = self.current_provider
                 badge.execution_mode = "acp"  # ACP mode for agent connections
 
-                # Show confirmation
-                t = Text()
-                t.append(f"\n  ✅ ", style=f"bold {THEME['success']}")
-                t.append("Model selected: ", style=THEME["text"])
-                t.append(f"{model_name}", style=f"bold {THEME['cyan']}")
-                t.append(f" ({model_id})\n", style=THEME["dim"])
-                t.append(f"  🆓 This is a FREE model! Ready to chat.\n", style=THEME["success"])
-                log.write(t)
+                self._announce_model_ready(
+                    model_name=model_name,
+                    model_id=model_id,
+                    source="OpenCode",
+                    log=log,
+                    free=bool(model.get("free")),
+                )
             else:
                 log.add_error(f"Invalid selection. Choose 1-{len(self.opencode_models)}")
 
@@ -307,14 +306,12 @@ class ModelCatalogMixin:
                 badge.provider = self.current_provider
                 badge.execution_mode = "acp"
 
-                # Show confirmation
-                t = Text()
-                t.append(f"\n  ✅ ", style=f"bold {THEME['success']}")
-                t.append("Model selected: ", style=THEME["text"])
-                t.append(f"{model_name}", style=f"bold {THEME['cyan']}")
-                t.append(f" ({model_id})\n", style=THEME["dim"])
-                t.append(f"  ✨ Ready to chat with Gemini!\n", style=THEME["success"])
-                log.write(t)
+                self._announce_model_ready(
+                    model_name=model_name,
+                    model_id=model_id,
+                    source="Gemini CLI",
+                    log=log,
+                )
             else:
                 log.add_error(f"Invalid selection. Choose 1-{len(self._gemini_models)}")
 
@@ -334,14 +331,12 @@ class ModelCatalogMixin:
                 badge.provider = self.current_provider
                 badge.execution_mode = "acp"
 
-                # Show confirmation
-                t = Text()
-                t.append(f"\n  ✅ ", style=f"bold {THEME['success']}")
-                t.append("Model selected: ", style=THEME["text"])
-                t.append(f"{model_name}", style=f"bold {THEME['cyan']}")
-                t.append(f" ({model_id})\n", style=THEME["dim"])
-                t.append(f"  🧡 Ready to chat with Claude Code!\n", style=THEME["success"])
-                log.write(t)
+                self._announce_model_ready(
+                    model_name=model_name,
+                    model_id=model_id,
+                    source="Claude Code",
+                    log=log,
+                )
             else:
                 log.add_error(f"Invalid selection. Choose 1-{len(self._claude_models)}")
 
@@ -361,14 +356,12 @@ class ModelCatalogMixin:
                 badge.provider = self.current_provider
                 badge.execution_mode = "acp"
 
-                # Show confirmation
-                t = Text()
-                t.append(f"\n  ✅ ", style=f"bold {THEME['success']}")
-                t.append("Model selected: ", style=THEME["text"])
-                t.append(f"{model_name}", style=f"bold {THEME['cyan']}")
-                t.append(f" ({model_id})\n", style=THEME["dim"])
-                t.append(f"  📜 Ready to chat with Codex CLI!\n", style=THEME["success"])
-                log.write(t)
+                self._announce_model_ready(
+                    model_name=model_name,
+                    model_id=model_id,
+                    source="Codex CLI",
+                    log=log,
+                )
             else:
                 log.add_error(f"Invalid selection. Choose 1-{len(self._codex_models)}")
 
@@ -388,14 +381,12 @@ class ModelCatalogMixin:
                 badge.provider = self.current_provider
                 badge.execution_mode = "acp"
 
-                # Show confirmation
-                t = Text()
-                t.append(f"\n  ✅ ", style=f"bold {THEME['success']}")
-                t.append("Model selected: ", style=THEME["text"])
-                t.append(f"{model_name}", style=f"bold {THEME['cyan']}")
-                t.append(f" ({model_id})\n", style=THEME["dim"])
-                t.append(f"  🤝 Ready to chat with OpenHands!\n", style=THEME["success"])
-                log.write(t)
+                self._announce_model_ready(
+                    model_name=model_name,
+                    model_id=model_id,
+                    source="OpenHands",
+                    log=log,
+                )
             else:
                 log.add_error(f"Invalid selection. Choose 1-{len(self._openhands_models)}")
 
@@ -2390,16 +2381,21 @@ class ModelCatalogMixin:
         badge.model = badge_model_name
         self._set_acp_status(badge_model_name)
 
-        t = Text()
-        t.append(f"\n  ✅ ", style=f"bold {THEME['success']}")
-        t.append("Model changed to ", style=THEME["text"])
-        t.append(f"{model_display}", style=f"bold {THEME['cyan']}")
-        t.append(f" ({badge_model_name})\n", style=THEME["dim"])
-
-        if self.current_agent == "opencode" and selected_is_free:
-            t.append(f"  🆓 This is a FREE model!\n", style=THEME["success"])
-
-        log.write(t)
+        source = {
+            "opencode": "OpenCode",
+            "gemini": "Gemini CLI",
+            "claude": "Claude Code",
+            "codex": "Codex CLI",
+            "openhands": "OpenHands",
+        }.get(self.current_agent, self.current_agent or "ACP agent")
+        self._announce_model_ready(
+            model_name=model_display,
+            model_id=badge_model_name,
+            source=source,
+            log=log,
+            free=self.current_agent == "opencode" and selected_is_free,
+            changed=True,
+        )
 
     def _auto_select_opencode_model(
         self, model_hint: str, agent: Dict[str, Any], log: ConversationLog
@@ -2440,17 +2436,13 @@ class ModelCatalogMixin:
             badge.provider = self.current_provider
             badge.execution_mode = "acp"  # ACP mode for :acp connect
 
-            # Show confirmation
-            t = Text()
-            t.append(f"\n  ✅ ", style=f"bold {THEME['success']}")
-            t.append("Connected with model: ", style=THEME["text"])
-            t.append(f"{model_name}", style=f"bold {THEME['cyan']}")
-            t.append(f" ({badge_model_id})\n", style=THEME["dim"])
-            if selected_is_free:
-                t.append(f"  🆓 This is a FREE model! Ready to chat.\n", style=THEME["success"])
-            else:
-                t.append("  Ready to chat.\n", style=THEME["success"])
-            log.write(t)
+            self._announce_model_ready(
+                model_name=model_name,
+                model_id=badge_model_id,
+                source="OpenCode",
+                log=log,
+                free=selected_is_free,
+            )
         else:
             # No match found, show available models
             log.add_info(f"Model '{model_hint}' not found. Available models:")
@@ -2726,13 +2718,12 @@ class ModelCatalogMixin:
             badge.model = model_id
             badge.provider = "gemini"
 
-            t = Text()
-            t.append(f"\n  ✨ ", style=THEME["cyan"])
-            t.append("Model selected: ", style=THEME["text"])
-            t.append(f"{model_name}", style=f"bold {THEME['cyan']}")
-            t.append(f" ({model_id})\n", style=THEME["dim"])
-            t.append(f"  💬 Ready! Type your message.\n", style=THEME["success"])
-            log.write(t)
+            self._announce_model_ready(
+                model_name=model_name,
+                model_id=model_id,
+                source="Gemini CLI",
+                log=log,
+            )
         else:
             # No match found, show available models
             log.add_info(f"Model '{model_hint}' not found. Available models:")
@@ -2874,13 +2865,12 @@ class ModelCatalogMixin:
             badge.model = model_id
             badge.provider = "claude"
 
-            t = Text()
-            t.append(f"\n  🧡 ", style=THEME["orange"])
-            t.append("Model selected: ", style=THEME["text"])
-            t.append(f"{model_name}", style=f"bold {THEME['orange']}")
-            t.append(f" ({model_id})\n", style=THEME["dim"])
-            t.append(f"  💬 Ready! Type your message.\n", style=THEME["success"])
-            log.write(t)
+            self._announce_model_ready(
+                model_name=model_name,
+                model_id=model_id,
+                source="Claude Code",
+                log=log,
+            )
         else:
             # No match found, show available models
             log.add_info(f"Model '{model_hint}' not found. Available models:")
@@ -3028,13 +3018,12 @@ class ModelCatalogMixin:
             badge.model = model_id
             badge.provider = "openhands"
 
-            t = Text()
-            t.append(f"\n  🤝 ", style=THEME["orange"])
-            t.append("Model selected: ", style=THEME["text"])
-            t.append(f"{model_name}", style=f"bold {THEME['orange']}")
-            t.append(f" ({model_id})\n", style=THEME["dim"])
-            t.append(f"  💬 Ready! Type your message.\n", style=THEME["success"])
-            log.write(t)
+            self._announce_model_ready(
+                model_name=model_name,
+                model_id=model_id,
+                source="OpenHands",
+                log=log,
+            )
         else:
             # No match found, show available models
             log.add_info(f"Model '{model_hint}' not found. Available models:")

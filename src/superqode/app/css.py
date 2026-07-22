@@ -11,6 +11,29 @@ Screen > .screen--selection {
     text-style: bold;
 }
 
+/* Consequential state changes. Textual owns lifecycle and stacking. */
+ToastRack {
+    dock: top;
+    align: right top;
+    margin-top: 3;
+    padding: 0 1;
+}
+ToastHolder {
+    align-horizontal: right;
+}
+Toast {
+    width: 60;
+    max-width: 90%;
+    min-width: 28;
+    padding: 1 2;
+    background: #111116;
+    color: #f4f4f5;
+    border: round #3f3f46;
+}
+Toast.-information { border-left: thick #22c55e; }
+Toast.-warning { border-left: thick #f59e0b; }
+Toast.-error { border-left: thick #ef4444; }
+
 #main-grid { height: 100%; layout: horizontal; }
 
 /* Sidebar - hidden by default */

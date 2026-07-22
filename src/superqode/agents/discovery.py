@@ -145,8 +145,8 @@ async def read_agents(include_registry: bool = False) -> dict[str, "Agent"]:
             converted: "Agent" = convert_registry_agent(registry_agent)  # type: ignore[assignment]
             identity = converted["identity"]
             short_name = converted["short_name"].casefold()
-            existing_identity = identity if identity in agent_map else identities_by_short_name.get(
-                short_name
+            existing_identity = (
+                identity if identity in agent_map else identities_by_short_name.get(short_name)
             )
             if existing_identity:
                 existing = agent_map[existing_identity]

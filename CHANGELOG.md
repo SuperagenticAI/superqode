@@ -7,12 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.32] - 2026-07-23
+
 ### Added
 
+- **Unified TUI transition feedback** - Added responsive notifications, persistent transcript receipts, deduplication, focus restoration, and status synchronization for model, agent, provider, local runtime, harness, session, and interaction mode changes. Connection failures now provide prominent recovery guidance, and local models report selected and ready states separately.
 - **Optional vendor SDK bundle** - Added the `vendor-sdks` extra for Codex, Claude Agent, and Antigravity SDK runtimes, plus environment-aware `superqode runtime setup` and `:runtime setup` guidance. The default installation remains lightweight, and external Grok and Antigravity subscription CLIs retain their own installation and authentication flows.
 - **Durable harness switching** - Added `:harness switch <name>` with same-session context replay, persistent harness transition history, explicit `--fork` branching, harness continuity states, `superqode harness current`, and a harness-aware `:sessions switch` picker.
 - **Interactive Harness Switcher** - Added a responsive `:harness` and `:harness switch` picker with active-harness state, readiness and continuity details, keyboard and Vim navigation, direct switch or fork actions, complete-catalog toggling, inspection, cancellation, and fresh-runtime confirmation.
 - **ACP registry and runtime catalog** - Connected the official ACP Registry to a durable local cache and bundled offline catalog, corrected current ACP launch commands, expanded automatic discovery, added Devin, Kilo, Harn, Cortex Code, DeepAgents, GLM Agent, CodeBuddy Code, and Dirac definitions, and grouped the TUI into installed, featured, enterprise, and complete catalog views.
+
+### Changed
+
+- **Release metadata** - Bumped the package, runtime, lockfile, ACP registry, package checks, extension compatibility examples, and plugin documentation to `0.2.32`.
 
 ## [0.2.31] - 2026-07-22
 

@@ -1776,13 +1776,12 @@ class CodexMixin:
             badge.model = model_id
             badge.provider = "codex"
 
-            t = Text()
-            t.append(f"\n  📜 ", style=THEME["green"])
-            t.append("Model selected: ", style=THEME["text"])
-            t.append(f"{model_name}", style=f"bold {THEME['green']}")
-            t.append(f" ({model_id})\n", style=THEME["dim"])
-            t.append(f"  💬 Ready! Type your message.\n", style=THEME["success"])
-            log.write(t)
+            self._announce_model_ready(
+                model_name=model_name,
+                model_id=model_id,
+                source="Codex CLI",
+                log=log,
+            )
         else:
             # No match found, show available models
             log.add_info(f"Model '{model_hint}' not found. Available models:")

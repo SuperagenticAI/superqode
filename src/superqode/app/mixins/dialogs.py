@@ -2062,13 +2062,9 @@ class DialogsMixin:
                 ("Other registry agents", sorted(missing_by_tier["all"], key=sort_key)),
             ]
         elif catalog_tier == "enterprise":
-            visible_groups = [
-                ("Enterprise", sorted(missing_by_tier["enterprise"], key=sort_key))
-            ]
+            visible_groups = [("Enterprise", sorted(missing_by_tier["enterprise"], key=sort_key))]
         else:
-            visible_groups = [
-                ("Featured", sorted(missing_by_tier["featured"], key=sort_key))
-            ]
+            visible_groups = [("Featured", sorted(missing_by_tier["featured"], key=sort_key))]
         visible_groups = [(label, items) for label, items in visible_groups if items]
         all_agents = installed_sorted + [item for _, items in visible_groups for item in items]
 

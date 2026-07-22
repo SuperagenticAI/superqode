@@ -405,7 +405,9 @@ async def test_mounted_harness_switcher_uses_keyboard_navigation(tmp_path, monke
 
         assert app._awaiting_harness_selection is False
         assert app._pure_mode.session.harness_name == "workbench"
-        assert "Harness switched: Core -> Workbench" in "\n".join(line.text for line in log.lines)
+        assert "Harness switched: Workbench · from Core" in "\n".join(
+            line.text for line in log.lines
+        )
 
 
 async def test_mounted_harness_switcher_toggles_catalog_and_cancels(tmp_path, monkeypatch):

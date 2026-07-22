@@ -369,7 +369,7 @@ class ConnectMixin:
         )
         t = Text()
         t.append("\n  ✓ ", style=f"bold {THEME['success']}")
-        t.append("Connected — ", style=f"bold {THEME['text']}")
+        t.append("Connected: ", style=f"bold {THEME['text']}")
         t.append(f"{label}\n\n", style=f"bold {THEME['success']}")
         t.append("    Runtime   ", style=THEME["muted"])
         t.append(f"{runtime_name}\n", style=THEME["text"])
@@ -386,6 +386,17 @@ class ConnectMixin:
             t.append(command, style=THEME["cyan"])
             t.append(f" {description}\n", style=THEME["muted"])
         log.write(t)
+        announce = getattr(self, "_announce_transition", None)
+        if announce is not None:
+            announce(
+                title="Connected",
+                primary=label,
+                detail=f"{runtime_name} · {details['model']}",
+                severity="success",
+                log=log,
+                persist=False,
+                dedupe_key=f"runtime:{runtime_name}",
+            )
         self._set_status_runtime(runtime_name)  # badge shows the runtime now
         self._set_status_model("")  # model fills in once resolved
         if runtime_name == "codex-sdk":
@@ -432,6 +443,16 @@ class ConnectMixin:
                 box=ROUNDED,
                 padding=(1, 2),
             )
+        )
+        self._announce_transition(
+            title="Antigravity ready" if agy_path else "Antigravity setup required",
+            primary="Google Antigravity CLI",
+            detail="Installed" if agy_path else "agy was not found on PATH",
+            severity="success" if agy_path else "warning",
+            log=log,
+            persist=False,
+            guidance="Install agy, then run :connect antigravity." if not agy_path else "",
+            dedupe_key=f"antigravity:{bool(agy_path)}",
         )
 
     def _claude_runtime_or_connect(self, log):
@@ -965,7 +986,7 @@ class ConnectMixin:
     ) -> None:
         t = Text()
         local = mode == "local"
-        title = "Local Model Connected" if local else "Provider Connected"
+        title = "Local Model Selected" if local else "Provider Connected"
         icon = "✓"
         color = THEME["success"]
         t.append(f"\n  {icon} ", style=f"bold {color}")
@@ -983,7 +1004,12 @@ class ConnectMixin:
             t.append("    Host     ", style=THEME["muted"])
             t.append(host, style=THEME["dim"])
             t.append("\n")
-        t.append("\n  Ready. Type a message to start.", style=THEME["muted"])
+        t.append(
+            "\n  Validating the local server..."
+            if local
+            else "\n  Ready. Type a message to start.",
+            style=THEME["muted"],
+        )
         if local:
             t.append(" Use ", style=THEME["muted"])
             t.append(":local test", style=THEME["cyan"])
@@ -997,6 +1023,15 @@ class ConnectMixin:
                 box=ROUNDED,
                 padding=(1, 2),
             )
+        )
+        self._announce_transition(
+            title=title,
+            primary=f"{provider_name or provider} · {model}",
+            detail="Local" if local else "BYOK",
+            severity="information" if local else "success",
+            log=log,
+            persist=False,
+            dedupe_key=f"connection:{mode}:{provider}:{model}",
         )
 
     def _connect_byok_cmd(self, args: str, log: ConversationLog):
@@ -1688,7 +1723,14 @@ class ConnectMixin:
         from superqode.providers.acp_registry import get_acp_registry_agents
 
         agents = await get_acp_registry_agents(force_refresh=True)
-        log.add_success(f"ACP Registry refreshed: {len(agents)} agents available.")
+        self._announce_transition(
+            title="ACP Registry refreshed",
+            primary=f"{len(agents)} agents available",
+            detail="Featured, Enterprise, and All catalogs updated",
+            severity="success",
+            log=log,
+            dedupe_key="acp-registry-refresh",
+        )
         self._show_agents_async(log, clear_log=False)
 
     @work(exclusive=True)
@@ -1756,11 +1798,18 @@ class ConnectMixin:
                     badge.provider = self.current_provider
                     badge.execution_mode = "acp"
 
-                    log.add_info("Connected to Grok Build via the official Grok CLI ACP server.")
-                    if not self.current_model:
-                        log.add_info(
-                            "Using the signed-in account's Grok Build default (currently Grok 4.5)."
-                        )
+                    self._announce_transition(
+                        title="Agent connected",
+                        primary="Grok Build",
+                        detail=(
+                            f"{self.current_model} via ACP"
+                            if self.current_model
+                            else "Signed-in account default via ACP"
+                        ),
+                        severity="success",
+                        log=log,
+                        dedupe_key=f"agent:grok:{self.current_model or 'default'}",
+                    )
                 elif self.current_agent == "openhands":
                     # For OpenHands, handle model selection
                     if model_hint:
@@ -1783,7 +1832,46 @@ class ConnectMixin:
                 # separate widgets. Keep both synchronized for every ACP
                 # connection, including the model-selection state.
                 self._set_acp_status(self.current_model)
+
+                model_picker_agents = {"opencode", "gemini", "claude", "codex", "openhands"}
+                if self.current_agent in model_picker_agents and self._awaiting_model_selection:
+                    self._announce_transition(
+                        title="Agent connected",
+                        primary=agent.get("name", self.current_agent),
+                        detail="Choose a model to continue",
+                        severity="information",
+                        log=log,
+                        persist=False,
+                        dedupe_key=f"agent-picker:{self.current_agent}",
+                    )
+                elif self.current_agent not in model_picker_agents and self.current_agent != "grok":
+                    self._announce_transition(
+                        title="Agent connected",
+                        primary=agent.get("name", self.current_agent),
+                        detail=(
+                            f"{self.current_model} via ACP"
+                            if self.current_model
+                            else "ACP session ready"
+                        ),
+                        severity="success",
+                        log=log,
+                        dedupe_key=f"agent:{self.current_agent}:{self.current_model}",
+                    )
             else:
-                log.add_error(f"Agent '{agent_id}' not found")
+                self._announce_transition(
+                    title="Agent not found",
+                    primary=agent_id,
+                    detail="No matching ACP agent is available",
+                    severity="error",
+                    log=log,
+                    guidance="Run :connect acp all to review available agents.",
+                )
         except Exception as e:
-            log.add_error(str(e))
+            self._announce_transition(
+                title="Connection failed",
+                primary=agent_id,
+                detail=str(e),
+                severity="error",
+                log=log,
+                guidance="Run :log verbose for startup details.",
+            )

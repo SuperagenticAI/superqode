@@ -596,18 +596,36 @@ class PickerNavigationMixin:
 
             if is_installed:
                 # Connect to the agent
-                log.add_info(f"Connecting to {agent_data['name']}...")
+                self._announce_transition(
+                    title="Connecting",
+                    primary=agent_data["name"],
+                    detail="Starting ACP session",
+                    severity="information",
+                    log=log,
+                    persist=False,
+                    timeout=2.5,
+                    dedupe_key=f"agent-connecting:{agent_data['short_name']}",
+                )
                 self._connect_agent(agent_data["short_name"])
             else:
-                log.add_error(f"{agent_data['name']} is not installed.")
                 from superqode.agents.registry import get_agent_installation_info
 
                 install_info = get_agent_installation_info(agent_data)
                 install_cmd = install_info.get("command", "")
-                if install_cmd:
-                    log.add_info(f"Install with: {install_cmd}")
-                else:
-                    log.add_info(f"Use: :acp install {agent_data['short_name']}")
+                guidance = (
+                    f"Install with: {install_cmd}"
+                    if install_cmd
+                    else f"Run :acp install {agent_data['short_name']}."
+                )
+                self._announce_transition(
+                    title="Agent not installed",
+                    primary=agent_data["name"],
+                    detail="The ACP launcher is not available",
+                    severity="warning",
+                    log=log,
+                    guidance=guidance,
+                    dedupe_key=f"agent-missing:{agent_data['short_name']}",
+                )
 
     def _show_session_resume_picker(self, log: ConversationLog, clear_log: bool = True) -> None:
         """Show a keyboard-navigable picker for resuming local sessions."""

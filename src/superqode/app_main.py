@@ -156,7 +156,11 @@ from superqode.app.mixins.slash_commands import SlashCommandMixin
 from superqode.app.mixins.helpers import HelpersMixin
 
 
+from superqode.app.mixins.feedback import FeedbackMixin
+
+
 class SuperQodeApp(
+    FeedbackMixin,
     HelpersMixin,
     SlashCommandMixin,
     AgentRunMixin,

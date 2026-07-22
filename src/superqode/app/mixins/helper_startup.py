@@ -805,6 +805,12 @@ class HelperStartupMixin:
             result = await task
             if result.get("ok"):
                 log.add_meta(f"Ready · ds4/{model} · warm {result.get('elapsed', 0.0):.0f}s")
+                self._announce_local_model_ready(
+                    provider="ds4",
+                    model=model,
+                    log=log,
+                    detail=f"warmup {result.get('elapsed', 0.0):.0f}s",
+                )
             else:
                 # Don't block usage — the model will simply load on the first prompt.
                 log.add_warning(
