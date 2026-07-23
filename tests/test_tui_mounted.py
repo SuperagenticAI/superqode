@@ -585,11 +585,14 @@ async def test_grok_profile_selection_routes_to_grok_build_acp(monkeypatch):
         app._show_connect_type_picker(log)
         await pilot.pause()
 
-        # Navigate to the Grok subscription profile (last entry) and select it.
-        for _ in range(6):
+        from superqode.providers.connection_profiles import list_connection_profiles
+
+        profiles = list_connection_profiles()
+        grok_index = next(i for i, profile in enumerate(profiles) if profile.id == "grok")
+        for _ in range(grok_index):
             await pilot.press("down")
             await pilot.pause()
-        assert app._byok_highlighted_connect_type_index == 6
+        assert app._byok_highlighted_connect_type_index == grok_index
 
         await pilot.press("enter")
         await pilot.pause()

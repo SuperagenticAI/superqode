@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.2.32"
+version = "0.2.33"
 description = "The Agent Engineering framework for your code"
 readme = "README.md"
 license = "Apache-2.0"
@@ -104,6 +104,11 @@ openai-agents = [
 codex-sdk = [
     "openai-codex>=0.1.0b2,<0.2.0",
 ]
+copilot-sdk = [
+    # Official GitHub Copilot SDK. The Python wheel manages a pinned Copilot
+    # runtime and uses the user's Copilot login or an explicit GitHub token.
+    "github-copilot-sdk>=1.0.8,<2.0.0",
+]
 claude-agent-sdk = [
     # Anthropic Claude Agent SDK (drives the local Claude Code CLI; API-key auth
     # via ANTHROPIC_API_KEY). Adapter maps SDK message/block + permission shapes.
@@ -119,6 +124,7 @@ antigravity-sdk = [
 # runtimes. Vendor CLIs such as Grok and agy remain separate installations.
 vendor-sdks = [
     "openai-codex>=0.1.0b2,<0.2.0",
+    "github-copilot-sdk>=1.0.8,<2.0.0",
     "claude-agent-sdk>=0.2.9,<0.3.0",
     "google-antigravity>=0.1.6,<0.2.0",
     "protobuf>=6.31.1",

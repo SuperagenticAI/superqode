@@ -157,6 +157,13 @@ class CodexSDKHarnessBackend(RuntimeHarnessBackend):
         super().__init__("codex-sdk")
 
 
+class CopilotSDKHarnessBackend(RuntimeHarnessBackend):
+    """First-class harness adapter for the official GitHub Copilot SDK."""
+
+    def __init__(self) -> None:
+        super().__init__("copilot-sdk")
+
+
 class ClaudeAgentSDKHarnessBackend(RuntimeHarnessBackend):
     """First-class harness adapter name for the Anthropic Claude Agent SDK."""
 
@@ -165,6 +172,25 @@ class ClaudeAgentSDKHarnessBackend(RuntimeHarnessBackend):
 
 
 def _runtime_capabilities(runtime_name: str) -> HarnessBackendCapabilities:
+    if runtime_name == "copilot-sdk":
+        return HarnessBackendCapabilities(
+            backend=runtime_name,
+            supports_coding=True,
+            supports_no_tool=True,
+            supports_streaming=True,
+            supports_approvals=False,
+            supports_sandbox=True,
+            supports_shell=True,
+            supports_mcp=True,
+            supports_typed_output=False,
+            supports_workflow_children=True,
+            event_detail="rich",
+            notes=(
+                "Official GitHub Copilot SDK runtime. GitHub Copilot owns the "
+                "inner agent loop; SuperQode bridges HarnessSpec context, "
+                "permissions, normalized events, evaluation, and sessions.",
+            ),
+        )
     if runtime_name == "claude-agent-sdk":
         return HarnessBackendCapabilities(
             backend=runtime_name,

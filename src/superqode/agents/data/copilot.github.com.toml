@@ -10,7 +10,7 @@ publisher_url = "https://github.com"
 type = "coding"
 description = "AI coding assistant with ACP support in public preview."
 tags = ["coding", "github", "acp"]
-run_command."*" = "copilot --acp"
+run_command."*" = "copilot --acp --stdio"
 
 help = '''
 # GitHub Copilot
@@ -30,7 +30,7 @@ copilot login
 For ACP mode:
 
 ```bash
-copilot --acp
+copilot --acp --stdio
 ```
 
 See https://github.blog/changelog/2026-01-28-acp-support-in-copilot-cli-is-now-in-public-preview/ for details.

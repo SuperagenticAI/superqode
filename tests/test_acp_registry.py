@@ -104,7 +104,7 @@ def test_bundled_catalog_uses_current_acp_commands():
         "claude": "claude-agent-acp",
         "goose": "goose acp",
         "kimi": "kimi acp",
-        "copilot": "copilot --acp",
+        "copilot": "copilot --acp --stdio",
         "qwen": "qwen --acp --experimental-skills",
         "droid": "droid exec --output-format acp-daemon",
         "cortex": "cortex acp serve",

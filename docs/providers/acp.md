@@ -177,7 +177,7 @@ Representative current ACP commands include:
 | Claude Agent | `claude-agent-acp` |
 | Codex | `codex-acp` |
 | Gemini CLI | `gemini --acp` |
-| GitHub Copilot | `copilot --acp` |
+| GitHub Copilot | `copilot --acp --stdio` |
 | Goose | `goose acp` |
 | Grok Build | `grok agent stdio` |
 | Kimi CLI | `kimi acp` |

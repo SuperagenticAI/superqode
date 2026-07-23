@@ -635,7 +635,8 @@ class SuperQodeGroup(click.Group):
     type=click.Choice(known_runtime_names()),
     help=(
         "Agent runtime backend (default: builtin). Non-builtin runtimes "
-        "(adk, openai-agents, pydanticai, codex-sdk) require their optional extras."
+        "(adk, openai-agents, pydanticai, codex-sdk, copilot-sdk) require "
+        "their optional extras."
     ),
 )
 @click.option(
@@ -644,8 +645,8 @@ class SuperQodeGroup(click.Group):
     default=None,
     type=click.Choice(connection_profile_ids()),
     help=(
-        "Connection source to start with: codex / claude / antigravity / grok / byok / "
-        "local / acp. e.g. `--connect codex` to use your Codex subscription."
+        "Connection source to start with: codex / copilot / copilot-acp / claude / "
+        "antigravity / grok / byok / local / acp."
     ),
 )
 @click.pass_context

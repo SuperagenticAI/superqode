@@ -48,6 +48,7 @@ class CommandImplMixin:
         text.append("  Install one SDK runtime\n", style=f"bold {THEME['text']}")
         for label, extra in (
             ("Codex SDK", "codex-sdk"),
+            ("GitHub Copilot SDK", "copilot-sdk"),
             ("Claude Agent SDK", "claude-agent-sdk"),
             ("Antigravity SDK", "antigravity-sdk"),
         ):
@@ -66,6 +67,8 @@ class CommandImplMixin:
         text.append("codex login\n", style=THEME["cyan"])
         text.append("    Codex CLI install  ", style=THEME["muted"])
         text.append("npm i -g @openai/codex\n", style=THEME["cyan"])
+        text.append("    GitHub Copilot     ", style=THEME["muted"])
+        text.append("copilot login\n", style=THEME["cyan"])
         text.append("    Claude             ", style=THEME["muted"])
         text.append("export ANTHROPIC_API_KEY=...\n", style=THEME["cyan"])
         text.append("    Antigravity SDK    ", style=THEME["muted"])
@@ -1187,6 +1190,7 @@ class CommandImplMixin:
                 self._install_pure_permission_bridge(pure, log)
                 pure.runtime_name = sub
                 provider = {
+                    "copilot-sdk": "github-copilot",
                     "claude-agent-sdk": "anthropic",
                     "antigravity-sdk": "google",
                     "antigravity-cli": "google",
@@ -1203,6 +1207,173 @@ class CommandImplMixin:
                 f"Runtime swapped: {current} → {sub}. "
                 "Next message will reconnect with the new backend."
             )
+
+    # ---- GitHub Copilot SDK and ACP command surface -----------------------
+    def _copilot_cmd(self, args: str, log) -> None:
+        """Handle native SDK and official ACP routes for GitHub Copilot."""
+        parts = (args or "").split(maxsplit=1)
+        sub = parts[0].strip().lower() if parts and parts[0].strip() else "sdk"
+        rest = parts[1].strip() if len(parts) > 1 else ""
+        if sub in {"connect", "start", "sdk"}:
+            self._runtime_cmd("copilot-sdk", log)
+        elif sub == "acp":
+            self._connect_acp_cmd("copilot", log)
+        elif sub in {"status", "doctor"}:
+            self._copilot_status(log)
+        elif sub in {"models", "ls"}:
+            self.run_worker(self._copilot_models_cmd(log), exclusive=False)
+        elif sub == "model":
+            if rest:
+                try:
+                    runtime = self._copilot_runtime_or_connect(log)
+                    runtime.set_model(rest)
+                    if getattr(self, "_pure_mode", None) is not None:
+                        self._pure_mode.session.model = rest
+                    self._set_status_model(rest)
+                    log.add_success(f"GitHub Copilot model set to {rest}")
+                except Exception as exc:  # noqa: BLE001
+                    log.add_error(f"Could not set GitHub Copilot model: {exc}")
+            else:
+                self.run_worker(self._copilot_models_cmd(log), exclusive=False)
+        elif sub in {"sessions", "threads"}:
+            self.run_worker(self._copilot_sessions_cmd(log), exclusive=False)
+        elif sub == "resume":
+            if not rest:
+                log.add_info("Usage: :copilot resume <session-id>")
+            else:
+                self.run_worker(self._copilot_resume_cmd(rest, log), exclusive=False)
+        elif sub in {"help", "?"}:
+            log.add_info("Usage: :copilot [sdk|acp|status|models|model <id>|sessions|resume <id>]")
+        else:
+            log.add_error(f"Unknown GitHub Copilot command: {sub}")
+            log.add_info("Usage: :copilot [sdk|acp|status|models|model <id>|sessions|resume <id>]")
+
+    def _copilot_runtime_or_connect(self, log):
+        pure = getattr(self, "_pure_mode", None)
+        runtime = getattr(pure, "_runtime", None) if pure is not None else None
+        if (
+            runtime is not None
+            and getattr(pure, "runtime_name", "") == "copilot-sdk"
+            and getattr(getattr(pure, "session", None), "connected", False)
+        ):
+            return runtime
+        self._runtime_cmd("copilot-sdk", log)
+        pure = getattr(self, "_pure_mode", None)
+        runtime = getattr(pure, "_runtime", None) if pure is not None else None
+        if runtime is None or getattr(pure, "runtime_name", "") != "copilot-sdk":
+            raise RuntimeError("GitHub Copilot SDK runtime is not connected")
+        return runtime
+
+    def _copilot_status(self, log) -> None:
+        import importlib.util
+
+        text = Text()
+        text.append("\n  GitHub Copilot status\n\n", style=f"bold {THEME['cyan']}")
+        sdk_ok = importlib.util.find_spec("copilot") is not None
+        cli_ok = shutil.which("copilot") is not None
+        text.append("  SDK          ", style=THEME["muted"])
+        text.append(
+            "installed\n" if sdk_ok else "missing\n",
+            style=THEME["success" if sdk_ok else "error"],
+        )
+        text.append("  ACP CLI      ", style=THEME["muted"])
+        text.append(
+            "installed\n" if cli_ok else "not on PATH\n",
+            style=THEME["success" if cli_ok else "warning"],
+        )
+        token_ok = bool(
+            os.environ.get("COPILOT_GITHUB_TOKEN")
+            or os.environ.get("GH_TOKEN")
+            or os.environ.get("GITHUB_TOKEN")
+        )
+        text.append("  Auth         ", style=THEME["muted"])
+        text.append(
+            "GitHub token available\n" if token_ok else "delegated to the Copilot login store\n",
+            style=THEME["success" if token_ok else "text"],
+        )
+        pure = getattr(self, "_pure_mode", None)
+        runtime = getattr(pure, "_runtime", None) if pure is not None else None
+        connected = runtime is not None and getattr(pure, "runtime_name", "") == "copilot-sdk"
+        text.append("  SDK active   ", style=THEME["muted"])
+        text.append(
+            "yes\n" if connected else "no\n",
+            style=THEME["success" if connected else "muted"],
+        )
+        if connected:
+            text.append("  Model        ", style=THEME["muted"])
+            text.append(
+                f"{getattr(runtime, 'active_model', '') or 'Copilot default'}\n",
+                style=THEME["text"],
+            )
+        if not sdk_ok:
+            from superqode.providers.env_introspect import install_command
+
+            text.append("\n  SDK setup    ", style=THEME["muted"])
+            text.append(f"{install_command('copilot-sdk')}\n", style=THEME["cyan"])
+        if not cli_ok:
+            text.append("  ACP setup    ", style=THEME["muted"])
+            text.append("npm install -g @github/copilot\n", style=THEME["cyan"])
+        text.append("  Authenticate ", style=THEME["muted"])
+        text.append("copilot login\n", style=THEME["cyan"])
+        log.write(text)
+
+    async def _copilot_models_cmd(self, log) -> None:
+        try:
+            runtime = self._copilot_runtime_or_connect(log)
+            models = await runtime.models()
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not list GitHub Copilot models: {exc}")
+            return
+        text = Text()
+        text.append("\n  GitHub Copilot models\n\n", style=f"bold {THEME['text']}")
+        if not models:
+            text.append(
+                "  No models were returned for this Copilot account.\n", style=THEME["muted"]
+            )
+        active = getattr(runtime, "active_model", "")
+        for item in models:
+            model_id = str(item.get("id") or "")
+            marker = "▸" if model_id == active else " "
+            text.append(f"  {marker} ", style=THEME["success" if marker.strip() else "dim"])
+            text.append(f"{model_id:30}", style=THEME["cyan"])
+            text.append(f"{item.get('name') or model_id}\n", style=THEME["muted"])
+        text.append("\n  Select with ", style=THEME["muted"])
+        text.append(":copilot model <id>\n", style=THEME["cyan"])
+        log.write(text)
+
+    async def _copilot_sessions_cmd(self, log) -> None:
+        try:
+            runtime = self._copilot_runtime_or_connect(log)
+            sessions = await runtime.list_threads()
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not list GitHub Copilot sessions: {exc}")
+            return
+        text = Text()
+        text.append("\n  GitHub Copilot sessions\n\n", style=f"bold {THEME['text']}")
+        if not sessions:
+            text.append("  No persisted sessions found.\n", style=THEME["muted"])
+        for session in sessions[:20]:
+            data = session if isinstance(session, dict) else vars(session)
+            session_id = str(
+                data.get("session_id") or data.get("sessionId") or data.get("id") or "?"
+            )
+            title = str(data.get("title") or data.get("summary") or "")
+            text.append("  • ", style=THEME["dim"])
+            text.append(session_id, style=THEME["cyan"])
+            if title:
+                text.append(f"  {title}", style=THEME["muted"])
+            text.append("\n")
+        text.append("\n  Resume with ", style=THEME["muted"])
+        text.append(":copilot resume <session-id>\n", style=THEME["cyan"])
+        log.write(text)
+
+    async def _copilot_resume_cmd(self, session_id: str, log) -> None:
+        try:
+            runtime = self._copilot_runtime_or_connect(log)
+            await runtime.resume_thread(session_id)
+            log.add_success(f"Resumed GitHub Copilot session {session_id}")
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not resume GitHub Copilot session: {exc}")
 
     # ---- Claude Agent SDK :claude command surface --------------------------
     def _claude_cmd(self, args: str, log) -> None:

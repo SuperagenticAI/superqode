@@ -7,7 +7,7 @@ Manage runtime backends for agent execution.
 ## runtime setup
 
 Show environment-aware installation commands and authentication steps for the
-Codex, Claude Agent, and Antigravity SDK runtimes.
+Codex, GitHub Copilot, Claude Agent, and Antigravity SDK runtimes.
 
 ```bash
 superqode runtime setup
@@ -42,6 +42,7 @@ adk               missing    Google ADK (google-adk)
 openai-agents     missing    OpenAI Agents SDK
 pydanticai        missing    PydanticAI
 codex-sdk         missing    Codex SDK
+copilot-sdk       missing    GitHub Copilot SDK
 claude-agent-sdk  missing    Claude Agent SDK
 ```
 
@@ -82,6 +83,7 @@ superqode -p --runtime adk "implement the feature"
 | `openai-agents` | `openai-agents` | OpenAI Agents SDK |
 | `pydanticai` | `pydanticai` | PydanticAI agent framework |
 | `codex-sdk` | `codex-sdk` | Codex SDK |
+| `copilot-sdk` | `github-copilot-sdk` | GitHub Copilot SDK |
 | `claude-agent-sdk` | `claude-agent-sdk` | Claude Agent SDK |
 
 Each backend requires its respective package to be installed. Run `runtime doctor` to check availability.

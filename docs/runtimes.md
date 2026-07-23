@@ -32,6 +32,7 @@ environment details.
 | `adk` | `uv tool install "superqode[adk]"` | Google Agent Development Kit. Uses ADK's `Runner` and `LlmAgent`. |
 | `openai-agents` | `uv tool install "superqode[openai-agents]"` | OpenAI Agents SDK v0.17+. Includes SDK sessions, tool bridging, and HITL support. |
 | `codex-sdk` | `uv tool install "superqode[codex-sdk]"` | Official OpenAI Codex Python SDK runtime. Drives the published `openai-codex` package and its local app-server. |
+| `copilot-sdk` | `uv tool install "superqode[copilot-sdk]"` | Official GitHub Copilot SDK runtime. Uses the user's Copilot account or an explicit GitHub token and normalizes SDK events into SuperQode. |
 | `claude-agent-sdk` | `uv tool install "superqode[claude-agent-sdk]"` | Anthropic Claude Agent SDK runtime (API key via `ANTHROPIC_API_KEY`). The SDK provides its own Claude Code executable; `:claude` exposes model, permission, session, and slash-command controls. |
 | `antigravity-sdk` | `uv tool install "superqode[antigravity-sdk]"` | Google Antigravity SDK runtime using `GEMINI_API_KEY` or `GOOGLE_API_KEY`. This is separate from the signed-in `agy` CLI route. |
 | `deepagents` | `uv tool install "superqode[deepagents]"` | Optional DeepAgents 0.6 runtime for graph and middleware-heavy coding harnesses. |
@@ -46,7 +47,7 @@ vendor SDK runtimes only when you need them together:
 uv tool install "superqode[vendor-sdks]"
 ```
 
-This bundle contains `codex-sdk`, `claude-agent-sdk`, and `antigravity-sdk`.
+This bundle contains `codex-sdk`, `copilot-sdk`, `claude-agent-sdk`, and `antigravity-sdk`.
 It does not contain the Grok CLI or the `agy` CLI. Those products manage their
 own installation, authentication, and update lifecycle. Codex subscription
 authentication also uses the separate Codex CLI and `codex login`.
@@ -78,6 +79,7 @@ Precedence, highest first:
 superqode --runtime adk
 superqode --runtime openai-agents --print "summarize this repository"
 superqode --runtime codex-sdk --print "summarize this repository"
+superqode --runtime copilot-sdk --model gpt-5.6-sol --print "review this repository"
 superqode harness run --spec harness.yaml --runtime pydanticai --prompt "reason about this design"
 ```
 
@@ -118,9 +120,10 @@ the engine that executes it. The picker is profile-driven and shows live status:
   [2] BYOK provider        Your API key, such as OpenAI, Anthropic, or Gemini
   [3] Local model          Ollama / MLX / vLLM / LM Studio ...
   [4] Codex subscription   Drive OpenAI Codex with your ChatGPT/Codex login (~/.codex)
-  [5] Claude Agent SDK     Use your Anthropic API key via claude-agent-sdk
-  [6] Antigravity CLI      Use Google's agent harness with your Google Sign-In
-  [7] Advanced runtime     Pick the execution engine (builtin / openai-agents / ...)
+  [5] GitHub Copilot SDK   Embed Copilot through the official Python SDK
+  [6] GitHub Copilot ACP   Use the official Copilot CLI agent over ACP
+  [7] Claude Agent SDK     Use your Anthropic API key via claude-agent-sdk
+  [8] Antigravity CLI      Use Google's agent harness with your Google Sign-In
 ```
 
 **Claude** has one headline entry: **Claude Agent SDK** (API key via
@@ -132,6 +135,9 @@ Direct commands and CLI:
 
 ```bash
 :connect codex            # in the TUI, uses your Codex subscription
+:connect copilot          # official Copilot SDK path
+:connect copilot-acp      # official Copilot CLI ACP path
+:copilot models           # live model catalog for the active Copilot account
 :connect claude           # use Claude Agent SDK with ANTHROPIC_API_KEY
 :connect antigravity      # signed-in agy CLI (Google OAuth/keyring)
 :connect byok google      # Google API key path
@@ -140,14 +146,16 @@ superqode --connect codex # launch already on Codex
 superqode --connect codex --print "summarize this repo"   # headless
 ```
 
-Each source maps to a connector internally: **Codex** → the `codex-sdk` runtime
-(self-contained, `~/.codex` auth); **Claude** → the `claude-agent-sdk` runtime
+Each source maps to a connector internally: **Codex** maps to the `codex-sdk` runtime
+(self-contained, `~/.codex` auth); **GitHub Copilot SDK** maps to the
+`copilot-sdk` runtime; **GitHub Copilot ACP** maps to the `copilot` ACP agent;
+**Claude** maps to the `claude-agent-sdk` runtime
 (`ANTHROPIC_API_KEY`); **Antigravity** → the `antigravity-cli` runtime using
 `agy`'s Google Sign-In/keyring; **BYOK/Local**
 → the `builtin` runtime + provider/model, with an optional runtime override;
 **Advanced** → the raw `:runtime` picker.
 
-Only **Codex** is a sanctioned *subscription* SDK path today. Claude has two paths:
+Codex and GitHub Copilot provide supported subscription SDK paths. Claude has two paths:
 **Claude Code (ACP)** uses your own local Claude CLI, and **Claude Agent SDK** is
 an **API-key** runtime (`claude-agent-sdk`, `ANTHROPIC_API_KEY`). Both are shipped.
 **Antigravity CLI** is a self-contained runtime backed by `agy --print`. The
@@ -383,6 +391,36 @@ Performance notes: SuperQode reuses an already-connected Codex runtime when
 `:codex`/`:runtime codex-sdk` is invoked again in the same working directory,
 streams SDK notifications through one background reader thread, and batches
 high-volume command output deltas before updating tool cards.
+
+### `copilot-sdk`
+
+Wraps the official `github-copilot-sdk` Python package. The SDK manages a
+pinned Copilot runtime and uses the user's Copilot login or an explicit GitHub
+token. GitHub Copilot owns planning, built-in tools, file edits, and model
+access. SuperQode supplies HarnessSpec context, permission decisions,
+normalized events, evaluation, evidence, and terminal session controls.
+
+```bash
+uv tool install "superqode[copilot-sdk]"
+npm install -g @github/copilot
+copilot login
+superqode --connect copilot
+```
+
+Inside the TUI:
+
+```text
+:copilot status
+:copilot models
+:copilot model gpt-5.6-sol
+:copilot sessions
+:copilot resume <session-id>
+:copilot acp
+```
+
+Model availability is determined by the Copilot account and organization
+policy. See [GitHub Copilot](providers/github-copilot.md) for the SDK and ACP
+route comparison.
 
 ### `pydanticai`
 

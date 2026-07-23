@@ -1860,6 +1860,19 @@ wheels = [
 ]
 
 [[package]]
+name = "github-copilot-sdk"
+version = "1.0.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "python-dateutil" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3e/d2/517ae4be0dbbb02d5546f48e4be59f0ac2d83752cd608da739c5c580942f/github_copilot_sdk-1.0.8-py3-none-any.whl", hash = "sha256:7c3d868b73daa3a154ae6c1c5a2bd9301c47349c6b080f1ed77ba9027da3e0fa", size = 429721, upload-time = "2026-07-22T23:14:47.571Z" },
+]
+
+[[package]]
 name = "gitpython"
 version = "3.1.50"
 source = { registry = "https://pypi.org/simple" }
@@ -6040,7 +6053,7 @@ wheels = [
 
 [[package]]
 name = "superqode"
-version = "0.2.32"
+version = "0.2.33"
 source = { editable = "." }
 dependencies = [
     { name = "agent-client-protocol" },
@@ -6078,6 +6091,9 @@ claude-agent-sdk = [
 ]
 codex-sdk = [
     { name = "openai-codex" },
+]
+copilot-sdk = [
+    { name = "github-copilot-sdk" },
 ]
 deepagents = [
     { name = "deepagents" },
@@ -6186,6 +6202,7 @@ ui-testing = [
 ]
 vendor-sdks = [
     { name = "claude-agent-sdk" },
+    { name = "github-copilot-sdk" },
     { name = "google-antigravity" },
     { name = "openai-codex" },
     { name = "protobuf" },
@@ -6217,6 +6234,8 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'a2a'", specifier = ">=0.115.0" },
     { name = "flake8", marker = "extra == 'linters'", specifier = ">=7.1.0" },
     { name = "gepa", marker = "extra == 'optimization'", specifier = ">=0.1.1" },
+    { name = "github-copilot-sdk", marker = "extra == 'copilot-sdk'", specifier = ">=1.0.8,<2.0.0" },
+    { name = "github-copilot-sdk", marker = "extra == 'vendor-sdks'", specifier = ">=1.0.8,<2.0.0" },
     { name = "google-adk", marker = "extra == 'adk'", specifier = ">=2.1.0,<3.0" },
     { name = "google-antigravity", marker = "extra == 'antigravity-sdk'", specifier = ">=0.1.6,<0.2.0" },
     { name = "google-antigravity", marker = "extra == 'vendor-sdks'", specifier = ">=0.1.6,<0.2.0" },
@@ -6279,7 +6298,7 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'a2a'", specifier = ">=0.32.0" },
     { name = "websocket-client", marker = "extra == 'channels'", specifier = ">=1.6.0" },
 ]
-provides-extras = ["hf", "mlx", "monty", "semantic", "channels", "sandbox-e2b", "sandbox-modal", "sandbox-daytona", "sandbox-cloud", "web", "extras", "a2a", "adk", "openai-agents", "codex-sdk", "claude-agent-sdk", "antigravity-sdk", "vendor-sdks", "deepagents", "pydanticai", "pydanticai-logfire", "rlm-code", "mem0", "supermemory", "memory-providers", "dev", "testing", "linters", "ui-testing", "performance", "docs", "optimization", "observability"]
+provides-extras = ["hf", "mlx", "monty", "semantic", "channels", "sandbox-e2b", "sandbox-modal", "sandbox-daytona", "sandbox-cloud", "web", "extras", "a2a", "adk", "openai-agents", "codex-sdk", "copilot-sdk", "claude-agent-sdk", "antigravity-sdk", "vendor-sdks", "deepagents", "pydanticai", "pydanticai-logfire", "rlm-code", "mem0", "supermemory", "memory-providers", "dev", "testing", "linters", "ui-testing", "performance", "docs", "optimization", "observability"]
 
 [[package]]
 name = "synchronicity"

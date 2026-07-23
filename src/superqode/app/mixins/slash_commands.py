@@ -106,6 +106,8 @@ class SlashCommandMixin:
             self._runtime_cmd(args, log)
         elif c == "codex":
             self._codex_cmd(args, log)
+        elif c == "copilot":
+            self._copilot_cmd(args, log)
         elif c == "claude":
             self._claude_cmd(args, log)
         elif c in ("grok", "xai-grok"):
@@ -283,7 +285,14 @@ class SlashCommandMixin:
                         log,
                         "Connect setup",
                     )
-                elif subcmd in ("codex", "claude", "antigravity", "grok"):
+                elif subcmd in (
+                    "codex",
+                    "copilot",
+                    "copilot-acp",
+                    "claude",
+                    "antigravity",
+                    "grok",
+                ):
                     # Product/runtime connection profiles (Codex, Claude, Grok, …).
                     from superqode.providers.connection_profiles import get_connection_profile
 

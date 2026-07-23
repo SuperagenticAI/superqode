@@ -13,6 +13,7 @@ SuperQode provides a Python API to embed the agent runtime directly in your appl
 | adk | Google Agent Development Kit | uv tool install "superqode[adk]" |
 | pydanticai | PydanticAI agent framework | uv tool install "superqode[pydanticai]" |
 | codex-sdk | OpenAI Codex Python SDK | uv tool install "superqode[codex-sdk]" |
+| copilot-sdk | GitHub Copilot Python SDK | uv tool install "superqode[copilot-sdk]" |
 | claude-agent-sdk | Anthropic Claude Agent SDK | uv tool install "superqode[claude-agent-sdk]" |
 
 ## create_runtime()
@@ -64,6 +65,32 @@ with codex_session(cwd="myproject") as cx:
 ```
 
 Parameters: `prompt`, `model`, `cwd`, `provider`, `tools`, `system_prompt`, `require_confirmation`, `sandbox_backend`, `approval_callback`, `permission_manager`, `session_id`.
+
+## GitHub Copilot SDK Python API
+
+```python
+from pathlib import Path
+
+from superqode.agent.loop import AgentConfig
+from superqode.runtime import create_runtime
+
+config = AgentConfig(
+    provider="github-copilot",
+    model="gpt-5.6-sol",
+    working_directory=Path("myproject"),
+)
+runtime = create_runtime("copilot-sdk", config=config)
+
+models = await runtime.models()
+response = await runtime.run("Review this repository")
+await runtime.aclose()
+```
+
+The runtime supports streaming with `run_streaming` and
+`run_harness_events`, account-specific model discovery with `models`, model
+switching with `set_model`, cancellation, session listing, and session resume.
+The official Copilot runtime remains responsible for the inner agent loop and
+model entitlement.
 
 ## Claude Agent SDK Python API
 

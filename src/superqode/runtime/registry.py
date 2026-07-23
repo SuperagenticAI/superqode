@@ -94,6 +94,17 @@ def _codex_sdk_factory(**kwargs) -> AgentRuntime:
     return module.CodexSDKRuntime(**kwargs)
 
 
+def _copilot_sdk_factory(**kwargs) -> AgentRuntime:
+    try:
+        module = importlib.import_module("superqode.runtime.copilot_sdk")
+    except ImportError as exc:
+        raise RuntimeNotInstalledError(
+            "GitHub Copilot SDK runtime requires the 'copilot-sdk' extra. "
+            f"Install with: {_extra_install('copilot-sdk')}"
+        ) from exc
+    return module.CopilotSDKRuntime(**kwargs)
+
+
 def _claude_agent_sdk_factory(**kwargs) -> AgentRuntime:
     try:
         module = importlib.import_module("superqode.runtime.claude_agent_sdk")
@@ -127,6 +138,7 @@ _FACTORIES: dict[str, Callable[..., AgentRuntime]] = {
     "openai-agents": _openai_agents_factory,
     "pydanticai": _pydanticai_factory,
     "codex-sdk": _codex_sdk_factory,
+    "copilot-sdk": _copilot_sdk_factory,
     "claude-agent-sdk": _claude_agent_sdk_factory,
     "antigravity-sdk": _antigravity_sdk_factory,
     "antigravity-cli": _antigravity_cli_factory,
@@ -138,6 +150,7 @@ _DESCRIPTIONS: dict[str, str] = {
     "openai-agents": "OpenAI Agents SDK",
     "pydanticai": "PydanticAI agent framework",
     "codex-sdk": "OpenAI Codex Python SDK / local app-server",
+    "copilot-sdk": "GitHub Copilot SDK / bundled Copilot runtime",
     "claude-agent-sdk": "Anthropic Claude Agent SDK (API key)",
     "antigravity-sdk": "Google Antigravity SDK (Gemini API key)",
     "antigravity-cli": "Google Antigravity CLI (Google Sign-In)",
@@ -149,6 +162,7 @@ _OPTIONAL_PACKAGES: dict[str, tuple[str, str]] = {
     "openai-agents": ("agents", "superqode[openai-agents]"),
     "pydanticai": ("pydantic_ai", "superqode[pydanticai]"),
     "codex-sdk": ("openai_codex", "superqode[codex-sdk]"),
+    "copilot-sdk": ("copilot", "superqode[copilot-sdk]"),
     "claude-agent-sdk": ("claude_agent_sdk", "superqode[claude-agent-sdk]"),
     "antigravity-sdk": ("google.antigravity", "superqode[antigravity-sdk]"),
 }

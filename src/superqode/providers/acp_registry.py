@@ -127,7 +127,7 @@ REGISTRY_RUN_COMMANDS: dict[str, str] = {
     "devin": "devin acp",
     "factory-droid": "droid exec --output-format acp-daemon",
     "gemini": "gemini --acp",
-    "github-copilot-cli": "copilot --acp",
+    "github-copilot-cli": "copilot --acp --stdio",
     "goose": "goose acp",
     "grok-build": "grok agent stdio",
     "harn": "harn serve acp",

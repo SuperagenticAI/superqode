@@ -946,7 +946,13 @@ class SuperQodeApp(
     # Runtimes that are self-contained (own model + auth) and can be used in the
     # TUI without a separate :connect step.
     _SELF_CONTAINED_RUNTIMES = frozenset(
-        {"codex-sdk", "claude-agent-sdk", "antigravity-sdk", "antigravity-cli"}
+        {
+            "codex-sdk",
+            "copilot-sdk",
+            "claude-agent-sdk",
+            "antigravity-sdk",
+            "antigravity-cli",
+        }
     )
 
     def action_clear_screen(self):

@@ -65,6 +65,19 @@ def _codex_ready() -> bool:
     return (Path.home() / ".codex" / "auth.json").exists()
 
 
+def _copilot_sdk_ready() -> bool:
+    """The optional official GitHub Copilot SDK is importable."""
+    try:
+        return importlib.util.find_spec("copilot") is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
+        return False
+
+
+def _copilot_acp_ready() -> bool:
+    """The GitHub Copilot CLI needed for the ACP route is on PATH."""
+    return shutil.which("copilot") is not None
+
+
 def _claude_agent_ready() -> bool:
     """Claude Agent SDK installed + an Anthropic API key set (API-key runtime)."""
     if importlib.util.find_spec("claude_agent_sdk") is None:
@@ -147,6 +160,31 @@ _PROFILES: List[ConnectionProfile] = [
         self_contained=True,
         detect=_codex_ready,
         unavailable_hint=missing_extra_hint("codex-sdk", suffix="then run `codex login`"),
+    ),
+    ConnectionProfile(
+        id="copilot",
+        label="GitHub Copilot SDK",
+        description=(
+            "Embed GitHub Copilot with your Copilot licence; SuperQode adds "
+            "HarnessSpec context, policy, evidence, evaluation, and session controls"
+        ),
+        connector="runtime",
+        runtime="copilot-sdk",
+        self_contained=True,
+        detect=_copilot_sdk_ready,
+        unavailable_hint=missing_extra_hint(
+            "copilot-sdk",
+            suffix="then run `copilot login` or set COPILOT_GITHUB_TOKEN",
+        ),
+    ),
+    ConnectionProfile(
+        id="copilot-acp",
+        label="GitHub Copilot ACP",
+        description="Use the official Copilot CLI agent over ACP with your Copilot licence",
+        connector="acp",
+        acp_agent="copilot",
+        detect=_copilot_acp_ready,
+        unavailable_hint="install @github/copilot, then run `copilot login`",
     ),
     ConnectionProfile(
         id="claude",

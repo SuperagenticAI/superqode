@@ -278,6 +278,7 @@ Install only the runtimes you need:
 uv tool install "superqode[adk]"
 uv tool install "superqode[openai-agents]"
 uv tool install "superqode[codex-sdk]"
+uv tool install "superqode[copilot-sdk]"
 uv tool install "superqode[claude-agent-sdk]"
 uv tool install "superqode[antigravity-sdk]"
 uv tool install "superqode[deepagents]"
@@ -285,14 +286,14 @@ uv tool install "superqode[pydanticai]"
 uv tool install "superqode[rlm-code]"
 ```
 
-Install the three vendor SDK runtimes together only when you need all of them:
+Install the vendor SDK runtimes together only when you need all of them:
 
 ```bash
 uv tool install "superqode[vendor-sdks]"
 ```
 
 The default installation stays lightweight. The bundle includes the Codex,
-Claude Agent, and Antigravity SDK runtimes. It does not install the Grok or
+GitHub Copilot, Claude Agent, and Antigravity SDK runtimes. It does not install the Grok or
 Antigravity subscription CLIs, which retain their own installers and login
 flows. Run `superqode runtime setup` or `:runtime setup` for environment-aware
 commands and authentication steps.
@@ -303,6 +304,7 @@ Then select a backend in a spec or at run time:
 superqode harness run --spec harness.yaml --runtime pydanticai --prompt "review this design"
 superqode harness run --spec harness.yaml --runtime openai-agents --prompt "make the smallest safe fix"
 superqode harness run --spec harness.yaml --runtime codex-sdk --prompt "summarize this repository"
+superqode harness run --spec harness.yaml --runtime copilot-sdk --model gpt-5.6-sol --prompt "review this repository"
 superqode harness run --spec examples/harnesses/rlm-code-lid.yaml --provider ollama --model qwen3:8b --prompt "map this repository with evidence"
 ```
 
@@ -319,7 +321,7 @@ superqode harness run --spec examples/harnesses/rlm-code-lid.yaml --provider oll
 - **Measure and optimize**: Use harness tests, eval scorecards, local route optimization, harness optimization, and skill optimization with regression gates.
 - **Local code intelligence**: Use bounded reads, local code search, multi repo search, semantic search, offline indexes, and post edit verification.
 - **Configurable memory**: Keep local memory by default, then connect provider neutral memory systems when needed.
-- **Pluggable runtimes**: Run the same harness on the builtin engine, ADK, OpenAI Agents SDK, Codex SDK, Claude Agent SDK, DeepAgents, PydanticAI, or RLM Code.
+- **Pluggable runtimes**: Run through the builtin engine, ADK, OpenAI Agents SDK, Codex SDK, GitHub Copilot SDK, Claude Agent SDK, DeepAgents, PydanticAI, or RLM Code while preserving the common contract each runtime can honor.
 - **Policy and safety**: Gate file access, shell commands, network access, approvals, sandboxing, plugins, MCP, and project trust through explicit policy.
 - **Headless and CI ready**: Run coding tasks, provider checks, evals, schema validated outputs, event exports, and change summaries from scripts.
 
@@ -352,6 +354,9 @@ Inside the TUI, start with `:help` and these commands:
 
 ```text
 :connect codex        # Codex SDK with local Codex login
+:connect copilot      # GitHub Copilot SDK with your Copilot licence
+:connect copilot-acp  # official Copilot CLI agent over ACP
+:copilot models       # live models available to the Copilot account
 :connect claude       # Claude Agent SDK with ANTHROPIC_API_KEY
 :connect antigravity  # signed-in Antigravity CLI (Google OAuth/keyring)
 :connect byok google  # Google API key path

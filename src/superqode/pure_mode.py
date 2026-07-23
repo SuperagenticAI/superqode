@@ -401,7 +401,7 @@ class PureMode:
         )
 
         runtime_kwargs: dict[str, Any] = {}
-        if self.runtime_name in ("codex-sdk", "claude-agent-sdk"):
+        if self.runtime_name in ("codex-sdk", "copilot-sdk", "claude-agent-sdk"):
             runtime_kwargs["approval_callback"] = self.on_permission_request
         if self.runtime_name == "builtin":
             runtime_kwargs["hooks"] = self._extension_runtime.build_hooks()

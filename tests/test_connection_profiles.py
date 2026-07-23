@@ -20,6 +20,8 @@ def test_registry_has_expected_profiles():
         "byok",
         "acp",
         "codex",
+        "copilot",
+        "copilot-acp",
         "claude",
         "antigravity",
         "grok",
@@ -54,6 +56,18 @@ def test_claude_profile_is_agent_sdk_runtime():
     assert "subscription" not in (claude.label + claude.description).lower()
     assert "install claude code" not in claude.unavailable_hint.lower()
     assert "anthropic_api_key" in claude.unavailable_hint.lower()
+
+
+def test_copilot_profiles_expose_sdk_and_acp_routes():
+    sdk = get_connection_profile("copilot")
+    assert sdk.connector == "runtime"
+    assert sdk.runtime == "copilot-sdk"
+    assert sdk.self_contained is True
+    assert "licence" in sdk.description.lower()
+
+    acp = get_connection_profile("copilot-acp")
+    assert acp.connector == "acp"
+    assert acp.acp_agent == "copilot"
 
 
 def test_antigravity_profile_is_signed_in_cli_runtime_connector():
@@ -212,6 +226,18 @@ def test_dispatch_claude_routes_to_runtime(_dispatch):
     assert ("runtime", "claude-agent-sdk") in stub.calls
 
 
+def test_dispatch_copilot_routes_to_sdk_runtime(_dispatch):
+    stub = _DispatchStub()
+    _dispatch(stub, get_connection_profile("copilot"), log=None)
+    assert ("runtime", "copilot-sdk") in stub.calls
+
+
+def test_dispatch_copilot_acp_routes_to_agent(_dispatch):
+    stub = _DispatchStub()
+    _dispatch(stub, get_connection_profile("copilot-acp"), log=None)
+    assert ("acp", "copilot") in stub.calls
+
+
 def test_dispatch_antigravity_routes_to_cli_runtime(_dispatch):
     stub = _DispatchStub()
     _dispatch(stub, get_connection_profile("antigravity"), log=None)
@@ -335,13 +361,25 @@ def test_connect_profiles_in_commands_and_completion():
     from superqode.app_main import SuperQodeApp
 
     assert ":connect codex" in COMMANDS
+    assert ":copilot" in COMMANDS
     assert ":connect claude" in COMMANDS
     assert ":connect antigravity" in COMMANDS
     assert ":connect grok" in COMMANDS
     assert ":connect zai" in COMMANDS
     assert ":grok status" in COMMANDS
     values = {c.value for c in SuperQodeApp._connect_profile_completion_candidates()}
-    assert {"codex", "claude", "antigravity", "grok", "zai", "byok", "local", "acp"} <= values
+    assert {
+        "codex",
+        "copilot",
+        "copilot-acp",
+        "claude",
+        "antigravity",
+        "grok",
+        "zai",
+        "byok",
+        "local",
+        "acp",
+    } <= values
 
 
 def test_no_duplicate_acp_claude_profile():

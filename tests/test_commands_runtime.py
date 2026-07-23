@@ -22,6 +22,7 @@ def test_list_shows_current_runtimes(runner):
     assert "adk" in result.output
     assert "openai-agents" in result.output
     assert "codex-sdk" in result.output
+    assert "copilot-sdk" in result.output
     assert "pydanticai" in result.output
 
 
@@ -44,6 +45,7 @@ def test_list_json_emits_array(runner, monkeypatch):
         "adk",
         "openai-agents",
         "codex-sdk",
+        "copilot-sdk",
         "claude-agent-sdk",
         "antigravity-sdk",
         "antigravity-cli",
@@ -58,10 +60,12 @@ def test_setup_shows_bundle_individual_extras_and_external_clis(runner):
     result = runner.invoke(runtime_cmd, ["setup"])
     assert result.exit_code == 0, result.output
     assert "[codex-sdk]" in result.output
+    assert "[copilot-sdk]" in result.output
     assert "[claude-agent-sdk]" in result.output
     assert "[antigravity-sdk]" in result.output
     assert "[vendor-sdks]" in result.output
     assert "npm i -g @openai/codex" in result.output
+    assert "copilot login" in result.output
     assert "grok login" in result.output
     assert "not included" in result.output
 
@@ -87,4 +91,5 @@ def test_doctor_no_arg_probes_all(runner):
     assert "adk" in result.output
     assert "openai-agents" in result.output
     assert "codex-sdk" in result.output
+    assert "copilot-sdk" in result.output
     assert "pydanticai" in result.output

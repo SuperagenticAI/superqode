@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.33] - 2026-07-23
+
+### Added
+
+- **Subscription runtime integration** - Added optional SDK and ACP paths for GitHub Copilot, including account-scoped model discovery, streamed runtime events, permission handling, session controls, terminal connection profiles, and technical documentation.
+
+### Changed
+
+- **Release metadata** - Bumped the package, runtime, lockfile, ACP registry, package checks, extension compatibility examples, and plugin documentation to `0.2.33`.
+
 ## [0.2.32] - 2026-07-23
 
 ### Added

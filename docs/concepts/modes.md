@@ -203,6 +203,8 @@ SDK mode runs a vendor's own agent engine inside SuperQode. You keep SuperQode's
 | Runtime | Sign in with | Notes |
 | --- | --- | --- |
 | Codex SDK (`:connect codex`) | Your ChatGPT subscription (local Codex login) or an OpenAI API key | Codex-native patches, plans, and command events are normalized into SuperQode's event surface |
+| GitHub Copilot SDK (`:connect copilot`) | Your GitHub Copilot account or an explicit GitHub token | Copilot remains the inner agent loop; SuperQode adds normalized events, permission policy, model selection, evidence, and session controls |
+| GitHub Copilot ACP (`:connect copilot-acp`) | Your GitHub Copilot CLI login | The official Copilot CLI agent runs over ACP and owns its tools and commands |
 | Claude Agent SDK (`:connect claude`) | Your Claude subscription or an Anthropic API key | Claude Code behavior with SuperQode session management; `TodoWrite` feeds the shared plan panel |
 | Antigravity (`:connect antigravity`) | Your Google account via the official `agy` CLI | Headless print runtime using `agy`'s OS-keyring login; text streaming only because `agy` does not expose structured tool events |
 

@@ -24,14 +24,15 @@ uv tool install "superqode[deepagents]"
 uv tool install "superqode[adk]"
 ```
 
-For Codex, Claude Agent SDK, and Antigravity SDK support, install one runtime
+For Codex, GitHub Copilot SDK, Claude Agent SDK, and Antigravity SDK support, install one runtime
 or the optional bundle:
 
 ```bash
 uv tool install "superqode[codex-sdk]"
+uv tool install "superqode[copilot-sdk]"
 uv tool install "superqode[claude-agent-sdk]"
 uv tool install "superqode[antigravity-sdk]"
-# Or install all three:
+# Or install the complete vendor SDK bundle:
 uv tool install "superqode[vendor-sdks]"
 ```
 

@@ -78,6 +78,7 @@ def setup() -> None:
     """Show optional vendor runtime installation and authentication steps."""
     click.echo("Optional vendor SDK runtimes")
     click.echo(f"  Codex SDK:        {install_command('codex-sdk')}")
+    click.echo(f"  GitHub Copilot:   {install_command('copilot-sdk')}")
     click.echo(f"  Claude Agent SDK: {install_command('claude-agent-sdk')}")
     click.echo(f"  Antigravity SDK:  {install_command('antigravity-sdk')}")
     click.echo("\nInstall all vendor SDK runtimes:")
@@ -85,6 +86,7 @@ def setup() -> None:
     click.echo("\nAuthentication:")
     click.echo("  Codex:            codex login")
     click.echo("  Codex CLI:        npm i -g @openai/codex")
+    click.echo("  GitHub Copilot:   copilot login (or COPILOT_GITHUB_TOKEN)")
     click.echo("  Claude:           export ANTHROPIC_API_KEY=...")
     click.echo("  Antigravity SDK:  export GEMINI_API_KEY=...")
     click.echo("\nExternal subscription CLIs are not included in the bundle:")

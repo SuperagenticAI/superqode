@@ -338,6 +338,15 @@ class ConnectMixin:
                     (":codex status", "for diagnostics"),
                 ),
             },
+            "copilot-sdk": {
+                "auth": "GitHub Copilot login or COPILOT_GITHUB_TOKEN",
+                "model": "Copilot account default",
+                "commands": (
+                    (":copilot models", "to list models available to this account"),
+                    (":copilot model <id>", "to switch model"),
+                    (":copilot acp", "to use the official ACP path instead"),
+                ),
+            },
             "claude-agent-sdk": {
                 "auth": "Anthropic API key (ANTHROPIC_API_KEY)",
                 "model": "Claude SDK default",

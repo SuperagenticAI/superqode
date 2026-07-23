@@ -19,6 +19,7 @@ from .runtime import (
     ADKHarnessBackend,
     ClaudeAgentSDKHarnessBackend,
     CodexSDKHarnessBackend,
+    CopilotSDKHarnessBackend,
     OpenAIAgentsHarnessBackend,
     RuntimeHarnessBackend,
 )
@@ -29,6 +30,7 @@ _OPTIONAL_BACKENDS = {
     "anthropic-managed",
     "openai-agents",
     "codex-sdk",
+    "copilot-sdk",
     "claude-agent-sdk",
     "deepagents",
     "google-agent-engine",
@@ -48,6 +50,8 @@ def create_harness_backend(name: str | None) -> HarnessBackend:
         return OpenAIAgentsHarnessBackend()
     if resolved == "codex-sdk":
         return CodexSDKHarnessBackend()
+    if resolved == "copilot-sdk":
+        return CopilotSDKHarnessBackend()
     if resolved == "claude-agent-sdk":
         return ClaudeAgentSDKHarnessBackend()
     if resolved == "deepagents":
@@ -159,6 +163,7 @@ def _with_availability(capabilities: HarnessBackendCapabilities) -> HarnessBacke
         "adk": ("google.adk", "adk"),
         "openai-agents": ("agents", "openai-agents"),
         "codex-sdk": ("openai_codex", "codex-sdk"),
+        "copilot-sdk": ("copilot", "copilot-sdk"),
         "deepagents": ("deepagents", "deepagents"),
         "pydanticai": ("pydantic_ai", "pydanticai"),
         "rlm-code": ("rlm_code", "rlm-code"),

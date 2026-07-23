@@ -142,7 +142,7 @@ Use the command that matches how you launched SuperQode:
 | Another project venv | `uv add "superqode[<extra>]"` |
 | Plain virtualenv | `uv pip install "superqode[<extra>]"` |
 
-To install the Codex, Claude Agent, and Antigravity SDK runtimes together, use
+To install the Codex, GitHub Copilot, Claude Agent, and Antigravity SDK runtimes together, use
 the optional `vendor-sdks` extra. It is intentionally excluded from the default
 installation because the vendor packages are large and many users need only one
 of them.
