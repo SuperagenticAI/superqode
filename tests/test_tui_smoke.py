@@ -297,13 +297,13 @@ def test_welcome_uses_agent_engineering_positioning():
 
     text = render_plain(welcome)
 
-    assert "THE AGENT ENGINEERING FRAMEWORK FOR YOUR CODE" in text
+    assert "AGENT ENGINEERING FOR YOUR CODE FACTORY" in text
     assert ":connect" in text
     assert ":harness" in text
     assert ":work" in text
     assert ":init" not in text
     assert "Harnesses · Context · Memory · Tools · Evaluations · Control loops" in text
-    assert "Coding agents · Codebases · Software factories" in text
+    assert "Build · Connect · Orchestrate · Evaluate · Optimize" in text
     assert "Terminal-first · Any agent or model" in text
     assert "Interoperability: Local · ACP · MCP · A2A · BYOK · SDKs" in text
     assert "Current workspace" in text
@@ -317,14 +317,14 @@ def test_welcome_uses_agent_engineering_positioning():
     assert "Agentic Code Needs Super Quality Engineering" not in text
 
     lines = [line.strip() for line in text.splitlines()]
-    headline_index = lines.index("THE AGENT ENGINEERING FRAMEWORK FOR YOUR CODE")
+    headline_index = lines.index("AGENT ENGINEERING FOR YOUR CODE FACTORY")
     capabilities_index = lines.index(
         "Harnesses · Context · Memory · Tools · Evaluations · Control loops"
     )
-    factories_index = lines.index("Coding agents · Codebases · Software factories")
+    lifecycle_index = lines.index("Build · Connect · Orchestrate · Evaluate · Optimize")
     assert lines[headline_index + 1] == ""
     assert lines[capabilities_index + 1] == ""
-    assert lines[factories_index + 1] == ""
+    assert lines[lifecycle_index + 1] == ""
 
 
 def test_welcome_next_steps_follow_workspace_state():
@@ -351,10 +351,10 @@ def test_welcome_compacts_for_narrow_terminals():
     text = render_plain(render_welcome([], width=50))
 
     assert "SuperQode" in text
-    assert "THE AGENT ENGINEERING FRAMEWORK FOR YOUR CODE" in text
+    assert "AGENT ENGINEERING FOR YOUR CODE FACTORY" in text
     assert "Local · ACP · MCP · A2A · BYOK · SDKs" in text
     assert "Current workspace" not in text
-    assert "Coding agents · Codebases · Software factories" not in text
+    assert "Build · Connect · Orchestrate · Evaluate · Optimize" not in text
     assert ":connect" in text
 
 
@@ -362,10 +362,10 @@ def test_welcome_uses_one_line_headlines_at_small_widths():
     compact = render_plain(render_welcome([], width=36))
     narrow = render_plain(render_welcome([], width=24))
 
-    assert "AGENT ENGINEERING FOR YOUR CODE" in compact
-    assert "THE AGENT ENGINEERING FRAMEWORK FOR YOUR CODE" not in compact
+    assert "YOUR CODE FACTORY" in compact
+    assert "AGENT ENGINEERING FOR YOUR CODE FACTORY" not in compact
     assert "AGENT ENGINEERING" in narrow
-    assert "FOR YOUR CODE" not in narrow
+    assert "CODE FACTORY" not in narrow
 
 
 def test_hints_bar_surfaces_mode_switcher():

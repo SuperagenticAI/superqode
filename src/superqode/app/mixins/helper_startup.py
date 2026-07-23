@@ -373,7 +373,7 @@ class HelperStartupMixin:
             ),
             PaletteCommand(
                 "factory",
-                "Software Factory",
+                "Code Factory",
                 "Switch models, harnesses, and routes without locking work to one vendor",
                 "▧",
                 ":factory",

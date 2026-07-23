@@ -2652,7 +2652,7 @@ class DialogsMixin:
                     (":sw handoff <id> --to <target>", "Send context from one session to another"),
                     (":sw approvals", "Show cross-agent approval inbox"),
                     (":sw share-tree <id>", "Export a portable session subtree"),
-                    (":factory", "Show Software Factory status for current work"),
+                    (":factory", "Show Code Factory status for current work"),
                     (
                         ":factory routes",
                         "List private, cheap, best, review, and no-subscription routes",

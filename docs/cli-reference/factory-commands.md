@@ -1,8 +1,8 @@
 # Factory Commands
 
-`superqode factory` manages model, harness, and route lineage for the local Software Factory.
+`superqode factory` manages model, harness, and route lineage within a SuperQode code factory.
 
-This command group is the routing and lineage module, not the entire factory. Harness authoring, WorkOrders, headless workers, delivery gates, evaluation, and optimization have their own command groups. Start with [Terminal-First Software Factory](../advanced/software-factory.md) for the complete product model and builder walkthrough.
+This command group is the routing and lineage module, not the entire code factory. Harness authoring, WorkOrders, headless workers, delivery gates, evaluation, and optimization have their own command groups. Start with [Building a Code Factory with SuperQode](../advanced/software-factory.md) for the complete product model and builder walkthrough.
 
 The factory layer does not replace sessions. It annotates the durable session graph so work can move
 between local OSS models, BYOK models, proprietary runtimes, and different harnesses without losing

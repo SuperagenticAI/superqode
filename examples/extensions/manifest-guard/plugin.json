@@ -3,7 +3,7 @@
   "name": "Manifest Guard",
   "version": "0.1.0",
   "api_version": 1,
-  "requires_superqode": ">=0.2.33,<1.0",
+  "requires_superqode": ">=0.2.34,<1.0",
   "description": "Example project-local Core extension.",
   "tools": [
     {

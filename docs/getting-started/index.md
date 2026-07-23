@@ -1,6 +1,6 @@
 # Getting Started
 
-SuperQode is the open-source, terminal-first Agent Engineering framework for your code, with first-class support for local and open models. It gives builders a TUI and CLI for building, running, evaluating, governing, and optimizing coding harnesses they own, with explicit model choice, tool access, sandbox policy, approvals, sessions, events, and repeatable HarnessSpec files.
+SuperQode is the open-source, terminal-first Agent Engineering framework for your code factory, with first-class support for local and open models. It gives builders a TUI and CLI for building, connecting, orchestrating, evaluating, governing, and optimizing coding harnesses, with explicit model choice, tool access, sandbox policy, approvals, sessions, events, and repeatable HarnessSpec files.
 
 This guide gets you from install to a useful first run.
 

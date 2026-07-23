@@ -16,7 +16,7 @@ COMPACT_LOGO = """ ____  _   _ ____  _____ ____   ___    ___  ____  _____
 |____/ \\___/|_|   |_____|_| \\_\\\\__\\_\\ \\___/|____/|_____|"""
 
 # Compact positioning used by alternate TUI renderers.
-TAGLINE_PART1 = "The Agent Engineering Framework for Your Code"
+TAGLINE_PART1 = "Agent Engineering for Your Code Factory"
 TAGLINE_PART2 = "Terminal-first · Any agent or model · Local or cloud"
 
 # First-page order for the product-level connection choices. The root plus

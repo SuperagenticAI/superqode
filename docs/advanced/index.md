@@ -144,13 +144,13 @@ Advanced SuperQode features for users who want more control over tools, safety, 
 
     [:octicons-arrow-right-24: Omnigent Compatibility](omnigent-compat.md)
 
--   **Terminal-First Software Factory**
+-   **Building a Code Factory**
 
     ---
 
     Understand how HarnessSpecs, sessions, WorkOrders, workers, evidence, delivery gates, evaluation, and optimization form one builder system.
 
-    [:octicons-arrow-right-24: Software Factory](software-factory.md)
+    [:octicons-arrow-right-24: Code Factory guide](software-factory.md)
 
 -   **SuperQode and Omnigent**
 

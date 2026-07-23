@@ -208,7 +208,7 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(
         ":switchboard share-tree", "Export a portable session subtree", category="workflow"
     ),
-    SlashCommand(":factory", "Open Software Factory status", category="workflow"),
+    SlashCommand(":factory", "Open Code Factory status", category="workflow"),
     SlashCommand(":factory init-policy", "Create .superqode/factory.yaml", category="workflow"),
     SlashCommand(":factory policy", "Show factory policy", category="workflow"),
     SlashCommand(":factory routes", "List model/harness routing presets", category="workflow"),

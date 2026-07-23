@@ -8,7 +8,7 @@
 
 site_name: SuperQode
 site_url: https://superagenticai.github.io/superqode
-site_description: "The open-source, terminal-first Agent Engineering framework for your code. Engineer reliable coding agents with portable harnesses, context, memory, tools, and control loops."
+site_description: "The open-source, terminal-first Agent Engineering framework for building, connecting, evaluating, governing, and optimizing the coding-agent harnesses behind your code factory."
 site_author: Superagentic AI
 
 repo_name: SuperagenticAI/superqode
@@ -150,6 +150,8 @@ nav:
 
   - 📚 Concepts:
     - concepts/index.md
+    - 🧭 Code Engineering: concepts/code-engineering.md
+    - 🏭 Code Factory: concepts/code-factory.md
     - 🔌 Connection Modes: concepts/modes.md
     - 🧬 Configuration vs Harness: concepts/configuration-vs-harness.md
     - 🔐 Authentication: concepts/authentication.md
@@ -209,7 +211,7 @@ nav:
       - 🐍 Monty Python REPL: advanced/monty-python-repl.md
     - 🤝 Workflows & Automation:
       - 🧰 Developer Workflows: developer-workflows.md
-      - 🏭 Terminal-First Software Factory: advanced/software-factory.md
+      - 🏭 Building a Code Factory: advanced/software-factory.md
       - 🤝 Multi-Agent Workflows: advanced/multi-agent.md
       - 🔁 Recursive Agent Harness: advanced/recursive-agent-harness.md
       - 🤖 Headless & CI: advanced/headless-ci.md

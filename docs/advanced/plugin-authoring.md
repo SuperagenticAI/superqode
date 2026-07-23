@@ -97,7 +97,7 @@ Every plugin is defined by a `plugin.json` manifest file. The only required fiel
   "name": "My Plugin",
   "version": "0.1.0",
   "api_version": 1,
-  "requires_superqode": ">=0.2.33,<1.0",
+  "requires_superqode": ">=0.2.34,<1.0",
   "description": "Extends SuperQode with custom code review capabilities.",
   "tools": [
     {

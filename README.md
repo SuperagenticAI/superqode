@@ -5,11 +5,11 @@
 <h1 align="center">SuperQode</h1>
 
 <p align="center">
-  <strong>The Agent Engineering Framework for Your Code</strong><br>
-  <em>Engineer reliable coding agents with portable harnesses, context, memory, tools, and control loops. Use any agent or model, from terminal sessions to software factories.</em>
+  <strong>Agent Engineering for Your Code Factory</strong><br>
+  <em>Build your own coding-agent harnesses or connect the agents you already use. Orchestrate, evaluate, govern, and optimize how they work across your repositories.</em>
 </p>
 
-<p align="center"><strong>Code engineering for the agent-driven world</strong></p>
+<p align="center"><strong>Code Engineering</strong>: Engineer how humans and agents create, verify, govern, and improve code.</p>
 
 <p align="center">Terminal-first · Any agent · Any model · Local or cloud · Open source</p>
 
@@ -33,16 +33,18 @@
 </p>
 
 <p align="center">
-  <img src="assets/superqode-hero.png" alt="SuperQode Agent Engineering terminal workbench" width="920">
+  <img src="assets/superqode-code-factory.svg" alt="SuperQode Agent Engineering terminal workbench" width="920">
 </p>
 
 ---
 
 ## What is SuperQode?
 
-SuperQode is the **open-source, terminal-first Agent Engineering framework for your code**. It provides the lifecycle for building, running, evaluating, governing, and optimizing reliable coding agents and software factories.
+SuperQode is the **open-source, terminal-first Agent Engineering framework for your code factory**. It provides the lifecycle for building, connecting, orchestrating, evaluating, governing, and optimizing reliable coding-agent harnesses across your repositories.
 
-[Agent Engineering](https://agentengineering.world/) is the discipline of designing, building, evaluating, governing, and operating agents as reliable systems. SuperQode applies that discipline to the complete system that produces code, from one coding agent working on a codebase to a multi-agent software factory.
+[Agent Engineering](https://agentengineering.world/) is the discipline of designing, building, evaluating, governing, and operating agents as reliable systems. SuperQode applies that discipline to your code factory: the organization-owned system of agents, harnesses, models, context, tools, repositories, policies, and evaluation gates that turns intent into verified code changes.
+
+**Code Engineering** is the discipline of applying evaluation, governance, provenance, and optimization to code produced by humans and agents. SuperQode engineers the production system around that code, not only the model that generates it.
 
 Harness engineering is one discipline within Agent Engineering. The harness is the software around the model that determines what it can see, which tools it can call, how it remembers, and how its work is checked. SuperQode treats that harness as a repository-owned engineering artifact instead of a hidden part of a closed agent product.
 
@@ -59,6 +61,24 @@ SuperQode brings five connected Agent Engineering capabilities to a harness you 
 - **Optimize** it with staged candidates a human adopts, so a failure gets fixed once instead of retried.
 
 SuperQode provides harness independence by keeping the agent configuration inspectable, versioned, measurable, and portable across local and hosted models.
+
+## The Problem SuperQode Solves
+
+Selecting a capable model does not give an organization a reliable code production system. The harness still decides what the agent sees, which tools it can use, how it remembers, what it may change, and how its work is verified.
+
+Teams commonly face several related problems:
+
+- established coding agents provide useful but vendor-owned harnesses that cannot always be inspected, moved, or evaluated independently
+- open and local models provide model capability without a complete repository coding harness
+- different agents keep separate sessions, context, tools, permissions, and evidence
+- session orchestration alone does not ensure that repository work finishes, passes checks, or produces an exact candidate a human can approve
+- harness changes are difficult to compare when quality, cost, latency, regressions, and failed candidates are not recorded together
+
+SuperQode makes the harness a repository-owned engineering artifact, connects existing agents through native runtimes and ACP, and applies a consistent lifecycle for execution, evaluation, governance, evidence, delivery, and optimization.
+
+## Build Your Code Factory
+
+Build an organization-owned harness, select one from the catalog, or connect an existing coding agent through a native runtime or ACP. SuperQode operates them through one consistent system for orchestration, evaluation, governance, and optimization.
 
 Run `superqode` for the terminal workbench, then `:local init` to detect your hardware, generate a local first starter harness, and run a readiness smoke test. The CLI mirrors the same path with `superqode local init --repo .`. Run `superqode local optimize` to benchmark candidates and generate role specific routing for planner, implementer, reviewer, and utility agents.
 
@@ -80,7 +100,7 @@ sq work approve work_... --actor maintainer
 sq work merge work_... --actor maintainer --cleanup
 ```
 
-This is the durable execution layer inside SuperQode's terminal-first Software Factory. Read the [complete Software Factory guide](https://superagentic.ai/superqode/advanced/software-factory/) for the product architecture and end-to-end builder workflow, or [How SuperQode Relates to Omnigent](https://superagentic.ai/superqode/advanced/superqode-vs-omnigent/) for shared ideas, different priorities, remote access, and interoperability.
+This is the durable execution layer inside your SuperQode code factory. Read the [complete Code Factory guide](https://superagentic.ai/superqode/advanced/software-factory/) for the product architecture and end-to-end builder workflow, or [How SuperQode Relates to Omnigent](https://superagentic.ai/superqode/advanced/superqode-vs-omnigent/) for shared ideas, different priorities, remote access, and interoperability.
 
 For controlled unattended work, `sq policy init` enables layered contextual policy, secret-filtered shells, strict network destinations, and named host-bound HTTP credentials. Use `sq harness bench` to publish a reproducible same-model harness comparison, then deliver an audited improvement through `sq harness promote stage`, `canary`, `activate`, and `rollback`.
 

@@ -785,7 +785,7 @@ class SlashCommandMixin:
         return True
 
     def _handle_factory(self, args: str, log: ConversationLog) -> None:
-        """Software Factory commands for model/harness/provider independence."""
+        """Code Factory commands for model, harness, and provider independence."""
         try:
             tokens = shlex.split((args or "").strip())
         except ValueError as exc:

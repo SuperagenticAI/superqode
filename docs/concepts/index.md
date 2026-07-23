@@ -1,6 +1,6 @@
 # Core Concepts
 
-SuperQode is the open-source, terminal-first Agent Engineering framework for your code, with first-class support for local and open models. It gives builders one repeatable contract for model choice, runtime backend, tool access, sandbox policy, approvals, session history, event capture, and output handling.
+SuperQode is the open-source, terminal-first Agent Engineering framework for your code factory, with first-class support for local and open models. It gives builders one repeatable contract for model choice, runtime backend, tool access, sandbox policy, approvals, session history, event capture, and output handling.
 
 Use this section to understand the pieces that make a SuperQode run predictable across local models, hosted providers, ACP agents, and optional runtime SDKs.
 
@@ -9,6 +9,22 @@ Use this section to understand the pieces that make a SuperQode run predictable 
 ## Quick Navigation
 
 <div class="grid cards" markdown>
+
+-   **Code Engineering**
+
+    ---
+
+    Apply evaluation, governance, provenance, and optimization to code produced by humans and agents.
+
+    [:octicons-arrow-right-24: Learn Code Engineering](code-engineering.md)
+
+-   **Code Factory**
+
+    ---
+
+    Build an organization-owned system for turning intent into verified code changes.
+
+    [:octicons-arrow-right-24: Understand Code Factories](code-factory.md)
 
 -   **Connection Modes**
 
@@ -78,6 +94,8 @@ SuperQode separates an agent system into stable pieces:
 | Event graph | Normalized model, tool, approval, sandbox, memory, and result events from a run |
 
 The harness is the product contract. Runtimes and providers are interchangeable execution choices behind that contract.
+
+Together, these components form a code factory: the organization-owned system that connects coding agents to repositories, policies, evaluation gates, evidence, and delivery workflows.
 
 ## How A Run Fits Together
 

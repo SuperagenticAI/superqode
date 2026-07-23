@@ -114,7 +114,7 @@ superqode sessions show abc123
 superqode sessions export abc123 --format markdown --output session.md
 ```
 
-Software Factory routing and lineage:
+Code Factory routing and lineage:
 
 ```bash
 superqode factory routes
@@ -463,7 +463,7 @@ superqode mcp --http --port 8765
 |---------|-------------|
 | `superqode sessions list` | List saved sessions |
 | `superqode sessions tree` | Show session branches and forks |
-| `superqode factory routes` | List Software Factory routing presets |
+| `superqode factory routes` | List Code Factory routing presets |
 | `superqode factory switch-model <provider/model>` | Record model/provider movement on a session |
 | `superqode factory switch-harness <name>` | Record harness movement on a session |
 | `superqode work create <goal> --queue` | Create and queue durable multi-harness work |

@@ -7,7 +7,7 @@ name = "superqode-example-skill-extension"
 version = "0.1.0"
 description = "Independent skill extension used to validate SuperQode Extensible Core"
 requires-python = ">=3.12"
-dependencies = ["superqode>=0.2.33,<1.0"]
+dependencies = ["superqode>=0.2.34,<1.0"]
 
 [project.entry-points."superqode.extensions"]
 example-skill = "superqode_example_skill:extension"

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.34] - 2026-07-23
+
+### Changed
+
+- **Product positioning** - Defined SuperQode as Agent Engineering for an organization-owned code factory. Added concrete Code Engineering and Code Factory concepts, retained Harness Engineering as the technical discipline, aligned the README, documentation, package metadata, and TUI, and documented the problem SuperQode solves without removing existing technical guidance.
+- **Release metadata** - Bumped the package, runtime, lockfile, ACP registry, package checks, extension compatibility examples, and plugin documentation to `0.2.34`.
+
 ## [0.2.33] - 2026-07-23
 
 ### Added

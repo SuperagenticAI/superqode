@@ -11,11 +11,11 @@ hide:
 
 # SuperQode
 
-<p class="sq-kicker">The <span class="sq-gradient-text">Agent Engineering Framework</span> for Your Code</p>
+<p class="sq-kicker"><span class="sq-gradient-text">Agent Engineering</span> for Your Code Factory</p>
 
-<p class="sq-tagline">Engineer reliable coding agents with portable harnesses, context, memory, tools, and control loops. Use any agent or model, from terminal sessions to software factories.</p>
+<p class="sq-tagline">Build your own coding-agent harnesses or connect the agents you already use. Orchestrate, evaluate, govern, and optimize how they work across your repositories.</p>
 
-<p><strong>Code engineering for the agent-driven world</strong></p>
+<p><strong>Code Engineering</strong>: Engineer how humans and agents create, verify, govern, and improve code.</p>
 
 <p>Terminal-first · Any agent · Any model · Local or cloud · Open source</p>
 
@@ -30,7 +30,7 @@ hide:
 [Optimize Local Models](local-agentic-coding.md){ .md-button }
 [Read Harness Engineering](harness-engineering.md){ .md-button }
 
-<img src="assets/superqode-hero.png" alt="SuperQode Agent Engineering terminal workbench" class="sq-hero-image" />
+<img src="assets/superqode-code-factory.svg" alt="SuperQode Agent Engineering terminal workbench" class="sq-hero-image" />
 
 </div>
 
@@ -70,13 +70,39 @@ Use `local build` to select a specific model, endpoint, or model pack.
 
 ## Overview
 
-SuperQode is the open-source, terminal-first Agent Engineering framework for your code. It provides the lifecycle for building, running, evaluating, governing, and optimizing reliable coding agents and software factories.
+SuperQode is the open-source, terminal-first Agent Engineering framework for your code factory. It provides the lifecycle for building, connecting, orchestrating, evaluating, governing, and optimizing reliable coding-agent harnesses across your repositories.
 
-[Agent Engineering](https://agentengineering.world/) is the discipline of designing, building, evaluating, governing, and operating agents as reliable systems. SuperQode applies that discipline to the complete system that produces code, from one coding agent working on a codebase to a multi-agent software factory.
+[Agent Engineering](https://agentengineering.world/) is the discipline of designing, building, evaluating, governing, and operating agents as reliable systems. SuperQode applies that discipline to your code factory: the organization-owned system of agents, harnesses, models, context, tools, repositories, policies, and evaluation gates that turns intent into verified code changes.
+
+[Code Engineering](concepts/code-engineering.md) applies evaluation, governance, provenance, and optimization to code produced by humans and agents. SuperQode engineers the production system around that code, not only the model that generates it.
 
 Harness engineering is one discipline within Agent Engineering. The repository-owned `HarnessSpec` defines model routing, tools, memory, context, search, approvals, sandboxing, workflows, evaluation, and optimization. Reliable delivery and harness independence are the outcomes.
 
 SuperQode is **terminal-first by design**. The CLI and TUI are the complete primary product surfaces for building harnesses, coordinating sessions and WorkOrders, reviewing evidence, and approving delivery. Browser rendering, the local companion API, and chat channels provide optional remote access without creating a separate web or mobile product direction.
+
+---
+
+## The problem SuperQode solves
+
+Selecting a capable model does not give an organization a reliable code production system. The harness still decides what the agent sees, which tools it can use, how it remembers, what it may change, and how its work is verified.
+
+Teams commonly face several related problems:
+
+- established coding agents provide useful but vendor-owned harnesses that cannot always be inspected, moved, or evaluated independently
+- open and local models provide model capability without a complete repository coding harness
+- different agents keep separate sessions, context, tools, permissions, and evidence
+- session orchestration alone does not ensure that repository work finishes, passes checks, or produces an exact candidate a human can approve
+- harness changes are difficult to compare when quality, cost, latency, regressions, and failed candidates are not recorded together
+
+SuperQode makes the harness a repository-owned engineering artifact, connects existing agents through native runtimes and ACP, and applies a consistent lifecycle for execution, evaluation, governance, evidence, delivery, and optimization.
+
+## Build your code factory
+
+Build an organization-owned harness, select one from the catalog, or connect an existing coding agent through a native runtime or ACP. SuperQode operates them through one consistent system for orchestration, evaluation, governance, and optimization.
+
+[Understand Code Factories](concepts/code-factory.md){ .md-button .md-button--primary }
+[Read Code Engineering](concepts/code-engineering.md){ .md-button }
+[Read Harness Engineering](harness-engineering.md){ .md-button }
 
 ---
 
@@ -182,13 +208,13 @@ Agent Engineering treats the complete agent lifecycle as an engineering system. 
 
     [:octicons-arrow-right-24: Optimization Story](advanced/optimization.md)
 
--   :octicons-workflow-16:{ .lg .middle } **Terminal-first Software Factory**
+-   :octicons-workflow-16:{ .lg .middle } **Terminal-first Code Factory**
 
     ---
 
     Move from a repo-owned HarnessSpec to durable role-aware WorkOrders, isolated workers, terminal operations, verified delivery, and evidence-backed harness improvement.
 
-    [:octicons-arrow-right-24: Software Factory](advanced/software-factory.md)
+    [:octicons-arrow-right-24: Code Factory](advanced/software-factory.md)
 
 -   :octicons-search-16:{ .lg .middle } **Local code intelligence**
 
@@ -250,7 +276,7 @@ you are changing, then use the CLI reference when you need exact flags.
 | Tools, search, MCP, and permissions | [Tools Catalog](advanced/tools-catalog.md) |
 | Safety, sandboxing, and approvals | [Safety & Permissions](advanced/safety-permissions.md) |
 | Sessions, sharing, memory, and logging | [Session Management](advanced/session-management.md) |
-| Software Factory, WorkOrders, workers, and delivery gates | [Terminal-First Software Factory](advanced/software-factory.md) |
+| Code Factory, WorkOrders, workers, and delivery gates | [Building a Code Factory with SuperQode](advanced/software-factory.md) |
 | Omnigent similarities, differences, and interoperability | [How SuperQode Relates to Omnigent](advanced/superqode-vs-omnigent.md) |
 | Plugins, skills, and optimization | [Plugin Authoring](advanced/plugin-authoring.md) |
 | Automation, channels, MCP, ACP, and A2A | [Advanced Workflows](advanced/index.md) |
@@ -342,7 +368,7 @@ Each step builds on the previous one.
 2. **Connect your models**: [Providers](providers/index.md) for hosted APIs, [Local Models](providers/local.md) for Ollama, LM Studio, MLX, vLLM, and DS4
 3. **Understand the engine**: [Inside the Agent Loop](advanced/agent-loop.md) and the [Tools Catalog](advanced/tools-catalog.md)
 4. **Make it yours**: [Harness System](advanced/harness-system.md) for portable run contracts, [Policies & Safety](advanced/policies.md) for guardrails
-5. **Build the factory**: [Terminal-First Software Factory](advanced/software-factory.md) for WorkOrders, workers, evidence, delivery, and improvement
+5. **Build the factory**: [Building a Code Factory with SuperQode](advanced/software-factory.md) for WorkOrders, workers, evidence, delivery, and improvement
 6. **Automate**: [Headless & CI](advanced/headless-ci.md) for scripts, pipelines, and schema-validated output
 7. **Go further**: [Developer Workflows](developer-workflows.md), [Multi-Agent Workflows](advanced/multi-agent.md), [Runtime Backends](runtimes.md), [Plugin Authoring](advanced/plugin-authoring.md)
 

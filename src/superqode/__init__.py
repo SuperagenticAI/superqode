@@ -1,11 +1,16 @@
 """
 SuperQode CLI package.
 
-This package provides the terminal user interface (TUI), interactive chat,
-and voice entrypoints for SuperQode, a multi-agent coding orchestration platform.
+This package provides the terminal user interface, command-line interface,
+interactive chat, and voice entrypoints for SuperQode, the terminal-first
+Agent Engineering framework for your code factory.
 
 Features:
+- Repository-owned coding-agent harnesses
+- Native, ACP, SDK, BYOK, and local-model connections
 - Multi-agent coding team support
+- Harness evaluation, governance, and optimization
+- Durable WorkOrders with evidence and delivery gates
 - Approval system for file changes
 - Diff viewer with syntax highlighting
 - Plan tracking for agent tasks
@@ -33,7 +38,7 @@ __all__ = [
     "sidebar",
 ]
 
-__version__ = "0.2.33"
+__version__ = "0.2.34"
 
 # Stable, lightweight public extension surface.  Importing this package does
 # not discover or execute third-party extensions; discovery happens only when

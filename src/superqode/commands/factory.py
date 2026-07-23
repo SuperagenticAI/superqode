@@ -9,7 +9,7 @@ import click
 
 @click.group()
 def factory():
-    """Model- and harness-independent Software Factory commands."""
+    """Model- and harness-independent Code Factory commands."""
     pass
 
 

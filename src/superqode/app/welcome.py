@@ -82,9 +82,9 @@ def render_welcome(
 
     desc_text = Text(justify=align)
     if width is None or width >= 48:
-        headline = "THE AGENT ENGINEERING FRAMEWORK FOR YOUR CODE"
+        headline = "AGENT ENGINEERING FOR YOUR CODE FACTORY"
     elif width >= 33:
-        headline = "AGENT ENGINEERING FOR YOUR CODE"
+        headline = "YOUR CODE FACTORY"
     elif width >= 19:
         headline = "AGENT ENGINEERING"
     else:
@@ -98,7 +98,7 @@ def render_welcome(
         )
         desc_text.append("\n", style="")
         desc_text.append(
-            "Coding agents · Codebases · Software factories\n",
+            "Build · Connect · Orchestrate · Evaluate · Optimize\n",
             style=f"bold {THEME['gold']}",
         )
         desc_text.append("\n", style="")

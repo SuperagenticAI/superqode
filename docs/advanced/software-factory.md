@@ -1,8 +1,8 @@
-# Terminal-First Software Factory
+# Building a Code Factory with SuperQode
 
-SuperQode's Software Factory is the durable delivery system inside its broader Agent Engineering product. It orchestrates multiple coding-agent harnesses and provides the execution, evaluation, governance, and optimization controls required to deliver verified repository changes.
+Your code factory is the organization-owned system that combines coding agents, harnesses, models, repositories, context, tools, policies, evaluation gates, and delivery workflows. SuperQode provides its terminal-first execution and control layer.
 
-The Software Factory is a first-class product capability within Agent Engineering. It is broader than the `sq factory` command group, and it does not treat one autonomous chat session as a complete delivery system.
+The existing SuperQode Software Factory implementation is the durable delivery system inside this broader product model. It orchestrates multiple coding-agent harnesses and provides the execution, evaluation, governance, and optimization controls required to deliver verified repository changes. It is broader than the `sq factory` command group, and it does not treat one autonomous chat session as a complete delivery system.
 
 ```text
 Build the harness

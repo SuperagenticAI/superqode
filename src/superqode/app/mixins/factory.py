@@ -17,7 +17,7 @@ class FactoryMixin:
 
     def _factory_help(self, log: ConversationLog) -> None:
         t = Text()
-        t.append("\n  Software Factory\n\n", style=f"bold {THEME['purple']}")
+        t.append("\n  Code Factory\n\n", style=f"bold {THEME['purple']}")
         commands = [
             (":factory", "show current model/harness/route lineage"),
             (":factory init-policy", "create .superqode/factory.yaml with local-first defaults"),
@@ -62,7 +62,7 @@ class FactoryMixin:
             return
         factory_meta = payload.get("factory") or {}
         t = Text()
-        t.append("\n  Software Factory\n\n", style=f"bold {THEME['purple']}")
+        t.append("\n  Code Factory\n\n", style=f"bold {THEME['purple']}")
         t.append("  Session  ", style=THEME["muted"])
         t.append(f"{payload['session_id']}\n", style=f"bold {THEME['cyan']}")
         for label, key in (
