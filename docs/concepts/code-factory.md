@@ -118,7 +118,6 @@ The `sq factory` command is one module within this product model. It manages rou
 
 ## Next steps
 
-- [Code Engineering](code-engineering.md)
 - [What Is Harness Engineering](../harness-engineering.md)
 - [Building a Code Factory with SuperQode](../advanced/software-factory.md)
 - [How SuperQode Relates to Omnigent](../advanced/superqode-vs-omnigent.md)

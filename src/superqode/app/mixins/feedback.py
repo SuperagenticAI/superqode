@@ -15,11 +15,12 @@ class FeedbackMixin:
     """Present important state changes as notifications and transcript receipts."""
 
     _TRANSITION_TIMEOUTS = {
-        "success": 4.0,
-        "information": 3.0,
-        "warning": 7.0,
-        "error": 10.0,
+        "success": 1.5,
+        "information": 1.5,
+        "warning": 3.0,
+        "error": 5.0,
     }
+    _TRANSITION_DEDUPE_SECONDS = 3.0
 
     def _announce_model_ready(
         self,
@@ -43,6 +44,7 @@ class FeedbackMixin:
             detail=" · ".join(detail_parts),
             severity="success",
             log=log,
+            popup=False,
             dedupe_key=f"model:{source}:{model_id}",
         )
 
@@ -62,6 +64,7 @@ class FeedbackMixin:
             severity="success",
             log=log,
             persist=False,
+            popup=False,
             dedupe_key=f"local-ready:{provider}:{model}",
         )
 
@@ -78,12 +81,13 @@ class FeedbackMixin:
         timeout: float | None = None,
         dedupe_key: str = "",
         restore_focus: bool = True,
+        popup: bool | None = None,
     ) -> bool:
         """Announce a user-visible state transition.
 
-        The toast provides immediate feedback. The transcript receipt preserves
-        the result after the toast expires. Callers remain responsible for
-        updating the persistent status bar with the new active state.
+        Warnings and errors use a short popup because they require attention.
+        Routine success and information transitions stay in the transcript and
+        status bar unless a caller explicitly requests a popup.
         """
         title = " ".join(str(title).split())
         primary = " ".join(str(primary).split())
@@ -99,7 +103,7 @@ class FeedbackMixin:
             recent = {}
             self._transition_notice_times = recent
         previous = recent.get(key)
-        if previous is not None and now - previous < 1.25:
+        if previous is not None and now - previous < self._TRANSITION_DEDUPE_SECONDS:
             return False
         recent[key] = now
         if len(recent) > 64:
@@ -108,22 +112,26 @@ class FeedbackMixin:
                 item_key: timestamp for item_key, timestamp in recent.items() if timestamp >= cutoff
             }
 
-        body_parts = [primary]
-        if detail:
-            body_parts.append(detail)
-        if guidance and severity in {"warning", "error"}:
-            body_parts.append(guidance)
-        try:
-            self.notify(
-                "\n".join(body_parts),
-                title=title,
-                severity="information" if severity == "success" else severity,
-                timeout=timeout or self._TRANSITION_TIMEOUTS[severity],
-                markup=False,
-            )
-        except Exception:
-            # Transcript feedback still works in headless and lightweight tests.
-            pass
+        show_popup = severity in {"warning", "error"} if popup is None else popup
+        if show_popup:
+            body_parts = [primary]
+            if detail:
+                body_parts.append(detail)
+            if guidance and severity in {"warning", "error"}:
+                body_parts.append(guidance)
+            try:
+                self.notify(
+                    "\n".join(body_parts),
+                    title=title,
+                    severity="information" if severity == "success" else severity,
+                    timeout=(
+                        timeout if timeout is not None else self._TRANSITION_TIMEOUTS[severity]
+                    ),
+                    markup=False,
+                )
+            except Exception:
+                # Transcript feedback still works in headless and lightweight tests.
+                pass
 
         if persist:
             if log is None:

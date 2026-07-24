@@ -3268,7 +3268,8 @@ class DialogsMixin:
 
             def _safe_notify(self, message: str, *, severity: str = "information") -> None:
                 try:
-                    self.notify(message, severity=severity)
+                    timeout = 1.0 if severity == "information" else 2.5
+                    self.notify(message, severity=severity, timeout=timeout)
                 except Exception:
                     pass
 
@@ -3416,7 +3417,7 @@ class DialogsMixin:
                     selected = self.query_one("#text-area", TextArea).selected_text
                     if selected:
                         self._copy_to_clipboard(selected)
-                        self.notify("Selection copied", severity="information")
+                        self.notify("Selection copied", severity="information", timeout=1)
                         return
                 except Exception:
                     pass
@@ -3424,7 +3425,7 @@ class DialogsMixin:
 
             def _copy_all(self):
                 self._copy_to_clipboard(self._content)
-                self.notify(f"{self._title} copied", severity="information")
+                self.notify(f"{self._title} copied", severity="information", timeout=1)
 
             def _copy_to_clipboard(self, text: str):
                 try:

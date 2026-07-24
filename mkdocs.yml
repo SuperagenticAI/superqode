@@ -148,12 +148,23 @@ nav:
     - ⚙️ Configuration: getting-started/configuration.md
     - 🧭 Troubleshooting: getting-started/troubleshooting.md
 
+  - 🔌 Connections:
+    - 🧭 Overview: concepts/modes.md
+    - 💻 Local Models: providers/local.md
+    - 🔑 BYOK Providers: providers/byok.md
+    - 🤖 ACP Agents: providers/acp.md
+    - 🧠 OpenAI Codex: providers/codex.md
+    - 🐙 GitHub Copilot: providers/github-copilot.md
+    - 🟠 Anthropic Claude: providers/anthropic-claude.md
+    - 🚀 Google Antigravity: providers/antigravity.md
+    - ✕ xAI Grok: providers/grok.md
+    - 🧠 Z.AI GLM: providers/zai.md
+    - 🔗 Connection Profile Reference: advanced/connection-profiles.md
+
   - 📚 Concepts:
     - concepts/index.md
     - 📋 Product Capability Reference: product-capabilities.md
-    - 🧭 Code Engineering: concepts/code-engineering.md
     - 🏭 Code Factory: concepts/code-factory.md
-    - 🔌 Connection Methods and Vendors: concepts/modes.md
     - 🧬 Configuration vs Harness: concepts/configuration-vs-harness.md
     - 🔐 Authentication: concepts/authentication.md
 
@@ -185,17 +196,11 @@ nav:
 
   - 🔌 Models & Providers:
     - providers/index.md
-    - 🔑 BYOK Providers: providers/byok.md
     - 🌙 Kimi K3: providers/kimi.md
-    - 🧠 Z.AI GLM: providers/zai.md
-    - 🚀 Google Antigravity: providers/antigravity.md
-    - 🐙 GitHub Copilot: providers/github-copilot.md
-    - 🤖 ACP Agents: providers/acp.md
     - 🔁 A2A Providers: providers/a2a.md
     - 🌐 OpenResponses: providers/openresponses.md
     - 🎛️ Model Profiles: providers/profiles.md
     - 🗂️ Model Catalog: advanced/model-catalog.md
-    - 🔗 Connection Profiles: advanced/connection-profiles.md
 
   - 🔬 Advanced:
     - advanced/index.md

@@ -136,7 +136,7 @@ class EventHandlerMixin:
                     f"Copied {len(selection)} chars to clipboard",
                     title="Copied",
                     severity="information",
-                    timeout=2,
+                    timeout=1,
                 )
             else:
                 self.notify(

@@ -15,8 +15,6 @@ hide:
 
 <p class="sq-tagline">Build your own coding-agent harnesses or connect the agents you already use. Orchestrate, evaluate, govern, and optimize how they work across your repositories.</p>
 
-<p><strong>Code Engineering</strong>: Engineer how humans and agents create, verify, govern, and improve code.</p>
-
 <p>Terminal-first · Any agent · Any model · Local or cloud · Open source</p>
 
 <p class="sq-badges">
@@ -74,8 +72,6 @@ SuperQode is the open-source, terminal-first Agent Engineering framework for you
 
 [Agent Engineering](https://agentengineering.world/) is the discipline of designing, building, evaluating, governing, and operating agents as reliable systems. SuperQode applies that discipline to your code factory: the organization-owned system of agents, harnesses, models, context, tools, repositories, policies, and evaluation gates that turns intent into verified code changes.
 
-[Code Engineering](concepts/code-engineering.md) applies evaluation, governance, provenance, and optimization to code produced by humans and agents. SuperQode engineers the production system around that code, not only the model that generates it.
-
 Harness engineering is one discipline within Agent Engineering. The repository-owned `HarnessSpec` defines model routing, tools, memory, context, search, approvals, sandboxing, workflows, evaluation, and optimization. Reliable delivery and harness independence are the outcomes.
 
 SuperQode is **terminal-first by design**. The CLI and TUI are the complete primary product surfaces for building harnesses, coordinating sessions and WorkOrders, reviewing evidence, and approving delivery. Browser rendering, the local companion API, and chat channels provide optional remote access without creating a separate web or mobile product direction.
@@ -103,7 +99,6 @@ Build an organization-owned harness, select one from the catalog, or connect an 
 <div class="sq-doc-cta" markdown>
 
 [Understand Code Factories](concepts/code-factory.md){ .md-button .md-button--primary }
-[Read Code Engineering](concepts/code-engineering.md){ .md-button }
 [Read Harness Engineering](harness-engineering.md){ .md-button }
 
 </div>

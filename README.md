@@ -9,8 +9,6 @@
   <em>Build your own coding-agent harnesses or connect the agents you already use. Orchestrate, evaluate, govern, and optimize how they work across your repositories.</em>
 </p>
 
-<p align="center"><strong>Code Engineering</strong>: Engineer how humans and agents create, verify, govern, and improve code.</p>
-
 <p align="center">Terminal-first · Any agent · Any model · Local or cloud · Open source</p>
 
 <p align="center">
@@ -43,8 +41,6 @@
 SuperQode is the **open-source, terminal-first Agent Engineering framework for your code factory**. It provides the lifecycle for building, connecting, orchestrating, evaluating, governing, and optimizing reliable coding-agent harnesses across your repositories.
 
 [Agent Engineering](https://agentengineering.world/) is the discipline of designing, building, evaluating, governing, and operating agents as reliable systems. SuperQode applies that discipline to your code factory: the organization-owned system of agents, harnesses, models, context, tools, repositories, policies, and evaluation gates that turns intent into verified code changes.
-
-**Code Engineering** is the discipline of applying evaluation, governance, provenance, and optimization to code produced by humans and agents. SuperQode engineers the production system around that code, not only the model that generates it.
 
 Harness engineering is one discipline within Agent Engineering. The harness is the software around the model that determines what it can see, which tools it can call, how it remembers, and how its work is checked. SuperQode treats that harness as a repository-owned engineering artifact instead of a hidden part of a closed agent product.
 

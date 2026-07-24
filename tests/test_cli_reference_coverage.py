@@ -196,7 +196,46 @@ def test_connection_reference_covers_methods_profiles_providers_and_agents():
     assert missing_profiles == []
     assert missing_providers == []
     assert missing_agents == []
-    assert "Connection Methods and Vendors: concepts/modes.md" in mkdocs
+    assert "🔌 Connections:" in mkdocs
+    assert "🧭 Overview: concepts/modes.md" in mkdocs
+
+
+def test_every_connection_profile_has_a_sidebar_page():
+    """Every root :connect profile should have a dedicated, navigable guide."""
+
+    root = Path(__file__).resolve().parents[1]
+    mkdocs = (root / "mkdocs.yml").read_text(encoding="utf-8")
+    profile_pages = {
+        "local": "providers/local.md",
+        "byok": "providers/byok.md",
+        "acp": "providers/acp.md",
+        "codex": "providers/codex.md",
+        "copilot": "providers/github-copilot.md",
+        "copilot-acp": "providers/github-copilot.md",
+        "claude": "providers/anthropic-claude.md",
+        "antigravity": "providers/antigravity.md",
+        "grok": "providers/grok.md",
+        "zai": "providers/zai.md",
+    }
+
+    assert set(profile_pages) == set(connection_profile_ids())
+
+    missing_pages = []
+    missing_navigation = []
+    missing_commands = []
+    for profile_id, relative_path in profile_pages.items():
+        path = root / "docs" / relative_path
+        if not path.exists():
+            missing_pages.append(profile_id)
+            continue
+        if relative_path not in mkdocs:
+            missing_navigation.append(profile_id)
+        if f":connect {profile_id}" not in path.read_text(encoding="utf-8"):
+            missing_commands.append(profile_id)
+
+    assert missing_pages == []
+    assert missing_navigation == []
+    assert missing_commands == []
 
 
 def test_runtime_tool_template_pack_and_tui_inventories_are_documented():

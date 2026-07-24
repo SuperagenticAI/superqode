@@ -2860,7 +2860,7 @@ class SlashCommandMixin:
                     selected = ta.selected_text
                     if selected:
                         self._copy_to_clipboard(selected)
-                        self.notify("Selection copied!", severity="information")
+                        self.notify("Selection copied!", severity="information", timeout=1)
                     else:
                         self._copy_all()
                 except Exception:
@@ -2869,7 +2869,11 @@ class SlashCommandMixin:
             def _copy_all(self):
                 """Copy all text to clipboard."""
                 self._copy_to_clipboard(self._content)
-                self.notify(f"{self._title} copied to clipboard!", severity="information")
+                self.notify(
+                    f"{self._title} copied to clipboard!",
+                    severity="information",
+                    timeout=1,
+                )
 
             def _copy_to_clipboard(self, text: str):
                 """Copy text to system clipboard."""

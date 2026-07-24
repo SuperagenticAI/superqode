@@ -74,7 +74,7 @@ def test_transition_feedback_has_toast_receipt_guidance_and_deduplication() -> N
             {
                 "title": "Connection failed",
                 "severity": "error",
-                "timeout": 10.0,
+                "timeout": 5.0,
                 "markup": False,
             },
         )
@@ -87,9 +87,7 @@ def test_transition_feedback_has_toast_receipt_guidance_and_deduplication() -> N
 
 
 @pytest.mark.asyncio
-async def test_transition_notification_is_visible_and_fits_narrow_terminal(monkeypatch) -> None:
-    from textual.widgets._toast import Toast
-
+async def test_model_transition_uses_transcript_without_popup(monkeypatch) -> None:
     monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
     app = SuperQodeApp()
     async with app.run_test(size=(58, 24), notifications=True) as pilot:
@@ -103,9 +101,31 @@ async def test_transition_notification_is_visible_and_fits_narrow_terminal(monke
         )
         await pilot.pause(0.1)
 
-        assert len(app._notifications) == 1
-        toast = app.screen.query_one(Toast)
-        assert 40 <= toast.size.width <= 56
-        assert toast.region.y >= 3
-        assert "Laguna S 2.1 Free" in str(toast.render())
+        assert len(app._notifications) == 0
         assert "Model ready" in "\n".join(line.text for line in log.lines)
+
+
+def test_information_transition_can_request_a_short_popup() -> None:
+    log = _Log()
+    app = _FeedbackApp(log)
+
+    announced = app._announce_transition(
+        title="Action complete",
+        primary="Evaluation report exported",
+        severity="information",
+        log=log,
+        popup=True,
+    )
+
+    assert announced is True
+    assert app.notifications == [
+        (
+            "Evaluation report exported",
+            {
+                "title": "Action complete",
+                "severity": "information",
+                "timeout": 1.5,
+                "markup": False,
+            },
+        )
+    ]

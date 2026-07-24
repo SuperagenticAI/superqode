@@ -265,7 +265,7 @@ class CommandImplMixin:
 
     def _vim_search_feedback(self, log: ConversationLog, message: str) -> None:
         try:
-            self.notify(message, timeout=2)
+            self.notify(message, timeout=1.25)
             return
         except Exception:
             pass

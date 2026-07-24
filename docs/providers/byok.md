@@ -22,6 +22,14 @@ BYOK is the primary mode for production use:
 
 ## Quick Setup
 
+Open the BYOK provider and model picker in the TUI:
+
+```text
+:connect byok
+```
+
+Or connect directly:
+
 ```bash
 # 1. Set API key. Alternative: `superqode auth login anthropic` stores the
 #    key in ~/.superqode/auth.json (0600) via a masked prompt.

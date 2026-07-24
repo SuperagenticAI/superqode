@@ -297,7 +297,7 @@ class LocalModelsMixin:
             pass
         if notify:
             try:
-                self.notify(notify, severity="warning", timeout=6)
+                self.notify(notify, severity="warning", timeout=3)
             except Exception:
                 pass
 
@@ -314,7 +314,7 @@ class LocalModelsMixin:
             severity="error",
             log=log,
             guidance="Check the local server, then reconnect with :connect local.",
-            timeout=10,
+            timeout=5,
             dedupe_key=f"local-connection-error:{message}",
         )
         try:

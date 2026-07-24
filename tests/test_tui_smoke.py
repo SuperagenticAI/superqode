@@ -1058,17 +1058,7 @@ def test_opencode_acp_model_selection_updates_mounted_status_bar(monkeypatch):
     assert "opencode/nemotron-3-ultra-free" in rendered
     assert "rt acp" in rendered
     assert "Model: not connected" not in rendered
-    assert notifications == [
-        (
-            "Nemotron 3 Ultra Free\nOpenCode via ACP · Free model · opencode/nemotron-3-ultra-free",
-            {
-                "title": "Model ready",
-                "severity": "information",
-                "timeout": 4.0,
-                "markup": False,
-            },
-        )
-    ]
+    assert notifications == []
     assert any("Model ready: Nemotron 3 Ultra Free" in str(item) for item in log.items)
 
 
@@ -1125,7 +1115,7 @@ def test_local_connection_failure_is_prominent_near_prompt():
             {
                 "title": "Local connection failed",
                 "severity": "error",
-                "timeout": 10,
+                "timeout": 5,
                 "markup": False,
             },
         )

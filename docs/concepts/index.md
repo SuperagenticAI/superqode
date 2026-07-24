@@ -10,14 +10,6 @@ Use this section to understand the pieces that make a SuperQode run predictable 
 
 <div class="grid cards" markdown>
 
--   **Code Engineering**
-
-    ---
-
-    Apply evaluation, governance, provenance, and optimization to code produced by humans and agents.
-
-    [:octicons-arrow-right-24: Learn Code Engineering](code-engineering.md)
-
 -   **Code Factory**
 
     ---
