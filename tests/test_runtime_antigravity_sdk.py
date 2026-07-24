@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -82,6 +83,14 @@ def test_antigravity_runtime_normalizes_rich_sdk_events(monkeypatch):
         error = None
 
     class RichResponse:
+        usage_metadata = SimpleNamespace(
+            prompt_token_count=10,
+            candidates_token_count=4,
+            thoughts_token_count=2,
+            total_token_count=16,
+            cached_content_token_count=3,
+        )
+
         @property
         def chunks(self):
             async def stream():
@@ -116,6 +125,13 @@ def test_antigravity_runtime_normalizes_rich_sdk_events(monkeypatch):
     ]
     assert events[2].data["tool_name"] == "view_file"
     assert events[3].data["success"] is True
+    assert events[-2].data["usage"] == {
+        "prompt_tokens": 10,
+        "completion_tokens": 4,
+        "thinking_tokens": 2,
+        "total_tokens": 16,
+        "cached_tokens": 3,
+    }
 
 
 def test_antigravity_tool_exception_is_a_failed_result(monkeypatch):
@@ -157,3 +173,125 @@ def test_antigravity_tool_exception_is_a_failed_result(monkeypatch):
     result = next(event for event in asyncio.run(collect()) if event.type == "tool_result")
     assert result.data["success"] is False
     assert result.data["error"] == "boom"
+
+
+def test_sdk_policy_bridge_asks_superqode_for_mutating_tools(tmp_path):
+    from superqode.runtime.antigravity_sdk import AntigravitySDKRuntime
+
+    approvals = []
+    runtime = AntigravitySDKRuntime(
+        config=AgentConfig(provider="google", model="", working_directory=tmp_path),
+        approval_callback=lambda name, args: approvals.append((name, args)) or True,
+    )
+    tool_call = SimpleNamespace(name="edit_file", args={"path": "README.md"})
+
+    assert runtime._approve_tool_call(tool_call) is True
+    assert approvals == [("edit_file", {"path": "README.md"})]
+    assert copy.deepcopy(runtime._sdk_policies())
+
+
+def test_sdk_discovers_project_skills_and_converts_mcp(tmp_path):
+    from superqode.runtime.antigravity_sdk import AntigravitySDKRuntime
+
+    skills = tmp_path / ".agents" / "skills"
+    skills.mkdir(parents=True)
+    mcp_dir = tmp_path / ".superqode"
+    mcp_dir.mkdir()
+    (mcp_dir / "mcp.json").write_text(
+        '{"mcpServers":{"local.files":{"command":"example-mcp","args":["--stdio"]},'
+        '"remote":{"transport":"http","url":"https://example.invalid/mcp"}}}'
+    )
+    runtime = AntigravitySDKRuntime(
+        config=AgentConfig(provider="google", model="", working_directory=tmp_path),
+        include_mcp=True,
+    )
+
+    servers = runtime._sdk_mcp_servers()
+
+    assert runtime.metadata["skills"] == [str(skills.resolve())]
+    assert [server.name for server in servers] == ["local-files", "remote"]
+    assert runtime.metadata["mcp_servers"] == 2
+
+
+def test_sdk_reasoning_effort_builds_thinking_model_target(tmp_path):
+    from superqode.runtime.antigravity_sdk import AntigravitySDKRuntime
+
+    runtime = AntigravitySDKRuntime(
+        config=AgentConfig(
+            provider="google",
+            model="gemini-test",
+            working_directory=tmp_path,
+            reasoning_effort="extra-high",
+        )
+    )
+
+    target = runtime._sdk_model("not-a-live-key")
+
+    assert target.name == "gemini-test"
+    assert target.endpoint.options.thinking_level.value == "extra_high"
+
+
+def test_sdk_disables_all_capabilities_for_no_tool_config(tmp_path):
+    from superqode.runtime.antigravity_sdk import AntigravitySDKRuntime
+
+    runtime = AntigravitySDKRuntime(
+        config=AgentConfig(
+            provider="google",
+            model="gemini-test",
+            working_directory=tmp_path,
+            tools_enabled=False,
+        )
+    )
+
+    capabilities = runtime._sdk_capabilities()
+
+    assert capabilities.enable_subagents is False
+    assert capabilities.enabled_tools == []
+
+
+def test_sdk_cancel_reaches_active_response(monkeypatch, tmp_path):
+    google = ModuleType("google")
+    google.__path__ = []
+    sdk = ModuleType("google.antigravity")
+    monkeypatch.setitem(sys.modules, "google", google)
+    monkeypatch.setitem(sys.modules, "google.antigravity", sdk)
+
+    class Response:
+        cancelled = False
+
+        @property
+        def chunks(self):
+            async def stream():
+                await asyncio.sleep(60)
+                if False:
+                    yield None
+
+            return stream()
+
+        async def cancel(self):
+            self.cancelled = True
+
+    response = Response()
+
+    class Agent:
+        async def chat(self, _prompt):
+            return response
+
+    from superqode.runtime.antigravity_sdk import AntigravitySDKRuntime
+
+    runtime = AntigravitySDKRuntime(
+        config=AgentConfig(provider="google", model="", working_directory=tmp_path)
+    )
+    runtime._agent = Agent()
+
+    async def exercise():
+        events = runtime.run_harness_events("wait")
+        first = await anext(events)
+        assert first.type == "model_request"
+        runtime.cancel()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        await events.aclose()
+
+    asyncio.run(exercise())
+    assert response.cancelled is True

@@ -49,6 +49,12 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_RUNTIME` | runtime id | `builtin` | Select the default runtime adapter when no CLI or project runtime is set. |
 | `SUPERQODE_COPILOT_TIMEOUT` | seconds | `600` | Maximum wait for one GitHub Copilot SDK prompt turn. |
 | `SUPERQODE_CODEX_PREFER_LOCAL_CLI` | `0`/`1` | on | Prefer a compatible installed Codex CLI app-server over the SDK-pinned server. |
+| `SUPERQODE_ANTIGRAVITY_CLI_AGENT` | custom agent name | CLI default | Pass a custom agent to signed-in `agy --agent`. |
+| `SUPERQODE_ANTIGRAVITY_CLI_EFFORT` | `low`/`medium`/`high` | CLI default | Pass a thinking level to `agy --effort`; requires agy 1.1.5 or newer. |
+| `SUPERQODE_ANTIGRAVITY_SKILLS` | paths (`:`-sep) | unset | Add skill directories to the local Antigravity SDK runtime. |
+| `SUPERQODE_ANTIGRAVITY_AGENT` | agent id | `antigravity-preview-05-2026` | Override the Google-hosted Antigravity managed agent ID. |
+| `SUPERQODE_ANTIGRAVITY_MODEL` | model id | agent default | Choose a model supported by the managed Antigravity agent. |
+| `SUPERQODE_ANTIGRAVITY_MAX_TOTAL_TOKENS` | int | unset | Cap input, output, and thinking tokens for each managed Antigravity interaction. |
 | `OLLAMA_HOST` etc. | URL | per-provider | Local server endpoints (see [Local Models](../providers/local.md)). |
 
 Provider API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, ...) follow each provider's standard names. See [BYOK Providers](../providers/byok.md).

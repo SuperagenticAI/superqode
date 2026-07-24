@@ -7,11 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.36] - 2026-07-24
+
+### Added
+
+- **Google-hosted Antigravity runtime** - Added `:antigravity managed` and the `antigravity-managed` runtime for the Gemini Interactions API, including typed SSE events, hosted environment and conversation continuation, model selection, system instructions, and per-interaction token budgets without using `agy` account credentials.
+- **Antigravity runtime controls** - Added model and thinking-effort selection for CLI and SDK turns, plus custom-agent selection for signed-in CLI turns through `:antigravity model`, `:antigravity effort`, and `:antigravity agent`.
+- **Native `:agy` command family** - Added discoverable TUI commands and contextual completion for Antigravity CLI agents, models, changelog, version/update/install, plugin management, runtime controls, and external interactive-session launch/resume handoffs.
+- **Antigravity SDK parity** - Added SuperQode approval policy bridging, backend cancellation, exact token usage, SDK thinking levels, project skill discovery, and stdio or Streamable HTTP MCP configuration.
+- **Antigravity no-tool enforcement** - Model-only headless profiles now disable the Antigravity SDK's built-in tools and subagents at the SDK capability layer.
+
 ### Changed
 
+- **Antigravity ecosystem support** - Updated the optional local SDK to `google-antigravity` 0.1.8, documented the July 2026 CLI, SDK, Antigravity 2.0, and Managed Agents capability map, and corrected the Google managed-harness interaction request to the current API schema.
+- **Antigravity SDK compatibility** - Selected protobuf 7.35 or newer for the 0.1.8 SDK's generated descriptors and declared incompatible optional-extra combinations so uv rejects them during resolution instead of installing an SDK that fails to import.
+- **Managed runtime identity** - The TUI now clears stale BYOK identity when connecting to a self-contained runtime, identifies the Antigravity-owned harness and managed agent in the status bar, labels hosted approval ownership accurately, and supplies an explicit identity contract so the remote agent does not probe its sandbox to answer runtime questions.
+- **Google BYOK model catalog** - Curated the Google picker to show current coding and agent models newest first, led by Gemini 3.6 Flash, and removed deprecated, superseded, alias, embedding, image, and other non-chat entries.
 - **Documentation coverage** - Added a product capability reference, surfaced Poolside Laguna S 2.1 on the documentation home page, and linked public capabilities to their implementation guides.
 - **Connection documentation** - Added one connection reference for Local, ACP, BYOK, SDK, MCP, and A2A methods, with direct product shortcuts and complete built-in provider, local engine, and bundled ACP agent inventories.
 - **Documentation style** - Replaced generic marketing headings with technical headings and expanded the public documentation check to reject selected formulaic marketing phrases.
+- **Release metadata** - Bumped the package, runtime, lockfile, ACP registry, package checks, extension compatibility examples, plugin documentation, and generated product images to `0.2.36`.
 
 ## [0.2.35] - 2026-07-24
 

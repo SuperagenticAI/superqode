@@ -102,6 +102,31 @@ class CompletionMixin:
             return self._codex_sandbox_completion_candidates(value)
         if lowered.startswith(":codex "):
             return self._codex_subcommand_completion_candidates(value)
+        if lowered == ":agy":
+            return [
+                PromptCompletionCandidate(
+                    value=":agy",
+                    label=":agy",
+                    description="Show the Antigravity CLI command catalog",
+                    kind="command",
+                ),
+                *self._agy_subcommand_completion_candidates(":agy "),
+            ]
+        if lowered.startswith(":agy plugin "):
+            return self._agy_plugin_completion_candidates(value)
+        if lowered.startswith(":agy effort "):
+            return self._agy_value_completion_candidates(
+                value,
+                ":agy effort ",
+                (
+                    ("auto", "Use the Antigravity CLI default"),
+                    ("low", "Use low reasoning effort"),
+                    ("medium", "Use medium reasoning effort"),
+                    ("high", "Use high reasoning effort"),
+                ),
+            )
+        if lowered.startswith(":agy "):
+            return self._agy_subcommand_completion_candidates(value)
         if lowered.startswith(":harness use-all "):
             return self._harness_candidates_after_prefix(
                 value, ":harness use-all ", include_all=True

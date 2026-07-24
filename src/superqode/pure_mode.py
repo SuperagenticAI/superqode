@@ -401,7 +401,12 @@ class PureMode:
         )
 
         runtime_kwargs: dict[str, Any] = {}
-        if self.runtime_name in ("codex-sdk", "copilot-sdk", "claude-agent-sdk"):
+        if self.runtime_name in (
+            "codex-sdk",
+            "copilot-sdk",
+            "claude-agent-sdk",
+            "antigravity-sdk",
+        ):
             runtime_kwargs["approval_callback"] = self.on_permission_request
         if self.runtime_name == "builtin":
             runtime_kwargs["hooks"] = self._extension_runtime.build_hooks()
@@ -694,6 +699,37 @@ class PureMode:
                         },
                     ),
                 )
+            return ""
+        if event.type == "turn_complete":
+            usage = event.data.get("usage")
+            if isinstance(usage, dict):
+                prompt_tokens = int(
+                    usage.get("total_input_tokens")
+                    or usage.get("input_tokens")
+                    or usage.get("prompt_tokens")
+                    or 0
+                )
+                completion_tokens = int(
+                    usage.get("total_output_tokens")
+                    or usage.get("output_tokens")
+                    or usage.get("completion_tokens")
+                    or 0
+                )
+                thinking_tokens = int(
+                    usage.get("total_thought_tokens")
+                    or usage.get("thought_tokens")
+                    or usage.get("thinking_tokens")
+                    or 0
+                )
+                total_tokens = int(
+                    usage.get("total_tokens") or prompt_tokens + completion_tokens + thinking_tokens
+                )
+                self._last_stats = {
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "thinking_tokens": thinking_tokens,
+                    "total_tokens": total_tokens,
+                }
             return ""
         return ""
 

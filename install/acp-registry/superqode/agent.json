@@ -1,7 +1,7 @@
 {
   "id": "superqode",
   "name": "SuperQode",
-  "version": "0.2.35",
+  "version": "0.2.36",
   "description": "The open-source, terminal-first Agent Engineering framework for your code. Engineer reliable coding agents with portable harnesses, context, memory, tools, and control loops.",
   "repository": "https://github.com/SuperagenticAI/superqode",
   "website": "https://super-agentic.ai/superqode",
@@ -11,7 +11,7 @@
   "license": "Apache-2.0",
   "distribution": {
     "uvx": {
-      "package": "superqode==0.2.35",
+      "package": "superqode==0.2.36",
       "args": [
         "serve",
         "acp"

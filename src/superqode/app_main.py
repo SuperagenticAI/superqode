@@ -952,6 +952,7 @@ class SuperQodeApp(
             "claude-agent-sdk",
             "antigravity-sdk",
             "antigravity-cli",
+            "antigravity-managed",
         }
     )
 

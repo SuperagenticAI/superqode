@@ -132,6 +132,11 @@ def _antigravity_cli_factory(**kwargs) -> AgentRuntime:
     return module.AntigravityCLIRuntime(**kwargs)
 
 
+def _antigravity_managed_factory(**kwargs) -> AgentRuntime:
+    module = importlib.import_module("superqode.runtime.antigravity_managed")
+    return module.AntigravityManagedRuntime(**kwargs)
+
+
 _FACTORIES: dict[str, Callable[..., AgentRuntime]] = {
     "builtin": _builtin_factory,
     "adk": _adk_factory,
@@ -142,6 +147,7 @@ _FACTORIES: dict[str, Callable[..., AgentRuntime]] = {
     "claude-agent-sdk": _claude_agent_sdk_factory,
     "antigravity-sdk": _antigravity_sdk_factory,
     "antigravity-cli": _antigravity_cli_factory,
+    "antigravity-managed": _antigravity_managed_factory,
 }
 
 _DESCRIPTIONS: dict[str, str] = {
@@ -154,6 +160,7 @@ _DESCRIPTIONS: dict[str, str] = {
     "claude-agent-sdk": "Anthropic Claude Agent SDK (API key)",
     "antigravity-sdk": "Google Antigravity SDK (Gemini API key)",
     "antigravity-cli": "Google Antigravity CLI (Google Sign-In)",
+    "antigravity-managed": "Google-hosted Antigravity agent (Gemini API key)",
 }
 
 _OPTIONAL_PACKAGES: dict[str, tuple[str, str]] = {
@@ -206,6 +213,12 @@ def list_runtimes() -> list[RuntimeInfo]:
             )
             install_hint = None if installed else status.issue
             implemented = True
+        elif name == "antigravity-managed":
+            installed = True
+            ready = True
+            install_hint = None
+            implemented = True
+            status_detail = "Gemini API key is verified on first use"
         else:
             pkg, extra = _OPTIONAL_PACKAGES[name]
             try:

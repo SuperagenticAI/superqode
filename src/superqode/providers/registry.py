@@ -13,7 +13,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional
 
-from .models import LATEST_GOOGLE_FLASH_MODEL, LATEST_GOOGLE_PRO_MODEL
+from .models import (
+    LATEST_GOOGLE_FLASH_MODEL,
+    LATEST_GOOGLE_MODEL_IDS,
+    LATEST_GOOGLE_PRO_MODEL,
+)
 
 
 class ProviderTier(Enum):
@@ -130,11 +134,8 @@ PROVIDERS: Dict[str, ProviderDef] = {
         env_vars=["GOOGLE_API_KEY", "GEMINI_API_KEY"],
         litellm_prefix="gemini/",
         docs_url="https://aistudio.google.com/",
-        example_models=[
-            LATEST_GOOGLE_PRO_MODEL,
-            LATEST_GOOGLE_FLASH_MODEL,
-        ],
-        notes="Gemini API via Google AI Studio. Free key at aistudio.google.com; great for large codebases.",
+        example_models=list(LATEST_GOOGLE_MODEL_IDS),
+        notes="Current Gemini coding/chat models via Google AI Studio, newest first. Free key at aistudio.google.com.",
     ),
     "meta": ProviderDef(
         # Curated so Meta lists under US Labs instead of the synthesized

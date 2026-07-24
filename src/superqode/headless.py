@@ -293,6 +293,7 @@ async def run_headless(
         custom_system_prompt=extension_prompt or None,
         job_description=profile.job_description,
         plan_mode=profile.name == "plan",
+        tools_enabled=profile.name != "no-tool",
         enable_session_storage=True,
         session_storage_dir=storage_dir,
         session_id=session_id,

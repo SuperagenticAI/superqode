@@ -111,10 +111,10 @@ async def test_google_managed_backend_supports_interaction_payload(monkeypatch):
     endpoint, payload, headers, _timeout = calls[0]
     assert endpoint == "https://example.googleapis.com/v1/interactions"
     assert payload["agent"] == "projects/p/locations/us/agents/a"
-    assert payload["input"][0]["type"] == "user_input"
+    assert payload["input"] == "diagnose the failing checkout tests"
     assert payload["environment"] == {"type": "remote", "sources": []}
     assert payload["tools"] == [{"type": "code_execution"}]
-    assert payload["stream"] is True
+    assert payload["stream"] is False
     assert headers["x-goog-api-key"] == "test-google-token"
 
 

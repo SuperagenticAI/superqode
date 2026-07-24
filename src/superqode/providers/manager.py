@@ -6,7 +6,12 @@ from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 from enum import Enum
 
-from .models import LATEST_GOOGLE_FLASH_MODEL, LATEST_GOOGLE_PRO_MODEL
+from .models import (
+    LATEST_GOOGLE_FLASH_LITE_MODEL,
+    LATEST_GOOGLE_FLASH_MODEL,
+    LATEST_GOOGLE_PRO_MODEL,
+    LATEST_GOOGLE_STANDARD_FLASH_MODEL,
+)
 
 # litellm is imported lazily to avoid import errors when CWD doesn't exist
 # (litellm tries to resolve current directory during import via pydantic plugins)
@@ -643,21 +648,33 @@ class ProviderManager:
             ProviderInfo(
                 id="google",
                 name="Google",
-                description="Latest Gemini Pro and Flash models from models.dev",
+                description="Current Gemini coding/chat models, newest first",
                 requires_api_key=True,
                 configured=self._is_provider_configured("google"),
                 models=[
                     ModelInfo(
+                        LATEST_GOOGLE_FLASH_MODEL,
+                        "Gemini 3.6 Flash (Latest)",
+                        "google",
+                        context_size=1_048_576,
+                    ),
+                    ModelInfo(
+                        LATEST_GOOGLE_FLASH_LITE_MODEL,
+                        "Gemini 3.5 Flash-Lite",
+                        "google",
+                        context_size=1_048_576,
+                    ),
+                    ModelInfo(
+                        LATEST_GOOGLE_STANDARD_FLASH_MODEL,
+                        "Gemini 3.5 Flash",
+                        "google",
+                        context_size=1_048_576,
+                    ),
+                    ModelInfo(
                         LATEST_GOOGLE_PRO_MODEL,
                         "Gemini 3.1 Pro Preview (Latest Pro)",
                         "google",
-                        context_size=2000000,
-                    ),
-                    ModelInfo(
-                        LATEST_GOOGLE_FLASH_MODEL,
-                        "Gemini Flash Latest",
-                        "google",
-                        context_size=1000000,
+                        context_size=1_048_576,
                     ),
                 ],
             )
@@ -744,7 +761,7 @@ class ProviderManager:
                     ),
                     ModelInfo(
                         f"google/{LATEST_GOOGLE_FLASH_MODEL}",
-                        "Gemini Flash Latest",
+                        "Gemini 3.6 Flash",
                         "openrouter",
                         context_size=2097152,
                     ),
@@ -1206,7 +1223,7 @@ class ProviderManager:
                     ),
                     ModelInfo(
                         LATEST_GOOGLE_FLASH_MODEL,
-                        "Gemini Flash Latest (Vertex)",
+                        "Gemini 3.6 Flash (Vertex)",
                         "vertex-ai",
                         context_size=1000000,
                     ),
@@ -1270,7 +1287,7 @@ class ProviderManager:
                         description=model.description,
                         context_size=model.context_window,
                     )
-                    for model in get_models_for_provider(provider_id, include_all=True).values()
+                    for model in get_models_for_provider(provider_id).values()
                 ]
         except Exception:
             pass

@@ -960,6 +960,32 @@ def test_colorful_status_bar_shows_active_harness():
     assert "harness workbench" in plain
 
 
+def test_self_contained_status_replaces_stale_byok_identity(monkeypatch):
+    from superqode.app.widgets import ColorfulStatusBar
+    from superqode.app_main import SuperQodeApp
+
+    monkeypatch.delenv("SUPERQODE_ANTIGRAVITY_AGENT", raising=False)
+    bar = ColorfulStatusBar()
+    bar.update_byok_status("unknown", "unknown", tokens=108)
+
+    class Stub:
+        def query_one(self, *_args):
+            return bar
+
+    SuperQodeApp._sync_self_contained_status(
+        Stub(),
+        "antigravity-managed",
+        tokens=108,
+    )
+
+    plain = bar._render_for_width(160).plain
+    assert "unknown" not in plain
+    assert "antigravity-preview-05-2026" in plain
+    assert "rt antigravity-managed" in plain
+    assert "harness antigravity" in plain
+    assert "108 tok" in plain
+
+
 def test_colorful_status_bar_compacts_by_width():
     from superqode import __version__
     from superqode.app.widgets import ColorfulStatusBar
@@ -6167,6 +6193,14 @@ def test_agent_session_label_names_what_actually_runs():
     )
     assert app._agent_session_label("openai") == "Runtime: Codex (agent-owned harness)"
 
+    app._pure_mode = SimpleNamespace(
+        runtime_name="antigravity-managed",
+        get_status=lambda: {"harness": {"name": "core"}},
+    )
+    assert (
+        app._agent_session_label("google") == "Runtime: Antigravity managed (agent-owned harness)"
+    )
+
     # Native loop with a named harness.
     app._pure_mode = SimpleNamespace(
         runtime_name="builtin",
@@ -6177,3 +6211,21 @@ def test_agent_session_label_names_what_actually_runs():
     # Native loop without a harness name falls back to the provider.
     app._pure_mode = SimpleNamespace(runtime_name="", get_status=lambda: {"harness": {}})
     assert app._agent_session_label("openai") == "BYOK openai"
+
+
+def test_managed_agent_session_badges_name_hosted_ownership():
+    log = ConversationLog()
+    writes = []
+    log.write = lambda content, *args, **kwargs: writes.append(content)
+
+    log.start_agent_session(
+        "Runtime: Antigravity managed (agent-owned harness)",
+        "",
+        "managed",
+        "hosted",
+    )
+
+    rendered = "\n".join(render_plain(item) for item in writes)
+    assert "MANAGED" in rendered
+    assert "HOSTED" in rendered
+    assert "ASK" not in rendered

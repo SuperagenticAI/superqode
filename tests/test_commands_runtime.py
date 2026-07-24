@@ -49,6 +49,7 @@ def test_list_json_emits_array(runner, monkeypatch):
         "claude-agent-sdk",
         "antigravity-sdk",
         "antigravity-cli",
+        "antigravity-managed",
         "pydanticai",
     }
     # Exactly one entry is marked active.

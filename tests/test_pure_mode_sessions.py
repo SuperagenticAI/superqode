@@ -82,6 +82,32 @@ def test_pure_mode_uses_core_harness_by_default(monkeypatch):
     assert status["harness"]["id"] == "core"
 
 
+def test_pure_mode_captures_managed_runtime_usage():
+    from superqode.harness.events import HarnessEvent
+
+    pure = PureMode()
+    pure._handle_runtime_harness_event(
+        HarnessEvent(
+            type="turn_complete",
+            data={
+                "usage": {
+                    "total_input_tokens": 21,
+                    "total_output_tokens": 13,
+                    "total_thought_tokens": 8,
+                    "total_tokens": 42,
+                }
+            },
+        )
+    )
+
+    assert pure._last_stats == {
+        "prompt_tokens": 21,
+        "completion_tokens": 13,
+        "thinking_tokens": 8,
+        "total_tokens": 42,
+    }
+
+
 def test_pure_mode_switches_to_ds4_profile_on_connect(tmp_path, monkeypatch):
     monkeypatch.delenv("SUPERQODE_TOOL_PROFILE", raising=False)
     monkeypatch.setenv("SUPERQODE_HARNESS", "workbench")

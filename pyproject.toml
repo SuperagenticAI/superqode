@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.2.35"
+version = "0.2.36"
 description = "Agent Engineering for your code factory"
 readme = "README.md"
 license = "Apache-2.0"
@@ -115,10 +115,10 @@ claude-agent-sdk = [
     "claude-agent-sdk>=0.2.9,<0.3.0",
 ]
 antigravity-sdk = [
-    "google-antigravity>=0.1.6,<0.2.0",
-    # 0.1.6 ships edition-2024 generated descriptors but its own protobuf
-    # lower bound is too loose; protobuf 5 fails while importing the SDK.
-    "protobuf>=6.31.1",
+    "google-antigravity>=0.1.8,<0.2.0",
+    # The SDK ships edition-2024 generated descriptors but its own protobuf
+    # lower bound is too loose; its 7.35 gencode requires protobuf 7.35+.
+    "protobuf>=7.35.0",
 ]
 # Convenience bundle for users who actively use all supported vendor SDK
 # runtimes. Vendor CLIs such as Grok and agy remain separate installations.
@@ -126,8 +126,8 @@ vendor-sdks = [
     "openai-codex>=0.1.0b2,<0.2.0",
     "github-copilot-sdk>=1.0.8,<2.0.0",
     "claude-agent-sdk>=0.2.9,<0.3.0",
-    "google-antigravity>=0.1.6,<0.2.0",
-    "protobuf>=6.31.1",
+    "google-antigravity>=0.1.8,<0.2.0",
+    "protobuf>=7.35.0",
 ]
 deepagents = [
     "deepagents>=0.6.0,<0.7.0",
@@ -228,6 +228,77 @@ superqode = [
     "local/data/*.yaml",
     "local/data/model-packs/*.yaml",
     "py.typed",
+]
+
+[tool.uv]
+# google-antigravity 0.1.8 ships protobuf 7.35-generated descriptors, while
+# mem0ai currently requires protobuf <7. Keep uv from selecting a combination
+# that installs successfully but cannot import the Antigravity SDK.
+conflicts = [
+    [
+        { extra = "antigravity-sdk" },
+        { extra = "mem0" },
+    ],
+    [
+        { extra = "antigravity-sdk" },
+        { extra = "memory-providers" },
+    ],
+    [
+        { extra = "vendor-sdks" },
+        { extra = "mem0" },
+    ],
+    [
+        { extra = "vendor-sdks" },
+        { extra = "memory-providers" },
+    ],
+    [
+        { extra = "antigravity-sdk" },
+        { extra = "adk" },
+    ],
+    [
+        { extra = "antigravity-sdk" },
+        { extra = "observability" },
+    ],
+    [
+        { extra = "vendor-sdks" },
+        { extra = "adk" },
+    ],
+    [
+        { extra = "vendor-sdks" },
+        { extra = "observability" },
+    ],
+    [
+        { extra = "antigravity-sdk" },
+        { extra = "sandbox-modal" },
+    ],
+    [
+        { extra = "antigravity-sdk" },
+        { extra = "sandbox-cloud" },
+    ],
+    [
+        { extra = "vendor-sdks" },
+        { extra = "sandbox-modal" },
+    ],
+    [
+        { extra = "vendor-sdks" },
+        { extra = "sandbox-cloud" },
+    ],
+    [
+        { extra = "antigravity-sdk" },
+        { extra = "pydanticai" },
+    ],
+    [
+        { extra = "antigravity-sdk" },
+        { extra = "pydanticai-logfire" },
+    ],
+    [
+        { extra = "vendor-sdks" },
+        { extra = "pydanticai" },
+    ],
+    [
+        { extra = "vendor-sdks" },
+        { extra = "pydanticai-logfire" },
+    ],
 ]
 
 [tool.ruff]

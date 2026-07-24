@@ -818,12 +818,14 @@ class AgentRunMixin:
             self._start_stream_animation(log)
 
             # Use enhanced agent session header (always visible)
+            runtime_name = str(getattr(self._pure_mode, "runtime_name", "") or "")
+            managed_antigravity = runtime_name == "antigravity-managed"
             _safe_call(
                 log.start_agent_session,
                 self._agent_session_label(provider),
                 model,
-                "byok" if not is_local else "local",
-                self.approval_mode,
+                "managed" if managed_antigravity else ("byok" if not is_local else "local"),
+                "hosted" if managed_antigravity else self.approval_mode,
             )
 
             # Stream the response
@@ -1020,9 +1022,14 @@ class AgentRunMixin:
                     file_diffs = self._compute_file_diffs(files_modified) if files_modified else {}
 
                     # Use ACP-style outcome display for both ACP and BYOK
+                    outcome_agent = (
+                        self._agent_session_label(provider)
+                        if runtime_name in self._SELF_CONTAINED_RUNTIMES
+                        else f"BYOK {provider}/{model}"
+                    )
                     self._show_final_outcome(
                         response_text,
-                        f"BYOK {provider}/{model}",
+                        outcome_agent,
                         {
                             "tool_count": tool_count,
                             "duration": elapsed,
@@ -1065,6 +1072,14 @@ class AgentRunMixin:
                         total_tokens=total_tokens,
                         total_cost=float(stats.get("total_cost", 0.0) or 0.0) or None,
                     )
+                    if runtime_name in self._SELF_CONTAINED_RUNTIMES:
+                        # Usage tracking shares the historical BYOK tracker,
+                        # whose provider/model may be "unknown". Restore the
+                        # runtime-owned identity while retaining exact usage.
+                        self._sync_self_contained_status(
+                            runtime_name,
+                            tokens=total_tokens,
+                        )
             elif chunk_count > 0:
                 # Got chunks but no content - might be tool calls only
                 log.add_warning(
@@ -1097,7 +1112,11 @@ class AgentRunMixin:
 
                     # Show completion summary with file changes
                     self._show_completion_summary(
-                        f"BYOK {provider}/{model}",
+                        (
+                            self._agent_session_label(provider)
+                            if runtime_name in self._SELF_CONTAINED_RUNTIMES
+                            else f"BYOK {provider}/{model}"
+                        ),
                         {
                             "tool_count": tool_count,
                             "duration": elapsed,
@@ -3863,7 +3882,11 @@ class AgentRunMixin:
         if runtime_name in self._SELF_CONTAINED_RUNTIMES:
             friendly = {
                 "codex-sdk": "Codex",
+                "copilot-sdk": "Copilot SDK",
                 "claude-agent-sdk": "Claude Agent SDK",
+                "antigravity-sdk": "Antigravity SDK",
+                "antigravity-cli": "Antigravity CLI",
+                "antigravity-managed": "Antigravity managed",
             }.get(runtime_name, runtime_name)
             return f"Runtime: {friendly} (agent-owned harness)"
         harness_name = ""

@@ -524,8 +524,23 @@ class DialogsMixin:
             "(found)\n" if settings.exists() else "(not found yet)\n",
             style=THEME["success" if settings.exists() else "dim"],
         )
+        runtime_getter = getattr(self, "_active_antigravity_runtime", None)
+        runtime = runtime_getter() if callable(runtime_getter) else None
         t.append("    Auth      ", style=THEME["muted"])
-        t.append("OS keyring / browser sign-in handled by agy\n", style=THEME["text"])
+        if getattr(runtime, "name", "") == "antigravity-sdk":
+            t.append("Gemini API key handled by the SDK\n", style=THEME["text"])
+        else:
+            t.append("OS keyring / browser sign-in handled by agy\n", style=THEME["text"])
+        if runtime is not None:
+            t.append("    Runtime   ", style=THEME["muted"])
+            t.append(f"{runtime.name}\n", style=THEME["text"])
+            if getattr(runtime, "name", "") == "antigravity-cli":
+                t.append("    Agent     ", style=THEME["muted"])
+                t.append(f"{runtime.agent_name or 'default'}\n", style=THEME["text"])
+            t.append("    Model     ", style=THEME["muted"])
+            t.append(f"{runtime.config.model or 'default'}\n", style=THEME["text"])
+            t.append("    Effort    ", style=THEME["muted"])
+            t.append(f"{runtime.reasoning_effort or 'auto'}\n", style=THEME["text"])
         t.append("\n  Commands:\n", style=THEME["muted"])
         t.append("    :antigravity launch    ", style=THEME["cyan"])
         t.append("show the current-repo agy launch command\n", style=THEME["muted"])
@@ -559,6 +574,95 @@ class DialogsMixin:
         t.append("    :connect antigravity  # Google Sign-In route\n", style=THEME["cyan"])
         log.write(t)
 
+    def _show_agy_help(self, log) -> None:
+        """Show the native agy 1.1.x command tree available in SuperQode."""
+
+        t = Text()
+        t.append("\n  agy CLI commands in SuperQode\n\n", style=f"bold {THEME['text']}")
+        sections = (
+            (
+                "Harness and session",
+                (
+                    (":agy connect", "connect the signed-in agy harness"),
+                    (":agy run <prompt>", "send a prompt through the connected runtime"),
+                    (":agy status", "binary, version, settings, runtime diagnostics"),
+                    (":agy agent [name]", "list agents or select one for future turns"),
+                    (":agy model [name]", "list models or select one for future turns"),
+                    (":agy effort <auto|low|medium|high>", "set reasoning effort"),
+                ),
+            ),
+            (
+                "Native CLI",
+                (
+                    (":agy agents", "run `agy agents`"),
+                    (":agy models", "run `agy models`"),
+                    (":agy changelog", "show CLI release notes"),
+                    (":agy version", "show the installed version"),
+                    (":agy update", "update the agy installation"),
+                    (":agy install [flags]", "configure PATH and shell integration"),
+                ),
+            ),
+            (
+                "Plugins",
+                (
+                    (":agy plugin list", "list imported plugins"),
+                    (":agy plugin import [gemini|claude]", "import legacy plugins"),
+                    (":agy plugin install <target>", "install a plugin"),
+                    (":agy plugin uninstall <name>", "uninstall a plugin"),
+                    (":agy plugin enable|disable <name>", "change plugin state"),
+                    (":agy plugin validate [path]", "validate a plugin"),
+                    (":agy plugin link <marketplace> <target>", "generate a marketplace link"),
+                ),
+            ),
+            (
+                "Interactive TUI and other routes",
+                (
+                    (":agy launch [flags]", "show a copyable external agy TUI command"),
+                    (":agy continue", "show the workspace quick-resume command"),
+                    (":agy resume <conversation-id>", "show an exact resume command"),
+                    (":agy migrate", "show Gemini CLI migration steps"),
+                    (":agy sdk", "use the local API-key SDK harness"),
+                    (":agy managed", "use Google's hosted API-key agent"),
+                    (":agy superqode", "use Google BYOK with SuperQode's harness"),
+                ),
+            ),
+        )
+        for title, rows in sections:
+            t.append(f"  {title}\n", style=f"bold {THEME['purple']}")
+            for command, description in rows:
+                t.append(f"    {command:<42}", style=THEME["cyan"])
+                t.append(f"{description}\n", style=THEME["muted"])
+            t.append("\n")
+        t.append(
+            "  Account-backed commands run only when you explicitly enter them. "
+            "`:agy help`, `:agy status`, and completion do not query your account.\n",
+            style=THEME["dim"],
+        )
+        t.append(
+            "  A full-screen TUI cannot be nested reliably inside SuperQode, so "
+            "interactive panels (/resume, /agents, /config, /permissions, /mcp, "
+            "/skills) are opened through :agy launch.\n",
+            style=THEME["dim"],
+        )
+        log.write(t)
+
+    def _show_agy_plugin_help(self, log) -> None:
+        t = Text()
+        t.append("\n  agy plugin commands\n\n", style=f"bold {THEME['text']}")
+        for command, description in (
+            (":agy plugin list", "List imported plugins"),
+            (":agy plugin import [gemini|claude]", "Import legacy plugins"),
+            (":agy plugin install <target>", "Install plugin or plugin@marketplace"),
+            (":agy plugin uninstall <name>", "Uninstall a plugin"),
+            (":agy plugin enable <name>", "Enable an installed plugin"),
+            (":agy plugin disable <name>", "Disable an installed plugin"),
+            (":agy plugin validate [path]", "Validate a plugin directory"),
+            (":agy plugin link <marketplace> <target>", "Generate a marketplace link"),
+        ):
+            t.append(f"    {command:<44}", style=THEME["cyan"])
+            t.append(f"{description}\n", style=THEME["muted"])
+        log.write(t)
+
     def _show_antigravity_help(self, log) -> None:
         t = Text()
         t.append("\n  Antigravity in SuperQode\n\n", style=f"bold {THEME['text']}")
@@ -566,17 +670,34 @@ class DialogsMixin:
         t.append("Antigravity harness through signed-in agy\n", style=THEME["muted"])
         t.append("  :antigravity sdk           ", style=THEME["cyan"])
         t.append("Antigravity harness through its API-key SDK\n", style=THEME["muted"])
+        t.append("  :antigravity managed       ", style=THEME["cyan"])
+        t.append(
+            "Antigravity harness in Google's hosted sandbox via Gemini API key\n",
+            style=THEME["muted"],
+        )
         t.append("  :antigravity superqode     ", style=THEME["cyan"])
         t.append("SuperQode harness with a Google API key\n", style=THEME["muted"])
         t.append("  :antigravity launch        ", style=THEME["cyan"])
         t.append("show the separate agy CLI handoff\n", style=THEME["muted"])
         t.append("  :antigravity status        ", style=THEME["cyan"])
         t.append("check binary/settings status\n", style=THEME["muted"])
+        t.append("  :antigravity agent <name>  ", style=THEME["cyan"])
+        t.append("select a CLI custom agent for future turns\n", style=THEME["muted"])
+        t.append("  :antigravity model <name>  ", style=THEME["cyan"])
+        t.append("select a CLI/SDK model for future turns\n", style=THEME["muted"])
+        t.append("  :antigravity effort <level>", style=THEME["cyan"])
+        t.append("set CLI/SDK thinking effort (or auto)\n", style=THEME["muted"])
         t.append("  :antigravity migrate       ", style=THEME["cyan"])
         t.append("show Gemini CLI migration steps\n", style=THEME["muted"])
         t.append(
             "\n  Structured SuperQode tool cards require an ACP/headless event stream. "
-            "agy does not document that yet.\n",
+            "The managed and SDK routes provide typed events; agy does not document "
+            "that stream yet.\n",
+            style=THEME["dim"],
+        )
+        t.append(
+            "  Managed execution is remote: it does not upload the current local "
+            "repository automatically.\n",
             style=THEME["dim"],
         )
         log.write(t)

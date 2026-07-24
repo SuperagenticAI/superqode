@@ -19,9 +19,14 @@ def test_default_google_recommendations_and_aliases():
 
     google = config.providers["google"]
 
-    assert google.recommended_models[:2] == ["gemini-3.1-pro-preview", "gemini-flash-latest"]
+    assert google.recommended_models[:4] == [
+        "gemini-3.6-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.5-flash",
+        "gemini-3.1-pro-preview",
+    ]
     assert config.model_aliases["latest-gemini"] == "gemini-3.1-pro-preview"
-    assert config.model_aliases["latest-gemini-flash"] == "gemini-flash-latest"
+    assert config.model_aliases["latest-gemini-flash"] == "gemini-3.6-flash"
 
 
 def test_default_huggingface_glm52_fireworks_route():

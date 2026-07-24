@@ -23,7 +23,11 @@ from .schema import (
     CostTrackingConfig,
     ErrorConfig,
 )
-from ..providers.models import LATEST_GOOGLE_FLASH_MODEL, LATEST_GOOGLE_PRO_MODEL
+from ..providers.models import (
+    LATEST_GOOGLE_FLASH_MODEL,
+    LATEST_GOOGLE_MODEL_IDS,
+    LATEST_GOOGLE_PRO_MODEL,
+)
 from ..providers.model_specs import split_provider_model_ref
 
 
@@ -712,10 +716,7 @@ Critique and improve code quality from development.""",
         "google": ProviderConfig(
             api_key_env="GOOGLE_API_KEY",
             description="Google Gemini models via Vertex AI",
-            recommended_models=[
-                LATEST_GOOGLE_PRO_MODEL,
-                LATEST_GOOGLE_FLASH_MODEL,
-            ],
+            recommended_models=list(LATEST_GOOGLE_MODEL_IDS),
             custom_models_allowed=True,
         ),
         "zhipuai": ProviderConfig(

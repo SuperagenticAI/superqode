@@ -9,14 +9,19 @@ def teardown_function():
     model_db._live_autoload_attempted = False
 
 
-def test_builtin_google_byok_models_only_expose_latest_pair(monkeypatch):
+def test_builtin_google_byok_models_are_current_and_newest_first(monkeypatch):
     monkeypatch.setattr(model_db, "_use_live_data", False)
     monkeypatch.setattr(model_db, "_live_models", None)
     monkeypatch.setattr(model_db, "_live_autoload_attempted", True)
 
     models = get_models_for_provider("google")
 
-    assert list(models) == ["gemini-3.1-pro-preview", "gemini-flash-latest"]
+    assert list(models) == [
+        "gemini-3.6-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.5-flash",
+        "gemini-3.1-pro-preview",
+    ]
 
 
 def test_builtin_xai_grok_4_5_metadata(monkeypatch):
@@ -109,6 +114,28 @@ def test_full_catalog_option_keeps_new_openai_variants_selectable():
     } <= set(full_catalog)
 
 
+def test_default_byok_catalog_keeps_only_six_newest_chat_models():
+    set_live_models(
+        {
+            "acme": {
+                f"acme-{version}": ModelInfo(
+                    f"acme-{version}",
+                    f"Acme {version}",
+                    "acme",
+                    released=f"2026-{version:02d}-01",
+                )
+                for version in range(1, 9)
+            }
+        }
+    )
+
+    byok_models = get_models_for_provider("acme")
+    full_catalog = get_models_for_provider("acme", include_all=True)
+
+    assert list(byok_models) == [f"acme-{version}" for version in range(8, 2, -1)]
+    assert list(full_catalog) == [f"acme-{version}" for version in range(8, 0, -1)]
+
+
 def test_builtin_xai_catalog_drops_retired_grok_models(monkeypatch):
     # xAI no longer serves grok-3/grok-2/grok-beta; they must not reappear.
     monkeypatch.setattr(model_db, "_use_live_data", False)
@@ -126,11 +153,35 @@ def test_builtin_xai_catalog_drops_retired_grok_models(monkeypatch):
     assert "grok-4.5" in manager_ids
 
 
-def test_live_google_models_are_filtered_to_latest_pro_and_flash():
+def test_live_google_models_drop_deprecated_aliases_and_specialty_endpoints():
     set_live_models(
         {
             "google": {
+                "gemini-2.0-flash": ModelInfo(
+                    "gemini-2.0-flash",
+                    "Gemini 2.0 Flash",
+                    "google",
+                    released="2025-02-05",
+                ),
                 "gemini-2.5-pro": ModelInfo("gemini-2.5-pro", "Gemini 2.5 Pro", "google"),
+                "gemini-3.6-flash": ModelInfo(
+                    "gemini-3.6-flash",
+                    "Gemini 3.6 Flash",
+                    "google",
+                    released="2026-07-21",
+                ),
+                "gemini-3.5-flash-lite": ModelInfo(
+                    "gemini-3.5-flash-lite",
+                    "Gemini 3.5 Flash-Lite",
+                    "google",
+                    released="2026-07-21",
+                ),
+                "gemini-3.5-flash": ModelInfo(
+                    "gemini-3.5-flash",
+                    "Gemini 3.5 Flash",
+                    "google",
+                    released="2026-05-19",
+                ),
                 "gemini-3.1-pro-preview": ModelInfo(
                     "gemini-3.1-pro-preview",
                     "Gemini 3.1 Pro Preview",
@@ -143,25 +194,31 @@ def test_live_google_models_are_filtered_to_latest_pro_and_flash():
                     "google",
                     released="2026-02-19",
                 ),
-                "gemini-3.5-flash": ModelInfo(
-                    "gemini-3.5-flash",
-                    "Gemini 3.5 Flash",
-                    "google",
-                    released="2026-05-19",
-                ),
                 "gemini-flash-latest": ModelInfo(
                     "gemini-flash-latest",
                     "Gemini Flash Latest",
                     "google",
-                    released="2025-09-25",
+                    released="2026-07-21",
                 ),
             }
         }
     )
 
     models = get_models_for_provider("google")
+    full_catalog = get_models_for_provider("google", include_all=True)
 
-    assert list(models) == ["gemini-3.1-pro-preview", "gemini-flash-latest"]
+    expected = [
+        "gemini-3.6-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.5-flash",
+        "gemini-3.1-pro-preview",
+    ]
+    assert list(models) == expected
+    assert list(full_catalog) == expected
+    assert "gemini-2.0-flash" not in full_catalog
+    assert "gemini-2.5-pro" not in full_catalog
+    assert "gemini-flash-latest" not in full_catalog
+    assert "gemini-3.1-pro-preview-customtools" not in full_catalog
 
 
 def test_live_provider_models_replace_stale_builtin_models():

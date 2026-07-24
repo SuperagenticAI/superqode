@@ -371,6 +371,14 @@ class ConnectMixin:
                     (":antigravity help", "for route details"),
                 ),
             },
+            "antigravity-managed": {
+                "auth": "Gemini API key (GEMINI_API_KEY or GOOGLE_API_KEY)",
+                "model": "Google-hosted Antigravity managed agent",
+                "commands": (
+                    (":antigravity help", "for route details"),
+                    (":runtime list", "to compare available runtime routes"),
+                ),
+            },
         }
         details = connection_details.get(
             runtime_name,
@@ -406,8 +414,7 @@ class ConnectMixin:
                 persist=False,
                 dedupe_key=f"runtime:{runtime_name}",
             )
-        self._set_status_runtime(runtime_name)  # badge shows the runtime now
-        self._set_status_model("")  # model fills in once resolved
+        self._sync_self_contained_status(runtime_name)
         if runtime_name == "codex-sdk":
             self.run_worker(self._resolve_codex_active_model(log), exclusive=False)
 
@@ -1367,7 +1374,7 @@ class ConnectMixin:
                         missing_keys.append(env_var)
 
             try:
-                models = get_models_for_provider(pid, include_all=True)
+                models = get_models_for_provider(pid)
                 model_count = len(models)
             except Exception:
                 model_count = len(pdef.example_models) if pdef.example_models else 0

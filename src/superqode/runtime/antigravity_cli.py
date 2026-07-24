@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import shutil
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -34,6 +35,11 @@ class AntigravityCLIRuntime:
             "harness_owner": self.harness_owner,
             "authentication": "google-sign-in",
             "structured_events": False,
+            "model": self.config.model or "cli-default",
+            "agent": self._agent_name,
+            "reasoning_effort": self._reasoning_effort,
+            "project_id": self._project_id,
+            "conversation_id": self._conversation_id,
         }
 
     def __init__(self, *, config: AgentConfig | None = None, **_unused: Any) -> None:
@@ -47,8 +53,15 @@ class AntigravityCLIRuntime:
                 "https://antigravity.google/docs/cli-install"
             )
         self._checked_version = False
+        self._cli_version: tuple[int, ...] | None = None
         self._project_id = self._workspace_project_id()
         self._conversation_id: str | None = None
+        self._agent_name = _safe_cli_value(
+            os.environ.get("SUPERQODE_ANTIGRAVITY_CLI_AGENT"), setting="agent"
+        )
+        self._reasoning_effort = _coerce_cli_effort(
+            config.reasoning_effort or os.environ.get("SUPERQODE_ANTIGRAVITY_CLI_EFFORT")
+        )
         self._process: asyncio.subprocess.Process | None = None
         self._cancelled = False
         self._turn_lock = asyncio.Lock()
@@ -82,6 +95,12 @@ class AntigravityCLIRuntime:
                 "Run `agy update`; SuperQode requires 1.1.1 or newer because that release "
                 "fixes --print hangs and error exit codes."
             )
+        if self._reasoning_effort and version < (1, 1, 5):
+            raise RuntimeError(
+                f"Antigravity CLI {text} does not support --effort. "
+                "Run `agy update` or set effort to auto."
+            )
+        self._cli_version = version
         self._checked_version = True
 
     def _command(self, prompt: str) -> list[str]:
@@ -99,6 +118,10 @@ class AntigravityCLIRuntime:
             command.append("--new-project")
         if self.config.model:
             command.extend(["--model", self.config.model])
+        if self._agent_name:
+            command.extend(["--agent", self._agent_name])
+        if self._reasoning_effort:
+            command.extend(["--effort", self._reasoning_effort])
         command.extend(["--print", prompt])
         return command
 
@@ -219,6 +242,47 @@ class AntigravityCLIRuntime:
 
     def reset_cancellation(self) -> None:
         self._cancelled = False
+
+    def set_agent(self, agent: str | None) -> None:
+        self._agent_name = _safe_cli_value(agent, setting="agent")
+
+    @property
+    def agent_name(self) -> str | None:
+        return self._agent_name
+
+    def set_model(self, model: str | None) -> None:
+        self.config.model = _safe_cli_value(model, setting="model") or ""
+
+    def set_reasoning_effort(self, effort: str | None) -> None:
+        normalized = _coerce_cli_effort(effort)
+        # A prior version probe may have run before an effort was selected.
+        if normalized and self._cli_version is not None and self._cli_version < (1, 1, 5):
+            raise RuntimeError("agy 1.1.5 or newer is required for reasoning effort")
+        self._reasoning_effort = normalized
+
+    @property
+    def reasoning_effort(self) -> str | None:
+        return self._reasoning_effort
+
+
+def _safe_cli_value(value: str | None, *, setting: str) -> str | None:
+    normalized = str(value or "").strip()
+    if normalized.lower() in {"", "auto", "default", "none"}:
+        return None
+    if normalized.startswith("-") or any(char in normalized for char in "\x00\r\n"):
+        raise ValueError(f"invalid Antigravity CLI {setting}")
+    return normalized
+
+
+def _coerce_cli_effort(effort: str | None) -> str | None:
+    normalized = _safe_cli_value(effort, setting="effort")
+    if normalized is None:
+        return None
+    normalized = normalized.lower().replace("_", "-")
+    allowed = {"low", "medium", "high"}
+    if normalized not in allowed:
+        raise ValueError("agy effort must be auto, low, medium, or high")
+    return normalized
 
 
 __all__ = ["AntigravityCLIRuntime"]

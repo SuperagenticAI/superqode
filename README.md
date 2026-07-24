@@ -151,7 +151,7 @@ Inside the TUI, the local-first MVP path is:
 
 ### Poolside Laguna S 2.1 on Apple Silicon
 
-SuperQode `0.2.35` can run Poolside's 118B Laguna S 2.1 GGUF on a
+SuperQode `0.2.36` can run Poolside's 118B Laguna S 2.1 GGUF on a
 128 GB Apple Silicon Mac through either DwarfStar or a Laguna-capable
 llama.cpp build. Download the Q4_K_M artifact once into Hugging Face's standard
 cache:
@@ -343,6 +343,10 @@ Antigravity subscription CLIs, which retain their own installers and login
 flows. Run `superqode runtime setup` or `:runtime setup` for environment-aware
 commands and authentication steps.
 
+Google's hosted Antigravity managed agent needs no extra package. Set
+`GEMINI_API_KEY`, then use `:antigravity managed`. It runs in a fresh remote
+sandbox and does not upload the local checkout automatically.
+
 Then select a backend in a spec or at run time:
 
 ```bash
@@ -404,6 +408,11 @@ Inside the TUI, start with `:help` and these commands:
 :copilot models       # live models available to the Copilot account
 :connect claude       # Claude Agent SDK with ANTHROPIC_API_KEY
 :connect antigravity  # signed-in Antigravity CLI (Google OAuth/keyring)
+:antigravity sdk      # local Antigravity SDK with GEMINI_API_KEY
+:antigravity model <slug>  # set CLI or SDK model before the next turn
+:antigravity effort high  # set CLI or SDK thinking effort
+:antigravity agent reviewer  # select an agy custom agent
+:antigravity managed  # Google-hosted Antigravity agent with GEMINI_API_KEY
 :connect byok google  # Google API key path
 :connect grok         # Grok Build, xAI's own agent over ACP
 :grok api             # SuperQode core/workbench harness on the same subscription

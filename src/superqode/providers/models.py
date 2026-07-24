@@ -20,9 +20,19 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Tuple
 
+LATEST_GOOGLE_FLASH_MODEL = "gemini-3.6-flash"
+LATEST_GOOGLE_FLASH_LITE_MODEL = "gemini-3.5-flash-lite"
+LATEST_GOOGLE_STANDARD_FLASH_MODEL = "gemini-3.5-flash"
 LATEST_GOOGLE_PRO_MODEL = "gemini-3.1-pro-preview"
-LATEST_GOOGLE_FLASH_MODEL = "gemini-flash-latest"
-LATEST_GOOGLE_MODEL_IDS = (LATEST_GOOGLE_PRO_MODEL, LATEST_GOOGLE_FLASH_MODEL)
+# Deliberately concrete IDs rather than rolling aliases. Google's ListModels
+# endpoint retains superseded and even shut-down entries, so this tuple is the
+# lifecycle-reviewed BYOK chat/coding catalog and its display order.
+LATEST_GOOGLE_MODEL_IDS = (
+    LATEST_GOOGLE_FLASH_MODEL,
+    LATEST_GOOGLE_FLASH_LITE_MODEL,
+    LATEST_GOOGLE_STANDARD_FLASH_MODEL,
+    LATEST_GOOGLE_PRO_MODEL,
+)
 CURRENT_MODEL_LIMIT = 6
 LOCAL_MODEL_PROVIDERS = {
     "ds4",
@@ -619,14 +629,14 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
     # GOOGLE
     # =========================================================================
     "google": {
-        "gemini-3.1-pro-preview": ModelInfo(
-            id="gemini-3.1-pro-preview",
-            name="Gemini 3.1 Pro Preview",
+        "gemini-3.6-flash": ModelInfo(
+            id="gemini-3.6-flash",
+            name="Gemini 3.6 Flash",
             provider="google",
-            input_price=2.0,
-            output_price=8.0,
-            context_window=2000000,
-            max_output=65536,
+            input_price=1.50,
+            output_price=7.50,
+            context_window=1_048_576,
+            max_output=65_536,
             capabilities=[
                 ModelCapability.TOOLS,
                 ModelCapability.VISION,
@@ -636,29 +646,72 @@ MODELS: Dict[str, Dict[str, ModelInfo]] = {
                 ModelCapability.CODE,
                 ModelCapability.LONG_CONTEXT,
             ],
-            description="Latest general Gemini Pro model listed by models.dev",
-            recommended_for=["complex reasoning", "large codebases", "research"],
-            released="2026-02",
+            description="Latest stable Gemini model for coding and agentic execution",
+            recommended_for=["coding", "agentic workflows", "general"],
+            released="2026-07-21",
         ),
-        "gemini-flash-latest": ModelInfo(
-            id="gemini-flash-latest",
-            name="Gemini Flash Latest",
+        "gemini-3.5-flash-lite": ModelInfo(
+            id="gemini-3.5-flash-lite",
+            name="Gemini 3.5 Flash-Lite",
             provider="google",
-            input_price=0.15,
-            output_price=0.60,
-            context_window=1000000,
-            max_output=65536,
+            input_price=0.30,
+            output_price=2.50,
+            context_window=1_048_576,
+            max_output=65_536,
             capabilities=[
                 ModelCapability.TOOLS,
                 ModelCapability.VISION,
                 ModelCapability.STREAMING,
                 ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
                 ModelCapability.CODE,
                 ModelCapability.LONG_CONTEXT,
             ],
-            description="Latest Gemini Flash alias listed by models.dev",
-            recommended_for=["quick tasks", "high volume", "coding"],
-            released="2025-09",
+            description="Latest stable low-cost Gemini model for high-volume subagent work",
+            recommended_for=["subagents", "high volume", "quick tasks"],
+            released="2026-07-21",
+        ),
+        "gemini-3.5-flash": ModelInfo(
+            id="gemini-3.5-flash",
+            name="Gemini 3.5 Flash",
+            provider="google",
+            input_price=1.50,
+            output_price=9.00,
+            context_window=1_048_576,
+            max_output=65_536,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.VISION,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Stable Gemini model for multi-step and long-horizon agentic work",
+            recommended_for=["coding", "multi-step workflows", "general"],
+            released="2026-05-19",
+        ),
+        "gemini-3.1-pro-preview": ModelInfo(
+            id="gemini-3.1-pro-preview",
+            name="Gemini 3.1 Pro Preview",
+            provider="google",
+            input_price=2.0,
+            output_price=12.0,
+            context_window=1_048_576,
+            max_output=65_536,
+            capabilities=[
+                ModelCapability.TOOLS,
+                ModelCapability.VISION,
+                ModelCapability.STREAMING,
+                ModelCapability.JSON_MODE,
+                ModelCapability.REASONING,
+                ModelCapability.CODE,
+                ModelCapability.LONG_CONTEXT,
+            ],
+            description="Latest Gemini Pro preview for complex coding and agentic workflows",
+            recommended_for=["complex reasoning", "large codebases", "research"],
+            released="2026-02-19",
         ),
     },
     # =========================================================================
@@ -1395,10 +1448,11 @@ def get_model_info(provider_id: str, model_id: str) -> Optional[ModelInfo]:
 def get_models_for_provider(provider_id: str, *, include_all: bool = False) -> Dict[str, ModelInfo]:
     """Get provider models, optionally retaining the complete live catalog.
 
-    The default remains compact for recommendations and small status surfaces.
-    BYOK selection, direct connection completion, and catalog browsing pass
-    ``include_all=True`` so a new models.dev entry cannot be hidden by that
-    presentation-oriented trimming.
+    The default is the current, newest-first chat/coding set used by BYOK
+    pickers, completion, and SDK-facing provider lists. Diagnostic callers may
+    pass ``include_all=True`` to inspect the underlying provider catalog.
+    Google remains lifecycle-curated in both modes because its raw API catalog
+    retains obsolete aliases and specialty endpoints.
     """
     # The Grok subscription catalog is whatever the signed-in CLI reports;
     # its order matches the CLI's own /model picker, so return it as-is.
@@ -1428,6 +1482,12 @@ def get_models_for_provider(provider_id: str, *, include_all: bool = False) -> D
             ):
                 filtered[model_id] = model_info
 
+    # Google is intentionally curated even for "all" picker/catalog views.
+    # Its API inventory includes rolling aliases, specialty endpoints, and
+    # obsolete models long after their replacements ship.
+    if provider_id == "google":
+        return _latest_google_models(filtered)
+
     if include_all:
         if provider_id not in LOCAL_MODEL_PROVIDERS:
             # Full catalogs read newest-first too (pickers, search, completion).
@@ -1435,8 +1495,6 @@ def get_models_for_provider(provider_id: str, *, include_all: bool = False) -> D
             ordered = sorted(filtered.values(), key=_hosted_model_sort_key, reverse=True)
             return {model.id: model for model in ordered}
         return filtered
-    if provider_id == "google":
-        return _latest_google_models(filtered)
     if provider_id not in LOCAL_MODEL_PROVIDERS:
         return _current_hosted_models(filtered)
 
@@ -1444,44 +1502,10 @@ def get_models_for_provider(provider_id: str, *, include_all: bool = False) -> D
 
 
 def _latest_google_models(models: Dict[str, ModelInfo]) -> Dict[str, ModelInfo]:
-    """Keep BYOK Google model lists focused on the current Pro and Flash choices."""
-    latest: Dict[str, ModelInfo] = {}
-
-    pro = _select_google_model(models, kind="pro")
-    flash = _select_google_model(models, kind="flash")
-
-    if pro:
-        latest[pro.id] = pro
-    if flash and flash.id not in latest:
-        latest[flash.id] = flash
-    return latest
-
-
-def _select_google_model(models: Dict[str, ModelInfo], *, kind: str) -> ModelInfo | None:
-    alias = "gemini-pro-latest" if kind == "pro" else LATEST_GOOGLE_FLASH_MODEL
-    if alias in models:
-        return models[alias]
-
-    candidates: list[ModelInfo] = []
-    for model in models.values():
-        model_id = model.id.lower()
-        name = model.name.lower()
-        text = f"{model_id} {name}"
-        if "gemini" not in text or kind not in text:
-            continue
-        if any(skip in text for skip in ("lite", "image", "tts", "customtools")):
-            continue
-        candidates.append(model)
-
-    if not candidates:
-        fallback = LATEST_GOOGLE_PRO_MODEL if kind == "pro" else LATEST_GOOGLE_FLASH_MODEL
-        return models.get(fallback)
-
-    return max(candidates, key=_model_recency_key)
-
-
-def _model_recency_key(model: ModelInfo) -> tuple[str, str]:
-    return (model.released or "", model.id)
+    """Return Google's lifecycle-reviewed BYOK chat/coding models newest-first."""
+    return {
+        model_id: models[model_id] for model_id in LATEST_GOOGLE_MODEL_IDS if model_id in models
+    }
 
 
 def _current_hosted_models(models: Dict[str, ModelInfo]) -> Dict[str, ModelInfo]:

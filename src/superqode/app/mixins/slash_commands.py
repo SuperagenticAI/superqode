@@ -112,8 +112,10 @@ class SlashCommandMixin:
             self._claude_cmd(args, log)
         elif c in ("grok", "xai-grok"):
             self._grok_cmd(args, log)
-        elif c in ("antigravity", "agy"):
+        elif c == "antigravity":
             self._antigravity_cmd(args, log)
+        elif c == "agy":
+            self._agy_cmd(args, log)
         elif c == "approve":
             self.run_worker(self._approval_cmd("approve", args, log))
         elif c == "reject":

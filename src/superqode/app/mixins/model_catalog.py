@@ -84,9 +84,9 @@ class ModelCatalogMixin:
             },
             {
                 "id": LATEST_GOOGLE_FLASH_MODEL,
-                "name": "Gemini Flash Latest",
+                "name": "Gemini 3.6 Flash",
                 "context": 1000000,
-                "desc": "Latest Gemini Flash alias from models.dev - 1M context",
+                "desc": "Latest stable Gemini Flash - 1M context",
                 "recommended": True,
             },
         ]
@@ -173,7 +173,7 @@ class ModelCatalogMixin:
             },
             {
                 "id": LATEST_GOOGLE_FLASH_MODEL,
-                "name": "Gemini Flash Latest",
+                "name": "Gemini 3.6 Flash",
                 "context": 1000000,
             },
             {"id": "gpt-4o", "name": "GPT-4o", "context": 128000},
@@ -770,7 +770,7 @@ class ModelCatalogMixin:
         try:
             from superqode.providers.models import get_models_for_provider
 
-            model = get_models_for_provider(provider_id, include_all=True).get(model_id)
+            model = get_models_for_provider(provider_id).get(model_id)
             if model is None:
                 return ""
             labels = []
@@ -792,7 +792,7 @@ class ModelCatalogMixin:
         try:
             from superqode.providers.models import get_models_for_provider
 
-            return list(get_models_for_provider(provider_id, include_all=True).keys())
+            return list(get_models_for_provider(provider_id).keys())
         except Exception:
             return []
 
@@ -1223,7 +1223,7 @@ class ModelCatalogMixin:
         )
 
         # Get models from database
-        db_models = get_models_for_provider(provider_id, include_all=True)
+        db_models = get_models_for_provider(provider_id)
 
         if db_models:
             # Helper function to detect latest models for any provider
@@ -1248,6 +1248,8 @@ class ModelCatalogMixin:
                     "4.7",
                     "4.6",
                     "4.5",
+                    "3.6",
+                    "3.5",
                     "3.2",
                     "3.1",
                     "3.0",
@@ -1256,7 +1258,9 @@ class ModelCatalogMixin:
                     "gpt-5.3-codex",
                     "gpt-5.2",
                     "gpt-5.1",
-                    "gemini-flash-latest",
+                    "gemini-3.6-flash",
+                    "gemini-3.5-flash-lite",
+                    "gemini-3.5-flash",
                     "gemini-3.1-pro",
                     "gemini 3.5",
                     "gemini 3.1",
@@ -1301,6 +1305,7 @@ class ModelCatalogMixin:
                 return False
 
             # Group models by category
+            catalog_order = {model_id: index for index, model_id in enumerate(db_models)}
             recommended = []  # Code-optimized or reasoning models
             budget = []  # < $1 input price
             free = []  # Free models
@@ -1352,7 +1357,9 @@ class ModelCatalogMixin:
                     # Latest flagship models (2025-12 releases)
                     ("gpt-5.2", -10),
                     ("5.2", -10),
-                    ("gemini-flash-latest", -10),
+                    ("gemini-3.6-flash", -12),
+                    ("gemini-3.5-flash-lite", -11),
+                    ("gemini-3.5-flash", -10),
                     ("gemini-3.1-pro", -10),
                     ("gemini 3.5", -10),
                     ("gemini 3.1", -10),
@@ -1393,8 +1400,14 @@ class ModelCatalogMixin:
             def sort_key_recommended(x):
                 model_id, info = x
                 priority = get_latest_priority(model_id, info)
-                # Then by code-optimized, then by price
-                return (priority, not info.is_code_optimized, info.input_price)
+                # Preserve the provider catalog's newest-first order within
+                # broad release buckets before secondary capability/price ties.
+                return (
+                    priority,
+                    catalog_order.get(model_id, len(catalog_order)),
+                    not info.is_code_optimized,
+                    info.input_price,
+                )
 
             def sort_key_others(x):
                 model_id, info = x
@@ -1735,7 +1748,7 @@ class ModelCatalogMixin:
             return
 
         # Get models
-        db_models = get_models_for_provider(provider_id, include_all=True)
+        db_models = get_models_for_provider(provider_id)
 
         if not db_models:
             # Fall back to numbered list
@@ -1761,7 +1774,9 @@ class ModelCatalogMixin:
                 "5.3",
                 "gpt-5.2",
                 "5.2",
-                "gemini-flash-latest",
+                "gemini-3.6-flash",
+                "gemini-3.5-flash-lite",
+                "gemini-3.5-flash",
                 "gemini-3.1-pro",
                 "gemini 3.5",
                 "gemini 3.1",

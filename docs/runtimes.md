@@ -35,6 +35,7 @@ environment details.
 | `copilot-sdk` | `uv tool install "superqode[copilot-sdk]"` | Official GitHub Copilot SDK runtime. Uses the user's Copilot account or an explicit GitHub token and normalizes SDK events into SuperQode. |
 | `claude-agent-sdk` | `uv tool install "superqode[claude-agent-sdk]"` | Anthropic Claude Agent SDK runtime (API key via `ANTHROPIC_API_KEY`). The SDK provides its own Claude Code executable; `:claude` exposes model, permission, session, and slash-command controls. |
 | `antigravity-sdk` | `uv tool install "superqode[antigravity-sdk]"` | Google Antigravity SDK runtime using `GEMINI_API_KEY` or `GOOGLE_API_KEY`. This is separate from the signed-in `agy` CLI route. |
+| `antigravity-managed` | included | Google-hosted Antigravity agent over the Gemini Interactions API using `GEMINI_API_KEY` or `GOOGLE_API_KEY`. |
 | `deepagents` | `uv tool install "superqode[deepagents]"` | Optional DeepAgents 0.6 runtime for graph and middleware-heavy coding harnesses. |
 | `pydanticai` | `uv tool install "superqode[pydanticai]"` | Optional PydanticAI runtime with SuperQode JSON-schema tool bridging, approval resume, native MCP config loading, fallback chains, and typed-output-friendly harness support. |
 
@@ -140,6 +141,7 @@ Direct commands and CLI:
 :copilot models           # live model catalog for the active Copilot account
 :connect claude           # use Claude Agent SDK with ANTHROPIC_API_KEY
 :connect antigravity      # signed-in agy CLI (Google OAuth/keyring)
+:antigravity managed      # Google-hosted sandbox (Gemini API key)
 :connect byok google      # Google API key path
 :connect acp              # generic ACP picker, including local Claude Code
 superqode --connect codex # launch already on Codex
@@ -161,7 +163,17 @@ an **API-key** runtime (`claude-agent-sdk`, `ANTHROPIC_API_KEY`). Both are shipp
 **Antigravity CLI** is a self-contained runtime backed by `agy --print`. The
 official CLI owns Google OAuth and retrieves its session from the OS keyring;
 SuperQode never reads the token. API-key users can use `:connect byok google`,
-or install the optional `antigravity-sdk` extra and select that advanced runtime.
+install the optional `antigravity-sdk` extra for the local SDK, or select
+`:antigravity managed` for Google's hosted sandbox.
+
+**Antigravity Managed** streams structured thought, tool, and text events and
+resumes both conversation and hosted filesystem state. Its sandbox is remote;
+SuperQode does not upload the current checkout automatically.
+
+**Antigravity SDK** normalizes the local harness's typed events, usage, and
+conversation identity. It also bridges mutating tool calls into SuperQode
+approvals, propagates cancellation to the SDK backend, discovers project
+skills, and converts configured stdio or Streamable HTTP MCP servers.
 
 ### Antigravity CLI
 
@@ -170,6 +182,9 @@ Google's Antigravity CLI (`agy`) is the consumer migration path for Gemini CLI:
 ```text
 :antigravity launch
 :antigravity status
+:antigravity agent reviewer
+:antigravity model gemini-model-slug
+:antigravity effort high
 :antigravity migrate
 ```
 
@@ -178,6 +193,11 @@ its supported headless print mode and continues the CLI conversation between
 turns. `agy` 1.1.1 or newer is required because it fixes subprocess hangs and
 error exit codes. The route streams text, but `agy` does not expose structured
 tool or approval events.
+
+Custom agent selection uses `agy --agent`, model selection uses `agy --model`,
+and thinking effort uses `agy --effort`. Effort requires version 1.1.5 or newer
+and accepts `low`, `medium`, or `high` in CLI 1.1.6. Use `auto` to return a
+setting to the CLI default.
 
 For a complete comparison of harness ownership, authentication, and supported
 routes, see [Google Antigravity](providers/antigravity.md).

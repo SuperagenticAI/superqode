@@ -24,6 +24,7 @@ def test_dialog_lists_current_runtimes():
         "claude-agent-sdk",
         "antigravity-sdk",
         "antigravity-cli",
+        "antigravity-managed",
         "pydanticai",
     }
 

@@ -9,6 +9,55 @@ resolution-markers = [
     "python_full_version < '3.13' and sys_platform == 'emscripten'",
     "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
+conflicts = [[
+    { package = "superqode", extra = "antigravity-sdk" },
+    { package = "superqode", extra = "mem0" },
+], [
+    { package = "superqode", extra = "antigravity-sdk" },
+    { package = "superqode", extra = "memory-providers" },
+], [
+    { package = "superqode", extra = "mem0" },
+    { package = "superqode", extra = "vendor-sdks" },
+], [
+    { package = "superqode", extra = "memory-providers" },
+    { package = "superqode", extra = "vendor-sdks" },
+], [
+    { package = "superqode", extra = "adk" },
+    { package = "superqode", extra = "antigravity-sdk" },
+], [
+    { package = "superqode", extra = "antigravity-sdk" },
+    { package = "superqode", extra = "observability" },
+], [
+    { package = "superqode", extra = "adk" },
+    { package = "superqode", extra = "vendor-sdks" },
+], [
+    { package = "superqode", extra = "observability" },
+    { package = "superqode", extra = "vendor-sdks" },
+], [
+    { package = "superqode", extra = "antigravity-sdk" },
+    { package = "superqode", extra = "sandbox-modal" },
+], [
+    { package = "superqode", extra = "antigravity-sdk" },
+    { package = "superqode", extra = "sandbox-cloud" },
+], [
+    { package = "superqode", extra = "sandbox-modal" },
+    { package = "superqode", extra = "vendor-sdks" },
+], [
+    { package = "superqode", extra = "sandbox-cloud" },
+    { package = "superqode", extra = "vendor-sdks" },
+], [
+    { package = "superqode", extra = "antigravity-sdk" },
+    { package = "superqode", extra = "pydanticai" },
+], [
+    { package = "superqode", extra = "antigravity-sdk" },
+    { package = "superqode", extra = "pydanticai-logfire" },
+], [
+    { package = "superqode", extra = "pydanticai" },
+    { package = "superqode", extra = "vendor-sdks" },
+], [
+    { package = "superqode", extra = "pydanticai-logfire" },
+    { package = "superqode", extra = "vendor-sdks" },
+]]
 
 [[package]]
 name = "absl-py"
@@ -282,22 +331,22 @@ dependencies = [
     { name = "openinference-instrumentation-openai" },
     { name = "openinference-semantic-conventions" },
     { name = "opentelemetry-exporter-otlp" },
-    { name = "opentelemetry-proto" },
-    { name = "opentelemetry-sdk" },
+    { name = "opentelemetry-proto", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-sdk", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
     { name = "orjson" },
     { name = "pandas" },
     { name = "prometheus-client" },
     { name = "psutil" },
     { name = "pyarrow" },
     { name = "pydantic" },
-    { name = "pydantic-ai-slim", extra = ["anthropic", "bedrock", "google", "mcp", "openai", "ui"] },
+    { name = "pydantic-ai-slim", extra = ["anthropic", "bedrock", "google", "mcp", "openai", "ui"], marker = "extra == 'extra-9-superqode-observability' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "pystache" },
     { name = "python-dateutil" },
     { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "scikit-learn" },
     { name = "scipy" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "sqlalchemy", extra = ["asyncio"], marker = "extra == 'extra-9-superqode-observability' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "sqlean-py" },
     { name = "starlette" },
     { name = "strawberry-graphql" },
@@ -320,7 +369,7 @@ dependencies = [
     { name = "openinference-instrumentation" },
     { name = "openinference-semantic-conventions" },
     { name = "opentelemetry-exporter-otlp" },
-    { name = "opentelemetry-sdk" },
+    { name = "opentelemetry-sdk", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
@@ -337,7 +386,7 @@ dependencies = [
     { name = "jsonpath-ng" },
     { name = "openinference-instrumentation" },
     { name = "openinference-semantic-conventions" },
-    { name = "opentelemetry-api" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
     { name = "pandas" },
     { name = "pydantic" },
     { name = "pystache" },
@@ -357,9 +406,9 @@ dependencies = [
     { name = "openinference-instrumentation" },
     { name = "openinference-semantic-conventions" },
     { name = "opentelemetry-exporter-otlp" },
-    { name = "opentelemetry-proto" },
-    { name = "opentelemetry-sdk" },
-    { name = "opentelemetry-semantic-conventions" },
+    { name = "opentelemetry-proto", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-sdk", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-semantic-conventions", version = "0.60b1", source = { registry = "https://pypi.org/simple" } },
     { name = "typing-extensions" },
     { name = "wrapt" },
 ]
@@ -456,7 +505,7 @@ name = "bandit"
 version = "1.9.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "pyyaml" },
     { name = "rich" },
     { name = "stevedore" },
@@ -851,7 +900,7 @@ name = "colorlog"
 version = "6.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0a/bf/cb30a51af3aa8ce63735f77e23dcd4fc0720fe0339bcb04f77345659c277/colorlog-6.11.0.tar.gz", hash = "sha256:9d90fb53fa906c8970c18fbe46506bae1fb5f86b513b8f867db37e4ace9be7ae", size = 17734, upload-time = "2026-07-17T12:16:46.59Z" }
 wheels = [
@@ -1036,7 +1085,7 @@ dependencies = [
     { name = "packageurl-python" },
     { name = "py-serializable" },
     { name = "sortedcontainers" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/89/ed/54ecfa25fc145c58bf4f98090f7b6ffe5188d0759248c57dde44427ea239/cyclonedx_python_lib-11.6.0.tar.gz", hash = "sha256:7fb85a4371fa3a203e5be577ac22b7e9a7157f8b0058b7448731474d6dea7bf0", size = 1408147, upload-time = "2025-12-02T12:28:46.446Z" }
 wheels = [
@@ -1064,7 +1113,7 @@ version = "0.118.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-auth" },
-    { name = "protobuf" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" } },
     { name = "requests" },
     { name = "urllib3" },
 ]
@@ -1113,10 +1162,14 @@ dependencies = [
     { name = "httpx" },
     { name = "httpx-ws" },
     { name = "obstore" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-exporter-otlp-proto-http" },
-    { name = "opentelemetry-instrumentation-aiohttp-client" },
-    { name = "opentelemetry-sdk" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-antigravity-sdk' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire')" },
+    { name = "opentelemetry-exporter-otlp-proto-http", version = "1.39.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "opentelemetry-exporter-otlp-proto-http", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-antigravity-sdk' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire')" },
+    { name = "opentelemetry-instrumentation-aiohttp-client", version = "0.60b1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "opentelemetry-instrumentation-aiohttp-client", version = "0.65b0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-antigravity-sdk' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire')" },
+    { name = "opentelemetry-sdk", version = "1.39.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "opentelemetry-sdk", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-antigravity-sdk' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire')" },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "python-multipart" },
@@ -1362,7 +1415,8 @@ dependencies = [
     { name = "httpcore" },
     { name = "httpx" },
     { name = "packaging" },
-    { name = "protobuf" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-memory-providers' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or extra == 'extra-9-superqode-sandbox-cloud' or extra == 'extra-9-superqode-sandbox-modal'" },
+    { name = "protobuf", version = "7.35.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-antigravity-sdk' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks') or (extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-memory-providers' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire' and extra != 'extra-9-superqode-sandbox-cloud' and extra != 'extra-9-superqode-sandbox-modal')" },
     { name = "python-dateutil" },
     { name = "rich" },
     { name = "typing-extensions" },
@@ -1491,7 +1545,7 @@ name = "fastmcp"
 version = "3.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "fastmcp-slim", extra = ["client", "server"] },
+    { name = "fastmcp-slim", extra = ["client", "server"], marker = "extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/3b/a9/5c5a01b6abd5346bf60b97cfd29e4a86661940c27dd562bfcda07fd03519/fastmcp-3.3.1.tar.gz", hash = "sha256:979362ea557de42a5f40342563c7e4b236bcc8e7cd192715f50030695d1a71cd", size = 28681699, upload-time = "2026-05-15T15:50:39.673Z" }
 wheels = [
@@ -1504,7 +1558,7 @@ version = "3.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "platformdirs" },
-    { name = "pydantic", extra = ["email"] },
+    { name = "pydantic", extra = ["email"], marker = "extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "rich" },
@@ -1521,8 +1575,8 @@ client = [
     { name = "exceptiongroup" },
     { name = "httpx" },
     { name = "mcp" },
-    { name = "opentelemetry-api" },
-    { name = "py-key-value-aio", extra = ["filetree", "keyring", "memory"] },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "py-key-value-aio", extra = ["filetree", "keyring", "memory"], marker = "extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 server = [
     { name = "authlib" },
@@ -1534,9 +1588,9 @@ server = [
     { name = "jsonschema-path" },
     { name = "mcp" },
     { name = "openapi-pydantic" },
-    { name = "opentelemetry-api" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
     { name = "packaging" },
-    { name = "py-key-value-aio", extra = ["filetree", "keyring", "memory"] },
+    { name = "py-key-value-aio", extra = ["filetree", "keyring", "memory"], marker = "extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "pyperclip" },
     { name = "python-multipart" },
     { name = "pyyaml" },
@@ -1774,8 +1828,8 @@ name = "gevent"
 version = "25.9.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cffi", marker = "platform_python_implementation == 'CPython' and sys_platform == 'win32'" },
-    { name = "greenlet", marker = "platform_python_implementation == 'CPython'" },
+    { name = "cffi", marker = "(platform_python_implementation == 'CPython' and sys_platform == 'win32') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (platform_python_implementation != 'CPython' and extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks') or (sys_platform != 'win32' and extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (sys_platform != 'win32' and extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (sys_platform != 'win32' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (sys_platform != 'win32' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (sys_platform != 'win32' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (sys_platform != 'win32' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (sys_platform != 'win32' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (sys_platform != 'win32' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (sys_platform != 'win32' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (sys_platform != 'win32' and extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (sys_platform != 'win32' and extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (sys_platform != 'win32' and extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (sys_platform != 'win32' and extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (sys_platform != 'win32' and extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (sys_platform != 'win32' and extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (sys_platform != 'win32' and extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "greenlet", marker = "platform_python_implementation == 'CPython' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "zope-event" },
     { name = "zope-interface" },
 ]
@@ -1893,13 +1947,13 @@ dependencies = [
     { name = "authlib" },
     { name = "click" },
     { name = "fastapi" },
-    { name = "google-auth", extra = ["pyopenssl"] },
+    { name = "google-auth", extra = ["pyopenssl"], marker = "extra == 'extra-9-superqode-adk' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "google-genai" },
     { name = "graphviz" },
     { name = "httpx" },
     { name = "jsonschema" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-sdk" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-sdk", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
     { name = "packaging" },
     { name = "pydantic" },
     { name = "python-dotenv" },
@@ -1921,23 +1975,23 @@ wheels = [
 
 [[package]]
 name = "google-antigravity"
-version = "0.1.6"
+version = "0.1.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "absl-py" },
     { name = "google-genai" },
     { name = "mcp" },
-    { name = "protobuf" },
+    { name = "protobuf", version = "7.35.1", source = { registry = "https://pypi.org/simple" } },
     { name = "pydantic" },
     { name = "uvicorn" },
     { name = "websockets" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1d/1e/8cc4f065cd6718339adf293be73ed00b88bf8db5fb5b17ec5e57de83f3ac/google_antigravity-0.1.6-py3-none-macosx_11_0_arm64.whl", hash = "sha256:9241c21d74f9a15294fc4ad5689eba90b986d0d50ae54c0e3c1bcd9178177f63", size = 31385533, upload-time = "2026-07-09T19:32:56.248Z" },
-    { url = "https://files.pythonhosted.org/packages/95/83/b31b74483a673854c654b3a912028842786bf4f112d46a7c6dc0749967be/google_antigravity-0.1.6-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:b15461ea59a0a1ef84ced09c841c5c66934f997569b146e25f2d7cf5726f3b14", size = 33916468, upload-time = "2026-07-09T19:32:59.361Z" },
-    { url = "https://files.pythonhosted.org/packages/5b/ef/fc44bdeccd962f81bbbe57fd28ebd847313ecf4d030938b6d4d240ae660e/google_antigravity-0.1.6-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:e1eabba26db6f7cee27861365393f65dcb567f83db2aac7382adac0372e8d093", size = 37121428, upload-time = "2026-07-09T19:33:02.097Z" },
-    { url = "https://files.pythonhosted.org/packages/4b/1c/2df8e3a6be4ff50d4e4f8ff16ba6d21cac2041c0cdae184fa5faab447def/google_antigravity-0.1.6-py3-none-win_amd64.whl", hash = "sha256:b5a4d9e298234b73a0d90b8009535ee8255f769e27ccf6318d0ec1956391397b", size = 36133563, upload-time = "2026-07-09T19:33:05.077Z" },
-    { url = "https://files.pythonhosted.org/packages/28/22/fdf2b48d7497ba4e5545c3018bc12e8f6727b8629ce346ce0206a85e9412/google_antigravity-0.1.6-py3-none-win_arm64.whl", hash = "sha256:9302e728b77b6e461b6cd0c1c976c23944a29d8563a16dff3544c135a258b601", size = 32639377, upload-time = "2026-07-09T19:33:08.138Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/5f/0f5d6b210faddb4e6d2b0c25072ae0b2430294f5dec0b4eabecc196ea32b/google_antigravity-0.1.8-py3-none-macosx_11_0_arm64.whl", hash = "sha256:be5a4853ae7cb7bff4fbba44073cbed96e1fdcdeebd9602b324bf3abe5614ab2", size = 31829862, upload-time = "2026-07-23T19:20:02.908Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/cb/2d74bfc57e9f7f579a97f8b445599639ac4a101bcf44bab2a9c58c1f634f/google_antigravity-0.1.8-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:06773b250668993cf59e3a90ba00f1d6fc52483612d9463aa3e71e4a2a30a20b", size = 37289461, upload-time = "2026-07-23T19:20:06.571Z" },
+    { url = "https://files.pythonhosted.org/packages/93/54/9972ecf8e0b5e3d12067550462078be9babf8dc0f686e80ffe70daef0cad/google_antigravity-0.1.8-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:bd912cc0ac74fef8026c227500b7de06b3749a78f0148b99d9033e8c952787e0", size = 39396935, upload-time = "2026-07-23T19:20:09.493Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/ee/52f63973142aa00b722d7d841b60991798352564538f8533c9eb27bb9546/google_antigravity-0.1.8-py3-none-win_amd64.whl", hash = "sha256:edc1690c3116d1da31b033951d62a56a005f73d13486ced1d11564c0b98ca244", size = 36678881, upload-time = "2026-07-23T19:20:13.11Z" },
+    { url = "https://files.pythonhosted.org/packages/a1/f6/503b6efb48903cfca252fb22077c15849da302e3d3f4d7a7b7cd2438e146/google_antigravity-0.1.8-py3-none-win_arm64.whl", hash = "sha256:999bdc9ed8d413a6abff96b15105e72b7c596fcd7fce41448f6613ee0947a8b4", size = 33138761, upload-time = "2026-07-23T19:20:16.811Z" },
 ]
 
 [[package]]
@@ -1987,7 +2041,8 @@ name = "googleapis-common-protos"
 version = "1.75.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "protobuf" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-memory-providers' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or extra == 'extra-9-superqode-sandbox-cloud' or extra == 'extra-9-superqode-sandbox-modal'" },
+    { name = "protobuf", version = "7.35.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-antigravity-sdk' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks') or (extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-memory-providers' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire' and extra != 'extra-9-superqode-sandbox-cloud' and extra != 'extra-9-superqode-sandbox-modal')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b5/c8/f439cffde755cffa462bfbb156278fa6f9d09119719af9814b858fd4f81f/googleapis_common_protos-1.75.0.tar.gz", hash = "sha256:53a062ff3c32552fbd62c11fe23768b78e4ddf0494d5e5fd97d3f4689c75fbbd", size = 151035, upload-time = "2026-05-07T08:04:49.423Z" }
 wheels = [
@@ -2956,7 +3011,7 @@ dependencies = [
     { name = "pytest" },
     { name = "python-engineio" },
     { name = "python-socketio", extra = ["client"] },
-    { name = "pywin32", marker = "sys_platform == 'win32'" },
+    { name = "pywin32", marker = "sys_platform == 'win32' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "pyzmq" },
     { name = "requests" },
     { name = "werkzeug" },
@@ -2972,10 +3027,10 @@ version = "4.33.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "executing" },
-    { name = "opentelemetry-exporter-otlp-proto-http" },
-    { name = "opentelemetry-instrumentation" },
-    { name = "opentelemetry-sdk" },
-    { name = "protobuf" },
+    { name = "opentelemetry-exporter-otlp-proto-http", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-instrumentation", version = "0.60b1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-sdk", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" } },
     { name = "rich" },
     { name = "typing-extensions" },
 ]
@@ -3196,7 +3251,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "openai" },
     { name = "posthog" },
-    { name = "protobuf" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" } },
     { name = "pydantic" },
     { name = "pytz" },
     { name = "qdrant-client" },
@@ -3247,8 +3302,8 @@ dependencies = [
     { name = "eval-type-backport" },
     { name = "httpx" },
     { name = "jsonpath-python" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-semantic-conventions" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-semantic-conventions", version = "0.60b1", source = { registry = "https://pypi.org/simple" } },
     { name = "pydantic" },
     { name = "python-dateutil" },
     { name = "typing-inspection" },
@@ -3264,7 +3319,7 @@ version = "1.6.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "ghp-import" },
     { name = "jinja2" },
     { name = "markdown" },
@@ -3385,11 +3440,11 @@ dependencies = [
     { name = "fastapi" },
     { name = "gitpython" },
     { name = "importlib-metadata" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-proto" },
-    { name = "opentelemetry-sdk" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-proto", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-sdk", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
     { name = "packaging" },
-    { name = "protobuf" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" } },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
@@ -3411,11 +3466,11 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cachetools" },
     { name = "databricks-sdk" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-proto" },
-    { name = "opentelemetry-sdk" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-proto", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-sdk", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
     { name = "packaging" },
-    { name = "protobuf" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" } },
     { name = "pydantic" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/04/34/ff5e72919b4eec8fe65e6fc843978a1a512194e6fafbd1761deca48269ad/mlflow_tracing-3.14.0.tar.gz", hash = "sha256:c2f701e001d35964f23fbbdfdda36c818a76c157b912ae83781199fd714be09a", size = 1429017, upload-time = "2026-06-17T07:58:00.647Z" }
@@ -3428,7 +3483,7 @@ name = "mlx"
 version = "0.31.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "mlx-metal", marker = "sys_platform == 'darwin'" },
+    { name = "mlx-metal", marker = "sys_platform == 'darwin' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c3/47/5f33906cb03d6a378a697cd2d2641a26b37dea17ee3d9124d7e39e8eca01/mlx-0.31.2-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:e5067aaf2be1f3d7bba5be52348775804f111173c1ed04639618fd713b1a530f", size = 584863, upload-time = "2026-04-22T03:14:38.211Z" },
@@ -3469,9 +3524,10 @@ version = "0.31.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jinja2" },
-    { name = "mlx", marker = "sys_platform == 'darwin'" },
+    { name = "mlx", marker = "sys_platform == 'darwin' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "numpy" },
-    { name = "protobuf" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-memory-providers' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or extra == 'extra-9-superqode-sandbox-cloud' or extra == 'extra-9-superqode-sandbox-modal'" },
+    { name = "protobuf", version = "7.35.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-antigravity-sdk' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks') or (extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-memory-providers' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire' and extra != 'extra-9-superqode-sandbox-cloud' and extra != 'extra-9-superqode-sandbox-modal')" },
     { name = "pyyaml" },
     { name = "sentencepiece" },
     { name = "transformers" },
@@ -3526,7 +3582,7 @@ dependencies = [
     { name = "certifi" },
     { name = "click" },
     { name = "grpclib" },
-    { name = "protobuf" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" } },
     { name = "rich" },
     { name = "synchronicity" },
     { name = "toml" },
@@ -3683,7 +3739,7 @@ name = "mypy"
 version = "1.19.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "librt", marker = "platform_python_implementation != 'PyPy'" },
+    { name = "librt", marker = "platform_python_implementation != 'PyPy' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "mypy-extensions" },
     { name = "pathspec" },
     { name = "typing-extensions" },
@@ -3941,8 +3997,8 @@ version = "0.1.53"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "openinference-semantic-conventions" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-sdk" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-sdk", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
     { name = "wrapt" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f9/b6/c0e7e047ae4962f2755a3bc9141fdd6272c75c74e47dfc6aa71978a9b78f/openinference_instrumentation-0.1.53.tar.gz", hash = "sha256:3c0c145cf6e13cfa630b29d0e3ca806f3821470ffca7922f1590e3970fadd4da", size = 33712, upload-time = "2026-06-02T16:37:21.771Z" }
@@ -3957,9 +4013,9 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "openinference-instrumentation" },
     { name = "openinference-semantic-conventions" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-instrumentation" },
-    { name = "opentelemetry-semantic-conventions" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-instrumentation", version = "0.60b1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-semantic-conventions", version = "0.60b1", source = { registry = "https://pypi.org/simple" } },
     { name = "typing-extensions" },
     { name = "wrapt" },
 ]
@@ -3981,13 +4037,41 @@ wheels = [
 name = "opentelemetry-api"
 version = "1.39.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
 dependencies = [
-    { name = "importlib-metadata" },
-    { name = "typing-extensions" },
+    { name = "importlib-metadata", marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "typing-extensions", marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/97/b9/3161be15bb8e3ad01be8be5a968a9237c3027c5be504362ff800fca3e442/opentelemetry_api-1.39.1.tar.gz", hash = "sha256:fbde8c80e1b937a2c61f20347e91c0c18a1940cecf012d62e65a7caf08967c9c", size = 65767, upload-time = "2025-12-11T13:32:39.182Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cf/df/d3f1ddf4bb4cb50ed9b1139cc7b1c54c34a1e7ce8fd1b9a37c0d1551a6bd/opentelemetry_api-1.39.1-py3-none-any.whl", hash = "sha256:2edd8463432a7f8443edce90972169b195e7d6a05500cd29e6d13898187c9950", size = 66356, upload-time = "2025-12-11T13:32:17.304Z" },
+]
+
+[[package]]
+name = "opentelemetry-api"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "typing-extensions", marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ee/8b/aa9e2d8b8dfa7c946f7dec5d1f8f6ba8eca062f43509a06bdb5ce93d26c0/opentelemetry_api-1.44.0.tar.gz", hash = "sha256:67647e5e9566edcf421166fdf022b3537f818635daa852b289e34604dc6fb33a", size = 72406, upload-time = "2026-07-16T15:25:32.678Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/6f/a04e900f465ff3221ccc395522503e2d10e79fa21f2723c8e177aae1e0d1/opentelemetry_api-1.44.0-py3-none-any.whl", hash = "sha256:94b98c893a91b88657eaac1e3ba89618cdb85be6918196705354f34728b2cdef", size = 60018, upload-time = "2026-07-16T15:25:11.657Z" },
 ]
 
 [[package]]
@@ -3996,7 +4080,7 @@ version = "1.39.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "opentelemetry-exporter-otlp-proto-grpc" },
-    { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "opentelemetry-exporter-otlp-proto-http", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/30/9c/3ab1db90f32da200dba332658f2bbe602369e3d19f6aba394031a42635be/opentelemetry_exporter_otlp-1.39.1.tar.gz", hash = "sha256:7cf7470e9fd0060c8a38a23e4f695ac686c06a48ad97f8d4867bc9b420180b9c", size = 6147, upload-time = "2025-12-11T13:32:40.309Z" }
 wheels = [
@@ -4007,12 +4091,40 @@ wheels = [
 name = "opentelemetry-exporter-otlp-proto-common"
 version = "1.39.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
 dependencies = [
-    { name = "opentelemetry-proto" },
+    { name = "opentelemetry-proto", version = "1.39.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e9/9d/22d241b66f7bbde88a3bfa6847a351d2c46b84de23e71222c6aae25c7050/opentelemetry_exporter_otlp_proto_common-1.39.1.tar.gz", hash = "sha256:763370d4737a59741c89a67b50f9e39271639ee4afc999dadfe768541c027464", size = 20409, upload-time = "2025-12-11T13:32:40.885Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8c/02/ffc3e143d89a27ac21fd557365b98bd0653b98de8a101151d5805b5d4c33/opentelemetry_exporter_otlp_proto_common-1.39.1-py3-none-any.whl", hash = "sha256:08f8a5862d64cc3435105686d0216c1365dc5701f86844a8cd56597d0c764fde", size = 18366, upload-time = "2025-12-11T13:32:20.2Z" },
+]
+
+[[package]]
+name = "opentelemetry-exporter-otlp-proto-common"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "opentelemetry-proto", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/61/09/4d717852c1cf3f854b76c7110a5d00883bc3c99288b9b0dbcbeb9e306eb6/opentelemetry_exporter_otlp_proto_common-1.44.0.tar.gz", hash = "sha256:dc87a5a5bc58f149a56d1547e4691588fa12994cdc3bc039a694ccb3375862ac", size = 20202, upload-time = "2026-07-16T15:25:37.658Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5e/71/65fd9d54c10b860f87c045ccee1264cab7011268895d3528818a29c1172a/opentelemetry_exporter_otlp_proto_common-1.44.0-py3-none-any.whl", hash = "sha256:9a9fe61bba73d802904bc989f1d6b4a7b1ee40f06c40e98d6f85af65aaebb694", size = 17045, upload-time = "2026-07-16T15:25:18.201Z" },
 ]
 
 [[package]]
@@ -4022,10 +4134,10 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "googleapis-common-protos" },
     { name = "grpcio" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-exporter-otlp-proto-common" },
-    { name = "opentelemetry-proto" },
-    { name = "opentelemetry-sdk" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-exporter-otlp-proto-common", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-proto", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-sdk", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
     { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/53/48/b329fed2c610c2c32c9366d9dc597202c9d1e58e631c137ba15248d8850f/opentelemetry_exporter_otlp_proto_grpc-1.39.1.tar.gz", hash = "sha256:772eb1c9287485d625e4dbe9c879898e5253fea111d9181140f51291b5fec3ad", size = 24650, upload-time = "2025-12-11T13:32:41.429Z" }
@@ -4037,14 +4149,22 @@ wheels = [
 name = "opentelemetry-exporter-otlp-proto-http"
 version = "1.39.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
 dependencies = [
-    { name = "googleapis-common-protos" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-exporter-otlp-proto-common" },
-    { name = "opentelemetry-proto" },
-    { name = "opentelemetry-sdk" },
-    { name = "requests" },
-    { name = "typing-extensions" },
+    { name = "googleapis-common-protos", marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "opentelemetry-exporter-otlp-proto-common", version = "1.39.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "opentelemetry-proto", version = "1.39.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "opentelemetry-sdk", version = "1.39.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "requests", marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "typing-extensions", marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/80/04/2a08fa9c0214ae38880df01e8bfae12b067ec0793446578575e5080d6545/opentelemetry_exporter_otlp_proto_http-1.39.1.tar.gz", hash = "sha256:31bdab9745c709ce90a49a0624c2bd445d31a28ba34275951a6a362d16a0b9cb", size = 17288, upload-time = "2025-12-11T13:32:42.029Z" }
 wheels = [
@@ -4052,14 +4172,48 @@ wheels = [
 ]
 
 [[package]]
+name = "opentelemetry-exporter-otlp-proto-http"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "googleapis-common-protos", marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "opentelemetry-exporter-otlp-proto-common", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "opentelemetry-proto", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "opentelemetry-sdk", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "requests", marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "typing-extensions", marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1a/87/95e2a5aaa795b4e2260d74e16df2d5541deb2ea9de010bcd615f4dee2654/opentelemetry_exporter_otlp_proto_http-1.44.0.tar.gz", hash = "sha256:c633d7270ad6b57cd4cfbe8b0007a9e2e7c0cb50bd6c50fe2a7b245f721a09d8", size = 25806, upload-time = "2026-07-16T15:25:39.162Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cd/d0/fdeb1a98d8d3a6205f5f297c51b4a9bfe65126ab60339669bbe3dd54c2e2/opentelemetry_exporter_otlp_proto_http-1.44.0-py3-none-any.whl", hash = "sha256:838592fce774c1c8bb7b9a0a7facbfa82e17be5a8a4e94cef10cb84ae026bae3", size = 21850, upload-time = "2026-07-16T15:25:20.006Z" },
+]
+
+[[package]]
 name = "opentelemetry-instrumentation"
 version = "0.60b1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
 dependencies = [
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-semantic-conventions" },
-    { name = "packaging" },
-    { name = "wrapt" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "opentelemetry-semantic-conventions", version = "0.60b1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "packaging", marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "wrapt", marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/41/0f/7e6b713ac117c1f5e4e3300748af699b9902a2e5e34c9cf443dde25a01fa/opentelemetry_instrumentation-0.60b1.tar.gz", hash = "sha256:57ddc7974c6eb35865af0426d1a17132b88b2ed8586897fee187fd5b8944bd6a", size = 31706, upload-time = "2025-12-11T13:36:42.515Z" }
 wheels = [
@@ -4067,15 +4221,46 @@ wheels = [
 ]
 
 [[package]]
+name = "opentelemetry-instrumentation"
+version = "0.65b0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "opentelemetry-semantic-conventions", version = "0.65b0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "packaging", marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "wrapt", marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/13/91/3c58961cb0360cd60509064734f0be4275383c8681d73c580a40ca83ddce/opentelemetry_instrumentation-0.65b0.tar.gz", hash = "sha256:071d9d9eced9bd6460444ec3b0c77229870ed05a881c22c84fdede58e4eed09b", size = 42689, upload-time = "2026-07-16T15:25:50.275Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/40/7b/85eab1215f72adf0e68d3dc4a679b9bff993fa679ff34cd8dd378e2659fd/opentelemetry_instrumentation-0.65b0-py3-none-any.whl", hash = "sha256:ea967a72b9939b5fcfdad572753b4306c59dcb99e3f382d95dae04286805e137", size = 36717, upload-time = "2026-07-16T15:24:51.424Z" },
+]
+
+[[package]]
 name = "opentelemetry-instrumentation-aiohttp-client"
 version = "0.60b1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
 dependencies = [
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-instrumentation" },
-    { name = "opentelemetry-semantic-conventions" },
-    { name = "opentelemetry-util-http" },
-    { name = "wrapt" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "opentelemetry-instrumentation", version = "0.60b1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "opentelemetry-semantic-conventions", version = "0.60b1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "opentelemetry-util-http", version = "0.60b1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "wrapt", marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c0/79/95be90c555fd7efde79dcba36ea5c668815aa2d0a4250b63687e0f91c74a/opentelemetry_instrumentation_aiohttp_client-0.60b1.tar.gz", hash = "sha256:d0e7d5aa057791ca4d9090b0d3c9982f253c1a24b6bc78a734fc18d8dd97927b", size = 15907, upload-time = "2025-12-11T13:36:44.434Z" }
 wheels = [
@@ -4083,14 +4268,38 @@ wheels = [
 ]
 
 [[package]]
+name = "opentelemetry-instrumentation-aiohttp-client"
+version = "0.65b0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "opentelemetry-instrumentation", version = "0.65b0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "opentelemetry-semantic-conventions", version = "0.65b0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "opentelemetry-util-http", version = "0.65b0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "wrapt", marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a9/33/3ff7230b035e8b696db6be54f5c52dfa409829d634d91431c076ad789820/opentelemetry_instrumentation_aiohttp_client-0.65b0.tar.gz", hash = "sha256:85906a2806ee5641756b5c33274e9aa75c3cc2441e3b830aa5804cf0e1fa9dd1", size = 19042, upload-time = "2026-07-16T15:25:51.632Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/71/f9/5c8459224f175829601cabbcffaeab0f9041903c086e4a0368f9971093a5/opentelemetry_instrumentation_aiohttp_client-0.65b0-py3-none-any.whl", hash = "sha256:3a060efa53fa44d02ba7372a7ed2b42cdfa6be6df81b089845067ad840e25729", size = 13677, upload-time = "2026-07-16T15:24:53.361Z" },
+]
+
+[[package]]
 name = "opentelemetry-instrumentation-httpx"
 version = "0.60b1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-instrumentation" },
-    { name = "opentelemetry-semantic-conventions" },
-    { name = "opentelemetry-util-http" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-instrumentation", version = "0.60b1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-semantic-conventions", version = "0.60b1", source = { registry = "https://pypi.org/simple" } },
+    { name = "opentelemetry-util-http", version = "0.60b1", source = { registry = "https://pypi.org/simple" } },
     { name = "wrapt" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/86/08/11208bcfcab4fc2023252c3f322aa397fd9ad948355fea60f5fc98648603/opentelemetry_instrumentation_httpx-0.60b1.tar.gz", hash = "sha256:a506ebaf28c60112cbe70ad4f0338f8603f148938cb7b6794ce1051cd2b270ae", size = 20611, upload-time = "2025-12-11T13:37:01.661Z" }
@@ -4102,8 +4311,16 @@ wheels = [
 name = "opentelemetry-proto"
 version = "1.39.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
 dependencies = [
-    { name = "protobuf" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/49/1d/f25d76d8260c156c40c97c9ed4511ec0f9ce353f8108ca6e7561f82a06b2/opentelemetry_proto-1.39.1.tar.gz", hash = "sha256:6c8e05144fc0d3ed4d22c2289c6b126e03bcd0e6a7da0f16cedd2e1c2772e2c8", size = 46152, upload-time = "2025-12-11T13:32:48.681Z" }
 wheels = [
@@ -4111,13 +4328,42 @@ wheels = [
 ]
 
 [[package]]
+name = "opentelemetry-proto"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "(extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-memory-providers' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire') or (extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-sandbox-cloud') or (extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-sandbox-modal')" },
+    { name = "protobuf", version = "7.35.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-antigravity-sdk' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks') or (extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-memory-providers' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire' and extra != 'extra-9-superqode-sandbox-cloud' and extra != 'extra-9-superqode-sandbox-modal')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/64/01/40ac4ae9a149263cc52c2cee200ddd80cb6d8db1a4610abf8eabce0fe771/opentelemetry_proto-1.44.0.tar.gz", hash = "sha256:c547a79c2f8c0c515d31509154682e5921c7cfd5ca67b70e1f9266e2c3e103f3", size = 46488, upload-time = "2026-07-16T15:25:45.34Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d1/7c/8be563d68e93bbefa5c8affb82ddcff91b3ad858ce49957ba7b16fd3e0ab/opentelemetry_proto-1.44.0-py3-none-any.whl", hash = "sha256:898b155a0e1557afd867478fb6158e8122a46329ca0bb8dc53cc55e98f017f56", size = 72483, upload-time = "2026-07-16T15:25:28.429Z" },
+]
+
+[[package]]
 name = "opentelemetry-sdk"
 version = "1.39.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
 dependencies = [
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-semantic-conventions" },
-    { name = "typing-extensions" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "opentelemetry-semantic-conventions", version = "0.60b1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "typing-extensions", marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/eb/fb/c76080c9ba07e1e8235d24cdcc4d125ef7aa3edf23eb4e497c2e50889adc/opentelemetry_sdk-1.39.1.tar.gz", hash = "sha256:cf4d4563caf7bff906c9f7967e2be22d0d6b349b908be0d90fb21c8e9c995cc6", size = 171460, upload-time = "2025-12-11T13:32:49.369Z" }
 wheels = [
@@ -4125,12 +4371,42 @@ wheels = [
 ]
 
 [[package]]
+name = "opentelemetry-sdk"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "opentelemetry-semantic-conventions", version = "0.65b0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "typing-extensions", marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5d/77/a6592cbc7c8d9bcc9d6757a9df45e04a7c585e3e6e7a13456da522b21109/opentelemetry_sdk-1.44.0.tar.gz", hash = "sha256:cebe7f65dc12f26ead75c6064de12fd2a9052e5060c0272d402cfa203aae123b", size = 208624, upload-time = "2026-07-16T15:25:46.078Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e7/23/ff077e61886ee020a17ce9c8b6fa11c601c8d8345b09ea24f605445df62a/opentelemetry_sdk-1.44.0-py3-none-any.whl", hash = "sha256:df081c4c6bcfdb1211e3e86140376792643128a25f8d72d1d27675936e7e96ad", size = 137221, upload-time = "2026-07-16T15:25:29.534Z" },
+]
+
+[[package]]
 name = "opentelemetry-semantic-conventions"
 version = "0.60b1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
 dependencies = [
-    { name = "opentelemetry-api" },
-    { name = "typing-extensions" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
+    { name = "typing-extensions", marker = "extra == 'extra-9-superqode-adk' or extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/91/df/553f93ed38bf22f4b999d9be9c185adb558982214f33eae539d3b5cd0858/opentelemetry_semantic_conventions-0.60b1.tar.gz", hash = "sha256:87c228b5a0669b748c76d76df6c364c369c28f1c465e50f661e39737e84bc953", size = 137935, upload-time = "2025-12-11T13:32:50.487Z" }
 wheels = [
@@ -4138,12 +4414,58 @@ wheels = [
 ]
 
 [[package]]
+name = "opentelemetry-semantic-conventions"
+version = "0.65b0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "opentelemetry-api", version = "1.44.0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+    { name = "typing-extensions", marker = "extra != 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-observability' and extra != 'extra-9-superqode-pydanticai' and extra != 'extra-9-superqode-pydanticai-logfire'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8f/73/0cbdebcb4cf545fdd328da14f5137e37d0770c3f26185e478b0d15d94f50/opentelemetry_semantic_conventions-0.65b0.tar.gz", hash = "sha256:f9b2b81e9d5b64f11bc952075e7e9c7fb0aab075c7fd1c46d597f1b919852d60", size = 148774, upload-time = "2026-07-16T15:25:46.902Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a6/0e/49df70d9b81fb5cbae4bbf2a49d865b09bcbcbc4eb53f5851b1027738d78/opentelemetry_semantic_conventions-0.65b0-py3-none-any.whl", hash = "sha256:1cacde7b0ad306f84c5ef08c3dbe1bbaf20165bba6f8bff43b670e555a086bcb", size = 204645, upload-time = "2026-07-16T15:25:30.688Z" },
+]
+
+[[package]]
 name = "opentelemetry-util-http"
 version = "0.60b1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/50/fc/c47bb04a1d8a941a4061307e1eddfa331ed4d0ab13d8a9781e6db256940a/opentelemetry_util_http-0.60b1.tar.gz", hash = "sha256:0d97152ca8c8a41ced7172d29d3622a219317f74ae6bb3027cfbdcf22c3cc0d6", size = 11053, upload-time = "2025-12-11T13:37:25.115Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/16/5c/d3f1733665f7cd582ef0842fb1d2ed0bc1fba10875160593342d22bba375/opentelemetry_util_http-0.60b1-py3-none-any.whl", hash = "sha256:66381ba28550c91bee14dcba8979ace443444af1ed609226634596b4b0faf199", size = 8947, upload-time = "2025-12-11T13:36:37.151Z" },
+]
+
+[[package]]
+name = "opentelemetry-util-http"
+version = "0.65b0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+sdist = { url = "https://files.pythonhosted.org/packages/32/a9/d7525a59fdd240e69b5af4a6338e78fafa1b4203394122cbd6701fb5f84a/opentelemetry_util_http-0.65b0.tar.gz", hash = "sha256:84f82d826978bba416ab453460ff6a7391cdc3534c93a786595e4068680016b7", size = 11243, upload-time = "2026-07-16T15:26:27.898Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/3f/ab8d29df207ce5f470a07fa96ebb48af4e95b7fab7e7635311b9a32f2fab/opentelemetry_util_http-0.65b0-py3-none-any.whl", hash = "sha256:7553b606f963097cb190536dc30556cce85090692e471a422fff30ca29b04348", size = 8245, upload-time = "2026-07-16T15:25:46.482Z" },
 ]
 
 [[package]]
@@ -4589,6 +4911,14 @@ wheels = [
 name = "protobuf"
 version = "6.33.6"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/66/70/e908e9c5e52ef7c3a6c7902c9dfbb34c7e29c25d2f81ade3856445fd5c94/protobuf-6.33.6.tar.gz", hash = "sha256:a6768d25248312c297558af96a9f9c929e8c4cee0659cb07e780731095f38135", size = 444531, upload-time = "2026-03-18T19:05:00.988Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fc/9f/2f509339e89cfa6f6a4c4ff50438db9ca488dec341f7e454adad60150b00/protobuf-6.33.6-cp310-abi3-win32.whl", hash = "sha256:7d29d9b65f8afef196f8334e80d6bc1d5d4adedb449971fefd3723824e6e77d3", size = 425739, upload-time = "2026-03-18T19:04:48.373Z" },
@@ -4598,6 +4928,29 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/9b/ca/25afc144934014700c52e05103c2421997482d561f3101ff352e1292fb81/protobuf-6.33.6-cp39-abi3-manylinux2014_s390x.whl", hash = "sha256:c96c37eec15086b79762ed265d59ab204dabc53056e3443e702d2681f4b39ce3", size = 339381, upload-time = "2026-03-18T19:04:54.616Z" },
     { url = "https://files.pythonhosted.org/packages/16/92/d1e32e3e0d894fe00b15ce28ad4944ab692713f2e7f0a99787405e43533a/protobuf-6.33.6-cp39-abi3-manylinux2014_x86_64.whl", hash = "sha256:e9db7e292e0ab79dd108d7f1a94fe31601ce1ee3f7b79e0692043423020b0593", size = 323436, upload-time = "2026-03-18T19:04:55.768Z" },
     { url = "https://files.pythonhosted.org/packages/c4/72/02445137af02769918a93807b2b7890047c32bfb9f90371cbc12688819eb/protobuf-6.33.6-py3-none-any.whl", hash = "sha256:77179e006c476e69bf8e8ce866640091ec42e1beb80b213c3900006ecfba6901", size = 170656, upload-time = "2026-03-18T19:04:59.826Z" },
+]
+
+[[package]]
+name = "protobuf"
+version = "7.35.1"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+sdist = { url = "https://files.pythonhosted.org/packages/da/01/9ef0afd7999eb9badb3a768b4aedd78c86d4c65cfaf1958ab276199e76b4/protobuf-7.35.1.tar.gz", hash = "sha256:ce115a26fe0c39a2c29973d914d327e516a6455464489fe3cd1e51a1b354f81a", size = 458717, upload-time = "2026-06-11T21:55:40.257Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/10/03/8aeeb7458d22546bf64b5250ca1daeb5ff757d900e8e4a7476c6f0db843e/protobuf-7.35.1-cp310-abi3-macosx_10_9_universal2.whl", hash = "sha256:24f857477359a85c0c235261b8ba905fd51b2562f4a64ca1df5473f29850cbf6", size = 433226, upload-time = "2026-06-11T21:55:31.719Z" },
+    { url = "https://files.pythonhosted.org/packages/37/4b/dfb89eb0e652a1ff073c39a59fb5e3a83cfe9b57a2c83fa6d78270101767/protobuf-7.35.1-cp310-abi3-manylinux2014_aarch64.whl", hash = "sha256:11d6b0ec246892d85215b0a13ca6e0233cf5284b68f0ac02646427f4ff88a799", size = 328847, upload-time = "2026-06-11T21:55:34.035Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/58/dc12f2cd484951524af6e3382c785869b9b3fb5e52ee95ae23add53ee8f9/protobuf-7.35.1-cp310-abi3-manylinux2014_s390x.whl", hash = "sha256:b73f9489a4b8b1c9cb1f8ed951c736392592edb24b9d6819f36d2e10b171d5b4", size = 344030, upload-time = "2026-06-11T21:55:34.941Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/be/5b3cfe508bfab6761414ff944e3366eb13be4fd71efcd69450f89ba39f43/protobuf-7.35.1-cp310-abi3-manylinux2014_x86_64.whl", hash = "sha256:74758715c53d7158fb76caf4f0cfdacc5329a4b1bb994f865d6cf302d413a1c4", size = 327130, upload-time = "2026-06-11T21:55:35.921Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/bc/6d6c7ba8709c85f8f2c390b2b118d6fb08a783676a572271851bf45a7d22/protobuf-7.35.1-cp310-abi3-win32.whl", hash = "sha256:353652e4efd0bca5b5fc2656abf8307ef351f0cf938c9eba09f0e09c20a25c30", size = 428945, upload-time = "2026-06-11T21:55:37.034Z" },
+    { url = "https://files.pythonhosted.org/packages/0a/19/8d0cb6f20a1ef7b18f1c8986ad5783f22f84cce39c6ce9a6e645ea55192e/protobuf-7.35.1-cp310-abi3-win_amd64.whl", hash = "sha256:230a75ddfc2de4806e56696ce9640c1cdfdb6543b7cfce98d42a4c0a0e7bdb87", size = 439996, upload-time = "2026-06-11T21:55:38.123Z" },
+    { url = "https://files.pythonhosted.org/packages/19/c7/5f7c636ec43e0c545e28d1f1db71990108306f7bdcb89f069ba97e428e7f/protobuf-7.35.1-py3-none-any.whl", hash = "sha256:4bc97768d8fe4ad6743c8a19403e314511ed9f6d13205b687e52421c023ac1b9", size = 171659, upload-time = "2026-06-11T21:55:39.155Z" },
 ]
 
 [[package]]
@@ -4752,7 +5105,7 @@ name = "pydantic-ai"
 version = "1.98.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pydantic-ai-slim", extra = ["ag-ui", "anthropic", "bedrock", "cli", "cohere", "evals", "fastmcp", "google", "groq", "huggingface", "logfire", "mcp", "mistral", "openai", "retries", "spec", "temporal", "ui", "vertexai", "xai"] },
+    { name = "pydantic-ai-slim", extra = ["ag-ui", "anthropic", "bedrock", "cli", "cohere", "evals", "fastmcp", "google", "groq", "huggingface", "logfire", "mcp", "mistral", "openai", "retries", "spec", "temporal", "ui", "vertexai", "xai"], marker = "extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/16/a5/aab1c1422e1698cecf252d10ec90e13590ee9748be28303d70d591c41417/pydantic_ai-1.98.0.tar.gz", hash = "sha256:5d451d0c7203ba9c027a4335fb91f3e608afad3af7e38c4a5de0e3ca218028e4", size = 17427, upload-time = "2026-05-19T01:08:25.381Z" }
 wheels = [
@@ -4767,7 +5120,7 @@ dependencies = [
     { name = "genai-prices" },
     { name = "griffelib" },
     { name = "httpx" },
-    { name = "opentelemetry-api" },
+    { name = "opentelemetry-api", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
     { name = "pydantic" },
     { name = "pydantic-graph" },
     { name = "typing-inspection" },
@@ -4814,10 +5167,10 @@ huggingface = [
     { name = "huggingface-hub" },
 ]
 logfire = [
-    { name = "logfire", extra = ["httpx"] },
+    { name = "logfire", extra = ["httpx"], marker = "extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 mcp = [
-    { name = "fastmcp-slim", extra = ["client"] },
+    { name = "fastmcp-slim", extra = ["client"], marker = "extra == 'extra-9-superqode-observability' or extra == 'extra-9-superqode-pydanticai' or extra == 'extra-9-superqode-pydanticai-logfire' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 mistral = [
     { name = "mistralai" },
@@ -5033,7 +5386,7 @@ version = "4.0.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "astroid" },
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "dill" },
     { name = "isort" },
     { name = "mccabe" },
@@ -5112,7 +5465,7 @@ name = "pytest"
 version = "9.0.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "iniconfig" },
     { name = "packaging" },
     { name = "pluggy" },
@@ -5129,7 +5482,7 @@ version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pytest" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/90/2c/8af215c0f776415f3590cac4f9086ccefd6fd463befeae41cd4d3f193e5a/pytest_asyncio-1.3.0.tar.gz", hash = "sha256:d7f52f36d231b80ee124cd216ffb19369aa168fc10095013c6b014a34d3ee9e5", size = 50087, upload-time = "2025-11-10T16:07:47.256Z" }
 wheels = [
@@ -5299,7 +5652,7 @@ name = "pyzmq"
 version = "27.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cffi", marker = "implementation_name == 'pypy'" },
+    { name = "cffi", marker = "implementation_name == 'pypy' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/04/0b/3c9baedbdf613ecaa7aa07027780b8867f57b6293b6ee50de316c9f3222b/pyzmq-27.1.0.tar.gz", hash = "sha256:ac0765e3d44455adb6ddbf4417dcce460fc40a05978c08efdf2948072f6db540", size = 281750, upload-time = "2025-09-08T23:10:18.157Z" }
 wheels = [
@@ -5333,10 +5686,10 @@ version = "1.18.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "grpcio" },
-    { name = "httpx", extra = ["http2"] },
+    { name = "httpx", extra = ["http2"], marker = "extra == 'extra-9-superqode-mem0' or extra == 'extra-9-superqode-memory-providers' or (extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks') or (extra == 'extra-9-superqode-adk' and extra != 'extra-9-superqode-mem0' and extra != 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "numpy" },
     { name = "portalocker" },
-    { name = "protobuf" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" } },
     { name = "pydantic" },
     { name = "urllib3" },
 ]
@@ -6053,7 +6406,7 @@ wheels = [
 
 [[package]]
 name = "superqode"
-version = "0.2.35"
+version = "0.2.36"
 source = { editable = "." }
 dependencies = [
     { name = "agent-client-protocol" },
@@ -6081,7 +6434,7 @@ adk = [
 ]
 antigravity-sdk = [
     { name = "google-antigravity" },
-    { name = "protobuf" },
+    { name = "protobuf", version = "7.35.1", source = { registry = "https://pypi.org/simple" } },
 ]
 channels = [
     { name = "websocket-client" },
@@ -6147,7 +6500,7 @@ observability = [
     { name = "logfire" },
     { name = "mlflow" },
     { name = "opentelemetry-exporter-otlp-proto-grpc" },
-    { name = "opentelemetry-sdk" },
+    { name = "opentelemetry-sdk", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
 ]
 openai-agents = [
     { name = "openai-agents", extra = ["litellm"] },
@@ -6205,7 +6558,7 @@ vendor-sdks = [
     { name = "github-copilot-sdk" },
     { name = "google-antigravity" },
     { name = "openai-codex" },
-    { name = "protobuf" },
+    { name = "protobuf", version = "7.35.1", source = { registry = "https://pypi.org/simple" } },
 ]
 web = [
     { name = "textual-serve" },
@@ -6237,8 +6590,8 @@ requires-dist = [
     { name = "github-copilot-sdk", marker = "extra == 'copilot-sdk'", specifier = ">=1.0.8,<2.0.0" },
     { name = "github-copilot-sdk", marker = "extra == 'vendor-sdks'", specifier = ">=1.0.8,<2.0.0" },
     { name = "google-adk", marker = "extra == 'adk'", specifier = ">=2.1.0,<3.0" },
-    { name = "google-antigravity", marker = "extra == 'antigravity-sdk'", specifier = ">=0.1.6,<0.2.0" },
-    { name = "google-antigravity", marker = "extra == 'vendor-sdks'", specifier = ">=0.1.6,<0.2.0" },
+    { name = "google-antigravity", marker = "extra == 'antigravity-sdk'", specifier = ">=0.1.8,<0.2.0" },
+    { name = "google-antigravity", marker = "extra == 'vendor-sdks'", specifier = ">=0.1.8,<0.2.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "httpx", marker = "extra == 'testing'", specifier = ">=0.28.1" },
     { name = "httpx-sse", specifier = ">=0.4.3" },
@@ -6270,8 +6623,8 @@ requires-dist = [
     { name = "playwright", marker = "extra == 'ui-testing'", specifier = ">=1.49.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.1.0" },
     { name = "prompt-toolkit", specifier = ">=3.0.52" },
-    { name = "protobuf", marker = "extra == 'antigravity-sdk'", specifier = ">=6.31.1" },
-    { name = "protobuf", marker = "extra == 'vendor-sdks'", specifier = ">=6.31.1" },
+    { name = "protobuf", marker = "extra == 'antigravity-sdk'", specifier = ">=7.35.0" },
+    { name = "protobuf", marker = "extra == 'vendor-sdks'", specifier = ">=7.35.0" },
     { name = "pydantic-ai", marker = "extra == 'pydanticai'", specifier = ">=1.98.0,<2.0.0" },
     { name = "pydantic-ai", marker = "extra == 'pydanticai-logfire'", specifier = ">=1.98.0,<2.0.0" },
     { name = "pydantic-monty", marker = "extra == 'monty'", specifier = ">=0.0.4" },
@@ -6318,7 +6671,7 @@ version = "1.27.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "nexus-rpc" },
-    { name = "protobuf" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" } },
     { name = "types-protobuf" },
     { name = "typing-extensions" },
 ]
@@ -6533,7 +6886,7 @@ version = "0.32.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
-    { name = "cffi", marker = "implementation_name != 'pypy' and os_name == 'nt'" },
+    { name = "cffi", marker = "(implementation_name != 'pypy' and os_name == 'nt') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (implementation_name == 'pypy' and extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks') or (os_name != 'nt' and extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-antigravity-sdk') or (os_name != 'nt' and extra == 'extra-9-superqode-adk' and extra == 'extra-9-superqode-vendor-sdks') or (os_name != 'nt' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-mem0') or (os_name != 'nt' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-memory-providers') or (os_name != 'nt' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-observability') or (os_name != 'nt' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai') or (os_name != 'nt' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-pydanticai-logfire') or (os_name != 'nt' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-cloud') or (os_name != 'nt' and extra == 'extra-9-superqode-antigravity-sdk' and extra == 'extra-9-superqode-sandbox-modal') or (os_name != 'nt' and extra == 'extra-9-superqode-mem0' and extra == 'extra-9-superqode-vendor-sdks') or (os_name != 'nt' and extra == 'extra-9-superqode-memory-providers' and extra == 'extra-9-superqode-vendor-sdks') or (os_name != 'nt' and extra == 'extra-9-superqode-observability' and extra == 'extra-9-superqode-vendor-sdks') or (os_name != 'nt' and extra == 'extra-9-superqode-pydanticai' and extra == 'extra-9-superqode-vendor-sdks') or (os_name != 'nt' and extra == 'extra-9-superqode-pydanticai-logfire' and extra == 'extra-9-superqode-vendor-sdks') or (os_name != 'nt' and extra == 'extra-9-superqode-sandbox-cloud' and extra == 'extra-9-superqode-vendor-sdks') or (os_name != 'nt' and extra == 'extra-9-superqode-sandbox-modal' and extra == 'extra-9-superqode-vendor-sdks')" },
     { name = "idna" },
     { name = "outcome" },
     { name = "sniffio" },
@@ -7043,9 +7396,9 @@ dependencies = [
     { name = "aiohttp" },
     { name = "googleapis-common-protos" },
     { name = "grpcio" },
-    { name = "opentelemetry-sdk" },
+    { name = "opentelemetry-sdk", version = "1.39.1", source = { registry = "https://pypi.org/simple" } },
     { name = "packaging" },
-    { name = "protobuf" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" } },
     { name = "pydantic" },
     { name = "requests" },
 ]

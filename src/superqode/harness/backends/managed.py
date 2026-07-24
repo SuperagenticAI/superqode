@@ -44,7 +44,7 @@ class ManagedBackendConfig:
     stream: bool
     background: bool
     store: bool
-    environment: dict[str, Any] | None
+    environment: str | dict[str, Any] | None
     tools: list[Any]
 
     @property
@@ -204,10 +204,22 @@ def _resolve_config(backend: str, request: HarnessBackendRequest) -> ManagedBack
         or os.getenv(f"{prefix}_ENDPOINT")
         or ""
     ).strip()
+    google_interaction_mode = mode.replace("-", "_") in {
+        "interaction",
+        "interactions",
+        "persisted",
+        "agent",
+    }
     base_agent = str(
         config.get("base_agent")
         or config.get("model")
-        or ("gemini-flash-latest" if backend == "google-agent-engine" else "")
+        or (
+            "antigravity-preview-05-2026"
+            if backend == "google-agent-engine" and google_interaction_mode
+            else "gemini-flash-latest"
+            if backend == "google-agent-engine"
+            else ""
+        )
     ).strip()
     auth_type = str(
         config.get("auth_type") or ("api_key" if backend == "google-agent-engine" else "api_key")
@@ -261,6 +273,8 @@ def _resolve_config(backend: str, request: HarnessBackendRequest) -> ManagedBack
         )
     )
     environment = config.get("environment")
+    if environment is None and backend == "google-agent-engine" and google_interaction_mode:
+        environment = "remote"
     tools = config.get("tools") if isinstance(config.get("tools"), list) else []
     return ManagedBackendConfig(
         endpoint=endpoint,
@@ -278,9 +292,9 @@ def _resolve_config(backend: str, request: HarnessBackendRequest) -> ManagedBack
         api_revision=api_revision,
         system_instruction=system_instruction,
         stream=_bool_config(config.get("stream"), default=False),
-        background=_bool_config(config.get("background"), default=True),
+        background=_bool_config(config.get("background"), default=False),
         store=_bool_config(config.get("store"), default=True),
-        environment=environment if isinstance(environment, dict) else None,
+        environment=environment if isinstance(environment, (str, dict)) else None,
         tools=tools,
     )
 
@@ -348,17 +362,18 @@ def _google_interaction_payload(
 ) -> dict[str, Any]:
     agent = config.agent_id or config.base_agent
     payload: dict[str, Any] = {
-        "stream": config.stream,
-        "background": config.background,
-        "store": config.store,
+        # The synchronous harness backend uses a JSON response. The dedicated
+        # antigravity-managed runtime owns the SSE path.
+        "stream": False,
         "agent": agent,
-        "input": [
-            {
-                "type": "user_input",
-                "content": [{"type": "text", "text": request.prompt}],
-            }
-        ],
+        "input": request.prompt,
     }
+    if config.background:
+        payload["background"] = True
+    if config.store:
+        payload["store"] = True
+    if config.system_instruction:
+        payload["system_instruction"] = config.system_instruction
     if config.environment:
         payload["environment"] = config.environment
     if config.tools:

@@ -10,6 +10,12 @@ from superqode.runtime.antigravity_cli import AntigravityCLIRuntime, _version_tu
 from superqode.runtime.antigravity_status import probe_antigravity_cli
 
 
+@pytest.fixture(autouse=True)
+def _clear_antigravity_overrides(monkeypatch):
+    monkeypatch.delenv("SUPERQODE_ANTIGRAVITY_CLI_AGENT", raising=False)
+    monkeypatch.delenv("SUPERQODE_ANTIGRAVITY_CLI_EFFORT", raising=False)
+
+
 def test_version_tuple():
     assert _version_tuple("agy version 1.1.1") == (1, 1, 1)
     assert _version_tuple("1.2.0") == (1, 2, 0)
@@ -138,14 +144,60 @@ def test_command_creates_project_when_workspace_has_no_mapping(monkeypatch, tmp_
     assert "--new-project" in runtime._command("hello")
 
 
+def test_command_supports_custom_agent_and_effort(monkeypatch, tmp_path):
+    monkeypatch.setattr("shutil.which", lambda _name: "/tmp/agy")
+    monkeypatch.setenv("SUPERQODE_ANTIGRAVITY_CLI_AGENT", "reviewer")
+    runtime = AntigravityCLIRuntime(
+        config=AgentConfig(
+            provider="google",
+            model="gemini-test",
+            working_directory=tmp_path,
+            reasoning_effort="high",
+        )
+    )
+
+    command = runtime._command("review this")
+
+    assert command[command.index("--agent") : command.index("--agent") + 2] == [
+        "--agent",
+        "reviewer",
+    ]
+    assert command[command.index("--effort") : command.index("--effort") + 2] == [
+        "--effort",
+        "high",
+    ]
+    runtime.set_agent("auto")
+    runtime.set_model("gemini-next")
+    runtime.set_reasoning_effort("medium")
+    assert runtime.agent_name is None
+    assert runtime.config.model == "gemini-next"
+    assert runtime.reasoning_effort == "medium"
+
+    with pytest.raises(ValueError, match="low, medium, or high"):
+        runtime.set_reasoning_effort("extra-high")
+
+
+def test_effort_requires_cli_1_1_5_after_version_probe(monkeypatch, tmp_path):
+    monkeypatch.setattr("shutil.which", lambda _name: "/tmp/agy")
+    runtime = AntigravityCLIRuntime(
+        config=AgentConfig(provider="google", model="", working_directory=tmp_path)
+    )
+    runtime._cli_version = (1, 1, 1)
+
+    with pytest.raises(RuntimeError, match="1.1.5"):
+        runtime.set_reasoning_effort("high")
+
+    assert runtime.reasoning_effort is None
+
+
 def test_metadata_identifies_antigravity_harness(monkeypatch):
     monkeypatch.setattr("shutil.which", lambda _name: "/tmp/agy")
     runtime = AntigravityCLIRuntime(
         config=AgentConfig(provider="google", model="", working_directory=Path.cwd())
     )
-    assert runtime.metadata == {
-        "runtime": "antigravity-cli",
-        "harness_owner": "antigravity",
-        "authentication": "google-sign-in",
-        "structured_events": False,
-    }
+    assert runtime.metadata["runtime"] == "antigravity-cli"
+    assert runtime.metadata["harness_owner"] == "antigravity"
+    assert runtime.metadata["authentication"] == "google-sign-in"
+    assert runtime.metadata["structured_events"] is False
+    assert runtime.metadata["agent"] is None
+    assert runtime.metadata["reasoning_effort"] is None

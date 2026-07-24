@@ -1151,7 +1151,7 @@ class CommandImplMixin:
             ):
                 self._install_pure_permission_bridge(existing, log)
                 _os.environ["SUPERQODE_RUNTIME"] = sub
-                self._set_status_runtime(sub)
+                self._sync_self_contained_status(sub)
                 if sub == "codex-sdk":
                     self.run_worker(self._resolve_codex_active_model(log), exclusive=False)
                     log.add_info("Already connected via codex-sdk; reusing warm Codex app-server.")
@@ -1194,6 +1194,7 @@ class CommandImplMixin:
                     "claude-agent-sdk": "anthropic",
                     "antigravity-sdk": "google",
                     "antigravity-cli": "google",
+                    "antigravity-managed": "google",
                 }.get(sub, "openai")
                 pure.connect(provider=provider, model="", working_directory=Path.cwd())
                 self._announce_self_contained_connection(sub, log)
@@ -1426,7 +1427,318 @@ class CommandImplMixin:
                 "Usage: :claude [status|model|permission|sessions|resume|rename|tag|commands|command|review]"
             )
 
-    # ---- Google Antigravity CLI :antigravity command surface -----------------
+    # ---- Google Antigravity CLI :agy command surface --------------------------
+    @staticmethod
+    def _agy_subcommand_completion_candidates(value: str) -> list[PromptCompletionCandidate]:
+        """Complete the installed agy CLI's major command tree."""
+
+        prefix = ":agy "
+        partial = value[len(prefix) :].lower()
+        subcommands = (
+            ("help", "Show all agy commands available through SuperQode"),
+            ("connect", "Connect the signed-in agy harness"),
+            ("status", "Show local agy diagnostics without authenticating"),
+            ("run", "Send a prompt through the connected agy runtime"),
+            ("agents", "List agents reported by agy"),
+            ("agent", "Show agents or select one for future turns"),
+            ("models", "List models reported by agy"),
+            ("model", "Show or select the model for future turns"),
+            ("effort", "Show or set reasoning effort"),
+            ("changelog", "Show Antigravity CLI release notes"),
+            ("plugin", "Manage Antigravity plugins"),
+            ("update", "Run the agy updater"),
+            ("install", "Configure agy PATH and shell integration"),
+            ("launch", "Show an external agy TUI launch command"),
+            ("continue", "Show the workspace-scoped quick-resume command"),
+            ("resume", "Show the command to resume a conversation ID"),
+            ("version", "Show the installed agy version"),
+            ("migrate", "Show Gemini CLI migration commands"),
+            ("sdk", "Use Antigravity's API-key SDK runtime"),
+            ("managed", "Use Google's API-key managed agent runtime"),
+            ("superqode", "Use SuperQode's harness with Google BYOK"),
+        )
+        return [
+            PromptCompletionCandidate(
+                value=f"{prefix}{subcommand}",
+                label=subcommand,
+                description=description,
+                kind="agy",
+            )
+            for subcommand, description in subcommands
+            if subcommand.startswith(partial) and f"{prefix}{subcommand}" != value
+        ]
+
+    @staticmethod
+    def _agy_plugin_completion_candidates(value: str) -> list[PromptCompletionCandidate]:
+        prefix = ":agy plugin "
+        partial = value[len(prefix) :].lower()
+        commands = (
+            ("list", "List imported plugins"),
+            ("import", "Import plugins from gemini or claude"),
+            ("install", "Install a plugin or plugin@marketplace"),
+            ("uninstall", "Uninstall a plugin"),
+            ("enable", "Enable an installed plugin"),
+            ("disable", "Disable an installed plugin"),
+            ("validate", "Validate a plugin directory"),
+            ("link", "Generate a marketplace link"),
+            ("help", "Show plugin command help"),
+        )
+        return [
+            PromptCompletionCandidate(
+                value=f"{prefix}{command}",
+                label=command,
+                description=description,
+                kind="agy-plugin",
+            )
+            for command, description in commands
+            if command.startswith(partial) and f"{prefix}{command}" != value
+        ]
+
+    @staticmethod
+    def _agy_value_completion_candidates(
+        value: str,
+        prefix: str,
+        options: tuple[tuple[str, str], ...],
+    ) -> list[PromptCompletionCandidate]:
+        partial = value[len(prefix) :].lower()
+        return [
+            PromptCompletionCandidate(
+                value=f"{prefix}{option}",
+                label=option,
+                description=description,
+                kind="agy-value",
+            )
+            for option, description in options
+            if option.startswith(partial) and f"{prefix}{option}" != value
+        ]
+
+    def _agy_cmd(self, args: str, log) -> None:
+        """Expose agy's useful non-interactive CLI commands inside SuperQode."""
+
+        parts = (args or "").split(maxsplit=1)
+        sub = parts[0].strip().lower() if parts and parts[0].strip() else "help"
+        rest = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub in {"help", "?"}:
+            self._show_agy_help(log)
+        elif sub in {"connect", "start", "cli"}:
+            self._runtime_cmd("antigravity-cli", log)
+        elif sub in {"status", "doctor"}:
+            self._show_antigravity_status(log)
+        elif sub == "run":
+            if not rest:
+                log.add_info("Usage: :agy run <prompt>")
+                return
+            runtime = self._active_antigravity_runtime()
+            if runtime is None or getattr(runtime, "name", "") != "antigravity-cli":
+                log.add_error("Connect the agy runtime first.")
+                log.add_info(":agy connect")
+                return
+            self._handle_message(rest, log)
+        elif sub in {"agents", "ls-agents"}:
+            self._run_agy_native(["agents"], log, "Antigravity agents")
+        elif sub == "agent":
+            if rest:
+                self._antigravity_agent_cmd(rest, log)
+            else:
+                self._run_agy_native(["agent"], log, "Antigravity agents")
+        elif sub in {"models", "ls-models"}:
+            self._run_agy_native(["models"], log, "Antigravity models")
+        elif sub == "model":
+            if rest:
+                self._antigravity_model_cmd(rest, log)
+            else:
+                self._run_agy_native(["models"], log, "Antigravity models")
+        elif sub in {"effort", "thinking"}:
+            self._antigravity_effort_cmd(rest, log)
+        elif sub == "changelog":
+            self._run_agy_native(["changelog"], log, "Antigravity changelog")
+        elif sub in {"plugin", "plugins"}:
+            self._agy_plugin_cmd(rest, log)
+        elif sub == "update":
+            if rest:
+                log.add_error("Usage: :agy update")
+            else:
+                self._run_agy_native(["update"], log, "Antigravity update", timeout=600)
+        elif sub == "install":
+            self._agy_install_cmd(rest, log)
+        elif sub == "version":
+            self._run_agy_native(["--version"], log, "Antigravity version")
+        elif sub in {"launch", "open"}:
+            self._show_agy_launch(log, rest)
+        elif sub in {"continue", "resume"}:
+            if sub == "resume" and not rest:
+                log.add_info("Usage: :agy resume <conversation-id>")
+                return
+            launch_args = "--continue" if sub == "continue" else f"--conversation {rest}"
+            self._show_agy_launch(log, launch_args)
+        elif sub in {"sdk", "api-key-sdk"}:
+            self._runtime_cmd("antigravity-sdk", log)
+        elif sub in {"managed", "cloud", "remote", "agent-api"}:
+            self._runtime_cmd("antigravity-managed", log)
+        elif sub in {"superqode", "byok"}:
+            self._connect_byok_cmd("google", log)
+        elif sub in {"migrate", "migration", "gemini"}:
+            self._show_antigravity_migration(log)
+        else:
+            log.add_error(f"Unknown agy command: {sub}")
+            log.add_info("Use :agy help to see the complete command catalog.")
+
+    def _run_agy_native(
+        self,
+        command_parts: list[str],
+        log,
+        label: str,
+        *,
+        timeout: int = 120,
+    ) -> None:
+        """Schedule a non-interactive agy command without invoking a shell."""
+
+        self.run_worker(
+            self._agy_cli_cmd(command_parts, log, label, timeout=timeout),
+            exclusive=False,
+        )
+
+    async def _agy_cli_cmd(
+        self,
+        command_parts: list[str],
+        log,
+        label: str,
+        *,
+        timeout: int = 120,
+    ) -> None:
+        """Run an explicitly selected agy subcommand without blocking the TUI."""
+
+        agy = shutil.which("agy")
+        if not agy:
+            log.add_error(
+                "Antigravity CLI was not found. Install it from "
+                "https://antigravity.google/docs/cli-install"
+            )
+            return
+
+        command = [agy, *command_parts]
+        display_command = " ".join(shlex.quote(part) for part in command)
+        log.add_info(f"Starting {label}:\n  {display_command}")
+
+        def _run() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                command,
+                cwd=Path.cwd(),
+                text=True,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                check=False,
+                timeout=timeout,
+            )
+
+        try:
+            completed = await asyncio.to_thread(_run)
+        except subprocess.TimeoutExpired:
+            log.add_error(f"{label} timed out after {timeout} seconds.")
+            return
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"{label} failed to start: {exc}")
+            return
+
+        output = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
+        if completed.returncode == 0:
+            log.add_success(f"{label} completed.")
+            if output:
+                log.write(Text(output + "\n", style=THEME["text"], overflow="fold"))
+        else:
+            log.add_error(f"{label} failed with exit code {completed.returncode}.")
+            if output:
+                log.write(Text(output + "\n", style=THEME["error"], overflow="fold"))
+
+    def _agy_plugin_cmd(self, args: str, log) -> None:
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :agy plugin arguments: {exc}")
+            return
+        if not tokens or tokens[0] in {"help", "?"}:
+            self._show_agy_plugin_help(log)
+            return
+
+        action = tokens[0].lower()
+        allowed = {
+            "list",
+            "import",
+            "install",
+            "uninstall",
+            "enable",
+            "disable",
+            "validate",
+            "link",
+        }
+        if action not in allowed:
+            log.add_error(f"Unknown agy plugin command: {action}")
+            self._show_agy_plugin_help(log)
+            return
+        required = {
+            "install": 1,
+            "uninstall": 1,
+            "enable": 1,
+            "disable": 1,
+            "link": 2,
+        }.get(action, 0)
+        if len(tokens) - 1 < required:
+            self._show_agy_plugin_help(log)
+            return
+
+        self._run_agy_native(
+            ["plugin", *tokens],
+            log,
+            f"Antigravity plugin {action}",
+            timeout=300,
+        )
+
+    def _agy_install_cmd(self, args: str, log) -> None:
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :agy install arguments: {exc}")
+            return
+        allowed_flags = {"--dir", "--skip-aliases", "--skip-path"}
+        for token in tokens:
+            if (
+                token.startswith("-")
+                and token not in allowed_flags
+                and not token.startswith("--dir=")
+            ):
+                log.add_error(f"Unsupported agy install flag: {token}")
+                log.add_info("Allowed: --dir <path>, --skip-aliases, --skip-path")
+                return
+        self._run_agy_native(["install", *tokens], log, "Antigravity install setup")
+
+    def _show_agy_launch(self, log, args: str = "") -> None:
+        """Show a copyable external-TUI command; never nest agy inside Textual."""
+
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :agy launch arguments: {exc}")
+            return
+        if "--dangerously-skip-permissions" in tokens:
+            log.add_error(
+                "SuperQode does not generate launch commands that bypass all agy permissions."
+            )
+            return
+        command = ["agy", *tokens]
+        display = " ".join(shlex.quote(token) for token in command)
+        text = Text()
+        text.append("\n  Antigravity interactive TUI\n\n", style=f"bold {THEME['text']}")
+        text.append("  Run from this workspace in another terminal:\n", style=THEME["muted"])
+        text.append(f"    cd {shlex.quote(str(Path.cwd()))} && {display}\n", style=THEME["cyan"])
+        text.append(
+            "\n  Interactive-only panels such as /resume, /agents, /config, "
+            "/permissions, /mcp, and /skills remain inside agy's own terminal UI.\n",
+            style=THEME["dim"],
+        )
+        log.write(text)
+
+    # ---- Google Antigravity routes :antigravity -------------------------------
     def _antigravity_cmd(self, args: str, log) -> None:
         """Handle Antigravity CLI handoff/profile commands.
 
@@ -1437,23 +1749,95 @@ class CommandImplMixin:
         """
         parts = (args or "").split(maxsplit=1)
         sub = parts[0].strip().lower() if parts and parts[0].strip() else "connect"
+        rest = parts[1].strip() if len(parts) > 1 else ""
         if sub in ("connect", "start", "cli"):
             self._runtime_cmd("antigravity-cli", log)
         elif sub in ("sdk", "api-key-sdk"):
             self._runtime_cmd("antigravity-sdk", log)
+        elif sub in ("managed", "cloud", "remote", "agent-api"):
+            self._runtime_cmd("antigravity-managed", log)
         elif sub in ("superqode", "byok"):
             self._connect_byok_cmd("google", log)
         elif sub in ("launch", "open"):
             self._show_antigravity_connect(log)
         elif sub in ("status", "doctor"):
             self._show_antigravity_status(log)
+        elif sub in ("agent", "profile"):
+            self._antigravity_agent_cmd(rest, log)
+        elif sub in ("model", "models"):
+            self._antigravity_model_cmd(rest, log)
+        elif sub in ("effort", "thinking"):
+            self._antigravity_effort_cmd(rest, log)
         elif sub in ("migrate", "migration", "gemini"):
             self._show_antigravity_migration(log)
         elif sub in ("help", "?"):
             self._show_antigravity_help(log)
         else:
             log.add_error(f"Unknown antigravity command: {sub}")
-            log.add_info("Usage: :antigravity [cli|sdk|superqode|status|migrate|launch|help]")
+            log.add_info(
+                "Usage: :antigravity "
+                "[cli|sdk|agent|model|effort|superqode|status|migrate|launch|help]"
+            )
+
+    def _active_antigravity_runtime(self):
+        pure = getattr(self, "_pure_mode", None)
+        runtime = getattr(pure, "_runtime", None)
+        if runtime is None:
+            return None
+        if getattr(runtime, "name", "") not in {"antigravity-cli", "antigravity-sdk"}:
+            return None
+        return runtime
+
+    def _antigravity_agent_cmd(self, agent: str, log) -> None:
+        runtime = self._active_antigravity_runtime()
+        if runtime is None or getattr(runtime, "name", "") != "antigravity-cli":
+            log.add_error("Connect the Antigravity CLI runtime before selecting a custom agent.")
+            log.add_info(":connect antigravity")
+            return
+        if not agent:
+            log.add_info(f"Antigravity CLI agent: {runtime.agent_name or 'default'}")
+            return
+        try:
+            runtime.set_agent(agent)
+            log.add_success(f"Antigravity CLI agent set to {runtime.agent_name or 'default'}")
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not set Antigravity agent: {exc}")
+
+    def _antigravity_effort_cmd(self, effort: str, log) -> None:
+        runtime = self._active_antigravity_runtime()
+        if runtime is None:
+            log.add_error("Connect the Antigravity CLI or SDK runtime before setting effort.")
+            log.add_info(":antigravity cli  or  :antigravity sdk")
+            return
+        if not effort:
+            log.add_info(f"Antigravity effort: {runtime.reasoning_effort or 'auto'}")
+            return
+        try:
+            runtime.set_reasoning_effort(effort)
+            log.add_success(f"Antigravity effort set to {runtime.reasoning_effort or 'auto'}")
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not set Antigravity effort: {exc}")
+
+    def _antigravity_model_cmd(self, model: str, log) -> None:
+        runtime = self._active_antigravity_runtime()
+        if runtime is None:
+            log.add_error("Connect the Antigravity CLI or SDK runtime before setting a model.")
+            log.add_info(":antigravity cli  or  :antigravity sdk")
+            return
+        if not model:
+            current = getattr(runtime, "config", None)
+            log.add_info(f"Antigravity model: {getattr(current, 'model', '') or 'default'}")
+            return
+        try:
+            runtime.set_model(model)
+            current = getattr(runtime, "config", None)
+            selected = getattr(current, "model", "") or "default"
+            if getattr(self, "_pure_mode", None) is not None:
+                self._pure_mode.session.model = "" if selected == "default" else selected
+            self._set_status_model("" if selected == "default" else selected)
+            log.add_success(f"Antigravity model set to {selected}")
+        except Exception as exc:  # noqa: BLE001
+            log.add_error(f"Could not set Antigravity model: {exc}")
 
     def _antigravity_command_line(self) -> str:
         return f"cd {shlex.quote(str(Path.cwd()))} && agy"

@@ -1504,6 +1504,7 @@ class ConversationLog(RichLog):
             "acp": ("🔌", "ACP", THEME["success"]),
             "byok": ("🔑", "BYOK", THEME["cyan"]),
             "local": ("💻", "Local", THEME["warning"]),
+            "managed": ("☁", "MANAGED", THEME["cyan"]),
         }
         mode_icon, mode_label, mode_color = mode_badges.get(
             mode.lower(), ("●", mode.upper(), THEME["muted"])
@@ -1514,6 +1515,7 @@ class ConversationLog(RichLog):
             "auto": ("🟢", "AUTO", THEME["success"]),
             "ask": ("🟡", "ASK", THEME["warning"]),
             "deny": ("🔴", "DENY", THEME["error"]),
+            "hosted": ("◉", "HOSTED", THEME["purple"]),
         }
         app_icon, app_label, app_color = approval_badges.get(
             approval_mode, ("🟡", "ASK", THEME["warning"])

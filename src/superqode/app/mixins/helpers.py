@@ -144,7 +144,24 @@ class HelpersMixin(
             pure = getattr(self, "_pure_mode", None)
             harness = ""
             if pure is not None:
-                harness = str(pure.get_status().get("harness", {}).get("id") or "")
+                runtime_name = str(getattr(pure, "runtime_name", "") or "")
+                connected = bool(getattr(getattr(pure, "session", None), "connected", False))
+                if connected and runtime_name in getattr(
+                    self, "_SELF_CONTAINED_RUNTIMES", frozenset()
+                ):
+                    # These runtimes own the agent loop and tool harness. The
+                    # native "core" profile is only SuperQode's wrapper and
+                    # must not be presented as the active harness.
+                    harness = {
+                        "codex-sdk": "codex",
+                        "copilot-sdk": "copilot",
+                        "claude-agent-sdk": "claude",
+                        "antigravity-sdk": "antigravity",
+                        "antigravity-cli": "antigravity",
+                        "antigravity-managed": "antigravity",
+                    }.get(runtime_name, runtime_name)
+                else:
+                    harness = str(pure.get_status().get("harness", {}).get("id") or "")
             if not harness:
                 from superqode.harness import resolve_harness
 
@@ -631,6 +648,32 @@ class HelpersMixin(
             display = "" if runtime_name in ("", "builtin") else runtime_name
             self.query_one("#status-bar", ColorfulStatusBar).active_runtime = display
         except Exception:  # noqa: BLE001
+            pass
+
+    def _sync_self_contained_status(self, runtime_name: str, *, tokens: int = 0) -> None:
+        """Replace stale provider state with runtime-owned identity."""
+        try:
+            from superqode.app.widgets import ColorfulStatusBar
+
+            status = self.query_one("#status-bar", ColorfulStatusBar)
+            status.update_byok_status(tokens=max(0, int(tokens or 0)))
+            status.active_runtime = runtime_name
+            if runtime_name == "antigravity-managed":
+                status.active_model = (
+                    os.getenv("SUPERQODE_ANTIGRAVITY_AGENT", "").strip()
+                    or "antigravity-preview-05-2026"
+                )
+            else:
+                status.active_model = ""
+            status.active_harness = {
+                "codex-sdk": "codex",
+                "copilot-sdk": "copilot",
+                "claude-agent-sdk": "claude",
+                "antigravity-sdk": "antigravity",
+                "antigravity-cli": "antigravity",
+                "antigravity-managed": "antigravity",
+            }.get(runtime_name, runtime_name)
+        except Exception:  # noqa: BLE001 - status chrome must never break connect
             pass
 
     def _subscription_login_in_progress(self) -> bool:

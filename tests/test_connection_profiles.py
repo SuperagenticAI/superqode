@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from superqode.providers.connection_profiles import (
@@ -266,13 +268,67 @@ def test_antigravity_commands_select_explicit_harness_routes():
     stub = Stub()
     SuperQodeApp._antigravity_cmd(stub, "cli", log=None)
     SuperQodeApp._antigravity_cmd(stub, "sdk", log=None)
+    SuperQodeApp._antigravity_cmd(stub, "managed", log=None)
     SuperQodeApp._antigravity_cmd(stub, "superqode", log=None)
 
     assert stub.calls == [
         ("runtime", "antigravity-cli"),
         ("runtime", "antigravity-sdk"),
+        ("runtime", "antigravity-managed"),
         ("byok", "google"),
     ]
+
+
+def test_antigravity_commands_control_active_cli_runtime():
+    from superqode.app_main import SuperQodeApp
+
+    class Runtime:
+        name = "antigravity-cli"
+        agent_name = None
+        reasoning_effort = None
+
+        def set_agent(self, value):
+            self.agent_name = None if value == "auto" else value
+
+        def set_reasoning_effort(self, value):
+            self.reasoning_effort = None if value == "auto" else value
+
+        def set_model(self, value):
+            self.config.model = "" if value == "auto" else value
+
+        config = SimpleNamespace(model="")
+
+    class Log:
+        def __init__(self):
+            self.messages = []
+
+        def add_info(self, value):
+            self.messages.append(("info", value))
+
+        def add_success(self, value):
+            self.messages.append(("success", value))
+
+        def add_error(self, value):
+            self.messages.append(("error", value))
+
+    runtime = Runtime()
+
+    class Stub:
+        def _active_antigravity_runtime(self):
+            return runtime
+
+    stub = Stub()
+    log = Log()
+    SuperQodeApp._antigravity_agent_cmd(stub, "reviewer", log)
+    stub._pure_mode = SimpleNamespace(session=SimpleNamespace(model=""))
+    stub._set_status_model = lambda model: None
+    SuperQodeApp._antigravity_model_cmd(stub, "gemini-test", log)
+    SuperQodeApp._antigravity_effort_cmd(stub, "high", log)
+
+    assert runtime.agent_name == "reviewer"
+    assert runtime.config.model == "gemini-test"
+    assert runtime.reasoning_effort == "high"
+    assert [kind for kind, _message in log.messages] == ["success", "success", "success"]
 
 
 def test_antigravity_connection_announcement_never_mentions_codex():
@@ -292,6 +348,9 @@ def test_antigravity_connection_announcement_never_mentions_codex():
         def _set_status_model(self, _model):
             pass
 
+        def _sync_self_contained_status(self, _runtime):
+            pass
+
         def run_worker(self, *_args, **_kwargs):
             raise AssertionError("Antigravity must not run Codex model resolution")
 
@@ -302,6 +361,28 @@ def test_antigravity_connection_announcement_never_mentions_codex():
     assert ":antigravity status" in log.output
     assert "Codex" not in log.output
     assert ":codex" not in log.output
+
+
+def test_managed_connection_announcement_uses_managed_route_commands():
+    from superqode.app_main import SuperQodeApp
+
+    class Log:
+        def __init__(self):
+            self.output = ""
+
+        def write(self, value):
+            self.output += str(value)
+
+    class Stub:
+        def _sync_self_contained_status(self, _runtime):
+            pass
+
+    log = Log()
+    SuperQodeApp._announce_self_contained_connection(Stub(), "antigravity-managed", log)
+
+    assert ":antigravity help" in log.output
+    assert ":runtime list" in log.output
+    assert "local CLI diagnostics" not in log.output
 
 
 def test_dispatch_grok_routes_to_grok_build_acp(_dispatch):
