@@ -1,257 +1,337 @@
-# Connection Modes
+# Connection Methods and Vendors
 
-SuperQode connects to intelligence in four ways: ACP agents, BYOK providers, local model servers, and vendor SDK runtimes. The connection mode decides where model work happens and who owns the agent loop. A harness decides what capabilities are allowed during a run.
+SuperQode provides six connection and interoperability methods: Local, ACP,
+MCP, A2A, BYOK, and SDK runtimes. The `:connect` picker exposes the methods and
+the primary product profiles. Vendor-specific commands remain available for
+direct selection.
 
----
+## Connection Methods
 
-## Overview
+| Method | Connects SuperQode to | Primary command | Execution ownership |
+| --- | --- | --- | --- |
+| Local | Ollama, LM Studio, MLX, DwarfStar, llama.cpp, vLLM, SGLang, TGI, or another OpenAI-compatible server | `:connect local` | SuperQode runs the harness and calls the local model |
+| ACP | An external coding-agent process that implements Agent Client Protocol | `:connect acp` | The external agent owns its model and tool loop |
+| BYOK | A hosted model provider using an API key supplied by the user | `:connect byok` | SuperQode runs the harness and calls the provider |
+| SDK | A vendor agent SDK or authenticated client runtime | `:connect codex`, `:connect claude`, or another product profile | The vendor runtime owns model access; SuperQode supplies session and policy controls |
+| MCP | Tool and resource servers exposed through Model Context Protocol | `:mcp` | MCP extends the active harness or ACP agent; it is not a model connection |
+| A2A | Remote agents exposed through Agent2Agent endpoints | `:a2a connect <url>` | The remote agent owns its execution contract |
 
-| Mode | What it connects to | Best for |
-| --- | --- | --- |
-| ACP | External coding agents that speak Agent Client Protocol | Full coding-agent workflows where the agent owns its model and tools |
-| BYOK | Hosted model providers using your API keys | Cloud models, automation, model comparison, and direct provider usage |
-| Local | Local or self-hosted model servers | Privacy, offline work, cost control, and local model experiments |
-| SDK | Vendor agent SDKs running inside SuperQode | Using your existing ChatGPT or Claude subscription, or vendor-native agent behavior, with SuperQode's TUI and sessions around it |
+Harness Protocol is also supported for portable harness import and export. It
+defines harness artifacts rather than an intelligence connection.
 
-Start from the TUI:
+## TUI Connection Picker
+
+Open the complete product-level picker:
 
 ```text
 :connect
 ```
 
-Direct examples:
+Open a method-specific picker:
+
+```text
+:connect local
+:connect acp
+:connect byok
+```
+
+Use a direct product profile:
+
+```text
+:connect codex
+:connect claude
+:connect antigravity
+:connect grok
+:connect copilot
+:connect copilot-acp
+:connect zai
+```
+
+The root picker is intentionally shorter than the full catalogs. The following
+commands show the authoritative installed and configured inventory:
+
+```bash
+superqode agents list --protocol acp
+superqode providers list
+superqode runtime list
+```
+
+## Named Product and Vendor Routes
+
+Several vendors can be reached through more than one method. Choose the route
+that matches the account, runtime, and harness ownership required for the task.
+
+| Vendor or product | Available routes | Direct selection |
+| --- | --- | --- |
+| OpenAI Codex | Codex SDK, Codex ACP, OpenAI BYOK | `:connect codex`, `:connect acp codex`, `:connect byok openai <model>` |
+| Anthropic Claude | Claude Agent SDK, Claude Code ACP, Anthropic BYOK | `:connect claude`, `:connect acp claude`, `:connect byok anthropic <model>` |
+| Google Antigravity | Authenticated Antigravity CLI runtime | `:connect antigravity` |
+| Google Gemini | Gemini CLI ACP, Google AI Studio BYOK, Google ADK runtime | `:connect acp gemini`, `:connect byok google <model>`, `:runtime adk` |
+| GitHub Copilot | Copilot SDK, Copilot CLI ACP | `:connect copilot`, `:connect copilot-acp` |
+| xAI Grok | Grok Build ACP, Grok subscription model route, xAI BYOK | `:connect grok`, `:grok api [model]`, `:connect byok xai <model>` |
+| OpenCode | OpenCode ACP, OpenCode Zen BYOK | `:connect acp opencode`, `:connect byok opencode <model>` |
+| Z.AI GLM | Z.AI BYOK, GLM ACP | `:connect zai`, `:connect acp glm` |
+| Poolside | Pool CLI ACP, Laguna S 2.1 through DwarfStar or llama.cpp | `:connect acp poolside`, `:connect local ds4 laguna-s-2.1` |
+| Moonshot AI Kimi | Kimi CLI ACP, Moonshot BYOK | `:connect acp kimi`, `:connect byok moonshot kimi-k3` |
+| Alibaba Qwen | Qwen Code ACP, DashScope BYOK, local Qwen models | `:connect acp qwen`, `:connect byok alibaba <model>`, `:connect local ollama qwen3:8b` |
+| DeepSeek | DeepSeek BYOK, local DeepSeek and DS4 model paths | `:connect byok deepseek <model>`, `:connect local ds4 <model>` |
+| Mistral AI | Mistral Vibe ACP, Mistral BYOK, local Mistral models | `:connect acp mistral-vibe`, `:connect byok mistral <model>` |
+| MiniMax | MiniMax BYOK, local MiniMax model paths | `:connect byok minimax <model>`, `:connect local <provider> <model>` |
+| Meta | Meta first-party BYOK, local Meta model paths | `:connect byok meta muse-spark-1.1`, `:connect local <provider> <model>` |
+| Cursor | Cursor CLI ACP | `:connect acp cursor` |
+| Cline | Cline CLI ACP | `:connect acp cline` |
+| Factory | Factory Droid ACP | `:connect acp droid` |
+| Cognition | Devin ACP | `:connect acp devin` |
+| JetBrains | Junie ACP | `:connect acp junie` |
+| Amazon | Amazon Bedrock BYOK, Kiro ACP | `:connect byok amazon-bedrock <model>`, `:connect acp kiro` |
+
+Product names in this table identify connection paths, not bundled
+subscriptions. Authentication and usage terms remain controlled by each
+vendor.
+
+## ACP Coding Agents
+
+ACP connects SuperQode to an external coding-agent harness. The agent manages
+its own model calls and can expose file editing, shell execution, MCP tools, and
+agent-specific commands. SuperQode supplies the terminal interface, session
+switching, harness selection, policy controls, and normalized events supported
+by the adapter.
+
+Open the ACP picker:
+
+```text
+:connect acp
+:connect acp enterprise
+:connect acp all
+```
+
+Connect directly:
 
 ```text
 :connect acp opencode
-:connect byok openai <openai-model>
-:connect local ollama qwen3:8b
-:connect codex
-:connect claude
+:connect acp poolside
+:connect acp glm
 ```
 
-CLI equivalents:
+The bundled offline catalog contains the following agents. The `all` picker can
+also include additional entries from the official ACP registry and user
+definitions.
+
+| Agent | Identifier | Agent | Identifier |
+| --- | --- | --- | --- |
+| AgentPool | `agentpool` | Amp | `amp` |
+| Auggie (Augment Code) | `auggie` | AutoDev Xiuper | `autodev` |
+| Blackbox AI | `blackbox` | Bub | `bub` |
+| cagent | `cagent` | Claude Code | `claude` |
+| Cline | `cline` | Code Assistant | `codeassistant` |
+| CodeBuddy Code | `codebuddy` | Codex | `codex` |
+| GitHub Copilot | `copilot` | Cortex Code | `cortex` |
+| crow-cli | `crow` | Cursor | `cursor` |
+| DeepAgents | `deepagents` | Devin | `devin` |
+| Dirac | `dirac` | Factory Droid | `droid` |
+| fast-agent | `fast-agent` | fount | `fount` |
+| Gemini CLI | `gemini` | GLM Agent | `glm` |
+| Goose | `goose` | Grok Build | `grok` |
+| Harn | `harn` | Hermes Agent | `hermes` |
+| JetBrains Junie | `junie` | Kilo | `kilo` |
+| Kimi CLI | `kimi` | Kiro CLI | `kiro` |
+| LLMling-Agent | `llmlingagent` | Minion Code | `minion` |
+| Mistral Vibe | `mistral-vibe` | OpenClaw | `openclaw` |
+| OpenCode | `opencode` | OpenHands | `openhands` |
+| Pi | `pi` | Poolside | `poolside` |
+| Qoder CLI | `qoder` | Qwen Code | `qwen` |
+| siGit Code | `sigit` | Stakpak | `stakpak` |
+| stdio Bus | `stdio-bus` | VT Code | `vtcode` |
+
+Inspect installation and authentication requirements:
 
 ```bash
-superqode connect acp opencode
-superqode connect byok openai <openai-model>
-superqode connect local ollama qwen3:8b
-superqode --runtime codex-sdk --print "review this repo"
+superqode agents show poolside
+superqode agents doctor poolside
+superqode agents doctor poolside --live
 ```
 
----
+See [ACP Agents](../providers/acp.md) for registry behavior, configuration, and
+protocol details.
 
-## ACP
+## BYOK Providers
 
-ACP mode connects SuperQode to an external coding agent. The agent manages its own model calls and may expose file editing, shell execution, MCP tools, and agent-specific slash commands.
-
-Use ACP when:
-
-- you want a full coding agent rather than a direct model call
-- the agent already has its own auth and provider setup
-- you want SuperQode's TUI, sessions, exports, and command surface around that agent
-- you need agent-owned MCP or shell behavior
-
-Common commands:
-
-```bash
-superqode agents list
-superqode agents show opencode
-superqode agents doctor opencode
-superqode agents doctor opencode --live
-superqode connect acp opencode
-```
-
-Example config:
-
-```yaml
-default:
-  mode: acp
-  agent: opencode
-
-agents:
-  opencode:
-    description: OpenCode coding agent
-    protocol: acp
-    command: opencode
-```
-
-`coding_agent` is still accepted for older configs, but new config should use `agent`.
-
----
-
-## BYOK
-
-BYOK mode connects to hosted providers with your own API keys. SuperQode reads keys from environment variables and does not require secrets in YAML.
-
-Use BYOK when:
-
-- you want direct access to hosted models
-- you need model comparison or provider switching
-- you want API-key-based automation
-- you want cost and model metadata where available
-
-Set an API key:
-
-```bash
-export OPENAI_API_KEY=your-key
-export ANTHROPIC_API_KEY=your-key
-export GOOGLE_API_KEY=your-key
-```
-
-Connect:
+BYOK connects SuperQode directly to a hosted model API. API keys are read from
+environment variables or SuperQode's local credential store. Secrets do not
+need to be placed in a HarnessSpec.
 
 ```text
-:connect byok openai <openai-model>
+:connect byok
+:connect byok openai <model>
+:connect byok anthropic <model>
 ```
 
-Check setup:
+The built-in provider registry contains these hosted routes:
+
+| Provider | Identifier | Provider | Identifier |
+| --- | --- | --- | --- |
+| Anthropic | `anthropic` | OpenAI | `openai` |
+| Google AI Studio | `google` | Meta | `meta` |
+| xAI | `xai` | Mistral AI | `mistral` |
+| DeepSeek | `deepseek` | Z.AI general API | `zai` |
+| Zhipu AI | `zhipu` | Alibaba DashScope | `alibaba` |
+| MiniMax | `minimax` | Moonshot AI | `moonshot` |
+| SiliconFlow | `siliconflow` | Baidu | `baidu` |
+| ByteDance Doubao | `doubao` | OpenRouter | `openrouter` |
+| Together AI | `together` | Groq | `groq` |
+| Fireworks AI | `fireworks` | Hugging Face | `huggingface` |
+| Cerebras | `cerebras` | Perplexity | `perplexity` |
+| Cohere | `cohere` | Amazon Bedrock | `amazon-bedrock` |
+| OpenCode Zen | `opencode` | GitHub Copilot model endpoint | `github-copilot` |
+| Azure OpenAI | `azure` | Google Vertex AI | `vertex` |
+| Cloudflare AI Gateway | `cloudflare` |  |  |
+
+`grok-cli` is an authenticated subscription route used by `:grok api`; it is
+not an API-key BYOK provider.
+
+Check provider setup and discover current models:
 
 ```bash
+superqode providers list
 superqode providers doctor openai
 superqode providers guide openai
 superqode models --provider openai
 ```
 
-Example config:
+See [BYOK Providers](../providers/byok.md) for API-key variables and detailed
+provider configuration.
 
-```yaml
-default:
-  mode: byok
-  provider: openai
-  model: <openai-model>
+## Local Providers
 
-providers:
-  openai:
-    api_key_env: OPENAI_API_KEY
-    recommended_models:
-      - <openai-model>
-      - <openai-fast-model>
-```
+Local mode connects to a server running on the current machine or on private
+infrastructure.
 
----
+| Local route | Identifier | Typical use |
+| --- | --- | --- |
+| Ollama | `ollama` | Local model management and serving |
+| Ollama Cloud | `ollama-cloud` | Ollama-hosted model route |
+| LM Studio | `lmstudio` | Desktop model serving |
+| MLX | `mlx` | Apple Silicon inference |
+| vLLM | `vllm` | High-throughput model serving |
+| DwarfStar | `ds4` | Laguna S 2.1 and DeepSeek V4 Flash |
+| SGLang | `sglang` | Structured and high-throughput serving |
+| Hugging Face TGI | `tgi` | Text Generation Inference |
+| llama.cpp server | `llamacpp` | GGUF and CPU-first inference |
+| Custom OpenAI-compatible server | `openai-compatible` | Private or vendor-specific endpoints |
 
-## Local
-
-Local mode connects to model servers running on your machine or infrastructure.
-
-Use local mode when:
-
-- repository contents should stay on your machine
-- you want no per-token API cost
-- you are evaluating local coding models
-- you need offline or self-hosted workflows
-
-Supported local provider paths include Ollama, LM Studio, MLX, vLLM, SGLang, TGI, and DS4 where installed and configured.
-
-Ollama example:
-
-```bash
-ollama serve
-ollama pull qwen3:8b
-superqode providers doctor ollama --live
-```
-
-Connect:
+Open the local picker or select a provider directly:
 
 ```text
+:connect local
 :connect local ollama qwen3:8b
+:connect local ds4 laguna-s-2.1
 ```
 
-Example config:
+See [Local Providers](../providers/local.md) for setup, server lifecycle, model
+selection, and hardware guidance.
 
-```yaml
-default:
-  mode: local
-  provider: ollama
-  model: qwen3:8b
+## SDK Runtimes
 
-providers:
-  ollama:
-    base_url: http://localhost:11434
-    recommended_models:
-      - qwen3:8b
-```
+SDK runtimes embed or call a vendor execution engine while preserving
+SuperQode's terminal, sessions, approvals, plans, and evidence surface.
 
-Local tool support depends on the model family and provider. SuperQode has model-family policies for known local models and can fall back to no-tool or reduced-tool operation when a model cannot reliably call tools.
-
----
-
-## Connection Mode Versus Runtime
-
-Connection mode answers: "What product, provider, agent, or local server am I connected to?"
-
-Runtime answers: "Which execution engine runs the harness?"
-
-Examples:
-
-| Choice | Meaning |
-| --- | --- |
-| `:connect byok openai <openai-model>` | Use a hosted OpenAI model through SuperQode's provider path |
-| `:connect local ollama qwen3:8b` | Use a local Ollama model |
-| `:connect acp opencode` | Use an ACP coding agent |
-| `:runtime pydanticai` | Switch the runtime backend for compatible harness runs |
-| `superqode harness run --spec harness.yaml --runtime openai-agents` | Run a harness through the OpenAI Agents SDK adapter |
-
-See [Runtime Backends](../runtimes.md) for backend details.
-
----
-
-## SDK runtimes
-
-SDK mode runs a vendor's own agent engine inside SuperQode. You keep SuperQode's TUI, sessions, approvals, plan surface, and exports, while the vendor SDK owns the model calls and its native behaviors.
-
-| Runtime | Sign in with | Notes |
+| Runtime | Selection | Authentication |
 | --- | --- | --- |
-| Codex SDK (`:connect codex`) | Your ChatGPT subscription (local Codex login) or an OpenAI API key | Codex-native patches, plans, and command events are normalized into SuperQode's event surface |
-| GitHub Copilot SDK (`:connect copilot`) | Your GitHub Copilot account or an explicit GitHub token | Copilot remains the inner agent loop; SuperQode adds normalized events, permission policy, model selection, evidence, and session controls |
-| GitHub Copilot ACP (`:connect copilot-acp`) | Your GitHub Copilot CLI login | The official Copilot CLI agent runs over ACP and owns its tools and commands |
-| Claude Agent SDK (`:connect claude`) | Your Claude subscription or an Anthropic API key | Claude Code behavior with SuperQode session management; `TodoWrite` feeds the shared plan panel |
-| Antigravity (`:connect antigravity`) | Your Google account via the official `agy` CLI | Headless print runtime using `agy`'s OS-keyring login; text streaming only because `agy` does not expose structured tool events |
+| Codex SDK | `:connect codex` | Local Codex or ChatGPT login, or OpenAI API key |
+| GitHub Copilot SDK | `:connect copilot` | GitHub Copilot account or token |
+| Claude Agent SDK | `:connect claude` | Anthropic API key |
+| Antigravity CLI | `:connect antigravity` | Google Sign-In through `agy` |
+| OpenAI Agents SDK | `:runtime openai-agents` | OpenAI provider credentials |
+| Google ADK | `:runtime adk` | Google provider credentials |
+| Pydantic AI | `:runtime pydanticai` | Credentials for the selected provider |
 
-Use SDK mode when:
-
-- you already pay for a ChatGPT or Claude subscription and want to use it instead of per-token API billing
-- you want a vendor's native agent behavior, but with SuperQode's readable sessions, exports, and approval policies around it
-- you are comparing vendor agents against local models in one interface
+List the installed runtime adapters:
 
 ```bash
-superqode --runtime codex-sdk --print "summarize this repository"
-superqode --connect claude --print "summarize the last change"
+superqode runtime list
 ```
 
-See [Runtime Backends](../runtimes.md) for the full runtime matrix.
+See [Runtime Backends](../runtimes.md) for optional dependencies, event
+normalization, and runtime capability differences.
 
+## MCP Tool Connections
 
-## Choosing A Mode
+MCP connects tools and resources to a SuperQode harness or to an ACP agent that
+accepts MCP server definitions. MCP does not select a model.
 
-| Need | Recommended mode |
-| --- | --- |
-| Full external coding agent | ACP |
-| Hosted model with your own key | BYOK |
-| Private local inference | Local |
-| Repeatable repository automation | Any mode plus a HarnessSpec |
-| Pure planning without tools | Any mode plus a no-tool harness |
-| Model comparison | BYOK or local, using `:compare` |
+```text
+:mcp
+:mcp list
+:mcp doctor
+```
 
----
+Project and user MCP configuration can be stored in:
 
-## Safety Notes
+```text
+.superqode/mcp.json
+~/.superqode/mcp.json
+~/.config/superqode/mcp.json
+```
 
-Connection mode does not by itself grant capabilities. The effective capabilities come from the active runtime, harness, provider, and approval policy.
+Enabled MCP servers are passed to compatible ACP sessions during
+`session/new`. Restart the ACP session after changing MCP configuration.
 
-For repeatable safety, use a HarnessSpec:
+See [MCP Configuration](../configuration/mcp-config.md) for transports and
+configuration. See [MCP Command](../cli-reference/mcp-command.md) for the
+harness server interface.
+
+## A2A Agent Connections
+
+A2A connects remote agents through Agent2Agent cards and task endpoints. It is
+used for remote delegation and agent-provider integration rather than direct
+model selection.
+
+```text
+:a2a connect http://localhost:8000
+:a2a discover http://agent:8080
+:a2a call myagent "Review the authentication module"
+```
+
+See [A2A Protocol](../providers/a2a.md) for provider configuration,
+authentication, task lifecycle, and streaming.
+
+## Connection Method Versus Harness
+
+A connection chooses the model, external agent, provider, or runtime. A
+HarnessSpec defines the controls applied to work:
+
+- context and memory
+- tools and skills
+- model and runtime policy
+- evaluation and acceptance gates
+- budgets and permissions
+- workflow and optimization settings
+
+Switching a connection does not delete saved sessions or HarnessSpecs. Use
+`:sessions` to resume a session and `:harness` to list or switch harnesses.
+
+## Safety and Diagnostics
+
+Connection alone does not grant capabilities. Effective access comes from the
+active runtime, harness, provider, agent, and approval policy.
+
+Use the relevant doctor command before important work:
 
 ```bash
-superqode harness init planner --template no-tool --output planner.yaml
-superqode harness init coder --template coding --output coder.yaml
-superqode harness doctor --spec coder.yaml
+superqode providers doctor openai
+superqode agents doctor opencode --live
+superqode harness doctor --spec harness.yaml
 ```
 
-Review [Safety & Permissions](../advanced/safety-permissions.md) before allowing shell or write access in important repositories.
+Review [Safety and Permissions](../advanced/safety-permissions.md) before
+enabling shell or write access in important repositories.
 
-## Next Steps
+## Related Documentation
 
 - [Authentication](authentication.md)
 - [Provider Configuration](../providers/index.md)
+- [ACP Agents](../providers/acp.md)
+- [BYOK Providers](../providers/byok.md)
+- [Local Providers](../providers/local.md)
 - [Runtime Backends](../runtimes.md)
 - [Harness System](../advanced/harness-system.md)

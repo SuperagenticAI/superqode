@@ -229,7 +229,7 @@ superqode local serve ds4 --model laguna-s-2.1 --ctx 32768 --build
 superqode local serve llama.cpp --model laguna-s-2.1 --ctx 32768
 ```
 
-### Reproducible Laguna Setup And Test
+### Reproducible Laguna Setup and Test
 
 Every machine uses the same standard-cache download command:
 

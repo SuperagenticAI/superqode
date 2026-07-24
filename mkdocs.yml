@@ -27,18 +27,18 @@ theme:
 
   # Light and dark schemes. Brand colors live in stylesheets/extra.css.
   palette:
-    - scheme: default
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/weather-night
-        name: Switch to dark mode
     - scheme: slate
       primary: custom
       accent: custom
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
 
   features:
     - navigation.instant
@@ -150,9 +150,10 @@ nav:
 
   - 📚 Concepts:
     - concepts/index.md
+    - 📋 Product Capability Reference: product-capabilities.md
     - 🧭 Code Engineering: concepts/code-engineering.md
     - 🏭 Code Factory: concepts/code-factory.md
-    - 🔌 Connection Modes: concepts/modes.md
+    - 🔌 Connection Methods and Vendors: concepts/modes.md
     - 🧬 Configuration vs Harness: concepts/configuration-vs-harness.md
     - 🔐 Authentication: concepts/authentication.md
 

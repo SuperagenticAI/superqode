@@ -1,6 +1,10 @@
 # Providers
 
-SuperQode supports multiple provider types for connecting to AI models and agents.
+SuperQode supports hosted model providers, local model servers, external coding
+agents, vendor SDK runtimes, MCP tool servers, and A2A agent services. The
+[Connection Methods and Vendors](../concepts/modes.md) page lists every
+connection method, product-level shortcut, built-in provider, local engine, and
+bundled ACP agent in one place.
 
 !!! note "Model names are examples"
     Model identifiers in these provider docs, such as `<anthropic-model>` or
@@ -54,19 +58,36 @@ SuperQode supports multiple provider types for connecting to AI models and agent
 
     [:octicons-arrow-right-24: Model Profiles](profiles.md)
 
+-   **SDK Runtimes**
+
+    Vendor agent SDKs and authenticated clients, including Codex, Claude,
+    GitHub Copilot, and Antigravity.
+
+    [:octicons-arrow-right-24: Runtime Backends](../runtimes.md)
+
+-   **MCP and A2A**
+
+    Connect tool servers through MCP and remote agent services through A2A.
+
+    [:octicons-arrow-right-24: MCP Configuration](../configuration/mcp-config.md)
+    [:octicons-arrow-right-24: A2A Providers](a2a.md)
+
 </div>
 
 ---
 
-## Execution Modes
+## Connection Methods
 
-SuperQode supports three execution modes:
+The terminal exposes six connection and interoperability methods:
 
-| Mode | Description | Use Case |
+| Method | Description | Selection |
 |------|-------------|----------|
-| **BYOK** | Cloud AI providers with your API key | Production, team use |
-| **ACP** | Coding agents with full capabilities | Complex tasks |
-| **Local** | Self-hosted models | Privacy, cost savings |
+| **Local** | Local and self-hosted model servers | `:connect local` |
+| **ACP** | External coding agents with their own model and tools | `:connect acp` |
+| **BYOK** | Hosted model providers using your API key | `:connect byok` |
+| **SDK** | Vendor agent SDKs and authenticated client runtimes | `:connect codex`, `:connect claude`, or another product profile |
+| **MCP** | Tool and resource servers attached to the active agent | `:mcp` |
+| **A2A** | Remote agent services and workflows | `:a2a` |
 
 ---
 

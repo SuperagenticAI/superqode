@@ -4,7 +4,7 @@ A harness is a single YAML file that defines how a coding agent behaves: which m
 
 This guide shows how to create a harness, inspect the resolved policy, customize it, measure it, and run it against the selected model route.
 
-## Why This Matters
+## Problem Addressed
 
 Many coding agents ship with a fixed harness. The model route, tool loop, memory, context strategy, approvals, search, workflow, and optimization assumptions are controlled by the product.
 
@@ -21,11 +21,11 @@ SuperQode's shipped templates are starting points. Review the generated harness 
 
 ## Step 1: Get A Harness
 
-You almost never need to write a harness from scratch. You have three ways to get one, from easiest to most manual.
+Harness creation supports four paths, ordered from least to most manual.
 
 ### Option A: The wizard (recommended)
 
-The wizard asks a few plain questions and writes the file for you. No YAML editing required to get started.
+The wizard collects the required settings and writes the YAML file.
 
 Use the TUI path when you want to create and immediately use your first harness:
 
@@ -81,7 +81,7 @@ You can also provide the answers up front with flags:
 :harness wizard my-coder --starter qwen-coding --output harness.yaml --load
 ```
 
-Either way, the builder records the name, starting point (model family), provider/model, file and shell permissions, approval style, tool-call format, and optional multi-agent workflow. Then it writes `harness.yaml` and explains what it built in plain English.
+Both paths record the name, starting point (model family), provider and model, file and shell permissions, approval style, tool-call format, and optional multi-agent workflow. The builder then writes `harness.yaml` and explains the resolved configuration.
 
 For a first CLI run after the wizard:
 
@@ -94,7 +94,7 @@ superqode harness run --spec harness.yaml --prompt "Read README.md and summarize
 ### Option B: Start from a model-family template
 
 SuperQode ships templates with researched starter defaults per model family.
-Pick the one closest to your model and edit from there:
+Select the closest model-family template and edit the generated file:
 
 ```bash
 superqode harness init my-coder -t qwen-coding
@@ -146,7 +146,7 @@ superqode local init --repo . --pack minimax-m1 --skip-smoke
 All paths produce the same kind of file. Whichever you use, the next steps are identical.
 
 !!! note "Starter packs are not certification"
-    The Gemma, Qwen, GLM, MiniMax, DS4, Devstral, and gpt-oss packs are default
+    The Gemma, Qwen, GLM, MiniMax, DS4, Laguna, Devstral, and gpt-oss packs are default
     starting points for model families. They have not been live-certified
     against every checkpoint, quantization, serving engine, hardware tier, and
     repository. Run smoke checks, explain the harness, and adapt the pack for
@@ -186,7 +186,7 @@ Workflow
   - Single agent handles the whole task.
 ```
 
-If you ever wonder "what can this agent actually do to my repo?", run `explain` and read the answer.
+Run `explain` to inspect the effective repository permissions and tool policy.
 
 ## Step 3: Edit It
 
@@ -286,7 +286,7 @@ Nothing here is cosmetic. When you load a harness, SuperQode turns your YAML int
 4. `workflow` decides whether one agent handles the task or it flows through planner, implementer, and reviewer roles.
 5. `context` controls which instruction files load, where sessions are stored, and when the conversation compacts.
 
-You can prove this to yourself: set `allow_shell: false`, run `harness explain`, and you will see "Running shell commands: BLOCKED". Run a task that asks the model to use the shell, and the permission layer refuses it.
+To verify enforcement, set `allow_shell: false` and run `harness explain`. The output reports `Running shell commands: BLOCKED`. A task that requests shell access is then rejected by the permission layer.
 
 ## A Read-Only Reviewer Example
 

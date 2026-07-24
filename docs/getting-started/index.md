@@ -152,7 +152,8 @@ Summarize this repository and suggest the smallest safe improvement.
 | Local | You want private or offline inference | Start Ollama, LM Studio, MLX, vLLM, SGLang, DS4, or another local server |
 | SDK | You want to use your ChatGPT or Claude subscription, or vendor-native agent behavior | `:connect codex`, `:connect claude`, or `:connect antigravity` in the TUI |
 
-See [Connection Modes](../concepts/modes.md) for how the four paths differ.
+See [Connection Methods and Vendors](../concepts/modes.md) for the supported
+connection methods, product profiles, providers, local engines, and ACP agents.
 
 Provider diagnostics:
 
@@ -294,5 +295,5 @@ Use headless CLI when:
 3. [Configuration](configuration.md)
 4. [Inside the Agent Loop](../advanced/agent-loop.md), to understand what the engine is doing for you
 5. [Harness System](../advanced/harness-system.md)
-6. [Connection Modes](../concepts/modes.md)
+6. [Connection Methods and Vendors](../concepts/modes.md)
 7. [CLI Reference](../cli-reference/index.md)

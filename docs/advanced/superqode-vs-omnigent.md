@@ -120,7 +120,7 @@ SuperQode workflow. It describes product shape rather than relative quality.
 | Delivery review | Typed reviews, deterministic checks, verified merge, and rollback | Decide whether an exact repository candidate is ready to accept |
 | Harness improvement | Evaluations, failure mining, candidate ledger, and held-out gates | Measure changes and promote an improved harness under explicit controls |
 
-## Why SuperQode added WorkOrders
+## WorkOrder Design Rationale
 
 Interactive sessions are excellent for exploring and steering work. They do not, by themselves, answer all the questions required for reliable repository delivery:
 

@@ -19,7 +19,7 @@ Session management in SuperQode includes:
 
 ## Session Storage
 
-### How It Works
+### Storage Format
 
 Sessions are stored in JSONL format in `.superqode/sessions/`:
 
@@ -186,7 +186,7 @@ config = AgentConfig(
 )
 ```
 
-### How It Works
+### Summarization Flow
 
 1. After each agent turn, the system checks total tokens
 2. If tokens exceed `max_context_tokens`, older messages are summarized
@@ -207,7 +207,7 @@ estimated_tokens = len(message_content) // 4
 
 When agent responses exceed a size threshold, they are saved to a file rather than displayed inline.
 
-### How It Works
+### Large Output Storage
 
 Large outputs are saved to `.superqode/outputs/`:
 

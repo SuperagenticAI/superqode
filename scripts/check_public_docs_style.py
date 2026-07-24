@@ -11,6 +11,20 @@ PROHIBITED_DASHES = {
     chr(0x2013): "en dash",
     chr(0x2014): "em dash",
 }
+PROHIBITED_FORMULAIC_PHRASES = {
+    "why this matters": "replace the formulaic heading with a technical heading",
+    "how it works": "replace the generic heading with a specific technical heading",
+    "the bottom line": "replace the formulaic phrase with a specific conclusion",
+    "game-changing": "replace promotional wording with a measurable description",
+    "revolutionary": "replace promotional wording with a technical description",
+    "seamlessly": "state the supported integration behavior directly",
+    "effortlessly": "state the required operation directly",
+    "unlock the power": "describe the capability directly",
+    "in today's fast-paced": "remove the generic introductory phrase",
+    "whether you're": "replace the generic audience construction with scope",
+    "more than just": "describe the additional capability directly",
+    "supercharge": "replace promotional wording with a technical description",
+}
 
 
 def iter_public_files() -> list[Path]:
@@ -32,6 +46,12 @@ def public_docs_style_errors() -> list[str]:
                     errors.append(
                         f"{path.relative_to(ROOT)}:{line_number}: replace the {name} "
                         "with standard punctuation"
+                    )
+            normalized = line.casefold()
+            for phrase, guidance in PROHIBITED_FORMULAIC_PHRASES.items():
+                if phrase in normalized:
+                    errors.append(
+                        f"{path.relative_to(ROOT)}:{line_number}: {guidance}; found {phrase!r}"
                     )
     return errors
 

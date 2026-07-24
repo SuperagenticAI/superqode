@@ -11,7 +11,7 @@ remain available through explicit configuration.
 
 ## Local execution characteristics
 
-Three things changed:
+Current local execution depends on three operating conditions:
 
 1. **Open-weight coding models.** Current models can execute repository tasks on
    developer-managed hardware. Mixture-of-experts architectures reduce active
@@ -138,7 +138,7 @@ the prompt, `dynamic_workflow_script` compiles a bounded plan,
 evidence` show the resulting tree. See
 [Local Recursive Dynamic Coding](local-recursive-dynamic-coding.md).
 
-You own this harness. Build a custom one by answering a few questions with
+Build a custom harness with
 `superqode harness wizard`, start from a model-family template such as
 `qwen-coding` or `glm-coding`, and read exactly what any harness does in plain
 English with `superqode harness explain --spec harness.yaml`. The
@@ -156,7 +156,7 @@ superqode local labs alibaba --refresh
 ```
 
 The Labs view highlights local-friendly families such as GLM, MiniMax, Qwen,
-Gemma, DeepSeek, and Devstral, then shows open-weight, tool-capable,
+Gemma, DeepSeek, Devstral, and Poolside, then shows open-weight, tool-capable,
 long-context candidates with Hugging Face download hints where models.dev
 provides them.
 SuperQode's own recommendations are intentionally narrower than generic model
@@ -208,6 +208,7 @@ Every layer of the harness has a local-first answer:
 |---|---|
 | The loaded context window is smaller than the model card says | Live window detection from the running server, [adaptive compaction](advanced/local-context.md) sized to it |
 | Model families need different prompts, temperatures, and formats | [Model policy packs](advanced/local-stack.md#model-policy-packs): researched starter defaults per family, user-overridable |
+| Some reasoning models require assistant reasoning to remain in tool-call history | Laguna-aware gateways and local launchers preserve reasoning content across tool turns |
 | Many models have no reliable native tool head | `tool_call_format: prompt` renders tools into the prompt and parses calls from text |
 | Tool schemas eat the prompt budget | [Deferred tools](advanced/tools-system.md): heavy schemas hidden until the model activates them via `tool_search` |
 | Keyword search misses conceptual matches | Optional [semantic code search](advanced/semantic-search.md) via `superqode[semantic]`, backed by a local CocoIndex daemon and local Ollama embeddings |
@@ -228,10 +229,10 @@ Every layer of the harness has a local-first answer:
 | Ollama | everywhere, easiest start | provider, window detection, MLX-runtime detection, keep-alive shaping |
 | MLX (`mlx_lm.server`) | Apple Silicon, fastest path | `superqode providers mlx server`, HF cache inventory |
 | LM Studio | desktop, GUI management | provider, loaded-window detection, model inventory |
-| llama.cpp | CPU and constrained hardware | OpenAI-compatible provider, window detection |
+| llama.cpp | CPU, constrained hardware, and GGUF model support | OpenAI-compatible provider, window detection, Poolside Laguna launch flags, and reasoning preservation |
 | vLLM | NVIDIA, throughput | provider, `max_model_len` detection |
 | SGLang | NVIDIA, agentic pipelines | OpenAI-compatible provider, matrix-ranked on CUDA tiers |
-| DS4 | DeepSeek V4 Flash | dedicated provider, KV-cache guidance, thinking modes |
+| DS4 | Poolside Laguna S 2.1 and DeepSeek V4 Flash | dedicated provider, shared GGUF resolution, KV-cache guidance, thinking modes |
 
 All of them are detected by the doctor, benchable with `superqode local
 bench`, and usable from the same harness contract.

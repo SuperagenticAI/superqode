@@ -108,7 +108,8 @@ contract.
 superqode harness run --spec harness.yaml --runtime codex-sdk --prompt "review this repo"
 ```
 
-See [Runtime Backends](runtimes.md) and [Connection Modes](concepts/modes.md).
+See [Runtime Backends](runtimes.md) and
+[Connection Methods and Vendors](concepts/modes.md).
 
 ### Evaluate
 

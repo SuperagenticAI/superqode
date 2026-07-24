@@ -58,7 +58,7 @@ SuperQode brings five connected Agent Engineering capabilities to a harness you 
 - **Run** it across runtimes, providers, MCP, ACP, and A2A without changing the contract.
 - **Evaluate** it with scorecards, agentic benchmarks, and regression gates before you trust it.
 - **Govern** it with explicit permissions, sandbox policy, budgets, credentials, approvals, and delivery gates.
-- **Optimize** it with staged candidates a human adopts, so a failure gets fixed once instead of retried.
+- **Optimize** it through staged candidates, held-out evaluation, recorded negative evidence, and explicit human adoption.
 
 SuperQode provides harness independence by keeping the agent configuration inspectable, versioned, measurable, and portable across local and hosted models.
 
@@ -374,7 +374,7 @@ superqode harness run --spec examples/harnesses/rlm-code-lid.yaml --provider oll
 - **Policy and safety**: Gate file access, shell commands, network access, approvals, sandboxing, plugins, MCP, and project trust through explicit policy.
 - **Headless and CI ready**: Run coding tasks, provider checks, evals, schema validated outputs, event exports, and change summaries from scripts.
 
-### Built for Open Models and local execution
+### Local and Open Model Support
 
 SuperQode is tuned for local and Open Models, where context, tool calling, memory, and search usually decide whether an agent works:
 
@@ -411,11 +411,17 @@ Inside the TUI, start with `:help` and these commands:
 :connect byok google  # Google API key path
 :connect grok         # Grok Build, xAI's own agent over ACP
 :grok api             # SuperQode core/workbench harness on the same subscription
+:connect zai          # Z.AI GLM through the first-party general API
 :connect byok         # hosted provider/API-key path
 :connect local        # local model provider
 :connect acp          # installed and featured ACP coding agents
+:connect acp opencode # OpenCode agent over ACP
+:connect acp poolside # Poolside agent over ACP
+:connect acp glm      # GLM agent over ACP
 :connect acp all      # complete official registry plus SuperQode adapters
 :connect acp refresh  # refresh the cached official ACP Registry
+:mcp                  # tool and resource server connections
+:a2a                  # remote A2A agent connections
 :tree                 # saved session branches
 :share create         # portable superqode-share-v1 artifact
 :export markdown      # copyable transcript export
@@ -429,6 +435,10 @@ Inside the TUI, start with `:help` and these commands:
 :vim on               # optional Vim-like modal terminal navigation
 :vim tutor            # modes and navigation reference
 ```
+
+The [Connection Methods and Vendors](docs/concepts/modes.md) reference lists
+Local, ACP, BYOK, SDK, MCP, and A2A methods, direct product profiles, built-in
+providers, local engines, and the complete bundled ACP catalog.
 
 The optional Vim layer provides Normal, Insert, Command, and Search states for navigating conversations, panes, pickers, sessions, and agent output without leaving the keyboard. See [Vim-Like Terminal Navigation](docs/advanced/vim-mode.md).
 
@@ -459,7 +469,7 @@ Inside the TUI, use `:providers free` for setup hints or `:providers free --live
 
 See [Developer Workflows](docs/developer-workflows.md) for the full command set.
 
-## How It Works
+## Harness Execution Model
 
 ```
 HARNESS LIFECYCLE

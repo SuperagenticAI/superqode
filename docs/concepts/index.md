@@ -26,13 +26,13 @@ Use this section to understand the pieces that make a SuperQode run predictable 
 
     [:octicons-arrow-right-24: Understand Code Factories](code-factory.md)
 
--   **Connection Modes**
+-   **Connection Methods and Vendors**
 
     ---
 
-    Learn how SuperQode connects to ACP agents, BYOK providers, and local model servers.
+    Review Local, ACP, BYOK, SDK, MCP, and A2A methods with their supported vendors and direct commands.
 
-    [:octicons-arrow-right-24: Explore modes](modes.md)
+    [:octicons-arrow-right-24: Review connections](modes.md)
 
 -   **Authentication**
 
@@ -85,7 +85,7 @@ SuperQode separates an agent system into stable pieces:
 | Concept | Meaning |
 | --- | --- |
 | Harness | The run contract: flavor, runtime, model policy, tools, sandbox, workflow, checks, hooks, events, and output |
-| Connection mode | How SuperQode reaches intelligence: ACP agent, BYOK provider, or local model server |
+| Connection method | How SuperQode reaches models, agents, tools, and services through Local, ACP, BYOK, SDK, MCP, or A2A |
 | Runtime | The execution engine behind a harness, such as `builtin`, `openai-agents`, `adk`, `deepagents`, `pydanticai`, or `codex-sdk` |
 | Model policy | Model, fallback, reasoning, temperature, context, local hardware, and tool-call behavior |
 | Tool policy | The explicit set of capabilities the agent can use |
@@ -108,15 +108,19 @@ Together, these components form a code factory: the organization-owned system th
 6. REVIEW      Inspect files, session history, run events, graph output, and checks
 ```
 
-## Connection Modes
+## Connection Methods and Vendors
 
-| Mode | Best for | Typical command |
+| Method | Best for | Typical command |
 | --- | --- | --- |
 | ACP | External coding agents that own their own model and tool loop | `:connect acp opencode` |
 | BYOK | Hosted providers using your API keys | `:connect byok openai <openai-model>` |
 | Local | Ollama, LM Studio, MLX, vLLM, SGLang, DS4, and other local servers | `:connect local ollama qwen3:8b` |
+| SDK | Vendor SDK and authenticated client runtimes | `:connect codex` |
+| MCP | Tool and resource servers | `:mcp connect` |
+| A2A | Remote agent services | `:a2a connect <url>` |
 
-See [Connection Modes](modes.md) for setup details.
+See [Connection Methods and Vendors](modes.md) for the complete connection
+method, vendor, provider, and ACP agent inventory.
 
 ## Harness Flavors
 
@@ -187,7 +191,7 @@ SuperQode keeps coding work inspectable:
 
 - [Installation](../getting-started/installation.md)
 - [Quick Start](../getting-started/quickstart.md)
-- [Connection Modes](modes.md)
+- [Connection Methods and Vendors](modes.md)
 - [Harness System](../advanced/harness-system.md)
 - [Runtime Backends](../runtimes.md)
 - [Tools System](../advanced/tools-system.md)

@@ -1,11 +1,9 @@
 # Local Stack Doctor
 
-The hardest part of Local Agentic Coding is not the agent. It is choosing the
-right engine and the right model for the machine in front of you, out of a
-landscape that changes monthly. The **Local Stack Doctor** helps with that
-choice: it detects your hardware, inventories your engines and downloaded
-models, and recommends a practical starting stack. One more flag turns the
-recommendation into a ready-to-edit harness.
+Local Agentic Coding requires an engine and model that fit the available
+hardware. The **Local Stack Doctor** detects the hardware, inventories installed
+engines and downloaded models, and recommends a starting configuration. It can
+also generate an editable HarnessSpec.
 
 ```bash
 superqode local init --repo .
@@ -32,7 +30,7 @@ superqode local doctor --repo . --guardrails
    beats a 20GB pull.
 5. **Labs discovery**: `superqode local labs` reads models.dev Labs metadata
    and surfaces open-weight, tool-capable families such as GLM, Qwen, Gemma,
-   DeepSeek, and Devstral with Hugging Face download hints.
+   DeepSeek, Devstral, and Poolside with Hugging Face download hints.
 
 The shipped matrix only recommends models with explicit provenance: a
 models.dev Lab entry or a vetted community namespace such as `mlx-community`.
@@ -159,8 +157,8 @@ Your tiers replace shipped tiers with the same `id`; everything else is kept.
 
 A **pack** is one YAML file of starter defaults for an open-model family:
 temperature, system prompt level, tool-call format, and session history budget.
-SuperQode ships packs for `gemma4`, `qwen3`, `qwen-coder`, `ds4`, `devstral`,
-`gpt-oss`, `glm`, and `minimax`.
+SuperQode ships packs for `gemma4`, `qwen3`, `qwen-coder`, `ds4`, `laguna`,
+`devstral`, `gpt-oss`, `glm`, and `minimax`.
 
 Shipped packs are researched defaults, not live certification for every
 checkpoint, quantization, engine, context size, and repository. Use them to get

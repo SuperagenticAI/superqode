@@ -115,7 +115,7 @@ contract, approval handling, HarnessSpec support, normalized events, and session
 behavior. Authentication uses `GOOGLE_API_KEY` or `GEMINI_API_KEY`, according to
 the selected Google provider configuration.
 
-## Why the SuperQode harness does not use the Antigravity SDK
+## SDK and Harness Boundary
 
 The Antigravity SDK is an agent harness SDK rather than a model-only completion
 client. Its public API creates an Antigravity `Agent` and connects it to the

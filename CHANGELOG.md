@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Documentation coverage** - Added a product capability reference, surfaced Poolside Laguna S 2.1 on the documentation home page, and linked public capabilities to their implementation guides.
+- **Connection documentation** - Added one connection reference for Local, ACP, BYOK, SDK, MCP, and A2A methods, with direct product shortcuts and complete built-in provider, local engine, and bundled ACP agent inventories.
+- **Documentation style** - Replaced generic marketing headings with technical headings and expanded the public documentation check to reject selected formulaic marketing phrases.
+
 ## [0.2.35] - 2026-07-24
 
 ### Added

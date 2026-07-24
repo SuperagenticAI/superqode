@@ -250,7 +250,7 @@ agents:
 
 ## ACP Protocol
 
-### How It Works
+### Process and Protocol Flow
 
 1. SuperQode spawns the agent process
 2. Communicates via ACP (JSON over stdin/stdout)

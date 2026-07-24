@@ -74,7 +74,10 @@ Once the TUI starts, connect a provider or agent:
 :connect
 ```
 
-Choose BYOK (cloud API key), Local (self-hosted model), or ACP (coding agent) from the picker. See [Connection Modes](../concepts/modes.md) for guidance on which to pick.
+Choose BYOK (cloud API key), Local (self-hosted model), ACP (coding agent), or
+an available SDK product profile from the picker. See
+[Connection Methods and Vendors](../concepts/modes.md) for the full connection
+and interoperability inventory.
 
 For ACP coding agents, `:connect acp` shows installed and featured runtimes.
 Use `:connect acp all` to search the complete catalog or `:connect acp refresh`
@@ -289,7 +292,7 @@ Use this path for repeatable project checks. For day-to-day coding, start with t
 2. [Harness System](../advanced/harness-system.md)
 3. [Runtime Backends](../runtimes.md)
 4. [Configuration Guide](configuration.md)
-5. [Connection Modes](../concepts/modes.md)
+5. [Connection Methods and Vendors](../concepts/modes.md)
 
 ---
 

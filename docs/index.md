@@ -100,9 +100,13 @@ SuperQode makes the harness a repository-owned engineering artifact, connects ex
 
 Build an organization-owned harness, select one from the catalog, or connect an existing coding agent through a native runtime or ACP. SuperQode operates them through one consistent system for orchestration, evaluation, governance, and optimization.
 
+<div class="sq-doc-cta" markdown>
+
 [Understand Code Factories](concepts/code-factory.md){ .md-button .md-button--primary }
 [Read Code Engineering](concepts/code-engineering.md){ .md-button }
 [Read Harness Engineering](harness-engineering.md){ .md-button }
+
+</div>
 
 ---
 
@@ -132,7 +136,7 @@ Agent Engineering treats the complete agent lifecycle as an engineering system. 
 
     ---
 
-    Prove behavior before you trust it with eval scorecards, agentic benchmarks, and regression gates that reject candidates which break tasks the baseline solved.
+    Measure behavior with eval scorecards, agentic benchmarks, and regression gates that reject candidates which break tasks the baseline solved.
 
     [:octicons-arrow-right-24: Run, Measure, Optimize](advanced/harness-optimization.md)
 
@@ -148,7 +152,7 @@ Agent Engineering treats the complete agent lifecycle as an engineering system. 
 
     ---
 
-    Improve model routes, harnesses, and skills with staged candidates a human adopts, so a failure gets fixed once instead of retried.
+    Improve model routes, harnesses, and skills through staged candidates, held-out evaluation, recorded negative evidence, and explicit human adoption.
 
     [:octicons-arrow-right-24: Optimization Story](advanced/optimization.md)
 
@@ -192,6 +196,14 @@ Agent Engineering treats the complete agent lifecycle as an engineering system. 
 
     [:octicons-arrow-right-24: Local Agentic Coding](local-agentic-coding.md)
 
+-   :octicons-cpu-16:{ .lg .middle } **Poolside Laguna S 2.1**
+
+    ---
+
+    Run Poolside's official Q4_K_M GGUF through DwarfStar or a compatible llama.cpp build. SuperQode resolves one shared model artifact, applies Laguna model policy, preserves reasoning across tool turns, and exposes request-controlled, chat, and reasoner variants.
+
+    [:octicons-arrow-right-24: Laguna Local Inference](providers/local.md#dwarfstar-ds4)
+
 -   :octicons-workflow-16:{ .lg .middle } **Local dynamic workflows with RLM**
 
     ---
@@ -220,7 +232,7 @@ Agent Engineering treats the complete agent lifecycle as an engineering system. 
 
     ---
 
-    Give models the right context with bounded reads, local code search, multi repo search, semantic search, offline indexes, and post edit verification.
+    Provide bounded repository context through local code search, multi repo search, semantic search, offline indexes, and post edit verification.
 
     [:octicons-arrow-right-24: Multi-Repo Search & Edit Safety](advanced/multi-repo-search.md)
 
@@ -254,7 +266,7 @@ Agent Engineering treats the complete agent lifecycle as an engineering system. 
 
     Connect to existing runtimes, SDKs, MCP tools, ACP agents, and A2A workflows while keeping the harness as the portable contract.
 
-    [:octicons-arrow-right-24: Connection Modes](concepts/modes.md)
+    [:octicons-arrow-right-24: Connection Methods and Vendors](concepts/modes.md)
 
 </div>
 
@@ -267,6 +279,7 @@ you are changing, then use the CLI reference when you need exact flags.
 
 | Area | Documentation |
 | --- | --- |
+| Product capability coverage | [Product Capability Reference](product-capabilities.md) |
 | CLI commands | [CLI Reference](cli-reference/index.md) |
 | TUI commands | [TUI Reference](advanced/tui.md) |
 | Harness specs, workflows, evals, and events | [Harness System](advanced/harness-system.md) |
@@ -287,7 +300,7 @@ groups are not added without a reference page.
 
 ---
 
-## See it work
+## Capability demonstrations
 
 === "Interactive TUI"
 
@@ -360,7 +373,7 @@ Every stage is observable: `superqode harness events <run-id>` shows the normali
 
 ---
 
-## Learn it in order
+## Recommended documentation sequence
 
 Each step builds on the previous one.
 
@@ -376,6 +389,6 @@ Each step builds on the previous one.
 
 <div class="sq-footer-cta" markdown>
 
-**Ready?** [Install SuperQode](getting-started/installation.md){ .md-button .md-button--primary } or start with the [Harness Guide](getting-started/bring-your-own-harness.md).
+[Install SuperQode](getting-started/installation.md){ .md-button .md-button--primary } or open the [Harness Guide](getting-started/bring-your-own-harness.md).
 
 </div>

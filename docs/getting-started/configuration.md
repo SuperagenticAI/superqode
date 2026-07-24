@@ -7,7 +7,7 @@ SuperQode uses two complementary configuration files:
 
 Most developers can start with `superqode config init`, then run `:local init` inside the TUI to generate `superqode.local.yaml` for the machine they are using.
 
-## Why There Are Two Files
+## Configuration File Responsibilities
 
 `superqode.yaml` answers: what is configured for this project or machine?
 
