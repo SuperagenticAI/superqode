@@ -797,12 +797,12 @@ class LocalModelsMixin:
                 log.add_info("Use: :connect local <provider> <model>")
                 return
 
-        # MLX and llama.cpp serve exactly one model per process and are NOT
+        # MLX, DwarfStar, and llama.cpp serve exactly one model per process and are NOT
         # always-on background apps like Ollama or LM Studio. Connecting alone
         # would point at a dead endpoint, so if their server is not already up
         # ask before launching a managed server. Note the provider id
         # "llamacpp" maps to the server-manager engine "llama.cpp".
-        engine_for_provider = {"mlx": "mlx", "llamacpp": "llama.cpp"}
+        engine_for_provider = {"mlx": "mlx", "ds4": "ds4", "llamacpp": "llama.cpp"}
         if provider in engine_for_provider and model:
             engine = engine_for_provider[provider]
             try:
@@ -826,7 +826,14 @@ class LocalModelsMixin:
     def _local_serve_command(engine: str, model: str) -> str:
         import shlex
 
-        return f":local serve {engine} --model {shlex.quote(model)}"
+        from superqode.local.laguna import LAGUNA_SAFE_CONTEXT, is_laguna_model
+
+        command = f":local serve {engine} --model {shlex.quote(model)}"
+        if is_laguna_model(model):
+            command += f" --ctx {LAGUNA_SAFE_CONTEXT}"
+            if engine == "ds4":
+                command += " --build"
+        return command
 
     @staticmethod
     def _native_local_server_command(
@@ -852,6 +859,12 @@ class LocalModelsMixin:
         host = host or spec.default_host
         port = port or spec.default_port
         q = shlex.quote
+        from superqode.local.laguna import is_laguna_model, resolve_laguna_gguf
+
+        if is_laguna_model(model):
+            resolved_laguna = resolve_laguna_gguf(model)
+            if resolved_laguna is not None:
+                model = str(resolved_laguna)
 
         if engine == "ollama":
             env = [f"OLLAMA_HOST={host}:{port}"]
@@ -882,6 +895,10 @@ class LocalModelsMixin:
         if engine == "ds4":
             cmd = [
                 "ds4-server",
+            ]
+            if model:
+                cmd += ["-m", model]
+            cmd += [
                 "--host",
                 host,
                 "--port",
@@ -898,6 +915,8 @@ class LocalModelsMixin:
             return shlex.join(cmd)
 
         if engine == "llama.cpp":
+            from superqode.local.laguna import LAGUNA_MODEL_ID
+
             cmd = [
                 "llama-server",
                 "-m",
@@ -909,6 +928,8 @@ class LocalModelsMixin:
             ]
             if ctx:
                 cmd += ["-c", str(ctx)]
+            if is_laguna_model(model):
+                cmd += ["--jinja", "--reasoning-preserve", "--alias", LAGUNA_MODEL_ID]
             return shlex.join(cmd)
 
         return q(f":local serve {engine}")
@@ -953,7 +974,14 @@ class LocalModelsMixin:
 
         label = _Path(model).name if engine == "llama.cpp" else model
         command = self._local_serve_command(engine, model)
-        native_command = self._native_local_server_command(engine, model=model)
+        from superqode.local.laguna import LAGUNA_SAFE_CONTEXT, is_laguna_model
+
+        laguna = is_laguna_model(model)
+        native_command = self._native_local_server_command(
+            engine,
+            model=model,
+            ctx=LAGUNA_SAFE_CONTEXT if laguna else None,
+        )
         self._awaiting_local_connect_start = {
             "provider": provider,
             "engine": engine,
@@ -1003,6 +1031,15 @@ class LocalModelsMixin:
         if engine == "mlx":
             t.append(
                 "  MLX will not download missing Hugging Face weights unless you explicitly use --allow-download.\n",
+                style=THEME["dim"],
+            )
+        if laguna:
+            from superqode.local.laguna import resolve_laguna_gguf
+
+            selected_gguf = resolve_laguna_gguf(model)
+            selected_location = str(selected_gguf or model)
+            t.append(
+                f"  Laguna GGUF: {selected_location}\n  Run only one local engine at a time.\n",
                 style=THEME["dim"],
             )
         log.write(t)
@@ -1063,18 +1100,24 @@ class LocalModelsMixin:
     async def _start_local_then_connect(
         self, provider: str, engine: str, model: str, log: ConversationLog
     ):
-        """Launch a one-model local server (MLX/llama.cpp), then connect to it.
+        """Launch a one-model local server (MLX/DwarfStar/llama.cpp), then connect to it.
 
-        ``model`` is an HF id for MLX or a ``.gguf`` path for llama.cpp. After
-        the server is up it serves the model under a short id (the GGUF
-        basename for llama.cpp), which is what we connect with.
+        ``model`` is an HF id for MLX, a DwarfStar model id/path, or a GGUF
+        path/alias for llama.cpp.
         """
         import asyncio
         from pathlib import Path as _Path
 
-        from superqode.local.servers import ServerError, get_manager
+        from superqode.local.laguna import (
+            LAGUNA_DS4_REF,
+            LAGUNA_MODEL_ID,
+            LAGUNA_SAFE_CONTEXT,
+            is_laguna_model,
+        )
+        from superqode.local.servers import ServerError, ds4_build, get_manager
 
         label = _Path(model).name if engine == "llama.cpp" else model
+        laguna = is_laguna_model(model)
         t0 = Text()
         t0.append("\n  ⏳ ", style=THEME["warning"])
         t0.append(f"Starting {engine} server", style=f"bold {THEME['text']}")
@@ -1086,10 +1129,24 @@ class LocalModelsMixin:
 
         self.is_busy = True
         try:
+            manager = get_manager()
+            if engine == "ds4" and (laguna or not manager.is_installed("ds4")):
+                self._call_ui(
+                    log.add_info,
+                    "Checking and building DwarfStar's Laguna support branch before launch...",
+                )
+                await asyncio.to_thread(
+                    ds4_build,
+                    ref=LAGUNA_DS4_REF if laguna else None,
+                )
             # Large models load slowly; give the server room before the
             # readiness probe gives up. Cached files only, so no download.
             handle = await asyncio.to_thread(
-                get_manager().start, engine, model=model, timeout=300.0
+                manager.start,
+                engine,
+                model=model,
+                ctx=LAGUNA_SAFE_CONTEXT if laguna else None,
+                timeout=300.0,
             )
         except ServerError as exc:
             self._call_ui(log.add_error, str(exc))
@@ -1111,8 +1168,12 @@ class LocalModelsMixin:
         t.append(f"  {handle.base_url}\n", style=THEME["cyan"])
         self._call_ui(log.write, t)
 
-        # llama-server serves the GGUF under its basename; MLX serves the HF id.
-        connect_model = _Path(model).name if engine == "llama.cpp" else model
+        # Laguna is given a stable alias by the managed llama.cpp command.
+        # Other llama.cpp models use the GGUF basename; MLX and DS4 retain
+        # their selected model id.
+        connect_model = (
+            LAGUNA_MODEL_ID if laguna else (_Path(model).name if engine == "llama.cpp" else model)
+        )
         self._call_ui(self._connect_byok_mode, provider, connect_model, log)
 
     def _show_local_provider_picker(self, log: ConversationLog, clear_log: bool = True):
@@ -1336,6 +1397,8 @@ class LocalModelsMixin:
 
     async def _show_local_provider_models(self, provider_id: str, log: ConversationLog):
         """Show models for a local provider by discovering them."""
+        import asyncio
+
         from superqode.providers.registry import PROVIDERS
         from superqode.providers.local import (
             DS4Client,
@@ -1461,6 +1524,70 @@ class LocalModelsMixin:
         # Create client and check availability
         client = client_class()
         server_running = await client.is_available()
+
+        # DwarfStar normally has a legacy default model, so its generic stopped
+        # state offers an immediate start. When the shared Laguna GGUF exists,
+        # let the user select it first so the managed launch includes ``-m``.
+        if provider_id == "ds4" and not server_running:
+            from superqode.local.laguna import (
+                LAGUNA_CONTEXT_WINDOW,
+                is_laguna_model,
+            )
+            from superqode.local.servers import discover_gguf_models
+            from superqode.providers.local.base import LocalModel
+
+            discovered_ggufs = await asyncio.to_thread(discover_gguf_models)
+            laguna_entry = next(
+                (item for item in discovered_ggufs if is_laguna_model(item["path"])),
+                None,
+            )
+            if laguna_entry is not None:
+                laguna_gguf = Path(laguna_entry["path"])
+                laguna_model = LocalModel(
+                    id=str(laguna_gguf),
+                    name="Poolside Laguna S 2.1",
+                    size_bytes=laguna_gguf.stat().st_size,
+                    quantization="Q4_K_M",
+                    context_window=LAGUNA_CONTEXT_WINDOW,
+                    parameter_count="118B-A8B",
+                    family="laguna",
+                    running=False,
+                )
+                self._local_selected_provider = provider_id
+                self._local_model_list = [str(laguna_gguf)]
+                self._local_cached_models = [laguna_model]
+                self._awaiting_local_model = True
+                self._awaiting_local_provider = False
+                self._local_highlighted_model_index = 0
+
+                t = Text()
+                t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+                t.append("DwarfStar 4 Models\n", style=f"bold {THEME['text']}")
+                t.append(
+                    "  Shared Laguna GGUF found; select it to build/start DwarfStar.\n\n",
+                    style=THEME["success"],
+                )
+                t.append("  ▶ [ 1] ", style=f"bold {THEME['success']}")
+                t.append("○ Poolside Laguna S 2.1", style=f"bold {THEME['success']}")
+                t.append("  recommended  ← SELECTED\n", style=THEME["success"])
+                t.append(f"       {laguna_gguf}\n", style=THEME["muted"])
+                t.append(
+                    f"       {laguna_model.size_display} • Q4_K_M • "
+                    f"{LAGUNA_CONTEXT_WINDOW:,} ctx • excellent tools\n\n",
+                    style=THEME["dim"],
+                )
+                t.append(
+                    "  Press Enter or type 1. SuperQode will confirm before launching.\n",
+                    style=THEME["muted"],
+                )
+                t.append(
+                    "  Alternative runtime: choose llama.cpp from the provider picker.\n",
+                    style=THEME["dim"],
+                )
+                log.clear()
+                log.write(t)
+                self.set_timer(0.05, self._ensure_input_focus)
+                return
 
         # For DS4, MLX and LM Studio, try to discover models even if server check fails
         # Sometimes the server is running but the availability check fails
@@ -2058,6 +2185,8 @@ class LocalModelsMixin:
                 log.add_system(
                     "e.g. :local serve ds4 --ctx 32768   ·   long DS4: --ctx 100000   ·   Think Max: --ctx 393216"
                 )
+                log.add_system("Laguna: :local serve ds4 --model laguna-s-2.1 --ctx 32768")
+                log.add_system("or: :local serve llama.cpp --model laguna-s-2.1 --ctx 32768")
         elif sub == "servers":
             # :local servers - Show managed/running server status
             self.run_worker(self._local_servers(log))

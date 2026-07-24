@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.35] - 2026-07-24
+
+### Added
+
+- **Poolside Laguna S 2.1 local inference** - Added first-class support for the official `laguna-s-2.1-Q4_K_M.gguf` through DwarfStar and llama.cpp, including standard Hugging Face cache discovery, a portable model alias, runtime-specific launch settings, model policy, tool guidance, and local setup documentation.
+- **Laguna connection variants** - Added distinct DwarfStar entries for the request-controlled, chat, and reasoner behaviors so the TUI exposes each API mode with a clear name while sharing one downloaded GGUF.
+
+### Changed
+
+- **Local model connection flow** - Moved llama.cpp discovery into its own model selection screen, aligned DwarfStar and llama.cpp managed launches around the shared Laguna artifact, and documented the current llama.cpp compatibility requirement.
+- **Release metadata** - Bumped the package, runtime, lockfile, ACP registry, package checks, extension compatibility examples, plugin documentation, and generated product images to `0.2.35`.
+
+### Fixed
+
+- **DwarfStar Laguna startup** - Rebuilds an existing DwarfStar checkout when requested, detects stale or incompatible binaries, and avoids presenting the same server model as indistinguishable duplicate TUI entries.
+- **Portable model paths** - Removed reliance on a user-specific model directory. Laguna now resolves from the standard Hugging Face cache, configured cache roots, `SUPERQODE_LAGUNA_GGUF`, or an explicit GGUF path.
+
 ## [0.2.34] - 2026-07-23
 
 ### Changed

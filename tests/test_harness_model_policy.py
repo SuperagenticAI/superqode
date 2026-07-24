@@ -65,6 +65,26 @@ def test_ds4_provider_autodetects_ds4_coding_policy():
     assert policy.parallel_tools is False
 
 
+@pytest.mark.parametrize("provider", ["ds4", "llamacpp", "ollama"])
+def test_laguna_profile_is_engine_neutral(provider):
+    spec = get_harness_template("coding")
+
+    policy = resolve_harness_model_policy(
+        spec,
+        provider=provider,
+        model="laguna-s-2.1",
+    )
+
+    assert policy.profile == "laguna-coding"
+    assert policy.family == "laguna"
+    assert policy.temperature is None
+    assert policy.system_level == SystemPromptLevel.MINIMAL
+    assert policy.tool_profile == "ds4"
+    assert policy.tool_call_format == "compact-json"
+    assert policy.parallel_tools is False
+    assert policy.session_history_limit == 20
+
+
 def test_minimax_pack_autodetects_policy():
     spec = get_harness_template("coding")
 

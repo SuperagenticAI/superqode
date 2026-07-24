@@ -47,6 +47,14 @@ from typing import Callable, Dict, List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .laguna import (
+    LAGUNA_DS4_REF,
+    LAGUNA_MODEL_ID,
+    is_laguna_model,
+    laguna_download_command,
+    resolve_laguna_gguf,
+)
+
 SERVERS_DIR = Path.home() / ".superqode" / "servers"
 
 # How long to wait for the HTTP endpoint to answer after launch. The port binds
@@ -146,10 +154,11 @@ INSTALL_GUIDES: Dict[str, List[str]] = {
         "Then pick a model already in your Hugging Face cache (no surprise download).",
     ],
     "ds4": [
-        "DS4 (DeepSeek V4 Flash) ships as a source build:",
+        "DwarfStar ships as a source build and supports DeepSeek V4 plus Laguna S 2.1:",
         "  superqode local serve ds4 --build     # clones + makes the binary",
-        "  cd ~/oss/ds4 && ./download_model.sh   # large GGUF, run when ready",
+        f"  {laguna_download_command()}",
         "Start safely with: superqode local serve ds4 --ctx 32768",
+        "Select a discovered GGUF or set SUPERQODE_LAGUNA_GGUF to its absolute path.",
         "Use --ctx 100000 only for long coding sessions with enough memory headroom.",
     ],
     "llama.cpp": [
@@ -185,7 +194,11 @@ def discover_gguf_models(limit: int = 50) -> List[dict]:
     projector files (``mmproj``) and embedding models are skipped since they
     cannot serve chat completions.
     """
+    hf_home = os.environ.get("HF_HOME", "").strip()
+    hf_hub_cache = os.environ.get("HF_HUB_CACHE", "").strip()
     roots = [
+        *([Path(hf_hub_cache).expanduser()] if hf_hub_cache else []),
+        *([Path(hf_home).expanduser() / "hub"] if hf_home else []),
         Path.home() / ".cache" / "huggingface" / "hub",
         Path.home() / ".cache" / "lm-studio" / "models",
         Path.home() / "models",
@@ -193,6 +206,16 @@ def discover_gguf_models(limit: int = 50) -> List[dict]:
         Path.home() / ".local" / "share" / "models",
     ]
     seen: dict[str, dict] = {}
+    # A user-configured Laguna file may live outside every conventional model
+    # cache. Include that exact file without making the TUI assume a directory.
+    configured_laguna = os.environ.get("SUPERQODE_LAGUNA_GGUF", "").strip()
+    if configured_laguna:
+        configured_path = Path(configured_laguna).expanduser()
+        if configured_path.is_file():
+            key = str(configured_path)
+            seen[key] = {"id": configured_path.name, "path": key}
+            if len(seen) >= limit:
+                return list(seen.values())
     for root in roots:
         if not root.exists():
             continue
@@ -554,12 +577,12 @@ class ServerManager:
         return False
 
     def _ds4_binary(self) -> Optional[Path]:
-        on_path = shutil.which("ds4-server")
-        if on_path:
-            return Path(on_path)
         candidate = DS4_CHECKOUT / "ds4-server"
         if candidate.exists() and os.access(candidate, os.X_OK):
             return candidate
+        on_path = shutil.which("ds4-server")
+        if on_path:
+            return Path(on_path)
         return None
 
     # -- command building ------------------------------------------------
@@ -582,6 +605,18 @@ class ServerManager:
         extra_args = list(extra_args or [])
         if spec.needs_model and not model:
             raise ServerError(f"{engine} needs a model: pass --model")
+
+        laguna_requested = engine in {"ds4", "llama.cpp"} and is_laguna_model(model)
+        if laguna_requested:
+            resolved_laguna = resolve_laguna_gguf(model)
+            if resolved_laguna is None:
+                raise ServerError(
+                    "Laguna S 2.1 GGUF was not found. Finish the shared download first:\n"
+                    f"  {laguna_download_command()}\n"
+                    "Or set SUPERQODE_LAGUNA_GGUF=/absolute/path/to/"
+                    "laguna-s-2.1-Q4_K_M.gguf."
+                )
+            model = str(resolved_laguna)
 
         if engine == "ollama":
             env = {"OLLAMA_HOST": f"{host}:{port}"}
@@ -619,6 +654,14 @@ class ServerManager:
                 )
             ctx = ctx or DS4_DEFAULT_CTX
             cmd = [str(binary), "--host", host, "--port", str(port), "--ctx", str(ctx)]
+            # DwarfStar's legacy DeepSeek setup can still use ./ds4flash.gguf,
+            # but Laguna is a shared artifact and must be selected explicitly.
+            if model:
+                model_path = Path(str(model)).expanduser()
+                if model_path.suffix.lower() == ".gguf":
+                    if not model_path.is_file():
+                        raise ServerError(f"GGUF model file does not exist: {model_path}")
+                    cmd += ["-m", str(model_path)]
             if not _has_extra_arg(extra_args, "--kv-disk-dir"):
                 cmd += ["--kv-disk-dir", str(DS4_DEFAULT_KV_DIR)]
             if not _has_extra_arg(extra_args, "--kv-disk-space-mb"):
@@ -629,6 +672,16 @@ class ServerManager:
             cmd = ["llama-server", "-m", str(model), "--host", host, "--port", str(port)]
             if ctx:
                 cmd += ["-c", str(ctx)]
+            if laguna_requested:
+                # Laguna's official chat template emits reasoning and tagged
+                # tool calls. These flags keep that structure on the OpenAI
+                # endpoint and preserve reasoning across agent turns.
+                if not _has_extra_arg(extra_args, "--jinja"):
+                    cmd += ["--jinja"]
+                if not _has_extra_arg(extra_args, "--reasoning-preserve"):
+                    cmd += ["--reasoning-preserve"]
+                if not (_has_extra_arg(extra_args, "--alias") or _has_extra_arg(extra_args, "-a")):
+                    cmd += ["--alias", LAGUNA_MODEL_ID]
             return (cmd + extra_args, {}, None)
 
         raise ServerError(f"Unknown engine: {engine}")
@@ -980,7 +1033,7 @@ def _tail(path: Path, lines: int = 12) -> str:
 # ---------------------------------------------------------------------------
 
 
-def ds4_build_plan() -> dict:
+def ds4_build_plan(ref: Optional[str] = None) -> dict:
     """Describe how to obtain a built ds4-server, without doing anything heavy.
 
     Returns a dict the CLI/TUI render: whether a checkout exists, the build
@@ -989,28 +1042,59 @@ def ds4_build_plan() -> dict:
     checkout = DS4_CHECKOUT
     has_checkout = (checkout / "Makefile").exists()
     binary = checkout / "ds4-server"
+    clone_cmd = ["git", "clone"]
+    if ref:
+        clone_cmd += ["--branch", ref, "--single-branch"]
+    clone_cmd += ["https://github.com/antirez/ds4", str(checkout)]
     return {
         "checkout": str(checkout),
         "has_checkout": has_checkout,
         "has_binary": binary.exists(),
-        "clone_cmd": ["git", "clone", "https://github.com/antirez/ds4", str(checkout)],
+        "ref": ref or "",
+        "clone_cmd": clone_cmd,
         "build_cmd": ["make"],  # macOS Metal default target
-        "download_cmd": ["./download_model.sh"],  # large GGUF; user-gated
+        "download_cmd": (
+            shlex.split(laguna_download_command())
+            if ref == LAGUNA_DS4_REF
+            else ["./download_model.sh"]
+        ),  # large GGUF; user-gated
     }
 
 
-def ds4_build(checkout: Path = DS4_CHECKOUT, timeout: int = 1800) -> Path:
+def ds4_build(
+    checkout: Path = DS4_CHECKOUT,
+    timeout: int = 1800,
+    ref: Optional[str] = None,
+) -> Path:
     """Clone (if needed) and ``make`` the ds4-server binary. Returns its path.
 
     Does NOT download the model weights: that is a separate, user-gated step.
     """
     if not (checkout / "Makefile").exists():
         checkout.parent.mkdir(parents=True, exist_ok=True)
+        clone_cmd = ["git", "clone"]
+        if ref:
+            clone_cmd += ["--branch", ref, "--single-branch"]
+        clone_cmd += ["https://github.com/antirez/ds4", str(checkout)]
         subprocess.run(  # noqa: S603
-            ["git", "clone", "https://github.com/antirez/ds4", str(checkout)],
+            clone_cmd,
             check=True,
             timeout=timeout,
         )
+    elif ref:
+        branch = subprocess.run(  # noqa: S603
+            ["git", "branch", "--show-current"],
+            cwd=str(checkout),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        ).stdout.strip()
+        if branch and branch != ref:
+            raise ServerError(
+                f"{checkout} is on DwarfStar branch {branch!r}; Laguna requires {ref!r}. "
+                f"Switch explicitly with: cd {checkout} && git switch {ref}"
+            )
     subprocess.run(["make"], cwd=str(checkout), check=True, timeout=timeout)  # noqa: S603,S607
     binary = checkout / "ds4-server"
     if not binary.exists():

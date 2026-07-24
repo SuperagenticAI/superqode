@@ -1,0 +1,15 @@
+# Poolside Laguna S 2.1 via DwarfStar, llama.cpp, Ollama, or another
+# OpenAI-compatible runtime.
+name: laguna
+description: "Laguna S 2.1 starter: native tools, preserved interleaved reasoning, engine-neutral GGUF"
+match: [laguna-s-2.1, laguna-s2.1, poolside/laguna]
+policy:
+  system_level: minimal
+  tool_profile: ds4
+  tool_call_format: compact-json
+  parallel_tools: false
+  session_history_limit: 20
+notes:
+  - "Preserve assistant reasoning content between tool calls; dropping it degrades Laguna's agentic behavior."
+  - "Leave temperature unset to use Poolside's native sampling defaults; set temperature explicitly only for deterministic evaluation."
+  - "The same Q4_K_M GGUF can be used by DwarfStar and llama.cpp, but a 128GB Mac should run only one server at a time."

@@ -74,6 +74,8 @@ def _select_profile(spec: HarnessSpec, *, provider: str | None, model: str | Non
         if _mentions_modern_gemma(haystack):
             return "gemma4-no-tool"
         return "no-tool"
+    if _mentions_laguna(haystack):
+        return "laguna-coding"
     if _mentions_ds4(haystack):
         return "ds4-coding"
     if _mentions_modern_gemma(haystack):
@@ -98,6 +100,22 @@ def _base_policy(spec: HarnessSpec, profile: str) -> EffectiveModelPolicy:
             parallel_tools=False,
             max_iterations=0,
             session_history_limit=8,
+        )
+
+    if profile in {"laguna-coding", "laguna"}:
+        return EffectiveModelPolicy(
+            profile=profile,
+            family="laguna",
+            # Poolside's native sampled default is part of Laguna's reasoning
+            # recipe. Leave it unset unless the harness explicitly chooses one.
+            temperature=temperature,
+            system_level=SystemPromptLevel.MINIMAL,
+            tool_profile="ds4",
+            tool_call_format=tool_call_format or "compact-json",
+            reasoning=spec.model_policy.reasoning,
+            parallel_tools=False,
+            max_iterations=0,
+            session_history_limit=20,
         )
 
     if profile in {"ds4-coding", "ds4-fast-local", "ds4"}:
@@ -238,6 +256,11 @@ def _optional_float(value: Any) -> float | None:
 
 def _mentions_ds4(text: str) -> bool:
     return "ds4" in text or "dwarfstar" in text or "deepseek-v4" in text
+
+
+def _mentions_laguna(text: str) -> bool:
+    normalized = text.replace("_", "-")
+    return "laguna-s-2.1" in normalized or "laguna-s2.1" in normalized
 
 
 def _mentions_modern_gemma(text: str) -> bool:

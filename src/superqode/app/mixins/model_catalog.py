@@ -1869,6 +1869,13 @@ class ModelCatalogMixin:
         from superqode.providers.dynamic import resolve_provider_def
         from superqode.providers.local.base import is_embedding_model
 
+        def render_screen(content: Text) -> None:
+            """Replace the provider picker instead of appending below it."""
+            log.auto_scroll = False
+            log.clear()
+            log.write(content)
+            log.auto_scroll = True
+
         provider_def = resolve_provider_def(provider_id)
         name = provider_def.name if provider_def else provider_id
         base_url = ""
@@ -1886,40 +1893,72 @@ class ModelCatalogMixin:
         models = [m for m in ids if not is_embedding_model(m)]
 
         if not models:
-            # No server is up. Cached GGUF files are useful start hints, but
-            # they are not chat-ready models until llama-server is actually
-            # serving one, so never put them in the selectable model list here.
+            # No server is up. For llama.cpp, cached GGUF files are launchable
+            # choices: selecting one routes through the explicit start
+            # confirmation before the TUI starts and connects to llama-server.
             if provider_id == "llamacpp":
                 from superqode.local.servers import discover_gguf_models
+                from superqode.local.laguna import (
+                    LAGUNA_CONTEXT_WINDOW,
+                    is_laguna_model,
+                    laguna_download_command,
+                )
 
                 gguf = await asyncio.to_thread(discover_gguf_models)
+                gguf.sort(key=lambda item: (not is_laguna_model(item["path"]), item["id"].lower()))
                 t = Text()
                 t.append("\n  🟡 ", style=THEME["warning"])
                 t.append(f"No {name} answering at {base_url}\n", style=f"bold {THEME['text']}")
                 if gguf:
                     t.append(
-                        f"  Found {len(gguf)} cached GGUF file(s), but none are being served yet.\n",
+                        f"  Found {len(gguf)} cached GGUF file(s). Select one to start llama.cpp:\n\n",
                         style=THEME["muted"],
                     )
-                    first_path = gguf[0]["path"]
+                    self._local_selected_provider = provider_id
+                    self._local_model_list = [item["path"] for item in gguf]
+                    self._local_cached_models = list(self._local_model_list)
+                    self._awaiting_local_model = True
+                    self._awaiting_local_provider = False
+                    self._local_highlighted_model_index = 0
+                    for idx, item in enumerate(gguf, 1):
+                        laguna = is_laguna_model(item["path"])
+                        marker = "  ▶ " if idx == 1 else "    "
+                        style = f"bold {THEME['success']}" if idx == 1 else f"bold {THEME['text']}"
+                        t.append(marker, style=f"bold {THEME['success']}")
+                        t.append(
+                            f"[{idx:2}] ",
+                            style=self._picker_link_style(THEME["dim"], idx),
+                        )
+                        t.append(
+                            "Poolside Laguna S 2.1" if laguna else item["id"],
+                            style=style,
+                        )
+                        if laguna:
+                            t.append("  recommended", style=THEME["success"])
+                        if idx == 1:
+                            t.append("  ← SELECTED", style=f"bold {THEME['success']}")
+                        t.append("\n", style="")
+                        t.append(f"       {item['path']}\n", style=THEME["muted"])
+                        if laguna:
+                            t.append(
+                                f"       Q4_K_M • {LAGUNA_CONTEXT_WINDOW:,} ctx • "
+                                "reasoning + tools\n",
+                                style=THEME["dim"],
+                            )
+                        t.append("\n", style="")
                     t.append(
-                        "  Start llama.cpp with one of them, for example:\n", style=THEME["muted"]
+                        "  Press Enter or type a number. SuperQode will confirm before launching.\n",
+                        style=THEME["muted"],
                     )
-                    t.append("      ", style="")
-                    t.append(
-                        self._native_local_server_command("llama.cpp", model=first_path),
-                        style=THEME["cyan"],
-                    )
-                    t.append("\n", style="")
-                    t.append(
-                        "      Edit the model path, port, or context if needed.\n",
-                        style=THEME["dim"],
-                    )
+                    render_screen(t)
+                    self.set_timer(0.05, self._ensure_input_focus)
+                    return
                 else:
                     t.append(
-                        "  No cached GGUF models found. Download one, e.g.:\n", style=THEME["muted"]
+                        "  No cached GGUF models found. Download Laguna S 2.1 with:\n",
+                        style=THEME["muted"],
                     )
-                    t.append("      hf download <repo> <file>.gguf\n", style=THEME["cyan"])
+                    t.append(f"      {laguna_download_command()}\n", style=THEME["cyan"])
                     t.append("  or point at a running server:\n", style=THEME["muted"])
                     t.append(
                         "      llama-server -m /path/to/model.gguf --port 8081\n",
@@ -1934,7 +1973,7 @@ class ModelCatalogMixin:
                 )
                 self._awaiting_local_model = False
                 self._awaiting_local_provider = False
-                log.write(t)
+                render_screen(t)
                 self._pin_local_prompt_to_input(
                     "Start llama.cpp first, then run :connect local",
                     log,
@@ -1958,7 +1997,7 @@ class ModelCatalogMixin:
             # Stable final state — no auto-reopen (that clears the log = flash).
             self._awaiting_local_model = False
             self._awaiting_local_provider = False
-            log.write(t)
+            render_screen(t)
             return
 
         self._local_selected_provider = provider_id
@@ -1986,7 +2025,7 @@ class ModelCatalogMixin:
             t.append("\n", style="")
         t.append("\n  💡 ", style=THEME["muted"])
         t.append("Select a model number or name to connect\n", style=THEME["text"])
-        log.write(t)
+        render_screen(t)
         self.set_timer(0.05, self._ensure_input_focus)
 
     def _models_cmd(self, args: str, log: ConversationLog):

@@ -147,11 +147,40 @@ Inside the TUI, the local-first MVP path is:
 ```text
 :local init          # detect hardware, generate superqode.local.yaml, run smoke when possible
 :local labs          # browse trusted models.dev Labs recommendations
-:connect local       # pick Ollama, LM Studio, MLX, DS4, vLLM, or SGLang
+:connect local       # pick Ollama, LM Studio, MLX, DS4, llama.cpp, vLLM, or SGLang
 :harness superqode.local.yaml
 ```
 
 > **Local model safety:** Local inference can use substantial CPU, GPU, memory, battery, and disk bandwidth. Do not run local models on hardware that cannot safely support them. Monitor temperature, memory pressure, fan noise, battery, and system responsiveness. Use smaller models, lower context, or hosted/BYOK providers when your machine is constrained. SuperQode provides hardware checks and guardrails, but you are responsible for running local models responsibly on your own hardware.
+
+### Poolside Laguna S 2.1 on Apple Silicon
+
+SuperQode `0.2.35` can run Poolside's 118B Laguna S 2.1 GGUF on a
+128 GB Apple Silicon Mac through either DwarfStar or a Laguna-capable
+llama.cpp build. Download the Q4_K_M artifact once into Hugging Face's standard
+cache:
+
+```bash
+hf download \
+  poolside/Laguna-S-2.1-GGUF \
+  laguna-s-2.1-Q4_K_M.gguf
+```
+
+Then start one engine at a time with the same portable alias:
+
+```bash
+superqode local serve ds4 --model laguna-s-2.1 --ctx 32768 --build
+superqode local stop ds4
+
+superqode local serve llama.cpp --model laguna-s-2.1 --ctx 32768
+```
+
+No user-specific model path is stored in SuperQode. `HF_HOME`,
+`HF_HUB_CACHE`, `SUPERQODE_LAGUNA_GGUF`, and explicit GGUF paths remain
+available for custom layouts. In the TUI, use `:connect local`; DwarfStar shows
+separate default, chat, and reasoner variants, while llama.cpp opens a dedicated
+model picker. See the [local provider guide](docs/providers/local.md#dwarfstar-ds4)
+for engine prerequisites, testing, and recovery details.
 
 `superqode.yaml` and `superqode.local.yaml` have different jobs. `superqode.yaml` is project configuration: provider hints, endpoints, MCP servers, memory providers, aliases, and default connection settings. `superqode.local.yaml` is a HarnessSpec: the repeatable run contract for runtime, model policy, tools, sandbox, approvals, checks, workflow, and events. Generate project config with `superqode config init`; generate a harness with `:local init`, `superqode local init --repo .`, or `superqode harness init ...`.
 

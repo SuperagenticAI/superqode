@@ -75,9 +75,9 @@ superqode local warm ollama --model qwen3:8b
 
 Do not treat any shipped harness pack as sacred. Pick your model, pick or
 generate a harness, pick your memory and permissions, then customize the YAML
-for your project. SuperQode's Gemma, Qwen, GLM, MiniMax, DS4, Devstral, and
-gpt-oss packs are getting-started defaults; your smoke tests and evals are what
-turn them into a project harness.
+for your project. SuperQode's Gemma, Qwen, GLM, MiniMax, Laguna, DS4, Devstral,
+and gpt-oss packs are getting-started defaults; your smoke tests and evals are
+what turn them into a project harness.
 
 ### Who Starts The Server?
 
@@ -168,7 +168,7 @@ It checks that the server is reachable, a chat model (not an embedding model) is
 
 | Provider | Best For | Setup Complexity |
 |----------|----------|------------------|
-| **DS4** | DeepSeek V4 Flash, coding agents, long-context work | Medium |
+| **DwarfStar (DS4)** | Laguna S 2.1, DeepSeek V4 Flash, coding agents | Medium |
 | **Ollama** | Easy setup, many models | Easy |
 | **LM Studio** | GUI interface, beginners | Easy |
 | **MLX** | General Apple Silicon model serving | Medium |
@@ -185,21 +185,159 @@ then prints the local-model adaptation work without changing files.
 
 ---
 
-## DS4 / DwarfStar 4
+## DwarfStar (DS4)
 
-DS4 runs DeepSeek V4 Flash locally and exposes OpenAI-compatible, Responses, and Anthropic-style endpoints. SuperQode treats it as a local provider named `ds4`, so it can be used from the CLI, TUI, provider doctor, and model recommendation flow.
+DS4 runs Laguna S 2.1 and DeepSeek V4 Flash locally and exposes
+OpenAI-compatible, Responses, and Anthropic-style endpoints. SuperQode treats it
+as a local provider named `ds4`, so it can be used from the CLI, TUI, provider
+doctor, and model recommendation flow.
 
-Use DS4 instead of MLX when your target model is DeepSeek V4 Flash. MLX is a good general Apple Silicon runner; DS4 is a purpose-built DeepSeek V4 Flash engine with DS4-specific prompt rendering, tool-call handling, long-context behavior, and disk KV cache support.
+Use the model-specific DwarfStar branch when it provides optimized support for
+your model. SuperQode preserves DwarfStar's thinking blocks across tool turns
+and uses its compact tool profile.
 
 ### Prerequisites
 
 - A working DS4 checkout or release directory.
 - The `ds4-server` binary available in that directory or on `PATH`.
-- A compatible model file available to DS4, commonly `ds4flash.gguf`.
+- A compatible GGUF file, such as `laguna-s-2.1-Q4_K_M.gguf` or
+  `ds4flash.gguf`.
 
 See the upstream project for installation and model details: [antirez/ds4](https://github.com/antirez/ds4).
 
 ### Start DS4
+
+For Laguna S 2.1, download Poolside's official Q4_K_M GGUF once:
+
+```bash
+hf download \
+  poolside/Laguna-S-2.1-GGUF \
+  laguna-s-2.1-Q4_K_M.gguf
+```
+
+This stores the file in Hugging Face's standard cache. SuperQode's
+`laguna-s-2.1` alias resolves the cached Poolside snapshot without making a
+network request. Start that one cached artifact with either DwarfStar or
+llama.cpp:
+
+```bash
+# Optimized DwarfStar path. --build checks out the Laguna support branch
+# when ds4-server is not already installed.
+superqode local serve ds4 --model laguna-s-2.1 --ctx 32768 --build
+
+# General llama.cpp path, using the exact same GGUF file.
+superqode local serve llama.cpp --model laguna-s-2.1 --ctx 32768
+```
+
+### Reproducible Laguna Setup And Test
+
+Every machine uses the same standard-cache download command:
+
+```bash
+hf download \
+  poolside/Laguna-S-2.1-GGUF \
+  laguna-s-2.1-Q4_K_M.gguf
+```
+
+Do not add `--local-dir`; Hugging Face chooses the snapshot location under its
+normal cache. `HF_HOME` and `HF_HUB_CACHE` are supported when a machine
+relocates that cache. `SUPERQODE_LAGUNA_GGUF` is needed only for a GGUF outside
+Hugging Face's cache and the other discovered model locations.
+
+Optionally verify the completed cache entry:
+
+```bash
+hf cache verify poolside/Laguna-S-2.1-GGUF
+```
+
+For an existing DwarfStar checkout, verify the required branch:
+
+```bash
+git -C ~/oss/ds4 branch --show-current
+# expected: laguna-s2.1
+```
+
+The following command performs an incremental `make` even when `ds4-server`
+already exists, preventing an old binary from being mistaken for a Laguna-ready
+build:
+
+```bash
+superqode local serve ds4 \
+  --model laguna-s-2.1 \
+  --ctx 32768 \
+  --build
+```
+
+Once the server is ready, test discovery, a real completion, and tool calling:
+
+```bash
+superqode providers doctor ds4 --live
+superqode providers smoke ds4 \
+  --model laguna-s-2.1 \
+  --run \
+  --prompt "Inspect the current directory and summarize it."
+```
+
+Stop DwarfStar before testing the same cached GGUF with llama.cpp:
+
+```bash
+superqode local stop ds4
+superqode local serve llama.cpp --model laguna-s-2.1 --ctx 32768
+superqode providers doctor llamacpp --live
+superqode providers smoke llamacpp \
+  --model laguna-s-2.1 \
+  --run \
+  --prompt "Inspect the current directory and summarize it."
+superqode local stop llama.cpp
+```
+
+Run only one of these servers at a time on a 128 GB Mac. Override the shared
+file location with `SUPERQODE_LAGUNA_GGUF=/absolute/path/model.gguf`. A direct
+GGUF path also works with both commands. The managed llama.cpp command enables
+Jinja templates and reasoning preservation for Laguna automatically.
+
+Laguna requires a current llama.cpp build with Poolside model support. Upstream
+support landed after older builds such as Homebrew build 9430, which reject the
+model or do not recognize `--reasoning-preserve`. Upgrade before using the
+managed launcher:
+
+```bash
+brew update
+brew upgrade llama.cpp
+llama-server --version
+```
+
+The Poolside llama.cpp fork is also supported. For a manual compatibility test,
+start with the minimal flags below and replace the model argument with the
+absolute path printed by `hf download`:
+
+```bash
+llama-server \
+  -m /absolute/path/to/laguna-s-2.1-Q4_K_M.gguf \
+  --host 127.0.0.1 \
+  --port 8081 \
+  --ctx-size 32768 \
+  --jinja \
+  --alias laguna-s-2.1
+```
+
+In the SuperQode TUI, run `:connect local` and choose either **DwarfStar 4** or
+**llama.cpp**. When the shared GGUF is present, Laguna appears as a selectable
+model even if the server is stopped. Select it and confirm the launch; the TUI
+uses the same shared path, 32K starting context, and runtime-specific flags.
+When DwarfStar is not installed, the confirmed managed launch builds its Laguna
+support branch before starting the server.
+
+After DwarfStar starts, its connection screen shows three intentional API
+variants backed by the same GGUF:
+
+- **Poolside Laguna S 2.1** lets each request control thinking.
+- **Poolside Laguna S 2.1 Chat** disables thinking.
+- **Poolside Laguna S 2.1 Reasoner** enables thinking.
+
+These are behavior aliases, not three copies of the model. The llama.cpp
+provider opens a dedicated model picker instead of appending discovered models
+to the provider list.
 
 SuperQode-managed start:
 

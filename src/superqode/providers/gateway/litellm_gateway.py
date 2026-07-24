@@ -1599,6 +1599,9 @@ class LiteLLMGateway(GatewayInterface):
         - Assistant ``tool_calls`` become standalone ``tool_use`` blocks, each
           carrying the original ``id`` so DS4's exact-DSML replay map stays
           intact across turns.
+        - Assistant reasoning becomes a ``thinking`` block. Laguna S 2.1
+          explicitly requires prior reasoning to be preserved between tool
+          calls; dropping it can make the model restart or stop reasoning.
         """
         system_parts: List[str] = []
         out: List[Dict[str, Any]] = []
@@ -1636,6 +1639,13 @@ class LiteLLMGateway(GatewayInterface):
             flush_pending()
 
             content_blocks: List[Dict[str, Any]] = []
+            if msg.role == "assistant" and msg.reasoning_content:
+                content_blocks.append(
+                    {
+                        "type": "thinking",
+                        "thinking": msg.reasoning_content,
+                    }
+                )
             if msg.content:
                 if isinstance(msg.content, str):
                     content_blocks.append({"type": "text", "text": msg.content})
@@ -1867,11 +1877,18 @@ class LiteLLMGateway(GatewayInterface):
 
             content = response_data.get("content", [])
             text_content = ""
+            thinking_parts: List[str] = []
             tool_calls = []
 
             for block in content:
                 if block.get("type") == "text":
                     text_content += block.get("text", "")
+                elif block.get("type") in {"thinking", "summary"}:
+                    thinking = (
+                        block.get("thinking") or block.get("summary") or block.get("text") or ""
+                    )
+                    if thinking:
+                        thinking_parts.append(str(thinking))
                 elif block.get("type") == "tool_use":
                     tool_calls.append(
                         {
@@ -1905,6 +1922,7 @@ class LiteLLMGateway(GatewayInterface):
                 provider="ds4",
                 tool_calls=tool_calls if tool_calls else None,
                 raw_response=response_data,
+                thinking_content="".join(thinking_parts) or None,
             )
 
         except aiohttp.ClientError as e:

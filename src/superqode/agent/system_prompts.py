@@ -84,6 +84,15 @@ Stopping:
   follow-up. Skip it only when the task is conclusively done.
 - If a task is ambiguous, ask one focused question before starting."""
 
+# Laguna uses interleaved reasoning and native tagged tool calls through both
+# DwarfStar and llama.cpp. It benefits from the same compact local harness as
+# DeepSeek V4, but must retain its own identity across every engine route.
+LAGUNA_PROMPT = DS4_PROMPT.replace(
+    "powered by DeepSeek V4 Flash",
+    "powered by Poolside Laguna S 2.1",
+    1,
+)
+
 
 # Local-model prompt. Tuned for Ollama/MLX/llama.cpp where tool-call reliability
 # is the dominant failure mode. The wording is deliberate:
@@ -434,9 +443,21 @@ def get_provider_prompt(provider: Optional[str], model: Optional[str]) -> str:
     if not provider and not model:
         return ""
     model_lower = (model or "").lower()
+    if "laguna-s-2.1" in model_lower or model_lower in {"laguna", "laguna-s2.1"}:
+        return LAGUNA_PROMPT + _search_roots_note()
     if provider == "ds4" or "deepseek-v4" in model_lower:
         return DS4_PROMPT + _search_roots_note()
-    if provider in {"ollama", "mlx", "lmstudio", "vllm", "sglang", "tgi", "llama-cpp"}:
+    if provider in {
+        "ollama",
+        "mlx",
+        "lmstudio",
+        "vllm",
+        "sglang",
+        "tgi",
+        "llamacpp",
+        "llama-cpp",
+        "llama.cpp",
+    }:
         base = QWEN_PROMPT if "qwen" in model_lower else LOCAL_PROMPT
         return base + _search_roots_note()
     return ""

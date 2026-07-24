@@ -265,6 +265,7 @@ TRUSTED_HF_ORGS = {
     "lmstudio-community",
     "ggml-org",
     "unsloth",
+    "poolside",
 }
 
 

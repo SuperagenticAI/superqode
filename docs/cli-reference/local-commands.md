@@ -277,13 +277,15 @@ MLX/llama.cpp model selection asks before starting a one-model server; type
 ```bash
 superqode local serve ollama
 superqode local serve ds4 --ctx 32768
+superqode local serve ds4 --model laguna-s-2.1 --ctx 32768 --build
+superqode local serve llama.cpp --model laguna-s-2.1 --ctx 32768
 superqode local serve mlx --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit --port 8090
 superqode local serve llama.cpp --model /path/to/model.gguf --ctx 16384
 ```
 
 | Option | Description |
 | --- | --- |
-| `-m, --model TEXT` | Model id / weight path (required for `mlx` and `llama.cpp`) |
+| `-m, --model TEXT` | Model id / weight path (required for `mlx` and `llama.cpp`; selects a GGUF for DwarfStar) |
 | `-p, --port INTEGER` | Port (default: engine default) |
 | `--host TEXT` | Bind host (default `127.0.0.1`) |
 | `--ctx INTEGER` | Context window (where the engine supports it) |
@@ -293,6 +295,34 @@ superqode local serve llama.cpp --model /path/to/model.gguf --ctx 16384
 | `--extra TEXT` | Extra flag passed to the server (repeatable) |
 
 Engines: `ollama`, `lmstudio`, `mlx`, `ds4`, `llama.cpp`.
+
+For Laguna S 2.1, the alias `laguna-s-2.1` resolves Poolside's GGUF from the
+standard Hugging Face cache for both DwarfStar and llama.cpp. Set
+`SUPERQODE_LAGUNA_GGUF` to use another location. The same GGUF can be shared,
+but only one server should load it at a time on a 128 GB Mac.
+
+The llama.cpp engine must be a current build with Poolside Laguna support.
+Older builds can reject the model or the managed reasoning flag. Upgrade
+llama.cpp before starting the managed server, or use the Poolside fork.
+
+Download once into the standard cache, then test each engine separately:
+
+```bash
+hf download poolside/Laguna-S-2.1-GGUF laguna-s-2.1-Q4_K_M.gguf
+
+superqode local serve ds4 --model laguna-s-2.1 --ctx 32768 --build
+superqode providers smoke ds4 --model laguna-s-2.1 --run
+superqode local stop ds4
+
+superqode local serve llama.cpp --model laguna-s-2.1 --ctx 32768
+superqode providers smoke llamacpp --model laguna-s-2.1 --run
+superqode local stop llama.cpp
+```
+
+For DwarfStar, `--build` runs an incremental build even when the binary already
+exists. A Laguna launch requires the `laguna-s2.1` branch in `~/oss/ds4`.
+When connected, SuperQode labels the request-controlled, chat, and reasoner
+aliases separately even though they use the same GGUF.
 
 For DS4, the managed default is conservative: `--ctx 32768` plus disk KV cache
 under `~/.superqode/ds4-kv`. Use `--ctx 100000` for long coding sessions when

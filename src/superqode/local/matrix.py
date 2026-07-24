@@ -28,6 +28,7 @@ class ModelCandidate:
     role: str = "main"
     pack: str = ""
     source: str = ""
+    engines: List[str] = field(default_factory=list)
     downloaded: Optional[LocalModel] = None
 
 
@@ -43,10 +44,13 @@ class StackRecommendation:
 
     @property
     def best_model(self) -> Optional[ModelCandidate]:
-        downloaded_main = [m for m in self.models if m.role == "main" and m.downloaded]
+        compatible = [
+            m for m in self.models if not self.engine or not m.engines or self.engine in m.engines
+        ]
+        downloaded_main = [m for m in compatible if m.role == "main" and m.downloaded]
         if downloaded_main:
             return downloaded_main[0]
-        mains = [m for m in self.models if m.role == "main"]
+        mains = [m for m in compatible if m.role == "main"]
         return mains[0] if mains else None
 
     @property
@@ -403,6 +407,7 @@ def recommend(
             role=str(raw.get("role", "main")),
             pack=str(raw.get("pack", "")),
             source=str(raw.get("source", "")),
+            engines=[str(engine) for engine in raw.get("engines", [])],
         )
         candidate.downloaded = _find_downloaded(candidate.match, inventory)
         candidates.append(candidate)

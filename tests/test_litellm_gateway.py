@@ -242,6 +242,43 @@ def test_ds4_thinking_unknown_value_falls_back_to_default(monkeypatch):
     assert gateway._ds4_thinking_config() is None
 
 
+def test_ds4_conversion_preserves_laguna_reasoning_between_tool_turns():
+    gateway = LiteLLMGateway()
+    messages = [
+        Message(role="system", content="code carefully"),
+        Message(
+            role="assistant",
+            content="",
+            reasoning_content="I need to inspect the repository first.",
+            tool_calls=[
+                {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                        "name": "read_file",
+                        "arguments": '{"path":"README.md"}',
+                    },
+                }
+            ],
+        ),
+        Message(
+            role="tool",
+            content="SuperQode",
+            tool_call_id="call-1",
+        ),
+    ]
+
+    system, converted = gateway._ds4_convert_to_anthropic(messages)
+
+    assert system == "code carefully"
+    assert converted[0]["content"][0] == {
+        "type": "thinking",
+        "thinking": "I need to inspect the repository first.",
+    }
+    assert converted[0]["content"][1]["type"] == "tool_use"
+    assert converted[1]["content"][0]["type"] == "tool_result"
+
+
 # ---------------------------------------------------------------------------
 # Prompt caching
 # ---------------------------------------------------------------------------

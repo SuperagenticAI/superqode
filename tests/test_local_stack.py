@@ -188,6 +188,7 @@ def test_matrix_recommendations_have_trusted_sources():
         "models.dev/labs/zhipuai",
         "mlx-community",
         "lmstudio-community",
+        "huggingface.co/poolside",
     }
     matrix = load_matrix()
 
@@ -638,13 +639,23 @@ def test_optimization_harness_yaml_contains_repo_context(tmp_path):
 
 def test_shipped_packs_load():
     packs = load_packs()
-    assert {"gemma4", "qwen3", "qwen-coder", "ds4", "devstral", "gpt-oss", "glm"} <= set(packs)
+    assert {
+        "gemma4",
+        "qwen3",
+        "qwen-coder",
+        "ds4",
+        "devstral",
+        "gpt-oss",
+        "glm",
+        "laguna",
+    } <= set(packs)
 
 
 def test_detect_pack_longest_match_wins():
     assert detect_pack("ollama qwen3-coder-next").name == "qwen-coder"
     assert detect_pack("ollama qwen3.6:35b-a3b").name == "qwen3"
     assert detect_pack("zhipuai glm-4.5-air").name == "glm"
+    assert detect_pack("ds4 poolside/Laguna-S-2.1").name == "laguna"
     assert detect_pack("gpt-4o-mini") is None
 
 

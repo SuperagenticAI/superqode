@@ -712,7 +712,7 @@ PROVIDERS: Dict[str, ProviderDef] = {
     ),
     "ds4": ProviderDef(
         id="ds4",
-        name="DwarfStar 4 (DeepSeek V4 Flash)",
+        name="DwarfStar 4 (DeepSeek V4 / Laguna)",
         tier=ProviderTier.LOCAL,
         category=ProviderCategory.LOCAL,
         env_vars=[],
@@ -723,8 +723,12 @@ PROVIDERS: Dict[str, ProviderDef] = {
         example_models=[
             "deepseek-v4-flash",
             "deepseek-chat",
+            "laguna-s-2.1",
+            "laguna-s-2.1-chat",
         ],
-        notes="Local DS4 server for DeepSeek V4 Flash. Safe start: ./ds4-server --ctx 32768 --kv-disk-dir /tmp/ds4-kv --kv-disk-space-mb 8192. Use --ctx 100000 for long coding sessions with enough memory; Think Max requires --ctx >= 393216.",
+        notes="Local DwarfStar server for DeepSeek V4 and Poolside Laguna S 2.1. "
+        "Use one shared Laguna GGUF with either DwarfStar or llama.cpp. "
+        "Safe context default: 32768.",
         deployment_mode="local",
     ),
     "sglang": ProviderDef(

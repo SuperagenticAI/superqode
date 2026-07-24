@@ -406,7 +406,10 @@ def _local_client_for(engine: str):
 @local.command("serve")
 @click.argument("engine", type=click.Choice(["ollama", "lmstudio", "mlx", "ds4", "llama.cpp"]))
 @click.option(
-    "--model", "-m", default=None, help="Model id / weight path (required for mlx and llama.cpp)"
+    "--model",
+    "-m",
+    default=None,
+    help="Model id / weight path (required for mlx/llama.cpp; selects a GGUF for DwarfStar)",
 )
 @click.option("--port", "-p", default=None, type=int, help="Port (default: engine default)")
 @click.option("--host", default=None, help="Bind host (default: 127.0.0.1)")
@@ -437,20 +440,31 @@ def local_serve(engine, model, port, host, ctx, no_wait, build, allow_download, 
         ds4_build_plan,
         get_manager,
     )
+    from superqode.local.laguna import (
+        LAGUNA_DS4_REF,
+        is_laguna_model,
+        resolve_laguna_gguf,
+    )
 
     manager = get_manager()
 
-    if engine == "ds4" and build and not manager.is_installed("ds4"):
-        plan = ds4_build_plan()
+    if engine == "ds4" and build:
+        laguna_model = is_laguna_model(model)
+        ds4_ref = LAGUNA_DS4_REF if laguna_model else None
+        plan = ds4_build_plan(ref=ds4_ref)
         click.echo(f"Building ds4-server in {plan['checkout']} ...", err=True)
         try:
-            ds4_build()
+            ds4_build(ref=ds4_ref)
         except Exception as exc:  # noqa: BLE001
             raise click.ClickException(f"ds4 build failed: {exc}") from exc
-        click.echo(
-            "Built ds4-server. The model weights are a separate (large) download:\n"
-            f"  cd {plan['checkout']} && ./download_model.sh"
-        )
+        cached_laguna = resolve_laguna_gguf(model) if laguna_model else None
+        if cached_laguna is not None:
+            click.echo(f"Built ds4-server. Using cached Laguna GGUF:\n  {cached_laguna}")
+        else:
+            click.echo(
+                "Built ds4-server. The model weights are a separate (large) download:\n"
+                f"  {' '.join(plan['download_cmd'])}"
+            )
 
     host_eff = host or SPECS[engine].default_host
     port_eff = port or SPECS[engine].default_port

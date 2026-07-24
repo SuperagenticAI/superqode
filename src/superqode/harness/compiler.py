@@ -110,7 +110,7 @@ def _system_level_from_spec(spec: HarnessSpec) -> SystemPromptLevel:
     if spec.flavor == HarnessFlavor.NO_TOOL:
         return SystemPromptLevel.NO_TOOL
     profile = (spec.model_policy.profile or "").lower()
-    if profile in {"ds4-coding", "gemma4-coding"}:
+    if profile in {"ds4-coding", "gemma4-coding", "laguna-coding"}:
         return SystemPromptLevel.MINIMAL
     return SystemPromptLevel.FULL
 

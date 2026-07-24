@@ -111,6 +111,53 @@ async def test_ds4_context_window_defaults_to_1m_when_unreported(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_ds4_identifies_laguna_family_and_native_context(monkeypatch):
+    client = DS4Client(host="http://127.0.0.1:8000/v1")
+
+    async def fake_request(method, endpoint, data=None, timeout=10.0):
+        return {"data": [{"id": "laguna-s-2.1"}]}
+
+    monkeypatch.setattr(client, "_async_request", fake_request)
+
+    model = (await client.list_models())[0]
+
+    assert model.family == "laguna"
+    assert model.context_window == 262_144
+    assert model.quantization == "Q4_K_M"
+    assert model.parameter_count == "118B-A8B"
+    assert model.details["reasoning_preservation"] is True
+
+
+@pytest.mark.asyncio
+async def test_ds4_gives_laguna_aliases_distinct_behavior_names(monkeypatch):
+    client = DS4Client(host="http://127.0.0.1:8000/v1")
+
+    async def fake_request(method, endpoint, data=None, timeout=10.0):
+        return {
+            "data": [
+                {"id": "laguna-s-2.1", "name": "Laguna S 2.1"},
+                {"id": "laguna-s-2.1-chat", "name": "Laguna S 2.1"},
+                {"id": "laguna-s-2.1-reasoner", "name": "Laguna S 2.1"},
+            ]
+        }
+
+    monkeypatch.setattr(client, "_async_request", fake_request)
+
+    models = await client.list_models()
+
+    assert [model.name for model in models] == [
+        "Poolside Laguna S 2.1 (default)",
+        "Poolside Laguna S 2.1 Chat (thinking off)",
+        "Poolside Laguna S 2.1 Reasoner (thinking on)",
+    ]
+    assert [model.details["thinking_mode"] for model in models] == [
+        "request-controlled",
+        "off",
+        "on",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_ds4_falls_back_to_known_models_when_server_unreachable(monkeypatch):
     client = DS4Client(host="http://127.0.0.1:8000/v1")
 
@@ -121,7 +168,13 @@ async def test_ds4_falls_back_to_known_models_when_server_unreachable(monkeypatc
 
     models = await client.list_models()
 
-    assert [model.id for model in models] == ["deepseek-v4-flash", "deepseek-chat"]
+    assert [model.id for model in models] == [
+        "deepseek-v4-flash",
+        "deepseek-chat",
+        "laguna-s-2.1",
+        "laguna-s-2.1-chat",
+        "laguna-s-2.1-reasoner",
+    ]
     assert all(model.supports_tools for model in models)
     assert all(model.running is False for model in models)
 

@@ -13,7 +13,7 @@
 #   pack:          model policy pack the generated harness should reference
 #   notes:         shown verbatim by the doctor
 
-version: 2026-06-14
+version: 2026-07-23
 
 tiers:
   - id: apple_16
@@ -106,8 +106,15 @@ tiers:
 
   - id: apple_128
     description: "Apple Silicon, 96GB+ unified memory"
-    engines: [mlx-lm, ollama, ds4, lmstudio]
+    engines: [ds4, llama.cpp, mlx-lm, ollama, lmstudio]
     models:
+      - name: "Poolside Laguna S 2.1 118B-A8B (Q4_K_M)"
+        match: ["laguna-s-2.1", "laguna-s2.1"]
+        pull: "hf download poolside/Laguna-S-2.1-GGUF laguna-s-2.1-Q4_K_M.gguf"
+        role: main
+        pack: laguna
+        source: huggingface.co/poolside
+        engines: [ds4, llama.cpp]
       - name: "GLM-4.5-Air (bf16 or 8bit)"
         match: ["glm-4.5-air", "glm4.5-air", "glm-4-5-air"]
         pull: "hf download THUDM/GLM-4.5-Air"
@@ -139,8 +146,8 @@ tiers:
         pack: gemma4
         source: models.dev/labs/google
     notes:
-      - "Enough headroom to run a main coder plus a small utility/vision model concurrently."
-      - "On M5 with macOS 26.2+, always prefer the MLX path: Neural Accelerators give ~4x prefill, and agentic loops are prefill-dominated."
+      - "Laguna's shared GGUF works with DwarfStar and llama.cpp; run only one of those servers at a time on 128GB."
+      - "For model families with a supported MLX conversion, M5 Neural Accelerators can materially improve prefill; Laguna currently uses its GGUF paths."
 
   - id: nvidia_16
     description: "NVIDIA GPU, up to ~16GB VRAM"

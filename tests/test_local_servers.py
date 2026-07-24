@@ -7,6 +7,8 @@ or redirected to a tmp path; no test launches a real engine or model.
 from __future__ import annotations
 
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -74,6 +76,24 @@ def test_build_command_llamacpp_maps_ctx_to_dash_c(manager: ServerManager):
     assert "-c" in cmd and "4096" in cmd
 
 
+def test_build_command_llamacpp_adds_laguna_chat_flags(manager, tmp_path):
+    model = tmp_path / "laguna-s-2.1-Q4_K_M.gguf"
+    model.write_bytes(b"gguf")
+
+    cmd, _env, _cwd = manager.build_command(
+        "llama.cpp",
+        host="127.0.0.1",
+        port=8081,
+        model=str(model),
+        ctx=32768,
+    )
+
+    assert cmd[cmd.index("-m") + 1] == str(model)
+    assert "--jinja" in cmd
+    assert "--reasoning-preserve" in cmd
+    assert cmd[cmd.index("--alias") + 1] == "laguna-s-2.1"
+
+
 def test_build_command_ds4_maps_ctx_to_flag_and_sets_cwd(manager, monkeypatch, tmp_path):
     binary = tmp_path / "ds4-server"
     binary.write_text("#!/bin/sh\n")
@@ -85,6 +105,90 @@ def test_build_command_ds4_maps_ctx_to_flag_and_sets_cwd(manager, monkeypatch, t
     assert "--kv-disk-dir" in cmd
     assert "--kv-disk-space-mb" in cmd and "8192" in cmd
     assert cwd == binary.parent
+
+
+def test_build_command_ds4_selects_shared_laguna_gguf(manager, monkeypatch, tmp_path):
+    binary = tmp_path / "ds4-server"
+    binary.write_text("#!/bin/sh\n")
+    binary.chmod(0o755)
+    model = tmp_path / "laguna-s-2.1-Q4_K_M.gguf"
+    model.write_bytes(b"gguf")
+    monkeypatch.setattr(manager, "_ds4_binary", lambda: binary)
+
+    cmd, _env, _cwd = manager.build_command(
+        "ds4",
+        host="127.0.0.1",
+        port=8000,
+        model=str(model),
+        ctx=32768,
+    )
+
+    assert cmd[cmd.index("-m") + 1] == str(model)
+
+
+def test_build_command_laguna_alias_reports_missing_shared_file(manager, monkeypatch, tmp_path):
+    monkeypatch.setenv("SUPERQODE_LAGUNA_GGUF", str(tmp_path / "missing.gguf"))
+
+    with pytest.raises(ServerError, match="Finish the shared download"):
+        manager.build_command(
+            "llama.cpp",
+            host="127.0.0.1",
+            port=8081,
+            model="laguna-s-2.1",
+        )
+
+
+def test_laguna_alias_resolves_official_file_from_standard_hf_cache(monkeypatch, tmp_path):
+    from superqode.local import laguna
+
+    model = tmp_path / "hub" / "snapshots" / "commit" / laguna.LAGUNA_GGUF_FILENAME
+    model.parent.mkdir(parents=True)
+    model.write_bytes(b"gguf")
+    calls = []
+
+    def fake_try_to_load_from_cache(**kwargs):
+        calls.append(kwargs)
+        return str(model)
+
+    fake_huggingface_hub = types.ModuleType("huggingface_hub")
+    fake_huggingface_hub.try_to_load_from_cache = fake_try_to_load_from_cache
+    monkeypatch.delenv("SUPERQODE_LAGUNA_GGUF", raising=False)
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_huggingface_hub)
+
+    assert laguna.resolve_laguna_gguf("laguna-s-2.1") == model
+    assert calls == [
+        {
+            "repo_id": "poolside/Laguna-S-2.1-GGUF",
+            "filename": "laguna-s-2.1-Q4_K_M.gguf",
+        }
+    ]
+    assert "--local-dir" not in laguna.laguna_download_command()
+
+
+def test_gguf_discovery_includes_configured_laguna_outside_standard_caches(monkeypatch, tmp_path):
+    model = tmp_path / "custom-location" / "laguna-s-2.1-Q4_K_M.gguf"
+    model.parent.mkdir()
+    model.write_bytes(b"gguf")
+    monkeypatch.setenv("SUPERQODE_LAGUNA_GGUF", str(model))
+
+    assert servers.discover_gguf_models(limit=1) == [{"id": model.name, "path": str(model)}]
+
+
+def test_gguf_discovery_honors_custom_hf_hub_cache(monkeypatch, tmp_path):
+    model = (
+        tmp_path
+        / "hf-hub"
+        / "models--poolside--Laguna-S-2.1-GGUF"
+        / "snapshots"
+        / "commit"
+        / "laguna-s-2.1-Q4_K_M.gguf"
+    )
+    model.parent.mkdir(parents=True)
+    model.write_bytes(b"gguf")
+    monkeypatch.delenv("SUPERQODE_LAGUNA_GGUF", raising=False)
+    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "hf-hub"))
+
+    assert servers.discover_gguf_models(limit=1) == [{"id": model.name, "path": str(model)}]
 
 
 def test_build_command_ds4_defaults_safe_ctx_and_kv_cache(manager, monkeypatch, tmp_path):
@@ -120,6 +224,47 @@ def test_build_command_ds4_errors_when_binary_missing(manager, monkeypatch):
     monkeypatch.setattr(manager, "_ds4_binary", lambda: None)
     with pytest.raises(ServerError, match="not built"):
         manager.build_command("ds4", host="127.0.0.1", port=8000)
+
+
+def test_ds4_laguna_build_plan_pins_branch_and_uses_shared_download():
+    plan = servers.ds4_build_plan(ref="laguna-s2.1")
+
+    assert plan["clone_cmd"][2:5] == ["--branch", "laguna-s2.1", "--single-branch"]
+    assert plan["download_cmd"][:2] == ["hf", "download"]
+    assert "poolside/Laguna-S-2.1-GGUF" in plan["download_cmd"]
+
+
+def test_ds4_build_runs_incremental_make_when_binary_already_exists(monkeypatch, tmp_path):
+    checkout = tmp_path / "ds4"
+    checkout.mkdir()
+    (checkout / "Makefile").write_text("all:\n\t@true\n")
+    binary = checkout / "ds4-server"
+    binary.write_bytes(b"existing")
+    calls = []
+
+    class Result:
+        stdout = "laguna-s2.1\n"
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return Result()
+
+    monkeypatch.setattr(servers.subprocess, "run", fake_run)
+
+    assert servers.ds4_build(checkout=checkout, ref="laguna-s2.1") == binary
+    assert any(cmd == ["make"] for cmd, _kwargs in calls)
+
+
+def test_ds4_binary_prefers_managed_checkout_over_path(monkeypatch, tmp_path):
+    checkout = tmp_path / "ds4"
+    checkout.mkdir()
+    managed = checkout / "ds4-server"
+    managed.write_text("#!/bin/sh\n")
+    managed.chmod(0o755)
+    monkeypatch.setattr(servers, "DS4_CHECKOUT", checkout)
+    monkeypatch.setattr(servers.shutil, "which", lambda _name: "/usr/local/bin/ds4-server")
+
+    assert ServerManager(registry_dir=tmp_path / "registry")._ds4_binary() == managed
 
 
 # -- start / adopt ----------------------------------------------------------

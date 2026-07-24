@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .doctor import DoctorReport, run_doctor
+from .laguna import is_laguna_model
 from .matrix import ModelSearchHit, search_models
 from .servers import DS4_DEFAULT_CTX
 
@@ -80,6 +81,11 @@ def _serve_command(engine: str, model_id: str, context: int) -> str:
     if engine == "llama.cpp":
         return f"superqode local serve llama.cpp --model /path/to/model.gguf --ctx {context}"
     if engine == "ds4":
+        if is_laguna_model(model_id):
+            return (
+                "superqode local serve ds4 "
+                f"--model laguna-s-2.1 --ctx {min(context, DS4_DEFAULT_CTX)}"
+            )
         return f"superqode local serve ds4 --ctx {min(context, DS4_DEFAULT_CTX)}"
     if engine == "lmstudio":
         return "superqode local serve lmstudio"

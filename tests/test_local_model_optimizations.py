@@ -18,6 +18,7 @@ import json
 import pytest
 
 from superqode.agent.system_prompts import (
+    LAGUNA_PROMPT,
     LOCAL_PROMPT,
     QWEN_PROMPT,
     get_provider_prompt,
@@ -52,9 +53,24 @@ def test_qwen_prompt_used_for_mlx_qwen():
     assert out == QWEN_PROMPT
 
 
+@pytest.mark.parametrize("provider", ["ds4", "llamacpp", "llama.cpp", "ollama"])
+def test_laguna_prompt_follows_model_across_local_engines(provider):
+    assert get_provider_prompt(provider, "laguna-s-2.1") == LAGUNA_PROMPT
+
+
 @pytest.mark.parametrize(
     "provider",
-    ["ollama", "mlx", "lmstudio", "vllm", "sglang", "tgi", "llama-cpp"],
+    [
+        "ollama",
+        "mlx",
+        "lmstudio",
+        "vllm",
+        "sglang",
+        "tgi",
+        "llamacpp",
+        "llama-cpp",
+        "llama.cpp",
+    ],
 )
 def test_all_local_providers_get_a_local_prompt(provider):
     """Every local provider routes through the local-prompt path —
