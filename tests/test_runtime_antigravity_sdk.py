@@ -34,6 +34,41 @@ class _Agent:
         return _Response()
 
 
+def _install_sdk_stub(monkeypatch):
+    """Install the optional SDK surface used by unit tests."""
+    google = ModuleType("google")
+    google.__path__ = []
+    sdk = ModuleType("google.antigravity")
+    hooks = ModuleType("google.antigravity.hooks")
+    types = ModuleType("google.antigravity.types")
+
+    def record(**kwargs):
+        return SimpleNamespace(**kwargs)
+
+    class ThinkingLevel:
+        MINIMAL = SimpleNamespace(value="minimal")
+        LOW = SimpleNamespace(value="low")
+        MEDIUM = SimpleNamespace(value="medium")
+        HIGH = SimpleNamespace(value="high")
+        EXTRA_HIGH = SimpleNamespace(value="extra_high")
+
+    sdk.CapabilitiesConfig = record
+    sdk.GeminiAPIEndpoint = record
+    sdk.GeminiModelOptions = record
+    sdk.ModelTarget = record
+    sdk.ModelType = SimpleNamespace(TEXT="text")
+    sdk.ThinkingLevel = ThinkingLevel
+    types.McpStdioServer = record
+    types.McpStreamableHttpServer = record
+    sdk.types = types
+    hooks.policy = SimpleNamespace(safe_defaults=lambda approve: [approve])
+
+    monkeypatch.setitem(sys.modules, "google", google)
+    monkeypatch.setitem(sys.modules, "google.antigravity", sdk)
+    monkeypatch.setitem(sys.modules, "google.antigravity.hooks", hooks)
+    monkeypatch.setitem(sys.modules, "google.antigravity.types", types)
+
+
 def test_antigravity_runtime_streams_and_accepts_google_key(monkeypatch):
     google = ModuleType("google")
     google.__path__ = []
@@ -175,7 +210,8 @@ def test_antigravity_tool_exception_is_a_failed_result(monkeypatch):
     assert result.data["error"] == "boom"
 
 
-def test_sdk_policy_bridge_asks_superqode_for_mutating_tools(tmp_path):
+def test_sdk_policy_bridge_asks_superqode_for_mutating_tools(monkeypatch, tmp_path):
+    _install_sdk_stub(monkeypatch)
     from superqode.runtime.antigravity_sdk import AntigravitySDKRuntime
 
     approvals = []
@@ -190,7 +226,8 @@ def test_sdk_policy_bridge_asks_superqode_for_mutating_tools(tmp_path):
     assert copy.deepcopy(runtime._sdk_policies())
 
 
-def test_sdk_discovers_project_skills_and_converts_mcp(tmp_path):
+def test_sdk_discovers_project_skills_and_converts_mcp(monkeypatch, tmp_path):
+    _install_sdk_stub(monkeypatch)
     from superqode.runtime.antigravity_sdk import AntigravitySDKRuntime
 
     skills = tmp_path / ".agents" / "skills"
@@ -213,7 +250,8 @@ def test_sdk_discovers_project_skills_and_converts_mcp(tmp_path):
     assert runtime.metadata["mcp_servers"] == 2
 
 
-def test_sdk_reasoning_effort_builds_thinking_model_target(tmp_path):
+def test_sdk_reasoning_effort_builds_thinking_model_target(monkeypatch, tmp_path):
+    _install_sdk_stub(monkeypatch)
     from superqode.runtime.antigravity_sdk import AntigravitySDKRuntime
 
     runtime = AntigravitySDKRuntime(
@@ -231,7 +269,8 @@ def test_sdk_reasoning_effort_builds_thinking_model_target(tmp_path):
     assert target.endpoint.options.thinking_level.value == "extra_high"
 
 
-def test_sdk_disables_all_capabilities_for_no_tool_config(tmp_path):
+def test_sdk_disables_all_capabilities_for_no_tool_config(monkeypatch, tmp_path):
+    _install_sdk_stub(monkeypatch)
     from superqode.runtime.antigravity_sdk import AntigravitySDKRuntime
 
     runtime = AntigravitySDKRuntime(
