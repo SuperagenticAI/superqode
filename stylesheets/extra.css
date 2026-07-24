@@ -281,3 +281,75 @@
   margin: 2.5rem auto 1rem;
   text-align: center;
 }
+
+/* Documentation CTAs use explicit monochrome contrast in both schemes. */
+.md-typeset .sq-doc-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 1.25rem 0 1.5rem;
+}
+
+.md-typeset .sq-doc-cta .md-button {
+  margin: 0;
+  border: 1px solid #111111;
+  border-radius: 0.4rem;
+  background: #ffffff;
+  color: #111111;
+  font-weight: 750;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.md-typeset .sq-doc-cta .md-button--primary {
+  border-color: #111111;
+  background: #111111;
+  color: #ffffff;
+}
+
+.md-typeset .sq-doc-cta .md-button:hover,
+.md-typeset .sq-doc-cta .md-button:focus-visible {
+  border-color: #111111;
+  background: #111111;
+  color: #ffffff;
+}
+
+.md-typeset .sq-doc-cta .md-button--primary:hover,
+.md-typeset .sq-doc-cta .md-button--primary:focus-visible {
+  background: #ffffff;
+  color: #111111;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .sq-doc-cta .md-button {
+  border-color: #ffffff;
+  background: #0a0a0c;
+  color: #ffffff;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .sq-doc-cta .md-button--primary {
+  border-color: #ffffff;
+  background: #ffffff;
+  color: #000000;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .sq-doc-cta .md-button:hover,
+[data-md-color-scheme="slate"] .md-typeset .sq-doc-cta .md-button:focus-visible {
+  background: #ffffff;
+  color: #000000;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .sq-doc-cta .md-button--primary:hover,
+[data-md-color-scheme="slate"] .md-typeset .sq-doc-cta .md-button--primary:focus-visible {
+  background: #0a0a0c;
+  color: #ffffff;
+}
+
+@media screen and (max-width: 44.984375em) {
+  .md-typeset .sq-doc-cta {
+    flex-direction: column;
+  }
+
+  .md-typeset .sq-doc-cta .md-button {
+    width: 100%;
+    text-align: center;
+  }
+}
