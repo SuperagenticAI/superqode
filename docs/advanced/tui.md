@@ -180,6 +180,39 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 
 Tool and file-change output is collapsed by default so normal coding sessions stay readable. Agent thinking/session notes are also hidden by default. Use `Ctrl+T` when you want to see thinking logs, and use `:log verbose` before a task when you want full successful tool output, raw ACP agent session logs, and file names in the session report.
 
+## Command Family Index
+
+The command palette is the authoritative runtime inventory because optional
+extensions and connected ACP agents can add commands. The following table maps
+the built-in command roots. Enter a root without arguments to open its picker,
+show status, or display its local help where supported.
+
+| Area | Built-in command roots |
+| --- | --- |
+| General operation | `:help`, `:status`, `:health`, `:doctor`, `:doctor-current`, `:diagnostics`, `:usage`, `:summary`, `:clear`, `:update`, `:demo`, `:exit`, `:quit`, `:q` |
+| Connections and authentication | `:connect`, `:disconnect`, `:agents`, `:agent`, `:acp`, `:providers`, `:provider`, `:profiles`, `:auth`, `:models`, `:model`, `:catalog`, `:model-guide`, `:recommend`, `:hf` |
+| Vendor runtimes | `:codex`, `:copilot`, `:claude`, `:antigravity`, `:agy`, `:grok`, `:xai-grok`, `:runtime` |
+| Agent modes and context | `:chat`, `:build`, `:mode`, `:context`, `:thinking`, `:toggle_thinking`, `:compact`, `:retry`, `:redo`, `:compare`, `:prompt`, `:log` |
+| Files and repositories | `:files`, `:find`, `:open`, `:view`, `:search`, `:workspace`, `:sidebar`, `:home`, `:attach`, `:image`, `:img`, `:paste`, `:copy`, `:select` |
+| Harness and delivery | `:harness`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:benchmark`, `:benchmarks` |
+| Sessions and history | `:session`, `:sessions`, `:sessions-current`, `:resume`, `:tree`, `:switchboard`, `:sw`, `:share`, `:transcript`, `:timeline`, `:rewind`, `:history`, `:stash`, `:checkpoints`, `:clone`, `:fork`, `:queue` |
+| Execution control | `:approve`, `:reject`, `:permissions`, `:plan`, `:diff`, `:undo`, `:sandbox`, `:trust`, `:tools` |
+| Extensions and protocols | `:plugins`, `:plugin`, `:skills`, `:skillopt`, `:recipes`, `:recipe`, `:mcp`, `:a2a` |
+| Local systems and memory | `:local`, `:hub`, `:memory` |
+| Configuration and services | `:init`, `:config`, `:serve`, `:daemon`, `:export`, `:theme` |
+| Vim and contextual navigation | `:vim`, `:set`, `:w`, `:e`, `:edit`, `:ls`, `:grep`, `:m`, `:back`, `:cancel` |
+
+`:sodebar` is retained as a compatibility alias for `:sidebar`. New
+documentation and scripts should use `:sidebar`.
+
+The CLI-backed families use the same subcommand names as their documented CLI
+counterparts. For example, `:work status`, `:harness doctor`,
+`:providers smoke`, and `:sessions graph` correspond to `sq work status`,
+`sq harness doctor`, `sq providers smoke`, and `sq sessions graph`.
+Runtime-specific command families are documented in
+[Agent Runtimes](../runtimes.md). Public CLI subcommands are indexed in the
+[CLI Reference](../cli-reference/index.md).
+
 ## Plan Mode, TODOs, and Questions
 
 Plan mode gives you a review step before native tools run:

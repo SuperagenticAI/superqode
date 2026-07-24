@@ -237,6 +237,57 @@ superqode providers test anthropic
 
 ## Optional Dependencies
 
+Install an extra into the same environment that runs SuperQode:
+
+```bash
+uv tool install "superqode[<extra>]"
+```
+
+| Extra | Capability |
+| --- | --- |
+| `hf` | Hugging Face Hub search, downloads, and accelerated transfers |
+| `mlx` | MLX and MLX-VLM local inference |
+| `monty` | Sandboxed Monty Python REPL |
+| `semantic` | CocoIndex semantic code search |
+| `extras` | Optional Exa Python client for external search integrations |
+| `channels` | Slack and Discord transports for the channel daemon |
+| `sandbox-e2b` | E2B cloud sandbox |
+| `sandbox-modal` | Modal cloud sandbox |
+| `sandbox-daytona` | Daytona cloud sandbox |
+| `sandbox-cloud` | E2B, Modal, and Daytona together |
+| `web` | Browser-hosted Textual TUI |
+| `a2a` | A2A HTTP server dependencies |
+| `adk` | Google Agent Development Kit runtime |
+| `openai-agents` | OpenAI Agents SDK runtime |
+| `codex-sdk` | OpenAI Codex SDK runtime |
+| `copilot-sdk` | GitHub Copilot SDK runtime |
+| `claude-agent-sdk` | Anthropic Claude Agent SDK runtime |
+| `antigravity-sdk` | Google Antigravity SDK runtime |
+| `vendor-sdks` | Codex, Copilot, Claude Agent, and Antigravity SDK runtimes |
+| `deepagents` | DeepAgents runtime |
+| `pydanticai` | PydanticAI runtime |
+| `pydanticai-logfire` | PydanticAI runtime with Logfire instrumentation |
+| `rlm-code` | RLM Code recursive harness backend |
+| `mem0` | Mem0 memory provider |
+| `supermemory` | Supermemory provider |
+| `memory-providers` | Mem0 and Supermemory together |
+| `optimization` | GEPA optimization engine |
+| `observability` | OpenTelemetry, MLflow, LangSmith, Logfire, and Arize Phoenix exporters |
+
+The default install remains intentionally small. Install only the integrations
+used by the current repository or runtime.
+
+Contributor and repository-maintenance extras are separate:
+
+| Extra | Capability |
+| --- | --- |
+| `dev` | Pytest, coverage, Ruff, MyPy, and pre-commit |
+| `testing` | CI test, security, and HTTP test dependencies |
+| `linters` | Bandit, Pylint, Flake8, Safety, and pip-audit |
+| `ui-testing` | Selenium and Playwright |
+| `performance` | Locust performance testing |
+| `docs` | MkDocs, Material for MkDocs, and documentation plugins |
+
 ### For Local Models
 
 === "Ollama"

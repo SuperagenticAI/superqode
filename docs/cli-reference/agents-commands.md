@@ -148,6 +148,25 @@ superqode agents store
 
 ---
 
+## agents connect
+
+Connect directly to an ACP coding agent.
+
+```bash
+superqode agents connect AGENT [--project-dir DIR]
+```
+
+This compatibility command is deprecated. New scripts should use:
+
+```bash
+superqode connect acp AGENT --project-dir DIR
+```
+
+Existing automation can continue using `agents connect`, but the `connect acp`
+form is the maintained connection surface.
+
+---
+
 ## Related Commands
 
 - `superqode connect acp <agent>` - Connect to an ACP agent

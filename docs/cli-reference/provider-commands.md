@@ -420,6 +420,34 @@ filesystem mount details.
 
 ---
 
+## providers ds4
+
+Inspect and configure a local DwarfStar DS4 server.
+
+```bash
+superqode providers ds4 ACTION [--host URL]
+```
+
+| Action | Description |
+| --- | --- |
+| `doctor` | Check connectivity and report KV-cache and thinking-mode recommendations. |
+| `list` | List models reported by the server with their context limits. |
+| `server` | Print a ready-to-run `ds4-server` command. |
+
+Examples:
+
+```bash
+superqode providers ds4 doctor
+superqode providers ds4 list
+superqode providers ds4 server
+superqode providers ds4 doctor --host http://127.0.0.1:11435
+```
+
+For model files, DwarfStar builds, Laguna support, and server recovery, see
+[Local Models](../providers/local.md#dwarfstar-ds4).
+
+---
+
 ## Connect Commands
 
 ### connect byok

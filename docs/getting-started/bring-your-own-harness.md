@@ -102,10 +102,17 @@ superqode harness init my-coder -t qwen-coding
 
 | Template | Starting point |
 | --- | --- |
+| `core` | Lean native harness with read, write, edit, and shell tools |
+| `workbench` | Complete native coding workbench |
+| `benchmark-coding` | Autonomous headless benchmark work in an external sandbox |
 | `qwen-coding` | Qwen Coder (low temperature, native tools, long agentic sessions) |
 | `glm-coding` | GLM 4.x/5.x (strong agentic coder, native tools) |
 | `glm52-coding` | GLM-5.2 via Z.AI general API (long horizon, native tools) |
+| `kimi-coding` | Current stable Kimi-family coding route |
+| `kimi-k3-coding` | Reproducible route pinned to Kimi K3 |
+| `minimax-coding` | MiniMax coding route with long-context reasoning policy |
 | `gemma4-coding` | Gemma 4 local (strict-JSON tool calls, MLX) |
+| `gemma4-no-tool` | Gemma 4 model-only reasoning |
 | `ds4-coding` | DeepSeek/DS4 (compact-JSON tool calls) |
 | `ds4-fast-local` | DS4 fast local iteration starter |
 | `coding` | Any model (generic full coding agent) |

@@ -34,7 +34,12 @@ superqode harness init my-coder --template qwen-coding --output harness.yaml
 superqode harness init local --template gemma4-coding --output harness.yaml
 ```
 
-Templates include `coding`, `no-tool`, `qwen-coding`, `glm-coding`, `glm52-coding`, `gemma4-coding`, `gemma4-no-tool`, `ds4-coding`, and `ds4-fast-local`. The model-family templates ship model policies already tuned for those families. `glm52-coding` targets Z.AI's first-party general API and never selects the restricted Coding Plan endpoint.
+Templates include `core`, `workbench`, `coding`, `benchmark-coding`,
+`no-tool`, `qwen-coding`, `glm-coding`, `glm52-coding`, `kimi-coding`,
+`kimi-k3-coding`, `minimax-coding`, `gemma4-coding`, `gemma4-no-tool`,
+`ds4-coding`, and `ds4-fast-local`. The model-family templates ship model
+policies already tuned for those families. `glm52-coding` targets Z.AI's
+first-party general API and never selects the restricted Coding Plan endpoint.
 
 See exactly what any harness will do, in plain English:
 

@@ -1,8 +1,41 @@
 # Tools Catalog
 
-Every builtin tool the agent can use, what it's for, and the guarantees behind it. Tools are plain Python classes in `superqode/tools/` with a name, description, JSON-Schema parameters, and an async `execute`. See [Plugin Authoring](plugin-authoring.md) to add your own.
+Every builtin tool the agent can use, its purpose, and its execution guarantees. Tools are Python classes in `superqode/tools/` with a name, description, JSON Schema parameters, and an async `execute` method. See [Plugin Authoring](plugin-authoring.md) to add a tool.
 
-Profiles select which tools a session gets: `coding` (the lean default), `full` (everything), `standard` (no network/agents), `ds4` (minimal schema surface for fast local calling), `none`. Pick one with `SUPERQODE_TOOL_PROFILE` or per-harness via `tools.profile`.
+SuperQode exposes two related profile namespaces.
+
+Tool registry profiles control the model-facing tool schema. Set one with
+`SUPERQODE_TOOL_PROFILE` or `model_policy.config.tool_profile` in a
+HarnessSpec:
+
+| Tool registry profile | Tool policy |
+| --- | --- |
+| `core` | Lean native surface with `read`, `write`, `edit`, and `bash` aliases. |
+| `coding` | Normal coding tool registry. This is the default interactive profile. |
+| `full` | Complete built-in tool registry, including network and agent tools. |
+| `standard` | Standard tools without network and agent delegation. |
+| `ds4` | Compact schema surface for latency-sensitive local models. |
+| `none` | Empty tool registry for model-only runs. |
+
+Aliases include `all` for `full`, `safe` for `standard`, `local-fast` for
+`ds4`, and `no-tool` or `model-only` for `none`.
+
+Headless harness profiles combine a tool selection with system-prompt and
+permission policy. Select one with `superqode --profile <name>`:
+
+| Headless harness profile | Tool policy |
+| --- | --- |
+| `core` | Lean native coding surface with `read`, `write`, `edit`, and `bash` model-facing aliases. |
+| `workbench` | Feature-rich native coding surface used by the Workbench harness. |
+| `no-tool` | No repository, shell, network, or agent tools. |
+| `build` | Complete built-in tool registry with write and execution permissions. |
+| `plan` | Read and search tools, diagnostics, and approval-gated shell access. Headless plan runs deny shell execution. |
+| `review` | Read, search, and diagnostics only. |
+
+Use `superqode tools list --profile <headless-profile>` to inspect the effective
+registry and permissions. Headless profile aliases map `minimal` to `core` and
+`coding` or `native` to `workbench`. HarnessSpec files can select a tool
+registry profile and then include or exclude individual tools.
 
 ## Files
 
@@ -42,7 +75,7 @@ Each call waits up to `yield_ms` (default 1500) and returns early once output se
 
 ## Search
 
-`grep` and `glob` spawn ripgrep directly with structured `--json` output, report truncation honestly, and fan out across every repo registered with `:workspace add`. `code_search` finds symbols (definitions/references); `repo_search` is the cross-repo entry point. All read-only, so multiple searches in one turn run concurrently.
+`grep` and `glob` spawn ripgrep directly with structured `--json` output, report truncation honestly, and fan out across every repo registered with `:workspace add`. `code_search` finds symbols (definitions/references); `repo_search` is the cross-repo entry point. `local_code_search` provides one offline broker for path, content, and symbol search across the active repository or all registered repositories. All are read-only, so multiple searches in one turn can run concurrently.
 
 `semantic_search` adds meaning-based lookup: it matches code by intent ("where is the conversation history compacted") rather than by exact text or symbol name. It is optional and appears only when the `cocoindex-code` integration is installed. See [Semantic Code Search](semantic-search.md).
 
@@ -58,9 +91,23 @@ Each call waits up to `yield_ms` (default 1500) and returns early once output se
 
 | Tool | Use |
 |---|---|
-| `sub_agent`, `task_coordinator` | Fire-and-forget delegation: spawn an isolated child for one task, get one result. |
+| `agent`, `coordinate` | Run one isolated sub-agent task or coordinate several independent tasks and collect their results. |
+| `agent_session` | Start, resume, message, wait for, approve, reject, list, and close persistent child sessions declared by a HarnessSpec. |
 | `spawn_agent`, `send_input`, `wait_agent`, `list_agents`, `close_agent` | **Peer agents**, long-lived addressable children. See [Multi-Agent](multi-agent.md). |
 | `a2a_call`, `a2a_discover` | Call external A2A agents. |
+
+## Recursive and dynamic workflows
+
+| Tool | Use |
+| --- | --- |
+| `context_handle` | Inspect large files, repository globs, working-tree diffs, and persisted run artifacts without inserting the complete artifact into the prompt. |
+| `spawn_harness` | Run a bounded recursive child harness and return a compact result with lineage. |
+| `dynamic_workflow` | Execute a runtime-defined list of child harness steps under bounded policy. |
+| `dynamic_workflow_script` | Compile a restricted Python-like workflow description containing literal `workflow(...)` and `step(...)` calls, then execute it through `dynamic_workflow`. |
+
+See [RLM Code Integration](rlm-code.md) and
+[Recursive Agent Harness](recursive-agent-harness.md) for execution limits,
+evidence storage, and supported backends.
 
 ## Meta
 

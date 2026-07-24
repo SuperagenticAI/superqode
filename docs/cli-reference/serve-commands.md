@@ -144,3 +144,18 @@ superqode serve web --host 0.0.0.0 --port 8080
 ```
 
 Uses `textual-serve` to expose the full SuperQode TUI over HTTP. Open the provided URL in a browser for a terminal-like experience without a local terminal emulator.
+
+---
+
+## serve status
+
+Inspect server integrations supplied by the optional SuperQode Enterprise
+package.
+
+```bash
+superqode serve status
+```
+
+The open-source package reports that this surface requires the Enterprise
+package. The open-source `serve acp`, `serve harness`, `serve api`, and
+`serve web` commands remain available as documented above.

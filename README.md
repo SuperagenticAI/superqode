@@ -100,7 +100,7 @@ sq work approve work_... --actor maintainer
 sq work merge work_... --actor maintainer --cleanup
 ```
 
-This is the durable execution layer inside your SuperQode code factory. Read the [complete Code Factory guide](https://superagentic.ai/superqode/advanced/software-factory/) for the product architecture and end-to-end builder workflow, or [How SuperQode Relates to Omnigent](https://superagentic.ai/superqode/advanced/superqode-vs-omnigent/) for shared ideas, different priorities, remote access, and interoperability.
+This is the durable execution layer inside your SuperQode code factory. Read the [complete Code Factory guide](https://superagenticai.github.io/superqode/advanced/software-factory/) for the product architecture and end-to-end builder workflow, or [How SuperQode Relates to Omnigent](https://superagenticai.github.io/superqode/advanced/superqode-vs-omnigent/) for shared ideas, different priorities, remote access, and interoperability.
 
 For controlled unattended work, `sq policy init` enables layered contextual policy, secret-filtered shells, strict network destinations, and named host-bound HTTP credentials. Use `sq harness bench` to publish a reproducible same-model harness comparison, then deliver an audited improvement through `sq harness promote stage`, `canary`, `activate`, and `rollback`.
 

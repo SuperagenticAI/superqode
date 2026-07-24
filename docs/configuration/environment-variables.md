@@ -34,6 +34,9 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_SHELL_ENV_POLICY` | `inherit`/`filter-secrets` | `inherit` | Strip secret-looking env vars (`*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, ...) from spawned shell commands. |
 | `SUPERQODE_SHELL_ENV_ALLOW` | names (`,`-sep) | unset | Exceptions kept when filtering secrets. |
 | `SUPERQODE_SANDBOX` | mode | off | OS sandbox for shell commands (macOS Seatbelt / Linux bwrap). |
+| `SUPERQODE_ORG_POLICY` | path | unset | Load the organization-level contextual policy applied before project and harness policy. |
+| `SUPERQODE_NET_STRICT` | `0`/`1` | off | Restrict network tools to the configured destination allowlist. |
+| `SUPERQODE_NET_ALLOW` | domains (`,`-sep) | unset | Add domains to the default network destination allowlist. |
 
 ## Providers & models
 
@@ -43,6 +46,9 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_MODEL` | model id | `<openai-fast-model>` | Default model for headless runs. |
 | `SUPERQODE_HARNESS` | path | unset | HarnessSpec YAML/JSON to load on start. |
 | `SUPERQODE_CONNECT` | profile name | unset | Auto-connect a connection profile when the TUI starts (set by `--connect`). |
+| `SUPERQODE_RUNTIME` | runtime id | `builtin` | Select the default runtime adapter when no CLI or project runtime is set. |
+| `SUPERQODE_COPILOT_TIMEOUT` | seconds | `600` | Maximum wait for one GitHub Copilot SDK prompt turn. |
+| `SUPERQODE_CODEX_PREFER_LOCAL_CLI` | `0`/`1` | on | Prefer a compatible installed Codex CLI app-server over the SDK-pinned server. |
 | `OLLAMA_HOST` etc. | URL | per-provider | Local server endpoints (see [Local Models](../providers/local.md)). |
 
 Provider API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, ...) follow each provider's standard names. See [BYOK Providers](../providers/byok.md).
@@ -56,6 +62,11 @@ Provider API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, ...)
 | `SUPERQODE_DISABLE_LOCAL_SHAPING` | `0`/`1` | off | Skip local-request shaping (num_ctx, keep-alive, tool-temperature clamps). |
 | `SUPERQODE_DISABLE_PROMPT_CACHE` | `0`/`1` | off | Disable prompt-cache annotations on outgoing requests. |
 | `SUPERQODE_DS4_THINKING` | mode | unset | Force the DS4 thinking mode instead of the per-model default. |
+| `SUPERQODE_DS4_TOOL_MODE` | `always`/`auto`/`never` | `always` | Control whether DS4 requests include tools. `never` also accepts off/false/0. |
+| `SUPERQODE_DS4_WARMUP` | `0`/`1` | on | Send a small best-effort DS4 warmup request after connecting. |
+| `SUPERQODE_LOCAL_WARMUP` | `0`/`1` | on | Send a small best-effort warmup request after connecting to a local model. |
+| `SUPERQODE_LOCAL_WARMUP_TIMEOUT` | seconds | `45` | Maximum wait for automatic local-model warmup. |
+| `SUPERQODE_LAGUNA_GGUF` | absolute path | unset | Pin the Laguna S 2.1 GGUF file instead of using automatic cache discovery. |
 | `SUPERQODE_MLX_INPROCESS` | `0`/`1` | on | Serve MLX models in-process; set `0` to require an external server. |
 | `SUPERQODE_UTILITY_PROVIDER` | `apple-fm` or `provider/model` | unset | Route utility calls (rubric grading, memory extraction) to a cheaper model; `apple-fm` uses the on-device Apple Foundation Model. Falls back to the session model. See [Local Stack Doctor](../advanced/local-stack.md). |
 
@@ -70,6 +81,21 @@ Provider API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, ...)
 
 Chat allowlists and defaults live in `~/.superqode/channels.yaml`. See [Chat Channels](../advanced/channels.md).
 
+## Observability
+
+| Variable | Values | Default | Effect |
+| --- | --- | --- | --- |
+| `SUPERQODE_OBS_OTEL_ENABLED` | `0`/`1` | off | Enable the OpenTelemetry harness-event sink. |
+| `SUPERQODE_OBS_MLFLOW_ENABLED` | `0`/`1` | off | Enable the MLflow artifact sink. |
+| `SUPERQODE_OBS_MLFLOW_EXPERIMENT` | name | `superqode-harness` | Select the MLflow experiment used for harness traces. |
+| `SUPERQODE_OBS_LANGSMITH_ENABLED` | `0`/`1` | off | Enable the LangSmith harness-event sink. |
+| `SUPERQODE_OBS_LOGFIRE_ENABLED` | `0`/`1` | off | Enable the Logfire harness-event sink. |
+| `SUPERQODE_OBS_ARIZE_ENABLED` | `0`/`1` | off | Enable the Arize Phoenix harness-event sink. |
+
+Exporter endpoints, project names, service names, and credentials use the
+exporter's standard environment variables or the HarnessSpec observability
+configuration. See [Harness System](../advanced/harness-system.md#observability-export).
+
 ## ACP connections
 
 | Variable | Values | Default | Effect |
@@ -83,6 +109,16 @@ Chat allowlists and defaults live in `~/.superqode/channels.yaml`. See [Chat Cha
 | `SUPERQODE_ACP_TRAFFIC_LOG_PATH` | path | under `SUPERQODE_HOME` | Where the ACP traffic log is written. |
 | `SUPERQODE_ACP_PRINT_LOGS` | `0`/`1` | off | Print agent process logs through the TUI (opencode agents). |
 | `SUPERQODE_FAST_AGENT_ACP_COMMAND` | command | built-in | Override the command used to launch the fast-agent ACP server. |
+| `SUPERQODE_ACP_SPEC` | path or `template:<name>` | discovered per session | Pin the HarnessSpec exposed by `superqode serve acp`. |
+| `SUPERQODE_ACP_PROVIDER` | provider id | HarnessSpec route | Override the provider used by the SuperQode ACP server. |
+| `SUPERQODE_ACP_MODEL` | model id | HarnessSpec route | Override the model used by the SuperQode ACP server. |
+
+## MCP harness server
+
+| Variable | Values | Default | Effect |
+| --- | --- | --- | --- |
+| `SUPERQODE_MCP_PROVIDER` | provider id | HarnessSpec route | Override the provider used by the harness MCP server. |
+| `SUPERQODE_MCP_MODEL` | model id | HarnessSpec route | Override the model used by the harness MCP server. |
 
 ## Core, sessions, and state
 
@@ -104,6 +140,7 @@ Chat allowlists and defaults live in `~/.superqode/channels.yaml`. See [Chat Cha
 | `SUPERQODE_QUIET` | `0`/`1` | off | Same as passing `--quiet`. |
 | `SUPERQODE_VERBOSE` | `0`/`1` | off | Same as passing `--verbose`. |
 | `SUPERQODE_VIM_MODE` | `0`/`1` | saved preference or off | Override the optional Vim-like modal navigation layer for the TUI. |
+| `SUPERQODE_NO_BROWSER` | `0`/`1` | off | Do not open the system browser automatically during subscription login. Print the login URL instead. |
 
 ## Notes
 

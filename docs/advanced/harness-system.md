@@ -408,6 +408,9 @@ runtimes.
 | `qwen-coding` | Qwen Coder pack: low temperature, native tools, long agentic sessions, sequential tools |
 | `glm-coding` | GLM pack: native tools, longer history budget, sequential tools |
 | `glm52-coding` | Z.AI GLM-5.2: native tools, 1M context, max reasoning, longer history |
+| `kimi-coding` | Current stable Kimi coding route with extended history and native tools |
+| `kimi-k3-coding` | Kimi K3 route pinned for reproducible evaluations |
+| `minimax-coding` | MiniMax long-context coding and reasoning policy |
 | `gemma4-coding` | minimal prompt, compact local tool surface, strict JSON tool-call hints, low temperature, sequential tools |
 | `gemma4-no-tool` | model-only prompt, no tools, low temperature, short history, reasoning disabled where supported |
 | `ds4-coding` | DS4 prompt path, compact tool surface, low temperature, low reasoning, sequential tools |

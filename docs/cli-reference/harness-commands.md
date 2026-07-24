@@ -132,7 +132,7 @@ superqode harness init team --template coding --minimal
 
 | Option | Description |
 | --- | --- |
-| `-t, --template` | `coding`, `no-tool`, `kimi-coding`, `kimi-k3-coding`, `qwen-coding`, `glm-coding`, `glm52-coding`, `gemma4-coding`, `gemma4-no-tool`, `ds4-coding`, `ds4-fast-local` (default `coding`) |
+| `-t, --template` | `core`, `workbench`, `coding`, `benchmark-coding`, `no-tool`, `kimi-coding`, `kimi-k3-coding`, `qwen-coding`, `glm-coding`, `glm52-coding`, `minimax-coding`, `gemma4-coding`, `gemma4-no-tool`, `ds4-coding`, `ds4-fast-local` (default `coding`) |
 | `-o, --output PATH` | Spec file to write (default `harness.yaml`) |
 | `--preset` | `single`, `plan-implement-review`, `fix-and-verify`, `parallel-review`, `security-review`, `release-check`, `router`, `evaluator-optimizer` |
 | `--minimal` | Write a small spec with `inherits: <template>` instead of a fully expanded template |
