@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.66] - 2026-07-30
+
+### Fixed
+
+- **The home screen buried its own footer.** A blank line only appears
+  between two rendered blocks when the preceding block's text ends with a
+  trailing newline, and one section ended with two, stacking three blank
+  lines between "Next step" and the `Ctrl+K` footer. Every section now ends
+  with exactly one, so spacing is consistent throughout and the whole screen
+  dropped from 34 lines to 27, with the footer visible without scrolling on
+  a normal terminal.
+- **"Terminal-first · Any agent or model" and "Interoperability: ..." had no
+  gap.** Every other tagline pairing had one; these were the only two lines
+  running directly into each other. Fixed to match.
+- **The status bar did not use the terminal's width.** Identity and
+  connection state sat at the left edge and the mode badge sat right next to
+  it, leaving the rest of a wide row empty. Session state (mode, plan,
+  context usage, cost) is now a second cluster right-aligned to the far edge,
+  so the row uses the full width instead of stopping partway across it.
+
 ## [0.2.65] - 2026-07-30
 
 ### Fixed
