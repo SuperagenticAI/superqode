@@ -182,9 +182,18 @@ class ColorfulStatusBar(Static):
         wide = width >= 110
         medium = width >= 72
         result = Text()
+        # Session state (mode, plan, usage) is collected separately and
+        # right-aligned to the far edge, so the important identity/connection
+        # info on the left doesn't leave the row looking half-empty on a wide
+        # terminal — the two clusters use the full width instead of hugging
+        # the left edge.
+        right = Text()
 
         def separator() -> None:
             result.append(" │ ", style="#3f3f46")
+
+        def right_separator() -> None:
+            right.append(" │ ", style="#3f3f46")
 
         # Compact branded identity. Version is retained at every width.
         super_colors = ["#a855f7", "#b366f9", "#c177fb", "#cf88fd", "#dd99ff"]
@@ -250,7 +259,7 @@ class ColorfulStatusBar(Static):
                 style="bold #a855f7",
             )
 
-        # Interaction mode is always visible.
+        # Interaction mode is always visible, on the right cluster.
         mode = (self.interaction_mode or "").strip().lower()
         if mode:
             mode_label = {"chat": "CHAT", "plan": "PLAN", "build": "BUILD"}.get(mode, mode.upper())
@@ -259,8 +268,7 @@ class ColorfulStatusBar(Static):
                 "plan": "#fbbf24",
                 "build": "#22c55e",
             }.get(mode, "#a855f7")
-            separator()
-            result.append(mode_label, style=f"bold {mode_color} reverse")
+            right.append(mode_label, style=f"bold {mode_color} reverse")
 
         # Keep the interaction mode and the optional input mode distinct.
         vim_state = (self.vim_state or "").strip().lower()
@@ -277,12 +285,13 @@ class ColorfulStatusBar(Static):
                 "command": "#fbbf24",
                 "search": "#ec4899",
             }.get(vim_state, "#a855f7")
-            separator()
+            if right.plain:
+                right_separator()
             if medium:
-                result.append("VIM ", style="#a1a1aa")
-                result.append(vim_label, style=f"bold {vim_color}")
+                right.append("VIM ", style="#a1a1aa")
+                right.append(vim_label, style=f"bold {vim_color}")
             else:
-                result.append(vim_label[:1], style=f"bold {vim_color} reverse")
+                right.append(vim_label[:1], style=f"bold {vim_color} reverse")
 
         # Usage remains visible whenever known. Figures compact on narrower
         # terminals, while connection/runtime/mode retain priority.
@@ -295,19 +304,21 @@ class ColorfulStatusBar(Static):
                 context_color = "#fbbf24"
             else:
                 context_color = "#ef4444"
-            separator()
-            result.append("ctx ", style="#a1a1aa")
-            result.append(f"{pct}%", style=context_color)
+            if right.plain:
+                right_separator()
+            right.append("ctx ", style="#a1a1aa")
+            right.append(f"{pct}%", style=context_color)
             if wide:
-                result.append(
+                right.append(
                     f" · {self._format_token_count(context_used)}/"
                     f"{self._format_token_count(self.context_window)}",
                     style="#a1a1aa",
                 )
         elif medium and self.byok_tokens > 0:
-            separator()
-            result.append(self._format_token_count(self.byok_tokens), style="#06b6d4")
-            result.append(" tok", style="#71717a")
+            if right.plain:
+                right_separator()
+            right.append(self._format_token_count(self.byok_tokens), style="#06b6d4")
+            right.append(" tok", style="#71717a")
 
         if self.plan_state:
             state = self.plan_state.strip()
@@ -317,15 +328,29 @@ class ColorfulStatusBar(Static):
                 "active": "#06b6d4",
                 "approved": "#22c55e",
             }.get(state, "#a855f7")
-            separator()
-            result.append("PLAN", style=f"bold {color}")
-            result.append(f" {state}", style=color)
+            if right.plain:
+                right_separator()
+            right.append("PLAN", style=f"bold {color}")
+            right.append(f" {state}", style=color)
 
         if self.byok_cost > 0 and medium:
-            separator()
+            if right.plain:
+                right_separator()
             cost = f"${self.byok_cost:.2f}" if self.byok_cost >= 0.01 else f"${self.byok_cost:.3f}"
-            result.append(cost, style="#fbbf24")
+            right.append(cost, style="#fbbf24")
 
+        if not right.plain:
+            return result
+
+        # Right-align the session-state cluster to the far edge when there is
+        # real room for it; otherwise keep it adjacent so nothing overflows a
+        # narrow terminal.
+        gap = width - len(result.plain) - len(right.plain)
+        if gap >= 4:
+            result.append(" " * gap, style="")
+        else:
+            result.append("  ", style="")
+        result.append(right)
         return result
 
     def render(self) -> Text:

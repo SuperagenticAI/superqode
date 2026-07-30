@@ -68,7 +68,6 @@ def render_welcome(
     items = []
 
     logo_text = Text()
-    logo_text.append("\n", style="")
     if narrow or (width is not None and width < logo_width):
         logo_text.append("SuperQode", style=f"bold {GRADIENT[3 % len(GRADIENT)]}")
         logo_text.append("\n", style="")
@@ -77,8 +76,6 @@ def render_welcome(
             color = GRADIENT[i % len(GRADIENT)]
             logo_text.append(f"{line}\n", style=f"bold {color}")
     items.append(place(logo_text))
-
-    items.append(Text("\n", style=""))
 
     desc_text = Text(justify=align)
     if width is None or width >= 48:
@@ -103,6 +100,8 @@ def render_welcome(
         )
         desc_text.append("\n", style="")
     desc_text.append("Terminal-first · Any agent or model\n", style=f"bold {THEME['purple']}")
+    if not narrow:
+        desc_text.append("\n", style="")
     interoperability = "Local · ACP · MCP · A2A · BYOK · SDKs"
     if narrow:
         desc_text.append(interoperability, style=THEME["muted"])
@@ -111,8 +110,6 @@ def render_welcome(
         desc_text.append(interoperability, style=THEME["muted"])
     desc_text.append("\n", style="")
     items.append(place(desc_text))
-
-    items.append(Text("\n", style=""))
 
     if not narrow:
         state_text = Text(justify="left")
@@ -132,10 +129,8 @@ def render_welcome(
                 THEME["text"] if value not in {"Not selected", "Not connected"} else THEME["muted"]
             )
             state_text.append(_truncate_middle(value, 46), style=value_color)
-            if index < len(state_rows) - 1:
-                state_text.append("\n")
+            state_text.append("\n")
         items.append(place(state_text))
-        items.append(Text("\n", style=""))
 
     next_text = Text(justify="left")
     next_text.append("Next step\n", style=f"bold {THEME['text']}")
@@ -146,10 +141,8 @@ def render_welcome(
         if not narrow:
             next_text.append("  ", style="")
             next_text.append(description, style=THEME["muted"])
-        if index < len(steps) - 1:
-            next_text.append("\n")
+        next_text.append("\n")
     items.append(place(next_text))
-    items.append(Text("\n\n", style=""))
 
     keys_text = Text(justify=align)
     keys_text.append("Ctrl+K", style=f"bold {THEME['cyan']}")

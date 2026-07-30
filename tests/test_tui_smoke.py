@@ -429,6 +429,62 @@ def test_welcome_uses_one_line_headlines_at_small_widths():
     assert "CODE FACTORY" not in narrow
 
 
+def test_welcome_screen_is_not_padded_with_stray_blank_lines():
+    """Every section is separated by exactly one blank line, never more.
+
+    The screen previously stacked two or three blank lines between sections
+    (most visibly between "Next step" and the keybind footer), pushing that
+    footer below where a user would see it without scrolling.
+    """
+    state = WelcomeState(repository="/work/repository")
+    text = render_plain(render_welcome([], width=100, state=state))
+    lines = text.splitlines()
+
+    blank_run = 0
+    max_blank_run = 0
+    for line in lines:
+        if line.strip() == "":
+            blank_run += 1
+            max_blank_run = max(max_blank_run, blank_run)
+        else:
+            blank_run = 0
+
+    assert max_blank_run <= 1, f"found {max_blank_run} consecutive blank lines"
+
+
+def test_welcome_screen_fits_in_a_short_terminal():
+    """The whole screen, including the footer, must fit without scrolling
+    on a terminal as short as a real user's — not just a tall test window."""
+    state = WelcomeState(repository="/work/repository")
+    text = render_plain(render_welcome([], width=100, state=state))
+    lines = [line for line in text.splitlines() if line.strip()]
+
+    assert len(lines) <= 24, f"welcome screen needs {len(lines)} non-blank lines"
+
+
+def test_welcome_separates_terminal_first_from_interoperability():
+    """These two lines previously had no gap, unlike every other pairing."""
+    text = render_plain(render_welcome([], width=100))
+    lines = text.splitlines()
+
+    terminal_first = next(i for i, line in enumerate(lines) if "Terminal-first" in line)
+    interoperability = next(i for i, line in enumerate(lines) if "Interoperability:" in line)
+
+    assert interoperability > terminal_first + 1, "expected a blank line between them"
+    assert lines[terminal_first + 1].strip() == ""
+
+
+def test_welcome_footer_is_close_to_the_next_step():
+    """The footer must not be buried behind a wall of blank lines."""
+    text = render_plain(render_welcome([], width=100))
+    lines = text.splitlines()
+
+    next_step = next(i for i, line in enumerate(lines) if line.strip() == "Next step")
+    footer = next(i for i, line in enumerate(lines) if "Ctrl+K" in line)
+
+    assert footer - next_step <= 3, f"footer is {footer - next_step} lines after Next step"
+
+
 def test_hints_bar_surfaces_mode_switcher():
     text = render_plain(HintsBar().render())
 
