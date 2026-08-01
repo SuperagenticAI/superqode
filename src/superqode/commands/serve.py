@@ -22,7 +22,7 @@ console = Console()
 @click.pass_context
 def serve(ctx: click.Context):
     """Server commands for IDE and web integration."""
-    if ctx.invoked_subcommand in {"api", "harness", "acp"}:
+    if ctx.invoked_subcommand in {"api", "harness", "acp", "a2a"}:
         return
     if not require_enterprise("Server integrations"):
         raise SystemExit(1)
@@ -143,6 +143,106 @@ def serve_acp(spec_path: Optional[Path], harness_dir: Optional[Path], provider: 
         )
     except KeyboardInterrupt:
         pass
+
+
+@serve.command("a2a")
+@click.option("--spec", "spec_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--provider", default="openai", envvar="SUPERQODE_PROVIDER", show_default=True)
+@click.option(
+    "--model", "model_name", default="gpt-5.4", envvar="SUPERQODE_MODEL", show_default=True
+)
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8000, show_default=True, type=int)
+@click.option(
+    "--public-url", default=None, help="Public A2A interface URL advertised in the Agent Card"
+)
+@click.option(
+    "--working-dir",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path("."),
+)
+@click.option(
+    "--harness-store",
+    "--store",
+    "store_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=Path(".superqode/a2a/store.sqlite3"),
+    show_default=True,
+    help="SQLite store for SuperQode sessions, runs, events, and evidence",
+)
+@click.option(
+    "--task-store",
+    "task_store_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=Path(".superqode/a2a/tasks.sqlite3"),
+    show_default=True,
+    help="SQLite store for A2A task lookup, listing, and restart recovery",
+)
+@click.option("--token", envvar="SUPERQODE_A2A_TOKEN", help="Bearer token for A2A operations")
+@click.option("--allow-remote", is_flag=True, help="Allow binding outside localhost")
+@click.option(
+    "--export-agent-card",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the runtime Agent Card to a JSON file and exit",
+)
+def serve_a2a(
+    spec_path: Optional[Path],
+    provider: str,
+    model_name: str,
+    host: str,
+    port: int,
+    public_url: Optional[str],
+    working_dir: Path,
+    store_path: Path,
+    task_store_path: Path,
+    token: Optional[str],
+    allow_remote: bool,
+    export_agent_card: Optional[Path],
+):
+    """Expose a HarnessSpec as an A2A 1.0 HTTP+JSON agent."""
+    import asyncio
+
+    from superqode.a2a import create_a2a_server
+
+    is_loopback = host in {"127.0.0.1", "localhost", "::1"}
+    if not is_loopback and not allow_remote:
+        raise click.ClickException("Use --allow-remote to bind outside localhost.")
+    if not is_loopback and not token:
+        raise click.ClickException("Remote A2A serving requires --token or SUPERQODE_A2A_TOKEN.")
+    advertised_url = public_url or f"http://{'127.0.0.1' if host == '0.0.0.0' else host}:{port}"
+    if not is_loopback and not public_url:
+        console.print(
+            "[yellow]No --public-url supplied; the Agent Card advertises a loopback URL.[/yellow]"
+        )
+
+    try:
+        server = asyncio.run(
+            create_a2a_server(
+                spec=spec_path,
+                server_url=advertised_url,
+                provider=provider,
+                model=model_name,
+                working_directory=working_dir.resolve(),
+                store_path=store_path,
+                task_store_path=task_store_path,
+                bearer_token=token,
+            )
+        )
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if export_agent_card is not None:
+        export_agent_card.parent.mkdir(parents=True, exist_ok=True)
+        export_agent_card.write_text(server.agent_card_json(), encoding="utf-8")
+        console.print(f"[green]Wrote Agent Card to {export_agent_card}[/green]")
+        return
+
+    console.print(f"[cyan]Serving SuperQode A2A 1.0 on http://{host}:{port}[/cyan]")
+    console.print("[dim]Agent Card: /.well-known/agent-card.json[/dim]")
+    try:
+        server.run(host=host, port=port)
+    except KeyboardInterrupt:
+        console.print("\n[dim]A2A server stopped.[/dim]")
 
 
 @serve.command("api")

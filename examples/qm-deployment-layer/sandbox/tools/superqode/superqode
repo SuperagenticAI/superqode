@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+if [ -n "${SUPERQODE_EXECUTABLE:-}" ]; then
+  exec "${SUPERQODE_EXECUTABLE}" "$@"
+fi
+
+cache_base="${XDG_CACHE_HOME:-${HOME}/.cache}/qm-superqode"
+venv_path="${cache_base}/venv"
+version="${SUPERQODE_VERSION:-0.2.67}"
+
+if [ ! -x "${venv_path}/bin/superqode" ]; then
+  mkdir -p "${cache_base}"
+  python3 -m venv "${venv_path}"
+  "${venv_path}/bin/pip" install --disable-pip-version-check --no-cache-dir "superqode==${version}"
+fi
+
+exec "${venv_path}/bin/superqode" "$@"

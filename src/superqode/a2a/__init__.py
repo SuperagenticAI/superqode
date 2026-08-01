@@ -14,8 +14,8 @@ Quick Start:
     # As A2A Server - expose SuperQode
     from superqode.a2a import create_a2a_server
 
-    server = await create_a2a_server(config)
-    await server.start()
+    server = await create_a2a_server(spec="harness.yaml")
+    server.run()
 
     # Workflow orchestration
     from superqode.a2a import A2AWorkflowEngine

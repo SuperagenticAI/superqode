@@ -115,7 +115,7 @@ A harness executes anywhere SuperQode runs:
 | TUI, at launch | `superqode --harness harness.yaml` or `SUPERQODE_HARNESS=...` | Make the contract the session default |
 | TUI, workflows | `:workflow run <task>` (after `:harness ...`) | Execute the spec's chain, parallel, router, orchestrator, or evaluator-optimizer topology; `:workflow presets` and `:workflow preview <task>` first |
 | MCP | `superqode mcp` | Any MCP client discovers `list_harnesses`, `describe_harness`, `run_harness` and runs your workflows |
-| A2A | `create_a2a_server()` Python API | Other agents call your harness over the Agent-to-Agent protocol |
+| A2A | `superqode serve a2a --spec harness.yaml` | Other agents call your harness over A2A 1.0 HTTP+JSON |
 | Python | `init_harness()`, `kernel.session()`, `run_workflow()` | Embed harness execution in your own application |
 
 The single-prompt paths (`harness run --single-step`, TUI chat) execute through the harness kernel. Non-single CLI runs, `:workflow run`, the MCP server, and the Python `run_workflow()` API execute the spec's chain, parallel, router, orchestrator, or evaluator-optimizer topology.

@@ -1,7 +1,7 @@
-"""
-A2A Protocol Types - Reimplemented from spec (no copying from reference).
+"""Stable, lightweight return types for SuperQode's public A2A client API.
 
-Agent2Agent (A2A) Protocol: https://a2a.ai
+Wire validation and server protocol models come from the official ``a2a-sdk``;
+these dataclasses keep the existing SuperQode client surface convenient.
 """
 
 from __future__ import annotations

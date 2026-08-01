@@ -1,0 +1,66 @@
+{
+  "name": "SuperQode",
+  "description": "Open-source harness engineering for coding agents",
+  "supportedInterfaces": [
+    {
+      "url": "https://super-agentic.ai/superqode/a2a",
+      "protocolBinding": "HTTP+JSON",
+      "protocolVersion": "1.0"
+    }
+  ],
+  "provider": {
+    "url": "https://super-agentic.ai",
+    "organization": "Superagentic AI"
+  },
+  "version": "0.2.67",
+  "documentationUrl": "https://github.com/SuperagenticAI/superqode",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false
+  },
+  "securitySchemes": {
+    "bearer": {
+      "httpAuthSecurityScheme": {
+        "description": "Bearer token configured by the SuperQode operator",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "securityRequirements": [
+    {
+      "schemes": {
+        "bearer": {}
+      }
+    }
+  ],
+  "defaultInputModes": [
+    "text/plain"
+  ],
+  "defaultOutputModes": [
+    "text/plain"
+  ],
+  "skills": [
+    {
+      "id": "superqode-harness",
+      "name": "SuperQode Core",
+      "description": "SuperQode's native minimal coding harness",
+      "tags": [
+        "coding",
+        "harness",
+        "evaluation",
+        "software-engineering"
+      ],
+      "examples": [
+        "Inspect this repository and implement the requested change.",
+        "Run this task through the configured SuperQode harness.",
+        "Evaluate two coding-agent configurations and compare their evidence."
+      ],
+      "inputModes": [
+        "text/plain"
+      ],
+      "outputModes": [
+        "text/plain"
+      ]
+    }
+  ]
+}

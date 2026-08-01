@@ -96,6 +96,7 @@ extras = [
     "exa-py>=1.0.0",
 ]
 a2a = [
+    "a2a-sdk[fastapi,sqlite]>=1.1.2,<2.0.0",
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",
 ]
@@ -252,6 +253,16 @@ superqode = [
 # mem0ai currently requires protobuf <7. Keep uv from selecting a combination
 # that installs successfully but cannot import the Antigravity SDK.
 conflicts = [
+    # a2a-sdk 1.x currently requires protobuf <7, while Antigravity's generated
+    # descriptors require protobuf 7.35+.
+    [
+        { extra = "a2a" },
+        { extra = "antigravity-sdk" },
+    ],
+    [
+        { extra = "a2a" },
+        { extra = "vendor-sdks" },
+    ],
     [
         { extra = "antigravity-sdk" },
         { extra = "mem0" },

@@ -507,6 +507,7 @@ COMMANDS = [
     ":serve harness",
     ":serve api",
     ":serve acp",
+    ":serve a2a",
     ":profiles",
     ":profiles list",
     ":doctor",

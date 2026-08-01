@@ -15,8 +15,9 @@ description: Configure ACP, MCP, A2A, semantic search, and execution tools.
 | Harness Protocol | **Included** | `superqode harness protocol list` | `superqode harness protocol conformance` | [Harness Protocol](../advanced/harness-protocol.md) |
 
 SuperQode can expose a harness as an MCP, ACP, or A2A service. See
-[Serve a Harness over ACP](../advanced/acp-agent-server.md) and the
-[MCP command](../cli-reference/mcp-command.md).
+[Serve a Harness over ACP](../advanced/acp-agent-server.md), the
+[MCP command](../cli-reference/mcp-command.md), and the
+[A2A server guide](../providers/a2a.md#expose-a-harness).
 
 ## CocoIndex Code semantic search
 
@@ -61,4 +62,3 @@ superqode plugins doctor
 
 See [MCP Configuration](../configuration/mcp-config.md) and
 [Plugin Authoring](../advanced/plugin-authoring.md).
-

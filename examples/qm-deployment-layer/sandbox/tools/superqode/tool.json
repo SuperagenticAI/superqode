@@ -1,0 +1,56 @@
+{
+  "id": "superqode",
+  "label": "SuperQode Harness",
+  "advertise": "superqode — run, inspect, and evaluate versioned coding-agent harnesses",
+  "hints": [
+    "Use SuperQode when the user asks to run, compare, validate, or evaluate a HarnessSpec.",
+    "Validate or inspect an unfamiliar HarnessSpec before executing it.",
+    "Use --json for machine-readable harness results and report the run_id and session_id.",
+    "Do not run superqode auth inside the QM computer; use deployment-managed secret environment variables.",
+    "Do not start SuperQode servers inside a task; use the deployment's separately managed A2A service boundary."
+  ],
+  "egress": [
+    "pypi.org",
+    "files.pythonhosted.org"
+  ],
+  "approvals": [
+    {
+      "command": "auth",
+      "decision": "deny",
+      "reason": "QM deployment credentials must not be replaced from inside the agent computer"
+    },
+    {
+      "command": "serve",
+      "decision": "deny",
+      "reason": "Long-lived services must be deployed and authenticated outside an individual QM task"
+    },
+    {
+      "command": "harness run",
+      "decision": "require_approval",
+      "reason": "A harness run can execute filesystem and shell tools under its HarnessSpec policy"
+    },
+    {
+      "command": "harness worker",
+      "decision": "require_approval",
+      "reason": "A worker can claim and execute multiple queued harness tasks"
+    },
+    {
+      "command": "harness drain",
+      "decision": "require_approval",
+      "reason": "Draining an inbox can execute multiple queued harness tasks"
+    },
+    {
+      "command": "work run",
+      "decision": "require_approval",
+      "reason": "A WorkOrder can execute a multi-step coding workflow"
+    },
+    {
+      "pattern": "\\bsuperqode\\b\\s+(?:-p|--print)\\b",
+      "decision": "require_approval",
+      "reason": "Headless agent execution can use filesystem and shell tools"
+    }
+  ],
+  "install": {
+    "binary": "superqode"
+  }
+}

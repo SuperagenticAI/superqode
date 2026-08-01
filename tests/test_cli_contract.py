@@ -10,7 +10,7 @@ import click
 from superqode.main import cli_main
 
 
-EXPECTED_COMMAND_COUNT = 262
+EXPECTED_COMMAND_COUNT = 263
 # Rebaselined for `superqode update` (261 -> 262: exactly one command added),
 # and again for the `copilot-cli` / `grok-cli` subscription runtimes, which
 # widen the --runtime choice list without adding a Click command. The same work
@@ -23,7 +23,9 @@ EXPECTED_COMMAND_COUNT = 262
 # root and the four `build-*` routes widen the choice list, and the help text
 # now names those rungs instead of the old five-option screen. No Click command
 # was added or removed, so the count is unchanged.
-EXPECTED_HELP_TREE_SHA256 = "363586628418e98acca96a418fe6ea4b3daf8afa5ca10fabf2b3349cdf01ac1f"
+# Rebaselined for `superqode serve a2a`, which adds one Click command and its
+# A2A 1.0, storage, authentication, and Agent Card export options.
+EXPECTED_HELP_TREE_SHA256 = "66a17c07a3756e3b15dbfd84bcc1b145a3ca5e6f62a3678d2c5a43084e2b5063"
 
 
 def _render_help_tree() -> tuple[int, str]:

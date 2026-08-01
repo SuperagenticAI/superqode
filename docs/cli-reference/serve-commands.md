@@ -1,6 +1,6 @@
 # Serve Commands
 
-Expose SuperQode to other tools: an ACP agent for editors and benchmarks, an MCP server for your harnesses, and a browser-based TUI. A2A serving is available through the Python API.
+Expose SuperQode to other tools: an ACP agent for editors and benchmarks, MCP and A2A servers for harnesses, and a browser-based TUI.
 
 ---
 
@@ -13,7 +13,7 @@ Expose SuperQode to other tools: an ACP agent for editors and benchmarks, an MCP
 | Harness MCP alias | `superqode serve harness --spec harness.yaml` | Same MCP server, shaped around one harness file or directory. |
 | Local Session API | `superqode serve api` | Browser/mobile companions and local tools that inspect or drive the switchboard and Software Factory graph. |
 | Web TUI | `superqode serve web` | A browser, for the full TUI without a terminal emulator. |
-| A2A | `create_a2a_server()` (Python API) | Other agents and orchestrators over the Agent-to-Agent protocol. See [A2A Providers](../providers/a2a.md). |
+| A2A | `superqode serve a2a --spec harness.yaml` | Other agents and orchestrators over A2A 1.0 HTTP+JSON. See [A2A Providers](../providers/a2a.md). |
 
 ---
 
