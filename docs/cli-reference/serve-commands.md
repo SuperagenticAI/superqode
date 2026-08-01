@@ -15,6 +15,11 @@ Expose SuperQode to other tools: an ACP agent for editors and benchmarks, MCP an
 | Web TUI | `superqode serve web` | A browser, for the full TUI without a terminal emulator. |
 | A2A | `superqode serve a2a --spec harness.yaml` | Other agents and orchestrators over A2A 1.0 HTTP+JSON. See [A2A Providers](../providers/a2a.md). |
 
+A2A is the primary cross-service surface. The public Agent Card at
+`https://super-agentic.ai/.well-known/agent-card.json` is a **preview**; the
+hosted operations path is in maintenance until reverse-proxied. Local serving
+works today.
+
 ---
 
 ## mcp
@@ -147,6 +152,40 @@ Uses `textual-serve` to expose the full SuperQode TUI over HTTP. Open the provid
 
 ---
 
+## serve a2a
+
+Expose a HarnessSpec as an A2A 1.0 HTTP+JSON agent:
+
+```bash
+superqode serve a2a --spec harness.yaml
+superqode serve a2a \
+  --spec harness.yaml \
+  --host 0.0.0.0 \
+  --allow-remote \
+  --public-url https://superqode.example.com \
+  --token "$SUPERQODE_A2A_TOKEN"
+superqode serve a2a \
+  --public-url https://super-agentic.ai/superqode/a2a \
+  --token preview-only-value \
+  --export-agent-card examples/a2a/agent-card.json
+```
+
+| Option | Description |
+|--------|-------------|
+| `--spec` | HarnessSpec file to serve |
+| `--provider` / `--model` | Session defaults (env: `SUPERQODE_PROVIDER`, `SUPERQODE_MODEL`) |
+| `--host` / `--port` | Bind address (default `127.0.0.1:8000`) |
+| `--public-url` | Interface URL advertised in the Agent Card |
+| `--harness-store` / `--store` | SQLite harness sessions, runs, evidence |
+| `--task-store` | SQLite A2A task records (survives restart) |
+| `--token` | Bearer token (env: `SUPERQODE_A2A_TOKEN`; required for remote bind) |
+| `--allow-remote` | Allow binding outside localhost |
+| `--export-agent-card` | Write the runtime Agent Card JSON and exit |
+
+See [A2A Protocol](../providers/a2a.md) for durability, publishing, and the experimental multiplayer-computer packaging notes.
+
+---
+
 ## serve status
 
 Inspect server integrations supplied by the optional SuperQode Enterprise
@@ -157,5 +196,5 @@ superqode serve status
 ```
 
 The open-source package reports that this surface requires the Enterprise
-package. The open-source `serve acp`, `serve harness`, `serve api`, and
+package. The open-source `serve acp`, `serve a2a`, `serve harness`, `serve api`, and
 `serve web` commands remain available as documented above.

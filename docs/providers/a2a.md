@@ -1,6 +1,17 @@
 # A2A Protocol
 
-SuperQode can expose a versioned HarnessSpec as an [A2A 1.0](https://github.com/a2aproject/A2A/blob/main/docs/specification.md) agent and can call other A2A HTTP+JSON agents. The official [`a2a-sdk`](https://github.com/a2aproject/a2a-python) implements discovery, version negotiation, task lifecycle, streaming, subscription, and cancellation; SuperQode maps those tasks to its Harness Protocol and durable run ledger.
+SuperQode can **serve** a versioned HarnessSpec as an [A2A 1.0](https://github.com/a2aproject/A2A/blob/main/docs/specification.md) agent and **call** other A2A HTTP+JSON agents. The official [`a2a-sdk`](https://github.com/a2aproject/a2a-python) implements discovery, version negotiation, task lifecycle, streaming, subscription, and cancellation. SuperQode maps those tasks onto its Harness Protocol and durable run ledger.
+
+A2A is the primary cross-service integration surface for SuperQode: other agents, orchestrators, and multiplayer computers discover a SuperQode agent card and submit tasks without sharing SuperQode internals.
+
+## Public preview status
+
+| Surface | URL | Status |
+| --- | --- | --- |
+| Agent Card (discovery) | `https://super-agentic.ai/.well-known/agent-card.json` | **Published** (static preview) |
+| A2A operations | `https://super-agentic.ai/superqode/a2a/*` | **Maintenance** until the Python A2A server is reverse-proxied |
+
+Treat the public card as discovery and intent, not a guarantee that remote clients can run tasks yet. Local `superqode serve a2a` is fully usable today.
 
 ## Install
 
@@ -43,7 +54,16 @@ superqode serve a2a \
 
 `--allow-remote` is required outside loopback, and remote serving also requires a bearer token. Terminate TLS at a trusted proxy and keep the HarnessSpec execution policy restrictive: A2A authentication controls who may submit work, while the HarnessSpec controls what accepted work may do.
 
-The bridge uses two durable stores with separate schemas. The SuperQode harness store persists sessions, runs, canonical events, and evidence. The official SDK's SQLite task store persists A2A task lookup, listing, and terminal task state across server restarts. The legacy `--store` spelling remains an alias for `--harness-store`. A process crash does not resume an A2A request that was actively executing; production operators should reconcile tasks left in `TASK_STATE_WORKING` against the durable SuperQode run ledger.
+### Durability
+
+The bridge uses two durable stores with separate schemas:
+
+| Store | Flag | Contents |
+| --- | --- | --- |
+| Harness store | `--harness-store` (alias: `--store`) | SuperQode sessions, runs, canonical events, evidence |
+| A2A task store | `--task-store` | Official SDK SQLite task lookup, listing, and terminal state |
+
+Completed A2A task records survive process restart. An actively executing request is **not** auto-resumed after a crash; operators should reconcile tasks left in `TASK_STATE_WORKING` against the SuperQode run ledger.
 
 ## Publish the runtime Agent Card
 
@@ -51,13 +71,18 @@ Generate the static discovery document from the same model used by the server:
 
 ```bash
 superqode serve a2a \
-  --spec harness.yaml \
   --public-url https://super-agentic.ai/superqode/a2a \
   --token preview-only-value \
-  --export-agent-card agent-card.json
+  --export-agent-card examples/a2a/agent-card.json
 ```
 
-The token value is not written to the document; supplying one declares Bearer authentication. Publish the generated file at `/.well-known/agent-card.json`. The checked-in [publication example](../../examples/a2a/agent-card.json) is generated this way and protected against runtime drift by tests.
+Notes:
+
+- The token value is **not** written into the card; supplying one only declares Bearer authentication.
+- Publish the file at `/.well-known/agent-card.json`.
+- The checked-in [publication artifact](../../examples/a2a/agent-card.json) matches the runtime export and the public preview card.
+- Skill text on the card is product-facing (`SuperQode Harness`); the bound `--spec` still decides what the server actually runs.
+- Regenerate and republish when SuperQode version, public URL, capabilities, or auth policy change.
 
 ## Python server API
 
@@ -74,7 +99,7 @@ server = await create_a2a_server(
 server.run(host="0.0.0.0", port=8000)
 ```
 
-Advanced applications can pass a configured `HarnessProtocolController` instead of a spec. This is the clean embedding boundary for custom adapters and durable stores.
+Advanced applications can pass a configured `HarnessProtocolController` instead of a spec. That is the clean embedding boundary for custom adapters and durable stores.
 
 ## Call another A2A agent
 
@@ -86,24 +111,30 @@ async with A2AClient("https://agent.example.com", bearer_token="...") as client:
     task = await client.send_message("Review the current change")
 ```
 
-The TUI also provides `:a2a connect`, `:a2a discover`, `:a2a call`, and workflow commands. Client discovery uses the well-known Agent Card and routes every operation to the selected A2A 1.0 HTTP+JSON URL in `supportedInterfaces`, including path-prefixed deployments.
+The TUI also provides `:a2a connect`, `:a2a discover`, `:a2a call`, and workflow commands. Client discovery uses the well-known Agent Card and routes every operation to the selected A2A 1.0 HTTP+JSON URL in `supportedInterfaces`, including path-prefixed deployments such as `/superqode/a2a`.
 
-## QM collaboration pattern
-
-[YC's QM](https://github.com/yc-software/qm) and SuperQode overlap at the product level but have different technical centers: QM provides an organization-shared, durable TypeScript agent computer; SuperQode provides a Python HarnessSpec, execution kernel, evaluation, optimization, and evidence ledger. That makes A2A a useful collaboration boundary rather than a reason to merge internals.
-
-There are two complementary modes:
-
-1. **Inside the computer:** install the [QM deployment-layer example](https://github.com/SuperagenticAI/superqode/tree/main/examples/qm-deployment-layer). QM invokes `superqode harness run` in the same durable workspace under both QM command policy and the SuperQode execution policy.
-2. **Across services:** run `superqode serve a2a`; when QM exposes an A2A Agent Card, exchange A2A tasks and artifacts. Keep the direct Harness API as a private fallback for capabilities A2A does not yet represent.
-
-A practical interop demo should test Agent Card discovery, Python-to-TypeScript and TypeScript-to-Python task exchange, context continuity, artifact transfer, cancellation, approval-required states, authentication, and restart behavior. Publish those results as a compatibility matrix instead of claiming the systems are identical.
+An independent Node TypeScript client lives at [examples/qm-deployment-layer/interop/a2a-client.mts](../../examples/qm-deployment-layer/interop/a2a-client.mts) and is exercised by the test suite against a local server.
 
 ## Protocol boundaries
 
-- A2A is for agent discovery and task exchange across a network boundary.
-- MCP is for exposing harness operations as tools to an existing agent.
-- ACP is for editor/terminal clients that drive SuperQode as the coding agent.
-- Harness Protocol is SuperQode's internal, runtime-neutral session and event contract.
+| Protocol | Role |
+| --- | --- |
+| **A2A** | Agent discovery and task exchange across a network boundary |
+| **MCP** | Expose harness operations as tools to an existing agent |
+| **ACP** | Editor/terminal clients that drive SuperQode as the coding agent |
+| **Harness Protocol** | SuperQode's internal, runtime-neutral session and event contract |
+
+## Experimental: multiplayer computers (QM)
+
+**Status: experimental.** Not a production SuperQode feature surface.
+
+[YC's QM](https://github.com/yc-software/qm) is an open-source multiplayer agent harness (Slack + web, org scopes, durable computers). SuperQode's center is different: versioned HarnessSpec, execution kernel, evaluation, optimization, and evidence ledger. The systems are complementary rather than competitive.
+
+We keep a thin experimental deployment example while watching the QM ecosystem:
+
+1. **A2A (preferred long-term boundary):** run `superqode serve a2a`; when a multiplayer computer exposes an A2A Agent Card, exchange tasks and artifacts without sharing Python or TypeScript internals.
+2. **In-computer CLI (experimental packaging):** the [QM deployment-layer example](https://github.com/SuperagenticAI/superqode/tree/main/examples/qm-deployment-layer) shows how a QM sandbox tool/skill can invoke `superqode harness run` under both QM command policy and SuperQode execution policy.
+
+Do not treat the QM example as a supported product integration. Prefer A2A for cross-service collaboration. A practical interop matrix should cover discovery, path-prefixed interface URLs, context continuity, artifacts, cancellation, approvals, authentication, and restart recovery.
 
 See also [ACP Agents](acp.md), [MCP Tools](../configuration/mcp-config.md), and [Harness Protocol](../advanced/harness-protocol.md).

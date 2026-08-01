@@ -21,7 +21,7 @@
   "securitySchemes": {
     "bearer": {
       "httpAuthSecurityScheme": {
-        "description": "Bearer token configured by the SuperQode operator",
+        "description": "Bearer token issued by the SuperQode operator",
         "scheme": "bearer"
       }
     }
@@ -42,8 +42,8 @@
   "skills": [
     {
       "id": "superqode-harness",
-      "name": "SuperQode Core",
-      "description": "SuperQode's native minimal coding harness",
+      "name": "SuperQode Harness",
+      "description": "Run versioned coding-agent harnesses with controlled execution, evaluation, and evidence",
       "tags": [
         "coding",
         "harness",

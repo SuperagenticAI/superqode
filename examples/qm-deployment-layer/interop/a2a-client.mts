@@ -15,7 +15,7 @@ interface A2ATask {
   artifacts?: Array<{ parts?: Array<{ text?: string }> }>;
 }
 
-const [discoveryUrl, bearerToken, message = "QM TypeScript interoperability check"] =
+const [discoveryUrl, bearerToken, message = "TypeScript A2A interoperability check"] =
   process.argv.slice(2);
 
 if (!discoveryUrl || !bearerToken) {

@@ -37,6 +37,11 @@ class A2AServerConfig(BaseModel):
     version: str = Field(default_factory=_package_version)
     url: str = "http://127.0.0.1:8000"
     documentation_url: str = "https://github.com/SuperagenticAI/superqode"
+    skill_id: str = "superqode-harness"
+    skill_name: str = "SuperQode Harness"
+    skill_description: str = (
+        "Run versioned coding-agent harnesses with controlled execution, evaluation, and evidence"
+    )
     provider: str = "openai"
     model: str = "gpt-5.4"
     working_directory: Path = Field(default_factory=Path.cwd)
@@ -355,11 +360,14 @@ async def create_a2a_server(
 def _agent_card(
     controller: HarnessProtocolController, config: A2AServerConfig, sdk: dict[str, Any]
 ) -> Any:
-    descriptor = controller.descriptors()[0]
+    # Discovery skill text is product-facing and stable across harness templates.
+    # The bound HarnessSpec still controls execution policy and runtime behavior.
+    if not controller.descriptors():
+        raise ValueError("A2A serving requires at least one Harness Protocol adapter")
     skill = sdk["AgentSkill"](
-        id="superqode-harness",
-        name=descriptor.name,
-        description=descriptor.description or config.description,
+        id=config.skill_id,
+        name=config.skill_name,
+        description=config.skill_description,
         tags=["coding", "harness", "evaluation", "software-engineering"],
         examples=[
             "Inspect this repository and implement the requested change.",
@@ -374,7 +382,7 @@ def _agent_card(
         kwargs["security_schemes"] = {
             "bearer": sdk["SecurityScheme"](
                 http_auth_security_scheme=sdk["HTTPAuthSecurityScheme"](
-                    description="Bearer token configured by the SuperQode operator",
+                    description="Bearer token issued by the SuperQode operator",
                     scheme="bearer",
                 )
             )

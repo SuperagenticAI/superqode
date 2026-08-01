@@ -353,6 +353,18 @@ def test_independent_node_typescript_client_interoperates(tmp_path: Path):
     if node is None:
         pytest.skip("Node is not installed")
 
+    version = subprocess.run(
+        [node, "--version"], check=False, capture_output=True, text=True
+    )
+    major = 0
+    if version.returncode == 0 and version.stdout.startswith("v"):
+        try:
+            major = int(version.stdout[1:].split(".", 1)[0])
+        except ValueError:
+            major = 0
+    if major < 22:
+        pytest.skip("Node 22+ is required for --experimental-strip-types")
+
     import uvicorn
 
     with socket.socket() as listener:
