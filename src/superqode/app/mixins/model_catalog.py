@@ -190,6 +190,101 @@ class ModelCatalogMixin:
             exclusive=True,
         )
 
+    #: What the launch refreshes managed to do, for the one status line below.
+    _catalog_status: dict = {}
+
+    def _report_catalog_freshness(self, log=None) -> None:
+        """Say what the background refresh found, once, under the welcome.
+
+        Deliberately not a progress bar or a splash. None of this data is
+        needed to start working, so implying the user should wait for it would
+        be worse than the blank screen it replaces. It reports, then stops.
+        """
+        try:
+            from superqode.app.widgets import ConversationLog
+
+            if log is None:
+                if not getattr(self, "_welcome_active", False):
+                    return
+                log = self.query_one("#log", ConversationLog)
+
+            parts = []
+            providers = self._catalog_freshness_providers()
+            if providers:
+                parts.append(f"{providers} providers")
+            agents = self._catalog_status.get("agents")
+            if agents:
+                parts.append(f"{agents} ACP agents")
+            if not parts:
+                return
+
+            age = self._catalog_cache_age()
+            log.add_meta(f"Catalogue: {' · '.join(parts)} · {age}", icon="·")
+        except Exception:  # noqa: BLE001 - a status line is never load-bearing
+            pass
+
+    @staticmethod
+    def _catalog_freshness_providers() -> int:
+        try:
+            from superqode.providers.dynamic import connect_provider_ids
+
+            return len(list(connect_provider_ids()))
+        except Exception:  # noqa: BLE001 - the count is decoration
+            return 0
+
+    @staticmethod
+    def _catalog_cache_age() -> str:
+        """Describe how current the catalogue is, including when offline."""
+        from datetime import UTC, datetime
+        from pathlib import Path
+
+        newest = 0.0
+        for name in ("models_cache.json", "acp_registry_cache.json"):
+            path = Path.home() / ".superqode" / name
+            try:
+                newest = max(newest, path.stat().st_mtime)
+            except OSError:
+                continue
+        if not newest:
+            return "using bundled lists"
+
+        age = (datetime.now(UTC).timestamp() - newest) / 60
+        if age < 5:
+            return "updated just now"
+        if age < 60:
+            return f"updated {int(age)}m ago"
+        if age < 60 * 48:
+            return f"cached, {int(age // 60)}h old"
+        return f"cached, {int(age // (60 * 24))}d old"
+
+    def _start_acp_registry_refresh(self) -> None:
+        """Refresh the ACP agent registry without blocking the TUI.
+
+        models.dev already refreshed itself on a launch timer; the agent
+        registry never did, so a cache could sit untouched for months and new
+        agents simply never appeared. Same shape, same guarantees.
+        """
+        self.run_worker(
+            self._load_acp_registry_data,
+            name="acp-registry-refresh",
+            group="acp-registry",
+            exit_on_error=False,
+            exclusive=True,
+        )
+
+    async def _load_acp_registry_data(self):
+        """Pull the current ACP registry, leaving the cache alone on failure."""
+        try:
+            from superqode.providers.acp_registry import get_acp_registry_agents
+
+            agents = await get_acp_registry_agents(force_refresh=True)
+            self._catalog_status["agents"] = len(agents)
+        except Exception:
+            # Offline or transient. The cached registry stands, and the status
+            # line says so rather than reporting a failure the user cannot act
+            # on.
+            self._catalog_status.setdefault("agents", None)
+
     def _apply_live_models(self, client) -> bool:
         """Push the client's current provider/model data into the live registry."""
         from superqode.providers.models import set_live_models

@@ -28,13 +28,25 @@ def check_agent_installed(agent: "Agent") -> bool:
     if not run_command:
         return False
 
-    # Extract the command name (first part before any spaces or arguments)
-    cmd_name = run_command.split()[0]
+    parts = run_command.split()
+    cmd_name = parts[0]
 
-    # Registry launchers may download a package on demand. Having npx or uvx
-    # installed does not mean the agent itself is installed and authenticated.
+    # Registry launchers may download a package on demand, so having npx or
+    # uvx says nothing on its own. But the agent itself is often installed
+    # anyway, and only looking at the launcher token reported it missing:
+    # fast-agent ships `fast-agent` on PATH while launching via `uvx`. Check
+    # the names the agent actually installs before giving up.
     if cmd_name in {"npx", "uvx"}:
-        return False
+        candidates = [
+            part
+            for part in parts[1:]
+            # Skip uvx/npx's own flags and their values, e.g. `--from pkg@latest`.
+            if not part.startswith("-") and "@" not in part and "/" not in part
+        ]
+        short_name = str(agent.get("short_name") or "").strip()
+        if short_name:
+            candidates.append(short_name)
+        return any(shutil.which(name) is not None for name in candidates if name)
 
     # Check if command exists in PATH
     return shutil.which(cmd_name) is not None

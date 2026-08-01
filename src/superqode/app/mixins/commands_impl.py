@@ -664,6 +664,10 @@ class CommandImplMixin:
             from superqode.skills import load_skills
 
             skills = sorted(load_skills(Path.cwd()).values(), key=lambda item: item.name.lower())
+            if skills:
+                # This repository already has skills, so suggesting them later
+                # would be telling the user something they clearly know.
+                self._record_milestone("used_skill")
             t = Text()
             t.append("\n  ✦ ", style=f"bold {THEME['purple']}")
             t.append("Skills\n\n", style=f"bold {THEME['text']}")
@@ -672,10 +676,19 @@ class CommandImplMixin:
             t.append("  Loaded      ", style=THEME["muted"])
             t.append(f"{len(skills)}\n\n", style=f"bold {THEME['cyan']}")
             if not skills:
-                t.append("  No local skills found.\n", style=THEME["muted"])
-                t.append("  Create one with ", style=THEME["muted"])
-                t.append(":skills add repo-review", style=THEME["cyan"])
-                t.append(" or import an existing SKILL.md.\n", style=THEME["muted"])
+                # Say what a skill is for. "No skills found" tells someone the
+                # directory is empty, not why they would ever fill it.
+                t.append("  No skills here yet.\n\n", style=THEME["muted"])
+                t.append(
+                    "  A skill is an instruction you stop retyping. Write the way you\n"
+                    "  want reviews done, or releases cut, once; the agent then follows\n"
+                    "  it in every session, under any harness.\n\n",
+                    style=THEME["dim"],
+                )
+                t.append("  Create   ", style=THEME["dim"])
+                t.append(":skills add repo-review\n", style=THEME["cyan"])
+                t.append("  Import   ", style=THEME["dim"])
+                t.append(":skills import ./SKILL.md\n", style=THEME["cyan"])
             for index, skill in enumerate(skills, 1):
                 t.append(f"  [{index}] ", style=THEME["dim"])
                 t.append(skill.name, style=f"bold {THEME['cyan']}")
@@ -891,7 +904,7 @@ class CommandImplMixin:
         command_parts: list[str],
         log: ConversationLog,
         label: str,
-    ) -> None:
+    ) -> bool:
         """Run a SuperQode CLI command from the TUI without blocking input."""
         import sys
 
@@ -917,17 +930,19 @@ class CommandImplMixin:
             completed = await asyncio.to_thread(_run)
         except Exception as exc:
             log.add_error(f"{label} failed to start: {exc}")
-            return
+            return False
 
         output = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
         if completed.returncode == 0:
             log.add_success(f"{label} completed.")
             if output:
                 log.write(Text(output + "\n", style=THEME["text"], overflow="fold"))
+            return True
         else:
             log.add_error(f"{label} failed with exit code {completed.returncode}.")
             if output:
                 log.write(Text(output + "\n", style=THEME["error"], overflow="fold"))
+            return False
 
     def _skills_doctor(self, skills_root: Path, log: ConversationLog) -> None:
         """Validate local skill files and show actionable issues."""
@@ -3761,6 +3776,7 @@ class CommandImplMixin:
         self._refresh_harness_panel()
 
         primary = str(entry.spec.model_policy.primary or "")
+        needs_model = False
         if "/" in primary and auto_connect:
             provider_id, model_id = primary.split("/", 1)
             from superqode.providers.dynamic import resolve_provider_def
@@ -3814,13 +3830,16 @@ class CommandImplMixin:
                     )
         elif pure.session.connected:
             pure.disconnect()
-            log.add_info("Reconnect with :connect byok or :connect local to use this harness.")
+            needs_model = True
         else:
-            log.add_info("Connect with :connect byok or :connect local to use this harness.")
+            needs_model = True
 
         active_session_id = pure.get_current_session_id() or previous_session_id
         display_name = _harness_display_name(entry.id)
         if sub == "switch":
+            # Two switches mean the user has something to compare, which is the
+            # precondition for evaluation being a meaningful suggestion.
+            self._record_harness_switch_milestone()
             if fork_session and source_session_id and active_session_id:
                 self._announce_transition(
                     title="Harness switched",
@@ -3854,6 +3873,114 @@ class CommandImplMixin:
                 severity="success",
                 log=log,
                 dedupe_key=f"harness:{entry.id}:{active_session_id or 'pending'}",
+            )
+
+        if sub == "switch":
+            self._write_harness_detail_card(entry, log)
+
+        # Only for an interactive switch. The picker routes through `switch`,
+        # so this is the flow where the user just chose a harness and the model
+        # is the one thing left. Other subcommands (the wizard especially) end
+        # on a summary of what they wrote, and opening a picker would clear it.
+        if needs_model and sub == "switch":
+            self._prompt_model_for_harness(display_name, log, tool_count=len(entry.tools))
+
+    def _write_harness_detail_card(self, entry, log) -> None:
+        """Say what the harness actually does before asking for its model.
+
+        A name and a tool count do not tell anyone whether this harness can run
+        shell commands, what it is sandboxed to, or whether any MCP server is
+        attached. Those are the differences between the presets, so they belong
+        on the screen where the harness is chosen.
+        """
+        try:
+            spec = entry.spec
+            tools = list(entry.tools or ())
+            policy = spec.execution_policy
+
+            t = Text()
+            t.append("\n    ", style="")
+            t.append(f"{_harness_display_name(entry.id)}\n", style=f"bold {THEME['text']}")
+
+            rows: list[tuple[str, str, str]] = [
+                ("Runtime", f"{entry.runtime} · {spec.flavor.value}", THEME["text"]),
+            ]
+            if tools:
+                shown = ", ".join(tools[:6])
+                more = f" +{len(tools) - 6} more" if len(tools) > 6 else ""
+                rows.append(("Tools", f"{len(tools)}: {shown}{more}", THEME["text"]))
+            else:
+                rows.append(
+                    ("Tools", "none, so it can discuss code but not change it", THEME["warning"])
+                )
+
+            permissions = [
+                name
+                for name, allowed in (
+                    ("read", getattr(policy, "allow_read", None)),
+                    ("write", getattr(policy, "allow_write", None)),
+                    ("shell", getattr(policy, "allow_shell", None)),
+                    ("network", getattr(policy, "allow_network", None)),
+                )
+                if allowed
+            ]
+            rows.append(
+                (
+                    "Can",
+                    ", ".join(permissions) if permissions else "nothing outside the conversation",
+                    THEME["text"],
+                )
+            )
+            rows.append(("Sandbox", str(getattr(policy, "sandbox", "") or "local"), THEME["text"]))
+
+            memory = getattr(spec.context, "memory", None)
+            if memory:
+                rows.append(("Memory", str(memory), THEME["text"]))
+
+            try:
+                from superqode.mcp.integration import list_mcp_servers
+
+                servers = list_mcp_servers()
+            except Exception:  # noqa: BLE001 - MCP is optional
+                servers = []
+            if servers:
+                names = ", ".join(str(s.get("name", "")) for s in servers[:4] if s.get("name"))
+                rows.append(("MCP", f"{len(servers)} attached: {names}", THEME["text"]))
+            else:
+                rows.append(("MCP", "none attached, add one with :mcp", THEME["muted"]))
+
+            width = max(len(name) for name, _value, _style in rows)
+            for name, value, style in rows:
+                t.append(f"      {name:<{width}}  ", style=THEME["dim"])
+                t.append(f"{value}\n", style=style)
+            log.write(t)
+        except Exception:  # noqa: BLE001 - a description must never break a switch
+            pass
+
+    def _prompt_model_for_harness(self, display_name: str, log, *, tool_count: int = -1) -> None:
+        """Ask the one question left after a harness is chosen: which model.
+
+        Sending the user back to ``:connect`` reopened the ownership question
+        they had just answered by choosing a harness, so the flow looped. The
+        harness is already active here; only the model route is missing, so go
+        straight to that screen.
+        """
+        from superqode.providers.connection_profiles import CONNECT_MENU_MODELS
+
+        note = f"{display_name} is active. Choose the model it should run on."
+        if tool_count == 0:
+            # A harness with no tools cannot read or edit files. That is a
+            # legitimate choice for review and reasoning, and a surprise for
+            # anyone who picked it expecting to build something.
+            note += " This harness has no tools: it can discuss code, not change it."
+        self._connect_context_note = note
+        try:
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_MODELS, preserve_log=True)
+        except Exception:  # noqa: BLE001 - fall back to naming the command
+            self._connect_context_note = ""
+            log.add_info(
+                f"{display_name} is active. Choose its model with :connect models "
+                "(or :connect local / :connect byok)."
             )
 
     def _active_harness_reference(self) -> str:
@@ -4494,7 +4621,16 @@ class CommandImplMixin:
         if was_active:
             log = self.query_one("#log", ConversationLog)
             log.clear()
-            log.add_info("Harness selection cancelled.")
+            # The catalogue is usually reached from the harness step of
+            # :connect, so Esc goes back there instead of leaving the user on
+            # an empty screen with nothing to act on.
+            if getattr(self, "_harness_picker_from_connect", False):
+                from superqode.providers.connection_profiles import CONNECT_MENU_HARNESS
+
+                self._harness_picker_from_connect = False
+                self._show_connect_type_picker(log, menu=CONNECT_MENU_HARNESS)
+            else:
+                log.add_info("Harness selection cancelled. Reopen it with :harness")
 
     def _handle_harness_picker_input(self, value: str, log) -> bool:
         """Resolve a typed picker number or harness name."""
@@ -5894,7 +6030,22 @@ class CommandImplMixin:
             if status.detail:
                 t.append("  Detail   ", style=THEME["muted"])
                 t.append(f"{status.detail}\n", style=THEME["text"])
-            t.append("\n  Commands: ", style=THEME["muted"])
+            if not status.record_count:
+                # Nothing stored yet, so say what storing would buy rather than
+                # listing subcommands at somebody with no reason to run them.
+                t.append(
+                    "\n  Nothing stored yet. Facts you keep here outlive the agent\n"
+                    "  that learned them, and survive every harness and model switch.\n\n",
+                    style=THEME["dim"],
+                )
+                t.append("  Try  ", style=THEME["dim"])
+                t.append(
+                    ':memory remember "deploys run from scripts/release.sh"\n',
+                    style=THEME["cyan"],
+                )
+                t.append("\n  Commands: ", style=THEME["muted"])
+            else:
+                t.append("\n  Commands: ", style=THEME["muted"])
             t.append(":memory remember", style=THEME["cyan"])
             t.append(", ", style=THEME["muted"])
             t.append(":memory search", style=THEME["cyan"])
@@ -5930,6 +6081,7 @@ class CommandImplMixin:
                 log.add_error(f"Could not save memory: {exc}")
                 return
             log.add_success(f"Remembered {record.id}")
+            self._record_milestone("used_memory")
             return
 
         if subcommand == "search":
@@ -5998,6 +6150,68 @@ class CommandImplMixin:
             return
 
         log.add_info("Usage: :memory [status|providers|doctor|remember|search|forget|export]")
+
+    def _eval_cmd(self, args: str, log: ConversationLog):
+        """Score a harness on this repository, or explain how to start.
+
+        Evaluation is the rung the whole ladder points at, but it only ever
+        existed as ``superqode harness eval``. Advertising ``:eval`` while it
+        did not resolve sent people to a dead command at the exact moment they
+        were ready to use the thing.
+        """
+        try:
+            tokens = shlex.split(args or "")
+        except ValueError as exc:
+            log.add_error(f"Could not parse :eval arguments: {exc}")
+            return
+
+        if tokens:
+
+            async def run_eval() -> None:
+                completed = await self._superqode_cli_cmd(
+                    ["harness", "eval", *tokens], log, "Harness eval"
+                )
+                if completed:
+                    self._record_milestone("ran_eval")
+
+            self.run_worker(run_eval())
+            return
+
+        tasks = [
+            path
+            for path in (
+                Path.cwd() / "evals" / "tasks.yaml",
+                Path.cwd() / ".superqode" / "evals" / "tasks.yaml",
+                Path.cwd() / "tasks.yaml",
+            )
+            if path.exists()
+        ]
+        harness = self._active_harness_reference()
+
+        t = Text()
+        t.append("\n  ✦ ", style=f"bold {THEME['purple']}")
+        t.append("Evaluation\n\n", style=f"bold {THEME['text']}")
+        t.append("  Harness  ", style=THEME["muted"])
+        t.append(f"{harness}\n", style=f"bold {THEME['cyan']}")
+        t.append("  Tasks    ", style=THEME["muted"])
+        if tasks:
+            t.append(f"{tasks[0]}\n\n", style=THEME["text"])
+            t.append("  Run it   ", style=THEME["dim"])
+            t.append(f":eval --tasks {tasks[0]}\n", style=THEME["cyan"])
+        else:
+            t.append("none found\n\n", style=THEME["warning"])
+            t.append(
+                "  An eval is a task file plus a rubric. Scoring two harnesses on\n"
+                "  the same tasks turns a preference into a measurement, and it is\n"
+                "  what :harness optimize needs before it can improve anything.\n\n",
+                style=THEME["dim"],
+            )
+            t.append("  Start    ", style=THEME["dim"])
+            t.append("create evals/tasks.yaml, then :eval\n", style=THEME["cyan"])
+            t.append("  Packs    ", style=THEME["dim"])
+            t.append(":eval --help", style=THEME["cyan"])
+            t.append("  for splits, variants and gates\n", style=THEME["muted"])
+        self._show_command_output(log, t)
 
     def _benchmark_cmd(self, args: str, log: ConversationLog):
         """Show benchmark harness status and optional task-file guidance."""

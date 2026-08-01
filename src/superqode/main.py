@@ -675,8 +675,9 @@ class SuperQodeGroup(click.Group):
     type=click.Choice(connection_profile_ids(include_legacy=True)),
     show_choices=False,
     help=(
-        "Connection source to start with: local / acp / byok / subscriptions, "
-        "or a product such as codex / claude / grok / copilot / antigravity."
+        "Connection source to start with: agents / models / build, a method "
+        "such as local / acp / byok, or a product such as codex / grok / "
+        "copilot / antigravity."
     ),
 )
 @click.pass_context

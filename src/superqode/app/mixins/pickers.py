@@ -70,6 +70,33 @@ class PickerNavigationMixin:
                 return True
             return False
 
+        # 1a-i. The build-your-own pickers. Arrow keys reached these, but typing
+        # a number did not, which is how every other picker in the product is
+        # driven; without this, choosing a preset by its number did nothing.
+        if getattr(self, "_awaiting_harness_preset", False):
+            presets = getattr(self, "_harness_preset_list", [])
+            if presets and 1 <= num <= len(presets):
+                log.clear()
+                self._clone_harness_preset(num - 1, log)
+                return True
+            return False
+
+        if getattr(self, "_awaiting_harness_import", False):
+            found = getattr(self, "_harness_import_list", [])
+            if found and 1 <= num <= len(found):
+                log.clear()
+                self._import_harness_selection(num - 1, log)
+                return True
+            return False
+
+        if getattr(self, "_awaiting_explore", False):
+            capabilities = getattr(self, "_explore_capabilities", [])
+            if capabilities and 1 <= num <= len(capabilities):
+                self._explore_index = num - 1
+                self.action_toggle_explore_row()
+                return True
+            return False
+
         # 1a. A registry-driven prompt sits on top of whatever opened it, so it
         # claims the number keys. Handled generically: every prompt registered
         # in the stack gets number selection without another branch here.

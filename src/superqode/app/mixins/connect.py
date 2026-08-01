@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import asyncio
+import os
 import shutil
 from textual import work
 from rich.text import Text
@@ -83,13 +84,17 @@ class ConnectMixin:
             log.write(t)
 
     def _connect_menu_profiles(self):
-        """Profiles shown on the connect screen the user is currently looking at."""
+        """Profiles on the current connect screen, in the order they are drawn.
+
+        Selection and navigation both index this list, so it has to match the
+        screen rather than the registry.
+        """
         from superqode.providers.connection_profiles import (
             CONNECT_MENU_ROOT,
-            list_connection_profiles,
+            display_ordered_profiles,
         )
 
-        return list_connection_profiles(getattr(self, "_connect_menu", CONNECT_MENU_ROOT))
+        return display_ordered_profiles(getattr(self, "_connect_menu", CONNECT_MENU_ROOT))
 
     def action_navigate_connect_type_up(self):
         """Navigate to previous connection type (arrow up)."""
@@ -139,20 +144,58 @@ class ConnectMixin:
         self._dispatch_connection_profile(profiles[idx], log)
 
     def action_connect_menu_back(self) -> bool:
-        """Return a submenu (Subscriptions) to the root connect screen.
+        """Step one screen back, or let Esc cancel the picker at the root.
 
         Returns True when it handled the request, so Esc/`:back` can fall
         through to cancelling the picker on the root screen.
         """
-        from superqode.providers.connection_profiles import CONNECT_MENU_ROOT
+        from superqode.providers.connection_profiles import CONNECT_MENU_ROOT, parent_menu
 
         if not getattr(self, "_awaiting_connect_type", False):
             return False
-        if getattr(self, "_connect_menu", CONNECT_MENU_ROOT) == CONNECT_MENU_ROOT:
+        current = getattr(self, "_connect_menu", CONNECT_MENU_ROOT)
+        if current == CONNECT_MENU_ROOT:
             return False
+        # Each screen declares its parent, so Esc walks the path the user
+        # actually took instead of jumping back to the start.
         log = self.query_one("#log", ConversationLog)
-        self._show_connect_type_picker(log, menu=CONNECT_MENU_ROOT)
+        self._show_connect_type_picker(log, menu=parent_menu(current))
         return True
+
+    def _show_own_harness_catalog(self, log: ConversationLog, profile_id: str = "") -> None:
+        """List the harnesses we ship and the ones this repository defines.
+
+        The full switcher also carries vendor agents and ACP agents, which are
+        the other branch of ``:connect`` entirely. Offering them here would ask
+        the user to re-answer the question they already answered by choosing
+        "connect a harness with your model".
+        """
+        from pathlib import Path
+
+        from superqode.harness import list_harnesses
+
+        try:
+            entries = list_harnesses(Path.cwd())
+        except Exception:  # noqa: BLE001 - fall back to the full switcher
+            self._harness_cmd("", log)
+            return
+
+        if profile_id == "harness-repo":
+            project = [entry for entry in entries if entry.source not in {"built-in"}]
+            entries = project or entries
+        self._show_harness_picker(
+            log,
+            catalog_entries=entries,
+            subtitle="Harnesses we ship, plus any this repository defines",
+        )
+
+    def _return_to_model_step(self) -> None:
+        """Reopen the model screen after backing out of a provider list."""
+        from superqode.providers.connection_profiles import CONNECT_MENU_MODELS
+
+        log = self.query_one("#log", ConversationLog)
+        log.clear()
+        self._show_connect_type_picker(log, menu=CONNECT_MENU_MODELS)
 
     def action_browse_harnesses_from_connect(self) -> None:
         """Leave the connection picker and open optional non-ACP harnesses."""
@@ -180,6 +223,118 @@ class ConnectMixin:
             catalog_entries=entries,
             subtitle="Optional non-ACP harness integrations",
         )
+
+    #: What each vendor product can do once it is connected, as
+    #: (matcher, command, what it gives you). Every one of these already
+    #: existed; without naming them here a user has no way to learn that the
+    #: product they just connected has its own model and profile controls.
+    _VENDOR_COMMANDS: tuple[tuple[tuple[str, ...], str, str], ...] = (
+        (("antigravity", "agy"), ":agy", "profiles, models and Google sign-in"),
+        (("antigravity", "agy"), ":antigravity status", "which Antigravity route is live"),
+        (("copilot",), ":copilot", "switch Copilot models and check your plan"),
+        (("codex",), ":codex model", "pick the Codex model"),
+        (("codex",), ":codex effort", "set reasoning effort"),
+        (("grok", "xai"), ":grok", "Grok routes, models and sign-in"),
+        (("claude",), ":claude", "Claude Agent SDK options"),
+        (("devin",), ":acp devin", "Devin session controls"),
+        (("droid", "factory"), ":acp droid", "Droid model and session controls"),
+    )
+
+    def _vendor_command_hints(self, *names: str) -> list[tuple[str, str]]:
+        """Commands worth knowing for the product that was just connected."""
+        haystack = " ".join(name.lower() for name in names if name)
+        seen: set[str] = set()
+        hints: list[tuple[str, str]] = []
+        for matchers, command, description in self._VENDOR_COMMANDS:
+            if command in seen:
+                continue
+            if any(matcher in haystack for matcher in matchers):
+                seen.add(command)
+                hints.append((command, description))
+        return hints
+
+    def _teach(self, method: str, *args, **kwargs) -> None:
+        """Call one of the teaching renderers, never failing the connection.
+
+        These cards explain a connection that has already succeeded. A missing
+        renderer or a rendering error must not turn a working connection into
+        an error the user has to debug.
+        """
+        try:
+            renderer = getattr(self, method, None)
+            if renderer is not None:
+                renderer(*args, **kwargs)
+        except Exception:  # noqa: BLE001 - teaching is never load-bearing
+            pass
+
+    def _write_connection_teaching_card(
+        self,
+        log: ConversationLog,
+        *,
+        label: str,
+        vendor_owned: bool,
+        harness: str = "",
+        model: str = "",
+    ) -> None:
+        """Explain what was just connected, and what it now costs to change it.
+
+        The load-bearing line is that the session survives a harness switch.
+        Once a user believes switching is free, they experiment, and
+        experimenting is the only way anyone discovers the platform under the
+        coding agent. Prose in the docs never achieved that.
+        """
+        if log is None:
+            return
+
+        t = Text()
+        t.append("\n  ✓ ", style=f"bold {THEME['success']}")
+        t.append(f"Connected — {label}\n\n", style=f"bold {THEME['text']}")
+
+        t.append("    Harness   ", style=THEME["dim"])
+        if vendor_owned:
+            t.append(f"{harness or label} ", style=THEME["text"])
+            t.append("(vendor-owned)\n", style=THEME["muted"])
+            t.append("    Model     ", style=THEME["dim"])
+            t.append(f"{model or 'chosen by the agent'}\n", style=THEME["muted"])
+        else:
+            t.append(f"{harness or 'core'} ", style=THEME["text"])
+            t.append("(SuperQode, yours to inspect and change)\n", style=THEME["muted"])
+            t.append("    Model     ", style=THEME["dim"])
+            t.append(f"{model or 'not set'}\n", style=THEME["text"])
+        t.append("    Session   ", style=THEME["dim"])
+        t.append("durable — survives switching to any other harness\n\n", style=THEME["text"])
+
+        t.append("    You now also have  ", style=THEME["dim"])
+        t.append(
+            ":memory  :share  :tree  :plan  :eval  :trust\n\n",
+            style=THEME["cyan"],
+        )
+
+        # A vendor product keeps its own model and profile controls after it is
+        # connected. Naming them here is the only place a user finds out.
+        hints = self._vendor_command_hints(label, harness)
+        if hints:
+            product = label.replace(" subscription", "").split(" · ")[0].strip()
+            t.append(f"    {product} commands\n", style=f"bold {THEME['text']}")
+            width = max(len(command) for command, _ in hints)
+            for command, description in hints:
+                t.append(f"      {command:<{width}}  ", style=f"bold {THEME['cyan']}")
+                t.append(f"{description}\n", style=THEME["muted"])
+            t.append("\n", style="")
+
+        t.append("    When you're ready\n", style=f"bold {THEME['text']}")
+        rows = [
+            (
+                ":harness switch workbench" if vendor_owned else ":harness",
+                "same session, our harness" if vendor_owned else "swap the tool loop, keep context",
+            ),
+            (":explore", "everything else available here"),
+        ]
+        width = max(len(command) for command, _ in rows)
+        for command, description in rows:
+            t.append(f"      {command:<{width}}  ", style=f"bold {THEME['cyan']}")
+            t.append(f"{description}\n", style=THEME["muted"])
+        log.write(t)
 
     def _reset_connect_selection_states(self) -> None:
         """Clear transient connect-flow selection state so flows don't interfere."""
@@ -261,10 +416,51 @@ class ConnectMixin:
             self._show_agents(log)
         elif conn == "harness-picker":
             self._show_other_harnesses(log)
-        elif conn == "subscription-picker":
-            from superqode.providers.connection_profiles import CONNECT_MENU_SUBSCRIPTIONS
+        elif conn in {"agent-picker", "subscription-picker"}:
+            from superqode.providers.connection_profiles import CONNECT_MENU_AGENTS
 
-            self._show_connect_type_picker(log, menu=CONNECT_MENU_SUBSCRIPTIONS)
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_AGENTS)
+        elif conn == "model-picker":
+            from superqode.providers.connection_profiles import CONNECT_MENU_MODELS
+
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_MODELS)
+        elif conn == "build-picker":
+            from superqode.providers.connection_profiles import CONNECT_MENU_BUILD
+
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_BUILD)
+        elif conn == "plan-picker":
+            from superqode.providers.connection_profiles import CONNECT_MENU_PLAN
+
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_PLAN)
+        elif conn == "vendor-picker":
+            from superqode.providers.connection_profiles import CONNECT_MENU_VENDORS
+
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_VENDORS)
+        elif conn == "grok-api":
+            # The plan route runs our harness on xAI models, which is what
+            # `:grok api` does; the vendor's own agent is on the agents screen.
+            self._grok_api_cmd("", log)
+        elif conn == "harness-picker-menu":
+            from superqode.providers.connection_profiles import CONNECT_MENU_HARNESS
+
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_HARNESS)
+        elif conn == "harness-use":
+            # Switching confirms the harness, then asks for the model, so the
+            # two steps stay separate and neither is a dead end.
+            self._harness_cmd(f"switch {profile.runtime or 'core'}", log)
+        elif conn == "harness-catalog":
+            # Remember where this was opened from, so Esc returns to the
+            # harness step rather than dead-ending.
+            self._harness_picker_from_connect = True
+            self._show_own_harness_catalog(log, profile.id)
+        elif conn == "harness-import":
+            self._harness_import_picker(log)
+        elif conn == "harness-preset":
+            self._show_harness_preset_picker(log)
+        elif conn == "harness-wizard":
+            self._start_harness_wizard_flow(log)
+        elif conn == "harness-blank":
+            self._scaffold_blank_harness(log)
         elif conn == "external-cli":
             if getattr(profile, "id", "") == "antigravity":
                 self._antigravity_cmd("connect", log)
@@ -355,6 +551,19 @@ class ConnectMixin:
         self._apply_subscription_billing_policy(profile, log)
 
         if _copilot_sdk_ready():
+            # Choosing silently taught the user nothing. Connecting on the best
+            # route and naming the alternative teaches that the runtime is a
+            # swappable layer, without costing a keystroke on the happy path.
+            if _copilot_acp_ready():
+                self._teach(
+                    "_announce_runtime_route",
+                    log,
+                    product="GitHub Copilot",
+                    chosen="Copilot SDK",
+                    reason="per-tool approvals, resumable sessions, streaming",
+                    alternative="Copilot CLI",
+                    alternative_command=":connect copilot-cli",
+                )
             self._runtime_cmd(profile.runtime or "copilot-sdk", log)
             return
         if _copilot_acp_ready():
@@ -375,6 +584,39 @@ class ConnectMixin:
             return
         if log is not None:
             log.add_info(f"{profile.label} needs setup: {profile.unavailable_hint}")
+
+    def _announce_runtime_route(
+        self,
+        log: ConversationLog,
+        *,
+        product: str,
+        chosen: str,
+        reason: str,
+        alternative: str,
+        alternative_command: str,
+    ) -> None:
+        """Say which execution route was taken, and how to take the other one.
+
+        The runtime is the layer most users never learn exists, because it is
+        always picked for them. Naming it at the one moment it is being decided
+        is the cheapest possible way to teach it.
+        """
+        if log is None:
+            return
+        t = Text()
+        t.append("\n  ◈ ", style=THEME["purple"])
+        t.append(f"{product} has two routes\n", style=f"bold {THEME['text']}")
+        t.append("    Using  ", style=THEME["dim"])
+        t.append(chosen, style=f"bold {THEME['success']}")
+        t.append(f"   {reason}\n", style=THEME["muted"])
+        t.append("    Or     ", style=THEME["dim"])
+        t.append(alternative, style=THEME["text"])
+        t.append("   ", style="")
+        t.append(alternative_command, style=THEME["cyan"])
+        t.append("\n    Same subscription, different execution layer. ", style=THEME["muted"])
+        t.append(":runtime", style=THEME["cyan"])
+        t.append(" lists them all.\n", style=THEME["muted"])
+        log.write(t)
 
     def _select_byok_model_by_number(self, num: int):
         """Select a BYOK model by number."""
@@ -604,6 +846,14 @@ class ConnectMixin:
                 dedupe_key=f"runtime:{runtime_name}",
             )
         self._sync_self_contained_status(runtime_name)
+        self._teach(
+            "_write_connection_teaching_card",
+            log,
+            label=label,
+            vendor_owned=True,
+            harness=label,
+            model=details.get("model", ""),
+        )
         self._mark_onboarding_complete()
         if runtime_name == "codex-sdk":
             self.run_worker(self._resolve_codex_active_model(log), exclusive=False)
@@ -918,6 +1168,23 @@ class ConnectMixin:
 
         provider = normalize_provider_id(provider)
         model = normalize_model_for_provider(provider, model)
+        if provider == "grok-cli":
+            # The BYOK provider/model picker can reach this route without
+            # passing through `:grok api`. Refresh the imported CLI credential
+            # before claiming the connection is ready; otherwise a stale token
+            # falls through to LiteLLM as an anonymous OpenAI-compatible call.
+            if not self._import_grok_token(
+                log,
+                on_login_success=lambda: self._connect_byok_mode(
+                    provider,
+                    model,
+                    log,
+                    resolved_role,
+                    _catalog_refresh_attempted=_catalog_refresh_attempted,
+                    session_id=session_id,
+                ),
+            ):
+                return
         provider_def = resolve_provider_def(provider)
         if provider_def is None:
             if not _catalog_refresh_attempted:
@@ -991,25 +1258,20 @@ class ConnectMixin:
                 t.append(f"  Provider: ", style=THEME["muted"])
                 t.append(f"{provider_name}\n", style=THEME["text"])
                 t.append(f"  Required: ", style=THEME["muted"])
-                t.append(f"{' or '.join(provider_def.env_vars)}\n\n", style=THEME["yellow"])
-                t.append(f"  Setup:\n", style=THEME["muted"])
-                t.append(f"    1. Get API key from: ", style=THEME["dim"])
+                t.append(f"{' or '.join(provider_def.env_vars)}\n", style=THEME["yellow"])
+                t.append("  Recommended: ", style=THEME["muted"])
+                t.append(f"superqode auth login {provider}\n", style=THEME["cyan"])
+                t.append("  Or export:   ", style=THEME["muted"])
+                t.append(
+                    f"export {provider_def.env_vars[0]}='your-api-key'\n",
+                    style=THEME["cyan"],
+                )
+                t.append("  Get a key:   ", style=THEME["muted"])
                 if provider_def.docs_url:
                     t.append(f"{provider_def.docs_url}\n", style=THEME["cyan"])
                 else:
                     t.append(f"{provider_name} website\n", style=THEME["cyan"])
-                t.append(f"    2. Export key:\n", style=THEME["dim"])
-                for env_var in provider_def.env_vars[:1]:  # Show first option
-                    t.append(f"       export {env_var}='your-api-key'\n", style=THEME["cyan"])
-                t.append(
-                    f"    3. Add to ~/.zshrc or ~/.bashrc for persistence\n\n", style=THEME["dim"]
-                )
-                t.append(
-                    "  Or store it in SuperQode's local auth store (no shell config):\n",
-                    style=THEME["muted"],
-                )
-                t.append(f"    superqode auth login {provider}\n\n", style=THEME["cyan"])
-                t.append(f"  Then run: ", style=THEME["muted"])
+                t.append("  Retry:       ", style=THEME["muted"])
                 t.append(f":connect {provider}/{model}\n", style=THEME["success"])
                 log.write_feedback(t)
                 return
@@ -1239,6 +1501,14 @@ class ConnectMixin:
             persist=False,
             dedupe_key=f"connection:{mode}:{provider}:{model}",
         )
+        self._teach(
+            "_write_connection_teaching_card",
+            log,
+            label=f"{provider_name or provider} · {model}",
+            vendor_owned=False,
+            harness=str(getattr(self, "current_harness", "") or "core"),
+            model=f"{provider}/{model}" if provider else model,
+        )
         self._mark_onboarding_complete()
 
     def _connect_byok_cmd(self, args: str, log: ConversationLog):
@@ -1417,8 +1687,9 @@ class ConnectMixin:
         log: ConversationLog,
         clear_log: bool = True,
         menu: str | None = None,
+        preserve_log: bool = False,
     ):
-        """Show the connect screen: the five root sources, or a submenu.
+        """Show a connect screen: the root ownership question, or a submenu.
 
         Args:
             log: The conversation log widget
@@ -1428,9 +1699,12 @@ class ConnectMixin:
                   fresh render, and to the current screen while navigating it.
         """
         from superqode.providers.connection_profiles import (
+            CONNECT_MENU_AGENTS,
             CONNECT_MENU_ROOT,
-            CONNECT_MENU_SUBSCRIPTIONS,
-            list_connection_profiles,
+            CONNECT_MENU_TITLES,
+            detected_sources,
+            grouped_menu_profiles,
+            normalize_menu,
         )
 
         current_menu = getattr(self, "_connect_menu", CONNECT_MENU_ROOT)
@@ -1438,6 +1712,7 @@ class ConnectMixin:
             # A fresh `:connect` always lands on the root screen; arrow-key
             # redraws (clear_log=False) stay on the screen being navigated.
             menu = CONNECT_MENU_ROOT if clear_log else current_menu
+        menu = normalize_menu(menu)
         if menu != current_menu:
             self._byok_highlighted_connect_type_index = 0
         self._connect_menu = menu
@@ -1456,75 +1731,103 @@ class ConnectMixin:
         if hasattr(self, "_byok_connect_list"):
             delattr(self, "_byok_connect_list")
 
-        is_subscriptions = menu == CONNECT_MENU_SUBSCRIPTIONS
-        t = Text()
-        t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
-        if is_subscriptions:
-            t.append("Subscriptions\n", style=f"bold {THEME['text']}")
-            t.append(
-                "  Vendor coding agents you sign in to with a plan you already have.\n\n",
-                style=THEME["muted"],
-            )
-        else:
-            t.append("How do you want to connect?\n\n", style=f"bold {THEME['text']}")
+        is_root = menu == CONNECT_MENU_ROOT
+        title, subtitle = CONNECT_MENU_TITLES.get(menu, ("Connect", ""))
 
-        profiles = list_connection_profiles(menu)
+        t = Text()
+        t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        t.append(f"{title}\n", style=f"bold {THEME['text']}")
+        if subtitle:
+            t.append(f"  {subtitle}\n", style=THEME["muted"])
+        # Opening the picker clears the log, so whatever sent the user here has
+        # to say so on this screen or the reason is lost.
+        note = getattr(self, "_connect_context_note", "")
+        if note:
+            t.append(f"  {note}\n", style=f"bold {THEME['success']}")
+            self._connect_context_note = ""
+        t.append("\n", style="")
+
+        # The header proves SuperQode already understands this machine before
+        # the user has chosen anything, which is worth more than any prose.
+        if is_root:
+            try:
+                found = detected_sources()
+            except Exception:  # noqa: BLE001 - never let detection break the picker
+                found = []
+            if found:
+                t.append("  Detected here: ", style=THEME["dim"])
+                t.append(" · ".join(found), style=THEME["cyan"])
+                t.append("\n\n", style="")
+
+        # The agents screen groups by readiness, which is the only axis a user
+        # can act on without leaving the picker. Other screens stay flat.
+        ordered = grouped_menu_profiles(menu)
+
+        # Everything counts rows down the screen: the printed number, the
+        # highlight, the arrow keys, and the number the user types or clicks.
+        # A row's label has to be the row's position, or "[1]" ends up eight
+        # rows down and typing 1 picks whatever is actually first.
+        display = [profile for _group, group_profiles in ordered for profile in group_profiles]
         highlighted_idx = getattr(self, "_byok_highlighted_connect_type_index", 0)
-        if not (0 <= highlighted_idx < len(profiles)):
+        if not (0 <= highlighted_idx < len(display)):
             highlighted_idx = 0
 
-        current_group = ""
-        for i, profile in enumerate(profiles):
-            if profile.group and profile.group != current_group:
-                if current_group:
+        position = 0
+        for group_name, group_profiles in ordered:
+            if group_name:
+                t.append(f"  {group_name}\n", style=f"bold {THEME['purple']}")
+            for profile in group_profiles:
+                num = position + 1
+                is_highlighted = position == highlighted_idx
+                position += 1
+
+                if is_highlighted:
+                    t.append("  ▶ ", style=f"bold {THEME['success']}")
+                    t.append(
+                        f"[{num}] ",
+                        style=self._picker_link_style(f"bold {THEME['success']}", num),
+                    )
+                    t.append(profile.label, style=f"bold {THEME['success']}")
                     t.append("\n", style="")
-                t.append(f"  {profile.group}\n", style=f"bold {THEME['purple']}")
-                current_group = profile.group
-            num = i + 1
-            available = profile.available
-            status = (
-                "available"
-                if menu == CONNECT_MENU_ROOT and available
-                else ("installed" if available else "needs setup")
-            )
-            status_color = THEME["success"] if available else THEME["warning"]
-            is_highlighted = i == highlighted_idx
-            if is_highlighted:
-                t.append("  ▶ ", style=f"bold {THEME['success']}")
-                t.append(
-                    f"[{num}] ",
-                    style=self._picker_link_style(f"bold {THEME['success']}", num),
-                )
-                t.append(profile.label, style=f"bold {THEME['success']}")
-                t.append("  ← SELECTED\n", style=f"bold {THEME['success']}")
-            else:
-                t.append(f"    [{num}] ", style=self._picker_link_style(THEME["dim"], num))
-                t.append(profile.label, style=f"bold {THEME['text']}")
-                t.append("\n", style="")
-            t.append(f"        {profile.description}\n", style=THEME["muted"])
-            t.append("        ", style="")
-            t.append(status, style=status_color)
-            if not available and profile.unavailable_hint:
-                t.append(f": {profile.unavailable_hint}", style=THEME["dim"])
-            t.append("\n\n", style="")
+                else:
+                    t.append(f"    [{num}] ", style=self._picker_link_style(THEME["dim"], num))
+                    t.append(profile.label, style=f"bold {THEME['text']}")
+                    t.append("\n", style="")
+                # Keep the catalogue scannable: supporting copy belongs to the
+                # row being considered, not to every option on the screen.
+                if is_highlighted and profile.description:
+                    t.append(f"        {profile.description}\n", style=THEME["muted"])
+                badges = profile.badges
+                if is_highlighted and badges:
+                    t.append("        ", style="")
+                    t.append(" · ".join(badges), style=THEME["dim"])
+                    t.append("\n", style="")
+                if is_highlighted and not profile.available and profile.unavailable_hint:
+                    t.append("        ", style="")
+                    t.append(profile.unavailable_hint, style=THEME["warning"])
+                    t.append("\n", style="")
+                if is_highlighted:
+                    t.append("\n", style="")
 
         t.append("  💡 ", style=THEME["muted"])
         t.append("↑↓", style=THEME["cyan"])
         t.append(" navigate  ", style=THEME["dim"])
         t.append("Enter", style=THEME["cyan"])
         t.append(" select  ", style=THEME["dim"])
-        if is_subscriptions:
+        if not is_root:
             t.append("Esc", style=THEME["purple"])
-            t.append(" back  •  or type a number or name, e.g. ", style=THEME["dim"])
-            t.append(":connect codex", style=THEME["cyan"])
-        else:
-            # "Other harnesses" is item 5 now, so the H shortcut stays bound but
-            # no longer needs to compete for attention in the hint line.
-            t.append("•  or type a number or name, e.g. ", style=THEME["dim"])
-            t.append(":connect subscriptions", style=THEME["cyan"])
-        t.append("\n", style="")
+            t.append(" back  ", style=THEME["dim"])
+        t.append("•  or type a number\n", style=THEME["dim"])
 
-        if clear_log:
+        if preserve_log:
+            # Opened underneath something the user still needs to read, such as
+            # the confirmation that a harness switch succeeded. Append instead
+            # of replacing, so the picker adds a question rather than erasing
+            # the answer to the previous one.
+            log.auto_scroll = False
+            log.write(t)
+            log.auto_scroll = True
+        elif clear_log:
             log.clear()
             log.auto_scroll = False
             log.write(t)
@@ -1538,7 +1841,7 @@ class ConnectMixin:
             # Don't scroll to home on navigation updates to reduce flickering
             log.auto_scroll = True  # set synchronously; avoids per-keystroke scroll-jump flicker
 
-        self._scroll_to_highlighted_item(log, highlighted_idx, len(profiles))
+        self._scroll_to_highlighted_item(log, highlighted_idx, len(display))
 
         # Set up selection handler
         self._awaiting_connect_type = True
@@ -1622,20 +1925,35 @@ class ConnectMixin:
                 self._byok_highlighted_provider_index = 0
 
         t = Text()
-        t.append(f"\n  ◈ ", style=f"bold {THEME['purple']}")
-        t.append("Select Provider\n\n", style=f"bold {THEME['text']}")
-
-        # Show data source info
-        data_source = get_data_source()
-        t.append(f"  📊 Source: {data_source}\n\n", style=THEME["dim"])
+        t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        t.append("Model providers\n", style=f"bold {THEME['text']}")
 
         # Get providers with free models
         free_providers = get_free_providers()
         visible_provider_ids = set(connect_provider_ids())
         free_provider_ids = set(free_providers.keys()) & visible_provider_ids
 
+        data_source = get_data_source()
+        t.append(
+            f"  {len(visible_provider_ids)} providers · metadata from {data_source}\n\n",
+            style=THEME["muted"],
+        )
+
         # Helper function to get provider info
+        # Building a row means counting a provider's models, and this screen
+        # walks the provider list more than once. Without memoising, every
+        # provider was priced twice before a single row was drawn.
+        _info_cache: dict = {}
+
         def get_provider_info(pid, pdef):
+            cached = _info_cache.get(pid)
+            if cached is not None:
+                return cached
+            result = _build_provider_info(pid, pdef)
+            _info_cache[pid] = result
+            return result
+
+        def _build_provider_info(pid, pdef):
             configured = False
             missing_keys = []
             if not pdef.env_vars:
@@ -1649,7 +1967,9 @@ class ConnectMixin:
                         missing_keys.append(env_var)
 
             try:
-                models = get_models_for_provider(pid)
+                # A count for one row must never spawn a vendor CLI and wait
+                # on it; that alone made this screen take seconds to appear.
+                models = get_models_for_provider(pid, probe_cli=False)
                 model_count = len(models)
             except Exception:
                 model_count = len(pdef.example_models) if pdef.example_models else 0
@@ -1696,13 +2016,55 @@ class ConnectMixin:
         idx = 1
         provider_list = []
 
-        # Show Free Models section first if there are any
+        # What already works comes first. A user with OPENAI_API_KEY set should
+        # not have to find "openai" inside a category list to use it, and
+        # leading with their own working setup is the fastest possible start.
+        ready_infos = []
+        for pid in connect_provider_ids():
+            pdef = resolve_provider_def(pid)
+            if pdef is None or not pdef.env_vars:
+                continue
+            info = get_provider_info(pid, pdef)
+            if info[2]:  # configured
+                ready_infos.append(info)
+        ready_infos.sort(key=lambda item: item[1].name)
+        ready_provider_ids = {info[0] for info in ready_infos}
+
+        if ready_infos:
+            t.append("  Ready — key found\n", style=f"bold {THEME['success']}")
+            for pid, pdef, _configured, _missing, model_count in ready_infos:
+                is_highlighted = (idx - 1) == getattr(self, "_byok_highlighted_provider_index", 0)
+                marker_style = f"bold {THEME['success']}" if is_highlighted else THEME["text"]
+                if is_highlighted:
+                    t.append("  ▶ ", style=f"bold {THEME['success']}")
+                    t.append(
+                        f"[{idx:2}] ",
+                        style=self._picker_link_style(f"bold {THEME['success']}", idx),
+                    )
+                else:
+                    t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
+                t.append("✓ ", style=THEME["success"])
+                t.append(f"{pid:<15}", style=marker_style)
+                t.append(f"{pdef.name}", style=marker_style if is_highlighted else THEME["muted"])
+                t.append("\n", style="")
+                if is_highlighted:
+                    t.append(f"        {pdef.env_vars[0]} ✓", style=THEME["dim"])
+                    if model_count > 0:
+                        t.append(f" · {model_count} models", style=THEME["dim"])
+                    t.append("\n", style="")
+                provider_list.append((pid, pdef))
+                idx += 1
+            t.append("\n", style="")
+
+        # Free routes are the strongest possible first run: no key, no card, and
+        # coding in under a minute. They were previously reachable only through
+        # `superqode providers scan-free`, which nobody finds.
         if free_provider_ids:
-            t.append(f"  🆓 Free Models\n", style=f"bold {THEME['success']}")
+            t.append("  Free right now, no card\n", style=f"bold {THEME['success']}")
             free_providers_list = []
             for pid in free_provider_ids:
                 pdef = PROVIDERS.get(pid)
-                if not pdef:
+                if not pdef or pid in ready_provider_ids:
                     continue
                 free_providers_list.append(get_provider_info(pid, pdef))
 
@@ -1724,35 +2086,21 @@ class ConnectMixin:
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=f"bold {THEME['success']}")
                     t.append(f"{pdef.name}", style=f"bold {THEME['success']}")
-                    t.append(f" 🆓", style=f"bold {THEME['success']}")
+                    t.append("\n", style="")
+                    t.append("        free", style=THEME["success"])
                     if model_count > 0:
                         t.append(
-                            f" ({model_count} model{'s' if model_count > 1 else ''})",
-                            style=f"bold {THEME['success']}",
+                            f" · {model_count} model{'s' if model_count > 1 else ''}",
+                            style=THEME["dim"],
                         )
                     if not configured and pdef.env_vars:
-                        t.append(
-                            f" • Needs: {', '.join(missing_keys)}", style=f"bold {THEME['success']}"
-                        )
-                    t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
+                        t.append(f" · needs {', '.join(missing_keys)}", style=THEME["warning"])
+                    t.append("\n", style="")
                 else:
                     t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=THEME["text"])
                     t.append(f"{pdef.name}", style=THEME["muted"])
-                    t.append(f" 🆓", style=THEME["success"])
-
-                    # Show model count
-                    if model_count > 0:
-                        t.append(f" ({model_count} model", style=THEME["dim"])
-                        if model_count > 1:
-                            t.append("s", style=THEME["dim"])
-                        t.append(")", style=THEME["dim"])
-
-                    # Show API key requirement if not configured
-                    if not configured and pdef.env_vars:
-                        t.append(f" • Needs: {', '.join(missing_keys)}", style=THEME["yellow"])
-
                     t.append("\n", style="")
 
                 provider_list.append((pid, pdef))
@@ -1792,8 +2140,8 @@ class ConnectMixin:
                 t.append(f"  {label}\n", style=f"bold {color}")
 
             for pid, pdef, configured, missing_keys, model_count in category_providers:
-                # Skip if already shown in Free Models section
-                if pid in free_provider_ids:
+                # Skip anything already shown under Ready or Free.
+                if pid in free_provider_ids or pid in ready_provider_ids:
                     continue
 
                 status = "✓" if configured else "○"
@@ -1810,38 +2158,20 @@ class ConnectMixin:
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=f"bold {THEME['success']}")
                     t.append(f"{pdef.name}", style=f"bold {THEME['success']}")
+                    t.append("\n", style="")
+                    details = []
                     if model_count > 0:
-                        t.append(
-                            f" ({model_count} model{'s' if model_count > 1 else ''})",
-                            style=f"bold {THEME['success']}",
-                        )
+                        details.append(f"{model_count} model{'s' if model_count > 1 else ''}")
                     if not configured and pdef.env_vars:
-                        t.append(
-                            f" • Needs: {', '.join(missing_keys)}", style=f"bold {THEME['success']}"
-                        )
-                    t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
+                        details.append(f"needs {', '.join(missing_keys)}")
+                    if details:
+                        t.append("        " + " · ".join(details) + "\n", style=THEME["dim"])
                 else:
                     t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=THEME["text"])
                     t.append(f"{pdef.name}", style=THEME["muted"])
-
-                # Show free badge if provider offers free models
-                if pid in free_provider_ids:
-                    t.append(f" 🆓", style=THEME["success"])
-
-                # Show model count
-                if model_count > 0:
-                    t.append(f" ({model_count} model", style=THEME["dim"])
-                    if model_count > 1:
-                        t.append("s", style=THEME["dim"])
-                    t.append(")", style=THEME["dim"])
-
-                # Show API key requirement if not configured
-                if not configured and pdef.env_vars:
-                    t.append(f" • Needs: {', '.join(missing_keys)}", style=THEME["yellow"])
-
-                t.append("\n", style="")
+                    t.append("\n", style="")
 
                 provider_list.append((pid, pdef))
                 idx += 1
@@ -1858,36 +2188,15 @@ class ConnectMixin:
                 style=THEME["dim"],
             )
 
-        # Add arrow key navigation instructions
-        t.append(f"  💡 Quick Connect:\n", style=THEME["muted"])
-        t.append(f"    ⌨️  ", style=THEME["dim"])
-        t.append(f"↑↓", style=THEME["cyan"])
-        t.append(" Arrow keys to navigate  ", style=THEME["dim"])
-        t.append(f"Enter", style=THEME["cyan"])
-        t.append(" to select highlighted provider\n", style=THEME["dim"])
-        t.append(f"    Or enter number (1-{len(provider_list)})  ", style=THEME["dim"])
-        t.append("to select provider\n", style=THEME["text"])
-        t.append(f"    Or: ", style=THEME["dim"])
-        t.append(f":connect byok <provider>/<model>", style=THEME["success"])
-        t.append(" for direct connect\n", style=THEME["text"])
-        t.append(f"    Local models? Use ", style=THEME["dim"])
-        t.append(f":connect local", style=THEME["cyan"])
-        t.append(" (Ollama, LM Studio, vLLM, …)\n", style=THEME["dim"])
-        t.append(f"    ", style=THEME["dim"])
-        t.append(f"R", style=f"bold {THEME['success']}")
-        t.append(" to refresh models from API\n", style=THEME["dim"])
-        t.append(f"    Use ", style=THEME["dim"])
-        t.append(f":back", style=THEME["cyan"])
-        t.append(" or ", style=THEME["dim"])
-        t.append(f":home", style=THEME["cyan"])
-        t.append(" to cancel\n", style=THEME["text"])
-        t.append(f"\n  💡 API Key Setup:\n", style=THEME["muted"])
-        t.append(f"    Export API key: ", style=THEME["dim"])
-        t.append("export ANTHROPIC_API_KEY='your-key'\n", style=THEME["cyan"])
-        t.append(f"    Or in ~/.zshrc: ", style=THEME["dim"])
-        t.append("export ANTHROPIC_API_KEY='your-key'\n", style=THEME["cyan"])
-        t.append(f"    See provider docs: ", style=THEME["dim"])
-        t.append("https://docs.superqode.ai/providers\n\n", style=THEME["cyan"])
+        t.append("  💡 ", style=THEME["muted"])
+        t.append("↑↓", style=THEME["cyan"])
+        t.append(" navigate  ", style=THEME["dim"])
+        t.append("Enter", style=THEME["cyan"])
+        t.append(" select  •  type a number  •  ", style=THEME["dim"])
+        t.append(":hub", style=THEME["cyan"])
+        t.append(" model search  •  ", style=THEME["dim"])
+        t.append(":connect local", style=THEME["cyan"])
+        t.append(" local models\n", style=THEME["dim"])
 
         # Ensure we have providers to show
         if not provider_list:
@@ -2192,6 +2501,14 @@ class ConnectMixin:
                 )
                 if callable(announce_harness_switch):
                     announce_harness_switch(log, agent)
+                self._teach(
+                    "_write_connection_teaching_card",
+                    log,
+                    label=str(agent.get("name") or self.current_agent),
+                    vendor_owned=True,
+                    harness=str(agent.get("name") or self.current_agent),
+                    model=self.current_model or "chosen by the agent",
+                )
                 self._mark_onboarding_complete()
             else:
                 self._pending_harness_acp_transition = None

@@ -70,6 +70,11 @@ class DialogsMixin:
         # Mark that the log currently shows only the welcome, so resizes can
         # re-flow it responsively until the user starts interacting.
         self._welcome_active = True
+        # The first-run card was defined but never called, so new users only
+        # ever saw the home screen. Show it under the welcome until the first
+        # connection lands, and note the return visit for the session hint.
+        self._maybe_show_onboarding(log)
+        self._note_repository_visit()
         # Scroll to top so user sees the attractive header first
         log.scroll_home(animate=False)
         # Re-enable auto-scroll for future messages
@@ -829,6 +834,24 @@ class DialogsMixin:
             t.append("    " + line + "\n", style=THEME["text"])
         self._show_command_output(log, t)
 
+    @staticmethod
+    def _alternate_runtime_names(current: str, *, limit: int = 5) -> list[str]:
+        """Installed runtimes that could execute this spec instead of ``current``.
+
+        Only ready runtimes are listed: naming a backend the user cannot run
+        would be an advert rather than a capability.
+        """
+        try:
+            from superqode.runtime import list_runtimes
+
+            return [
+                runtime.name
+                for runtime in list_runtimes()
+                if runtime.ready and runtime.name != current
+            ][:limit]
+        except Exception:  # noqa: BLE001 - inspect must render without runtimes
+            return []
+
     def _show_harness_inspect(self, log) -> None:
         """Show a readable summary for the active HarnessSpec."""
         spec, path = self._active_harness_spec()
@@ -859,6 +882,15 @@ class DialogsMixin:
             t.append("\n")
         t.append("  Runtime     ", style=THEME["muted"])
         t.append(summary["runtime"]["backend"], style=THEME["text"])
+        # The same spec runs through several agent frameworks. That is one of
+        # the strongest reasons to own a harness at all, and it was previously
+        # visible only in `:runtime list`, disconnected from any actual harness.
+        alternatives = self._alternate_runtime_names(summary["runtime"]["backend"])
+        if alternatives:
+            t.append("\n  Also runs   ", style=THEME["muted"])
+            t.append(" · ".join(alternatives), style=THEME["dim"])
+            t.append("   ", style="")
+            t.append(":runtime <name>", style=THEME["cyan"])
         t.append("\n  Workflow    ", style=THEME["muted"])
         t.append(workflow["mode"], style=f"bold {THEME['success']}")
         if workflow["preset"]:
@@ -1982,11 +2014,98 @@ class DialogsMixin:
         if files_modified:
             self.set_timer(0.2, lambda: self._navigate_to_sidebar_changes(files_modified))
 
+        # A finished turn is the one moment a capability reveal is welcome: the
+        # user has just seen the product work and has a concrete result in front
+        # of them. At most one hint, once ever, chosen from what they have done.
+        self._record_milestone("task_completed")
+        # What the run actually did decides which capability is worth naming
+        # next: :diff and :undo only matter once files changed, :trust and
+        # :sandbox only once something ran.
+        if files_modified:
+            self._record_milestone("edited_files")
+        if self._run_used_shell(summary):
+            self._record_milestone("ran_shell")
+        if self._run_hit_an_error(summary):
+            self._record_milestone("hit_an_error")
+        self._maybe_reveal_next_capability(log)
+
         # Keep the view pinned to the latest response. We no longer clear the
         # log each turn, so scrolling home would jump away from the answer the
         # user just asked for — scroll to the end and resume follow mode.
         log.auto_scroll = True
         self.set_timer(0.1, lambda: log.scroll_end(animate=False))
+
+    #: Commands worth meeting once the basics are in hand, in the order they
+    #: become useful. Only ones the user has not run are offered.
+    _WORTH_KNOWING: tuple[tuple[str, str], ...] = (
+        (":diff", "review every change the agent made"),
+        (":undo", "roll back the last agent edit"),
+        (":trust", "decide once what may run without asking"),
+        (":sandbox", "run commands away from your own shell"),
+        (":memory", "facts that outlive the agent that learned them"),
+        (":skills", "instructions you stop retyping"),
+        (":tree", "branch and resume sessions"),
+        (":harness", "swap the tool loop, keep the session"),
+        (":mcp", "attach tool servers: databases, browsers, your APIs"),
+        (":eval", "score harnesses on your own repository"),
+        (":work", "verified work across repositories"),
+    )
+
+    def _append_unused_command_suggestions(self, text, limit: int = 5) -> None:
+        """List a few commands this user has not run yet.
+
+        A reference of 130 commands answers "what exists", never "what should I
+        look at next". This narrows it to things they have not touched.
+        """
+        try:
+            from superqode.app.progress import load_progress
+
+            used = load_progress().commands_used
+        except Exception:  # noqa: BLE001 - help must always render
+            return
+
+        unused = [(cmd, why) for cmd, why in self._WORTH_KNOWING if cmd.lstrip(":") not in used][
+            :limit
+        ]
+        if not unused:
+            return
+
+        text.append("  ═══ You Have Not Tried ═══\n\n", style=f"bold {THEME['gold']}")
+        width = max(len(cmd) for cmd, _why in unused)
+        for command, why in unused:
+            text.append(f"    {command:<{width}}  ", style=f"bold {THEME['success']}")
+            text.append(f"{why}\n", style=THEME["muted"])
+        text.append("\n", style="")
+
+    @staticmethod
+    def _run_used_shell(summary: dict) -> bool:
+        """Whether this run executed a shell command.
+
+        ``:trust`` and ``:sandbox`` are only worth naming once something has
+        actually run, so this decides whether those hints are relevant yet.
+        """
+        if summary.get("commands_run"):
+            return True
+        tools = summary.get("tools") or ()
+        shell_tools = {"bash", "shell", "run_command", "execute", "terminal"}
+        for tool in tools:
+            name = tool.get("name", "") if isinstance(tool, dict) else str(tool)
+            if str(name).lower() in shell_tools:
+                return True
+        return False
+
+    @staticmethod
+    def _run_hit_an_error(summary: dict) -> bool:
+        """Whether any tool in this run reported a failure."""
+        for tool in summary.get("tools") or ():
+            if not isinstance(tool, dict):
+                continue
+            if tool.get("error") or str(tool.get("status", "")).lower() in {"error", "failed"}:
+                return True
+        for command in summary.get("commands_run") or ():
+            if isinstance(command, dict) and command.get("exit_code"):
+                return True
+        return False
 
     def _show_pure_tool_call(self, name: str, args: dict, log: ConversationLog):
         """Show Pure/BYOK/local tool calls through the shared tool renderer."""
@@ -2088,17 +2207,16 @@ class DialogsMixin:
             return
 
         t = Text()
-        t.append(f"\n  🤖 ", style=f"bold {THEME['cyan']}")
-        title = "All ACP Coding Agents" if include_all else "ACP Agent Runtimes"
+        t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
+        title = "Coding agents over ACP" if include_all else "ACP Agent Runtimes"
         if catalog_tier == "enterprise" and not include_all:
             title = "Enterprise ACP Agents"
-        t.append(f"{title}\n\n", style=f"bold {THEME['cyan']}")
-        t.append(f"  💡 ", style=THEME["muted"])
-        t.append("Type a number to select, or use ", style=THEME["dim"])
-        t.append(f"↑↓", style=THEME["cyan"])
-        t.append(" arrows + ", style=THEME["dim"])
-        t.append(f"Enter", style=THEME["cyan"])
-        t.append("\n\n", style=THEME["dim"])
+        t.append(f"{title}\n", style=f"bold {THEME['text']}")
+        t.append(
+            f"  {len(agents)} in the registry. Each brings its own harness; "
+            "SuperQode supplies the session, policy and evidence.\n\n",
+            style=THEME["muted"],
+        )
 
         # Installed agents are always visible. Missing agents are grouped so
         # the default view stays useful without becoming a registry dump.
@@ -2212,9 +2330,7 @@ class DialogsMixin:
 
         # Show installed agents with numbers and highlighting
         if installed_sorted:
-            t.append(
-                f"  ✓ Installed ({len(installed_sorted)}):\n", style=f"bold {THEME['success']}"
-            )
+            t.append(f"  Ready now ({len(installed_sorted)})\n", style=f"bold {THEME['success']}")
             for num, (agent_id, agent_data) in enumerate(installed_sorted, 1):
                 idx = num - 1
                 is_highlighted = idx == getattr(self, "_acp_highlighted_agent_index", 0)
@@ -2248,7 +2364,7 @@ class DialogsMixin:
         next_num = len(installed_sorted) + 1
         for group_name, group_agents in visible_groups:
             t.append(
-                f"  ○ {group_name} ({len(group_agents)}):\n",
+                f"  {group_name} ({len(group_agents)}) — one command away\n",
                 style=f"bold {THEME['warning']}",
             )
             for num, (agent_id, agent_data) in enumerate(group_agents, next_num):
@@ -2324,6 +2440,24 @@ class DialogsMixin:
         t.append(f" or ", style=THEME["dim"])
         t.append(f":back", style=THEME["cyan"])
         t.append(f" to cancel selection\n", style=THEME["dim"])
+
+        # ACP is the reason this list is long, and the reason switching between
+        # anything on it is cheap. Saying so here is what turns a directory of
+        # third-party binaries into a coherent capability.
+        t.append("\n  What ACP gives you here\n", style=f"bold {THEME['text']}")
+        for bullet in (
+            "one session store, memory and transcript across every agent above",
+            "switch agent mid-task without losing context: :harness switch --fork",
+            "your MCP servers, policies and approvals apply to all of them",
+        ):
+            t.append("    · ", style=THEME["dim"])
+            t.append(f"{bullet}\n", style=THEME["muted"])
+        t.append("    · ", style=THEME["dim"])
+        t.append("SuperQode can also ", style=THEME["muted"])
+        t.append("be", style=f"bold {THEME['muted']}")
+        t.append(" an ACP agent: ", style=THEME["muted"])
+        t.append("superqode serve acp", style=f"bold {THEME['cyan']}")
+        t.append("  drive it from Zed or any ACP client\n", style=THEME["muted"])
 
         self._show_command_output(log, t, clear_log=clear_log)
 
@@ -2471,23 +2605,31 @@ class DialogsMixin:
 
     def _show_help(self, log: ConversationLog):
         t = Text()
-        t.append(f"\n  ❓ ", style=f"bold {THEME['purple']}")
+        t.append("\n  ❓ ", style=f"bold {THEME['purple']}")
         t.append("SuperQode Commands\n\n", style=f"bold {THEME['purple']}")
 
-        # Connection modes overview
-        t.append(f"  ═══ Connection Modes ═══\n\n", style=f"bold {THEME['gold']}")
+        # A wall of 131 commands is a reference, not an answer. Point at the
+        # two screens that answer "what can I do" with live state first, then
+        # keep the full reference below for people who want to scan it.
+        t.append("  ═══ Start Here ═══\n\n", style=f"bold {THEME['gold']}")
+        t.append("    :connect", style=f"bold {THEME['success']}")
+        t.append(
+            "     choose who runs the coding loop: a ready-made agent,\n", style=THEME["muted"]
+        )
+        t.append("              ", style="")
+        t.append("a SuperQode harness on your model, or one you build\n", style=THEME["muted"])
+        t.append("    :explore", style=f"bold {THEME['success']}")
+        t.append("     every capability available here, with live status\n", style=THEME["muted"])
+        t.append("    :tour", style=f"bold {THEME['success']}")
+        t.append(
+            "        the ladder from a vendor agent to a harness you own,\n", style=THEME["muted"]
+        )
+        t.append("              ", style="")
+        t.append("ticked off as you actually do each step\n\n", style=THEME["muted"])
 
-        t.append(f"  🔗 ACP (Full Coding Agent)\n", style=f"bold {THEME['cyan']}")
-        t.append(f"    :connect acp <name>     ", style=THEME["cyan"])
-        t.append(f"Connect to ACP agent (opencode, claude, etc.)\n\n", style=THEME["muted"])
+        self._append_unused_command_suggestions(t)
 
-        t.append(f"  ⚡ BYOK (Direct LLM)\n", style=f"bold {THEME['success']}")
-        t.append(f"    :connect byok <p> <m>    ", style=THEME["success"])
-        t.append(f"Connect to provider/model\n", style=THEME["muted"])
-        t.append(f"    :connect                ", style=THEME["success"])
-        t.append(f"Interactive picker (choose acp, byok, or local)\n\n", style=THEME["muted"])
-
-        t.append(f"  ═══ All Commands ═══\n\n", style=f"bold {THEME['gold']}")
+        t.append("  ═══ All Commands ═══\n\n", style=f"bold {THEME['gold']}")
 
         sections = [
             (

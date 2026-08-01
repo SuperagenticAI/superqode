@@ -2322,6 +2322,15 @@ class LiteLLMGateway(GatewayInterface):
                 messages, model, temperature, max_tokens, tools, **kwargs
             )
 
+        if provider == "grok-cli" and not provider_api_key(PROVIDERS["grok-cli"]):
+            raise AuthenticationError(
+                "The imported Grok CLI session is missing or expired. "
+                "Run `grok login`, then `:grok api` to refresh it.",
+                provider=provider,
+                model=model,
+                error_type="authentication",
+            )
+
         litellm = self._get_litellm()
 
         # Set up provider environment
@@ -2589,6 +2598,15 @@ class LiteLLMGateway(GatewayInterface):
             ):
                 yield chunk
             return
+
+        if provider == "grok-cli" and not provider_api_key(PROVIDERS["grok-cli"]):
+            raise AuthenticationError(
+                "The imported Grok CLI session is missing or expired. "
+                "Run `grok login`, then `:grok api` to refresh it.",
+                provider=provider,
+                model=model,
+                error_type="authentication",
+            )
 
         litellm = self._get_litellm()
 

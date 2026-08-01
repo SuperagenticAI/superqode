@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
 
 from superqode.providers.connection_profiles import (
+    CONNECT_MENU_AGENTS,
+    CONNECT_MENU_BUILD,
+    CONNECT_MENU_MODELS,
     CONNECT_MENU_ROOT,
     CONNECT_MENU_SUBSCRIPTIONS,
     ConnectionProfile,
@@ -16,48 +20,108 @@ from superqode.providers.connection_profiles import (
 )
 
 
-def test_root_menu_is_five_entries_local_first():
-    """The first connect screen stays short: three methods, then two submenus."""
-    assert connection_profile_ids(menu=CONNECT_MENU_ROOT) == [
-        "local",
-        "acp",
-        "byok",
-        "subscriptions",
-        "other-harnesses",
-    ]
-    labels = {p.id: p.label for p in list_connection_profiles(CONNECT_MENU_ROOT)}
-    assert labels["acp"] == "ACP (Agent Client Protocol)"
-    assert labels["byok"] == "BYOK (Bring Your Own Key)"
+def test_root_menu_asks_one_question_in_three_answers():
+    """The first screen asks who runs the loop, not which protocol to speak.
+
+    Transport belongs one level down: somebody choosing between an agent and
+    their own key cannot act on the word "ACP" yet.
+    """
+    assert connection_profile_ids(menu=CONNECT_MENU_ROOT) == ["agents", "models", "build"]
     # Root entries are a flat list, so they carry no group headers.
     assert all(p.group == "" for p in list_connection_profiles(CONNECT_MENU_ROOT))
 
 
-def test_subscriptions_menu_holds_the_vendor_agents():
-    assert connection_profile_ids(menu=CONNECT_MENU_SUBSCRIPTIONS) == [
-        "codex",
-        "cursor",
-        "amp",
-        "antigravity",
-        "grok",
-        "copilot",
-        "devin",
-        "droid",
-        "kiro",
-        "glm-cli",
-        "qwen-code",
-        "kimi-code",
+def test_agents_menu_holds_three_existing_harness_categories():
+    assert connection_profile_ids(menu=CONNECT_MENU_AGENTS) == [
+        "agent-subscriptions",
+        "agent-acp",
+        "other-harnesses",
     ]
-    groups = {p.group for p in list_connection_profiles(CONNECT_MENU_SUBSCRIPTIONS)}
-    assert groups == {"US Coding Agents", "China Coding Agents"}
+
+
+def test_agents_carry_openness_and_transport_badges():
+    """Openness is two independent facts, so it is two badges, not one bucket.
+
+    Codex ships an Apache-2.0 harness that only drives OpenAI models; Droid is
+    a closed harness that runs anything you bring. Neither fits a 2x2.
+    """
+    codex = get_connection_profile("codex")
+    droid = get_connection_profile("droid")
+
+    assert codex.badges == ["open harness", "OpenAI models", "via SDK"]
+    assert droid.harness_openness == "closed"
+    assert "BYOK" in droid.model_openness
+    assert droid.transport == "ACP"
+
+
+def test_a_product_you_already_own_is_never_filed_as_installable():
+    """Owning Codex is not the same as never having installed it.
+
+    Readiness buckets by remaining effort, so a profile whose vendor product is
+    present but whose SuperQode adapter is missing belongs one step away, not
+    below a list of products the user has never touched.
+    """
+    from superqode.providers.connection_profiles import (
+        ConnectionProfile,
+        group_profiles_by_readiness,
+    )
+
+    owned = ConnectionProfile(
+        id="owned",
+        label="Owned",
+        description="",
+        connector="runtime",
+        menu=CONNECT_MENU_AGENTS,
+        detect=lambda: False,
+        product_detect=lambda: True,
+        unavailable_hint='uv tool install "superqode[some-extra]"',
+    )
+    never_seen = replace(owned, id="never-seen", label="Never seen", product_detect=lambda: False)
+
+    buckets = dict(group_profiles_by_readiness([owned, never_seen]))
+
+    assert [p.id for p in buckets["One step away"]] == ["owned"]
+    assert [p.id for p in buckets["Installable"]] == ["never-seen"]
+
+
+def test_product_present_never_raises_when_its_probe_does():
+    from superqode.providers.connection_profiles import ConnectionProfile
+
+    def explode() -> bool:
+        raise OSError("no filesystem today")
+
+    profile = ConnectionProfile(
+        id="x",
+        label="X",
+        description="",
+        connector="runtime",
+        detect=lambda: False,
+        product_detect=explode,
+    )
+
+    assert profile.product_present is False
+
+
+def test_models_and_build_menus_cover_the_other_two_rungs():
+    assert connection_profile_ids(menu=CONNECT_MENU_MODELS) == ["local", "byok", "plan"]
+    assert connection_profile_ids(menu=CONNECT_MENU_BUILD) == [
+        "build-import",
+        "build-preset",
+        "build-wizard",
+        "build-blank",
+    ]
+    # Importing beats authoring from scratch, so it leads the build menu.
+    assert get_connection_profile("build-import").connector == "harness-import"
 
 
 def test_registry_has_expected_profiles():
-    # The flat list is root order first, then the subscription submenu.
+    # The flat list is root order first, then each submenu in root order.
     assert connection_profile_ids() == [
-        "local",
-        "acp",
-        "byok",
-        "subscriptions",
+        "agents",
+        "models",
+        "build",
+        "agent-subscriptions",
+        "agent-acp",
         "other-harnesses",
         "codex",
         "cursor",
@@ -71,16 +135,39 @@ def test_registry_has_expected_profiles():
         "glm-cli",
         "qwen-code",
         "kimi-code",
+        "acp",
+        "harness-core",
+        "harness-workbench",
+        "harness-presets",
+        "harness-repo",
+        "local",
+        "byok",
+        "plan",
+        "plan-zai",
+        "plan-grok",
+        "plan-copilot",
+        "plan-moonshot",
+        "plan-qwen",
+        "plan-opencode",
+        "plan-ollama-cloud",
+        "plan-deepseek",
+        "plan-minimax",
+        "build-import",
+        "build-preset",
+        "build-wizard",
+        "build-blank",
     ]
     assert "copilot-acp" in connection_profile_ids(include_legacy=True)
 
 
-def test_subscriptions_profile_opens_the_submenu():
-    profile = get_connection_profile("subscriptions")
+def test_old_root_ids_still_resolve():
+    """Anyone with ``:connect subscriptions`` in muscle memory keeps working."""
+    for old_id in ("subscriptions", "local", "byok", "acp", "other-harnesses"):
+        assert get_connection_profile(old_id) is not None
 
-    assert profile.connector == "subscription-picker"
-    assert profile.menu == CONNECT_MENU_ROOT
-    assert profile.available is True
+    subscriptions = get_connection_profile("subscriptions")
+    assert subscriptions.connector == "vendor-picker"
+    assert subscriptions.available is True
 
 
 def test_devin_and_glm_are_acp_subscription_profiles():
@@ -190,7 +277,9 @@ def test_kimi_and_qwen_are_first_party_acp_profiles():
     assert qwen.acp_agent == "qwen"
     assert "qwenlm" in qwen.description.lower()
     assert "@qwen-code/qwen-code" in qwen.unavailable_hint
-    assert qwen.group == kimi.group == "China Coding Agents"
+    # Where a vendor is headquartered tells a user nothing about whether they
+    # can run it. Both are open harnesses over open weights, and that does.
+    assert qwen.badges == kimi.badges == ["open harness", "open weights", "via ACP"]
 
 
 def test_copilot_is_one_visible_subscription_with_sdk_and_cli_routes():
@@ -200,7 +289,7 @@ def test_copilot_is_one_visible_subscription_with_sdk_and_cli_routes():
     assert profile.runtime == "copilot-sdk"
     assert profile.acp_agent == "copilot"
     assert profile.self_contained is True
-    assert profile.group == "US Coding Agents"
+    assert profile.badges == ["closed harness", "multi-model", "via SDK or CLI"]
     assert "sdk" in profile.description.lower()
     assert "cli" in profile.description.lower()
 
@@ -341,6 +430,13 @@ class _DispatchStub:
         from superqode.app_main import SuperQodeApp
 
         SuperQodeApp._connect_copilot_subscription(self, profile, log)
+
+    def _teach(self, method, *args, **kwargs):
+        # The real guard, so these tests prove a connection still lands when
+        # the teaching renderers are absent.
+        from superqode.app_main import SuperQodeApp
+
+        SuperQodeApp._teach(self, method, *args, **kwargs)
 
     def _apply_subscription_billing_policy(self, profile, log):
         from superqode.app_main import SuperQodeApp
@@ -596,6 +692,8 @@ def test_antigravity_connection_announcement_never_mentions_codex():
         def _mark_onboarding_complete(self):
             pass
 
+        _teach = SuperQodeApp._teach
+
         def run_worker(self, *_args, **_kwargs):
             raise AssertionError("Antigravity must not run Codex model resolution")
 
@@ -624,6 +722,8 @@ def test_managed_connection_announcement_uses_managed_route_commands():
 
         def _mark_onboarding_complete(self):
             pass
+
+        _teach = SuperQodeApp._teach
 
     log = Log()
     SuperQodeApp._announce_self_contained_connection(Stub(), "antigravity-managed", log)
@@ -846,10 +946,15 @@ def test_subscription_descriptions_state_their_real_transport():
     transport, which read the same way. Users pick from this text, so it has to
     match what the connector does.
     """
-    from superqode.providers.connection_profiles import _SUBSCRIPTION_PROFILES
+    from superqode.providers.connection_profiles import (
+        _BROWSE_CONNECTORS,
+        _SUBSCRIPTION_PROFILES,
+    )
 
     mismatched = []
     for profile in _SUBSCRIPTION_PROFILES:
+        if profile.connector in _BROWSE_CONNECTORS:
+            continue  # "Browse all ACP agents" is a menu row, not a transport
         mentions_acp = "acp" in profile.description.lower()
         goes_over_acp = profile.connector == "acp"
         if mentions_acp != goes_over_acp:

@@ -169,6 +169,8 @@ superqode --runtime claude-agent-sdk --print "summarize the last change"
 Inside the TUI, start with `:help`. Common commands include:
 
 ```text
+:tour                   # progress from first connection to measured harness
+:explore                # inspect capabilities available on this machine
 :connect local          # local model provider
 :connect acp            # installed and featured ACP coding agents
 :connect byok           # hosted provider or API-key path
@@ -187,6 +189,7 @@ Inside the TUI, start with `:help`. Common commands include:
 :plugins doctor         # plugin manifest validation
 :plan fix the tests     # planning-only review
 :plan approve           # execute the approved plan
+:eval                   # explain or run repository harness evaluation
 :memory providers       # memory provider status
 :memory remember ...    # explicit project memory
 :vim on                 # optional Vim-like navigation

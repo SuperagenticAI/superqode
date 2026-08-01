@@ -8,6 +8,7 @@ refresh, which keeps startup and the TUI deterministic.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import shlex
@@ -244,6 +245,34 @@ def _bundled_fallback() -> list[dict[str, Any]]:
     return records
 
 
+#: The in-flight background refresh, so a screen that asks several times does
+#: not start several fetches.
+_refresh_task: "asyncio.Task | None" = None
+
+
+def _schedule_background_refresh() -> None:
+    """Refresh the registry off the read path, at most one fetch at a time."""
+    global _refresh_task
+
+    if _refresh_task is not None and not _refresh_task.done():
+        return
+
+    async def refresh() -> None:
+        try:
+            agents = await fetch_registry_from_cdn()
+            if agents:
+                _save_cache(agents)
+        except Exception as exc:  # noqa: BLE001 - a stale list still works
+            logger.debug("Background ACP registry refresh failed: %s", exc)
+
+    try:
+        _refresh_task = asyncio.get_running_loop().create_task(refresh())
+    except RuntimeError:
+        # No loop (sync CLI, tests). The cache stays as it is rather than
+        # blocking a synchronous caller on the network.
+        _refresh_task = None
+
+
 async def get_acp_registry_agents(force_refresh: bool = False) -> list[dict[str, Any]]:
     """Return the official, cached, or bundled ACP catalog.
 
@@ -267,7 +296,14 @@ async def get_acp_registry_agents(force_refresh: bool = False) -> list[dict[str,
     cached = _load_cache(allow_stale=False)
     if cached:
         return cached
+
+    # Past the TTL. Serving the stale copy and stopping there is why a cache
+    # could sit untouched for months: nothing on the read path ever refreshed
+    # it, and only an explicit force_refresh did. Hand back what we have so the
+    # screen draws instantly, and fetch in the background so the next read is
+    # current. The network is never on the path the user waits for.
     stale = _load_cache(allow_stale=True)
+    _schedule_background_refresh()
     return stale or _bundled_fallback()
 
 

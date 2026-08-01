@@ -153,6 +153,9 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:harness status` - Show the active harness
 - `:harness templates` - List built-in harness templates
 - `:harness off` - Disable the active harness
+- `:explore` - Browse capabilities with their local readiness state
+- `:tour` - Show the progressive path from first connection to evaluation
+- `:eval` - Explain or run repository harness evaluation
 - `:tau` - Select, configure, inspect, and retry the optional Tau harness
 - `:runtime list` - Show available runtime backends
 - `:runtime <name>` - Switch runtime where available
@@ -202,11 +205,12 @@ show status, or display its local help where supported.
 | Area | Built-in command roots |
 | --- | --- |
 | General operation | `:help`, `:keys`, `:status`, `:health`, `:doctor`, `:doctor-current`, `:diagnostics`, `:usage`, `:summary`, `:clear`, `:update`, `:demo`, `:exit`, `:quit`, `:q` |
+| Discovery | `:explore`, `:capabilities`, `:tour` |
 | Connections and authentication | `:connect`, `:disconnect`, `:agents`, `:agent`, `:acp`, `:providers`, `:provider`, `:profiles`, `:auth`, `:models`, `:model`, `:catalog`, `:model-guide`, `:recommend`, `:hf` |
 | Vendor runtimes | `:codex`, `:copilot`, `:claude`, `:antigravity`, `:agy`, `:grok`, `:xai-grok`, `:runtime` |
 | Agent modes and context | `:chat`, `:build`, `:mode`, `:context`, `:thinking`, `:toggle_thinking`, `:compact`, `:retry`, `:redo`, `:compare`, `:prompt`, `:log` |
 | Files and repositories | `:files`, `:find`, `:open`, `:view`, `:search`, `:workspace`, `:sidebar`, `:home`, `:attach`, `:image`, `:img`, `:paste`, `:copy`, `:select` |
-| Harness and delivery | `:harness`, `:tau`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:benchmark`, `:benchmarks` |
+| Harness and delivery | `:harness`, `:tau`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:eval`, `:evals`, `:benchmark`, `:benchmarks` |
 | Sessions and history | `:session`, `:sessions`, `:sessions-current`, `:resume`, `:tree`, `:switchboard`, `:sw`, `:share`, `:transcript`, `:timeline`, `:rewind`, `:history`, `:stash`, `:checkpoints`, `:clone`, `:fork`, `:queue` |
 | Execution control | `:approve`, `:reject`, `:permissions`, `:plan`, `:diff`, `:undo`, `:sandbox`, `:trust`, `:tools` |
 | Extensions and protocols | `:plugins`, `:plugin`, `:skills`, `:skillopt`, `:recipes`, `:recipe`, `:mcp`, `:a2a` |
@@ -216,6 +220,38 @@ show status, or display its local help where supported.
 
 `:sodebar` is retained as a compatibility alias for `:sidebar`. New
 documentation and scripts should use `:sidebar`.
+
+### Discovering What Is Available
+
+Two commands exist so the product does not have to be explained before it can
+be used.
+
+`:explore` opens a browser of every capability category, including agents,
+providers, local engines, harnesses, runtimes, memory, tools, sandboxes,
+observability, evaluation, optimization, remote execution, and delivery. Each
+row is a live probe of this machine rather than a description, so it reports
+what is actually installed, configured, or one command away. Use the arrow keys
+to move, `Enter` to expand a category, and the right arrow to run its command.
+Only one category stays expanded, keeping the inventory usable in a short
+terminal.
+`:explore memory` jumps straight to one category, and `:capabilities` is an
+alias for the same screen.
+
+`:tour` shows the ownership ladder, from using an agent someone else built to
+owning and measuring a harness of your own. Each rung is ticked off when the
+underlying milestone actually happens, so the screen reports progress rather
+than replaying an introduction. `:tour next` runs the current step, and
+`:tour 5` opens one rung without running it.
+
+After a connection is active, `:home` switches from the full onboarding view
+to a compact operational summary: repository, harness, agent or model, policy,
+and one recommended next action. The complete product surface remains one
+command away through `:explore`.
+
+Progress is stored per user in `~/.superqode/progress.json`. Set
+`SUPERQODE_PROGRESS_DIR` to relocate it, which is useful for automation that
+should not write to a developer's own state. Deleting the file only means
+seeing an already-dismissed hint a second time.
 
 The CLI-backed families use the same subcommand names as their documented CLI
 counterparts. For example, `:work status`, `:harness doctor`,

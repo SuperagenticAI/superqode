@@ -194,6 +194,20 @@ def test_gateway_applies_proxy_headers_and_token(tmp_path, isolated_auth_store, 
     }
 
 
+@pytest.mark.asyncio
+async def test_gateway_rejects_missing_grok_session_before_litellm(isolated_auth_store):
+    from superqode.providers.gateway.base import AuthenticationError
+    from superqode.providers.gateway.litellm_gateway import LiteLLMGateway
+
+    gateway = LiteLLMGateway()
+    with pytest.raises(AuthenticationError, match="grok login.*:grok api"):
+        await gateway.chat_completion([], "grok-4.5", provider="grok-cli")
+
+    with pytest.raises(AuthenticationError, match="grok login.*:grok api"):
+        async for _chunk in gateway.stream_completion([], "grok-4.5", provider="grok-cli"):
+            pass
+
+
 # --- :grok api command routing --------------------------------------------------
 
 
@@ -286,6 +300,22 @@ def test_grok_api_connects_default_model(tmp_path, isolated_auth_store, monkeypa
 
     assert stub.connected == [("grok-cli", "grok-build")]
     assert not log.errors
+
+
+def test_direct_grok_byok_connection_imports_cli_session_first():
+    from superqode.app_main import SuperQodeApp
+
+    calls = []
+
+    class _Stub:
+        def _import_grok_token(self, log, *, on_login_success=None):
+            calls.append(on_login_success)
+            return False
+
+    SuperQodeApp._connect_byok_mode(_Stub(), "grok-cli", "grok-4.5", _Log())
+
+    assert len(calls) == 1
+    assert callable(calls[0])
 
 
 def test_grok_api_strips_provider_prefixes(tmp_path, isolated_auth_store, monkeypatch):
