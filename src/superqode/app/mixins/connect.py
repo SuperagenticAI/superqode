@@ -2094,9 +2094,7 @@ class ConnectMixin:
                             style=THEME["dim"],
                         )
                     if not configured and pdef.env_vars:
-                        t.append(
-                            f" · needs {', '.join(missing_keys)}", style=THEME["warning"]
-                        )
+                        t.append(f" · needs {', '.join(missing_keys)}", style=THEME["warning"])
                     t.append("\n", style="")
                 else:
                     t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))

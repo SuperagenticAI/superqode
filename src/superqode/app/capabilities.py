@@ -321,9 +321,7 @@ def _optimization() -> Capability:
     items = [
         CapabilityItem(name="GEPA", state="available", detail="reflective search"),
         CapabilityItem(name="GEPA meta-harness", state="available", detail="candidate frontier"),
-        CapabilityItem(
-            name="MetaHarness", state="available", detail="Superagentic export"
-        ),
+        CapabilityItem(name="MetaHarness", state="available", detail="Superagentic export"),
         CapabilityItem(name="SkillOpt", state="available", detail="markdown skill review"),
         CapabilityItem(name="AutoResearch", state="available"),
     ]

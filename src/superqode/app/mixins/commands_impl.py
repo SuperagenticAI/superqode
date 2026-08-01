@@ -6166,6 +6166,7 @@ class CommandImplMixin:
             return
 
         if tokens:
+
             async def run_eval() -> None:
                 completed = await self._superqode_cli_cmd(
                     ["harness", "eval", *tokens], log, "Harness eval"
