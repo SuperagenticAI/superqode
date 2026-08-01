@@ -160,7 +160,19 @@ from superqode.app.mixins.helpers import HelpersMixin
 from superqode.app.mixins.feedback import FeedbackMixin
 
 
+from superqode.app.mixins.build_harness import BuildHarnessMixin
+
+
+from superqode.app.mixins.explore import ExploreMixin
+
+
+from superqode.app.mixins.tour import TourMixin
+
+
 class SuperQodeApp(
+    ExploreMixin,
+    BuildHarnessMixin,
+    TourMixin,
     FeedbackMixin,
     HelpersMixin,
     SlashCommandMixin,
@@ -726,6 +738,38 @@ class SuperQodeApp(
                 elif event.key == "enter":
                     self.action_select_highlighted_connect_type()
 
+            elif getattr(self, "_awaiting_explore", False):
+                event.stop()
+                handled = True
+                if event.key == "up":
+                    self.action_navigate_explore_up()
+                elif event.key == "down":
+                    self.action_navigate_explore_down()
+                elif event.key == "enter":
+                    self.action_toggle_explore_row()
+                elif event.key == "right":
+                    self.action_run_explore_command()
+
+            elif getattr(self, "_awaiting_harness_import", False):
+                event.stop()
+                handled = True
+                if event.key == "up":
+                    self.action_navigate_harness_import_up()
+                elif event.key == "down":
+                    self.action_navigate_harness_import_down()
+                elif event.key == "enter":
+                    self.action_select_harness_import()
+
+            elif getattr(self, "_awaiting_harness_preset", False):
+                event.stop()
+                handled = True
+                if event.key == "up":
+                    self.action_navigate_harness_preset_up()
+                elif event.key == "down":
+                    self.action_navigate_harness_preset_down()
+                elif event.key == "enter":
+                    self.action_select_harness_preset()
+
             elif getattr(self, "_awaiting_runtime_selection", False):
                 event.stop()
                 handled = True
@@ -814,14 +858,15 @@ class SuperQodeApp(
             self._show_local_provider_picker(log)
             return
         if getattr(self, "_awaiting_local_provider", False):
+            # Esc means "back one step", not "start over". The step before
+            # picking a provider is choosing where the model comes from.
             self._awaiting_local_provider = False
-            log = self.query_one("#log", ConversationLog)
-            log.add_info("Selection cancelled. Use :connect to try again.")
+            self._return_to_model_step()
             return
         if getattr(self, "_awaiting_byok_model", False):
             self._awaiting_byok_model = False
             log = self.query_one("#log", ConversationLog)
-            log.add_info("Selection cancelled. Use :connect to try again.")
+            self._show_byok_providers(log)
             return
         if getattr(self, "_awaiting_codex_model", False):
             self._awaiting_codex_model = False
@@ -835,8 +880,7 @@ class SuperQodeApp(
             return
         if getattr(self, "_awaiting_byok_provider", False):
             self._awaiting_byok_provider = False
-            log = self.query_one("#log", ConversationLog)
-            log.add_info("Selection cancelled. Use :connect to try again.")
+            self._return_to_model_step()
             return
         if getattr(self, "_awaiting_connect_type", False):
             # Esc inside Subscriptions steps back to the root connect screen;
@@ -847,10 +891,37 @@ class SuperQodeApp(
             log = self.query_one("#log", ConversationLog)
             log.add_info("Selection cancelled.")
             return
+        # The build screens are reached from :connect build, so Esc returns
+        # there. Leaving the user on a blank log is how a picker becomes a
+        # dead end.
+        for flag in ("_awaiting_harness_preset", "_awaiting_harness_import"):
+            if getattr(self, flag, False):
+                from superqode.providers.connection_profiles import CONNECT_MENU_BUILD
+
+                setattr(self, flag, False)
+                log = self.query_one("#log", ConversationLog)
+                log.clear()
+                self._show_connect_type_picker(log, menu=CONNECT_MENU_BUILD)
+                return
+
+        if getattr(self, "_awaiting_explore", False):
+            # Explore is opened on its own, so Esc closes it rather than
+            # jumping somewhere the user never asked for.
+            self._awaiting_explore = False
+            self.query_one("#log", ConversationLog).add_info(
+                "Closed. Reopen the capability browser with :explore"
+            )
+            return
+
         if getattr(self, "_awaiting_acp_agent_selection", False):
+            # The agent catalogue is opened from the existing-harness screen,
+            # so Esc returns there rather than dropping the user out entirely.
+            from superqode.providers.connection_profiles import CONNECT_MENU_AGENTS
+
             self._awaiting_acp_agent_selection = False
             log = self.query_one("#log", ConversationLog)
-            log.add_info("Selection cancelled. Use :connect to try again.")
+            log.clear()
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_AGENTS)
             return
         if getattr(self, "_awaiting_model_selection", False):
             self._awaiting_model_selection = False

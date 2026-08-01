@@ -63,6 +63,13 @@ class SlashCommandMixin:
             args = parts[1] if len(parts) > 1 else ""
 
         self._record_ex_command(cmd, c)
+        # A command the user has run does not need suggesting later.
+        try:
+            from superqode.app.progress import record_command_used
+
+            record_command_used(c)
+        except Exception:  # noqa: BLE001 - never block a command on bookkeeping
+            pass
 
         # ACP local slash commands win when an agent is connected. They cover
         # introspection commands (:status, :model, :session, :history, etc.)
@@ -329,8 +336,14 @@ class SlashCommandMixin:
             self._plugins_cmd(args, log)
         elif c == "memory":
             self._memory_cmd(args, log)
+        elif c in ("explore", "capabilities"):
+            self._explore_cmd(args, log)
+        elif c == "tour":
+            self._tour_cmd(args, log)
         elif c == "local":
             self._local_cmd(args, log)
+        elif c in ("eval", "evals"):
+            self._eval_cmd(args, log)
         elif c in ("benchmark", "benchmarks"):
             self._benchmark_cmd(args, log)
         elif c == "usage":
@@ -2999,7 +3012,7 @@ class SlashCommandMixin:
         # Apply the change if it's a file change
         if req.new_content and req.file_path:
             try:
-                self._file_manager.write(req.file_path, req.new_content)
+                self._write_approved_file(req.file_path, req.new_content)
                 log.add_success(f"📄 Written: {req.file_path}")
             except Exception as e:
                 log.add_error(f"Failed to write: {e}")
@@ -3282,8 +3295,9 @@ class SlashCommandMixin:
                 log.write(text)
                 return
 
-        # Fallback to file manager undo
-        version = self._file_manager.undo()
+        # Fallback to file manager undo, when one exists.
+        manager = getattr(self, "_file_manager", None)
+        version = manager.undo() if manager is not None else None
 
         if version:
             text = Text()

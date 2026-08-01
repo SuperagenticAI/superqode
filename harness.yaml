@@ -1,0 +1,62 @@
+version: 1
+name: superqode
+description: Lean native coding harness with read, write, edit, and bash.
+flavor: coding
+runtime:
+  backend: builtin
+  fallback_backends: []
+model_policy:
+  profile: core
+  config:
+    system_level: core
+    tool_profile: core
+    max_iterations: 0
+    session_history_limit: 20
+    parallel_tools: true
+execution_policy:
+  sandbox: local
+  approval_profile: balanced
+  allow_read: true
+  allow_write: true
+  allow_shell: true
+  allow_network: false
+  allowed_commands: []
+  blocked_categories: []
+agents:
+- id: coder
+  role: implementation
+  tools:
+  - read
+  - write
+  - edit
+  - bash
+workflow:
+  mode: single
+  max_task_depth: 4
+  parallelism: 1
+  merge_strategy: summary
+context:
+  instruction_files:
+  - AGENTS.md
+  - CLAUDE.md
+  - SUPERQODE.md
+  skills_dir: .agents/skills
+  roles_dir: .agents/roles
+  session_storage: .superqode/sessions
+  prompt_persistence: preview
+  compaction: {}
+  memory: {}
+checks:
+  enabled: false
+  fail_on_error: false
+  timeout_seconds: 300
+  custom_steps: []
+observability:
+  events: true
+  traces: false
+  local: true
+  exporters: []
+  run_store: memory
+metadata:
+  template: core
+  builtin_harness: true

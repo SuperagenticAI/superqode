@@ -17,7 +17,13 @@ EXPECTED_COMMAND_COUNT = 262
 # dropped `gemini-cli` from --connect, because it is an API-key route and a
 # subscription entry must never put the user on metered API billing; the agent
 # stays reachable via `:connect acp gemini`.
-EXPECTED_HELP_TREE_SHA256 = "def8edbf0748a5aa333b4add04231ea3dd13799ab8cb970e36f4043813cadfde"
+#
+# Rebaselined again for the `:connect` ownership ladder. `--connect` derives its
+# choices from the profile registry, so the new `agents` / `models` / `build`
+# root and the four `build-*` routes widen the choice list, and the help text
+# now names those rungs instead of the old five-option screen. No Click command
+# was added or removed, so the count is unchanged.
+EXPECTED_HELP_TREE_SHA256 = "93414fb42aee2db4de354345cfb33715b684fcd930ce3bc9da46609d6a9b3d35"
 
 
 def _render_help_tree() -> tuple[int, str]:

@@ -1,10 +1,12 @@
 # Connection Methods and Vendors
 
 SuperQode provides six connection and interoperability methods: Local, ACP,
-MCP, A2A, BYOK, and SDK runtimes. The `:connect` screen opens on five choices,
-Local, ACP, BYOK, Subscriptions, and Other harnesses, and the vendor products
-sit inside Subscriptions. Vendor-specific commands remain available for direct
-selection.
+MCP, A2A, BYOK, and SDK runtimes. The `:connect` screen does not open on those
+methods, because a method is a transport rather than a decision. It opens on
+one question, who should run the coding loop, in three answers: use an agent
+someone else built, run a SuperQode harness on a model you choose, or build a
+harness for this repository. The methods above are how each answer is carried
+out, and every vendor-specific command remains available for direct selection.
 
 ## Start With The Outcome
 
@@ -34,7 +36,7 @@ The Harness Switcher is the centralized inventory for runnable harnesses:
 | --- | --- | --- |
 | SuperQode native | Workbench, coding and no-tool templates, model presets | SuperQode owns the tool loop and HarnessSpec policy |
 | Vendor coding agents | Codex, GitHub Copilot, Antigravity, Grok, Kimi Code, Qwen Code | Vendor runtime or first-party agent owns the underlying agent behavior |
-| ACP agents | OpenCode, Claude Code, Gemini CLI, GLM Agent, Poolside, and the complete ACP catalog | External ACP process owns its agent loop |
+| ACP agents | OpenCode, Claude Code, GLM Agent, Poolside, and the complete ACP catalog | External ACP process owns its agent loop |
 | Optional harness integrations | Hugging Face Tau | External harness runs through SuperQode's Harness Protocol adapter |
 | Project HarnessSpecs | `harness.yaml`, `.superqode/harnesses/*.yaml` | Repository owns the complete run contract |
 | Installed Python harnesses | Package-provided HarnessSpec and protocol adapters | Installed package owns the adapter; repository can still select policy |
@@ -70,19 +72,79 @@ Open the complete product-level picker:
 :connect
 ```
 
-The root screen has five options: `local`, `acp`, `byok`, `subscriptions`, and
-`other-harnesses`. Open one of them directly:
+The root screen has three options, `agents`, `models`, and `build`, one per
+rung of the ownership ladder. Open any of them directly:
+
+```text
+:connect agents
+:connect models
+:connect build
+```
+
+| Root option | What it asks | What it opens |
+| --- | --- | --- |
+| `:connect agents` | Use an agent you already have | Vendor coding agents, the full ACP catalog, and optional harness integrations |
+| `:connect models` | Run a SuperQode harness on a model you choose | `:connect local`, `:connect byok`, and `:connect plan` |
+| `:connect build` | Build your own harness for this repository | Import, preset, wizard, and blank HarnessSpec routes |
+
+Above the options, the root screen lists what it detected on this machine:
+installed agents, running local engines, API keys already in the environment,
+and agent configuration files in the repository. Nothing has to be read first
+to find out what is usable here.
+
+The agents screen groups its rows by readiness rather than by vendor
+geography, because where a company is headquartered says nothing about whether
+a user can run its agent today:
+
+| Group | Meaning |
+| --- | --- |
+| Ready now | Installed and signed in, so Enter connects |
+| One step away | Installed but not yet authenticated |
+| Installable | One documented install command away |
+| More | Catalog rows that open a further screen |
+
+Each vendor row also carries badges for harness licence, model openness, and
+transport, for example `open harness`, `open weights`, `ACP`. These are two
+independent facts rather than one category: Codex ships an Apache-2.0 harness
+that drives only OpenAI models, and Factory Droid is a closed harness that
+runs whatever model you bring.
+
+Row numbers are registry positions rather than screen positions, so a shortcut
+such as `:connect codex` keeps working as readiness changes.
+
+The models screen holds the three routes where SuperQode owns the tool loop:
 
 ```text
 :connect local
-:connect acp
 :connect byok
-:connect subscriptions
-:connect other-harnesses
+:connect plan
 ```
 
-`:connect subscriptions` opens the vendor submenu. Every product on it is also
-a direct profile, so the submenu never becomes a required step:
+`:connect plan` covers subscriptions that expose a model endpoint, so a plan
+you already pay for can drive a SuperQode harness instead of the vendor agent.
+
+The build screen leads with importing, because a repository that already has
+agent configuration does not need to author anything:
+
+```text
+:connect build-import
+:connect build-preset
+:connect build-wizard
+:connect build-blank
+```
+
+| Build route | Starting point |
+| --- | --- |
+| `:connect build-import` | `AGENTS.md`, `CLAUDE.md`, `.claude/`, `.cursor/rules`, Copilot instructions, or `agent.yaml` |
+| `:connect build-preset` | A tuned built-in template, cloned into `.superqode/harnesses/` |
+| `:connect build-wizard` | Guided questions, for a harness with no existing configuration |
+| `:connect build-blank` | A minimal valid `harness.yaml` for people who know the schema |
+
+Imported and cloned specs are written into the repository as YAML, so they are
+versioned, reviewable, and evaluable like any other source file.
+
+`:connect agents` opens the vendor submenu. Every product on it is also a
+direct profile, so the submenu never becomes a required step:
 
 ```text
 :connect codex
@@ -91,7 +153,6 @@ a direct profile, so the submenu never becomes a required step:
 :connect antigravity
 :connect grok
 :connect copilot
-:connect acp gemini
 :connect devin
 :connect droid
 :connect kiro
@@ -104,8 +165,22 @@ Only vendor-plan and vendor-managed sign-in routes appear in this submenu.
 API-key-only routes remain under `:connect byok`; transport alternatives such
 as the Copilot CLI remain in the ACP picker.
 
-The root picker is intentionally shorter than the full catalogs. The following
-commands show the authoritative installed and configured inventory:
+Optional non-ACP harness integrations sit at the bottom of the same screen:
+
+```text
+:connect other-harnesses
+```
+
+Pre-ladder names still resolve, so muscle memory and older documentation keep
+working. `:connect subscriptions` lands on the agents screen, and `:connect
+local`, `:connect byok`, and `:connect acp` go straight to their screens
+without passing through the root question.
+
+The root picker is intentionally shorter than the full catalogs. Inside the
+TUI, `:explore` shows every capability category with its live state on this
+machine, and `:tour` shows the ownership ladder with each rung ticked off as
+you complete it. The following commands show the same authoritative inventory
+from the shell:
 
 ```bash
 superqode agents list --protocol acp
@@ -123,7 +198,7 @@ that matches the account, runtime, and harness ownership required for the task.
 | OpenAI Codex | Codex SDK, Codex ACP, OpenAI BYOK | `:connect codex`, `:connect acp codex`, `:connect byok openai <model>` |
 | Anthropic Claude | Claude Agent SDK, Anthropic BYOK | `:runtime claude-agent-sdk`, `:connect byok anthropic <model>` |
 | Google Antigravity | Authenticated Antigravity CLI runtime | `:connect antigravity` |
-| Google Gemini | Gemini CLI ACP, Google AI Studio BYOK, Google ADK runtime | `:connect acp gemini`, `:connect acp gemini`, `:connect byok google <model>`, `:runtime adk` |
+| Google Gemini | Antigravity CLI, Google AI Studio BYOK, Google ADK runtime | `:connect antigravity`, `:connect byok google <model>`, `:runtime adk` |
 | GitHub Copilot | Copilot SDK, Copilot CLI ACP | `:connect copilot`, `:connect copilot-cli`, `:connect acp copilot` |
 | xAI Grok | Grok Build ACP, Grok subscription model route, xAI BYOK | `:connect grok`, `:grok api [model]`, `:connect byok xai <model>` |
 | OpenCode | OpenCode ACP, OpenCode Zen BYOK | `:connect acp opencode`, `:connect byok opencode <model>` |

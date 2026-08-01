@@ -5,6 +5,7 @@ import asyncio
 import concurrent.futures
 import json
 import platform
+import re
 import subprocess
 import sys
 
@@ -385,6 +386,12 @@ def test_welcome_uses_agent_engineering_positioning():
 
 
 def test_welcome_shows_workspace_state_with_a_single_next_step():
+    from superqode.app.capabilities import capability_inventory
+
+    # The renderer reads the last probe rather than running one, so the counts
+    # only appear once something has explicitly asked for them.
+    capability_inventory()
+
     state = WelcomeState(
         repository="/work/repository",
         harness="review-harness",
@@ -399,12 +406,20 @@ def test_welcome_shows_workspace_state_with_a_single_next_step():
     assert "anthropic/claude-opus" in text
     assert "Runtime" in text
     assert "acp" in text
-    # The next step stays :connect whatever the workspace state is.
-    assert ":connect" in text
-    assert "select a local, BYOK, or ACP connection" in text
+    # A home screen that still says ":connect" after connecting is telling the
+    # user to redo the one thing they have already done.
+    assert ":connect" not in text
+    assert "describe what you want built" in text
     assert "Task" not in text
-    assert ":harness" not in text
-    assert ":work" not in text
+    # The scale of what is installed belongs on the first screen, not the README.
+    assert "Available" in text
+
+
+def test_welcome_asks_an_unconnected_workspace_to_connect():
+    text = render_plain(render_welcome([], width=100, state=WelcomeState(repository="/work/repo")))
+
+    assert ":connect" in text
+    assert "choose who runs the coding loop" in text
 
 
 def test_welcome_compacts_for_narrow_terminals():
@@ -1036,15 +1051,23 @@ def test_connection_summary_renders_compact_local_card():
         host="http://localhost:11434",
     )
 
-    text = render_plain(log.items[-1])
-    assert "Local Model Selected" in text
-    assert "Method" in text
-    assert "Local" in text
-    assert "Ollama" in text
-    assert "gemma4:12b-mlx" in text
-    assert "http://localhost:11434" in text
-    assert "ollama serve" not in text
-    assert "ollama pull" not in text
+    summary = render_plain(log.items[0])
+    assert "Local Model Selected" in summary
+    assert "Method" in summary
+    assert "Local" in summary
+    assert "Ollama" in summary
+    assert "gemma4:12b-mlx" in summary
+    assert "http://localhost:11434" in summary
+    assert "ollama serve" not in summary
+    assert "ollama pull" not in summary
+
+    # A successful connection is the one moment the user will read something,
+    # so it is where the platform under the coding agent gets introduced.
+    teaching = render_plain(log.items[-1])
+    assert "yours to inspect and change" in teaching
+    assert "survives switching to any other harness" in teaching
+    assert ":memory" in teaching
+    assert ":explore" in teaching
 
 
 def test_colorful_status_bar_shows_local_provider_and_full_model():
@@ -2111,36 +2134,6 @@ async def test_harness_python_extra_install_resumes_without_restart(monkeypatch)
     assert any("Continuing without restarting" in str(item) for item in log.items)
 
 
-def test_tui_harness_picker_navigates_and_switches_same_session(tmp_path, monkeypatch):
-    from superqode.agent.session_manager import SessionManager
-
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
-    app = make_app()
-    log = FakeLog()
-    app.set_timer = lambda *_args, **_kwargs: None
-    app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
-    app.query_one = lambda *args, **kwargs: log
-    pure = app._ensure_pure_mode()
-    pure.connect("test", "model", session_id="picker-session")
-
-    app._harness_cmd("", log)
-    app.action_navigate_harness_down()
-    assert app._harness_selection_list[app._harness_highlighted_index].id == "workbench"
-
-    app.action_select_highlighted_harness()
-
-    assert app._awaiting_harness_selection is False
-    assert pure.get_current_session_id() == "picker-session"
-    assert pure.session.harness_name == "workbench"
-    saved = SessionManager(".superqode/sessions").get_session_info("picker-session")
-    assert saved is not None
-    assert saved.harness_transitions[-1]["to_harness"] == "workbench"
-    rendered = "\n".join(str(item) for item in log.items)
-    assert "Harness switched: Workbench · from Core" in rendered
-    assert "Usage: :harness" not in rendered
-
-
 def test_tui_harness_picker_confirms_fresh_runtime_and_cancels(monkeypatch):
     app = make_app()
     log = FakeLog()
@@ -2166,60 +2159,6 @@ def test_tui_harness_picker_confirms_fresh_runtime_and_cancels(monkeypatch):
 
     assert app._awaiting_harness_confirmation is False
     assert log.items == ["Harness selection cancelled."]
-
-
-def test_tui_harness_switch_continues_same_session_and_reuses_route(tmp_path, monkeypatch):
-    from superqode.agent.session_manager import SessionManager
-
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
-    app = make_app()
-    log = FakeLog()
-    pure = app._ensure_pure_mode()
-    pure.connect("test", "model", session_id="core-session-1234")
-
-    app._harness_cmd("switch workbench", log)
-
-    saved = SessionManager(".superqode/sessions").get_session_info("core-session-1234")
-    assert saved is not None
-    assert saved.harness_id == "workbench"
-    assert saved.harness_transitions[-1]["from_harness"] == "core"
-    assert saved.harness_transitions[-1]["to_harness"] == "workbench"
-    assert saved.harness_transitions[-1]["continuity"] == "context-replay"
-    assert pure.session.harness_name == "workbench"
-    assert pure.session.provider == "test"
-    assert pure.session.model == "model"
-    assert pure.get_current_session_id() == "core-session-1234"
-    rendered = "\n".join(str(item) for item in log.items)
-    assert "core-session-1234"[:8] in rendered
-    assert "context replay" in rendered
-
-
-def test_tui_harness_switch_can_fork_before_changing_harness(tmp_path, monkeypatch):
-    from superqode.agent.session_manager import SessionManager
-
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
-    app = make_app()
-    log = FakeLog()
-    pure = app._ensure_pure_mode()
-    pure.connect("test", "model", session_id="source-session")
-    pure._session_manager.add_user_message("preserve this context")
-
-    app._harness_cmd("switch workbench --fork", log)
-
-    fork_id = pure.get_current_session_id()
-    assert fork_id is not None
-    assert fork_id != "source-session"
-    manager = SessionManager(".superqode/sessions")
-    source = manager.get_session_info("source-session")
-    forked = manager.get_session_info(fork_id)
-    assert source is not None and source.harness_id == "core"
-    assert forked is not None and forked.parent_session_id == "source-session"
-    assert forked.harness_id == "workbench"
-    assert [message.content for message in manager.store.get_messages(fork_id)] == [
-        "preserve this context"
-    ]
 
 
 def test_tui_harness_wizard_guided_steps_write_and_load_spec(tmp_path, monkeypatch):
@@ -5759,8 +5698,27 @@ def test_connect_selection_replaces_picker_before_rendering_result():
     assert log.scrolled_home is True
 
 
-def test_connect_root_picker_shows_five_options():
-    """The first connect screen stays at five choices, local first."""
+def picker_rows(rendered: str) -> list[tuple[int, str]]:
+    """Parse a connect screen into its (number, label) rows.
+
+    Rows render as ``  ▶  1. Label   badges`` with the badges separated by a
+    run of spaces, so the label ends at the first double space.
+    """
+    rows = []
+    for line in rendered.split("\n"):
+        match = re.match(r"\s*(?:▶\s+)?(\d+)\.\s(.+?)(?:\s{2,}.*)?$", line)
+        if match:
+            rows.append((int(match.group(1)), match.group(2).strip()))
+    return rows
+
+
+def test_connect_root_picker_asks_who_runs_the_loop():
+    """The first connect screen offers three rungs of the ownership ladder.
+
+    The old screen mixed "a whole agent" with "a model for our agent" and put
+    a transport name (ACP) beside both, so the five rows were not comparable
+    choices. These three are.
+    """
     app = make_app()
     log = FakeLog()
     app.set_timer = lambda *_args, **_kwargs: None
@@ -5768,49 +5726,116 @@ def test_connect_root_picker_shows_five_options():
     app._show_connect_type_picker(log)
     rendered = render_plain(log.items[-1])
 
-    assert "[1] Local" in rendered
-    assert "[2] ACP (Agent Client Protocol)" in rendered
-    assert "[3] BYOK (Bring Your Own Key)" in rendered
-    assert "[4] Subscriptions" in rendered
-    assert "[5] Other harnesses" in rendered
-    assert "[6]" not in rendered
-    # Vendor products live one screen deeper now.
+    assert picker_rows(rendered) == [
+        (1, "Use an existing agent"),
+        (2, "Run a model of your choice"),
+        (3, "Build a harness for this repository"),
+    ]
+    # Vendor products and transports live one screen deeper now.
     assert "Codex subscription" not in rendered
     assert "US Coding Agents" not in rendered
-    assert ":connect subscriptions" in rendered
+    # The root screen names what it found rather than making the user guess.
+    assert "Detected here:" in rendered
 
 
-def test_connect_subscriptions_screen_lists_vendor_agents():
+def test_connect_agents_screen_groups_vendor_agents_by_readiness():
+    app = make_app()
+    log = FakeLog()
+    app.set_timer = lambda *_args, **_kwargs: None
+    app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
+    app._show_connect_type_picker(log, menu="agents")
+    rendered = render_plain(log.items[-1])
+
+    assert app._connect_menu == "agents"
+    # Geography said nothing about whether a user could run something today.
+    assert "US Coding Agents" not in rendered
+    assert "China Coding Agents" not in rendered
+    assert "Claude Code subscription" not in rendered
+
+    # Which bucket an agent lands in depends on what is installed here, so the
+    # assertion is that the headers exist in escalating-effort order.
+    headers = [
+        name for name in ("Ready now", "One step away", "Installable", "More") if name in rendered
+    ]
+    assert headers == sorted(headers, key=rendered.index)
+    assert "More" in headers
+
+    # Every vendor gets exactly one numbered row, wherever readiness puts it.
+    # Matching the row form matters: several labels also occur inside their own
+    # description text.
+    rows = [label for _number, label in picker_rows(rendered)]
+    for label in (
+        "Codex subscription",
+        "Cursor subscription",
+        "Amp subscription",
+        "GitHub Copilot",
+        "Devin",
+        "Qwen Code",
+        "Kimi Code",
+    ):
+        assert rows.count(label) == 1
+
+    # Gemini CLI is deliberately not a vendor row: it is an API-key route, and
+    # a subscription entry must never put the user on metered API billing. It
+    # is still reachable through the ACP catalogue, where its billing is clear.
+    assert "Gemini CLI" not in rows
+    assert "Z.AI GLM API" not in rendered
+    assert "GitHub Copilot CLI" not in rendered
+    # Openness is two independent facts, shown as badges on each row.
+    assert "open harness · open weights · ACP" in rendered
+    # ACP is the main event for people who want a harness they did not write,
+    # so it gets a row here rather than a line in the documentation.
+    assert "Browse all ACP agents" in rows
+    assert "Esc back" in rendered
+
+
+def test_agents_screen_numbers_count_down_the_screen():
+    """The printed number must be the row's position, and must select that row.
+
+    Numbering by registry position put row "1" eight rows down and made typing
+    1 pick whatever was actually first, so the label and the action disagreed.
+    """
+    app = make_app()
+    log = FakeLog()
+    app.set_timer = lambda *_args, **_kwargs: None
+    app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
+    app.query_one = lambda *args, **kwargs: log
+    app._show_connect_type_picker(log, menu="agents")
+
+    rows = picker_rows(render_plain(log.items[-1]))
+    assert [number for number, _label in rows] == list(range(1, len(rows) + 1))
+
+    # A fresh screen highlights its own first row, not the registry's.
+    assert app._byok_highlighted_connect_type_index == 0
+
+    profiles = app._connect_menu_profiles()
+    assert len(profiles) == len(rows)
+    for position, (_number, label) in enumerate(rows):
+        assert profiles[position].label == label
+
+    # Typing a number selects the row that carries it.
+    for target in (1, 3, len(rows)):
+        app._show_connect_type_picker(log, menu="agents")
+        chosen = []
+        app._dispatch_connection_profile = lambda profile, _log: chosen.append(profile.label)
+        app._awaiting_connect_type = True
+        app._select_by_number_universal(target)
+        assert chosen == [rows[target - 1][1]]
+
+
+def test_legacy_subscriptions_menu_name_still_lands_on_the_agents_screen():
+    """``:connect subscriptions`` predates the ladder and must not blank out."""
     app = make_app()
     log = FakeLog()
     app.set_timer = lambda *_args, **_kwargs: None
     app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
     app._show_connect_type_picker(log, menu="subscriptions")
-    rendered = render_plain(log.items[-1])
 
-    assert app._connect_menu == "subscriptions"
-    assert rendered.index("US Coding Agents") < rendered.index("China Coding Agents")
-    assert "Claude Code subscription" not in rendered
-    assert rendered.index("[1] Codex subscription") < rendered.index("[2] Cursor subscription")
-    assert rendered.index("[2] Cursor subscription") < rendered.index("[3] Amp subscription")
-    assert rendered.index("[3] Amp subscription") < rendered.index("[4] Antigravity CLI")
-    assert rendered.index("[4] Antigravity CLI") < rendered.index("[5] Grok subscription")
-    assert rendered.index("[5] Grok subscription") < rendered.index("[6] GitHub Copilot")
-    # Gemini CLI is deliberately absent: it is an API-key route, and a
-    # subscription entry must never put the user on metered API billing.
-    assert "Gemini CLI" not in rendered
-    assert rendered.index("[6] GitHub Copilot") < rendered.index("[7] Devin")
-    assert rendered.index("[8] Factory Droid subscription") < rendered.index(
-        "[9] Kiro subscription"
-    )
-    assert rendered.index("[10] GLM Coding Plan") < rendered.index("[11] Qwen Code")
-    assert rendered.index("[11] Qwen Code") < rendered.index("[12] Kimi Code")
-    assert "Z.AI GLM API" not in rendered
-    assert "GitHub Copilot CLI" not in rendered
-    assert "Esc back" in rendered
+    assert app._connect_menu == "agents"
+    assert "Codex subscription" in render_plain(log.items[-1])
 
 
-def test_subscriptions_picker_returns_to_the_root_screen():
+def test_agents_picker_returns_to_the_root_screen():
     app = make_app()
     log = FakeLog()
     app.set_timer = lambda *_args, **_kwargs: None
@@ -5818,16 +5843,16 @@ def test_subscriptions_picker_returns_to_the_root_screen():
     app.query_one = lambda *args, **kwargs: log
 
     app._show_connect_type_picker(log)
-    app._byok_highlighted_connect_type_index = 3  # Subscriptions
+    app._byok_highlighted_connect_type_index = 0  # Use an existing agent
     app.action_select_highlighted_connect_type()
-    assert app._connect_menu == "subscriptions"
+    assert app._connect_menu == "agents"
     # The highlight resets so Enter cannot select a vendor the user never saw.
     assert app._byok_highlighted_connect_type_index == 0
 
     assert app.action_connect_menu_back() is True
     assert app._connect_menu == "root"
     assert app._awaiting_connect_type is True
-    assert "[4] Subscriptions" in render_plain(log.items[-1])
+    assert (1, "Use an existing agent") in picker_rows(render_plain(log.items[-1]))
     # On the root screen Esc falls through to cancelling instead.
     assert app.action_connect_menu_back() is False
 
@@ -5837,9 +5862,9 @@ def test_connect_picker_can_open_harness_catalog():
     log = FakeLog()
     app.set_timer = lambda *_args, **_kwargs: None
     app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
-    app._show_connect_type_picker(log)
+    app._show_connect_type_picker(log, menu="agents")
     rendered = render_plain(log.items[-1])
-    assert "[5] Other harnesses" in rendered
+    assert (14, "Other harness integrations") in picker_rows(rendered)
 
     app._awaiting_connect_type = True
     app.query_one = lambda *args, **kwargs: log

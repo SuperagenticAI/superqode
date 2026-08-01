@@ -78,26 +78,46 @@ bundled ACP agent in one place.
 
 ## Connection Methods
 
-`:connect` opens a five-option screen. The first three are ways SuperQode's own
-harness runs a model, the fourth is the vendor submenu, and the fifth holds the
-optional non-ACP integrations:
+`:connect` opens a three-option screen, one per rung of the ownership ladder:
 
 | Option | Description | Selection |
+|------|-------------|----------|
+| **Use an agent you already have** | Vendor coding agents, the ACP catalog, and optional harness integrations | `:connect agents` |
+| **Run a SuperQode harness on a model you choose** | Local engines, your API key, or a plan endpoint | `:connect models` |
+| **Build your own harness for this repo** | Import, preset, wizard, or blank HarnessSpec | `:connect build` |
+
+Each rung opens the specific methods underneath it:
+
+| Method | Description | Selection |
 |------|-------------|----------|
 | **Local** | Local and self-hosted model servers | `:connect local` |
 | **ACP (Agent Client Protocol)** | External coding agents with their own model and tools | `:connect acp` |
 | **BYOK (Bring Your Own Key)** | Hosted model providers using your API key | `:connect byok` |
-| **Subscriptions** | Vendor coding agents on a plan you already pay for | `:connect subscriptions` |
+| **Plan endpoints** | A subscription that exposes a model endpoint to our harness | `:connect plan` |
 | **Other harnesses** | Optional non-ACP harness integrations | `:connect other-harnesses` |
+
+Build routes are listed separately because they produce a repository artifact
+rather than a connection:
+
+| Build route | Description | Selection |
+|------|-------------|----------|
+| **Import** | Turn existing agent configuration into a HarnessSpec | `:connect build-import` |
+| **Preset** | Clone a tuned built-in template into the repository | `:connect build-preset` |
+| **Wizard** | Answer a few questions and generate a spec | `:connect build-wizard` |
+| **Blank** | Write a minimal valid `harness.yaml` | `:connect build-blank` |
 
 Tool and agent interoperability stays on its own commands: `:mcp` for Model
 Context Protocol servers and `:a2a` for remote agent services.
 
-### Subscriptions
+Inside the TUI, `:explore` lists every capability category with its live state
+on this machine, and `:tour` walks the ladder above.
 
-`:connect subscriptions` lists the vendor coding agents that sign in with their
+### Ready-made agents
+
+`:connect agents` lists the vendor coding agents that sign in with their
 own account or licence. Every entry is also reachable by name, so the submenu is
-a browsing aid rather than a required step:
+a browsing aid rather than a required step. The legacy name `:connect
+subscriptions` still opens the same screen:
 
 | Vendor agent | Selection |
 |------|----------|
@@ -107,7 +127,6 @@ a browsing aid rather than a required step:
 | Google Antigravity | `:connect antigravity` |
 | xAI Grok | `:connect grok` |
 | GitHub Copilot | `:connect copilot` |
-| Google Gemini CLI | `:connect acp gemini` |
 | Cognition Devin | `:connect devin` |
 | Factory Droid | `:connect droid` |
 | Kiro / Amazon Q Developer | `:connect kiro` |

@@ -124,6 +124,22 @@ class HelperStartupMixin:
                 "connection",
             ),
             PaletteCommand(
+                "explore",
+                "Explore Capabilities",
+                "Every category SuperQode supports here, with live status",
+                "◈",
+                ":explore",
+                "connection",
+            ),
+            PaletteCommand(
+                "tour",
+                "Guided Tour",
+                "The ladder from someone else's agent to a harness you own",
+                "◉",
+                ":tour",
+                "connection",
+            ),
+            PaletteCommand(
                 "resume",
                 "Resume Session",
                 "Continue a previous coding session by id or prefix",
@@ -521,6 +537,16 @@ class HelperStartupMixin:
         except Exception:
             self._undo_manager = None
 
+        # AtomicFileManager was written, referenced in three places, and never
+        # constructed. Approving a file change therefore always failed to write
+        # it, and :undo raised instead of falling back.
+        try:
+            from superqode.atomic import AtomicFileManager
+
+            self._file_manager = AtomicFileManager(str(Path.cwd()))
+        except Exception:  # noqa: BLE001 - the TUI must start without it
+            self._file_manager = None
+
     @work(exclusive=False)
     async def _discover_acp_agents(self):
         """Discover available ACP agents in background - truly async and non-blocking."""
@@ -664,15 +690,136 @@ class HelperStartupMixin:
 
     @staticmethod
     def _onboarding_marker() -> Path:
-        return Path.home() / ".superqode" / ".onboarded"
+        from superqode.app.progress import legacy_marker_path
+
+        return legacy_marker_path()
 
     def _mark_onboarding_complete(self) -> None:
         """Persist first-run completion only after a connection succeeds."""
+        self._record_milestone("connected")
         marker = self._onboarding_marker()
         try:
             marker.parent.mkdir(parents=True, exist_ok=True)
             marker.write_text("1", encoding="utf-8")
         except Exception:
+            pass
+
+    def _record_milestone(self, name: str) -> None:
+        """Record progress through the product. Never raises."""
+        try:
+            from superqode.app.progress import record_milestone
+
+            record_milestone(name)
+        except Exception:  # noqa: BLE001 - progress tracking is never load-bearing
+            pass
+
+    def _note_repository_visit(self) -> None:
+        """Record a return visit, so the session hint fires on the second run.
+
+        Sessions only become interesting once there is more than one of them,
+        so the hint waits for evidence that the user came back.
+        """
+        try:
+            import json
+
+            from superqode.app.progress import progress_path, record_milestone
+
+            marker = progress_path().parent / "visited.json"
+            key = str(Path.cwd())
+            try:
+                seen = set(json.loads(marker.read_text(encoding="utf-8")))
+            except (OSError, ValueError):
+                seen = set()
+            if key in seen:
+                record_milestone("second_session")
+                return
+            seen.add(key)
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text(json.dumps(sorted(seen)), encoding="utf-8")
+        except Exception:  # noqa: BLE001 - progress tracking is never load-bearing
+            pass
+
+    def _write_approved_file(self, path: str, content: str) -> None:
+        """Write a file the user just approved, keeping it undoable.
+
+        Prefers the atomic manager, which takes a backup so ``:undo`` has
+        something to restore, and falls back to a direct write rather than
+        losing an approved change.
+        """
+        manager = getattr(self, "_file_manager", None)
+        if manager is not None:
+            manager.write(path, content)
+            return
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+
+    def _refresh_capability_inventory(self) -> None:
+        """Probe capabilities in the background so the home screen can use them.
+
+        Never on the startup path. Importing the runtime adapters alone costs
+        roughly two seconds, and the welcome screen is the first thing a user
+        waits on, so this runs off-thread and once per app. The home screen
+        renders from whatever the cache holds, which is nothing on the very
+        first draw and the full inventory from then on.
+        """
+        if getattr(self, "_capability_inventory_probed", False):
+            return
+        self._capability_inventory_probed = True
+
+        def probe() -> None:
+            try:
+                from superqode.app.capabilities import capability_inventory
+
+                capability_inventory()
+            except Exception:  # noqa: BLE001 - counts are decoration
+                pass
+
+        try:
+            self.run_worker(probe, thread=True, exclusive=False)
+        except Exception:  # noqa: BLE001 - no worker host (tests, headless)
+            pass
+
+    def _record_harness_switch_milestone(self) -> None:
+        """Record a switch, promoting to 'compared' on the second one."""
+        try:
+            from superqode.app.progress import load_progress, record_milestone
+
+            if "switched_harness" in load_progress().milestones:
+                record_milestone("compared_harnesses")
+            else:
+                record_milestone("switched_harness")
+        except Exception:  # noqa: BLE001 - progress tracking is never load-bearing
+            pass
+
+    def _maybe_reveal_next_capability(self, log: ConversationLog) -> None:
+        """Show at most one unseen capability, chosen by what the user has done.
+
+        A menu of six suggestions is the thing this replaces, so this returns
+        after the first match and marks it seen forever.
+        """
+        if getattr(self, "_revealed_this_session", False):
+            return
+        try:
+            from superqode.app.progress import mark_hint_shown, next_hint
+
+            hint = next_hint()
+        except Exception:  # noqa: BLE001 - a hint must never break the session
+            return
+        if hint is None:
+            return
+
+        self._revealed_this_session = True
+        t = Text()
+        t.append("\n  ○ ", style=THEME["purple"])
+        t.append(hint.headline, style=f"bold {THEME['text']}")
+        t.append("\n    ", style="")
+        t.append(hint.command, style=f"bold {THEME['cyan']}")
+        t.append(f"   {hint.detail}\n", style=THEME["muted"])
+        log.write(t)
+        try:
+            mark_hint_shown(hint.id)
+        except Exception:  # noqa: BLE001 - showing beats crashing
             pass
 
     def _maybe_show_onboarding(self, log: ConversationLog) -> None:
@@ -687,47 +834,32 @@ class HelperStartupMixin:
         t = Text()
         t.append("\n  ╭─ ", style=THEME["purple"])
         t.append("Welcome to SuperQode 👋", style=f"bold {THEME['purple']}")
-        t.append("  First time? Here's the 30-second start.\n", style=THEME["muted"])
-        t.append("  │\n", style=THEME["purple"])
-        t.append("  │  Quick Start\n", style=f"bold {THEME['success']}")
+        t.append("  Three steps to your first task.\n", style=THEME["muted"])
         t.append("  │\n", style=THEME["purple"])
         t.append("  │  1. ", style=f"bold {THEME['cyan']}")
         t.append("Connect  ", style=f"bold {THEME['text']}")
         t.append(":connect", style=f"bold {THEME['success']}")
-        t.append("       pick local, ACP, BYOK, or a subscription\n", style=THEME["muted"])
+        t.append("     choose who runs the coding loop\n", style=THEME["muted"])
         t.append("  │  2. ", style=f"bold {THEME['cyan']}")
         t.append("Pick     ", style=f"bold {THEME['text']}")
-        t.append("↑/↓ then Enter", style=f"bold {THEME['success']}")
-        t.append("  or type a number\n", style=THEME["muted"])
+        t.append("↑/↓ Enter", style=f"bold {THEME['success']}")
+        t.append("    or type a number\n", style=THEME["muted"])
         t.append("  │  3. ", style=f"bold {THEME['cyan']}")
         t.append("Start    ", style=f"bold {THEME['text']}")
         t.append("just type", style=f"bold {THEME['success']}")
-        t.append("       describe what to build\n", style=THEME["muted"])
+        t.append("    describe what to build\n", style=THEME["muted"])
         t.append("  │\n", style=THEME["purple"])
-        t.append("  │  Or skip straight in:\n", style=THEME["muted"])
         t.append("  │  ", style=THEME["muted"])
-        t.append(":recommend coding", style=f"bold {THEME['success']}")
-        t.append("    get model suggestions\n", style=THEME["muted"])
+        t.append(":explore", style=f"bold {THEME['purple']}")
+        t.append(
+            "   see everything SuperQode can do here, with live status\n", style=THEME["muted"]
+        )
         t.append("  │  ", style=THEME["muted"])
-        t.append(":acp list", style=f"bold {THEME['purple']}")
-        t.append("             browse all coding agents\n", style=THEME["muted"])
-        t.append("  │  ", style=THEME["muted"])
-        t.append(":help", style=f"bold {THEME['cyan']}")
-        t.append("                 full command reference\n", style=THEME["muted"])
-        t.append("  │\n", style=THEME["purple"])
-        t.append("  │  ", style=THEME["dim"])
-        t.append("Tips: ", style=THEME["muted"])
-        t.append("@file", style=THEME["cyan"])
-        t.append(" to reference  •  ", style=THEME["dim"])
-        t.append("Ctrl+K", style=THEME["cyan"])
-        t.append(" for palettes  •  ", style=THEME["dim"])
-        t.append("Ctrl+G", style=THEME["cyan"])
-        t.append(" to stash\n", style=THEME["dim"])
-        t.append("  ╰─ This card stays until your first connection - ", style=THEME["purple"])
-        t.append(":help", style=f"bold {THEME['cyan']}")
-        t.append(" anytime  •  ", style=THEME["purple"])
-        t.append("Ctrl+L", style=f"bold {THEME['cyan']}")
-        t.append(" to redraw.\n", style=THEME["purple"])
+        t.append(":tour", style=f"bold {THEME['purple']}")
+        t.append(
+            "      the seven steps from a vendor agent to a harness you own\n", style=THEME["muted"]
+        )
+        t.append("  ╰─ This card stays until your first connection.\n", style=THEME["purple"])
         log.write(t)
 
     def _init_config(self, args: str, log: ConversationLog):

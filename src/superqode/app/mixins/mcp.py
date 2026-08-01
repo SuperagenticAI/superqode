@@ -156,6 +156,15 @@ class McpMixin:
         if subcommand == "list":
             subcommand = "status"
 
+        # Somebody with a server attached does not need to be told MCP exists.
+        try:
+            from superqode.mcp.integration import list_mcp_servers
+
+            if list_mcp_servers():
+                self._record_milestone("used_mcp")
+        except Exception:  # noqa: BLE001 - bookkeeping is never load-bearing
+            pass
+
         manager = await get_mcp_manager()
 
         if subcommand in ("", "status"):
@@ -176,11 +185,19 @@ class McpMixin:
             t.append(f"{summary['total_prompts']}\n\n", style=f"bold {THEME['text']}")
 
             if not configs:
-                t.append("  No MCP servers configured.\n", style=THEME["muted"])
+                # An empty screen is the one place a user is already looking at
+                # the feature, so it is where saying what it does costs least.
+                t.append("  No MCP servers attached yet.\n\n", style=THEME["muted"])
                 t.append(
-                    "  Add servers in .superqode/mcp.json or your MCP config file.\n",
+                    "  MCP servers give the agent tools beyond this repository:\n"
+                    "  databases, browsers, issue trackers, your own internal APIs.\n"
+                    "  Whatever you attach works with every harness and agent.\n\n",
                     style=THEME["dim"],
                 )
+                t.append("  Add one       ", style=THEME["dim"])
+                t.append("edit .superqode/mcp.json\n", style=THEME["cyan"])
+                t.append("  Then reload   ", style=THEME["dim"])
+                t.append(":mcp reload\n", style=THEME["cyan"])
             else:
                 for server_id, config in configs.items():
                     state = manager.get_connection_state(server_id).value

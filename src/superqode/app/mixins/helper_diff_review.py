@@ -209,7 +209,7 @@ class HelperDiffReviewMixin:
             return "Approval request is no longer pending."
         if request.new_content and request.file_path:
             try:
-                self._file_manager.write(request.file_path, request.new_content)
+                self._write_approved_file(request.file_path, request.new_content)
             except Exception as exc:
                 return f"Approved, but failed to write {request.file_path}: {exc}"
         suffix = " (always)" if always else ""

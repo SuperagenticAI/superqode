@@ -626,13 +626,13 @@ async def test_grok_profile_selection_routes_to_grok_build_acp(monkeypatch, tmp_
         from superqode.providers.connection_profiles import (
             CONNECT_MENU_ROOT,
             CONNECT_MENU_SUBSCRIPTIONS,
-            list_connection_profiles,
+            display_ordered_profiles,
         )
 
-        root = list_connection_profiles(CONNECT_MENU_ROOT)
-        subscriptions_index = next(
-            i for i, profile in enumerate(root) if profile.id == "subscriptions"
-        )
+        # Arrow keys walk the screen, so both hops count rows as drawn rather
+        # than entries in the registry.
+        root = display_ordered_profiles(CONNECT_MENU_ROOT)
+        subscriptions_index = next(i for i, profile in enumerate(root) if profile.id == "agents")
         for _ in range(subscriptions_index):
             await pilot.press("down")
             await pilot.pause()
@@ -640,7 +640,7 @@ async def test_grok_profile_selection_routes_to_grok_build_acp(monkeypatch, tmp_
         await pilot.pause()
         assert app._connect_menu == CONNECT_MENU_SUBSCRIPTIONS
 
-        profiles = list_connection_profiles(CONNECT_MENU_SUBSCRIPTIONS)
+        profiles = display_ordered_profiles(CONNECT_MENU_SUBSCRIPTIONS)
         grok_index = next(i for i, profile in enumerate(profiles) if profile.id == "grok")
         for _ in range(grok_index):
             await pilot.press("down")
@@ -679,9 +679,21 @@ async def test_codex_profile_error_visible_after_picker_navigation(monkeypatch):
     app = SuperQodeApp()
     async with app.run_test(size=(80, 24)) as pilot:
         log = app.query_one("#log", ConversationLog)
-        # Codex is the first entry on the Subscriptions screen.
         app._show_connect_type_picker(log, menu="subscriptions")
         await pilot.pause()
+
+        # The agents screen orders rows by readiness, so Codex's position
+        # depends on what is installed here. Walk to it rather than assuming.
+        from superqode.providers.connection_profiles import display_ordered_profiles
+
+        codex_index = next(
+            index
+            for index, profile in enumerate(display_ordered_profiles("agents"))
+            if profile.id == "codex"
+        )
+        for _ in range(codex_index):
+            await pilot.press("down")
+            await pilot.pause()
 
         await pilot.press("enter")
         await pilot.pause()

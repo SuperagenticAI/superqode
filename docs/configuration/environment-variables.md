@@ -142,6 +142,7 @@ configuration. See [Harness System](../advanced/harness-system.md#observability-
 | `SUPERQODE_CWD` | path | set automatically | Project root propagated to spawned helper processes. |
 | `SUPERQODE_MAX_ITERATIONS` | int | `0` (unlimited) | Safety cap on agent loop iterations per run. |
 | `SUPERQODE_SESSION_HISTORY_LIMIT` | int | `20` | How many stored messages a resumed session loads. |
+| `SUPERQODE_PROGRESS_DIR` | path | `~/.superqode` | Where `:tour` and `:explore` milestones are stored. Point it elsewhere so automation does not rewrite a developer's own progress. |
 | `SUPERQODE_STARTUP_HEALTH` | `0`/`1` | off | Run provider health checks at TUI startup. |
 
 ## Output & UX

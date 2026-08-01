@@ -498,6 +498,34 @@ class EventHandlerMixin:
             if self._handle_harness_picker_input(text, log):
                 return
 
+        # Typing a number and pressing Enter is how every picker in this
+        # product is driven. Without this the text went nowhere and the screen
+        # simply sat there.
+        for flag, items_attr, select, clears in (
+            ("_awaiting_harness_preset", "_harness_preset_list", "_clone_harness_preset", True),
+            (
+                "_awaiting_harness_import",
+                "_harness_import_list",
+                "_import_harness_selection",
+                True,
+            ),
+            ("_awaiting_explore", "_explore_capabilities", "_select_explore_row", False),
+        ):
+            if not getattr(self, flag, False):
+                continue
+            choice = text.strip()
+            items = getattr(self, items_attr, [])
+            if choice.isdigit() and items and 1 <= int(choice) <= len(items):
+                event.input.value = ""
+                if clears:
+                    log.clear()
+                getattr(self, select)(int(choice) - 1, log)
+                return
+            if choice:
+                log.add_error(f"Pick a number between 1 and {len(items)}, or press Esc.")
+                event.input.value = ""
+                return
+
         # Check if awaiting connect type selection (profile-driven)
         if getattr(self, "_awaiting_connect_type", False):
             from superqode.providers.connection_profiles import get_connection_profile

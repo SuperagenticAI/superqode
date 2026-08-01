@@ -206,10 +206,17 @@ def test_every_connection_profile_has_a_sidebar_page():
     root = Path(__file__).resolve().parents[1]
     mkdocs = (root / "mkdocs.yml").read_text(encoding="utf-8")
     profile_pages = {
+        "agents": "providers/index.md",
+        "models": "providers/index.md",
+        "build": "concepts/modes.md",
+        "build-import": "concepts/modes.md",
+        "build-preset": "concepts/modes.md",
+        "build-wizard": "concepts/modes.md",
+        "build-blank": "concepts/modes.md",
+        "plan": "providers/index.md",
         "local": "providers/local.md",
         "byok": "providers/byok.md",
         "acp": "providers/acp.md",
-        "subscriptions": "providers/index.md",
         "codex": "providers/codex.md",
         "copilot": "providers/github-copilot.md",
         "cursor": "concepts/modes.md",
