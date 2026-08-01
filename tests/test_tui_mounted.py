@@ -151,7 +151,7 @@ async def test_connect_picker_keyboard_navigation_keeps_selection_visible():
             await pilot.press("down")
             await pilot.pause()
 
-        selected_y = next(index for index, line in enumerate(log.lines) if "SELECTED" in line.text)
+        selected_y = next(index for index, line in enumerate(log.lines) if "▶" in line.text)
         visible_height = log.scrollable_content_region.height
 
         assert app._byok_highlighted_connect_type_index == 6
@@ -170,7 +170,7 @@ async def test_byok_picker_keyboard_navigation_keeps_selection_visible():
             await pilot.press("down")
             await pilot.pause()
 
-        selected_y = next(index for index, line in enumerate(log.lines) if "SELECTED" in line.text)
+        selected_y = next(index for index, line in enumerate(log.lines) if "▶" in line.text)
         visible_height = log.scrollable_content_region.height
 
         assert app._byok_highlighted_provider_index == 6
@@ -624,6 +624,7 @@ async def test_grok_profile_selection_routes_to_grok_build_acp(monkeypatch, tmp_
         await pilot.pause()
 
         from superqode.providers.connection_profiles import (
+            CONNECT_MENU_AGENTS,
             CONNECT_MENU_ROOT,
             CONNECT_MENU_SUBSCRIPTIONS,
             display_ordered_profiles,
@@ -633,6 +634,17 @@ async def test_grok_profile_selection_routes_to_grok_build_acp(monkeypatch, tmp_
         # than entries in the registry.
         root = display_ordered_profiles(CONNECT_MENU_ROOT)
         subscriptions_index = next(i for i, profile in enumerate(root) if profile.id == "agents")
+        for _ in range(subscriptions_index):
+            await pilot.press("down")
+            await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app._connect_menu == CONNECT_MENU_AGENTS
+
+        agent_categories = display_ordered_profiles(CONNECT_MENU_AGENTS)
+        subscriptions_index = next(
+            i for i, profile in enumerate(agent_categories) if profile.id == "agent-subscriptions"
+        )
         for _ in range(subscriptions_index):
             await pilot.press("down")
             await pilot.pause()
@@ -682,13 +694,12 @@ async def test_codex_profile_error_visible_after_picker_navigation(monkeypatch):
         app._show_connect_type_picker(log, menu="subscriptions")
         await pilot.pause()
 
-        # The agents screen orders rows by readiness, so Codex's position
-        # depends on what is installed here. Walk to it rather than assuming.
+        # The legacy subscription alias opens the stable vendor screen directly.
         from superqode.providers.connection_profiles import display_ordered_profiles
 
         codex_index = next(
             index
-            for index, profile in enumerate(display_ordered_profiles("agents"))
+            for index, profile in enumerate(display_ordered_profiles("vendors"))
             if profile.id == "codex"
         )
         for _ in range(codex_index):
@@ -726,8 +737,9 @@ async def test_plain_write_panel_visible_after_byok_navigation(monkeypatch):
             await pilot.pause()
 
         app._connect_byok_mode("openai", "gpt-5.6", log)
-        await pilot.pause()
-        await pilot.pause()
+        # The feedback card is re-anchored after Textual completes its wrapped
+        # line layout; assert the settled viewport rather than the write tick.
+        await pilot.pause(0.1)
 
         panel_y = next(
             index for index, line in enumerate(log.lines) if "API Key Required" in line.text

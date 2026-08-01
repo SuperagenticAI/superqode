@@ -1168,6 +1168,23 @@ class ConnectMixin:
 
         provider = normalize_provider_id(provider)
         model = normalize_model_for_provider(provider, model)
+        if provider == "grok-cli":
+            # The BYOK provider/model picker can reach this route without
+            # passing through `:grok api`. Refresh the imported CLI credential
+            # before claiming the connection is ready; otherwise a stale token
+            # falls through to LiteLLM as an anonymous OpenAI-compatible call.
+            if not self._import_grok_token(
+                log,
+                on_login_success=lambda: self._connect_byok_mode(
+                    provider,
+                    model,
+                    log,
+                    resolved_role,
+                    _catalog_refresh_attempted=_catalog_refresh_attempted,
+                    session_id=session_id,
+                ),
+            ):
+                return
         provider_def = resolve_provider_def(provider)
         if provider_def is None:
             if not _catalog_refresh_attempted:
@@ -1241,25 +1258,20 @@ class ConnectMixin:
                 t.append(f"  Provider: ", style=THEME["muted"])
                 t.append(f"{provider_name}\n", style=THEME["text"])
                 t.append(f"  Required: ", style=THEME["muted"])
-                t.append(f"{' or '.join(provider_def.env_vars)}\n\n", style=THEME["yellow"])
-                t.append(f"  Setup:\n", style=THEME["muted"])
-                t.append(f"    1. Get API key from: ", style=THEME["dim"])
+                t.append(f"{' or '.join(provider_def.env_vars)}\n", style=THEME["yellow"])
+                t.append("  Recommended: ", style=THEME["muted"])
+                t.append(f"superqode auth login {provider}\n", style=THEME["cyan"])
+                t.append("  Or export:   ", style=THEME["muted"])
+                t.append(
+                    f"export {provider_def.env_vars[0]}='your-api-key'\n",
+                    style=THEME["cyan"],
+                )
+                t.append("  Get a key:   ", style=THEME["muted"])
                 if provider_def.docs_url:
                     t.append(f"{provider_def.docs_url}\n", style=THEME["cyan"])
                 else:
                     t.append(f"{provider_name} website\n", style=THEME["cyan"])
-                t.append(f"    2. Export key:\n", style=THEME["dim"])
-                for env_var in provider_def.env_vars[:1]:  # Show first option
-                    t.append(f"       export {env_var}='your-api-key'\n", style=THEME["cyan"])
-                t.append(
-                    f"    3. Add to ~/.zshrc or ~/.bashrc for persistence\n\n", style=THEME["dim"]
-                )
-                t.append(
-                    "  Or store it in SuperQode's local auth store (no shell config):\n",
-                    style=THEME["muted"],
-                )
-                t.append(f"    superqode auth login {provider}\n\n", style=THEME["cyan"])
-                t.append(f"  Then run: ", style=THEME["muted"])
+                t.append("  Retry:       ", style=THEME["muted"])
                 t.append(f":connect {provider}/{model}\n", style=THEME["success"])
                 log.write_feedback(t)
                 return
@@ -1776,23 +1788,26 @@ class ConnectMixin:
                         style=self._picker_link_style(f"bold {THEME['success']}", num),
                     )
                     t.append(profile.label, style=f"bold {THEME['success']}")
-                    t.append("  ← SELECTED\n", style=f"bold {THEME['success']}")
+                    t.append("\n", style="")
                 else:
                     t.append(f"    [{num}] ", style=self._picker_link_style(THEME["dim"], num))
                     t.append(profile.label, style=f"bold {THEME['text']}")
                     t.append("\n", style="")
-                if profile.description:
+                # Keep the catalogue scannable: supporting copy belongs to the
+                # row being considered, not to every option on the screen.
+                if is_highlighted and profile.description:
                     t.append(f"        {profile.description}\n", style=THEME["muted"])
                 badges = profile.badges
-                if badges:
+                if is_highlighted and badges:
                     t.append("        ", style="")
                     t.append(" · ".join(badges), style=THEME["dim"])
                     t.append("\n", style="")
-                if not profile.available and profile.unavailable_hint:
+                if is_highlighted and not profile.available and profile.unavailable_hint:
                     t.append("        ", style="")
                     t.append(profile.unavailable_hint, style=THEME["warning"])
                     t.append("\n", style="")
-                t.append("\n", style="")
+                if is_highlighted:
+                    t.append("\n", style="")
 
         t.append("  💡 ", style=THEME["muted"])
         t.append("↑↓", style=THEME["cyan"])
@@ -2031,12 +2046,12 @@ class ConnectMixin:
                 t.append("✓ ", style=THEME["success"])
                 t.append(f"{pid:<15}", style=marker_style)
                 t.append(f"{pdef.name}", style=marker_style if is_highlighted else THEME["muted"])
-                t.append(f"  {pdef.env_vars[0]} ✓", style=THEME["dim"])
-                if model_count > 0:
-                    t.append(f"  {model_count} models", style=THEME["dim"])
-                if is_highlighted:
-                    t.append("  ← SELECTED", style=f"bold {THEME['success']}")
                 t.append("\n", style="")
+                if is_highlighted:
+                    t.append(f"        {pdef.env_vars[0]} ✓", style=THEME["dim"])
+                    if model_count > 0:
+                        t.append(f" · {model_count} models", style=THEME["dim"])
+                    t.append("\n", style="")
                 provider_list.append((pid, pdef))
                 idx += 1
             t.append("\n", style="")
@@ -2071,35 +2086,23 @@ class ConnectMixin:
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=f"bold {THEME['success']}")
                     t.append(f"{pdef.name}", style=f"bold {THEME['success']}")
-                    t.append(f" 🆓", style=f"bold {THEME['success']}")
+                    t.append("\n", style="")
+                    t.append("        free", style=THEME["success"])
                     if model_count > 0:
                         t.append(
-                            f" ({model_count} model{'s' if model_count > 1 else ''})",
-                            style=f"bold {THEME['success']}",
+                            f" · {model_count} model{'s' if model_count > 1 else ''}",
+                            style=THEME["dim"],
                         )
                     if not configured and pdef.env_vars:
                         t.append(
-                            f" • Needs: {', '.join(missing_keys)}", style=f"bold {THEME['success']}"
+                            f" · needs {', '.join(missing_keys)}", style=THEME["warning"]
                         )
-                    t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
+                    t.append("\n", style="")
                 else:
                     t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=THEME["text"])
                     t.append(f"{pdef.name}", style=THEME["muted"])
-                    t.append(f" 🆓", style=THEME["success"])
-
-                    # Show model count
-                    if model_count > 0:
-                        t.append(f" ({model_count} model", style=THEME["dim"])
-                        if model_count > 1:
-                            t.append("s", style=THEME["dim"])
-                        t.append(")", style=THEME["dim"])
-
-                    # Show API key requirement if not configured
-                    if not configured and pdef.env_vars:
-                        t.append(f" • Needs: {', '.join(missing_keys)}", style=THEME["yellow"])
-
                     t.append("\n", style="")
 
                 provider_list.append((pid, pdef))
@@ -2157,38 +2160,20 @@ class ConnectMixin:
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=f"bold {THEME['success']}")
                     t.append(f"{pdef.name}", style=f"bold {THEME['success']}")
+                    t.append("\n", style="")
+                    details = []
                     if model_count > 0:
-                        t.append(
-                            f" ({model_count} model{'s' if model_count > 1 else ''})",
-                            style=f"bold {THEME['success']}",
-                        )
+                        details.append(f"{model_count} model{'s' if model_count > 1 else ''}")
                     if not configured and pdef.env_vars:
-                        t.append(
-                            f" • Needs: {', '.join(missing_keys)}", style=f"bold {THEME['success']}"
-                        )
-                    t.append(f"  ← SELECTED\n", style=f"bold {THEME['success']}")
+                        details.append(f"needs {', '.join(missing_keys)}")
+                    if details:
+                        t.append("        " + " · ".join(details) + "\n", style=THEME["dim"])
                 else:
                     t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=THEME["text"])
                     t.append(f"{pdef.name}", style=THEME["muted"])
-
-                # Show free badge if provider offers free models
-                if pid in free_provider_ids:
-                    t.append(f" 🆓", style=THEME["success"])
-
-                # Show model count
-                if model_count > 0:
-                    t.append(f" ({model_count} model", style=THEME["dim"])
-                    if model_count > 1:
-                        t.append("s", style=THEME["dim"])
-                    t.append(")", style=THEME["dim"])
-
-                # Show API key requirement if not configured
-                if not configured and pdef.env_vars:
-                    t.append(f" • Needs: {', '.join(missing_keys)}", style=THEME["yellow"])
-
-                t.append("\n", style="")
+                    t.append("\n", style="")
 
                 provider_list.append((pid, pdef))
                 idx += 1
@@ -2205,44 +2190,15 @@ class ConnectMixin:
                 style=THEME["dim"],
             )
 
-        # Add arrow key navigation instructions
-        t.append(f"  💡 Quick Connect:\n", style=THEME["muted"])
-        t.append(f"    ⌨️  ", style=THEME["dim"])
-        t.append(f"↑↓", style=THEME["cyan"])
-        t.append(" Arrow keys to navigate  ", style=THEME["dim"])
-        t.append(f"Enter", style=THEME["cyan"])
-        t.append(" to select highlighted provider\n", style=THEME["dim"])
-        t.append(f"    Or enter number (1-{len(provider_list)})  ", style=THEME["dim"])
-        t.append("to select provider\n", style=THEME["text"])
-        t.append(f"    Or: ", style=THEME["dim"])
-        t.append(f":connect byok <provider>/<model>", style=THEME["success"])
-        t.append(" for direct connect\n", style=THEME["text"])
-        # People think "I want GLM-5.2" or "Kimi K2", not "I want SiliconFlow".
-        # Flipping the axis is one keystroke rather than a hidden subcommand.
-        t.append("    Know the model, not the provider? ", style=THEME["dim"])
-        t.append(":hub", style=f"bold {THEME['cyan']}")
-        t.append(" searches by model name\n", style=THEME["dim"])
-        t.append("    Zero-cost routes today: ", style=THEME["dim"])
-        t.append(":providers scan-free --live", style=f"bold {THEME['success']}")
-        t.append("\n", style="")
-        t.append(f"    Local models? Use ", style=THEME["dim"])
-        t.append(f":connect local", style=THEME["cyan"])
-        t.append(" (Ollama, LM Studio, vLLM, …)\n", style=THEME["dim"])
-        t.append(f"    ", style=THEME["dim"])
-        t.append(f"R", style=f"bold {THEME['success']}")
-        t.append(" to refresh models from API\n", style=THEME["dim"])
-        t.append(f"    Use ", style=THEME["dim"])
-        t.append(f":back", style=THEME["cyan"])
-        t.append(" or ", style=THEME["dim"])
-        t.append(f":home", style=THEME["cyan"])
-        t.append(" to cancel\n", style=THEME["text"])
-        t.append(f"\n  💡 API Key Setup:\n", style=THEME["muted"])
-        t.append(f"    Export API key: ", style=THEME["dim"])
-        t.append("export ANTHROPIC_API_KEY='your-key'\n", style=THEME["cyan"])
-        t.append(f"    Or in ~/.zshrc: ", style=THEME["dim"])
-        t.append("export ANTHROPIC_API_KEY='your-key'\n", style=THEME["cyan"])
-        t.append(f"    See provider docs: ", style=THEME["dim"])
-        t.append("https://docs.superqode.ai/providers\n\n", style=THEME["cyan"])
+        t.append("  💡 ", style=THEME["muted"])
+        t.append("↑↓", style=THEME["cyan"])
+        t.append(" navigate  ", style=THEME["dim"])
+        t.append("Enter", style=THEME["cyan"])
+        t.append(" select  •  type a number  •  ", style=THEME["dim"])
+        t.append(":hub", style=THEME["cyan"])
+        t.append(" model search  •  ", style=THEME["dim"])
+        t.append(":connect local", style=THEME["cyan"])
+        t.append(" local models\n", style=THEME["dim"])
 
         # Ensure we have providers to show
         if not provider_list:

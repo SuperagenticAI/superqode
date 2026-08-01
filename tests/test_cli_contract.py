@@ -23,7 +23,7 @@ EXPECTED_COMMAND_COUNT = 262
 # root and the four `build-*` routes widen the choice list, and the help text
 # now names those rungs instead of the old five-option screen. No Click command
 # was added or removed, so the count is unchanged.
-EXPECTED_HELP_TREE_SHA256 = "93414fb42aee2db4de354345cfb33715b684fcd930ce3bc9da46609d6a9b3d35"
+EXPECTED_HELP_TREE_SHA256 = "363586628418e98acca96a418fe6ea4b3daf8afa5ca10fabf2b3349cdf01ac1f"
 
 
 def _render_help_tree() -> tuple[int, str]:

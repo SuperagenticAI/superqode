@@ -149,9 +149,7 @@ class ExploreMixin:
         if not (0 <= index < len(capabilities)):
             return
         self._explore_index = index
-        expanded = set(getattr(self, "_explore_expanded", set()))
-        expanded.add(capabilities[index].id)
-        self._explore_expanded = expanded
+        self._explore_expanded = {capabilities[index].id}
         self._render_explore(log, clear_log=False)
 
     def action_toggle_explore_row(self) -> None:
@@ -165,10 +163,9 @@ class ExploreMixin:
         expanded = set(getattr(self, "_explore_expanded", set()))
         capability_id = capabilities[index].id
         if capability_id in expanded:
-            expanded.discard(capability_id)
+            self._explore_expanded = set()
         else:
-            expanded.add(capability_id)
-        self._explore_expanded = expanded
+            self._explore_expanded = {capability_id}
         self._render_explore(self.query_one("#log", ConversationLog), clear_log=False)
 
     def action_run_explore_command(self) -> None:

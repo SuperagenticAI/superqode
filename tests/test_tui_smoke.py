@@ -386,12 +386,6 @@ def test_welcome_uses_agent_engineering_positioning():
 
 
 def test_welcome_shows_workspace_state_with_a_single_next_step():
-    from superqode.app.capabilities import capability_inventory
-
-    # The renderer reads the last probe rather than running one, so the counts
-    # only appear once something has explicitly asked for them.
-    capability_inventory()
-
     state = WelcomeState(
         repository="/work/repository",
         harness="review-harness",
@@ -411,8 +405,30 @@ def test_welcome_shows_workspace_state_with_a_single_next_step():
     assert ":connect" not in text
     assert "describe what you want built" in text
     assert "Task" not in text
-    # The scale of what is installed belongs on the first screen, not the README.
-    assert "Available" in text
+    assert ":explore" in text
+    assert ":tour" in text
+    assert "AGENT ENGINEERING FOR YOUR CODE FACTORY" not in text
+    assert "Interoperability:" not in text
+
+
+@pytest.mark.parametrize("width", [60, 80, 120])
+def test_connected_home_stays_compact_at_common_terminal_widths(width):
+    state = WelcomeState(
+        repository="/work/a-very-long-repository-name/with/a/nested/project",
+        harness="review-harness",
+        connection="anthropic/claude-opus",
+        runtime="acp",
+    )
+    console = Console(record=True, width=width, force_terminal=False)
+    console.print(render_welcome([], width=width, state=state))
+    text = console.export_text()
+    nonblank = [line for line in text.splitlines() if line.strip()]
+
+    assert len(nonblank) <= 10
+    assert all(len(line) <= width for line in text.splitlines())
+    assert "Current workspace" in text
+    assert "Next" in text
+    assert ":explore" in text
 
 
 def test_welcome_asks_an_unconnected_workspace_to_connect():
@@ -2134,6 +2150,57 @@ async def test_harness_python_extra_install_resumes_without_restart(monkeypatch)
     assert any("Continuing without restarting" in str(item) for item in log.items)
 
 
+def test_tui_harness_switch_continues_same_session_and_reuses_route(tmp_path, monkeypatch):
+    from superqode.agent.session_manager import SessionManager
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+    app = make_app()
+    log = FakeLog()
+    pure = app._ensure_pure_mode()
+    pure.connect("test", "model", session_id="core-session-1234")
+
+    app._harness_cmd("switch workbench", log)
+
+    saved = SessionManager(".superqode/sessions").get_session_info("core-session-1234")
+    assert saved is not None
+    assert saved.harness_id == "workbench"
+    assert saved.harness_transitions[-1]["from_harness"] == "core"
+    assert saved.harness_transitions[-1]["to_harness"] == "workbench"
+    assert saved.harness_transitions[-1]["continuity"] == "context-replay"
+    assert pure.session.harness_name == "workbench"
+    assert pure.session.provider == "test"
+    assert pure.session.model == "model"
+    assert pure.get_current_session_id() == "core-session-1234"
+
+
+def test_tui_harness_switch_can_fork_before_changing_harness(tmp_path, monkeypatch):
+    from superqode.agent.session_manager import SessionManager
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPERQODE_HARNESS", "core")
+    app = make_app()
+    log = FakeLog()
+    pure = app._ensure_pure_mode()
+    pure.connect("test", "model", session_id="source-session")
+    pure._session_manager.add_user_message("preserve this context")
+
+    app._harness_cmd("switch workbench --fork", log)
+
+    fork_id = pure.get_current_session_id()
+    assert fork_id is not None
+    assert fork_id != "source-session"
+    manager = SessionManager(".superqode/sessions")
+    source = manager.get_session_info("source-session")
+    forked = manager.get_session_info(fork_id)
+    assert source is not None and source.harness_id == "core"
+    assert forked is not None and forked.parent_session_id == "source-session"
+    assert forked.harness_id == "workbench"
+    assert [message.content for message in manager.store.get_messages(fork_id)] == [
+        "preserve this context"
+    ]
+
+
 def test_tui_harness_picker_confirms_fresh_runtime_and_cancels(monkeypatch):
     app = make_app()
     log = FakeLog()
@@ -2158,7 +2225,7 @@ def test_tui_harness_picker_confirms_fresh_runtime_and_cancels(monkeypatch):
     app.action_cancel_harness_selection()
 
     assert app._awaiting_harness_confirmation is False
-    assert log.items == ["Harness selection cancelled."]
+    assert log.items == ["Harness selection cancelled. Reopen it with :harness"]
 
 
 def test_tui_harness_wizard_guided_steps_write_and_load_spec(tmp_path, monkeypatch):
@@ -5706,7 +5773,7 @@ def picker_rows(rendered: str) -> list[tuple[int, str]]:
     """
     rows = []
     for line in rendered.split("\n"):
-        match = re.match(r"\s*(?:▶\s+)?(\d+)\.\s(.+?)(?:\s{2,}.*)?$", line)
+        match = re.match(r"\s*(?:▶\s+)?\[(\d+)\]\s+(.+?)(?:\s{2,}.*)?$", line)
         if match:
             rows.append((int(match.group(1)), match.group(2).strip()))
     return rows
@@ -5727,9 +5794,9 @@ def test_connect_root_picker_asks_who_runs_the_loop():
     rendered = render_plain(log.items[-1])
 
     assert picker_rows(rendered) == [
-        (1, "Use an existing agent"),
-        (2, "Run a model of your choice"),
-        (3, "Build a harness for this repository"),
+        (1, "Connect an existing harness"),
+        (2, "Connect a harness with your model"),
+        (3, "Build your own harness"),
     ]
     # Vendor products and transports live one screen deeper now.
     assert "Codex subscription" not in rendered
@@ -5738,7 +5805,48 @@ def test_connect_root_picker_asks_who_runs_the_loop():
     assert "Detected here:" in rendered
 
 
-def test_connect_agents_screen_groups_vendor_agents_by_readiness():
+def test_connect_picker_only_explains_the_highlighted_choice():
+    app = make_app()
+    log = FakeLog()
+    app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
+    app.query_one = lambda *args, **kwargs: log
+
+    app._show_connect_type_picker(log)
+    first = render_plain(log.items[-1])
+    assert "Codex, Claude Code, Copilot, Cursor, Devin and more" in first
+    assert "Core, Workbench or a preset" not in first
+    assert "← SELECTED" not in first
+
+    app.action_navigate_connect_type_down()
+    second = render_plain(log.items[-1])
+    assert "Codex, Claude Code, Copilot, Cursor, Devin and more" not in second
+    assert "Core, Workbench or a preset" in second
+    assert "← SELECTED" not in second
+
+
+@pytest.mark.parametrize("width", [60, 80, 120])
+def test_connect_root_decision_fits_common_terminal_widths(width, monkeypatch):
+    import superqode.providers.connection_profiles as profiles
+
+    monkeypatch.setattr(profiles, "detected_sources", lambda: ["Cursor"])
+    app = make_app()
+    log = FakeLog()
+    app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
+    app._show_connect_type_picker(log)
+
+    console = Console(record=True, width=width, force_terminal=False)
+    console.print(log.items[-1])
+    text = console.export_text()
+    nonblank = [line for line in text.splitlines() if line.strip()]
+
+    assert len(nonblank) <= 12
+    assert all(len(line) <= width for line in text.splitlines())
+    assert "Connect an existing harness" in text
+    assert "Connect a harness with your model" in text
+    assert "Build your own harness" in text
+
+
+def test_connect_agents_screen_keeps_the_first_choice_progressive():
     app = make_app()
     log = FakeLog()
     app.set_timer = lambda *_args, **_kwargs: None
@@ -5752,40 +5860,14 @@ def test_connect_agents_screen_groups_vendor_agents_by_readiness():
     assert "China Coding Agents" not in rendered
     assert "Claude Code subscription" not in rendered
 
-    # Which bucket an agent lands in depends on what is installed here, so the
-    # assertion is that the headers exist in escalating-effort order.
-    headers = [
-        name for name in ("Ready now", "One step away", "Installable", "More") if name in rendered
+    assert picker_rows(rendered) == [
+        (1, "Subscriptions"),
+        (2, "ACP agents"),
+        (3, "Other harnesses"),
     ]
-    assert headers == sorted(headers, key=rendered.index)
-    assert "More" in headers
-
-    # Every vendor gets exactly one numbered row, wherever readiness puts it.
-    # Matching the row form matters: several labels also occur inside their own
-    # description text.
-    rows = [label for _number, label in picker_rows(rendered)]
-    for label in (
-        "Codex subscription",
-        "Cursor subscription",
-        "Amp subscription",
-        "GitHub Copilot",
-        "Devin",
-        "Qwen Code",
-        "Kimi Code",
-    ):
-        assert rows.count(label) == 1
-
-    # Gemini CLI is deliberately not a vendor row: it is an API-key route, and
-    # a subscription entry must never put the user on metered API billing. It
-    # is still reachable through the ACP catalogue, where its billing is clear.
-    assert "Gemini CLI" not in rows
-    assert "Z.AI GLM API" not in rendered
-    assert "GitHub Copilot CLI" not in rendered
-    # Openness is two independent facts, shown as badges on each row.
-    assert "open harness · open weights · ACP" in rendered
-    # ACP is the main event for people who want a harness they did not write,
-    # so it gets a row here rather than a line in the documentation.
-    assert "Browse all ACP agents" in rows
+    # The long vendor and ACP catalogs remain one deliberate choice deeper.
+    assert "Codex subscription" not in rendered
+    assert "Browse all ACP agents" not in rendered
     assert "Esc back" in rendered
 
 
@@ -5823,7 +5905,7 @@ def test_agents_screen_numbers_count_down_the_screen():
         assert chosen == [rows[target - 1][1]]
 
 
-def test_legacy_subscriptions_menu_name_still_lands_on_the_agents_screen():
+def test_legacy_subscriptions_menu_name_still_lands_on_the_vendor_screen():
     """``:connect subscriptions`` predates the ladder and must not blank out."""
     app = make_app()
     log = FakeLog()
@@ -5831,7 +5913,7 @@ def test_legacy_subscriptions_menu_name_still_lands_on_the_agents_screen():
     app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
     app._show_connect_type_picker(log, menu="subscriptions")
 
-    assert app._connect_menu == "agents"
+    assert app._connect_menu == "vendors"
     assert "Codex subscription" in render_plain(log.items[-1])
 
 
@@ -5852,7 +5934,7 @@ def test_agents_picker_returns_to_the_root_screen():
     assert app.action_connect_menu_back() is True
     assert app._connect_menu == "root"
     assert app._awaiting_connect_type is True
-    assert (1, "Use an existing agent") in picker_rows(render_plain(log.items[-1]))
+    assert (1, "Connect an existing harness") in picker_rows(render_plain(log.items[-1]))
     # On the root screen Esc falls through to cancelling instead.
     assert app.action_connect_menu_back() is False
 
@@ -5864,7 +5946,7 @@ def test_connect_picker_can_open_harness_catalog():
     app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
     app._show_connect_type_picker(log, menu="agents")
     rendered = render_plain(log.items[-1])
-    assert (14, "Other harness integrations") in picker_rows(rendered)
+    assert (3, "Other harnesses") in picker_rows(rendered)
 
     app._awaiting_connect_type = True
     app.query_one = lambda *args, **kwargs: log

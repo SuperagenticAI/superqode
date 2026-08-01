@@ -23,7 +23,7 @@ IMPORT_CANDIDATES: tuple[tuple[str, str, str], ...] = (
     ("AGENTS.md", "AGENTS.md", "prompt"),
     ("CLAUDE.md", "CLAUDE.md", "prompt"),
     (".claude/CLAUDE.md", "Claude Code project instructions", "prompt"),
-    (".cursor/rules", "Cursor rules", "prompt"),
+    (".cursor/rules", "Cursor rules", "prompt-tree"),
     (".github/copilot-instructions.md", "Copilot instructions", "prompt"),
     ("agent.yaml", "SuperQode agent spec", "agent-yaml"),
     ("agent.yml", "SuperQode agent spec", "agent-yaml"),
@@ -52,7 +52,16 @@ def discover_importable(repo_root: Path | None = None) -> list[tuple[Path, str, 
     for relative, label, kind in IMPORT_CANDIDATES:
         candidate = root / relative
         try:
-            if candidate.exists() and candidate.stat().st_size > 0:
+            if candidate.is_dir():
+                has_content = any(
+                    child.is_file()
+                    and child.suffix.lower() in {".md", ".mdc", ".txt"}
+                    and child.stat().st_size > 0
+                    for child in candidate.rglob("*")
+                )
+            else:
+                has_content = candidate.exists() and candidate.stat().st_size > 0
+            if has_content:
                 found.append((candidate, label, kind))
         except OSError:
             continue
@@ -108,17 +117,18 @@ class BuildHarnessMixin:
                 t.append("  ▶ ", style=f"bold {THEME['success']}")
                 t.append(f"[{num}] ", style=f"bold {THEME['success']}")
                 t.append(label, style=f"bold {THEME['success']}")
-                t.append("  ← SELECTED\n", style=f"bold {THEME['success']}")
+                t.append("\n", style="")
             else:
                 t.append(f"    [{num}] ", style=THEME["dim"])
                 t.append(label, style=f"bold {THEME['text']}")
                 t.append("\n", style="")
-            detail = (
-                "compiles directly to a HarnessSpec"
-                if kind == "agent-yaml"
-                else "becomes the harness system prompt"
-            )
-            t.append(f"        {path}  ·  {detail}\n\n", style=THEME["muted"])
+            if index == highlighted:
+                detail = (
+                    "compiles directly to a HarnessSpec"
+                    if kind == "agent-yaml"
+                    else "becomes the harness system prompt"
+                )
+                t.append(f"        {path}  ·  {detail}\n\n", style=THEME["muted"])
 
         t.append("  💡 ", style=THEME["muted"])
         t.append("↑↓", style=THEME["cyan"])
@@ -145,6 +155,12 @@ class BuildHarnessMixin:
             output = HARNESS_OUTPUT_DIR / f"{spec.name}.yaml"
             from superqode.harness.loader import save_harness_spec
 
+            if output.exists():
+                log.add_error(
+                    f"Refusing to overwrite existing harness: {output}. "
+                    "Rename it or choose a different harness name first."
+                )
+                return
             written = save_harness_spec(spec, output)
         except Exception as exc:  # noqa: BLE001 - surface import failures in the TUI
             log.add_error(f"Could not import {label}: {exc}")
@@ -180,13 +196,40 @@ class BuildHarnessMixin:
 
         from superqode.harness.templates import get_harness_template
 
-        instructions = path.read_text(encoding="utf-8").strip()
+        if kind == "prompt-tree":
+            parts = []
+            for child in sorted(path.rglob("*")):
+                if not child.is_file() or child.suffix.lower() not in {".md", ".mdc", ".txt"}:
+                    continue
+                content = child.read_text(encoding="utf-8").strip()
+                if content:
+                    parts.append(f"## {child.relative_to(path)}\n\n{content}")
+            instructions = "\n\n".join(parts)
+        else:
+            instructions = path.read_text(encoding="utf-8").strip()
         name = f"{Path.cwd().name or 'project'}-imported".lower().replace(" ", "-")
         spec = replace(get_harness_template("coding"), name=name)
         base = spec.agents[0] if spec.agents else None
         if base is not None:
             merged = "\n\n".join(part for part in (base.system_prompt, instructions) if part)
             spec = replace(spec, agents=(replace(base, system_prompt=merged), *spec.agents[1:]))
+        # Root AGENTS.md and CLAUDE.md are loaded by the coding template by
+        # default. Once their contents are embedded above, remove that source
+        # from the context list so the model does not receive it twice.
+        try:
+            relative_source = str(path.relative_to(Path.cwd()))
+        except ValueError:
+            relative_source = str(path)
+        if relative_source in spec.context.instruction_files:
+            spec = replace(
+                spec,
+                context=replace(
+                    spec.context,
+                    instruction_files=tuple(
+                        item for item in spec.context.instruction_files if item != relative_source
+                    ),
+                ),
+            )
         metadata = dict(spec.metadata)
         metadata["imported_from"] = str(path)
         metadata["built_with"] = "connect import"
@@ -223,12 +266,13 @@ class BuildHarnessMixin:
                 t.append("  ▶ ", style=f"bold {THEME['success']}")
                 t.append(f"[{num}] ", style=f"bold {THEME['success']}")
                 t.append(template_id, style=f"bold {THEME['success']}")
-                t.append("  ← SELECTED\n", style=f"bold {THEME['success']}")
+                t.append("\n", style="")
             else:
                 t.append(f"    [{num}] ", style=THEME["dim"])
                 t.append(template_id, style=f"bold {THEME['text']}")
                 t.append("\n", style="")
-            t.append(f"        {description}\n\n", style=THEME["muted"])
+            if index == highlighted:
+                t.append(f"        {description}\n\n", style=THEME["muted"])
 
         t.append("  💡 ", style=THEME["muted"])
         t.append("↑↓", style=THEME["cyan"])
@@ -257,7 +301,14 @@ class BuildHarnessMixin:
             metadata = dict(spec.metadata)
             metadata["built_with"] = "connect preset"
             spec = replace(spec, metadata=metadata)
-            written = save_harness_spec(spec, HARNESS_OUTPUT_DIR / f"{template_id}.yaml")
+            output = HARNESS_OUTPUT_DIR / f"{template_id}.yaml"
+            if output.exists():
+                log.add_error(
+                    f"Refusing to overwrite existing harness: {output}. "
+                    "Rename it or remove it explicitly before cloning again."
+                )
+                return
+            written = save_harness_spec(spec, output)
         except Exception as exc:  # noqa: BLE001 - surface template failures in the TUI
             log.add_error(f"Could not clone preset {template_id}: {exc}")
             return

@@ -31,21 +31,10 @@ def test_root_menu_asks_one_question_in_three_answers():
     assert all(p.group == "" for p in list_connection_profiles(CONNECT_MENU_ROOT))
 
 
-def test_agents_menu_holds_the_vendor_agents_then_the_browse_rows():
+def test_agents_menu_holds_three_existing_harness_categories():
     assert connection_profile_ids(menu=CONNECT_MENU_AGENTS) == [
-        "codex",
-        "cursor",
-        "amp",
-        "antigravity",
-        "grok",
-        "copilot",
-        "devin",
-        "droid",
-        "kiro",
-        "glm-cli",
-        "qwen-code",
-        "kimi-code",
-        "acp",
+        "agent-subscriptions",
+        "agent-acp",
         "other-harnesses",
     ]
 
@@ -59,7 +48,7 @@ def test_agents_carry_openness_and_transport_badges():
     codex = get_connection_profile("codex")
     droid = get_connection_profile("droid")
 
-    assert codex.badges == ["open harness", "OpenAI models", "SDK"]
+    assert codex.badges == ["open harness", "OpenAI models", "via SDK"]
     assert droid.harness_openness == "closed"
     assert "BYOK" in droid.model_openness
     assert droid.transport == "ACP"
@@ -131,6 +120,9 @@ def test_registry_has_expected_profiles():
         "agents",
         "models",
         "build",
+        "agent-subscriptions",
+        "agent-acp",
+        "other-harnesses",
         "codex",
         "cursor",
         "amp",
@@ -144,10 +136,22 @@ def test_registry_has_expected_profiles():
         "qwen-code",
         "kimi-code",
         "acp",
-        "other-harnesses",
+        "harness-core",
+        "harness-workbench",
+        "harness-presets",
+        "harness-repo",
         "local",
         "byok",
         "plan",
+        "plan-zai",
+        "plan-grok",
+        "plan-copilot",
+        "plan-moonshot",
+        "plan-qwen",
+        "plan-opencode",
+        "plan-ollama-cloud",
+        "plan-deepseek",
+        "plan-minimax",
         "build-import",
         "build-preset",
         "build-wizard",
@@ -162,7 +166,7 @@ def test_old_root_ids_still_resolve():
         assert get_connection_profile(old_id) is not None
 
     subscriptions = get_connection_profile("subscriptions")
-    assert subscriptions.connector == "agent-picker"
+    assert subscriptions.connector == "vendor-picker"
     assert subscriptions.available is True
 
 
@@ -275,7 +279,7 @@ def test_kimi_and_qwen_are_first_party_acp_profiles():
     assert "@qwen-code/qwen-code" in qwen.unavailable_hint
     # Where a vendor is headquartered tells a user nothing about whether they
     # can run it. Both are open harnesses over open weights, and that does.
-    assert qwen.badges == kimi.badges == ["open harness", "open weights", "ACP"]
+    assert qwen.badges == kimi.badges == ["open harness", "open weights", "via ACP"]
 
 
 def test_copilot_is_one_visible_subscription_with_sdk_and_cli_routes():
@@ -285,7 +289,7 @@ def test_copilot_is_one_visible_subscription_with_sdk_and_cli_routes():
     assert profile.runtime == "copilot-sdk"
     assert profile.acp_agent == "copilot"
     assert profile.self_contained is True
-    assert profile.badges == ["closed harness", "multi-model", "SDK"]
+    assert profile.badges == ["closed harness", "multi-model", "via SDK or CLI"]
     assert "sdk" in profile.description.lower()
     assert "cli" in profile.description.lower()
 

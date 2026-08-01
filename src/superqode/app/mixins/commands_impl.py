@@ -904,7 +904,7 @@ class CommandImplMixin:
         command_parts: list[str],
         log: ConversationLog,
         label: str,
-    ) -> None:
+    ) -> bool:
         """Run a SuperQode CLI command from the TUI without blocking input."""
         import sys
 
@@ -930,17 +930,19 @@ class CommandImplMixin:
             completed = await asyncio.to_thread(_run)
         except Exception as exc:
             log.add_error(f"{label} failed to start: {exc}")
-            return
+            return False
 
         output = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
         if completed.returncode == 0:
             log.add_success(f"{label} completed.")
             if output:
                 log.write(Text(output + "\n", style=THEME["text"], overflow="fold"))
+            return True
         else:
             log.add_error(f"{label} failed with exit code {completed.returncode}.")
             if output:
                 log.write(Text(output + "\n", style=THEME["error"], overflow="fold"))
+            return False
 
     def _skills_doctor(self, skills_root: Path, log: ConversationLog) -> None:
         """Validate local skill files and show actionable issues."""
@@ -6164,7 +6166,14 @@ class CommandImplMixin:
             return
 
         if tokens:
-            self._run_cli_passthrough(["harness", "eval", *tokens], log, "Harness eval")
+            async def run_eval() -> None:
+                completed = await self._superqode_cli_cmd(
+                    ["harness", "eval", *tokens], log, "Harness eval"
+                )
+                if completed:
+                    self._record_milestone("ran_eval")
+
+            self.run_worker(run_eval())
             return
 
         tasks = [

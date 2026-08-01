@@ -1246,6 +1246,15 @@ class ConversationLog(RichLog):
 
     def write(self, *args, **kwargs):
         """Override write to ensure console width is always correct - NO LIMITS."""
+        # A tall feedback card is deliberately anchored at its heading. Resume
+        # normal transcript following when the *next* piece of output arrives,
+        # rather than immediately jumping this card to its bottom edge.
+        if getattr(self, "_feedback_anchor_active", False) and not getattr(
+            self, "_writing_feedback", False
+        ):
+            self._feedback_anchor_active = False
+            self.auto_scroll = True
+
         # Ensure console width is updated before writing
         self._update_console_width()
 
@@ -1273,18 +1282,53 @@ class ConversationLog(RichLog):
            "API Key Required" block on a short terminal) showed only its last
            lines, hiding the heading that says what happened.
 
-        So: re-enable follow-scroll for subsequent output, then anchor the
-        viewport to the *start* of this block. ``scroll_to`` clamps to the
-        max scroll, so a short block near the end behaves exactly like
-        ``scroll_end`` while a tall block stays readable top-down.
+        So: suspend follow-scroll while writing, then anchor the viewport to
+        the *start* of this block after Textual has laid it out. ``scroll_to``
+        clamps to the max scroll, so a short block near the end behaves exactly
+        like ``scroll_end`` while a tall block stays readable top-down.
         """
         start_y = len(self.lines)
-        self.auto_scroll = True
-        self.write(content, scroll_end=False)
+        first_line = next((line.strip() for line in content.plain.splitlines() if line.strip()), "")
+        marker_start = next(
+            (index for index, character in enumerate(first_line) if character.isalnum()), 0
+        )
+        marker = " ".join(first_line[marker_start:].split())[:48]
+        self.auto_scroll = False
+        self._writing_feedback = True
         try:
-            self.scroll_to(y=start_y, animate=False)
+            self.write(content, scroll_end=False)
+        finally:
+            self._writing_feedback = False
+        self._feedback_anchor_active = True
+
+        def reveal() -> None:
+            if not self._feedback_anchor_active:
+                return
+            anchor_y = start_y
+            if marker:
+                for index in range(len(self.lines) - 1, -1, -1):
+                    rendered = " ".join(self.lines[index].text.split())
+                    if marker in rendered:
+                        anchor_y = index
+                        break
+            try:
+                self.scroll_to(y=anchor_y, animate=False)
+            except Exception:
+                self.scroll_end(animate=False)
+
+        # Move immediately when layout is already current, then repeat after
+        # refresh for newly wrapped lines and short-terminal geometry.
+        reveal()
+        try:
+            self.call_after_refresh(reveal)
         except Exception:
-            self.scroll_end(animate=False)
+            pass
+        if self.is_attached:
+            try:
+                self.call_later(reveal)
+                self.set_timer(0.05, reveal)
+            except Exception:
+                pass
 
     # Backwards-compatible internal alias.
     _write_feedback = write_feedback

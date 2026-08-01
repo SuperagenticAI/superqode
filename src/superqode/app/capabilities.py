@@ -68,15 +68,11 @@ def _safe(fn: Callable[[], Capability], fallback: Capability) -> Capability:
 
 def _coding_agents() -> Capability:
     from superqode.providers.connection_profiles import (
-        CONNECT_MENU_AGENTS,
+        CONNECT_MENU_VENDORS,
         list_connection_profiles,
     )
 
-    profiles = [
-        profile
-        for profile in list_connection_profiles(CONNECT_MENU_AGENTS)
-        if profile.connector not in {"acp-picker", "harness-picker"}
-    ]
+    profiles = list_connection_profiles(CONNECT_MENU_VENDORS)
     ready = [profile for profile in profiles if profile.available]
     items = [
         CapabilityItem(
@@ -90,7 +86,7 @@ def _coding_agents() -> Capability:
         id="agents",
         title="Coding agents",
         command=":connect",
-        summary="Vendor and ACP agents that bring their own harness",
+        summary="Vendor coding agents that bring their own harness",
         total=len(profiles),
         active=len(ready),
         status=f"{len(ready)} ready",
@@ -229,6 +225,7 @@ def _memory() -> Capability:
 
 def _tools_and_mcp() -> Capability:
     from superqode.harness.catalog import list_harnesses
+    from superqode.mcp.integration import list_mcp_servers
 
     entries = {entry.id: entry for entry in list_harnesses(Path.cwd())}
     widest = entries.get("workbench") or entries.get("core")
@@ -237,14 +234,28 @@ def _tools_and_mcp() -> Capability:
         CapabilityItem(name=name, state="ready", detail="native tool")
         for name in (getattr(widest, "tools", ()) or ())
     ]
+    servers = list_mcp_servers()
+    items.extend(
+        CapabilityItem(
+            name=str(server.get("name") or "MCP server"),
+            state="on",
+            detail="MCP server",
+        )
+        for server in servers
+    )
+    total = tool_count + len(servers)
     return Capability(
         id="tools",
         title="Tools and MCP",
         command=":mcp",
         summary="Native tools plus any Model Context Protocol server you attach",
-        total=tool_count,
-        active=tool_count,
-        status=f"{tool_count} native tools",
+        total=total,
+        active=total,
+        status=(
+            f"{tool_count} native tools · {len(servers)} MCP on"
+            if servers
+            else f"{tool_count} native tools · no MCP attached"
+        ),
         items=items,
     )
 
@@ -259,58 +270,72 @@ def _sandboxes() -> Capability:
         command=":sandbox",
         summary="Run shell work isolated, locally or in a cloud devbox",
         total=len(backends),
-        active=0,
-        status="local-os by default",
-        items=[CapabilityItem(name=str(backend), state="available") for backend in backends],
+        active=1 if "local-os" in backends else 0,
+        status="local-os ready" if "local-os" in backends else "none active",
+        items=[
+            CapabilityItem(
+                name=str(backend),
+                state="ready" if backend == "local-os" else "available",
+            )
+            for backend in backends
+        ],
     )
 
 
 def _observability() -> Capability:
     sinks = ("OpenTelemetry", "MLflow", "LangSmith", "Logfire", "Arize Phoenix")
+    items = [CapabilityItem(name="Local run events", state="ready")]
+    items.extend(CapabilityItem(name=sink, state="available") for sink in sinks)
     return Capability(
         id="observability",
         title="Observability",
         command=":harness observability status",
         summary="Export normalized runs, spans and evidence to your own stack",
-        total=len(sinks),
-        active=0,
+        total=len(items),
+        active=1,
         status="local events always on",
-        items=[CapabilityItem(name=sink, state="available") for sink in sinks],
+        items=items,
     )
 
 
 def _evaluation() -> Capability:
+    items = [
+        CapabilityItem(name="eval packs", state="ready"),
+        CapabilityItem(name="scorecards", state="ready"),
+        CapabilityItem(name="benchmarks", state="ready", detail="HarnessBench"),
+        CapabilityItem(name="regression gates", state="ready", detail="for CI"),
+    ]
     return Capability(
         id="evaluation",
         title="Evaluation",
         command=":eval",
         summary="Score a harness on your repository: tasks, rubrics, regression gates",
+        total=len(items),
+        active=len(items),
         status="ready",
-        items=[
-            CapabilityItem(name="eval packs", state="ready"),
-            CapabilityItem(name="scorecards", state="ready"),
-            CapabilityItem(name="benchmarks", state="ready", detail="HarnessBench"),
-            CapabilityItem(name="regression gates", state="ready", detail="for CI"),
-        ],
+        items=items,
     )
 
 
 def _optimization() -> Capability:
+    items = [
+        CapabilityItem(name="GEPA", state="available", detail="reflective search"),
+        CapabilityItem(name="GEPA meta-harness", state="available", detail="candidate frontier"),
+        CapabilityItem(
+            name="MetaHarness", state="available", detail="Superagentic export"
+        ),
+        CapabilityItem(name="SkillOpt", state="available", detail="markdown skill review"),
+        CapabilityItem(name="AutoResearch", state="available"),
+    ]
     return Capability(
         id="optimization",
         title="Optimization",
         command=":harness optimize",
         summary="Generate harness candidates from recorded failure evidence",
+        total=len(items),
+        active=0,
         status="needs an eval first",
-        items=[
-            CapabilityItem(name="GEPA", state="available", detail="reflective search"),
-            CapabilityItem(
-                name="GEPA meta-harness", state="available", detail="candidate frontier"
-            ),
-            CapabilityItem(name="MetaHarness", state="available", detail="Superagentic export"),
-            CapabilityItem(name="SkillOpt", state="available", detail="markdown skill review"),
-            CapabilityItem(name="AutoResearch", state="available"),
-        ],
+        items=items,
     )
 
 
@@ -341,18 +366,21 @@ def _remote() -> Capability:
 
 
 def _delivery() -> Capability:
+    items = [
+        CapabilityItem(name="WorkOrders", state="ready", detail="tasks, leases, recovery"),
+        CapabilityItem(name="Code factory", state="ready", detail="cross-repository runs"),
+        CapabilityItem(name="Session sharing", state="ready", detail=":share create"),
+        CapabilityItem(name="Session tree", state="ready", detail=":tree"),
+    ]
     return Capability(
         id="delivery",
         title="Delivery",
         command=":work",
         summary="Durable multi-repository work with checks, reviews and evidence",
+        total=len(items),
+        active=len(items),
         status="ready",
-        items=[
-            CapabilityItem(name="WorkOrders", state="ready", detail="tasks, leases, recovery"),
-            CapabilityItem(name="Code factory", state="ready", detail="cross-repository runs"),
-            CapabilityItem(name="Session sharing", state="ready", detail=":share create"),
-            CapabilityItem(name="Session tree", state="ready", detail=":tree"),
-        ],
+        items=items,
     )
 
 

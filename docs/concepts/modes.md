@@ -92,16 +92,18 @@ installed agents, running local engines, API keys already in the environment,
 and agent configuration files in the repository. Nothing has to be read first
 to find out what is usable here.
 
-The agents screen groups its rows by readiness rather than by vendor
-geography, because where a company is headquartered says nothing about whether
-a user can run its agent today:
+The existing-harness screen stays short by offering three categories:
+`agent-subscriptions`, `agent-acp`, and `other-harnesses`. The subscription
+screen keeps vendors in a stable order and shows the remaining setup directly
+for the highlighted row. Other rows remain one-line choices. This prevents row
+numbers from moving between machines while keeping installed and unavailable
+routes clear without turning the picker into a catalogue page.
 
-| Group | Meaning |
-| --- | --- |
-| Ready now | Installed and signed in, so Enter connects |
-| One step away | Installed but not yet authenticated |
-| Installable | One documented install command away |
-| More | Catalog rows that open a further screen |
+```text
+:connect agent-subscriptions
+:connect agent-acp
+:connect other-harnesses
+```
 
 Each vendor row also carries badges for harness licence, model openness, and
 transport, for example `open harness`, `open weights`, `ACP`. These are two
@@ -109,8 +111,18 @@ independent facts rather than one category: Codex ships an Apache-2.0 harness
 that drives only OpenAI models, and Factory Droid is a closed harness that
 runs whatever model you bring.
 
-Row numbers are registry positions rather than screen positions, so a shortcut
-such as `:connect codex` keeps working as readiness changes.
+Row numbers are screen positions. The displayed number, arrow-key highlight,
+mouse target, and typed number always select the same row. Named shortcuts such
+as `:connect codex` remain stable regardless of row position.
+
+When SuperQode owns the loop, the harness step is also directly addressable:
+
+```text
+:connect harness-core
+:connect harness-workbench
+:connect harness-presets
+:connect harness-repo
+```
 
 The models screen holds the three routes where SuperQode owns the tool loop:
 
@@ -122,6 +134,21 @@ The models screen holds the three routes where SuperQode owns the tool loop:
 
 `:connect plan` covers subscriptions that expose a model endpoint, so a plan
 you already pay for can drive a SuperQode harness instead of the vendor agent.
+Its direct routes are `plan-zai`, `plan-grok`, `plan-copilot`, `plan-moonshot`,
+`plan-qwen`, `plan-opencode`, `plan-ollama-cloud`, `plan-deepseek`, and
+`plan-minimax`, each used as `:connect <route>`.
+
+```text
+:connect plan-zai
+:connect plan-grok
+:connect plan-copilot
+:connect plan-moonshot
+:connect plan-qwen
+:connect plan-opencode
+:connect plan-ollama-cloud
+:connect plan-deepseek
+:connect plan-minimax
+```
 
 The build screen leads with importing, because a repository that already has
 agent configuration does not need to author anything:
@@ -172,9 +199,9 @@ Optional non-ACP harness integrations sit at the bottom of the same screen:
 ```
 
 Pre-ladder names still resolve, so muscle memory and older documentation keep
-working. `:connect subscriptions` lands on the agents screen, and `:connect
-local`, `:connect byok`, and `:connect acp` go straight to their screens
-without passing through the root question.
+working. `:connect subscriptions` lands on the vendor subscription screen, and
+`:connect local`, `:connect byok`, and `:connect acp` go straight to their
+screens without passing through the root question.
 
 The root picker is intentionally shorter than the full catalogs. Inside the
 TUI, `:explore` shows every capability category with its live state on this

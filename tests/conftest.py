@@ -35,6 +35,10 @@ def _clear_cli_probe_caches():
 
     clear_devin_cli_cache()
     clear_antigravity_cli_cache()
+    from superqode.providers.models import clear_effective_models_cache
+
+    clear_effective_models_cache()
     yield
     clear_devin_cli_cache()
     clear_antigravity_cli_cache()
+    clear_effective_models_cache()

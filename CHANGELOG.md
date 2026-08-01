@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.67] - 2026-08-01
+
+### Added
+
+- **Progressive TUI discovery** - `:tour` tracks the path from connection to
+  evaluation, while `:explore` reports agents, models, harnesses, tools,
+  memory, safety, evaluation, optimization, and delivery without crowding the
+  normal coding screen.
+- **Ownership-based connection flow** - `:connect` now starts with three
+  outcome-level choices: use an existing harness, run a SuperQode harness with
+  a chosen model, or build a repository-owned HarnessSpec.
+- **Repository harness onboarding** - Existing AGENTS.md, CLAUDE.md, Cursor
+  rules, Copilot instructions, and agent YAML can become an inspectable local
+  HarnessSpec. Presets, the existing wizard, and a minimal scaffold are
+  available from the same flow.
+- **TUI evaluation entry point** - `:eval` explains the task and rubric
+  contract or runs the existing harness evaluation command.
+
+### Fixed
+
+- **Harness creation preserves existing work** - Imports, preset clones, and
+  blank scaffolds refuse to overwrite an existing HarnessSpec.
+- **Discovery state follows real usage** - Commands already used are no longer
+  suggested, and successful evaluations complete the evaluation milestone.
+- **Capability counts reflect actual inventory** - Agent totals use vendor
+  profiles rather than category rows, MCP servers are included with tools, and
+  ready built-in capabilities contribute to active totals.
+- **Connected TUI screens stay compact** - Returning users receive an
+  operational home instead of repeated onboarding, connection pickers explain
+  only the highlighted choice, and `:explore` keeps one category open at a
+  time.
+- **Grok subscription credentials are verified before connection** - Selecting
+  `grok-cli` through the BYOK picker now refreshes the local CLI session token
+  before reporting success, and expired sessions produce actionable login
+  guidance instead of an OpenAI API-key error.
+
 ## [0.2.66] - 2026-07-30
 
 ### Fixed

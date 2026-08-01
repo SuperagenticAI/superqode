@@ -40,6 +40,8 @@ The primary interfaces are the CLI and TUI. Headless commands, local APIs, brows
 | Repository workspaces | Git safety, worktrees, multi-repository search, snapshots, diffs, and post-edit verification | [Workspace System](advanced/workspace-system.md) |
 | Planning and review | Plan-only execution, shared plan events, TODOs, clarification cards, diff review, rewind, and transcript selection | [TUI](advanced/tui.md) |
 | Terminal workflow | Command palette, state notifications, runtime and harness pickers, themes, exports, optional Vim navigation, and keyboard-first operation | [TUI](advanced/tui.md) |
+| Progressive discovery | Task-first welcome, milestone-based hints, guided tour, and live capability browser | [TUI](advanced/tui.md#discovering-what-is-available) |
+| Repository harness onboarding | Safe import of AGENTS.md, CLAUDE.md, Cursor rules, Copilot instructions, and agent YAML, plus presets and wizard paths | [Connection Methods and Vendors](concepts/modes.md#tui-connection-picker) |
 | Evaluation | Harness tests, eval packs, scorecards, benchmarks, evidence, and regression gates | [Harness Optimization](advanced/harness-optimization.md) |
 | Structured output | JSON mode, JSON Schema validation, corrective retries, rubric grading, and CI-oriented exit behavior | [Headless and CI](advanced/headless-ci.md) |
 | Optimization | Candidate generation, failure mining, Pareto selection, held-out evaluation, promotion, and rollback | [Optimization](advanced/optimization.md) |

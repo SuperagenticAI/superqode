@@ -133,6 +133,54 @@ def render_welcome(
     del agents  # Retained in the public renderer signature for compatibility.
     state = state or WelcomeState(repository=team_name)
 
+    # Once a connection exists, the home screen is an operational checkpoint,
+    # not an onboarding page. Keep the full product story for first use and
+    # give returning users only their current state and one useful next action.
+    if state.connected:
+        value_limit = max(18, min(46, int(width or 100) - 18))
+        items = []
+
+        title = Text()
+        title.append("SuperQode\n", style=f"bold {GRADIENT[3 % len(GRADIENT)]}")
+        items.append(title)
+
+        workspace = Text()
+        workspace.append("Current workspace\n", style=f"bold {THEME['text']}")
+        rows = [
+            ("Repository", state.repository or team_name),
+            ("Harness", state.harness or "Not selected"),
+            ("Agent/model", state.connection or state.runtime),
+            ("Policy", f"Approval {state.approval or 'ask'}"),
+        ]
+        if state.runtime and state.connection:
+            rows.append(("Runtime", state.runtime))
+        label_width = max(len(label) for label, _value in rows)
+        for label, value in rows:
+            workspace.append(f"{label:<{label_width}}  ", style=THEME["dim"])
+            workspace.append(_truncate_middle(value, value_limit), style=THEME["text"])
+            workspace.append("\n")
+        items.append(workspace)
+
+        command, description, color = _next_steps(state)[0]
+        next_text = Text()
+        next_text.append("Next  ", style=f"bold {THEME['text']}")
+        next_text.append(command, style=f"bold {color}")
+        if width is None or width >= 48:
+            next_text.append(f"  {description}", style=THEME["muted"])
+        next_text.append("\n")
+        items.append(next_text)
+
+        footer = Text()
+        footer.append(":explore", style=f"bold {THEME['cyan']}")
+        footer.append(" capabilities  •  ", style=THEME["muted"])
+        footer.append(":tour", style=f"bold {THEME['cyan']}")
+        footer.append(" progress  •  ", style=THEME["muted"])
+        footer.append(":home", style=f"bold {THEME['cyan']}")
+        footer.append(" refresh", style=THEME["muted"])
+        items.append(footer)
+
+        return Group(*items)
+
     # The full logo and operational table need approximately 62 columns.
     logo_lines = [line for line in ASCII_LOGO.strip().split("\n") if line]
     logo_width = max((len(line) for line in logo_lines), default=0)

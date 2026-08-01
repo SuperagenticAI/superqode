@@ -126,6 +126,29 @@ def test_command_usage_survives_the_leading_colon_and_arguments():
     assert command_used("skills") is False
 
 
+def test_running_a_real_tui_command_records_its_root():
+    from superqode.app.mixins.slash_commands import SlashCommandMixin
+
+    class Stub(SlashCommandMixin):
+        _acp_client = None
+
+        def _record_ex_command(self, *_args):
+            pass
+
+        def _show_help(self, _log):
+            pass
+
+        def set_timer(self, *_args):
+            pass
+
+        def _ensure_input_focus(self):
+            pass
+
+    SlashCommandMixin._handle_command(Stub(), ":help", object())
+
+    assert command_used("help") is True
+
+
 def test_doing_the_thing_makes_its_hint_redundant():
     record_milestone("task_completed")
     record_milestone("used_memory")

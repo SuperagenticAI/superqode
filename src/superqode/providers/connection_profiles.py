@@ -852,14 +852,14 @@ _LEGACY_PROFILES: List[ConnectionProfile] = [
         detect=_zai_ready,
         unavailable_hint="set ZAI_API_KEY",
     ),
-    # `:connect subscriptions` predates the ownership ladder. Subscriptions are
-    # how you authenticate a vendor agent, not a separate kind of thing, so the
-    # id now opens the agents screen rather than a menu of its own.
+    # `:connect subscriptions` predates the ownership ladder and opened the
+    # vendor list directly. Keep that shortcut exact for scripts and muscle
+    # memory even though new users reach it through Existing harnesses.
     ConnectionProfile(
         id="subscriptions",
         label="Subscriptions",
-        description="Vendor coding agents you sign in to; now part of the agents screen",
-        connector="agent-picker",
+        description="Vendor coding agents you sign in to with an existing plan",
+        connector="vendor-picker",
         detect=lambda: True,
     ),
 ]

@@ -197,6 +197,26 @@ def test_discover_importable_finds_existing_agent_config(tmp_path):
     ]
 
 
+def test_cursor_rules_directory_is_imported_in_stable_order(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    rules = tmp_path / ".cursor" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "b.mdc").write_text("Run the tests.\n", encoding="utf-8")
+    (rules / "a.mdc").write_text("Read the architecture.\n", encoding="utf-8")
+
+    stub, log = _BuildStub(), FakeLog()
+    stub._harness_import_picker(log)
+    stub._import_harness_selection(0, log)
+
+    from superqode.harness.loader import load_harness_spec
+
+    written = next((tmp_path / HARNESS_OUTPUT_DIR).glob("*.yaml"))
+    prompt = load_harness_spec(written).agents[0].system_prompt
+    assert prompt.index("## a.mdc") < prompt.index("## b.mdc")
+    assert "Read the architecture." in prompt
+    assert "Run the tests." in prompt
+
+
 def test_import_turns_repository_instructions_into_an_owned_harness(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "AGENTS.md").write_text("Always run pytest first.\n", encoding="utf-8")
@@ -216,6 +236,7 @@ def test_import_turns_repository_instructions_into_an_owned_harness(tmp_path, mo
     # The instructions have to survive the import, or the harness is not the
     # one the repository was already describing.
     assert "Always run pytest first." in spec.agents[0].system_prompt
+    assert "AGENTS.md" not in spec.context.instruction_files
     assert spec.metadata["built_with"] == "connect import"
     assert stub.milestones == ["built_harness"]
 
@@ -240,6 +261,31 @@ def test_preset_clone_lands_in_the_repository(tmp_path, monkeypatch):
     template_id = stub._harness_preset_list[0][0]
     assert (tmp_path / HARNESS_OUTPUT_DIR / f"{template_id}.yaml").exists()
     assert stub.milestones == ["built_harness"]
+
+
+def test_import_and_preset_clone_refuse_to_overwrite(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "AGENTS.md").write_text("Original instructions.\n", encoding="utf-8")
+    stub, log = _BuildStub(), FakeLog()
+    stub._harness_import_picker(log)
+    stub._import_harness_selection(0, log)
+    imported = next((tmp_path / HARNESS_OUTPUT_DIR).glob("*-imported.yaml"))
+    original_import = imported.read_text(encoding="utf-8")
+
+    (tmp_path / "AGENTS.md").write_text("Replacement instructions.\n", encoding="utf-8")
+    stub._harness_import_picker(log)
+    stub._import_harness_selection(0, log)
+    assert imported.read_text(encoding="utf-8") == original_import
+    assert "Refusing to overwrite" in log.items[-1]
+
+    stub._show_harness_preset_picker(log)
+    stub._clone_harness_preset(0, log)
+    preset_id = stub._harness_preset_list[0][0]
+    preset = tmp_path / HARNESS_OUTPUT_DIR / f"{preset_id}.yaml"
+    original_preset = preset.read_text(encoding="utf-8")
+    stub._clone_harness_preset(0, log)
+    assert preset.read_text(encoding="utf-8") == original_preset
+    assert "Refusing to overwrite" in log.items[-1]
 
 
 def test_blank_scaffold_never_overwrites_an_existing_harness(tmp_path, monkeypatch):
@@ -387,11 +433,16 @@ def test_explore_opens_a_category_by_number(tmp_path, monkeypatch):
     class ExploreStub(ExploreMixin):
         def __init__(self):
             self.milestones = []
+            self.log = None
 
         def _record_milestone(self, name):
             self.milestones.append(name)
 
+        def query_one(self, *_args, **_kwargs):
+            return self.log
+
     stub, log = ExploreStub(), FakeLog()
+    stub.log = log
     stub._explore_cmd("", log)
     assert stub._explore_capabilities
 
@@ -400,3 +451,53 @@ def test_explore_opens_a_category_by_number(tmp_path, monkeypatch):
     opened = stub._explore_capabilities[2].id
     assert opened in stub._explore_expanded
     assert stub._explore_index == 2
+
+    stub._select_explore_row(3, log)
+    second = stub._explore_capabilities[3].id
+    assert stub._explore_expanded == {second}
+
+    stub.action_toggle_explore_row()
+    assert stub._explore_expanded == set()
+
+
+def test_capability_inventory_counts_real_agents_and_ready_features(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from superqode.app.capabilities import capability_inventory
+    from superqode.providers.connection_profiles import (
+        CONNECT_MENU_VENDORS,
+        list_connection_profiles,
+    )
+
+    inventory = {capability.id: capability for capability in capability_inventory()}
+
+    assert inventory["agents"].total == len(list_connection_profiles(CONNECT_MENU_VENDORS))
+    assert "Subscriptions" not in {item.name for item in inventory["agents"].items}
+    assert inventory["sandboxes"].active >= 1
+    assert inventory["evaluation"].active == len(inventory["evaluation"].items)
+    assert inventory["delivery"].active == len(inventory["delivery"].items)
+
+
+@pytest.mark.asyncio
+async def test_successful_eval_records_the_milestone():
+    from superqode.app.mixins.commands_impl import CommandImplMixin
+
+    class EvalStub:
+        def __init__(self):
+            self.worker = None
+            self.milestones = []
+
+        def run_worker(self, worker):
+            self.worker = worker
+
+        async def _superqode_cli_cmd(self, command, log, label):
+            assert command[:2] == ["harness", "eval"]
+            return True
+
+        def _record_milestone(self, name):
+            self.milestones.append(name)
+
+    stub = EvalStub()
+    CommandImplMixin._eval_cmd(stub, "--tasks evals/tasks.yaml", FakeLog())
+    await stub.worker
+
+    assert stub.milestones == ["ran_eval"]
