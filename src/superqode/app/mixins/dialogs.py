@@ -54,10 +54,6 @@ class DialogsMixin:
 
     def _show_welcome(self, team_name: str):
         log = self.query_one("#log", ConversationLog)
-        # Refresh the capability counts before drawing, so the renderer stays a
-        # pure function of state. Probing here rather than inside the renderer
-        # keeps a resize or a re-flow from re-running thirteen registry probes.
-        self._refresh_capability_inventory()
         # Temporarily disable auto-scroll so we can scroll to top
         log.auto_scroll = False
         # expand=True makes the renderable fill the full log width so the

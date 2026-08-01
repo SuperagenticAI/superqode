@@ -754,32 +754,6 @@ class HelperStartupMixin:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
 
-    def _refresh_capability_inventory(self) -> None:
-        """Probe capabilities in the background so the home screen can use them.
-
-        Never on the startup path. Importing the runtime adapters alone costs
-        roughly two seconds, and the welcome screen is the first thing a user
-        waits on, so this runs off-thread and once per app. The home screen
-        renders from whatever the cache holds, which is nothing on the very
-        first draw and the full inventory from then on.
-        """
-        if getattr(self, "_capability_inventory_probed", False):
-            return
-        self._capability_inventory_probed = True
-
-        def probe() -> None:
-            try:
-                from superqode.app.capabilities import capability_inventory
-
-                capability_inventory()
-            except Exception:  # noqa: BLE001 - counts are decoration
-                pass
-
-        try:
-            self.run_worker(probe, thread=True, exclusive=False)
-        except Exception:  # noqa: BLE001 - no worker host (tests, headless)
-            pass
-
     def _record_harness_switch_milestone(self) -> None:
         """Record a switch, promoting to 'compared' on the second one."""
         try:

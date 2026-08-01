@@ -32,15 +32,12 @@ class WelcomeState:
 
 
 def _inventory_lines() -> List[tuple[str, str]]:
-    """Return the Active/Available rows for the home screen.
+    """Return the Active/Available rows for the home screen, if already known.
 
-    Naming the scale on the first screen does more for comprehension than the
-    README does, and it costs two rows. This reads the last probe rather than
-    running one: rendering is not allowed to reach into registries and local
-    server state, or drawing the home screen becomes both slow and dependent
-    on what ran before it. The app refreshes the probe when it shows the
-    screen, so the rows appear from the first real render and are simply
-    absent until something has asked for them.
+    Nothing probes on the startup path. Counting what is installed means
+    importing runtime adapters and walking registries, which cost seconds and
+    made the first screen wait on work nobody asked for. ``:explore`` fills
+    this cache when the user opens it; until then the rows are simply absent.
     """
     try:
         from superqode.app.capabilities import cached_inventory

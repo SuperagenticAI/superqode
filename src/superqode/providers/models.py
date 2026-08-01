@@ -1357,6 +1357,7 @@ def set_live_models(models: Dict[str, Dict[str, ModelInfo]]) -> None:
     global _live_models, _use_live_data
     _live_models = models
     _use_live_data = True
+    _EFFECTIVE_CACHE.clear()
 
 
 def _maybe_autoload_live_models() -> None:
@@ -1394,6 +1395,13 @@ def _newest_release(models: Dict[str, ModelInfo]) -> str:
     return max((m.released or "" for m in models.values()), default="")
 
 
+#: The merged catalogue, built once. Merging walks every provider and parses
+#: release dates on both sides, and callers ask for it per provider: the BYOK
+#: picker alone rebuilt the whole database dozens of times before drawing a
+#: single row. Cleared whenever live models are replaced.
+_EFFECTIVE_CACHE: Dict[str, Dict[str, Dict[str, ModelInfo]]] = {}
+
+
 def get_effective_models() -> Dict[str, Dict[str, ModelInfo]]:
     """
     Get the effective models database.
@@ -1403,6 +1411,20 @@ def get_effective_models() -> Dict[str, Dict[str, ModelInfo]]:
     automatically.
     """
     _maybe_autoload_live_models()
+    cached = _EFFECTIVE_CACHE.get("merged")
+    if cached is not None:
+        return cached
+    merged_result = _build_effective_models()
+    _EFFECTIVE_CACHE["merged"] = merged_result
+    return merged_result
+
+
+def clear_effective_models_cache() -> None:
+    """Forget the merged catalogue, so the next read rebuilds it."""
+    _EFFECTIVE_CACHE.clear()
+
+
+def _build_effective_models() -> Dict[str, Dict[str, ModelInfo]]:
     if _use_live_data and _live_models:
         # Live data replaces provider model lists. Keep built-ins only for providers
         # absent from models.dev/cache so stale built-in models do not leak into BYOK.
@@ -1445,7 +1467,9 @@ def get_model_info(provider_id: str, model_id: str) -> Optional[ModelInfo]:
     return None
 
 
-def get_models_for_provider(provider_id: str, *, include_all: bool = False) -> Dict[str, ModelInfo]:
+def get_models_for_provider(
+    provider_id: str, *, include_all: bool = False, probe_cli: bool = True
+) -> Dict[str, ModelInfo]:
     """Get provider models, optionally retaining the complete live catalog.
 
     The default is the current, newest-first chat/coding set used by BYOK
@@ -1456,7 +1480,12 @@ def get_models_for_provider(provider_id: str, *, include_all: bool = False) -> D
     """
     # The Grok subscription catalog is whatever the signed-in CLI reports;
     # its order matches the CLI's own /model picker, so return it as-is.
-    if provider_id == "grok-cli":
+    #
+    # This spawns the Grok CLI and waits for it, which costs seconds. Callers
+    # that only need a model count for a list row pass ``probe_cli=False`` and
+    # take the builtin catalogue: one row's number is not worth blocking a
+    # screen that shows a hundred and eighty of them.
+    if provider_id == "grok-cli" and probe_cli:
         live_cli = _grok_cli_live_catalog()
         if live_cli:
             return live_cli

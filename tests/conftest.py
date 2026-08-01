@@ -13,7 +13,12 @@ def _isolate_progress_state(tmp_path, monkeypatch):
     so without this a test run would rewrite the developer's own ladder and
     every reveal assertion would depend on which tests ran before it.
     """
+    from superqode.app.progress import clear_progress_cache
+
     monkeypatch.setenv("SUPERQODE_PROGRESS_DIR", str(tmp_path / "superqode-state"))
+    clear_progress_cache()
+    yield
+    clear_progress_cache()
 
 
 @pytest.fixture(autouse=True)

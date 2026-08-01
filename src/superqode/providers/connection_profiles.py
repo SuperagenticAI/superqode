@@ -332,7 +332,7 @@ _ROOT_PROFILES: List[ConnectionProfile] = [
 _HARNESS_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="harness-core",
-        label="Core",
+        label="Core (recommended)",
         description="Default harness. Small tool set, quick to start",
         connector="harness-use",
         runtime="core",
@@ -379,7 +379,7 @@ _MODEL_PROFILES: List[ConnectionProfile] = [
     ),
     ConnectionProfile(
         id="byok",
-        label="Your API key",
+        label="BYOK (use your own API key)",
         description="OpenAI, Anthropic, Google, Z.AI and 40 more providers",
         connector="byok",
         runtime="builtin",

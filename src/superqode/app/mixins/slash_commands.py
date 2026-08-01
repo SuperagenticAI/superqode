@@ -63,13 +63,6 @@ class SlashCommandMixin:
             args = parts[1] if len(parts) > 1 else ""
 
         self._record_ex_command(cmd, c)
-        # A command the user has run does not need suggesting later.
-        try:
-            from superqode.app.progress import record_command_used
-
-            record_command_used(c)
-        except Exception:  # noqa: BLE001 - never block a command on bookkeeping
-            pass
 
         # ACP local slash commands win when an agent is connected. They cover
         # introspection commands (:status, :model, :session, :history, etc.)

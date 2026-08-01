@@ -1925,7 +1925,20 @@ class ConnectMixin:
         )
 
         # Helper function to get provider info
+        # Building a row means counting a provider's models, and this screen
+        # walks the provider list more than once. Without memoising, every
+        # provider was priced twice before a single row was drawn.
+        _info_cache: dict = {}
+
         def get_provider_info(pid, pdef):
+            cached = _info_cache.get(pid)
+            if cached is not None:
+                return cached
+            result = _build_provider_info(pid, pdef)
+            _info_cache[pid] = result
+            return result
+
+        def _build_provider_info(pid, pdef):
             configured = False
             missing_keys = []
             if not pdef.env_vars:
@@ -1939,7 +1952,9 @@ class ConnectMixin:
                         missing_keys.append(env_var)
 
             try:
-                models = get_models_for_provider(pid)
+                # A count for one row must never spawn a vendor CLI and wait
+                # on it; that alone made this screen take seconds to appear.
+                models = get_models_for_provider(pid, probe_cli=False)
                 model_count = len(models)
             except Exception:
                 model_count = len(pdef.example_models) if pdef.example_models else 0

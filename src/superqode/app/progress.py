@@ -58,6 +58,11 @@ def command_used(command: str) -> bool:
     return bool(root) and root[0] in load_progress().commands_used
 
 
+def clear_progress_cache() -> None:
+    """Forget the in-memory copy, so a new state directory is picked up."""
+    _CACHE.clear()
+
+
 def state_dir() -> Path:
     """Return where progress lives, honouring ``SUPERQODE_PROGRESS_DIR``.
 
@@ -96,7 +101,23 @@ class Progress:
         }
 
 
+#: Read once per process. Every milestone check and hint lookup called
+#: ``load_progress``, so a screen that asked twice paid for two file reads, and
+#: recording anything re-read before it wrote. It is a few dozen strings.
+_CACHE: dict[str, "Progress"] = {}
+
+
 def load_progress() -> Progress:
+    """Return the milestone state, reading from disk at most once per process."""
+    cached = _CACHE.get("progress")
+    if cached is not None:
+        return cached
+    progress = _read_progress()
+    _CACHE["progress"] = progress
+    return progress
+
+
+def _read_progress() -> Progress:
     """Read the milestone file, migrating the pre-milestone marker if present."""
     path = progress_path()
     try:
@@ -120,6 +141,7 @@ def load_progress() -> Progress:
 
 def save_progress(progress: Progress) -> None:
     """Persist milestones. Never raises: this is a convenience, not state."""
+    _CACHE["progress"] = progress
     path = progress_path()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

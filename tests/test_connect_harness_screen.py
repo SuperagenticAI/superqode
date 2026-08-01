@@ -103,7 +103,9 @@ def test_harness_step_lists_the_built_in_harnesses_with_core_first():
         "harness-presets",
         "harness-repo",
     ]
-    assert profiles[0].label == "Core"
+    # Core is the right default, and the row says so rather than leaving the
+    # user to infer it from position alone.
+    assert profiles[0].label == "Core (recommended)"
 
 
 def test_the_second_root_choice_opens_the_harness_step():
@@ -365,9 +367,10 @@ def test_legacy_menu_names_land_on_the_right_category():
 
 
 def test_model_step_offers_local_key_and_subscription():
+    # BYOK is the term people search for; the parenthetical is what it means.
     assert [(p.id, p.label) for p in list_connection_profiles(CONNECT_MENU_MODELS)] == [
         ("local", "Local"),
-        ("byok", "Your API key"),
+        ("byok", "BYOK (use your own API key)"),
         ("plan", "Subscription"),
     ]
 
