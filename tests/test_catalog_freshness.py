@@ -140,6 +140,22 @@ def test_nothing_is_said_when_there_is_nothing_to_say():
     assert stub.lines == []
 
 
+def test_status_line_stays_off_once_welcome_is_gone():
+    """Pickers replace the home screen; the timer must not append under them."""
+    stub = _StatusStub(agents=38)
+    stub._welcome_active = False
+    stub._report_catalog_freshness()
+    assert stub.lines == []
+
+
+def test_status_line_stays_off_while_a_picker_owns_the_viewport():
+    """A late catalogue line yanks scroll and hides the highlighted row."""
+    stub = _StatusStub(agents=38)
+    stub._awaiting_byok_provider = True
+    stub._report_catalog_freshness()
+    assert stub.lines == []
+
+
 def test_the_status_line_never_raises_out():
     """It runs on a launch timer, so a failure here would break startup."""
 

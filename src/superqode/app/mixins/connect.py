@@ -1828,6 +1828,9 @@ class ConnectMixin:
             log.write(t)
             log.auto_scroll = True
         elif clear_log:
+            # Replacing the home screen: cancel welcome reflow and the deferred
+            # catalogue chrome line so neither can steal this picker's viewport.
+            self._welcome_active = False
             log.clear()
             log.auto_scroll = False
             log.write(t)
@@ -2205,6 +2208,9 @@ class ConnectMixin:
 
         # Clear log and show content from top (like agent finish work)
         if clear_log:
+            # Replacing the home screen: cancel welcome reflow and the deferred
+            # catalogue chrome line so neither can steal this picker's viewport.
+            self._welcome_active = False
             log.clear()
             log.auto_scroll = False
             log.write(t)

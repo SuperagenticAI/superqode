@@ -193,19 +193,49 @@ class ModelCatalogMixin:
     #: What the launch refreshes managed to do, for the one status line below.
     _catalog_status: dict = {}
 
+    #: Interactive surfaces that own the log viewport. A late welcome chrome
+    #: line must not append while these are up — ``write_feedback`` would yank
+    #: scroll to the new footer and hide the highlighted picker row.
+    _CATALOG_FRESHNESS_BLOCKING_FLAGS = (
+        "_awaiting_byok_provider",
+        "_awaiting_byok_model",
+        "_awaiting_connect_type",
+        "_awaiting_local_provider",
+        "_awaiting_local_model",
+        "_awaiting_harness_selection",
+        "_awaiting_harness_confirmation",
+        "_awaiting_runtime_selection",
+        "_awaiting_mode_selection",
+        "_awaiting_session_resume",
+        "_awaiting_acp_agent_selection",
+        "_awaiting_model_selection",
+        "_awaiting_codex_model",
+        "_awaiting_codex_effort",
+        "_awaiting_explore",
+    )
+
     def _report_catalog_freshness(self, log=None) -> None:
         """Say what the background refresh found, once, under the welcome.
 
         Deliberately not a progress bar or a splash. None of this data is
         needed to start working, so implying the user should wait for it would
         be worse than the blank screen it replaces. It reports, then stops.
+
+        Only decorate the welcome screen. Pickers and other interactive UIs
+        manage their own scroll; appending a meta line mid-navigation steals
+        the viewport and hides the selection (see BYOK provider picker).
         """
         try:
             from superqode.app.widgets import ConversationLog
 
+            # Welcome flag is the primary gate. Callers that replace the home
+            # screen must clear it so this timer is a no-op after navigation.
+            if not getattr(self, "_welcome_active", False):
+                return
+            if any(getattr(self, flag, False) for flag in self._CATALOG_FRESHNESS_BLOCKING_FLAGS):
+                return
+
             if log is None:
-                if not getattr(self, "_welcome_active", False):
-                    return
                 log = self.query_one("#log", ConversationLog)
 
             parts = []
