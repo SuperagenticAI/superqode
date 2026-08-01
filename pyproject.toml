@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.2.67"
+version = "0.2.68"
 description = "Agent Engineering for your code factory"
 readme = "README.md"
 license = "Apache-2.0"

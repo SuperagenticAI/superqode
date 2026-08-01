@@ -7,7 +7,7 @@ fi
 
 cache_base="${XDG_CACHE_HOME:-${HOME}/.cache}/qm-superqode"
 venv_path="${cache_base}/venv"
-version="${SUPERQODE_VERSION:-0.2.67}"
+version="${SUPERQODE_VERSION:-0.2.68}"
 
 if [ ! -x "${venv_path}/bin/superqode" ]; then
   mkdir -p "${cache_base}"

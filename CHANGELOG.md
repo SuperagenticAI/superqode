@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.68] - 2026-08-01
+
+### Added
+
+- **A2A 1.0 harness server** - `superqode serve a2a` exposes a versioned
+  HarnessSpec over the official A2A HTTP+JSON protocol (discovery Agent Card,
+  tasks, streaming, cancellation, subscriptions, and bearer auth).
+- **Durable A2A task store** - Completed A2A task records use the SDK SQLite
+  `DatabaseTaskStore` (`--task-store`), separate from SuperQode harness evidence
+  (`--harness-store` / `--store`).
+- **Path-aware A2A client** - Discovery routes operations to the Agent Card
+  `supportedInterfaces` URL, including path-prefixed deployments such as
+  `/superqode/a2a`.
+- **Agent Card export** - `--export-agent-card` writes the exact runtime card
+  for static publication; the checked-in publication artifact lives under
+  `examples/a2a/`.
+- **Experimental QM packaging** - Copy-ready tool/skill bootstrap for YC QM
+  agent computers, plus an independent TypeScript A2A interop client under
+  `examples/qm-deployment-layer/`.
+
+### Fixed
+
+- **A2A interface URL routing** - Clients no longer post to the discovery origin
+  when the card advertises a different operational path.
+- **Agent Card product metadata** - Runtime skill and bearer text stay aligned
+  with the public SuperQode card (product-facing skill name/description).
+- **Node interop test skip** - The TypeScript A2A client test requires Node 22+
+  for native type stripping instead of failing on older Node.
+
+### Documentation
+
+- **A2A provider guide** - Public preview status, durability model, publishing
+  workflow, and experimental multiplayer-computer packaging notes.
+- **`SUPERQODE_A2A_TOKEN`** - Documented for remote A2A binding and operation
+  auth.
+
 ## [0.2.67] - 2026-08-01
 
 ### Added

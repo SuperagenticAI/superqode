@@ -28,7 +28,7 @@ That makes collaboration useful and merging runtimes unnecessary. The preferred 
 
 ## Install into a QM deployment
 
-Copy `sandbox/tools/superqode` and `sandbox/skills/superqode-harness` into the matching paths in a QM deployment directory. The included executable is a small bootstrap pinned to SuperQode 0.2.67. Set `SUPERQODE_VERSION` to test another release, or replace the wrapper with a preinstalled `superqode` binary in your own pinned sandbox image.
+Copy `sandbox/tools/superqode` and `sandbox/skills/superqode-harness` into the matching paths in a QM deployment directory. The included executable is a small bootstrap pinned to SuperQode 0.2.68. Set `SUPERQODE_VERSION` to test another release, or replace the wrapper with a preinstalled `superqode` binary in your own pinned sandbox image.
 
 Then run QM's normal checks:
 

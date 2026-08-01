@@ -353,9 +353,7 @@ def test_independent_node_typescript_client_interoperates(tmp_path: Path):
     if node is None:
         pytest.skip("Node is not installed")
 
-    version = subprocess.run(
-        [node, "--version"], check=False, capture_output=True, text=True
-    )
+    version = subprocess.run([node, "--version"], check=False, capture_output=True, text=True)
     major = 0
     if version.returncode == 0 and version.stdout.startswith("v"):
         try:
