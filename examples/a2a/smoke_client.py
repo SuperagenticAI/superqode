@@ -20,11 +20,7 @@ import sys
 
 async def main() -> int:
     discovery = sys.argv[1] if len(sys.argv) > 1 else "https://super-agentic.ai"
-    message = (
-        sys.argv[2]
-        if len(sys.argv) > 2
-        else "Reply with exactly: python-client-ok"
-    )
+    message = sys.argv[2] if len(sys.argv) > 2 else "Reply with exactly: python-client-ok"
     token = os.environ.get("SUPERQODE_A2A_TOKEN") or os.environ.get("TOKEN")
     if not token:
         print(
