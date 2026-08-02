@@ -20,7 +20,7 @@ installation and operation of the systems connected to those execution paths.
 | [Coding agents](coding-agents.md) | Codex, Claude Code, GitHub Copilot, Antigravity, Grok, Kimi Code, Qwen Code, and ACP agents |
 | [Models and inference](models-inference.md) | LiteLLM, OpenResponses, hosted providers, Ollama, LM Studio, vLLM, SGLang, TGI, MLX, DwarfStar, and Hugging Face |
 | [Runtimes and harnesses](runtimes-harnesses.md) | Google ADK, OpenAI Agents SDK, PydanticAI, DeepAgents, RLM Code, Hugging Face Tau, and Omnigent |
-| [Protocols and tools](protocols-tools.md) | ACP, MCP, A2A, Harness Protocol, CocoIndex Code, Monty, and plugins |
+| [Protocols and tools](protocols-tools.md) | ACP, MCP, A2A (public Agent Card, multiplayer peers such as QM), Harness Protocol, CocoIndex Code, Monty, and plugins |
 | [Optimization](optimization.md) | GEPA, GEPA Omni, AutoResearch, MetaHarness, and SkillOpt |
 | [Memory](memory.md) | Local memory, SpecMem, Mem0, Cognee, and Supermemory |
 | [Sandboxes](sandboxes.md) | Local OS isolation, containers, E2B, Daytona, Modal, Vercel, Runloop, AgentCore, and LangSmith |

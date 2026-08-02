@@ -19,6 +19,34 @@ SuperQode can expose a harness as an MCP, ACP, or A2A service. See
 [MCP command](../cli-reference/mcp-command.md), and the
 [A2A server guide](../providers/a2a.md#expose-a-harness).
 
+## A2A and multiplayer computers
+
+[A2A](../providers/a2a.md) is SuperQode’s primary **harness-to-harness** and
+agent-to-agent network surface. Other agents discover SuperQode through a public
+[Agent Card](https://super-agentic.ai/.well-known/agent-card.json) and call the
+interface URL advertised in that card. Operational calls on the public pilot
+require bearer authentication (`SUPERQODE_A2A_TOKEN` when serving remotely).
+
+This is the preferred way to collaborate with **multiplayer agent computers**
+such as [YC’s QM](https://github.com/yc-software/qm): keep SuperQode as the
+versioned HarnessSpec, kernel, and evidence layer, and keep the multiplayer
+system as the org-shared computer. Do not merge runtimes; exchange tasks over
+A2A.
+
+An experimental, non-product packaging sketch for running SuperQode as a tool
+inside a QM-style deploy directory lives at
+[examples/qm-deployment-layer](https://github.com/SuperagenticAI/superqode/tree/main/examples/qm-deployment-layer).
+Treat that as compatibility exploration, not official QM support. Independent
+TypeScript and Python A2A clients for interop checks are documented under
+[A2A Protocol](../providers/a2a.md#interop-clients-in-this-repository).
+
+| First step | Command or URL |
+| --- | --- |
+| Public Agent Card | `https://super-agentic.ai/.well-known/agent-card.json` |
+| Serve a harness over A2A | `superqode serve a2a --spec harness.yaml` |
+| Call / discover from the TUI | `:a2a discover <url>` · `:a2a connect <url>` |
+| Full guide | [A2A Protocol](../providers/a2a.md) |
+
 ## CocoIndex Code semantic search
 
 The `semantic` extra installs the slim CocoIndex Code client. A local Ollama

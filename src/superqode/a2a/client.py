@@ -104,7 +104,7 @@ class A2AClient:
             response.raise_for_status()
             data = response.json()
             card = self._parse_agent_card(data)
-            self._interface_url = card.url.rstrip("/")
+            self._interface_url = card.url.strip().rstrip("/")
             self._agent_card = card
             return card
         except httpx.HTTPStatusError as e:
@@ -136,21 +136,25 @@ class A2AClient:
         interfaces = data.get("supportedInterfaces", [])
         interface_url = next(
             (
-                item.get("url")
+                str(item.get("url") or "").strip()
                 for item in interfaces
                 if item.get("protocolBinding", "").upper() == "HTTP+JSON"
                 and item.get("protocolVersion") == "1.0"
-                and item.get("url")
+                and str(item.get("url") or "").strip()
             ),
             None,
         )
         if interfaces and interface_url is None:
             raise A2AClientError("Agent Card does not advertise A2A 1.0 HTTP+JSON")
 
+        fallback = data.get("url", self.agent_url)
+        if isinstance(fallback, str):
+            fallback = fallback.strip() or self.agent_url
+
         return AgentCard(
             name=data.get("name", "Unknown"),
             description=data.get("description", ""),
-            url=interface_url or data.get("url", self.agent_url),
+            url=interface_url or fallback,
             version=data.get("version", "1.0"),
             capabilities=capabilities,
             skills=skills,

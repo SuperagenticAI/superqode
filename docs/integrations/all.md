@@ -12,7 +12,8 @@ are documented on the linked category page.
 | Integration | Function | Category |
 | --- | --- | --- |
 | Agent Client Protocol, ACP | Connect external coding agents and expose normalized sessions | [Protocols and tools](protocols-tools.md) |
-| Agent2Agent, A2A | Discover, call, and serve interoperable agents | [Protocols and tools](protocols-tools.md) |
+| Agent2Agent, A2A | Discover, call, and serve interoperable agents; public Agent Card pilot | [Protocols and tools](protocols-tools.md#a2a-and-multiplayer-computers) |
+| QM (YC multiplayer harness) | Experimental peer packaging and A2A collaboration boundary, not product support | [Protocols and tools](protocols-tools.md#a2a-and-multiplayer-computers) · [A2A Protocol](../providers/a2a.md#multiplayer-computers-and-qm-experimental) |
 | Amazon Bedrock AgentCore | Experimental remote code-interpreter sandbox | [Sandboxes](sandboxes.md) |
 | Anthropic Claude Agent SDK | Run the Claude Agent SDK through a SuperQode runtime adapter | [Coding agents](coding-agents.md) |
 | Apple Container | Experimental macOS-native container status integration | [Sandboxes](sandboxes.md) |

@@ -225,6 +225,33 @@ async def test_client_routes_operations_to_the_discovered_path(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_client_strips_whitespace_from_interface_url(tmp_path: Path):
+    from fastapi import FastAPI
+    from fastapi.responses import JSONResponse
+
+    server, _ = _server(tmp_path, url="http://agent/superqode/a2a")
+    outer = FastAPI()
+
+    @outer.get("/.well-known/agent-card.json")
+    async def public_card():
+        payload = json.loads(server.agent_card_json())
+        # Mimic a hand-edited static card with accidental leading whitespace.
+        payload["supportedInterfaces"][0]["url"] = "  http://agent/superqode/a2a  "
+        return JSONResponse(content=payload)
+
+    outer.mount("/superqode/a2a", server.app)
+    transport = httpx.ASGITransport(app=outer)
+    async with httpx.AsyncClient(transport=transport, base_url="http://agent") as http_client:
+        client = A2AClient("http://agent", http_client=http_client)
+        card = await client.get_agent_card()
+        task = await client.send_message("trim-url")
+
+    assert card.url == "http://agent/superqode/a2a"
+    assert task.status.state == TaskStatusValue.COMPLETED
+    assert task.artifacts[0].parts[0].text == "echo:trim-url"
+
+
+@pytest.mark.asyncio
 async def test_a2a_can_list_and_cancel_a_running_task(tmp_path: Path):
     started = asyncio.Event()
 
