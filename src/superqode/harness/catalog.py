@@ -164,6 +164,16 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
             default=True,
         ),
         HarnessDefinition(
+            id="pipy",
+            display_name="PiPy (Pi Like Harness)",
+            description=pipy.description,
+            runtime=pipy.runtime.backend,
+            source="built-in",
+            spec=pipy,
+            loop_policy=core_loop_policy(),
+            aliases=("pi", "pi-python"),
+        ),
+        HarnessDefinition(
             id="workbench",
             display_name="Workbench",
             description=workbench.description,
@@ -172,16 +182,6 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
             spec=workbench,
             loop_policy=workbench_loop_policy(),
             aliases=("coding", "native", "build"),
-        ),
-        HarnessDefinition(
-            id="pipy",
-            display_name="PiPy (pi twin)",
-            description=pipy.description,
-            runtime=pipy.runtime.backend,
-            source="built-in",
-            spec=pipy,
-            loop_policy=core_loop_policy(),
-            aliases=("pi", "pi-python"),
         ),
         HarnessDefinition(
             id="no-tool",

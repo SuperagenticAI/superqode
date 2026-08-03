@@ -58,8 +58,14 @@ def test_shared_code_changes_are_limited_to_the_known_set():
             "--name-only",
             "--",
             ".",
+            # PiPy's own files, wherever they live. What this test guards is
+            # changes to code that existed before PiPy.
             ":(exclude)src/superqode/pipy",
+            ":(exclude)src/superqode/harness/pipy_adapter.py",
+            ":(exclude)src/superqode/harness/pipy_extensions.py",
+            ":(exclude)src/superqode/harness/backends/pipy.py",
             ":(exclude)tests/pipy",
+            ":(exclude)docs/advanced/pipy.md",
             ":(exclude)NOTICE",
         ).splitlines()
         if line
@@ -87,6 +93,16 @@ def test_shared_code_changes_are_limited_to_the_known_set():
         # A generic, opt-in picker warning field.
         "src/superqode/app/harness_picker.py",
         "src/superqode/app/mixins/commands_impl.py",
+        # PiPy added to the :connect harness step, which is a hardcoded list
+        # separate from the catalogue that feeds :harness.
+        "src/superqode/providers/connection_profiles.py",
+        # PiPy is the one harness id whose product name is not the id
+        # capitalised, so the label helper needs an override.
+        "src/superqode/app/welcome.py",
+        # The :connect picker now explains every choice, not only the
+        # highlighted one. Unrelated to PiPy, requested separately.
+        "src/superqode/app/mixins/connect.py",
+        "tests/test_tui_smoke.py",
         # Inventory and reference updates required by the coverage tests.
         "docs/getting-started/bring-your-own-harness.md",
         "docs/configuration/environment-variables.md",
@@ -94,6 +110,15 @@ def test_shared_code_changes_are_limited_to_the_known_set():
         "mkdocs.yml",
         "tests/test_tui_smoke.py",
         "tests/test_tui_mounted.py",
+        "tests/test_connection_profiles.py",
+        "tests/test_connect_harness_screen.py",
+        "tests/test_cli_reference_coverage.py",
+        "docs/concepts/modes.md",
+        # Regenerated artifacts: the agent card carries the version, and the
+        # CLI help hash moves when --connect gains a choice.
+        "examples/a2a/agent-card.json",
+        "tests/test_cli_contract.py",
+        "tests/test_a2a_bridge.py",
     }
 
     unexpected = changed - expected

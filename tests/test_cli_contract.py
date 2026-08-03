@@ -25,7 +25,11 @@ EXPECTED_COMMAND_COUNT = 263
 # was added or removed, so the count is unchanged.
 # Rebaselined for `superqode serve a2a`, which adds one Click command and its
 # A2A 1.0, storage, authentication, and Agent Card export options.
-EXPECTED_HELP_TREE_SHA256 = "66a17c07a3756e3b15dbfd84bcc1b145a3ca5e6f62a3678d2c5a43084e2b5063"
+# Rebaselined for the PiPy harness, which adds `harness-pipy` to the
+# `--connect` choice list in second position, after `harness-core`.
+# `--connect` derives its choices from the profile registry, so no Click
+# command was added and the count is unchanged.
+EXPECTED_HELP_TREE_SHA256 = "71c891489cab56ce54eccc6cc88127a87bb177ea9f0665ac33cdd22fe019ecad"
 
 
 def _render_help_tree() -> tuple[int, str]:

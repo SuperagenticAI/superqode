@@ -142,7 +142,7 @@ def no_tool_template(*, name: str = "superqode-no-tool", backend: str = "builtin
 
 
 def pipy_template(*, name: str = "pipy") -> HarnessSpec:
-    """Native pi twin. Runs with the permissions of the process, as pi does.
+    """Native harness inspired by pi. Runs with the permissions of the process.
 
     Deliberately the opposite posture to every other native harness: no
     approvals, no sandbox, no MCP. Selecting PiPy is opting into that, which is
@@ -151,8 +151,7 @@ def pipy_template(*, name: str = "pipy") -> HarnessSpec:
     return HarnessSpec(
         name=name,
         description=(
-            "Complete pi twin in Python: event-first loop, parallel tools, "
-            "session tree, pure host permissions."
+            "Inspired by pi: event-first loop, parallel tools, session tree, pure host permissions."
         ),
         flavor=HarnessFlavor.CODING,
         runtime=RuntimeSpec(backend="pipy"),

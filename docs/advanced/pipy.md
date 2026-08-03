@@ -1,9 +1,9 @@
-# PiPy: a pi twin in Python
+# PiPy
 
-PiPy is a native SuperQode harness that replicates the architecture of
-[pi](https://github.com/earendil-works/pi) in Python: an event-first agent loop,
-parallel tool execution, mid-run steering, an append-only session tree, and pi's
-own tool surface and prompt shape.
+PiPy is a native SuperQode harness inspired by
+[pi](https://github.com/earendil-works/pi). It follows the same architecture in
+Python: an event-first agent loop, parallel tool execution, mid-run steering, an
+append-only session tree, and a small tool surface.
 
 It is opt in. `core` remains the default harness, and installing or upgrading
 SuperQode changes nothing until you select PiPy.
@@ -14,8 +14,15 @@ SuperQode changes nothing until you select PiPy.
 superqode --harness pipy
 ```
 
-In the TUI, open `:connect`, then select **PiPy (pi twin)**. The aliases `pi`
-and `pi-python` resolve to the same harness.
+In the TUI, open `:connect` and select **PiPy** from the harness step, or
+address it directly:
+
+```text
+:connect harness-pipy
+```
+
+`:harness` lists it alongside the full catalogue. The aliases `pi` and
+`pi-python` resolve to the same harness.
 
 ## Pure host permissions
 
@@ -38,7 +45,7 @@ manager or sandbox. A test walks the import graph of the whole package to keep
 it that way, and a second test asserts that a PiPy run which writes a file emits
 no approval event.
 
-## What PiPy replicates
+## What PiPy takes from pi
 
 | Area | Behaviour |
 | --- | --- |
@@ -50,8 +57,8 @@ no approval event.
 | Sessions | Append-only JSONL tree with branch, resume, fork and compaction |
 | Steering | Messages injected mid-run, and follow-ups that wait for the agent to settle |
 
-Behaviour is tracked against pi source by the suite in `tests/pipy/`, with a
-test named for each replicated behaviour.
+Behaviour is checked against pi's source by the suite in `tests/pipy/`, with a
+test named for each behaviour.
 
 ## Sessions
 
@@ -133,6 +140,7 @@ tool policy. PiPy takes no dependency on Tau.
 
 ## Attribution
 
-PiPy is a Python port of pi, which is distributed under the MIT License,
-Copyright (c) 2025 Mario Zechner. Ported modules name the upstream file they
-derive from, and the full notice is in `NOTICE` at the repository root.
+PiPy is derived from pi, which is distributed under the MIT License, Copyright
+(c) 2025 Mario Zechner. Modules ported from pi name the upstream file they came
+from, and the full notice is in `NOTICE` at the repository root. PiPy is not
+affiliated with or endorsed by the pi project.

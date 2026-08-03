@@ -1,6 +1,6 @@
 """Harness Protocol v1 adapter for the native PiPy harness.
 
-PiPy is a complete pi twin living in ``superqode.pipy``. This module is the only
+PiPy lives in ``superqode.pipy``. This module is the only
 place that knows both PiPy's event vocabulary and SuperQode's, translating one
 into the other so PiPy runs through the normal catalog, kernel and TUI route.
 
@@ -37,9 +37,9 @@ class PiPyHarnessProtocolAdapter:
             id="pipy",
             name="PiPy",
             description=(
-                "A complete pi twin in Python: event-first loop, parallel tools, "
-                "session tree, and pi's own tool surface. Runs with the "
-                "permissions of the process, exactly as pi does."
+                "A Python harness inspired by pi: event-first loop, parallel "
+                "tools, session tree, and a small tool surface. Runs with the "
+                "permissions of the process, as pi does."
             ),
             adapter_version="1.0",
             capabilities=HarnessCapabilities(

@@ -213,6 +213,7 @@ def test_every_connection_profile_has_a_sidebar_page():
         "build": "concepts/modes.md",
         "harness-core": "concepts/modes.md",
         "harness-workbench": "concepts/modes.md",
+        "harness-pipy": "advanced/pipy.md",
         "harness-presets": "concepts/modes.md",
         "harness-repo": "concepts/modes.md",
         "build-import": "concepts/modes.md",

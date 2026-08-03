@@ -340,6 +340,15 @@ _HARNESS_PROFILES: List[ConnectionProfile] = [
         detect=lambda: True,
     ),
     ConnectionProfile(
+        id="harness-pipy",
+        label="PiPy (Pi Like Harness)",
+        description="Inspired by pi. Parallel tools, session tree, no approvals or sandbox",
+        connector="harness-use",
+        runtime="pipy",
+        menu=CONNECT_MENU_HARNESS,
+        detect=lambda: True,
+    ),
+    ConnectionProfile(
         id="harness-workbench",
         label="Workbench",
         description="All native tools. For refactors and multi-file work",

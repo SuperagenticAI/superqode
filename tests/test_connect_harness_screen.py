@@ -99,6 +99,7 @@ def test_harness_step_lists_the_built_in_harnesses_with_core_first():
 
     assert [p.id for p in profiles] == [
         "harness-core",
+        "harness-pipy",
         "harness-workbench",
         "harness-presets",
         "harness-repo",
@@ -117,6 +118,7 @@ def test_choosing_a_harness_activates_it():
     asks for the model."""
     assert dispatch("harness-core").harness_commands == ["switch core"]
     assert dispatch("harness-workbench").harness_commands == ["switch workbench"]
+    assert dispatch("harness-pipy").harness_commands == ["switch pipy"]
 
 
 def test_the_harness_catalog_never_offers_vendor_or_acp_agents(tmp_path, monkeypatch):
@@ -452,7 +454,13 @@ def test_build_route_still_has_all_four_ways_in():
 
 def test_new_harness_rows_are_addressable_by_name():
     ids = connection_profile_ids()
-    for profile_id in ("harness-core", "harness-workbench", "harness-presets", "harness-repo"):
+    for profile_id in (
+        "harness-core",
+        "harness-workbench",
+        "harness-pipy",
+        "harness-presets",
+        "harness-repo",
+    ):
         assert profile_id in ids
 
 

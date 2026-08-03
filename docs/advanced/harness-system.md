@@ -158,7 +158,7 @@ Runtime backends are interchangeable execution adapters behind the same harness 
 | `deepagents` | optional | You want DeepAgents graph, middleware, and subagent behavior for tool-capable coding harnesses |
 | `pydanticai` | optional | You want PydanticAI behavior with SuperQode tools and HarnessSpec policy |
 | `rlm-code` | optional | You want RLM Code v0.1.11+ recursive REPL execution, LID context isolation, and native trajectory evidence behind a HarnessSpec |
-| `pipy` | built-in | You want a pi twin: parallel tools, session tree, and pure host permissions with no approval or sandbox layer |
+| `pipy` | built-in | You want a harness inspired by pi: parallel tools, session tree, and pure host permissions with no approval or sandbox layer |
 | `tau` | optional | You want Hugging Face Tau's event-first Python harness and native JSONL sessions behind Harness Protocol |
 
 The `rlm-code` backend delegates recursive execution to RLM Code and maps its context record, steps,
@@ -166,7 +166,7 @@ root/submodel usage, harness-exposure metrics, and native JSONL trajectory into 
 Install it with `uv tool install "superqode[rlm-code]"`; see [RLM Code Integration](rlm-code.md) for the
 configuration and safety boundary.
 
-The `pipy` backend runs the native PiPy harness, a Python replication of pi.
+The `pipy` backend runs the native PiPy harness, whose design follows pi.
 It is the one native harness that executes tools with the permissions of the
 process: no approvals, no sandbox, no network policy. Selecting it is opting
 into that posture, and the picker warns before you do. `core` remains the

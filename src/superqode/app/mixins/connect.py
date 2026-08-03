@@ -1793,9 +1793,10 @@ class ConnectMixin:
                     t.append(f"    [{num}] ", style=self._picker_link_style(THEME["dim"], num))
                     t.append(profile.label, style=f"bold {THEME['text']}")
                     t.append("\n", style="")
-                # Keep the catalogue scannable: supporting copy belongs to the
-                # row being considered, not to every option on the screen.
-                if is_highlighted and profile.description:
+                # Every row carries its own description. A user choosing between
+                # options needs to read them together, not arrow through the
+                # list to discover what each one is.
+                if profile.description:
                     t.append(f"        {profile.description}\n", style=THEME["muted"])
                 badges = profile.badges
                 if is_highlighted and badges:
@@ -1805,8 +1806,6 @@ class ConnectMixin:
                 if is_highlighted and not profile.available and profile.unavailable_hint:
                     t.append("        ", style="")
                     t.append(profile.unavailable_hint, style=THEME["warning"])
-                    t.append("\n", style="")
-                if is_highlighted:
                     t.append("\n", style="")
 
         t.append("  💡 ", style=THEME["muted"])

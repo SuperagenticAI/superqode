@@ -94,7 +94,7 @@ async def test_the_picker_offers_pipy_with_its_warning():
         ids = [entry.id for entry in app._harness_selection_list]
         index = ids.index("pipy")
         entry = app._harness_selection_list[index]
-        assert entry.display_name == "PiPy (pi twin)"
+        assert entry.display_name == "PiPy (Pi Like Harness)"
         assert entry.runtime == "pipy"
 
         app._move_harness_selection(index - app._harness_highlighted_index)

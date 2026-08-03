@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **PiPy harness** - a native Python replication of
+- **PiPy harness** - a native Python harness inspired by
   [pi](https://github.com/earendil-works/pi): event-first agent loop with
   parallel tool execution, mid-run steering, an append-only session tree, and
   pi's tool surface and prompt shape. Select it with `--harness pipy` (aliases

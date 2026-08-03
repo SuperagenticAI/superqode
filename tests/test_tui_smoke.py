@@ -1910,7 +1910,7 @@ def test_tui_harness_commands_open_complete_integration_switcher(tmp_path, monke
     picker_ids = [entry.id for entry in app._harness_selection_list]
     # PiPy sits with the other native coding harnesses, ahead of the
     # optional integrations.
-    assert picker_ids[:6] == ["core", "workbench", "pipy", "no-tool", "codex", "claude"]
+    assert picker_ids[:6] == ["core", "pipy", "workbench", "no-tool", "codex", "claude"]
     assert app._harness_highlighted_index == 0
     assert {"core", "workbench", "no-tool", "tau", "kimi-k3-coding"} <= set(picker_ids)
     rendered = render_plain(log.items[-1])
@@ -5807,7 +5807,8 @@ def test_connect_root_picker_asks_who_runs_the_loop():
     assert "Detected here:" in rendered
 
 
-def test_connect_picker_only_explains_the_highlighted_choice():
+def test_connect_picker_explains_every_choice():
+    """A user comparing options reads them together, not one arrow press apart."""
     app = make_app()
     log = FakeLog()
     app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
@@ -5816,13 +5817,17 @@ def test_connect_picker_only_explains_the_highlighted_choice():
     app._show_connect_type_picker(log)
     first = render_plain(log.items[-1])
     assert "Codex, Claude Code, Copilot, Cursor, Devin and more" in first
-    assert "Core, Workbench or a preset" not in first
+    assert "Core, Workbench or a preset" in first
+    assert "Import existing config" in first
     assert "← SELECTED" not in first
 
+    # Moving the highlight changes which row is marked, not which rows explain
+    # themselves.
     app.action_navigate_connect_type_down()
     second = render_plain(log.items[-1])
-    assert "Codex, Claude Code, Copilot, Cursor, Devin and more" not in second
+    assert "Codex, Claude Code, Copilot, Cursor, Devin and more" in second
     assert "Core, Workbench or a preset" in second
+    assert "Import existing config" in second
     assert "← SELECTED" not in second
 
 

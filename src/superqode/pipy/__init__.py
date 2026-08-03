@@ -1,7 +1,7 @@
-"""PiPy: a Python twin of the pi coding-agent harness.
+"""PiPy: a coding-agent harness for SuperQode, inspired by pi.
 
-PiPy replicates pi's agent architecture inside SuperQode: an event-first loop,
-mid-run steering, a session tree, and pi's tool surface. It runs with the
+PiPy follows the architecture of pi: an event-first loop, mid-run steering, a
+session tree, and a small tool surface. It runs with the
 permissions of the process that launched it, matching pi and deliberately
 unlike SuperQode's other native harnesses. See ``NOTICE`` for attribution.
 

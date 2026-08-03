@@ -292,7 +292,14 @@ def render_welcome(
     return Group(*items)
 
 
+#: Harness ids whose product name is not simply the id capitalised.
+_HARNESS_NAME_OVERRIDES = {"pipy": "PiPy"}
+
+
 def _harness_display_name(name) -> str:
     """Human form of a harness id for TUI labels ("core" -> "Core")."""
     text = str(name or "").strip()
-    return text[:1].upper() + text[1:] if text else "-"
+    if not text:
+        return "-"
+    override = _HARNESS_NAME_OVERRIDES.get(text.lower())
+    return override or (text[:1].upper() + text[1:])
