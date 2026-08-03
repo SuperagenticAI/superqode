@@ -1,4 +1,8 @@
-"""Pi-compatible events emitted by the portable agent layer."""
+"""Pi-compatible events emitted by the portable agent layer.
+
+Ported from the ``AgentEvent`` union in ``packages/agent/src/types.ts`` of
+earendil-works/pi (MIT). See NOTICE.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,7 @@ from typing import Any, Literal
 
 from .messages import AgentMessage, AssistantMessage, ToolResultMessage
 from .provider_events import AssistantMessageEvent
-from .tools_base import AgentToolResult
+from .tools.base import AgentToolResult
 from .types import JSONValue
 
 

@@ -193,7 +193,7 @@ async def test_harness_command_opens_complete_integration_switcher():
         assert app._prompt_completion_visible is False
         assert app._awaiting_harness_selection is True
         ids = [entry.id for entry in app._harness_selection_list]
-        assert ids[:5] == ["core", "workbench", "no-tool", "codex", "claude"]
+        assert ids[:6] == ["core", "workbench", "pipy", "no-tool", "codex", "claude"]
         assert app._harness_highlighted_index == 0
         assert "kimi-coding" in ids
         assert "kimi-k3-coding" in ids

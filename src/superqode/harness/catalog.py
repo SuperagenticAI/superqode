@@ -21,6 +21,7 @@ from .templates import (
     BUILTIN_TEMPLATES,
     core_template,
     no_tool_template,
+    pipy_template,
     tau_template,
     workbench_template,
 )
@@ -145,6 +146,7 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     core = core_template()
     workbench = workbench_template()
     no_tool = no_tool_template(name="no-tool")
+    pipy = pipy_template()
     tau = tau_template()
     from .tau_adapter import tau_installation_status
 
@@ -170,6 +172,16 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
             spec=workbench,
             loop_policy=workbench_loop_policy(),
             aliases=("coding", "native", "build"),
+        ),
+        HarnessDefinition(
+            id="pipy",
+            display_name="PiPy (pi twin)",
+            description=pipy.description,
+            runtime=pipy.runtime.backend,
+            source="built-in",
+            spec=pipy,
+            loop_policy=core_loop_policy(),
+            aliases=("pi", "pi-python"),
         ),
         HarnessDefinition(
             id="no-tool",

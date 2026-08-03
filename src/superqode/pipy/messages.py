@@ -1,4 +1,8 @@
-"""Pi-compatible provider-neutral content and transcript messages."""
+"""Pi-compatible provider-neutral content and transcript messages.
+
+Ported from ``packages/ai/src/types.ts`` and
+``packages/agent/src/harness/messages.ts`` of earendil-works/pi (MIT). See NOTICE.
+"""
 
 from __future__ import annotations
 
@@ -145,6 +149,9 @@ class ToolResultMessage:
     content: list[ToolResultContent] = field(default_factory=list)
     role: Literal["toolResult"] = "toolResult"
     details: JSONValue = None
+    #: Usage reported by the tool execution itself. Not part of LLM context
+    #: accounting, which only tracks the assistant messages.
+    usage: Usage | None = None
     added_tool_names: list[str] | None = None
     is_error: bool = False
     timestamp: int = field(default_factory=current_timestamp_ms)
@@ -179,6 +186,11 @@ class CompactionSummaryMessage:
     timestamp: int = field(default_factory=current_timestamp_ms)
 
 
+#: The message roles a provider can be sent directly.
+Message = UserMessage | AssistantMessage | ToolResultMessage
+
+#: Everything the transcript can hold, including entries that only exist for the
+#: UI or for session bookkeeping and must be projected before a provider call.
 AgentMessage = (
     UserMessage
     | AssistantMessage
@@ -186,6 +198,42 @@ AgentMessage = (
     | BranchSummaryMessage
     | CompactionSummaryMessage
 )
+
+COMPACTION_SUMMARY_PREFIX = (
+    "The conversation history before this point was compacted into the "
+    "following summary:\n\n<summary>\n"
+)
+COMPACTION_SUMMARY_SUFFIX = "\n</summary>"
+
+BRANCH_SUMMARY_PREFIX = (
+    "The following is a summary of a branch that this conversation came back from:\n\n<summary>\n"
+)
+BRANCH_SUMMARY_SUFFIX = "</summary>"
+
+
+def default_convert_to_llm(messages: list[AgentMessage]) -> list[Message]:
+    """Project transcript messages onto the roles a provider understands.
+
+    Port of ``convertToLlm`` in ``packages/agent/src/harness/messages.ts``.
+    Summary entries become user messages; anything unrecognised is dropped
+    rather than sent, because an unconvertible entry would be rejected by the
+    provider.
+    """
+    converted: list[Message] = []
+    for message in messages:
+        if isinstance(message, (UserMessage, AssistantMessage, ToolResultMessage)):
+            converted.append(message)
+        elif isinstance(message, BranchSummaryMessage):
+            text = BRANCH_SUMMARY_PREFIX + message.summary + BRANCH_SUMMARY_SUFFIX
+            converted.append(
+                UserMessage(content=[TextContent(text=text)], timestamp=message.timestamp)
+            )
+        elif isinstance(message, CompactionSummaryMessage):
+            text = COMPACTION_SUMMARY_PREFIX + message.summary + COMPACTION_SUMMARY_SUFFIX
+            converted.append(
+                UserMessage(content=[TextContent(text=text)], timestamp=message.timestamp)
+            )
+    return converted
 
 
 def content_text(content: str | list[Any]) -> str:

@@ -46,6 +46,9 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_MODEL` | model id | `<openai-fast-model>` | Default model for headless runs. |
 | `SUPERQODE_A2A_TOKEN` | bearer token | unset | Protect non-discovery operations served by `superqode serve a2a`; required for non-loopback binding. |
 | `SUPERQODE_HARNESS` | path | unset | HarnessSpec YAML/JSON to load on start. |
+| `SUPERQODE_PIPY_DIR` | path | `~/.superqode/pipy` | Root for everything the PiPy harness writes. |
+| `SUPERQODE_PIPY_SESSION_DIR` | path | `<pipy dir>/sessions` | Where PiPy stores its session tree, one directory per working directory. |
+| `SUPERQODE_PURE_PERMISSIONS_HEADLESS` | `1` to allow | unset | Allow a harness with no approvals or sandbox, such as PiPy, to run headless. Unattended runs have no reviewer, so this must be set deliberately. |
 | `SUPERQODE_CONNECT` | profile name | unset | Auto-connect a connection profile when the TUI starts (set by `--connect`). |
 | `SUPERQODE_STDIN_WAIT` | seconds | `0.2` | How long a headless run waits for piped stdin before deciding none was sent. |
 | `SUPERQODE_RUNTIME` | runtime id | `builtin` | Select the default runtime adapter when no CLI or project runtime is set. |

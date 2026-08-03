@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.2.68"
+version = "0.2.69"
 description = "Agent Engineering for your code factory"
 readme = "README.md"
 license = "Apache-2.0"
@@ -41,6 +41,10 @@ dependencies = [
     "anyio>=4.0.0",
     "httpx>=0.28.1",
     "httpx-sse>=0.4.3",
+    # PiPy validates tool-call arguments against each tool's JSON Schema before
+    # execution, the way pi validates against TypeBox. Already present through
+    # mcp/fastmcp; declared because superqode.pipy imports it directly.
+    "jsonschema>=4.20.0",
     "python-frontmatter>=1.1.0",
     "superopt>=0.1.1",
 ]

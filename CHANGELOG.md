@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.69] - 2026-08-03
+
+### Added
+
+- **PiPy harness** - a native Python replication of
+  [pi](https://github.com/earendil-works/pi): event-first agent loop with
+  parallel tool execution, mid-run steering, an append-only session tree, and
+  pi's tool surface and prompt shape. Select it with `--harness pipy` (aliases
+  `pi`, `pi-python`) or from the TUI harness picker.
+- PiPy sessions are byte-compatible with pi's version 3 JSONL format and are
+  stored separately under `~/.superqode/pipy/sessions/`, so switching harnesses
+  never disturbs another harness's history. PiPy also reads an existing
+  repository's `.pi/skills`, `.pi/prompts`, `AGENTS.md` and `CLAUDE.md`, and
+  never writes to `~/.pi/`.
+- `SUPERQODE_PIPY_DIR` and `SUPERQODE_PIPY_SESSION_DIR` relocate PiPy state.
+- `SUPERQODE_PURE_PERMISSIONS_HEADLESS` gates unattended runs of a harness that
+  has no approvals or sandbox.
+
+### Changed
+
+- PiPy runs tools with the permissions of the process, with no approval
+  prompts, no sandbox and no network policy, matching pi. This is the opposite
+  posture to every other native harness, so the harness picker warns before it
+  is selected. `core` remains the default harness and is unchanged.
+
+### Documentation
+
+- [PiPy](docs/advanced/pipy.md) covers the permission posture, session layout,
+  switch behaviour and commands.
+
 ## [0.2.68] - 2026-08-01
 
 ### Added

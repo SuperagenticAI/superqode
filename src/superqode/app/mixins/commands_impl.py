@@ -4152,6 +4152,8 @@ class CommandImplMixin:
         text.append(f"\n  {selected.description}\n", style=THEME["muted"])
         if not selected.available and selected.issue:
             text.append(f"  Setup: {selected.issue}\n", style=THEME["warning"])
+        if getattr(selected, "warning", ""):
+            text.append(f"  {selected.warning}\n", style=THEME["warning"])
         if selected.kind != "acp-browser" and selected.continuity == "fresh-session":
             text.append(
                 "  This harness starts a fresh runtime thread. SuperQode session lineage is retained.\n",

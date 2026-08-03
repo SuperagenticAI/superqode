@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -189,6 +190,23 @@ async def run_headless(
             raise ValueError(
                 f"Unknown harness or profile '{profile_name}'. Built-in profiles: {valid}"
             ) from exc
+
+        if custom_harness is not None and custom_harness.spec.metadata.get("pure_permissions"):
+            # A harness with no approvals, no sandbox and no network policy is
+            # safe interactively because a person is watching and can stop it.
+            # Headless has nobody watching, so it has to be asked for twice.
+            if os.environ.get("SUPERQODE_PURE_PERMISSIONS_HEADLESS", "").strip().lower() not in (
+                "1",
+                "true",
+                "yes",
+            ):
+                raise ValueError(
+                    f"Harness '{custom_harness.id}' runs tools with the permissions of this "
+                    "process: no approval prompts, no sandbox, no network policy. Running it "
+                    "unattended needs an explicit opt in. Set "
+                    "SUPERQODE_PURE_PERMISSIONS_HEADLESS=1 to allow it, ideally inside a "
+                    "container, or use --harness core for the policy stack."
+                )
 
     schema: Optional[Dict[str, Any]] = None
     if output_schema is not None:

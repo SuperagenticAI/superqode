@@ -1908,7 +1908,9 @@ def test_tui_harness_commands_open_complete_integration_switcher(tmp_path, monke
 
     assert app._awaiting_harness_selection is True
     picker_ids = [entry.id for entry in app._harness_selection_list]
-    assert picker_ids[:5] == ["core", "workbench", "no-tool", "codex", "claude"]
+    # PiPy sits with the other native coding harnesses, ahead of the
+    # optional integrations.
+    assert picker_ids[:6] == ["core", "workbench", "pipy", "no-tool", "codex", "claude"]
     assert app._harness_highlighted_index == 0
     assert {"core", "workbench", "no-tool", "tau", "kimi-k3-coding"} <= set(picker_ids)
     rendered = render_plain(log.items[-1])

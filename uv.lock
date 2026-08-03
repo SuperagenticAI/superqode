@@ -22974,7 +22974,7 @@ wheels = [
 
 [[package]]
 name = "superqode"
-version = "0.2.68"
+version = "0.2.69"
 source = { editable = "." }
 dependencies = [
     { name = "agent-client-protocol" },
@@ -22983,6 +22983,7 @@ dependencies = [
     { name = "fastmcp" },
     { name = "httpx" },
     { name = "httpx-sse" },
+    { name = "jsonschema" },
     { name = "litellm" },
     { name = "mcp" },
     { name = "prompt-toolkit" },
@@ -23171,6 +23172,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'testing'", specifier = ">=0.28.1" },
     { name = "httpx-sse", specifier = ">=0.4.3" },
     { name = "huggingface-hub", extras = ["hf-xet"], marker = "extra == 'hf'", specifier = ">=1.0.0" },
+    { name = "jsonschema", specifier = ">=4.20.0" },
     { name = "langsmith", marker = "extra == 'observability'", specifier = ">=0.8.5" },
     { name = "litellm", specifier = ">=1.83.14,<1.92" },
     { name = "locust", marker = "extra == 'performance'", specifier = ">=2.33.0" },
