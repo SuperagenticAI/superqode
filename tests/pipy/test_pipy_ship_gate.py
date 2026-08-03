@@ -100,8 +100,10 @@ def test_shared_code_changes_are_limited_to_the_known_set():
         # capitalised, so the label helper needs an override.
         "src/superqode/app/welcome.py",
         # The :connect picker now explains every choice, not only the
-        # highlighted one. Unrelated to PiPy, requested separately.
+        # highlighted one, and marks the highlighted row the way it used to.
+        # Unrelated to PiPy, requested separately.
         "src/superqode/app/mixins/connect.py",
+        "src/superqode/app/mixins/pickers.py",
         "tests/test_tui_smoke.py",
         # Inventory and reference updates required by the coverage tests.
         "docs/getting-started/bring-your-own-harness.md",

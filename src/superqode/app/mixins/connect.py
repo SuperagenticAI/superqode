@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import textwrap
 from textual import work
 from rich.text import Text
 from rich.panel import Panel
@@ -1772,6 +1773,23 @@ class ConnectMixin:
         if not (0 <= highlighted_idx < len(display)):
             highlighted_idx = 0
 
+        # Numbers are right-aligned to the widest one on the screen, so a list
+        # that runs past [9] keeps every label starting in the same column.
+        number_width = len(str(len(display))) or 1
+        # One column past where the labels start, so the supporting lines read
+        # as belonging to the row above them.
+        indent = " " * (8 + number_width)
+        wrap_width = max(24, self._picker_content_width(log) - len(indent) - 2)
+
+        def append_wrapped(text: str, style: str) -> None:
+            """Write supporting copy under a row, hanging-indented.
+
+            Rich would wrap this back to column zero, where it collides with
+            the next row's number and the list stops being readable.
+            """
+            for line in textwrap.wrap(text, width=wrap_width) or [text]:
+                t.append(f"{indent}{line}\n", style=style)
+
         position = 0
         for group_name, group_profiles in ordered:
             if group_name:
@@ -1784,29 +1802,28 @@ class ConnectMixin:
                 if is_highlighted:
                     t.append("  ▶ ", style=f"bold {THEME['success']}")
                     t.append(
-                        f"[{num}] ",
+                        f"[{num:>{number_width}}] ",
                         style=self._picker_link_style(f"bold {THEME['success']}", num),
                     )
                     t.append(profile.label, style=f"bold {THEME['success']}")
-                    t.append("\n", style="")
+                    t.append("  ← SELECTED\n", style=f"bold {THEME['success']}")
                 else:
-                    t.append(f"    [{num}] ", style=self._picker_link_style(THEME["dim"], num))
+                    t.append(
+                        f"    [{num:>{number_width}}] ",
+                        style=self._picker_link_style(THEME["dim"], num),
+                    )
                     t.append(profile.label, style=f"bold {THEME['text']}")
                     t.append("\n", style="")
                 # Every row carries its own description. A user choosing between
                 # options needs to read them together, not arrow through the
                 # list to discover what each one is.
                 if profile.description:
-                    t.append(f"        {profile.description}\n", style=THEME["muted"])
+                    append_wrapped(profile.description, THEME["muted"])
                 badges = profile.badges
                 if is_highlighted and badges:
-                    t.append("        ", style="")
-                    t.append(" · ".join(badges), style=THEME["dim"])
-                    t.append("\n", style="")
+                    append_wrapped(" · ".join(badges), THEME["dim"])
                 if is_highlighted and not profile.available and profile.unavailable_hint:
-                    t.append("        ", style="")
-                    t.append(profile.unavailable_hint, style=THEME["warning"])
-                    t.append("\n", style="")
+                    append_wrapped(profile.unavailable_hint, THEME["warning"])
 
         t.append("  💡 ", style=THEME["muted"])
         t.append("↑↓", style=THEME["cyan"])
@@ -2048,6 +2065,8 @@ class ConnectMixin:
                 t.append("✓ ", style=THEME["success"])
                 t.append(f"{pid:<15}", style=marker_style)
                 t.append(f"{pdef.name}", style=marker_style if is_highlighted else THEME["muted"])
+                if is_highlighted:
+                    t.append("  ← SELECTED", style=f"bold {THEME['success']}")
                 t.append("\n", style="")
                 if is_highlighted:
                     t.append(f"        {pdef.env_vars[0]} ✓", style=THEME["dim"])
@@ -2088,7 +2107,7 @@ class ConnectMixin:
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=f"bold {THEME['success']}")
                     t.append(f"{pdef.name}", style=f"bold {THEME['success']}")
-                    t.append("\n", style="")
+                    t.append("  ← SELECTED\n", style=f"bold {THEME['success']}")
                     t.append("        free", style=THEME["success"])
                     if model_count > 0:
                         t.append(
@@ -2160,7 +2179,7 @@ class ConnectMixin:
                     t.append(f"{status} ", style=status_style)
                     t.append(f"{pid:<15}", style=f"bold {THEME['success']}")
                     t.append(f"{pdef.name}", style=f"bold {THEME['success']}")
-                    t.append("\n", style="")
+                    t.append("  ← SELECTED\n", style=f"bold {THEME['success']}")
                     details = []
                     if model_count > 0:
                         details.append(f"{model_count} model{'s' if model_count > 1 else ''}")

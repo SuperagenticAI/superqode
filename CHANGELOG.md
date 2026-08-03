@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.70] - 2026-08-04
+
+### Changed
+
+- The `:connect` pickers show every option's description, not only the
+  highlighted one, so the choices can be compared without arrowing through
+  them. The highlighted row is marked `← SELECTED` again, alongside the arrow.
+- Picker numbers are right-aligned, so a list running past `[9]` keeps its
+  labels in one column.
+
+### Fixed
+
+- Long descriptions in the `:connect` pickers wrapped back to column zero,
+  where they collided with the next row. They now hang-indent under the row
+  they belong to, wrapped to the width of the conversation log rather than the
+  terminal.
+- `LICENSE` was missing the Apache appendix, so no copyright holder was named
+  in it. The boilerplate is now present and filled in.
+- `LICENSE` and `NOTICE` are declared through `license-files` instead of
+  relying on setuptools' default glob, so the MIT attribution that
+  `superqode.pipy` requires cannot silently stop shipping.
+
 ## [0.2.69] - 2026-08-03
 
 ### Added

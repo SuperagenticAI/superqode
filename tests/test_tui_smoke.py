@@ -5819,7 +5819,10 @@ def test_connect_picker_explains_every_choice():
     assert "Codex, Claude Code, Copilot, Cursor, Devin and more" in first
     assert "Core, Workbench or a preset" in first
     assert "Import existing config" in first
-    assert "← SELECTED" not in first
+    # The highlighted row is marked twice on purpose: the arrow reads at a
+    # glance, the word survives a screen reader and a copied transcript.
+    assert "Connect an existing harness  ← SELECTED" in first
+    assert first.count("← SELECTED") == 1
 
     # Moving the highlight changes which row is marked, not which rows explain
     # themselves.
@@ -5828,7 +5831,8 @@ def test_connect_picker_explains_every_choice():
     assert "Codex, Claude Code, Copilot, Cursor, Devin and more" in second
     assert "Core, Workbench or a preset" in second
     assert "Import existing config" in second
-    assert "← SELECTED" not in second
+    assert "Connect a harness with your model  ← SELECTED" in second
+    assert second.count("← SELECTED") == 1
 
 
 @pytest.mark.parametrize("width", [60, 80, 120])
