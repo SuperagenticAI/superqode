@@ -116,6 +116,10 @@ def test_shared_code_changes_are_limited_to_the_known_set():
         "tests/test_connect_harness_screen.py",
         "tests/test_cli_reference_coverage.py",
         "docs/concepts/modes.md",
+        # PiPy is derived from pi, so NOTICE has to reach anyone who installs
+        # the wheel. LICENSE gained the Apache appendix it was missing.
+        "LICENSE",
+        "MANIFEST.in",
         # Regenerated artifacts: the agent card carries the version, and the
         # CLI help hash moves when --connect gains a choice.
         "examples/a2a/agent-card.json",
