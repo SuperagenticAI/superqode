@@ -70,9 +70,8 @@ class DialogsMixin:
         # Mark that the log currently shows only the welcome, so resizes can
         # re-flow it responsively until the user starts interacting.
         self._welcome_active = True
-        # The first-run card was defined but never called, so new users only
-        # ever saw the home screen. Show it under the welcome until the first
-        # connection lands, and note the return visit for the session hint.
+        # Show the first-run card until the first connection lands, and note
+        # the visit for the session hint.
         self._maybe_show_onboarding(log)
         self._note_repository_visit()
         # Scroll to top so user sees the attractive header first
@@ -2014,13 +2013,9 @@ class DialogsMixin:
         if files_modified:
             self.set_timer(0.2, lambda: self._navigate_to_sidebar_changes(files_modified))
 
-        # A finished turn is the one moment a capability reveal is welcome: the
-        # user has just seen the product work and has a concrete result in front
-        # of them. At most one hint, once ever, chosen from what they have done.
+        # Reveal at most one capability, after a completed turn.
         self._record_milestone("task_completed")
-        # What the run actually did decides which capability is worth naming
-        # next: :diff and :undo only matter once files changed, :trust and
-        # :sandbox only once something ran.
+        # What the run did decides which hints become relevant.
         if files_modified:
             self._record_milestone("edited_files")
         if self._run_used_shell(summary):
@@ -2035,8 +2030,8 @@ class DialogsMixin:
         log.auto_scroll = True
         self.set_timer(0.1, lambda: log.scroll_end(animate=False))
 
-    #: Commands worth meeting once the basics are in hand, in the order they
-    #: become useful. Only ones the user has not run are offered.
+    #: Suggested commands, in the order they become useful. Only unused ones
+    #: are offered.
     _WORTH_KNOWING: tuple[tuple[str, str], ...] = (
         (":diff", "review every change the agent made"),
         (":undo", "roll back the last agent edit"),
@@ -2052,11 +2047,7 @@ class DialogsMixin:
     )
 
     def _append_unused_command_suggestions(self, text, limit: int = 5) -> None:
-        """List a few commands this user has not run yet.
-
-        A reference of 130 commands answers "what exists", never "what should I
-        look at next". This narrows it to things they have not touched.
-        """
+        """List up to ``limit`` commands this user has not run yet."""
         try:
             from superqode.app.progress import load_progress
 
@@ -2081,8 +2072,7 @@ class DialogsMixin:
     def _run_used_shell(summary: dict) -> bool:
         """Whether this run executed a shell command.
 
-        ``:trust`` and ``:sandbox`` are only worth naming once something has
-        actually run, so this decides whether those hints are relevant yet.
+        Gates the ``:trust`` and ``:sandbox`` hints.
         """
         if summary.get("commands_run"):
             return True

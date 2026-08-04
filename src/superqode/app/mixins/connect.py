@@ -164,12 +164,10 @@ class ConnectMixin:
         return True
 
     def _show_own_harness_catalog(self, log: ConversationLog, profile_id: str = "") -> None:
-        """List the harnesses we ship and the ones this repository defines.
+        """List built-in and repository harnesses only.
 
-        The full switcher also carries vendor agents and ACP agents, which are
-        the other branch of ``:connect`` entirely. Offering them here would ask
-        the user to re-answer the question they already answered by choosing
-        "connect a harness with your model".
+        Excludes vendor and ACP agents, which belong to the other branch of
+        ``:connect``.
         """
         from pathlib import Path
 
@@ -225,10 +223,8 @@ class ConnectMixin:
             subtitle="Optional non-ACP harness integrations",
         )
 
-    #: What each vendor product can do once it is connected, as
-    #: (matcher, command, what it gives you). Every one of these already
-    #: existed; without naming them here a user has no way to learn that the
-    #: product they just connected has its own model and profile controls.
+    #: Vendor-specific controls available after connecting, as
+    #: (name matchers, command, description).
     _VENDOR_COMMANDS: tuple[tuple[tuple[str, ...], str, str], ...] = (
         (("antigravity", "agy"), ":agy", "profiles, models and Google sign-in"),
         (("antigravity", "agy"), ":antigravity status", "which Antigravity route is live"),
@@ -255,11 +251,10 @@ class ConnectMixin:
         return hints
 
     def _teach(self, method: str, *args, **kwargs) -> None:
-        """Call one of the teaching renderers, never failing the connection.
+        """Call an informational renderer, ignoring any failure.
 
-        These cards explain a connection that has already succeeded. A missing
-        renderer or a rendering error must not turn a working connection into
-        an error the user has to debug.
+        These cards describe a connection that already succeeded, so a
+        rendering error must not surface as a connection error.
         """
         try:
             renderer = getattr(self, method, None)
@@ -277,13 +272,7 @@ class ConnectMixin:
         harness: str = "",
         model: str = "",
     ) -> None:
-        """Explain what was just connected, and what it now costs to change it.
-
-        The load-bearing line is that the session survives a harness switch.
-        Once a user believes switching is free, they experiment, and
-        experimenting is the only way anyone discovers the platform under the
-        coding agent. Prose in the docs never achieved that.
-        """
+        """Summarise the connection and the commands now available."""
         if log is None:
             return
 
@@ -311,8 +300,7 @@ class ConnectMixin:
             style=THEME["cyan"],
         )
 
-        # A vendor product keeps its own model and profile controls after it is
-        # connected. Naming them here is the only place a user finds out.
+        # Surface the product's own model and profile controls.
         hints = self._vendor_command_hints(label, harness)
         if hints:
             product = label.replace(" subscription", "").split(" · ")[0].strip()
@@ -438,20 +426,17 @@ class ConnectMixin:
 
             self._show_connect_type_picker(log, menu=CONNECT_MENU_VENDORS)
         elif conn == "grok-api":
-            # The plan route runs our harness on xAI models, which is what
-            # `:grok api` does; the vendor's own agent is on the agents screen.
+            # Plan route runs our harness on xAI models, as `:grok api` does.
             self._grok_api_cmd("", log)
         elif conn == "harness-picker-menu":
             from superqode.providers.connection_profiles import CONNECT_MENU_HARNESS
 
             self._show_connect_type_picker(log, menu=CONNECT_MENU_HARNESS)
         elif conn == "harness-use":
-            # Switching confirms the harness, then asks for the model, so the
-            # two steps stay separate and neither is a dead end.
+            # Switching confirms the harness, then prompts for the model.
             self._harness_cmd(f"switch {profile.runtime or 'core'}", log)
         elif conn == "harness-catalog":
-            # Remember where this was opened from, so Esc returns to the
-            # harness step rather than dead-ending.
+            # Remember the entry point so Esc returns to the harness step.
             self._harness_picker_from_connect = True
             self._show_own_harness_catalog(log, profile.id)
         elif conn == "harness-import":
@@ -1740,16 +1725,14 @@ class ConnectMixin:
         t.append(f"{title}\n", style=f"bold {THEME['text']}")
         if subtitle:
             t.append(f"  {subtitle}\n", style=THEME["muted"])
-        # Opening the picker clears the log, so whatever sent the user here has
-        # to say so on this screen or the reason is lost.
+        # Opening the picker clears the log, so carry the caller's context.
         note = getattr(self, "_connect_context_note", "")
         if note:
             t.append(f"  {note}\n", style=f"bold {THEME['success']}")
             self._connect_context_note = ""
         t.append("\n", style="")
 
-        # The header proves SuperQode already understands this machine before
-        # the user has chosen anything, which is worth more than any prose.
+        # Show what was detected locally before the user chooses anything.
         if is_root:
             try:
                 found = detected_sources()
@@ -1760,14 +1743,11 @@ class ConnectMixin:
                 t.append(" · ".join(found), style=THEME["cyan"])
                 t.append("\n\n", style="")
 
-        # The agents screen groups by readiness, which is the only axis a user
-        # can act on without leaving the picker. Other screens stay flat.
+        # Grouping is per-menu; most screens are flat.
         ordered = grouped_menu_profiles(menu)
 
-        # Everything counts rows down the screen: the printed number, the
-        # highlight, the arrow keys, and the number the user types or clicks.
-        # A row's label has to be the row's position, or "[1]" ends up eight
-        # rows down and typing 1 picks whatever is actually first.
+        # Row numbers, the highlight, arrow keys and typed numbers all count
+        # screen position, so a label always matches the row it sits on.
         display = [profile for _group, group_profiles in ordered for profile in group_profiles]
         highlighted_idx = getattr(self, "_byok_highlighted_connect_type_index", 0)
         if not (0 <= highlighted_idx < len(display)):
@@ -1959,9 +1939,8 @@ class ConnectMixin:
         )
 
         # Helper function to get provider info
-        # Building a row means counting a provider's models, and this screen
-        # walks the provider list more than once. Without memoising, every
-        # provider was priced twice before a single row was drawn.
+        # This screen walks the provider list more than once; memoise so each
+        # provider is priced once per render.
         _info_cache: dict = {}
 
         def get_provider_info(pid, pdef):
@@ -1986,8 +1965,7 @@ class ConnectMixin:
                         missing_keys.append(env_var)
 
             try:
-                # A count for one row must never spawn a vendor CLI and wait
-                # on it; that alone made this screen take seconds to appear.
+                # Never spawn a vendor CLI for a row count; it costs seconds.
                 models = get_models_for_provider(pid, probe_cli=False)
                 model_count = len(models)
             except Exception:

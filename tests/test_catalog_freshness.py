@@ -1,8 +1,6 @@
-"""Catalogue data stays current without the user ever waiting for it.
+"""Catalogue data stays current without blocking the user.
 
-The rule: a read never touches the network, refresh is always a background
-timer, and neither blocks. The ACP registry broke that rule by never
-refreshing itself at all, so a cache could sit untouched for months.
+A read never touches the network; refresh is always a background timer.
 """
 
 from __future__ import annotations
@@ -40,7 +38,7 @@ class _StatusStub(ModelCatalogMixin):
 
 
 def test_the_registry_refreshes_on_the_same_schedule_as_models_dev():
-    """models.dev already did this; the agent registry silently did not."""
+    """Both catalogues refresh on the same launch and interval timers."""
     source = pathlib.Path("src/superqode/app_main.py").read_text(encoding="utf-8")
 
     for call in (
@@ -53,7 +51,7 @@ def test_the_registry_refreshes_on_the_same_schedule_as_models_dev():
 
 
 def test_refreshes_run_as_background_workers():
-    """A fetch on the path a screen is drawn on is how a screen gets slow."""
+    """Refreshes run as background workers, not on the render path."""
     calls = []
 
     class WorkerStub(ModelCatalogMixin):
@@ -68,7 +66,7 @@ def test_refreshes_run_as_background_workers():
 
 
 async def test_a_failed_refresh_leaves_the_cache_alone():
-    """Offline is normal. It must not clear anything or raise."""
+    """A failed refresh leaves the cache intact and does not raise."""
 
     class FailingStub(ModelCatalogMixin):
         _catalog_status: dict = {}
@@ -118,7 +116,7 @@ def test_the_status_line_reports_what_it_actually_has():
 
 
 def test_an_offline_launch_still_reports_rather_than_alarms():
-    """No agent count because the fetch failed; the line still makes sense."""
+    """With no agent count, the line still reads sensibly."""
     with _with_cache_age(3 * 3600):
         stub = _StatusStub()
         stub._report_catalog_freshness()
@@ -130,7 +128,7 @@ def test_an_offline_launch_still_reports_rather_than_alarms():
 
 
 def test_nothing_is_said_when_there_is_nothing_to_say():
-    """No providers and no agents means no line, not an empty one."""
+    """Nothing known means no line at all."""
     stub = _StatusStub()
     with mock.patch.object(
         ModelCatalogMixin, "_catalog_freshness_providers", staticmethod(lambda: 0)
@@ -141,7 +139,7 @@ def test_nothing_is_said_when_there_is_nothing_to_say():
 
 
 def test_status_line_stays_off_once_welcome_is_gone():
-    """Pickers replace the home screen; the timer must not append under them."""
+    """The timer must not append once the welcome is gone."""
     stub = _StatusStub(agents=38)
     stub._welcome_active = False
     stub._report_catalog_freshness()
@@ -149,7 +147,7 @@ def test_status_line_stays_off_once_welcome_is_gone():
 
 
 def test_status_line_stays_off_while_a_picker_owns_the_viewport():
-    """A late catalogue line yanks scroll and hides the highlighted row."""
+    """The line must not append while a picker owns the viewport."""
     stub = _StatusStub(agents=38)
     stub._awaiting_byok_provider = True
     stub._report_catalog_freshness()
@@ -157,7 +155,7 @@ def test_status_line_stays_off_while_a_picker_owns_the_viewport():
 
 
 def test_the_status_line_never_raises_out():
-    """It runs on a launch timer, so a failure here would break startup."""
+    """Runs on a launch timer, so it must never raise."""
 
     class Broken(ModelCatalogMixin):
         _welcome_active = True

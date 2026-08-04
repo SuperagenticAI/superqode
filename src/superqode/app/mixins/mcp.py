@@ -156,7 +156,7 @@ class McpMixin:
         if subcommand == "list":
             subcommand = "status"
 
-        # Somebody with a server attached does not need to be told MCP exists.
+        # A user with a server attached needs no MCP hint.
         try:
             from superqode.mcp.integration import list_mcp_servers
 
@@ -185,8 +185,7 @@ class McpMixin:
             t.append(f"{summary['total_prompts']}\n\n", style=f"bold {THEME['text']}")
 
             if not configs:
-                # An empty screen is the one place a user is already looking at
-                # the feature, so it is where saying what it does costs least.
+                # Empty state: explain the feature, not just its absence.
                 t.append("  No MCP servers attached yet.\n\n", style=THEME["muted"])
                 t.append(
                     "  MCP servers give the agent tools beyond this repository:\n"

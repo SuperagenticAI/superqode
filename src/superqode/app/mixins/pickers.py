@@ -88,9 +88,7 @@ class PickerNavigationMixin:
                 return True
             return False
 
-        # 1a-i. The build-your-own pickers. Arrow keys reached these, but typing
-        # a number did not, which is how every other picker in the product is
-        # driven; without this, choosing a preset by its number did nothing.
+        # 1a-i. The build-your-own pickers, driven by number like the rest.
         if getattr(self, "_awaiting_harness_preset", False):
             presets = getattr(self, "_harness_preset_list", [])
             if presets and 1 <= num <= len(presets):

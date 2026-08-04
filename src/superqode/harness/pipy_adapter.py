@@ -37,7 +37,7 @@ class PiPyHarnessProtocolAdapter:
             id="pipy",
             name="PiPy",
             description=(
-                "A Python harness inspired by pi: event-first loop, parallel "
+                "A native Python harness: event-first loop, parallel "
                 "tools, session tree, and a small tool surface. Runs with the "
                 "permissions of the process, as pi does."
             ),

@@ -1,4 +1,4 @@
-"""PiPy: a coding-agent harness for SuperQode, inspired by pi.
+"""PiPy: a native Python coding-agent harness for SuperQode.
 
 PiPy follows the architecture of pi: an event-first loop, mid-run steering, a
 session tree, and a small tool surface. It runs with the

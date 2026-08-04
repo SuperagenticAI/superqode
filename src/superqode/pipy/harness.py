@@ -185,7 +185,7 @@ class AgentHarness:
         self._model = model
         self._stream_fn = stream_fn
         self._compaction_settings = compaction_settings or DEFAULT_COMPACTION_SETTINGS
-        # Zero keeps pi's behaviour: the loop runs until the model stops. A cap
+        # Zero means the loop runs until the model stops. A cap
         # is for unattended runs, where nobody is watching to interrupt one.
         self._max_turns = max(0, int(max_turns))
         self._system_prompt = system_prompt

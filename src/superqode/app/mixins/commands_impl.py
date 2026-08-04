@@ -676,8 +676,7 @@ class CommandImplMixin:
             t.append("  Loaded      ", style=THEME["muted"])
             t.append(f"{len(skills)}\n\n", style=f"bold {THEME['cyan']}")
             if not skills:
-                # Say what a skill is for. "No skills found" tells someone the
-                # directory is empty, not why they would ever fill it.
+                # Explain what a skill is for, not just that none exist.
                 t.append("  No skills here yet.\n\n", style=THEME["muted"])
                 t.append(
                     "  A skill is an instruction you stop retyping. Write the way you\n"
@@ -3837,8 +3836,7 @@ class CommandImplMixin:
         active_session_id = pure.get_current_session_id() or previous_session_id
         display_name = _harness_display_name(entry.id)
         if sub == "switch":
-            # Two switches mean the user has something to compare, which is the
-            # precondition for evaluation being a meaningful suggestion.
+            # Two switches make evaluation a meaningful suggestion.
             self._record_harness_switch_milestone()
             if fork_session and source_session_id and active_session_id:
                 self._announce_transition(
@@ -3878,21 +3876,13 @@ class CommandImplMixin:
         if sub == "switch":
             self._write_harness_detail_card(entry, log)
 
-        # Only for an interactive switch. The picker routes through `switch`,
-        # so this is the flow where the user just chose a harness and the model
-        # is the one thing left. Other subcommands (the wizard especially) end
-        # on a summary of what they wrote, and opening a picker would clear it.
+        # Interactive switches only. Other subcommands end on their own
+        # summary, which opening a picker would clear.
         if needs_model and sub == "switch":
             self._prompt_model_for_harness(display_name, log, tool_count=len(entry.tools))
 
     def _write_harness_detail_card(self, entry, log) -> None:
-        """Say what the harness actually does before asking for its model.
-
-        A name and a tool count do not tell anyone whether this harness can run
-        shell commands, what it is sandboxed to, or whether any MCP server is
-        attached. Those are the differences between the presets, so they belong
-        on the screen where the harness is chosen.
-        """
+        """Summarise tools, permissions, sandbox and MCP for a harness."""
         try:
             spec = entry.spec
             tools = list(entry.tools or ())
@@ -3958,20 +3948,12 @@ class CommandImplMixin:
             pass
 
     def _prompt_model_for_harness(self, display_name: str, log, *, tool_count: int = -1) -> None:
-        """Ask the one question left after a harness is chosen: which model.
-
-        Sending the user back to ``:connect`` reopened the ownership question
-        they had just answered by choosing a harness, so the flow looped. The
-        harness is already active here; only the model route is missing, so go
-        straight to that screen.
-        """
+        """Open the model screen for a harness that has no model yet."""
         from superqode.providers.connection_profiles import CONNECT_MENU_MODELS
 
         note = f"{display_name} is active. Choose the model it should run on."
         if tool_count == 0:
-            # A harness with no tools cannot read or edit files. That is a
-            # legitimate choice for review and reasoning, and a surprise for
-            # anyone who picked it expecting to build something.
+            # A no-tool harness cannot read or edit files; say so explicitly.
             note += " This harness has no tools: it can discuss code, not change it."
         self._connect_context_note = note
         try:
@@ -4623,9 +4605,7 @@ class CommandImplMixin:
         if was_active:
             log = self.query_one("#log", ConversationLog)
             log.clear()
-            # The catalogue is usually reached from the harness step of
-            # :connect, so Esc goes back there instead of leaving the user on
-            # an empty screen with nothing to act on.
+            # Usually reached from the harness step, so Esc returns there.
             if getattr(self, "_harness_picker_from_connect", False):
                 from superqode.providers.connection_profiles import CONNECT_MENU_HARNESS
 
@@ -6033,8 +6013,7 @@ class CommandImplMixin:
                 t.append("  Detail   ", style=THEME["muted"])
                 t.append(f"{status.detail}\n", style=THEME["text"])
             if not status.record_count:
-                # Nothing stored yet, so say what storing would buy rather than
-                # listing subcommands at somebody with no reason to run them.
+                # Nothing stored yet: explain the feature before its subcommands.
                 t.append(
                     "\n  Nothing stored yet. Facts you keep here outlive the agent\n"
                     "  that learned them, and survive every harness and model switch.\n\n",
@@ -6156,10 +6135,7 @@ class CommandImplMixin:
     def _eval_cmd(self, args: str, log: ConversationLog):
         """Score a harness on this repository, or explain how to start.
 
-        Evaluation is the rung the whole ladder points at, but it only ever
-        existed as ``superqode harness eval``. Advertising ``:eval`` while it
-        did not resolve sent people to a dead command at the exact moment they
-        were ready to use the thing.
+        Wraps ``superqode harness eval``.
         """
         try:
             tokens = shlex.split(args or "")

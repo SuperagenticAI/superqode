@@ -1,8 +1,4 @@
-"""The harness route: pick a harness, confirm it, then pick its model.
-
-Choosing a harness and choosing a model are two decisions, so they are two
-screens with a confirmation between them, not one combined list.
-"""
+"""The harness route: pick a harness, confirm it, then pick its model."""
 
 from __future__ import annotations
 
@@ -84,7 +80,7 @@ def test_root_offers_the_three_ways_to_get_a_harness():
 
 
 def test_root_copy_never_names_the_product_at_the_user():
-    """Whose harness it is cannot matter before the user has picked one."""
+    """Root copy does not name the product."""
     profiles = list_connection_profiles(CONNECT_MENU_ROOT)
     copy = " ".join(f"{p.label} {p.description}" for p in profiles).lower()
 
@@ -114,16 +110,14 @@ def test_the_second_root_choice_opens_the_harness_step():
 
 
 def test_choosing_a_harness_activates_it():
-    """Selecting Core must switch to Core, which is what confirms it and then
-    asks for the model."""
+    """Selecting a harness switches to it."""
     assert dispatch("harness-core").harness_commands == ["switch core"]
     assert dispatch("harness-workbench").harness_commands == ["switch workbench"]
     assert dispatch("harness-pipy").harness_commands == ["switch pipy"]
 
 
 def test_the_harness_catalog_never_offers_vendor_or_acp_agents(tmp_path, monkeypatch):
-    """This branch is "a harness with your model", so the other branch's
-    products would ask the user to re-answer a question they just answered."""
+    """The harness catalogue excludes vendor and ACP agents."""
     monkeypatch.chdir(tmp_path)
 
     from superqode.app.mixins.connect import ConnectMixin
@@ -155,7 +149,7 @@ def test_the_harness_catalog_never_offers_vendor_or_acp_agents(tmp_path, monkeyp
 
 
 def test_switching_a_harness_says_what_it_can_do(tmp_path, monkeypatch):
-    """A name and a tool count do not say whether it can run shell commands."""
+    """The switch card states what the harness can do."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("SUPERQODE_HARNESS", "core")
 
@@ -192,7 +186,7 @@ def test_a_no_tool_harness_says_it_cannot_change_code(tmp_path, monkeypatch):
 
 
 def test_a_subscription_row_states_the_route_we_take_to_it():
-    """ "SDK" alone reads as a property of the product, not as our route."""
+    """Each subscription row states the transport used to reach it."""
     from superqode.providers.connection_profiles import CONNECT_MENU_VENDORS
 
     badges = {p.id: p.badges for p in list_connection_profiles(CONNECT_MENU_VENDORS)}
@@ -208,8 +202,7 @@ def test_a_subscription_row_states_the_route_we_take_to_it():
 
 
 def test_existing_harnesses_is_three_categories_you_step_into():
-    """Signing in to a plan, launching an ACP process and bolting on a non-ACP
-    integration are three different things, so they are three categories."""
+    """Existing harnesses split into three categories by connection kind."""
     from superqode.providers.connection_profiles import CONNECT_MENU_AGENTS
 
     assert [(p.id, p.label) for p in list_connection_profiles(CONNECT_MENU_AGENTS)] == [
@@ -226,11 +219,7 @@ def test_each_category_opens_its_own_screen():
 
 
 def test_the_acp_category_opens_the_original_catalogue_screen():
-    """The ACP catalogue has its own screen with install hints and grouping.
-
-    A plain list of profile rows lost all of that, so the category hands off to
-    the real screen instead of reimplementing a worse one.
-    """
+    """The ACP category hands off to the existing catalogue screen."""
     from superqode.app_main import SuperQodeApp
 
     class AcpStub(DispatchStub):
@@ -252,11 +241,7 @@ def test_the_acp_category_opens_the_original_catalogue_screen():
 
 
 def test_the_subscriptions_category_holds_all_twelve_plans_codex_first():
-    """Order is fixed, so a plan is in the same place on every machine.
-
-    Sorting by readiness moved Codex down the screen wherever its optional
-    extra was missing, which made the list feel different every time.
-    """
+    """Plan order is fixed, so a product sits in the same place everywhere."""
     from superqode.providers.connection_profiles import CONNECT_MENU_VENDORS
 
     assert [p.id for p in list_connection_profiles(CONNECT_MENU_VENDORS)] == [
@@ -291,7 +276,7 @@ def test_the_subscription_screen_is_one_flat_list():
 
 
 def test_a_plan_that_needs_setup_says_so_on_its_own_row():
-    """Dropping the readiness sections must not drop the readiness itself."""
+    """A plan needing setup states how to enable it."""
     from superqode.providers.connection_profiles import CONNECT_MENU_VENDORS
 
     for profile in list_connection_profiles(CONNECT_MENU_VENDORS):
@@ -300,11 +285,7 @@ def test_a_plan_that_needs_setup_says_so_on_its_own_row():
 
 
 def test_connecting_a_vendor_names_its_own_commands():
-    """A vendor product keeps its own model and profile controls afterwards.
-
-    Those commands already existed; without naming them on the card there is
-    nothing that tells a user Antigravity has ``:agy`` behind it.
-    """
+    """The connection card names the vendor's own controls."""
     card = _card_renderer()
 
     log = FakeLog()
@@ -329,7 +310,7 @@ def test_connecting_a_vendor_names_its_own_commands():
 
 
 def test_a_plain_model_connection_gets_no_vendor_commands():
-    """Ollama has no vendor console, so inventing a section would be noise."""
+    """A plain model connection gets no vendor command section."""
     log = FakeLog()
     _card_renderer()._write_connection_teaching_card(
         log, label="Ollama · gemma4", vendor_owned=False, harness="core"
@@ -468,11 +449,7 @@ def test_new_harness_rows_are_addressable_by_name():
 
 
 def test_subscription_is_a_real_menu_not_a_printed_list():
-    """It used to render text and set no picker state, so nothing responded.
-
-    Being a menu is what gives it arrow keys, Enter, number selection and Esc,
-    because every connect screen shares that machinery.
-    """
+    """Subscriptions is a menu, so it inherits the shared picker machinery."""
     profiles = list_connection_profiles(CONNECT_MENU_PLAN)
 
     assert len(profiles) > 3

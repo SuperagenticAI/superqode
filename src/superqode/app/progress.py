@@ -1,12 +1,8 @@
-"""Durable record of what a user has already discovered.
+"""Durable record of which capabilities a user has already reached.
 
-Onboarding used to be one card that listed everything at once and disappeared
-after the first connection. That teaches nothing beyond step one: the other six
-stages of the product stayed invisible unless somebody read the documentation.
-
-This module stores milestones instead, so the TUI can reveal exactly one next
-capability at the moment it becomes relevant, and never repeat itself. The file
-is small, local, and safe to delete: losing it only means seeing a hint twice.
+Stores milestones so the TUI can reveal one relevant capability at a time and
+avoid repeating itself. The file is local and safe to delete; losing it only
+means a hint may be shown again.
 """
 
 from __future__ import annotations
@@ -38,11 +34,10 @@ MILESTONES = (
 
 
 def record_command_used(command: str) -> None:
-    """Remember that a command root has been run at least once.
+    """Record that a command root has been run at least once.
 
-    A hint for something the user already found is noise, so usage is tracked
-    separately from milestones: milestones say what became possible, this says
-    what no longer needs suggesting.
+    Tracked separately from milestones: milestones record what became
+    possible, this records what no longer needs suggesting.
     """
     root = str(command or "").strip().lstrip(":").split()[0:1]
     if not root:
@@ -66,10 +61,8 @@ def clear_progress_cache() -> None:
 def state_dir() -> Path:
     """Return where progress lives, honouring ``SUPERQODE_PROGRESS_DIR``.
 
-    Milestones are per-user rather than per-repository, so the default is the
-    usual home directory. The override exists because this state is global:
-    without it a test run, or any automated session, would silently rewrite the
-    real user's ladder.
+    Milestones are per-user, so the default is the home directory. The
+    override keeps test runs and automation out of a real user's state.
     """
     override = os.environ.get("SUPERQODE_PROGRESS_DIR", "").strip()
     return Path(override) if override else Path.home() / ".superqode"
@@ -101,9 +94,7 @@ class Progress:
         }
 
 
-#: Read once per process. Every milestone check and hint lookup called
-#: ``load_progress``, so a screen that asked twice paid for two file reads, and
-#: recording anything re-read before it wrote. It is a few dozen strings.
+#: Read once per process; milestone checks and hint lookups are frequent.
 _CACHE: dict[str, "Progress"] = {}
 
 
@@ -178,12 +169,10 @@ class Hint:
     detail: str
 
 
-#: The progressive ladder, in the order a user naturally climbs it. Each rung is
-#: revealed only after the previous rung's milestone, so nobody sees a menu of
-#: features they have no use for yet.
+#: Reveal order. Each hint is gated on the milestones that make it relevant.
 HINTS: tuple[Hint, ...] = (
-    # Editing and running things comes before anything else, so the commands
-    # that make those safe are the first worth knowing.
+    # Edit and shell hints come first: they gate the commands that make a
+    # run reviewable and reversible.
     Hint(
         id="diff",
         requires=("edited_files",),
@@ -300,11 +289,7 @@ HINTS: tuple[Hint, ...] = (
 
 
 def next_hint(progress: Progress | None = None) -> Hint | None:
-    """Return the single most relevant unseen hint, or None.
-
-    One at a time is the whole point. A list of six suggestions is a menu, and a
-    menu is the thing this replaces.
-    """
+    """Return the first unseen hint whose milestones are satisfied, or None."""
     state = progress or load_progress()
     for hint in HINTS:
         if hint.id in state.hints_shown:
@@ -313,8 +298,7 @@ def next_hint(progress: Progress | None = None) -> Hint | None:
             continue
         if set(hint.blocked_by) & state.milestones:
             continue
-        # Suggesting something the user already found is the fastest way to
-        # make every later suggestion look like noise.
+        # Skip commands the user has already run.
         root = hint.command.lstrip(":").split()[0]
         if root in state.commands_used:
             continue

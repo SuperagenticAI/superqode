@@ -31,11 +31,9 @@ def check_agent_installed(agent: "Agent") -> bool:
     parts = run_command.split()
     cmd_name = parts[0]
 
-    # Registry launchers may download a package on demand, so having npx or
-    # uvx says nothing on its own. But the agent itself is often installed
-    # anyway, and only looking at the launcher token reported it missing:
-    # fast-agent ships `fast-agent` on PATH while launching via `uvx`. Check
-    # the names the agent actually installs before giving up.
+    # Registry launchers download on demand, so npx/uvx alone proves nothing.
+    # The agent is often installed anyway (fast-agent ships `fast-agent` on
+    # PATH while launching via uvx), so check the names it installs.
     if cmd_name in {"npx", "uvx"}:
         candidates = [
             part

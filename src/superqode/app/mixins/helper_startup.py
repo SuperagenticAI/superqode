@@ -537,9 +537,7 @@ class HelperStartupMixin:
         except Exception:
             self._undo_manager = None
 
-        # AtomicFileManager was written, referenced in three places, and never
-        # constructed. Approving a file change therefore always failed to write
-        # it, and :undo raised instead of falling back.
+        # Backs :undo and approved-file writes.
         try:
             from superqode.atomic import AtomicFileManager
 
@@ -714,11 +712,7 @@ class HelperStartupMixin:
             pass
 
     def _note_repository_visit(self) -> None:
-        """Record a return visit, so the session hint fires on the second run.
-
-        Sessions only become interesting once there is more than one of them,
-        so the hint waits for evidence that the user came back.
-        """
+        """Record a return visit, which gates the session hint."""
         try:
             import json
 
@@ -740,11 +734,10 @@ class HelperStartupMixin:
             pass
 
     def _write_approved_file(self, path: str, content: str) -> None:
-        """Write a file the user just approved, keeping it undoable.
+        """Write an approved file, keeping it undoable where possible.
 
-        Prefers the atomic manager, which takes a backup so ``:undo`` has
-        something to restore, and falls back to a direct write rather than
-        losing an approved change.
+        Prefers the atomic manager so ``:undo`` has a backup to restore, and
+        falls back to a direct write rather than dropping the change.
         """
         manager = getattr(self, "_file_manager", None)
         if manager is not None:
@@ -767,11 +760,7 @@ class HelperStartupMixin:
             pass
 
     def _maybe_reveal_next_capability(self, log: ConversationLog) -> None:
-        """Show at most one unseen capability, chosen by what the user has done.
-
-        A menu of six suggestions is the thing this replaces, so this returns
-        after the first match and marks it seen forever.
-        """
+        """Show at most one unseen capability, then mark it seen."""
         if getattr(self, "_revealed_this_session", False):
             return
         try:

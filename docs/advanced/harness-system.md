@@ -158,7 +158,7 @@ Runtime backends are interchangeable execution adapters behind the same harness 
 | `deepagents` | optional | You want DeepAgents graph, middleware, and subagent behavior for tool-capable coding harnesses |
 | `pydanticai` | optional | You want PydanticAI behavior with SuperQode tools and HarnessSpec policy |
 | `rlm-code` | optional | You want RLM Code v0.1.11+ recursive REPL execution, LID context isolation, and native trajectory evidence behind a HarnessSpec |
-| `pipy` | built-in | You want a harness inspired by pi: parallel tools, session tree, and pure host permissions with no approval or sandbox layer |
+| `pipy` | built-in | You want parallel tools, a session tree, and pure host permissions with no approval or sandbox layer |
 | `tau` | optional | You want Hugging Face Tau's event-first Python harness and native JSONL sessions behind Harness Protocol |
 
 The `rlm-code` backend delegates recursive execution to RLM Code and maps its context record, steps,

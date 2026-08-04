@@ -165,7 +165,7 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
         ),
         HarnessDefinition(
             id="pipy",
-            display_name="PiPy (Pi Like Harness)",
+            display_name="PiPy",
             description=pipy.description,
             runtime=pipy.runtime.backend,
             source="built-in",

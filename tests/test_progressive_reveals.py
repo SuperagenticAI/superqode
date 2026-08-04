@@ -1,8 +1,7 @@
 """Which command gets suggested, and when.
 
-The rule these enforce: a command is advertised at the moment its precondition
-becomes true, never before, never twice, and never once the user has found it
-on their own.
+A command is suggested once its precondition holds, never twice, and never
+after the user has run it.
 """
 
 from __future__ import annotations
@@ -33,14 +32,14 @@ def reveal(*milestones: str):
 
 
 def test_every_hint_is_gated_on_declared_milestones():
-    """A hint gated on a typo would never fire, and nothing would report it."""
+    """Every hint is gated on declared milestone names."""
     for hint in HINTS:
         assert set(hint.requires) <= set(MILESTONES), hint.id
         assert set(hint.blocked_by) <= set(MILESTONES), hint.id
 
 
 def test_a_new_user_is_never_nudged():
-    """Before the first finished task there is exactly one thing to do."""
+    """No hints before the first completed task."""
     assert next_hint() is None
     assert reveal("connected") is None
 
@@ -62,7 +61,7 @@ def test_the_first_relevant_capability_is_the_one_offered(milestones, expected):
 
 
 def test_later_rungs_wait_for_the_earlier_ones_to_be_seen():
-    """One at a time. :eval waits its turn even once it is unlocked."""
+    """Hints are shown one at a time, in ladder order."""
     for name in ("task_completed", "connected", "compared_harnesses"):
         record_milestone(name)
 
@@ -79,7 +78,7 @@ def test_later_rungs_wait_for_the_earlier_ones_to_be_seen():
 
 
 def test_editing_then_failing_offers_the_way_back():
-    """:undo only means something once there is an edit and a mistake."""
+    """``:undo`` requires both an edit and a failure."""
     record_milestone("task_completed")
     record_milestone("edited_files")
     mark_hint_shown("diff")
@@ -110,7 +109,7 @@ def test_a_hint_is_offered_once_and_never_again():
 
 
 def test_a_command_the_user_already_ran_is_never_suggested():
-    """Suggesting something they found makes every later hint look like noise."""
+    """A command the user has run is not suggested."""
     record_milestone("task_completed")
     record_milestone("edited_files")
     record_command_used("diff")
