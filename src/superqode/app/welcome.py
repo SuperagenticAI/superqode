@@ -32,12 +32,11 @@ class WelcomeState:
 
 
 def _inventory_lines() -> List[tuple[str, str]]:
-    """Return the Active/Available rows for the home screen, if already known.
+    """Return the Active/Available rows, if a probe has already run.
 
-    Nothing probes on the startup path. Counting what is installed means
-    importing runtime adapters and walking registries, which cost seconds and
-    made the first screen wait on work nobody asked for. ``:explore`` fills
-    this cache when the user opens it; until then the rows are simply absent.
+    Never probes: counting installed capabilities imports runtime adapters and
+    walks registries, which is too slow for the startup path. ``:explore``
+    fills the cache; until then these rows are omitted.
     """
     try:
         from superqode.app.capabilities import cached_inventory
@@ -97,12 +96,7 @@ def _truncate_middle(value: str, limit: int) -> str:
 
 
 def _next_steps(state: WelcomeState) -> List[tuple[str, str, str]]:
-    """Pick the one next step that matches where this user actually is.
-
-    A home screen that always says ``:connect`` stops being useful the moment
-    somebody has connected, which is the point where the rest of the product
-    needs introducing.
-    """
+    """Return the next step matching the user's recorded progress."""
     if not state.connected:
         return [(":connect", "choose who runs the coding loop", THEME["cyan"])]
 
@@ -292,7 +286,14 @@ def render_welcome(
     return Group(*items)
 
 
+#: Harness ids whose product name is not simply the id capitalised.
+_HARNESS_NAME_OVERRIDES = {"pipy": "PiPy"}
+
+
 def _harness_display_name(name) -> str:
     """Human form of a harness id for TUI labels ("core" -> "Core")."""
     text = str(name or "").strip()
-    return text[:1].upper() + text[1:] if text else "-"
+    if not text:
+        return "-"
+    override = _HARNESS_NAME_OVERRIDES.get(text.lower())
+    return override or (text[:1].upper() + text[1:])

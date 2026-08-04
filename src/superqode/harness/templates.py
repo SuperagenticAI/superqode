@@ -141,6 +141,61 @@ def no_tool_template(*, name: str = "superqode-no-tool", backend: str = "builtin
     )
 
 
+def pipy_template(*, name: str = "pipy") -> HarnessSpec:
+    """Native Python harness. Runs with the permissions of the process.
+
+    Deliberately the opposite posture to every other native harness: no
+    approvals, no sandbox, no MCP. Selecting PiPy is opting into that, which is
+    why the metadata says so loudly enough for a picker to warn on it.
+    """
+    return HarnessSpec(
+        name=name,
+        description=("Event-first loop, parallel tools, session tree, pure host permissions."),
+        flavor=HarnessFlavor.CODING,
+        runtime=RuntimeSpec(backend="pipy"),
+        model_policy=ModelPolicySpec(
+            profile="pipy",
+            config={
+                # PiPy builds its own prompt and owns its own tools; these keep
+                # the surrounding SuperQode plumbing on a sane, minimal setting.
+                "system_level": "core",
+                "tool_profile": "core",
+                "parallel_tools": True,
+            },
+        ),
+        execution_policy=ExecutionPolicySpec(
+            sandbox="none",
+            approval_profile="none",
+            allow_read=True,
+            allow_write=True,
+            allow_shell=True,
+            allow_network=True,
+        ),
+        agents=(
+            AgentSpec(
+                id="pipy",
+                role="implementation",
+                tools=("read", "bash", "edit", "write"),
+            ),
+        ),
+        checks=ChecksSpec(enabled=False),
+        metadata={
+            "template": "pipy",
+            "builtin_harness": True,
+            "pure_permissions": True,
+            # PiPy emits tool and thinking events, so the streaming path may
+            # forward the full runtime vocabulary rather than deltas alone.
+            "rich_stream_events": True,
+            "continuity": "exact-resume",
+            "session_format": "pi-jsonl-v3",
+            "selection_warning": (
+                "Pure host permissions: PiPy runs tools with the permissions of "
+                "the process, with no approval prompts and no sandbox, matching pi."
+            ),
+        },
+    )
+
+
 def tau_template(*, name: str = "tau") -> HarnessSpec:
     """Read-only first-party preset for Hugging Face Tau."""
     return HarnessSpec(
@@ -462,6 +517,7 @@ BUILTIN_TEMPLATES = {
     "benchmark_coding": benchmark_coding_template,
     "no-tool": no_tool_template,
     "no_tool": no_tool_template,
+    "pipy": pipy_template,
     "tau": tau_template,
     "gemma4-coding": gemma4_coding_template,
     "gemma4-no-tool": gemma4_no_tool_template,

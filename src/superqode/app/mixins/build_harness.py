@@ -1,9 +1,7 @@
-"""Build-your-own-harness screens for the ``:connect`` ladder.
+"""Build-your-own-harness screens for ``:connect build``.
 
-The third rung of ``:connect`` is authoring a repository-owned HarnessSpec.
-Importing whatever agent config the repository already has comes first, because
-it produces a working harness out of work the user has already done. Presets,
-the wizard, and a blank spec follow for people who want to start clean.
+Routes for authoring a repository-owned HarnessSpec: import existing agent
+config, clone a preset, run the wizard, or scaffold a blank spec.
 """
 
 from __future__ import annotations
@@ -34,11 +32,7 @@ HARNESS_OUTPUT_DIR = Path(".superqode") / "harnesses"
 
 
 def _append_next_steps(text: Text, steps: tuple[tuple[str, str], ...]) -> None:
-    """Append an aligned command/description block.
-
-    Harness names vary in length, so the description column has to be measured
-    rather than hard-coded or the two rows visibly disagree.
-    """
+    """Append a command/description block, aligned to the longest command."""
     width = max(len(command) for command, _ in steps)
     for command, description in steps:
         text.append(f"      {command:<{width}}  ", style=f"bold {THEME['cyan']}")
@@ -323,8 +317,7 @@ class BuildHarnessMixin:
         if tool_count:
             t.append(f"{tool_count}\n\n", style=THEME["text"])
         else:
-            # A zero here is a deliberate choice for review and reasoning work,
-            # and a surprise to anyone who picked it expecting to build.
+            # A no-tool harness is valid for review work; say so explicitly.
             t.append("none\n", style=THEME["warning"])
             t.append(
                 "              this harness can discuss code, not change it\n\n",

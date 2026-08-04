@@ -23,6 +23,7 @@ from .runtime import (
     OpenAIAgentsHarnessBackend,
     RuntimeHarnessBackend,
 )
+from .pipy import PiPyHarnessBackend
 from .tau import TauHarnessBackend
 
 _RUNTIME_BACKENDS = {"builtin"}
@@ -35,6 +36,7 @@ _OPTIONAL_BACKENDS = {
     "claude-agent-sdk",
     "deepagents",
     "google-agent-engine",
+    "pipy",
     "pydanticai",
     "rlm-code",
     "tau",
@@ -62,6 +64,8 @@ def create_harness_backend(name: str | None) -> HarnessBackend:
         return PydanticAIHarnessBackend()
     if resolved == "rlm-code":
         return RLMCodeHarnessBackend()
+    if resolved == "pipy":
+        return PiPyHarnessBackend()
     if resolved == "tau":
         return TauHarnessBackend()
     if resolved in {"google-agent-engine", "anthropic-managed"}:

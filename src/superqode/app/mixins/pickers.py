@@ -22,6 +22,24 @@ class PickerNavigationMixin:
         """Add a Textual/Rich link target to a picker style."""
         return f"{style} link superqode://pick/{number}"
 
+    @staticmethod
+    def _picker_content_width(log: object) -> int:
+        """Columns a picker row actually gets.
+
+        The log is narrower than the terminal once a scrollbar or a sidebar is
+        in play, so wrapping to the terminal width overflows and Rich re-wraps
+        the overflow back to column zero. ``content_size`` already excludes the
+        widget's padding, border and scrollbar; the terminal is the fallback for
+        a log that has not been laid out yet.
+        """
+        for attr in ("content_size", "size"):
+            width = getattr(getattr(log, attr, None), "width", 0) or 0
+            if width > 0:
+                return int(width)
+        import shutil
+
+        return shutil.get_terminal_size().columns
+
     def _select_by_number_universal(self, num: int):
         """Universal number selection handler for all selection modes.
 
@@ -70,9 +88,7 @@ class PickerNavigationMixin:
                 return True
             return False
 
-        # 1a-i. The build-your-own pickers. Arrow keys reached these, but typing
-        # a number did not, which is how every other picker in the product is
-        # driven; without this, choosing a preset by its number did nothing.
+        # 1a-i. The build-your-own pickers, driven by number like the rest.
         if getattr(self, "_awaiting_harness_preset", False):
             presets = getattr(self, "_harness_preset_list", [])
             if presets and 1 <= num <= len(presets):

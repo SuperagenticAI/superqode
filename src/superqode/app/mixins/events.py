@@ -498,9 +498,7 @@ class EventHandlerMixin:
             if self._handle_harness_picker_input(text, log):
                 return
 
-        # Typing a number and pressing Enter is how every picker in this
-        # product is driven. Without this the text went nowhere and the screen
-        # simply sat there.
+        # Number-then-Enter selection, as every other picker supports.
         for flag, items_attr, select, clears in (
             ("_awaiting_harness_preset", "_harness_preset_list", "_clone_harness_preset", True),
             (

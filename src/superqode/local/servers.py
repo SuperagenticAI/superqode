@@ -563,10 +563,8 @@ class ServerManager:
         """Report whether an engine is usable here.
 
         ``refresh_imports`` controls the mlx import-cache refresh. It is
-        correct straight after an install and wrong everywhere else:
-        ``invalidate_caches`` is process-global, so a passive status check that
-        calls it makes every later lazy import re-scan the filesystem from the
-        current working directory. Read-only callers should pass ``False``.
+        correct straight after an install; ``invalidate_caches`` is
+        process-global, so read-only callers should pass ``False``.
         """
         if engine == "ollama":
             return shutil.which("ollama") is not None
@@ -574,9 +572,7 @@ class ServerManager:
             return shutil.which("lms") is not None or Path("/Applications/LM Studio.app").exists()
         if engine == "mlx":
             if refresh_imports:
-                # mlx-lm may have just been pip-installed into this same
-                # interpreter, in which case a stale finder still reports it
-                # missing.
+                # mlx-lm may have just been installed into this interpreter.
                 importlib.invalidate_caches()
             return find_spec("mlx_lm") is not None
         if engine == "ds4":

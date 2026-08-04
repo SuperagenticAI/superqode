@@ -1396,9 +1396,8 @@ def _newest_release(models: Dict[str, ModelInfo]) -> str:
 
 
 #: The merged catalogue, built once. Merging walks every provider and parses
-#: release dates on both sides, and callers ask for it per provider: the BYOK
-#: picker alone rebuilt the whole database dozens of times before drawing a
-#: single row. Cleared whenever live models are replaced.
+#: release dates, and callers ask for it per provider. Cleared when live
+#: models are replaced.
 _EFFECTIVE_CACHE: Dict[str, Dict[str, Dict[str, ModelInfo]]] = {}
 
 
@@ -1482,9 +1481,8 @@ def get_models_for_provider(
     # its order matches the CLI's own /model picker, so return it as-is.
     #
     # This spawns the Grok CLI and waits for it, which costs seconds. Callers
-    # that only need a model count for a list row pass ``probe_cli=False`` and
-    # take the builtin catalogue: one row's number is not worth blocking a
-    # screen that shows a hundred and eighty of them.
+    # needing only a model count pass ``probe_cli=False`` for the builtin
+    # catalogue instead.
     if provider_id == "grok-cli" and probe_cli:
         live_cli = _grok_cli_live_catalog()
         if live_cli:

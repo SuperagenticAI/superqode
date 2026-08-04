@@ -1,14 +1,8 @@
-"""``:tour`` — the ownership ladder, scored against what you have actually done.
+"""``:tour`` — the ownership ladder, checked against recorded milestones.
 
-A scripted walkthrough that plays the same way for everybody is a slideshow, and
-people close slideshows. This tour is a checklist instead: each rung declares a
-milestone, and the screen marks it done the moment the real thing happens. So
-running ``:tour`` after a session shows visible progress rather than replaying
-step one, and the rungs the user already climbed never ask for their attention
-again.
-
-The ladder is the product's spine: use somebody else's agent, then keep your own
-context across agents, then own the harness, then measure it.
+Each rung declares a milestone and is marked done when that milestone is
+recorded, so the screen reflects real progress rather than replaying a fixed
+introduction.
 """
 
 from __future__ import annotations
@@ -33,8 +27,8 @@ class TourStep:
     detail: str
 
 
-#: In climbing order. Every ``milestone`` here must exist in
-#: :data:`superqode.app.progress.MILESTONES`, or the step can never complete.
+#: In climbing order. Every ``milestone`` must exist in
+#: :data:`superqode.app.progress.MILESTONES` or the step can never complete.
 TOUR_STEPS: tuple[TourStep, ...] = (
     TourStep(
         id="connect",
@@ -119,15 +113,14 @@ TOUR_STEPS: tuple[TourStep, ...] = (
 def tour_state(milestones: set[str] | None = None) -> tuple[list[bool], int]:
     """Return per-step completion and the index of the first unfinished step.
 
-    Returns ``len(TOUR_STEPS)`` as the index when every rung is done, which the
-    renderer treats as the finished state.
+    The index is ``len(TOUR_STEPS)`` when every step is done.
     """
     if milestones is None:
         try:
             from superqode.app.progress import load_progress
 
             milestones = load_progress().milestones
-        except Exception:  # noqa: BLE001 - the tour must render without state
+        except Exception:  # noqa: BLE001 - render without stored state
             milestones = set()
 
     done = [step.milestone in milestones for step in TOUR_STEPS]

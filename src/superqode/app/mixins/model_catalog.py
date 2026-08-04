@@ -190,7 +190,7 @@ class ModelCatalogMixin:
             exclusive=True,
         )
 
-    #: What the launch refreshes managed to do, for the one status line below.
+    #: Results of the launch refreshes, for the status line below.
     _catalog_status: dict = {}
 
     #: Interactive surfaces that own the log viewport. A late welcome chrome
@@ -264,7 +264,7 @@ class ModelCatalogMixin:
 
     @staticmethod
     def _catalog_cache_age() -> str:
-        """Describe how current the catalogue is, including when offline."""
+        """Describe catalogue age in plain English, including when offline."""
         from datetime import UTC, datetime
         from pathlib import Path
 
@@ -288,12 +288,7 @@ class ModelCatalogMixin:
         return f"cached, {int(age // (60 * 24))}d old"
 
     def _start_acp_registry_refresh(self) -> None:
-        """Refresh the ACP agent registry without blocking the TUI.
-
-        models.dev already refreshed itself on a launch timer; the agent
-        registry never did, so a cache could sit untouched for months and new
-        agents simply never appeared. Same shape, same guarantees.
-        """
+        """Refresh the ACP agent registry without blocking the TUI."""
         self.run_worker(
             self._load_acp_registry_data,
             name="acp-registry-refresh",
@@ -310,9 +305,7 @@ class ModelCatalogMixin:
             agents = await get_acp_registry_agents(force_refresh=True)
             self._catalog_status["agents"] = len(agents)
         except Exception:
-            # Offline or transient. The cached registry stands, and the status
-            # line says so rather than reporting a failure the user cannot act
-            # on.
+            # Offline or transient: the cached registry stands.
             self._catalog_status.setdefault("agents", None)
 
     def _apply_live_models(self, client) -> bool:

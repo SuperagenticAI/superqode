@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.70] - 2026-08-04
+
+### Changed
+
+- The `:connect` pickers show every option's description, not only the
+  highlighted one, so the choices can be compared without arrowing through
+  them. The highlighted row is marked `← SELECTED` again, alongside the arrow.
+- Picker numbers are right-aligned, so a list running past `[9]` keeps its
+  labels in one column.
+
+### Fixed
+
+- Long descriptions in the `:connect` pickers wrapped back to column zero,
+  where they collided with the next row. They now hang-indent under the row
+  they belong to, wrapped to the width of the conversation log rather than the
+  terminal.
+- `LICENSE` was missing the Apache appendix, so no copyright holder was named
+  in it. The boilerplate is now present and filled in.
+- `LICENSE` and `NOTICE` are declared through `license-files` instead of
+  relying on setuptools' default glob, so the MIT attribution that
+  `superqode.pipy` requires cannot silently stop shipping.
+
+## [0.2.69] - 2026-08-03
+
+### Added
+
+- **PiPy harness** - a native Python harness inspired by
+  [pi](https://github.com/earendil-works/pi): event-first agent loop with
+  parallel tool execution, mid-run steering, an append-only session tree, and
+  pi's tool surface and prompt shape. Select it with `--harness pipy` (aliases
+  `pi`, `pi-python`) or from the TUI harness picker.
+- PiPy sessions are byte-compatible with pi's version 3 JSONL format and are
+  stored separately under `~/.superqode/pipy/sessions/`, so switching harnesses
+  never disturbs another harness's history. PiPy also reads an existing
+  repository's `.pi/skills`, `.pi/prompts`, `AGENTS.md` and `CLAUDE.md`, and
+  never writes to `~/.pi/`.
+- `SUPERQODE_PIPY_DIR` and `SUPERQODE_PIPY_SESSION_DIR` relocate PiPy state.
+- `SUPERQODE_PURE_PERMISSIONS_HEADLESS` gates unattended runs of a harness that
+  has no approvals or sandbox.
+
+### Changed
+
+- PiPy runs tools with the permissions of the process, with no approval
+  prompts, no sandbox and no network policy, matching pi. This is the opposite
+  posture to every other native harness, so the harness picker warns before it
+  is selected. `core` remains the default harness and is unchanged.
+
+### Documentation
+
+- [PiPy](docs/advanced/pipy.md) covers the permission posture, session layout,
+  switch behaviour and commands.
+
 ## [0.2.68] - 2026-08-01
 
 ### Added

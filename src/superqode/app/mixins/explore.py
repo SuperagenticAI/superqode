@@ -1,9 +1,7 @@
-"""``:explore`` — the whole product on one screen, with live status.
+"""``:explore`` — capability categories with their live state on this machine.
 
-The capability surface only existed in the documentation, so using SuperQode
-beyond a coding agent required reading first. This screen replaces that: every
-category states what it is, what its state is on this machine, and the command
-that acts on it. Nothing here is prose about a feature; every row is a probe.
+Every row is a probe: what the category is, whether it is active here, and the
+command that acts on it.
 """
 
 from __future__ import annotations
@@ -13,7 +11,7 @@ from rich.text import Text
 from superqode.app.constants import THEME
 from superqode.app.widgets import ConversationLog
 
-#: State glyphs, chosen so an active row reads as filled at a glance.
+#: State glyphs; active rows read as filled.
 _STATE_MARKS = {
     "on": ("●", "success"),
     "ready": ("●", "success"),

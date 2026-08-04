@@ -54,8 +54,7 @@ CONNECT_MENU_HARNESS = "harness"
 CONNECT_MENU_MODELS = "models"
 CONNECT_MENU_PLAN = "plan"
 CONNECT_MENU_BUILD = "build"
-#: ``:connect subscriptions`` means the vendor plan list, which is what this
-#: name has always described.
+#: ``:connect subscriptions`` maps to the vendor plan list.
 CONNECT_MENU_SUBSCRIPTIONS = CONNECT_MENU_VENDORS
 CONNECT_MENUS = (
     CONNECT_MENU_ROOT,
@@ -90,11 +89,10 @@ def parent_menu(menu: str) -> str:
 
 
 def normalize_menu(menu: str | None) -> str:
-    """Return a menu that actually has rows.
+    """Return a menu that has rows.
 
-    An unrecognised name would render a titled screen with nothing under it,
-    which reads as a broken command rather than a stale one. Old names land on
-    their successor, everything else falls back to the root question.
+    Superseded names map to their successor; anything unrecognised falls back
+    to the root menu rather than rendering an empty screen.
     """
     name = str(menu or "").strip().lower()
     if name in CONNECT_MENUS:
@@ -118,19 +116,14 @@ class ConnectionProfile:
     self_contained: bool = False
     # Probe (no network) for whether this source is ready to use right now.
     detect: Optional[Callable[[], bool]] = None
-    # Probe for whether the vendor's own product is present, regardless of
-    # whether SuperQode can drive it yet. Somebody with Codex installed and
-    # signed in is not in the same position as somebody who has never heard of
-    # it, even when both are "unavailable" because our optional extra is
-    # missing. Without this they sort into the same bucket, and the product a
-    # user already owns ends up below a list of things they do not.
+    # Whether the vendor product is present, regardless of whether SuperQode
+    # can drive it yet. Keeps a product the user already owns out of the same
+    # bucket as one they have never installed.
     product_detect: Optional[Callable[[], bool]] = None
     # Shown when detect() is False, to tell the user how to enable it.
     unavailable_hint: str = ""
-    # Row badges. Openness is two independent facts (the harness code licence
-    # and the model weights), never one bucket: Codex CLI is an open harness on
-    # closed models, and an open harness mostly gets run on closed models. A
-    # 2x2 would mislabel most of this list, so each row states its own facts.
+    # Row badges. Harness licence and model weights are independent facts, so
+    # each is stated separately rather than collapsed into one category.
     harness_openness: str = ""  # "open" | "closed"
     model_openness: str = ""  # "open weights" | "closed" | "multi-model" | "any model"
     transport: str = ""  # "ACP" | "SDK" | "CLI"
@@ -160,9 +153,8 @@ class ConnectionProfile:
     def badges(self) -> List[str]:
         """Short, factual row badges in display order.
 
-        The transport reads as "via SDK" rather than a bare acronym, because on
-        its own "SDK" looks like a property of the product instead of the route
-        SuperQode takes to reach it.
+        The transport reads as "via SDK" so it is clearly the route taken
+        rather than a property of the product.
         """
         return [
             value
@@ -327,8 +319,8 @@ _ROOT_PROFILES: List[ConnectionProfile] = [
     ),
 ]
 
-# Step one of the harness route: which harness runs. Core leads because it is
-# the right default. The model is chosen after this, not alongside it.
+# Step one of the harness route: which harness runs. The model is chosen
+# afterwards, on the models menu.
 _HARNESS_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="harness-core",
@@ -336,6 +328,15 @@ _HARNESS_PROFILES: List[ConnectionProfile] = [
         description="Default harness. Small tool set, quick to start",
         connector="harness-use",
         runtime="core",
+        menu=CONNECT_MENU_HARNESS,
+        detect=lambda: True,
+    ),
+    ConnectionProfile(
+        id="harness-pipy",
+        label="PiPy",
+        description="Parallel tools, session tree, no approvals or sandbox",
+        connector="harness-use",
+        runtime="pipy",
         menu=CONNECT_MENU_HARNESS,
         detect=lambda: True,
     ),
@@ -398,10 +399,8 @@ _MODEL_PROFILES: List[ConnectionProfile] = [
     ),
 ]
 
-# Plans whose credits can drive a harness through a model endpoint. Shorter
-# than the agents list on purpose: most vendors sell an agent rather than model
-# access, and a plan with no endpoint another harness can call does not belong
-# here. Those are reachable on the agents screen instead.
+# Plans whose credits can drive a harness through a model endpoint. Vendors
+# that sell an agent rather than model access belong on the agents screen.
 _PLAN_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="plan-zai",
@@ -645,9 +644,8 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
             "`npm install -g @github/copilot`; then run `copilot login`"
         ),
     ),
-    # Gemini CLI is deliberately absent. Antigravity superseded it for
-    # consumer Google accounts, so promoting it would send users to the older
-    # route; it stays reachable from the ACP catalogue for anyone who needs it.
+    # Gemini CLI is deliberately absent: Antigravity supersedes it for
+    # consumer Google accounts, and it stays reachable from the ACP catalogue.
     # It is also an
     # enterprise/API-key route rather than a subscription one, and Google has
     # moved consumer plans to Antigravity. Subscriptions must never put a user
@@ -748,10 +746,9 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
     ),
 ]
 
-# The three kinds of existing harness, as one screen you choose from. Signing
-# in to a vendor plan, launching a local ACP process, and bolting on a non-ACP
-# integration are different enough that mixing them into one list reads as
-# noise; each category owns its own screen.
+# The three kinds of existing harness. Each category owns its own screen,
+# since a vendor plan, an ACP process and a non-ACP integration are connected
+# in different ways.
 _AGENT_CATEGORY_PROFILES: List[ConnectionProfile] = [
     ConnectionProfile(
         id="agent-subscriptions",
@@ -992,14 +989,9 @@ def group_profiles_by_readiness(
 def grouped_menu_profiles(menu: str) -> List[tuple[str, List[ConnectionProfile]]]:
     """Return one screen's profiles in the order they are drawn.
 
-    Every screen is flat and in registry order. Sorting the subscription list
-    by readiness moved products around depending on what happened to be
-    installed, so the row a user reached for was never in the same place twice;
-    the setup each one still needs is on its own row instead.
-
-    Keeping this in one place matters because the picker's keyboard navigation
-    and its renderer must agree on the order, or the highlight lands on a row
-    other than the one the arrow keys appeared to move to.
+    Screens are flat and in registry order, so a product keeps the same
+    position regardless of what is installed. Navigation and rendering both
+    read this, so the highlight always matches the row on screen.
     """
     name = normalize_menu(menu)
     profiles = list_connection_profiles(name)
@@ -1010,8 +1002,7 @@ def grouped_menu_profiles(menu: str) -> List[tuple[str, List[ConnectionProfile]]
 def display_ordered_profiles(menu: str) -> List[ConnectionProfile]:
     """Flatten :func:`grouped_menu_profiles` into on-screen order.
 
-    Selection and navigation index this, so it has to be the same sequence the
-    renderer draws, including any rows built dynamically for that screen.
+    Selection and navigation index this, so it must match what is drawn.
     """
     return [profile for _group, profiles in grouped_menu_profiles(menu) for profile in profiles]
 
@@ -1019,9 +1010,8 @@ def display_ordered_profiles(menu: str) -> List[ConnectionProfile]:
 def detected_sources(repo_root: Optional[Path] = None, *, limit: int = 5) -> List[str]:
     """Short labels for what is already usable here, for the connect header.
 
-    Every probe is local and cheap (``which``, a file check, an env var). No
-    network calls: this renders on the first frame of ``:connect``, and a slow
-    header would make the picker feel broken.
+    Probes are local only (``which``, file and env checks); this renders on
+    the first frame of ``:connect``.
     """
     agents = [
         profile.label.replace(" subscription", "")

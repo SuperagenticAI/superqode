@@ -200,6 +200,7 @@ nav:
     - 🧬 Configuration vs Harness: concepts/configuration-vs-harness.md
     - 🧪 Harness Examples: examples.md
     - 🏗️ Harness System: advanced/harness-system.md
+    - π PiPy: advanced/pipy.md
     - 🔗 Harness Protocol v1: advanced/harness-protocol.md
     - 🌀 RLM Code Integration: advanced/rlm-code.md
     - 🔌 Serve a Harness over ACP: advanced/acp-agent-server.md

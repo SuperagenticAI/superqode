@@ -245,8 +245,7 @@ def _bundled_fallback() -> list[dict[str, Any]]:
     return records
 
 
-#: The in-flight background refresh, so a screen that asks several times does
-#: not start several fetches.
+#: In-flight background refresh, so repeated reads start only one fetch.
 _refresh_task: "asyncio.Task | None" = None
 
 
@@ -268,8 +267,7 @@ def _schedule_background_refresh() -> None:
     try:
         _refresh_task = asyncio.get_running_loop().create_task(refresh())
     except RuntimeError:
-        # No loop (sync CLI, tests). The cache stays as it is rather than
-        # blocking a synchronous caller on the network.
+        # No running loop (sync CLI, tests): leave the cache as it is.
         _refresh_task = None
 
 
@@ -297,11 +295,8 @@ async def get_acp_registry_agents(force_refresh: bool = False) -> list[dict[str,
     if cached:
         return cached
 
-    # Past the TTL. Serving the stale copy and stopping there is why a cache
-    # could sit untouched for months: nothing on the read path ever refreshed
-    # it, and only an explicit force_refresh did. Hand back what we have so the
-    # screen draws instantly, and fetch in the background so the next read is
-    # current. The network is never on the path the user waits for.
+    # Past the TTL: return the stale copy immediately and refresh in the
+    # background, so the network is never on the path the caller waits for.
     stale = _load_cache(allow_stale=True)
     _schedule_background_refresh()
     return stale or _bundled_fallback()

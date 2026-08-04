@@ -120,6 +120,7 @@ When SuperQode owns the loop, the harness step is also directly addressable:
 ```text
 :connect harness-core
 :connect harness-workbench
+:connect harness-pipy
 :connect harness-presets
 :connect harness-repo
 ```

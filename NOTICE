@@ -1,0 +1,48 @@
+SuperQode
+Copyright 2025-2026 Superagentic AI
+
+This product includes software developed at Superagentic AI, licensed under the
+Apache License, Version 2.0. See LICENSE for the full text.
+
+--------------------------------------------------------------------------------
+Third-party notices
+--------------------------------------------------------------------------------
+
+superqode.pipy
+--------------
+
+The `superqode.pipy` package is a Python port of the agent harness from pi
+(https://github.com/earendil-works/pi), researched against pi-coding-agent
+0.83.0 at commit 4279da1. Ported modules carry a header comment naming the
+upstream TypeScript file they derive from.
+
+pi is distributed under the MIT License:
+
+    MIT License
+
+    Copyright (c) 2025 Mario Zechner
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+superqode.harness.tau_adapter, superqode.harness.backends.tau
+-------------------------------------------------------------
+
+These modules integrate with Hugging Face Tau (https://github.com/huggingface/tau)
+as an optional dependency. They contain no Tau source. Tau is distributed under
+the MIT License, Copyright (c) 2026 Alejandro AO.

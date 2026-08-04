@@ -1908,7 +1908,9 @@ def test_tui_harness_commands_open_complete_integration_switcher(tmp_path, monke
 
     assert app._awaiting_harness_selection is True
     picker_ids = [entry.id for entry in app._harness_selection_list]
-    assert picker_ids[:5] == ["core", "workbench", "no-tool", "codex", "claude"]
+    # PiPy sits with the other native coding harnesses, ahead of the
+    # optional integrations.
+    assert picker_ids[:6] == ["core", "pipy", "workbench", "no-tool", "codex", "claude"]
     assert app._harness_highlighted_index == 0
     assert {"core", "workbench", "no-tool", "tau", "kimi-k3-coding"} <= set(picker_ids)
     rendered = render_plain(log.items[-1])
@@ -5805,7 +5807,8 @@ def test_connect_root_picker_asks_who_runs_the_loop():
     assert "Detected here:" in rendered
 
 
-def test_connect_picker_only_explains_the_highlighted_choice():
+def test_connect_picker_explains_every_choice():
+    """A user comparing options reads them together, not one arrow press apart."""
     app = make_app()
     log = FakeLog()
     app._scroll_to_highlighted_item = lambda *_args, **_kwargs: None
@@ -5814,14 +5817,22 @@ def test_connect_picker_only_explains_the_highlighted_choice():
     app._show_connect_type_picker(log)
     first = render_plain(log.items[-1])
     assert "Codex, Claude Code, Copilot, Cursor, Devin and more" in first
-    assert "Core, Workbench or a preset" not in first
-    assert "← SELECTED" not in first
+    assert "Core, Workbench or a preset" in first
+    assert "Import existing config" in first
+    # The highlighted row is marked twice on purpose: the arrow reads at a
+    # glance, the word survives a screen reader and a copied transcript.
+    assert "Connect an existing harness  ← SELECTED" in first
+    assert first.count("← SELECTED") == 1
 
+    # Moving the highlight changes which row is marked, not which rows explain
+    # themselves.
     app.action_navigate_connect_type_down()
     second = render_plain(log.items[-1])
-    assert "Codex, Claude Code, Copilot, Cursor, Devin and more" not in second
+    assert "Codex, Claude Code, Copilot, Cursor, Devin and more" in second
     assert "Core, Workbench or a preset" in second
-    assert "← SELECTED" not in second
+    assert "Import existing config" in second
+    assert "Connect a harness with your model  ← SELECTED" in second
+    assert second.count("← SELECTED") == 1
 
 
 @pytest.mark.parametrize("width", [60, 80, 120])

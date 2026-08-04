@@ -1,9 +1,4 @@
-"""Tests for the discovery surfaces: milestones, ``:tour``, and harness import.
-
-These cover the machinery that decides what a user is shown next. The point of
-each is that the product reports what actually happened on this machine rather
-than replaying a scripted introduction.
-"""
+"""Discovery surfaces: milestones, ``:tour``, and harness import."""
 
 from __future__ import annotations
 
@@ -57,7 +52,7 @@ class FakeLog:
 
 
 def test_progress_is_written_where_the_override_points():
-    """The override is what keeps automation out of a developer's own state."""
+    """The override keeps test runs out of a developer's own state."""
     record_milestone("connected")
 
     assert progress_path().exists()
@@ -68,7 +63,7 @@ def test_progress_is_written_where_the_override_points():
 
 
 def test_a_hint_is_shown_once_and_never_again():
-    """Repeating a suggestion the user already dismissed is nagging, not help."""
+    """A hint is shown once and not repeated."""
     record_milestone("task_completed")
     first = next_hint()
 
@@ -80,7 +75,7 @@ def test_a_hint_is_shown_once_and_never_again():
 
 
 def test_a_hint_stays_hidden_until_its_milestone_lands():
-    """Suggesting :eval to somebody who has not connected teaches nothing."""
+    """Hints stay hidden until their milestones are recorded."""
     assert next_hint() is None
 
     record_milestone("connected")
@@ -88,7 +83,7 @@ def test_a_hint_stays_hidden_until_its_milestone_lands():
 
 
 def test_a_milestone_makes_its_hint_redundant():
-    """Somebody who already used memory should not be told memory exists."""
+    """A hint is skipped once its milestone makes it redundant."""
     record_milestone("task_completed")
     record_milestone("used_memory")
 
@@ -97,7 +92,7 @@ def test_a_milestone_makes_its_hint_redundant():
 
 
 def test_every_hint_depends_on_declared_milestones():
-    """A hint gated on a typo would never fire, and nothing would report it."""
+    """Every hint is gated on declared milestone names."""
     for hint in HINTS:
         assert set(hint.requires) <= set(MILESTONES), hint.id
         assert set(hint.blocked_by) <= set(MILESTONES), hint.id
@@ -154,7 +149,7 @@ def test_tour_next_runs_the_current_step():
 
 
 def test_tour_next_on_a_typing_step_explains_instead_of_running():
-    """Step two has no command, so "next" must not silently do nothing."""
+    """Step two has no command, so ``next`` explains instead of running."""
     record_milestone("connected")
     stub, log = _TourStub(), FakeLog()
     stub._tour_cmd("next", log)
@@ -233,8 +228,7 @@ def test_import_turns_repository_instructions_into_an_owned_harness(tmp_path, mo
     from superqode.harness.loader import load_harness_spec
 
     spec = load_harness_spec(written[0])
-    # The instructions have to survive the import, or the harness is not the
-    # one the repository was already describing.
+    # The imported instructions must survive into the generated spec.
     assert "Always run pytest first." in spec.agents[0].system_prompt
     assert "AGENTS.md" not in spec.context.instruction_files
     assert spec.metadata["built_with"] == "connect import"
@@ -323,7 +317,7 @@ def _number_selector(stub):
 
 
 def test_typing_a_number_picks_a_preset(tmp_path, monkeypatch):
-    """Arrow keys reached these screens; typing a number did nothing at all."""
+    """Number selection reaches the preset picker."""
     monkeypatch.chdir(tmp_path)
     stub = _PickerStub()
     stub._show_harness_preset_picker(stub._log)
@@ -367,11 +361,9 @@ def test_a_preset_with_no_tools_says_so(tmp_path, monkeypatch):
 
 
 def test_the_screens_i_added_answer_every_selection_path():
-    """Arrows, a typed number, number+Enter and Esc.
+    """Every picker answers arrows, a typed number, number+Enter and Esc.
 
-    Two of these screens shipped answering only arrows, which is why picking a
-    preset by number did nothing. This is the contract, checked at the wiring
-    rather than per screen.
+    Checked at the wiring rather than per screen.
     """
     import re
     from pathlib import Path

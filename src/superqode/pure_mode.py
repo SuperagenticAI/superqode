@@ -114,7 +114,16 @@ class PureMode:
         definition = resolve_harness(reference, root=Path.cwd())
         self._harness_definition = definition
         self._loop_policy = definition.loop_policy
-        self._harness_spec = definition.spec if definition.source != "built-in" else None
+        # Built-in harnesses normally run through the in-process AgentLoop and
+        # need no spec. A built-in entry with its own runtime backend (PiPy)
+        # does, so it routes through the harness kernel like an external one.
+        # For core, workbench and no-tool the backend is "builtin", so this
+        # still evaluates to None and nothing changes for them.
+        self._harness_spec = (
+            definition.spec
+            if definition.source != "built-in" or definition.spec.runtime.backend != "builtin"
+            else None
+        )
         self._harness_path = str(definition.path or "")
         profile = str(definition.spec.model_policy.config.get("tool_profile") or "").strip()
         if not profile:
@@ -554,19 +563,35 @@ class PureMode:
         if self._harness_spec is not None:
             provider, model = self._resolve_harness_route()
             session = await self._ensure_harness_session()
-            async for event in session.stream(
-                prompt,
-                provider=provider,
-                model=model,
-                working_directory=self.session.working_directory,
-                runtime=self._harness_spec.runtime.backend,
-            ):
-                if event.type not in {"delta", "model_delta"}:
-                    continue
-                chunk = str(event.data.get("text", ""))
-                if self.on_stream_chunk:
-                    self.on_stream_chunk(chunk)
-                yield chunk
+            # Harnesses that declare rich stream events emit the full runtime
+            # vocabulary (tool calls, results, thinking), so they go through the
+            # same handler the in-process runtimes use and their tool cards
+            # render. Harnesses that do not keep the delta-only behaviour.
+            rich_events = bool(self._harness_spec.metadata.get("rich_stream_events", False))
+            if rich_events:
+                self._runtime_seen_tool_calls = set()
+            try:
+                async for event in session.stream(
+                    prompt,
+                    provider=provider,
+                    model=model,
+                    working_directory=self.session.working_directory,
+                    runtime=self._harness_spec.runtime.backend,
+                ):
+                    if rich_events:
+                        chunk = self._handle_runtime_harness_event(event)
+                    elif event.type in {"delta", "model_delta"}:
+                        chunk = str(event.data.get("text", ""))
+                    else:
+                        continue
+                    if not chunk:
+                        continue
+                    if self.on_stream_chunk:
+                        self.on_stream_chunk(chunk)
+                    yield chunk
+            finally:
+                if rich_events:
+                    self._flush_runtime_tool_delta_buffers(force=True)
             self.session.total_requests += 1
             return
 

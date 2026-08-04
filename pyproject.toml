@@ -1,9 +1,13 @@
 [project]
 name = "superqode"
-version = "0.2.68"
+version = "0.2.70"
 description = "Agent Engineering for your code factory"
 readme = "README.md"
 license = "Apache-2.0"
+# Declared rather than left to setuptools' default glob, so NOTICE cannot
+# silently stop shipping if that default changes. NOTICE carries the MIT
+# attribution that superqode.pipy requires.
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.12,<3.14"
 authors = [
     {name = "Shashi Jagtap", email = "info@super-agentic.ai"}
@@ -41,6 +45,10 @@ dependencies = [
     "anyio>=4.0.0",
     "httpx>=0.28.1",
     "httpx-sse>=0.4.3",
+    # PiPy validates tool-call arguments against each tool's JSON Schema before
+    # execution, the way pi validates against TypeBox. Already present through
+    # mcp/fastmcp; declared because superqode.pipy imports it directly.
+    "jsonschema>=4.20.0",
     "python-frontmatter>=1.1.0",
     "superopt>=0.1.1",
 ]

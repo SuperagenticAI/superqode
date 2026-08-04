@@ -39,6 +39,9 @@ class HarnessPickerItem:
     kind: str = "harness"
     target: Any = None
     install_extra: str = ""
+    #: Shown in the detail panel when this entry is highlighted. Empty for
+    #: every entry that does not declare one, so nothing changes for them.
+    warning: str = ""
 
 
 def _native_group(entry) -> str:
@@ -68,6 +71,7 @@ def _native_item(entry) -> HarnessPickerItem:
         kind="harness",
         target=entry,
         install_extra="tau" if entry.source == "optional:tau" and not entry.available else "",
+        warning=str(entry.spec.metadata.get("selection_warning") or ""),
     )
 
 
