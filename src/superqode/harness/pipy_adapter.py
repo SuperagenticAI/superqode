@@ -10,6 +10,7 @@ pulling the whole agent brain in.
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -87,6 +88,7 @@ class PiPyHarnessProtocolAdapter:
         )
         self._sessions[session_id] = coding_session
         self._refs[session_id] = ref
+        _record_session_path(session_id, coding_session.session_path)
         return ref
 
     async def resume(self, session: HarnessSessionRef) -> HarnessSessionRef:
@@ -107,7 +109,11 @@ class PiPyHarnessProtocolAdapter:
             session_id=session.session_id,
             metadata=metadata,
         )
-        existing = str(metadata.get("session_path") or "")
+        # A fresh backend, and so a fresh adapter, is built per request, so the
+        # in-memory cache never survives to the next turn.
+        existing = str(metadata.get("session_path") or "") or _indexed_session_path(
+            session.session_id, working_directory
+        )
         coding_session = await self._open(request, working_directory, session_path=existing or None)
         ref = HarnessSessionRef(
             session_id=session.session_id,
@@ -117,6 +123,7 @@ class PiPyHarnessProtocolAdapter:
         )
         self._sessions[session.session_id] = coding_session
         self._refs[session.session_id] = ref
+        _record_session_path(session.session_id, coding_session.session_path)
         return ref
 
     async def _open(
@@ -286,6 +293,50 @@ def translate_event(event: Any) -> list[HarnessEvent]:
         return []
 
     return []
+
+
+def _record_session_path(session_id: str, session_path: Path | str) -> None:
+    """Record which PiPy session a SuperQode session id owns.
+
+    Written beside the sessions it indexes so it follows a relocated root.
+    Failures are ignored: they cost continuity, not the run.
+    """
+    from superqode.pipy.config import SESSION_INDEX_NAME
+
+    path = Path(session_path)
+    index = path.parent / SESSION_INDEX_NAME
+    try:
+        entries = _read_index(index)
+        if entries.get(session_id) == str(path):
+            return
+        entries[session_id] = str(path)
+        index.parent.mkdir(parents=True, exist_ok=True)
+        index.write_text(json.dumps(entries, indent=2, sort_keys=True), encoding="utf-8")
+    except OSError:
+        return
+
+
+def _indexed_session_path(session_id: str, working_directory: Path) -> str:
+    """Look up a previous turn's session file, or "" when there is none."""
+    from superqode.pipy.config import session_index_for
+
+    try:
+        entries = _read_index(session_index_for(working_directory))
+    except OSError:
+        return ""
+    # A deleted session must not resurface as a resume failure.
+    recorded = str(entries.get(session_id) or "")
+    return recorded if recorded and Path(recorded).is_file() else ""
+
+
+def _read_index(index: Path) -> dict[str, str]:
+    if not index.is_file():
+        return {}
+    try:
+        loaded = json.loads(index.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return {}
+    return {str(k): str(v) for k, v in loaded.items()} if isinstance(loaded, dict) else {}
 
 
 def _delta_text(event: Any) -> str:

@@ -356,7 +356,8 @@ def test_welcome_uses_agent_engineering_positioning():
 
     assert "AGENT ENGINEERING FOR YOUR CODE FACTORY" in text
     assert ":connect" in text
-    # The welcome screen offers exactly one next step: connect.
+    # Connect first, help second. Nothing else competes with them.
+    assert ":help" in text
     assert ":harness" not in text
     assert ":work" not in text
     assert ":init" not in text
@@ -366,8 +367,10 @@ def test_welcome_uses_agent_engineering_positioning():
     assert "Interoperability: Local · ACP · MCP · A2A · BYOK · SDKs" in text
     assert "Current workspace" in text
     assert "/work/repository" in text
-    assert "Not selected" in text
-    assert "Not connected" in text
+    # Harness, model and policy report only absence before a connection, which
+    # is what the next step already says.
+    assert "Not selected" not in text
+    assert "Not connected" not in text
     assert "Next step" in text
     assert "[1]" not in text
     assert "Ctrl+C" in text
@@ -447,7 +450,9 @@ def test_welcome_compacts_for_narrow_terminals():
     assert "Current workspace" not in text
     assert "Build · Connect · Orchestrate · Evaluate · Optimize" not in text
     assert ":connect" in text
-    assert "Return here anytime: :home" in text
+    # The narrow screen keeps the essentials only: the way in, and the keys.
+    assert "Ctrl+C exit" in text
+    assert "Return here anytime" not in text
 
 
 def test_welcome_uses_one_line_headlines_at_small_widths():
@@ -507,34 +512,55 @@ def test_welcome_separates_terminal_first_from_interoperability():
 
 def test_welcome_footer_is_close_to_the_next_step():
     """The footer must not be buried behind a wall of blank lines."""
+    from superqode.app.welcome import WelcomeState, _next_steps
+
     text = render_plain(render_welcome([], width=100))
     lines = text.splitlines()
+    step_count = len(_next_steps(WelcomeState()))
 
-    next_step = next(i for i, line in enumerate(lines) if line.strip() == "Next step")
+    heading = next(i for i, line in enumerate(lines) if line.strip().startswith("Next step"))
     footer = next(i for i, line in enumerate(lines) if "Ctrl+K" in line)
 
-    assert footer - next_step <= 3, f"footer is {footer - next_step} lines after Next step"
+    # Heading, one line per step, and at most one blank before the footer.
+    allowed = step_count + 2
+    assert footer - heading <= allowed, f"footer is {footer - heading} lines after the heading"
 
 
-def test_hints_bar_surfaces_mode_switcher():
+def test_hints_bar_is_navigation_only():
+    """Places to go, not things to configure.
+
+    Connect and disconnect live in the status bar, so repeating them here
+    split one action across two controls. The configuration commands are
+    reached deliberately through :help and :explore.
+    """
     text = render_plain(HintsBar().render())
 
     assert ":connect" in text
-    assert ":init" not in text
-    assert ":mode" in text
-    assert ":harness" in text
-    assert ":work" in text
-    assert ":memory" in text
-    assert ":help" in text
     assert ":home" in text
-    assert ":exit" not in text
-    assert "🏠 :home" in text
-    assert "🔌 :connect" in text
-    assert "🎛 :mode" in text
-    assert "◈ :harness" in text
-    assert "📋 :work" in text
-    assert "🧠 :memory" in text
-    assert "? :help" in text
+    assert ":help" in text
+    for configuration in (":mode", ":harness", ":work", ":memory", ":init"):
+        assert configuration not in text, f"{configuration} is not navigation"
+
+
+def test_every_hint_responds_to_a_click():
+    """A dead entry beside a live one teaches that the bar is decorative."""
+    from superqode.app.mixins.clickable_commands import CLICKABLE_COMMANDS
+
+    rendered = HintsBar().render()
+    linked = {
+        str(span.style).rsplit("/", 1)[-1]
+        for span in rendered.spans
+        if "superqode://cmd/" in str(span.style)
+    }
+    shown = {word.lstrip(":") for word in rendered.plain.split() if word.startswith(":")}
+
+    assert shown <= linked, f"not clickable: {sorted(shown - linked)}"
+    assert shown <= CLICKABLE_COMMANDS
+    # Exit is a status bar control, not a place to navigate to.
+    assert ":exit" not in rendered.plain
+    assert "🏠 :home" in rendered.plain
+    assert "🔌 :connect" in rendered.plain
+    assert "? :help" in rendered.plain
 
 
 def test_lmstudio_app_only_prompt_does_not_arm_enter_start(monkeypatch):
@@ -886,8 +912,12 @@ def test_prompt_height_wraps_and_caps_long_text():
     assert SelectionAwareInput._height_for_text("line 1\nline 2", 40) == 3
 
 
-def test_prompt_default_placeholder_is_task_focused():
-    assert SelectionAwareInput.DEFAULT_PLACEHOLDER == "Describe a task or type : for commands."
+def test_prompt_default_placeholder_points_at_the_first_command():
+    """Nothing works before :connect, so the empty prompt says so."""
+    assert (
+        SelectionAwareInput.DEFAULT_PLACEHOLDER
+        == "Get started with :connect, or :help for more options."
+    )
 
 
 def test_connect_local_picker_lists_ds4():
@@ -1738,7 +1768,10 @@ def test_tui_static_commands_include_harness_subcommands():
     assert ":sessions" in slash_values
     assert ":sessions resume" in slash_values
     assert ":resume" in slash_values
-    assert "/tree" in slash_values
+    # Session commands are colon only. "/" opens a search in Vim mode, so the
+    # duplicate prefix made the same word mean two things.
+    for retired in ("/tree", "/resume", "/sessions", "/fork", "/compact"):
+        assert retired not in slash_values
     assert ":share" in slash_values
     assert ":share create" in slash_values
     assert ":share import" in slash_values
@@ -5770,12 +5803,12 @@ def test_connect_selection_replaces_picker_before_rendering_result():
 def picker_rows(rendered: str) -> list[tuple[int, str]]:
     """Parse a connect screen into its (number, label) rows.
 
-    Rows render as ``  ▶  1. Label   badges`` with the badges separated by a
-    run of spaces, so the label ends at the first double space.
+    Rows render as ``  ● [1] Label   badges``: a click dot, the number, then
+    the label, with badges separated by a run of spaces.
     """
     rows = []
     for line in rendered.split("\n"):
-        match = re.match(r"\s*(?:▶\s+)?\[(\d+)\]\s+(.+?)(?:\s{2,}.*)?$", line)
+        match = re.match(r"\s*(?:[▶●○]\s+)?\[(\d+)\]\s+(.+?)(?:\s{2,}.*)?$", line)
         if match:
             rows.append((int(match.group(1)), match.group(2).strip()))
     return rows
@@ -5819,13 +5852,12 @@ def test_connect_picker_explains_every_choice():
     assert "Codex, Claude Code, Copilot, Cursor, Devin and more" in first
     assert "Core, Workbench or a preset" in first
     assert "Import existing config" in first
-    # The highlighted row is marked twice on purpose: the arrow reads at a
-    # glance, the word survives a screen reader and a copied transcript.
+    # Marked twice on purpose: the arrow reads at a glance, the word survives
+    # a screen reader and a copied transcript.
     assert "Connect an existing harness  ← SELECTED" in first
     assert first.count("← SELECTED") == 1
 
-    # Moving the highlight changes which row is marked, not which rows explain
-    # themselves.
+    # Moving the highlight changes which row is marked, not which explain.
     app.action_navigate_connect_type_down()
     second = render_plain(log.items[-1])
     assert "Codex, Claude Code, Copilot, Cursor, Devin and more" in second

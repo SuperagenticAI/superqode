@@ -64,6 +64,7 @@ def test_shared_code_changes_are_limited_to_the_known_set():
             ":(exclude)src/superqode/harness/pipy_adapter.py",
             ":(exclude)src/superqode/harness/pipy_extensions.py",
             ":(exclude)src/superqode/harness/backends/pipy.py",
+            ":(exclude)src/superqode/app/mixins/pipy_commands.py",
             ":(exclude)tests/pipy",
             ":(exclude)docs/advanced/pipy.md",
             ":(exclude)NOTICE",
@@ -99,9 +100,7 @@ def test_shared_code_changes_are_limited_to_the_known_set():
         # PiPy is the one harness id whose product name is not the id
         # capitalised, so the label helper needs an override.
         "src/superqode/app/welcome.py",
-        # The :connect picker now explains every choice, not only the
-        # highlighted one, and marks the highlighted row the way it used to.
-        # Unrelated to PiPy, requested separately.
+        # The :connect picker layout. Unrelated to PiPy, requested separately.
         "src/superqode/app/mixins/connect.py",
         "src/superqode/app/mixins/pickers.py",
         "tests/test_tui_smoke.py",
@@ -116,8 +115,29 @@ def test_shared_code_changes_are_limited_to_the_known_set():
         "tests/test_connect_harness_screen.py",
         "tests/test_cli_reference_coverage.py",
         "docs/concepts/modes.md",
-        # PiPy is derived from pi, so NOTICE has to reach anyone who installs
-        # the wheel. LICENSE gained the Apache appendix it was missing.
+        # Click-to-run chrome and the discoverable disconnect, requested
+        # separately. Additive: a link scheme, a reactive and a sync line.
+        "src/superqode/app/mixins/events.py",
+        "src/superqode/app/mixins/helper_startup.py",
+        "src/superqode/app/mixins/dialogs.py",
+        "src/superqode/widgets/slash_complete.py",
+        "tests/test_connect_harness_screen.py",
+        "tests/test_slash_runtime.py",
+        "tests/test_status_bar_layout.py",
+        # Welcome screen and prompt box polish, requested separately.
+        "src/superqode/app/welcome.py",
+        "src/superqode/app/css.py",
+        "src/superqode/app/inputs.py",
+        "src/superqode/app/widgets.py",
+        "src/superqode/app/mixins/model_catalog.py",
+        "tests/test_catalog_freshness.py",
+        # The :pipy command surface. Additive: dispatch, registration, catalogue.
+        "src/superqode/app/mixins/slash_commands.py",
+        "src/superqode/app_main.py",
+        "src/superqode/app/constants.py",
+        "docs/advanced/tui.md",
+        # NOTICE must reach anyone installing the wheel; LICENSE gained the
+        # Apache appendix it was missing.
         "LICENSE",
         "MANIFEST.in",
         # Regenerated artifacts: the agent card carries the version, and the

@@ -151,7 +151,8 @@ async def test_connect_picker_keyboard_navigation_keeps_selection_visible():
             await pilot.press("down")
             await pilot.pause()
 
-        selected_y = next(index for index, line in enumerate(log.lines) if "▶" in line.text)
+        # The highlighted row is marked by a filled click dot.
+        selected_y = next(index for index, line in enumerate(log.lines) if "●" in line.text)
         visible_height = log.scrollable_content_region.height
 
         assert app._byok_highlighted_connect_type_index == 6
@@ -170,6 +171,8 @@ async def test_byok_picker_keyboard_navigation_keeps_selection_visible():
             await pilot.press("down")
             await pilot.pause()
 
+        # The provider picker keeps the arrow: its rows already carry a
+        # status glyph, so a click dot there would be a second circle.
         selected_y = next(index for index, line in enumerate(log.lines) if "▶" in line.text)
         visible_height = log.scrollable_content_region.height
 
@@ -394,14 +397,14 @@ def test_copy_text_to_clipboard_falls_back_to_osc52(monkeypatch):
 # --- prompt box: select-all + clear (escape a huge pasted blob) ---------------
 
 
-async def test_prompt_placeholder_is_task_focused(monkeypatch):
+async def test_prompt_placeholder_points_at_the_first_command(monkeypatch):
     monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
     app = SuperQodeApp()
     async with app.run_test() as pilot:
         prompt = app.query_one(SelectionAwareInput)
         await pilot.pause()
 
-        assert str(prompt.placeholder) == "Describe a task or type : for commands."
+        assert str(prompt.placeholder) == "Get started with :connect, or :help for more options."
 
 
 async def test_mounted_harness_switcher_uses_keyboard_navigation(tmp_path, monkeypatch):
@@ -1859,3 +1862,48 @@ async def test_a_configured_long_tail_provider_is_never_hidden(monkeypatch, mode
         await pilot.pause()
 
         assert "deepinfra" in {pid for pid, _ in app._byok_connect_list}
+
+
+async def test_clicking_anywhere_on_a_picker_row_selects_it(monkeypatch):
+    """Rows list names and paths; a click lands on those, not the number."""
+    import re
+
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
+    app = SuperQodeApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._show_local_provider_picker(log)
+        await pilot.pause()
+
+        rows = [
+            (index, "".join(segment.text for segment in strip).rstrip())
+            for index, strip in enumerate(log.lines)
+            if re.match(r"^\s*[▶●○]?\s*\[\s*\d+\s*\]", "".join(s.text for s in strip))
+        ]
+        assert rows, "no picker rows rendered"
+        assert app._awaiting_local_provider is True
+
+        line_index, text = rows[-1]
+        # Far right of the row, past everything carrying a link style.
+        y = log.region.y + line_index - int(log.scroll_offset.y)
+        x = log.region.x + min(len(text) - 2, log.region.width - 2)
+        await pilot.click(offset=(x, y))
+        await pilot.pause()
+
+        assert app._awaiting_local_provider is False, "the click did not select the row"
+
+
+async def test_a_click_off_a_picker_row_selects_nothing(monkeypatch):
+    """The row resolver must not turn stray clicks into selections."""
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
+    app = SuperQodeApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._show_local_provider_picker(log)
+        await pilot.pause()
+
+        # The heading, which carries no bracketed number.
+        await pilot.click(offset=(log.region.x + 2, log.region.y))
+        await pilot.pause()
+
+        assert app._awaiting_local_provider is True

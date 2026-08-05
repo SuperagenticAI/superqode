@@ -7,7 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.71] - 2026-08-05
+
+### Fixed
+
+- The Copilot models row in the subscription menu connected through the legacy
+  BYOK route, which lists what models.dev believes Copilot offers in general
+  rather than what a plan may actually use. Both Copilot rows now take the
+  vendor route, which asks the signed-in account.
+
+### Changed
+
+- TUI update. Connect, disconnect, back and exit are controls in the status
+  bar, picker rows are clickable across their width with a click dot to aim
+  at, long lists keep a uniform two-line rhythm, and the home screen and
+  prompt box were tidied. Session commands are offered as `:compact`,
+  `:fork`, `:tree`, `:resume` and `:sessions`; the slash forms still run.
+
 ## [0.2.70] - 2026-08-04
+
+### Added
+
+- Connect/disconnect and exit controls lead the status bar, where a browser
+  puts its toolbar, with the identity, model and session state following.
+  Clicking either during a run asks before cancelling it; neither asks when the
+  agent is idle. On a crowded row the labels shorten and then the controls
+  drop, session control last.
+- Session commands are offered with a colon only: `:compact`, `:fork`,
+  `:tree`, `:resume` and `:sessions`. The slash forms still run, but they are
+  no longer suggested, because `/` opens a search in Vim mode and the same
+  word meant two things depending on the mode.
+- Every option in a picker carries a click dot in a fixed column, so there is
+  somewhere deliberate to aim rather than a row to discover. The whole row
+  still works. The provider list keeps its own status glyphs instead, where a
+  second circle would be ambiguous.
+- The hints bar sits tight under the prompt and carries connect/disconnect,
+  home and help. Mode, harness, work and memory left it, and every remaining
+  entry is clickable; previously mode, work and memory silently ignored clicks
+  while their neighbours did not.
+- The home screen says both input styles work in one line, and the
+  `:home`/`:explore` reminder is gone: both are reachable from the bar under
+  the prompt, so repeating them on the home screen was noise.
+- The mode and Vim badges no longer render as filled colour blocks. Reverse
+  video reads as an alert; the row already uses colour to carry state.
+- Browser-style back. Screens record where the user came from, and a `← Back`
+  control appears in the status bar while there is somewhere to return to.
+  Unlike Esc, which follows a screen's declared parent, this walks the path
+  actually taken.
+- Picker rows are clickable across their whole width, not just the bracketed
+  number, and the footer says so. Long lists keep a uniform two-line rhythm:
+  only the highlighted row spends more than one line on its description.
+- The hints bar and the status bar connection are clickable. The connection
+  slot shows `:connect` when nothing is connected and `:disconnect` once
+  something is, so ending a session is as findable as starting one. Clicking
+  `:disconnect` during a run asks before cancelling it; typing the command is
+  unchanged. The connected home screen offers `:disconnect` too.
+- The home screen mentions Vim mode, which was only discoverable from the docs.
+- `:pipy` command surface for the PiPy harness, alongside `:tau`, `:agy` and the
+  rest: `:pipy help`, `session`, `compact`, `tree`, `fork`, `resume`, `new`,
+  `name`, `model`, `export`, `skill` and `prompt`. The catalogue, the help text
+  and the completions are all generated from PiPy's own declared command table,
+  so they cannot drift apart. `:pi` is an alias. `:pipy export` writes beside the session rather
+  than into the working directory.
 
 ### Changed
 
@@ -19,6 +80,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- PiPy started a new session on every turn, so a conversation lost its history
+  one prompt at a time while the catalog advertised exact resume. The kernel
+  builds a fresh backend per request, and nothing in the request carried a
+  session path, so every turn fell through to creating a session. A SuperQode
+  session id now maps to its PiPy session on disk.
 - Long descriptions in the `:connect` pickers wrapped back to column zero,
   where they collided with the next row. They now hang-indent under the row
   they belong to, wrapped to the width of the conversation log rather than the
@@ -28,6 +94,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LICENSE` and `NOTICE` are declared through `license-files` instead of
   relying on setuptools' default glob, so the MIT attribution that
   `superqode.pipy` requires cannot silently stop shipping.
+- The PiPy lazy-import test ran its subprocess without the parent's
+  `sys.path`, so on a checkout with no install it failed with
+  `ModuleNotFoundError` and read as a litellm regression. It now passes the
+  path through and fails with a message naming the real cause.
 
 ## [0.2.69] - 2026-08-03
 

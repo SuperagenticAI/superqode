@@ -98,7 +98,10 @@ def _truncate_middle(value: str, limit: int) -> str:
 def _next_steps(state: WelcomeState) -> List[tuple[str, str, str]]:
     """Return the next step matching the user's recorded progress."""
     if not state.connected:
-        return [(":connect", "choose who runs the coding loop", THEME["cyan"])]
+        return [
+            (":connect", "choose who runs the coding loop", THEME["cyan"]),
+            (":help", "see every command", THEME["cyan"]),
+        ]
 
     try:
         from superqode.app.progress import load_progress
@@ -170,7 +173,9 @@ def render_welcome(
         footer.append(":tour", style=f"bold {THEME['cyan']}")
         footer.append(" progress  •  ", style=THEME["muted"])
         footer.append(":home", style=f"bold {THEME['cyan']}")
-        footer.append(" refresh", style=THEME["muted"])
+        footer.append(" refresh  •  ", style=THEME["muted"])
+        footer.append(":disconnect", style=f"bold {THEME['pink']}")
+        footer.append(" end session", style=THEME["muted"])
         items.append(footer)
 
         return Group(*items)
@@ -235,14 +240,19 @@ def render_welcome(
     if not narrow:
         state_text = Text(justify="left")
         state_text.append("Current workspace\n", style=f"bold {THEME['text']}")
-        state_rows = [
-            ("Repository", _truncate_middle(state.repository or team_name, 46)),
-            ("Harness", state.harness or "Not selected"),
-            ("Agent/model", state.connection or state.runtime or "Not connected"),
-            ("Policy", f"Approval {state.approval or 'ask'}"),
-        ]
-        if state.runtime and state.connection:
-            state_rows.append(("Runtime", state.runtime))
+        state_rows = [("Repository", _truncate_middle(state.repository or team_name, 46))]
+        # Before anything is connected these rows only report absence, which is
+        # what the next step already says. They appear once they carry news.
+        if state.connected:
+            state_rows.extend(
+                [
+                    ("Harness", state.harness or "Not selected"),
+                    ("Agent/model", state.connection or state.runtime or "Not connected"),
+                    ("Policy", f"Approval {state.approval or 'ask'}"),
+                ]
+            )
+            if state.runtime and state.connection:
+                state_rows.append(("Runtime", state.runtime))
         state_rows.extend(_inventory_lines())
         label_width = max(len(label) for label, _ in state_rows)
         for index, (label, value) in enumerate(state_rows):
@@ -255,7 +265,8 @@ def render_welcome(
         items.append(place(state_text))
 
     next_text = Text(justify="left")
-    next_text.append("Next step\n", style=f"bold {THEME['text']}")
+    steps_heading = "Next steps" if len(_next_steps(state)) > 1 else "Next step"
+    next_text.append(f"{steps_heading}\n", style=f"bold {THEME['text']}")
     steps = _next_steps(state)
     command_width = max(len(command) for command, _, _ in steps)
     for index, (command, description, color) in enumerate(steps):
@@ -275,13 +286,18 @@ def render_welcome(
     keys_text.append(" exit", style=THEME["muted"])
     items.append(place(keys_text))
 
-    home_text = Text(justify=align)
-    home_text.append("Return here anytime: ", style=THEME["muted"])
-    home_text.append(":home", style=f"bold {THEME['cyan']}")
     if not narrow:
-        home_text.append("  •  See everything available: ", style=THEME["muted"])
-        home_text.append(":explore", style=f"bold {THEME['cyan']}")
-    items.append(place(home_text))
+        # Neither input style is discoverable on its own: mouse users do not
+        # try clicking a terminal, and Vim users do not expect one to answer j/k.
+        drive_text = Text(justify=align)
+        drive_text.append("\n", style="")
+        drive_text.append("Browse it like a browser", style=f"bold {THEME['cyan']}")
+        drive_text.append(" with your mouse", style=THEME["dim"])
+        drive_text.append("  ·  or drive it like a pro with ", style=THEME["muted"])
+        drive_text.append(":", style=f"bold {THEME['success']}")
+        drive_text.append(" and ", style=THEME["muted"])
+        drive_text.append(":vim on", style=f"bold {THEME['success']}")
+        items.append(place(drive_text))
 
     return Group(*items)
 

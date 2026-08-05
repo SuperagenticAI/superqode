@@ -646,10 +646,20 @@ def test_gateway_bridge_defers_its_provider_imports():
 
 def test_importing_pipy_does_not_load_litellm():
     """The expensive dependency stays out until a real request is made."""
+    import os
     import subprocess
     import sys
 
+    # A bare subprocess inherits the interpreter but not the parent's sys.path,
+    # so without this an uninstalled checkout reads as a litellm regression.
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)}
     code = "import sys, superqode.pipy;assert 'litellm' not in sys.modules, 'litellm was imported'"
-    completed = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    completed = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, env=env
+    )
 
+    assert "ModuleNotFoundError" not in completed.stderr, (
+        f"superqode was not importable in the subprocess, so this test proved nothing:\n"
+        f"{completed.stderr}"
+    )
     assert completed.returncode == 0, completed.stderr

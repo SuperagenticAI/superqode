@@ -97,7 +97,7 @@ def test_global_handler_registers_builtin_commands():
 def test_textual_completion_includes_harness_runtime_connect_and_session_commands():
     harness = filter_slash_commands(DEFAULT_COMMANDS, ":harn")
     runtime = filter_slash_commands(DEFAULT_COMMANDS, "/runtime")
-    resume = filter_slash_commands(DEFAULT_COMMANDS, "/resume")
+    resume = filter_slash_commands(DEFAULT_COMMANDS, ":resume")
     connect = filter_slash_commands(DEFAULT_COMMANDS, ":c")
 
     assert any(completion.command == ":harness" for completion in harness)
@@ -106,7 +106,9 @@ def test_textual_completion_includes_harness_runtime_connect_and_session_command
         completion.command == ":codex"
         for completion in filter_slash_commands(DEFAULT_COMMANDS, ":cod")
     )
-    assert any(completion.command == "/resume" for completion in resume)
+    # Session commands are offered with a colon only: "/" opens a search in
+    # Vim mode, so the same word meant two things.
+    assert any(completion.command == ":resume" for completion in resume)
     assert [completion.command for completion in connect[:6]] == [
         ":connect",
         ":connect local",

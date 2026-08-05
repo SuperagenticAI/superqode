@@ -74,6 +74,14 @@ def session_dir_for(cwd: str | Path, root: Path | None = None) -> Path:
     return (root or sessions_root()) / encode_cwd(cwd)
 
 
+#: Maps a SuperQode session id to the PiPy session file it owns.
+SESSION_INDEX_NAME = "superqode-index.json"
+
+
+def session_index_for(cwd: str | Path, root: Path | None = None) -> Path:
+    return session_dir_for(cwd, root) / SESSION_INDEX_NAME
+
+
 __all__ = [
     "ENV_AGENT_DIR",
     "ENV_SESSION_DIR",
@@ -81,7 +89,9 @@ __all__ = [
     "encode_cwd",
     "pi_agent_dir",
     "prompts_dir",
+    "SESSION_INDEX_NAME",
     "session_dir_for",
+    "session_index_for",
     "sessions_root",
     "skills_dir",
 ]

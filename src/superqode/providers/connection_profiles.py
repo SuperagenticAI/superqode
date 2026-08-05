@@ -425,8 +425,14 @@ _PLAN_PROFILES: List[ConnectionProfile] = [
         id="plan-copilot",
         label="Copilot models",
         description="Models provided by your GitHub Copilot plan",
-        connector="byok",
-        byok_provider="github-copilot",
+        # The BYOK route lists what models.dev believes Copilot offers in
+        # general, which is not what a given plan is entitled to; the SDK and
+        # ACP routes ask the signed-in account. connect.py already warns anyone
+        # who reaches the BYOK route by typing, so the menu must not lead there.
+        connector="copilot",
+        runtime="copilot-sdk",
+        acp_agent="copilot",
+        self_contained=True,
         menu=CONNECT_MENU_PLAN,
         detect=_copilot_subscription_ready,
         unavailable_hint="sign in with `copilot login`",

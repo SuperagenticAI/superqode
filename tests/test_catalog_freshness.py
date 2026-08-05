@@ -30,7 +30,7 @@ class _StatusStub(ModelCatalogMixin):
     def query_one(self, *args, **kwargs):
         return self
 
-    def add_meta(self, text, icon="·"):
+    def add_meta(self, text, icon="·", *, center=False):
         self.lines.append(text)
 
 

@@ -194,10 +194,8 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":local airplane prepare", "Prepare offline Airplane Mode", category="workflow"),
     SlashCommand(":sandbox doctor", "Check sandbox providers", category="workflow"),
     SlashCommand(":sandbox run", "Run a command through a sandbox backend", category="workflow"),
-    SlashCommand("/sessions", "List saved sessions", category="workflow"),
     SlashCommand(":sessions", "List saved sessions", category="workflow"),
     SlashCommand(":sessions resume", "Pick or resume a saved session", category="workflow"),
-    SlashCommand("/sessions resume", "Pick or resume a saved session", category="workflow"),
     SlashCommand(":switchboard", "Open session graph cockpit", category="workflow"),
     SlashCommand(":sw", "Alias for session switchboard", category="workflow"),
     SlashCommand(":switchboard graph", "Show durable session tree", category="workflow"),
@@ -230,7 +228,6 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
         ":factory fork-harness", "Fork work to another harness worker", category="workflow"
     ),
     SlashCommand(":factory lineage", "Show model/harness/mode lineage", category="workflow"),
-    SlashCommand("/resume", "Resume latest or selected session", category="workflow"),
     SlashCommand(":resume", "Resume latest or selected session", category="workflow"),
     SlashCommand(":diff", "Open current diff review", category="workflow"),
     SlashCommand(":diff files", "List changed files", category="workflow"),
@@ -240,7 +237,6 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":timeline", "Open session timeline replay", category="workflow"),
     SlashCommand(":rewind", "Edit & resend a previous message (Esc Esc)", category="workflow"),
     SlashCommand(":tree", "Show saved session branches", category="workflow"),
-    SlashCommand("/tree", "Show saved session branches", category="workflow"),
     SlashCommand(":share", "Show local session sharing options", category="workflow"),
     SlashCommand(":share create", "Create a portable share artifact", category="workflow"),
     SlashCommand(

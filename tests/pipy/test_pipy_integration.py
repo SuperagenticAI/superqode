@@ -298,3 +298,56 @@ def test_tau_integration_is_untouched():
         cwd=Path(__file__).resolve().parents[2],
     )
     assert diff.stdout.strip() == "", f"tau files changed: {diff.stdout}"
+
+
+async def test_a_second_turn_continues_the_same_session(tmp_path, monkeypatch):
+    """The catalog advertises exact resume, so turn two must not start over."""
+    from superqode.harness.backends.base import HarnessBackendRequest
+    from superqode.harness.backends.pipy import PiPyHarnessBackend
+
+    sessions = tmp_path / "sessions"
+    monkeypatch.setenv("SUPERQODE_PIPY_SESSION_DIR", str(sessions))
+    spec = pipy_template()
+
+    async def turn(prompt: str) -> None:
+        backend = PiPyHarnessBackend(
+            adapter=PiPyHarnessProtocolAdapter(
+                session_factory=make_factory([text_response(prompt)], sessions)
+            )
+        )
+        request = HarnessBackendRequest(
+            spec=spec,
+            prompt=prompt,
+            provider="fake",
+            model="fake",
+            working_directory=tmp_path,
+            session_id="tui-session-1",
+        )
+        async for _event in backend.stream(request):
+            pass
+
+    await turn("first")
+    await turn("second")
+
+    files = sorted(sessions.rglob("*.jsonl"))
+    assert len(files) == 1, f"expected one session across two turns, got {len(files)}"
+    body = files[0].read_text(encoding="utf-8")
+    assert "first" in body and "second" in body
+
+
+async def test_a_deleted_session_starts_a_new_one_instead_of_failing(tmp_path, monkeypatch):
+    """A stale index entry must not turn into a resume error."""
+    from superqode.harness.pipy_adapter import _indexed_session_path, _record_session_path
+
+    sessions = tmp_path / "sessions"
+    monkeypatch.setenv("SUPERQODE_PIPY_SESSION_DIR", str(sessions))
+    from superqode.pipy.config import session_dir_for
+
+    session_file = session_dir_for(tmp_path) / "2026-01-01T00-00-00-000Z_deadbeef.jsonl"
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_text("{}\n", encoding="utf-8")
+    _record_session_path("gone", session_file)
+    assert _indexed_session_path("gone", tmp_path) == str(session_file)
+
+    session_file.unlink()
+    assert _indexed_session_path("gone", tmp_path) == ""

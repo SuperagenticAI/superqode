@@ -1,6 +1,8 @@
 """Arrow-key navigation and selection across pickers."""
 
 from __future__ import annotations
+
+import re
 from textual import on
 from rich.text import Text
 from superqode.app.constants import (
@@ -22,15 +24,25 @@ class PickerNavigationMixin:
         """Add a Textual/Rich link target to a picker style."""
         return f"{style} link superqode://pick/{number}"
 
+    def _append_picker_dot(self, target: Text, number: int, *, highlighted: bool) -> None:
+        """Write the click dot that opens a row.
+
+        Rows are clickable across their whole width, but a target you can aim
+        at beats one you have to discover. The dot sits in a fixed column so
+        the list reads as a column of buttons.
+        """
+        style = self._picker_link_style(
+            f"bold {THEME['success']}" if highlighted else THEME["cyan"], number
+        )
+        target.append("● " if highlighted else "○ ", style=style)
+
     @staticmethod
     def _picker_content_width(log: object) -> int:
         """Columns a picker row actually gets.
 
-        The log is narrower than the terminal once a scrollbar or a sidebar is
-        in play, so wrapping to the terminal width overflows and Rich re-wraps
-        the overflow back to column zero. ``content_size`` already excludes the
-        widget's padding, border and scrollbar; the terminal is the fallback for
-        a log that has not been laid out yet.
+        The log is narrower than the terminal once a scrollbar or sidebar is in
+        play. ``content_size`` excludes padding, border and scrollbar; the
+        terminal is the fallback before layout.
         """
         for attr in ("content_size", "size"):
             width = getattr(getattr(log, attr, None), "width", 0) or 0
@@ -226,6 +238,47 @@ class PickerNavigationMixin:
             return True
 
         return False
+
+    #: Every flag that means "a numbered list is on screen awaiting a choice".
+    _PICKER_AWAITING_FLAGS = (
+        "_awaiting_connect_type",
+        "_awaiting_acp_agent_selection",
+        "_awaiting_byok_provider",
+        "_awaiting_byok_model",
+        "_awaiting_local_provider",
+        "_awaiting_local_model",
+        "_awaiting_codex_model",
+        "_awaiting_codex_effort",
+        "_awaiting_session_resume",
+        "_awaiting_mode_selection",
+        "_awaiting_harness_selection",
+        "_awaiting_runtime_selection",
+        "_awaiting_recommendation_selection",
+        "_awaiting_harness_wizard",
+    )
+
+    #: A row opens with an optional marker, then its bracketed number.
+    _PICKER_ROW = re.compile(r"^\s*[▶●○]?\s*\[\s*(\d+)\s*\]")
+
+    def _click_selects_picker_row(self, event) -> bool:
+        """Resolve a click anywhere on a row to that row's number.
+
+        Rows carry link styles, but only over the text that was linked, and a
+        list of model names and paths invites a click on the part that was not.
+        Clicking a row should select it wherever the pointer landed.
+        """
+        if not any(getattr(self, flag, False) for flag in self._PICKER_AWAITING_FLAGS):
+            return False
+        try:
+            log = self.query_one("#log", ConversationLog)
+            offset = event.screen_offset - log.region.offset
+            index = offset.y + int(log.scroll_offset.y)
+            strip = log.lines[index]
+        except Exception:  # noqa: BLE001 - a stray click must never raise
+            return False
+
+        match = self._PICKER_ROW.match("".join(segment.text for segment in strip))
+        return bool(match) and self._select_picker_number_direct(int(match.group(1)))
 
     def _select_picker_number_direct(self, num: int) -> bool:
         """Select a picker item directly from a mouse click.

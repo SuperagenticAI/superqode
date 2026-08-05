@@ -457,9 +457,14 @@ def test_subscription_is_a_real_menu_not_a_printed_list():
     for profile in profiles:
         assert profile.menu == CONNECT_MENU_PLAN
         # Every row has to lead somewhere the dispatcher understands.
-        assert profile.connector in {"byok", "grok-api"}
+        assert profile.connector in {"byok", "grok-api", "copilot"}
         if profile.connector == "byok":
             assert profile.byok_provider
+        if profile.connector == "copilot":
+            # The vendor route asks the account what it may use. BYOK would
+            # list the whole catalogue, which is not plan specific.
+            assert profile.runtime
+            assert not profile.byok_provider
 
 
 def test_choosing_a_plan_connects_that_provider():
@@ -470,6 +475,7 @@ def test_choosing_a_plan_connects_that_provider():
             super().__init__()
             self.byok = []
             self.grok = []
+            self.copilot = []
 
         def _connect_byok_cmd(self, provider, log):
             self.byok.append(provider)
@@ -477,11 +483,17 @@ def test_choosing_a_plan_connects_that_provider():
         def _grok_api_cmd(self, rest, log):
             self.grok.append(rest)
 
+        def _connect_copilot_subscription(self, profile, log):
+            self.copilot.append(profile.id)
+
     stub = PlanStub()
     SuperQodeApp._dispatch_connection_profile(
         stub, get_connection_profile("plan-copilot"), FakeLog()
     )
-    assert stub.byok == ["github-copilot"]
+    # The vendor route, not BYOK: BYOK lists the whole Copilot catalogue
+    # rather than what this plan may actually use.
+    assert stub.copilot == ["plan-copilot"]
+    assert stub.byok == []
 
     stub = PlanStub()
     SuperQodeApp._dispatch_connection_profile(stub, get_connection_profile("plan-grok"), FakeLog())
@@ -511,3 +523,29 @@ def test_every_plan_states_how_to_enable_it():
     for profile in list_connection_profiles(CONNECT_MENU_PLAN):
         if not profile.available:
             assert profile.unavailable_hint, profile.id
+
+
+def test_no_menu_row_leads_to_the_legacy_copilot_byok_route():
+    """The BYOK route lists the catalogue, not what a plan may use.
+
+    ``connect.py`` prints a warning to anyone who reaches that route by typing,
+    so no row in any menu may lead there silently.
+    """
+    from superqode.providers.connection_profiles import list_connection_profiles
+
+    offenders = [
+        profile.id
+        for profile in list_connection_profiles()
+        if profile.connector == "byok" and profile.byok_provider == "github-copilot"
+    ]
+
+    assert offenders == [], f"these rows still use the legacy Copilot BYOK route: {offenders}"
+
+
+def test_both_copilot_entries_ask_the_account():
+    from superqode.providers.connection_profiles import get_connection_profile
+
+    for profile_id in ("copilot", "plan-copilot"):
+        profile = get_connection_profile(profile_id)
+        assert profile.connector == "copilot", profile_id
+        assert profile.runtime == "copilot-sdk", profile_id

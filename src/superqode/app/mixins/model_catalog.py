@@ -249,7 +249,7 @@ class ModelCatalogMixin:
                 return
 
             age = self._catalog_cache_age()
-            log.add_meta(f"Catalogue: {' · '.join(parts)} · {age}", icon="·")
+            log.add_meta(f"Catalogue: {' · '.join(parts)} · {age}", icon="·", center=True)
         except Exception:  # noqa: BLE001 - a status line is never load-bearing
             pass
 

@@ -2329,25 +2329,21 @@ class DialogsMixin:
                 agent_short_name = agent_data.get("short_name", agent_id)
                 emoji = agent_emojis.get(agent_id) or agent_emojis.get(agent_short_name, "🤖")
 
+                row = self._picker_link_style(
+                    f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}", num
+                )
+                t.append("  ", style="")
+                self._append_picker_dot(t, num, highlighted=is_highlighted)
+                t.append(f"[{num:2}] ", style=row)
+                t.append(f"{emoji} ", style=THEME["success"])
+                t.append(f"{agent_data['short_name']:<15}", style=row)
                 if is_highlighted:
-                    t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                    t.append(
-                        f"[{num:2}] ",
-                        style=self._picker_link_style(f"bold {THEME['success']}", num),
-                    )
-                    t.append(f"{emoji} ", style=THEME["success"])
-                    t.append(f"{agent_data['short_name']:<15}", style=f"bold {THEME['success']}")
-                    t.append(
-                        f"{agent_data['name']}  ← SELECTED\n", style=f"bold {THEME['success']}"
-                    )
+                    t.append(f"{agent_data['name']}  ← SELECTED\n", style=row)
                 else:
                     t.append(
-                        f"    [{num:2}] ",
-                        style=self._picker_link_style(f"bold {THEME['text']}", num),
+                        f"{agent_data['name']}\n",
+                        style=self._picker_link_style(THEME["muted"], num),
                     )
-                    t.append(f"{emoji} ", style=THEME["success"])
-                    t.append(f"{agent_data['short_name']:<15}", style=f"bold {THEME['text']}")
-                    t.append(f"{agent_data['name']}\n", style=THEME["muted"])
             t.append("\n", style="")
 
         # Show missing agents by catalog group.
@@ -2367,36 +2363,26 @@ class DialogsMixin:
                 agent_short_name = agent_data.get("short_name", agent_id)
                 emoji = agent_emojis.get(agent_id) or agent_emojis.get(agent_short_name, "🤖")
 
+                row = self._picker_link_style(
+                    f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}", num
+                )
+                t.append("  ", style="")
+                self._append_picker_dot(t, num, highlighted=is_highlighted)
+                t.append(f"[{num:2}] ", style=row)
+                t.append(f"{emoji} ", style=THEME["warning"])
+                t.append(f"{agent_data['short_name']:<15}", style=row)
                 if is_highlighted:
-                    t.append(f"  ▶ ", style=f"bold {THEME['success']}")
-                    t.append(
-                        f"[{num:2}] ",
-                        style=self._picker_link_style(f"bold {THEME['success']}", num),
-                    )
-                    t.append(f"{emoji} ", style=THEME["warning"])
-                    t.append(f"{agent_data['short_name']:<15}", style=f"bold {THEME['success']}")
-                    t.append(
-                        f"{agent_data['name']:<25}  ← SELECTED\n", style=f"bold {THEME['success']}"
-                    )
+                    t.append(f"{agent_data['name']:<25}  ← SELECTED\n", style=row)
                     if install_cmd:
-                        t.append(f"         Install: ", style=THEME["dim"])
+                        t.append("         Install: ", style=THEME["dim"])
                         t.append(f"{install_cmd}\n", style=THEME["cyan"])
                 else:
+                    # Only the row being considered spends a second line on its
+                    # install command; the rest stay one line each.
                     t.append(
-                        f"    [{num:2}] ",
-                        style=self._picker_link_style(f"bold {THEME['text']}", num),
+                        f"{agent_data['name']}\n",
+                        style=self._picker_link_style(THEME["muted"], num),
                     )
-                    t.append(f"{emoji} ", style=THEME["warning"])
-                    t.append(f"{agent_data['short_name']:<15}", style=f"bold {THEME['text']}")
-                    t.append(f"{agent_data['name']:<25}", style=THEME["muted"])
-
-                    if install_cmd:
-                        t.append(f"\n             Install: ", style=THEME["dim"])
-                        t.append(f"{install_cmd}\n", style=THEME["cyan"])
-                    else:
-                        t.append(
-                            f"\n             No install command available\n", style=THEME["dim"]
-                        )
             t.append("\n", style="")
             next_num += len(group_agents)
 

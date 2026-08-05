@@ -7,6 +7,8 @@ plan, usage) is now a second cluster right-aligned to the far edge.
 
 from __future__ import annotations
 
+from rich.cells import cell_len
+
 from superqode.app.widgets import ColorfulStatusBar
 
 
@@ -23,7 +25,13 @@ class TestFullWidthUsage:
 
         line = bar._render_for_width(150)
 
-        assert len(line.plain) == 150
+        assert cell_len(line.plain) == 150
+        # The session-state cluster reaches the far edge rather than hugging
+        # the left. The connect/disconnect control is the last thing on it.
+        assert "BUILD" in line.plain
+        # Identity keeps the corner, controls follow it, state right aligns.
+        assert line.plain.startswith("SuperQode")
+        assert "[🔌 Connect]" in line.plain
         assert line.plain.rstrip().endswith("BUILD")
 
     def test_a_narrower_terminal_still_produces_a_valid_line(self):
@@ -32,7 +40,7 @@ class TestFullWidthUsage:
         line = bar._render_for_width(80)
 
         assert "BUILD" in line.plain
-        assert line.plain.startswith("SuperQode")
+        assert "SuperQode" in line.plain
 
     def test_width_scales_the_right_cluster_position(self):
         """A wider terminal must push the badge further right, not float it
@@ -49,14 +57,16 @@ class TestFullWidthUsage:
 
 
 class TestNoSessionStateIsAQuietRow:
-    def test_with_nothing_to_show_on_the_right_the_row_is_unchanged(self):
-        """No mode, no plan, no usage: nothing to right-align, so the line
-        stays exactly the left cluster with no trailing padding."""
+    def test_with_no_session_state_only_the_control_is_right_aligned(self):
+        """No mode, no plan, no usage. The connect control is always offered,
+        so it right-aligns alone rather than the row ending at the left cluster."""
         bar = _bar(interaction_mode="")
 
         line = bar._render_for_width(150)
 
-        assert line.plain == line.plain.rstrip()
+        assert line.plain.startswith("SuperQode")
+        assert "[🔌 Connect]" in line.plain
+        assert "BUILD" not in line.plain
 
 
 class TestLeftClusterUnaffected:
@@ -65,7 +75,7 @@ class TestLeftClusterUnaffected:
 
         line = bar._render_for_width(150)
 
-        assert line.plain.startswith("SuperQode")
+        assert "SuperQode" in line.plain
         assert "claude-opus" in line.plain
         assert line.plain.index("claude-opus") < line.plain.index("CHAT")
 

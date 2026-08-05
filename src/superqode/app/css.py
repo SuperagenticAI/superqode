@@ -138,23 +138,27 @@ ConversationLog {
     min-height: 4;
     max-height: 10;
     width: 100%;
-    background: #0a0a0f;
-    border: heavy #7c3aed;
-    border-title-color: #a855f7;
+    background: #000000;
+    border: heavy #d4d4d8;
+    border-title-color: #fafafa;
     border-subtitle-color: #71717a;
     margin: 1 2 0 2;
     padding: 0 1;
     overflow: hidden;
 }
-#input-box:focus-within { border: heavy #a855f7; background: #0d0d14; }
+/* Same black as the surrounding prompt area: the white border carries focus,
+   so a lighter fill only reads as grey against it. */
+#input-box:focus-within { border: heavy #ffffff; background: #000000; }
+/* One column wider than the "<>" glyph, left aligned, so the trailing gap is
+   the gutter rather than a rounding artifact of centring. */
 #prompt-symbol {
-    width: 2;
-    min-width: 2;
+    width: 3;
+    min-width: 3;
     height: 1;
     color: #ec4899;
     text-style: bold;
     padding: 0;
-    content-align: center top;
+    content-align: left top;
 }
 #prompt-input {
     width: 1fr;
@@ -182,7 +186,7 @@ ConversationLog {
 #prompt-completions.visible {
     display: block;
 }
-#hints { text-align: center; color: #71717a; height: 1; margin-top: 1; padding: 0; }
+#hints { text-align: center; color: #71717a; height: 1; margin-top: 0; padding: 0; }
 
 #active-tools {
     display: none;

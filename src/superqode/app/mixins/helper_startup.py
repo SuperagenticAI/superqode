@@ -600,6 +600,14 @@ class HelperStartupMixin:
         try:
             hints = self.query_one("#hints", HintsBar)
             hints.approval_mode = self.approval_mode
+            hints.connected = self._has_live_connection()
+        except Exception:
+            pass
+        try:
+            from superqode.app.widgets import ColorfulStatusBar
+
+            status = self.query_one("#status-bar", ColorfulStatusBar)
+            status.can_go_back = self._history.can_go_back
         except Exception:
             pass
         try:

@@ -28,6 +28,16 @@ from superqode.app.recipes import PromptCompletionCandidate
 from superqode.app.session_state import get_session
 
 
+def _menu_history_label(menu: str) -> str:
+    """Title of a connect screen, for the back control's tooltip."""
+    from superqode.providers.connection_profiles import CONNECT_MENU_TITLES
+
+    entry = CONNECT_MENU_TITLES.get(menu)
+    if isinstance(entry, (tuple, list)) and entry:
+        return str(entry[0])
+    return str(entry or "Connect")
+
+
 class ConnectMixin:
     """Local/BYOK/ACP connection flows and catalog refresh."""
 
@@ -1702,6 +1712,15 @@ class ConnectMixin:
         if menu != current_menu:
             self._byok_highlighted_connect_type_index = 0
         self._connect_menu = menu
+        # Recorded before the draw so back returns to the screen the user came
+        # from rather than this one's declared parent.
+        self._record_screen(
+            f"connect:{menu}",
+            _menu_history_label(menu),
+            lambda target=menu: self._show_connect_type_picker(
+                self.query_one("#log", ConversationLog), menu=target
+            ),
+        )
 
         # Clear any other primary picker state to prevent interference.
         self._awaiting_harness_selection = False
@@ -1753,20 +1772,14 @@ class ConnectMixin:
         if not (0 <= highlighted_idx < len(display)):
             highlighted_idx = 0
 
-        # Numbers are right-aligned to the widest one on the screen, so a list
-        # that runs past [9] keeps every label starting in the same column.
+        # Right-aligned to the widest number, so labels share a column past [9].
         number_width = len(str(len(display))) or 1
-        # One column past where the labels start, so the supporting lines read
-        # as belonging to the row above them.
         indent = " " * (8 + number_width)
-        wrap_width = max(24, self._picker_content_width(log) - len(indent) - 2)
+        content_width = self._picker_content_width(log)
+        wrap_width = max(24, content_width - len(indent) - 2)
 
         def append_wrapped(text: str, style: str) -> None:
-            """Write supporting copy under a row, hanging-indented.
-
-            Rich would wrap this back to column zero, where it collides with
-            the next row's number and the list stops being readable.
-            """
+            """Hanging-indent supporting copy; Rich would wrap it to column zero."""
             for line in textwrap.wrap(text, width=wrap_width) or [text]:
                 t.append(f"{indent}{line}\n", style=style)
 
@@ -1779,29 +1792,40 @@ class ConnectMixin:
                 is_highlighted = position == highlighted_idx
                 position += 1
 
+                # The whole row is the click target, not just the number. A
+                # mouse user aims at the name they are reading.
                 if is_highlighted:
-                    t.append("  ▶ ", style=f"bold {THEME['success']}")
-                    t.append(
-                        f"[{num:>{number_width}}] ",
-                        style=self._picker_link_style(f"bold {THEME['success']}", num),
-                    )
-                    t.append(profile.label, style=f"bold {THEME['success']}")
-                    t.append("  ← SELECTED\n", style=f"bold {THEME['success']}")
+                    link = self._picker_link_style(f"bold {THEME['success']}", num)
+                    t.append("  ", style="")
+                    self._append_picker_dot(t, num, highlighted=True)
+                    t.append(f"[{num:>{number_width}}] ", style=link)
+                    t.append(profile.label, style=link)
+                    t.append("  ← SELECTED\n", style=link)
                 else:
+                    link = self._picker_link_style(THEME["dim"], num)
+                    t.append("  ", style="")
+                    self._append_picker_dot(t, num, highlighted=False)
+                    t.append(f"[{num:>{number_width}}] ", style=link)
                     t.append(
-                        f"    [{num:>{number_width}}] ",
-                        style=self._picker_link_style(THEME["dim"], num),
+                        profile.label,
+                        style=self._picker_link_style(f"bold {THEME['text']}", num),
                     )
-                    t.append(profile.label, style=f"bold {THEME['text']}")
                     t.append("\n", style="")
-                # Every row carries its own description. A user choosing between
-                # options needs to read them together, not arrow through the
-                # list to discover what each one is.
+                # Every row explains itself, so options can be compared at
+                # once. Only the row being considered spends more than one
+                # line on it: a dozen wrapped paragraphs is a wall, not a list.
                 if profile.description:
-                    append_wrapped(profile.description, THEME["muted"])
+                    description_link = self._picker_link_style(THEME["muted"], num)
+                    if is_highlighted:
+                        append_wrapped(profile.description, description_link)
+                    else:
+                        t.append(
+                            f"{indent}{textwrap.shorten(profile.description, wrap_width, placeholder=' …')}\n",
+                            style=description_link,
+                        )
                 badges = profile.badges
                 if is_highlighted and badges:
-                    append_wrapped(" · ".join(badges), THEME["dim"])
+                    append_wrapped(" · ".join(badges), self._picker_link_style(THEME["dim"], num))
                 if is_highlighted and not profile.available and profile.unavailable_hint:
                     append_wrapped(profile.unavailable_hint, THEME["warning"])
 
@@ -1813,7 +1837,14 @@ class ConnectMixin:
         if not is_root:
             t.append("Esc", style=THEME["purple"])
             t.append(" back  ", style=THEME["dim"])
-        t.append("•  or type a number\n", style=THEME["dim"])
+        t.append("•  ", style=THEME["dim"])
+        # The hint is worth a word, not a wrapped second line on a narrow
+        # terminal. Esc back costs ten columns, so the budget differs by menu.
+        if content_width >= (70 if is_root else 80):
+            t.append("click", style=THEME["cyan"])
+            t.append(" or type a number\n", style=THEME["dim"])
+        else:
+            t.append("or type a number\n", style=THEME["dim"])
 
         if preserve_log:
             # Opened underneath something the user still needs to read, such as
@@ -2040,9 +2071,15 @@ class ConnectMixin:
                     )
                 else:
                     t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
+                row_link = self._picker_link_style(marker_style, idx)
                 t.append("✓ ", style=THEME["success"])
-                t.append(f"{pid:<15}", style=marker_style)
-                t.append(f"{pdef.name}", style=marker_style if is_highlighted else THEME["muted"])
+                t.append(f"{pid:<15}", style=row_link)
+                t.append(
+                    f"{pdef.name}",
+                    style=row_link
+                    if is_highlighted
+                    else self._picker_link_style(THEME["muted"], idx),
+                )
                 if is_highlighted:
                     t.append("  ← SELECTED", style=f"bold {THEME['success']}")
                 t.append("\n", style="")
@@ -2077,15 +2114,16 @@ class ConnectMixin:
                 # Highlight current selection
                 is_highlighted = (idx - 1) == getattr(self, "_byok_highlighted_provider_index", 0)
                 if is_highlighted:
-                    t.append(f"  ▶ ", style=f"bold {THEME['success']}")
+                    t.append("  ▶ ", style=f"bold {THEME['success']}")
                     t.append(
                         f"[{idx:2}] ",
                         style=self._picker_link_style(f"bold {THEME['success']}", idx),
                     )
+                    row_link = self._picker_link_style(f"bold {THEME['success']}", idx)
                     t.append(f"{status} ", style=status_style)
-                    t.append(f"{pid:<15}", style=f"bold {THEME['success']}")
-                    t.append(f"{pdef.name}", style=f"bold {THEME['success']}")
-                    t.append("  ← SELECTED\n", style=f"bold {THEME['success']}")
+                    t.append(f"{pid:<15}", style=row_link)
+                    t.append(f"{pdef.name}", style=row_link)
+                    t.append("  ← SELECTED\n", style=row_link)
                     t.append("        free", style=THEME["success"])
                     if model_count > 0:
                         t.append(
@@ -2098,8 +2136,8 @@ class ConnectMixin:
                 else:
                     t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                     t.append(f"{status} ", style=status_style)
-                    t.append(f"{pid:<15}", style=THEME["text"])
-                    t.append(f"{pdef.name}", style=THEME["muted"])
+                    t.append(f"{pid:<15}", style=self._picker_link_style(THEME["text"], idx))
+                    t.append(f"{pdef.name}", style=self._picker_link_style(THEME["muted"], idx))
                     t.append("\n", style="")
 
                 provider_list.append((pid, pdef))
@@ -2149,15 +2187,16 @@ class ConnectMixin:
                 # Highlight current selection
                 is_highlighted = (idx - 1) == getattr(self, "_byok_highlighted_provider_index", 0)
                 if is_highlighted:
-                    t.append(f"  ▶ ", style=f"bold {THEME['success']}")
+                    t.append("  ▶ ", style=f"bold {THEME['success']}")
                     t.append(
                         f"[{idx:2}] ",
                         style=self._picker_link_style(f"bold {THEME['success']}", idx),
                     )
+                    row_link = self._picker_link_style(f"bold {THEME['success']}", idx)
                     t.append(f"{status} ", style=status_style)
-                    t.append(f"{pid:<15}", style=f"bold {THEME['success']}")
-                    t.append(f"{pdef.name}", style=f"bold {THEME['success']}")
-                    t.append("  ← SELECTED\n", style=f"bold {THEME['success']}")
+                    t.append(f"{pid:<15}", style=row_link)
+                    t.append(f"{pdef.name}", style=row_link)
+                    t.append("  ← SELECTED\n", style=row_link)
                     details = []
                     if model_count > 0:
                         details.append(f"{model_count} model{'s' if model_count > 1 else ''}")
@@ -2168,8 +2207,8 @@ class ConnectMixin:
                 else:
                     t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                     t.append(f"{status} ", style=status_style)
-                    t.append(f"{pid:<15}", style=THEME["text"])
-                    t.append(f"{pdef.name}", style=THEME["muted"])
+                    t.append(f"{pid:<15}", style=self._picker_link_style(THEME["text"], idx))
+                    t.append(f"{pdef.name}", style=self._picker_link_style(THEME["muted"], idx))
                     t.append("\n", style="")
 
                 provider_list.append((pid, pdef))

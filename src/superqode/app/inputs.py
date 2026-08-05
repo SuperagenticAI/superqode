@@ -20,7 +20,7 @@ class SelectionAwareInput(TextArea):
     # Start tall enough to invite longer prompts; grow up to the max, then scroll.
     MIN_PROMPT_HEIGHT = 3
     MAX_PROMPT_HEIGHT = 8
-    DEFAULT_PLACEHOLDER = "Describe a task or type : for commands."
+    DEFAULT_PLACEHOLDER = "Get started with :connect, or :help for more options."
 
     # A prompt box should behave like an ordinary text field. TextArea's defaults
     # are surprising here: Ctrl+A is line-start and Ctrl+U only deletes to the

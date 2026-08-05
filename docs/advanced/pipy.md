@@ -76,6 +76,10 @@ Sessions are append-only. Compaction, branching and renaming all add entries
 rather than rewriting history, so navigating back to an earlier point is
 lossless.
 
+Each SuperQode session is mapped to the PiPy session it owns by a
+`superqode-index.json` beside the session files, so a later turn reopens the
+same session rather than starting a new one.
+
 Set `SUPERQODE_PIPY_SESSION_DIR` to move the store, or `SUPERQODE_PIPY_DIR` to
 move the whole PiPy root.
 
@@ -98,21 +102,23 @@ PiPy session; switching away starts or resumes that harness's own session. The
 conversation does not transfer, and neither store is modified by the other.
 
 That is a session boundary, not a fault. Fork a PiPy session if you want to
-explore an alternative without disturbing the original:
+explore an alternative without disturbing the original.
+
+These are typed as `:pipy <command>`, aliased `:pi`. `:pipy help` lists them:
 
 | Command | Effect |
 | --- | --- |
-| `compact` | Summarise older context and keep working |
-| `tree` | Move to another point in the session tree, summarising the branch left behind |
-| `fork` | Copy the current branch into a new session, leaving the source untouched |
-| `resume` | Reopen a previous session for this directory |
-| `new` | Start a fresh session |
-| `name` | Name the current session |
-| `model` | Switch the model for the next turn |
-| `session` | Show the session id, path, tree leaf and stats |
-| `export` | Render the current branch as Markdown |
-| `skill` | Invoke a skill by name |
-| `prompt` | Run a prompt template by name |
+| `:pipy compact` | Summarise older context and keep working |
+| `:pipy tree` | Move to another point in the session tree, summarising the branch left behind |
+| `:pipy fork` | Copy the current branch into a new session, leaving the source untouched |
+| `:pipy resume` | Reopen a previous session for this directory |
+| `:pipy new` | Start a fresh session |
+| `:pipy name` | Name the current session |
+| `:pipy model` | Switch the model for the next turn |
+| `:pipy session` | Show the session id, path, tree leaf and stats |
+| `:pipy export` | Render the current branch as Markdown |
+| `:pipy skill` | Invoke a skill by name |
+| `:pipy prompt` | Run a prompt template by name |
 
 ## Providers
 

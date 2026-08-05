@@ -126,6 +126,8 @@ class SlashCommandMixin:
             self._copilot_cmd(args, log)
         elif c == "tau":
             self._tau_cmd(args, log)
+        elif c in ("pipy", "pi"):
+            self._pipy_cmd(args, log)
         elif c == "claude":
             self._claude_cmd(args, log)
         elif c in ("grok", "xai-grok"):

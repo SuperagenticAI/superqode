@@ -12,7 +12,10 @@ from typing import Any
 
 from textual.widgets import Static, RichLog
 from textual.reactive import reactive
+from rich.cells import cell_len
 from rich.text import Text
+
+from superqode.app.mixins.clickable_commands import CLICKABLE_COMMANDS, command_link
 from rich.panel import Panel
 from rich.padding import Padding
 from rich.console import Group
@@ -153,6 +156,7 @@ class ColorfulStatusBar(Static):
     active_runtime: reactive[str] = reactive("")
     active_model: reactive[str] = reactive("")
     active_harness: reactive[str] = reactive("")
+    can_go_back: reactive[bool] = reactive(False)
     interaction_mode: reactive[str] = reactive("build")
     plan_state: reactive[str] = reactive("")
     vim_state: reactive[str] = reactive("")
@@ -190,32 +194,38 @@ class ColorfulStatusBar(Static):
         right = Text()
 
         def separator() -> None:
-            result.append(" │ ", style="#3f3f46")
+            # The state cluster no longer opens the row, so it only needs a
+            # separator between its own parts.
+            if result.plain:
+                result.append(" │ ", style="#3f3f46")
 
         def right_separator() -> None:
             right.append(" │ ", style="#3f3f46")
 
-        # Compact branded identity. Version is retained at every width.
+        # Compact branded identity, kept in the corner. Version is retained at
+        # every width.
+        identity = Text()
         super_colors = ["#a855f7", "#b366f9", "#c177fb", "#cf88fd", "#dd99ff"]
         for i, char in enumerate("Super"):
             color = super_colors[i % len(super_colors)]
-            result.append(char, style=f"bold {color}")
+            identity.append(char, style=f"bold {color}")
         qode_colors = ["#ec4899", "#f472b6", "#f97316", "#fb923c"]
         for i, char in enumerate("Qode"):
             color = qode_colors[i % len(qode_colors)]
-            result.append(char, style=f"bold {color}")
-        result.append(f" v{__version__}", style="#a1a1aa")
+            identity.append(char, style=f"bold {color}")
+        identity.append(f" v{__version__}", style="#a1a1aa")
 
         # Connection and model are always explicit, including before the user
         # has selected one. Long names compact, but the state never disappears.
         model_limit = 42 if wide else 24 if medium else 15 if width >= 64 else 10
         provider_limit = 24 if medium else 12 if width >= 64 else 8
+        disconnect = command_link("disconnect")
         if self.byok_provider:
             separator()
-            result.append("● ", style="#22c55e")
+            result.append("● ", style=f"#22c55e {disconnect}")
             result.append(
                 self._truncate_status_value(self.byok_provider, provider_limit),
-                style="bold #10b981",
+                style=f"bold #10b981 {disconnect}",
             )
             if self.byok_model:
                 result.append(
@@ -224,21 +234,21 @@ class ColorfulStatusBar(Static):
                 )
         elif self.active_model:
             separator()
-            result.append("● ", style="#22c55e")
+            result.append("● ", style=f"#22c55e {disconnect}")
             result.append(
                 self._truncate_status_value(self.active_model, model_limit),
-                style="bold #10b981",
+                style=f"bold #10b981 {disconnect}",
             )
         elif self.active_runtime:
             separator()
-            result.append("● ", style="#22c55e")
+            result.append("● ", style=f"#22c55e {disconnect}")
             result.append(
                 self._truncate_status_value(self.active_runtime, model_limit),
-                style="bold #10b981",
+                style=f"bold #10b981 {disconnect}",
             )
         else:
             separator()
-            result.append("Model: not connected", style="#a1a1aa")
+            result.append("Model: not connected", style=f"#a1a1aa {command_link('connect')}")
 
         # A specialized runtime is useful when a model is also named. The
         # default built-in runtime is intentionally omitted as visual noise.
@@ -268,7 +278,7 @@ class ColorfulStatusBar(Static):
                 "plan": "#fbbf24",
                 "build": "#22c55e",
             }.get(mode, "#a855f7")
-            right.append(mode_label, style=f"bold {mode_color} reverse")
+            right.append(mode_label, style=f"bold {mode_color}")
 
         # Keep the interaction mode and the optional input mode distinct.
         vim_state = (self.vim_state or "").strip().lower()
@@ -291,7 +301,7 @@ class ColorfulStatusBar(Static):
                 right.append("VIM ", style="#a1a1aa")
                 right.append(vim_label, style=f"bold {vim_color}")
             else:
-                right.append(vim_label[:1], style=f"bold {vim_color} reverse")
+                right.append(vim_label[:1], style=f"bold {vim_color}")
 
         # Usage remains visible whenever known. Figures compact on narrower
         # terminals, while connection/runtime/mode retain priority.
@@ -339,19 +349,113 @@ class ColorfulStatusBar(Static):
             cost = f"${self.byok_cost:.2f}" if self.byok_cost >= 0.01 else f"${self.byok_cost:.3f}"
             right.append(cost, style="#fbbf24")
 
-        if not right.plain:
-            return result
+        # The way out of a session sits at the far right, where a window
+        # control would be: one fixed place, present at every width, and
+        # labelled with whichever action is actually available.
+        connected = bool(self.byok_provider or self.active_model or self.active_runtime)
+        icon, word, colour, action = (
+            ("⏏", "Disconnect", "#fb7185", "disconnect")
+            if connected
+            else ("🔌", "Connect", "#22c55e", "connect")
+        )
+        # Sized against the room actually left rather than a width band: the
+        # label is what overflows a busy bar, not the terminal being narrow.
+        # The assembler always keeps a two column margin, so the buttons have
+        # to fit inside that too or the row wraps.
+        # Identity is a separate cluster now, so its columns have to come out
+        # of the budget too, along with the gap that follows it.
+        room = (
+            width
+            - cell_len(identity.plain)
+            - 2
+            - cell_len(result.plain)
+            - cell_len(right.plain)
+            - (3 if right.plain else 0)
+            - 2
+        )
+        # Connect/disconnect takes the room first: exit is also on Ctrl+C and
+        # in the footer, while this is the only control for the session.
+        # Controls lead the row, where a browser puts its toolbar, and the
+        # state they act on follows.
+        controls = Text()
+        if self.can_go_back:
+            for label in ("← Back", "←"):
+                if room >= cell_len(label) + 3:
+                    self._append_button(controls, label, "#06b6d4", "back", separator=False)
+                    room -= cell_len(label) + 3
+                    break
+
+        placed = False
+        for label in (f"{icon} {word}", f"{icon} {word[:4]}", icon):
+            cost = cell_len(label) + 3
+            if room >= cost:
+                self._append_button(
+                    controls, label, colour, action, separator=False, gap=bool(controls.plain)
+                )
+                room -= cost
+                placed = True
+                break
+        # Never the lone survivor: a row too tight for the session control has
+        # no business still offering the one that closes the app.
+        if placed:
+            for label in ("⏻ Exit", "⏻"):
+                if room >= cell_len(label) + 3:
+                    self._append_button(
+                        controls, label, "#ef4444", "exit", separator=False, gap=True
+                    )
+                    break
 
         # Right-align the session-state cluster to the far edge when there is
         # real room for it; otherwise keep it adjacent so nothing overflows a
         # narrow terminal.
-        gap = width - len(result.plain) - len(right.plain)
-        if gap >= 4:
-            result.append(" " * gap, style="")
-        else:
+        if right.plain:
             result.append("  ", style="")
-        result.append(right)
-        return result
+            result.append(right)
+
+        if not controls.plain:
+            if result.plain:
+                identity.append(" │ ", style="#3f3f46")
+            identity.append(result)
+            return identity
+
+        # Identity keeps the corner. The controls follow it, still on the left
+        # where a browser toolbar sits, and the state right-aligns after them.
+        line = Text()
+        line.append(identity)
+        line.append("  ", style="")
+        line.append(controls)
+        # Measured in cells, not characters: an emoji glyph occupies two
+        # columns while len() counts it once, which wrapped the row.
+        gap = width - cell_len(line.plain) - cell_len(result.plain)
+        # Padding only when there is room for it. A crowded row is already
+        # over the edge; widening it further is the one thing that helps least.
+        line.append(" " * gap if gap > 0 else " ", style="")
+        line.append(result)
+        return line
+
+    @staticmethod
+    def _append_button(
+        target: Text,
+        label: str,
+        colour: str,
+        action: str,
+        *,
+        separator: bool,
+        gap: bool = False,
+    ) -> None:
+        """Append a bracketed control.
+
+        Bracketed rather than reverse video: a filled block reads as an alert,
+        and this row already uses colour to carry state.
+        """
+        link = command_link(action)
+        if separator:
+            target.append(" │ ", style="#3f3f46")
+        elif gap:
+            target.append(" ", style="")
+        target.append("[", style=f"#52525b {link}")
+        target.append(label, style=f"bold {colour} {link}")
+        target.append("]", style=f"#52525b {link}")
 
     def render(self) -> Text:
         return self._render_for_width(self.size.width or 120)
@@ -834,26 +938,30 @@ class HintsBar(Static):
     """Persistent shortcuts for the primary terminal workflows."""
 
     approval_mode = reactive("auto")
+    connected = reactive(False)
 
     def render(self) -> Text:
         t = Text()
 
         # t.append("\n", style="")
 
+        # The three things a new user needs within reach of the prompt.
+        # Configuration commands are reached deliberately through :help.
         hints = [
+            ("⏏", ":disconnect", THEME["pink"])
+            if self.connected
+            else ("🔌", ":connect", THEME["pink"]),
             ("🏠", ":home", THEME["cyan"]),
-            ("🔌", ":connect", THEME["pink"]),
-            ("🎛", ":mode", THEME["gold"]),
-            ("◈", ":harness", THEME["purple"]),
-            ("📋", ":work", THEME["success"]),
-            ("🧠", ":memory", THEME["cyan"]),
             ("?", ":help", THEME["purple"]),
         ]
         for i, (icon, hint, color) in enumerate(hints):
             if i > 0:
                 t.append("  •  ", style=THEME["dim"])
-            t.append(f"{icon} ", style=color)
-            t.append(hint, style=color)
+            style = color
+            if hint.lstrip(":") in CLICKABLE_COMMANDS:
+                style = f"{color} {command_link(hint.lstrip(':'))}"
+            t.append(f"{icon} ", style=style)
+            t.append(hint, style=style)
 
         return t
 
@@ -1356,7 +1464,7 @@ class ConversationLog(RichLog):
         self._messages.append(("info", text, ""))
         self._write_feedback(Text(f"  ℹ️ {text}", style=THEME["cyan"]))
 
-    def add_meta(self, text: str, icon: str = "·"):
+    def add_meta(self, text: str, icon: str = "·", *, center: bool = False):
         """Dim SuperQode transcript chrome line (mode, commands, etc.).
 
         Deliberately quieter than ``add_info`` so SuperQode's own status output
@@ -1364,7 +1472,14 @@ class ConversationLog(RichLog):
         rendered in the subtle ``dim`` tone with a small glyph.
         """
         self._messages.append(("meta", text, ""))
-        self._write_feedback(Text(f"  {icon} {text}", style=THEME["dim"]))
+        line = f"  {icon} {text}"
+        if center:
+            # Padded rather than justified: this write path takes a Text, and
+            # Text.justify does not centre a single unwrapped line.
+            width = getattr(self.content_size, "width", 0) or self.size.width or 0
+            if width > len(line):
+                line = " " * ((width - len(line.strip())) // 2) + line.strip()
+        self._write_feedback(Text(line, style=THEME["dim"]))
 
     def add_warning(self, text: str):
         self._messages.append(("warning", text, ""))

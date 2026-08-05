@@ -128,6 +128,8 @@ from superqode.app.mixins.completion import CompletionMixin
 
 
 from superqode.app.mixins.pickers import PickerNavigationMixin
+from superqode.app.mixins.clickable_commands import ClickableCommandMixin
+from superqode.app.mixins.pipy_commands import PiPyCommandMixin
 
 
 from superqode.app.mixins.formatting import FormattingMixin
@@ -184,6 +186,8 @@ class SuperQodeApp(
     ModelCatalogMixin,
     FormattingMixin,
     PickerNavigationMixin,
+    PiPyCommandMixin,
+    ClickableCommandMixin,
     CompletionMixin,
     MiscActionsMixin,
     EventHandlerMixin,

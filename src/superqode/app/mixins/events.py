@@ -188,7 +188,20 @@ class EventHandlerMixin:
         """Route mouse clicks on numbered picker links through direct selection."""
         style = getattr(event, "style", None)
         link = getattr(style, "link", None) if style is not None else None
+        if link and str(link).startswith("superqode://cmd/"):
+            command = str(link).rsplit("/", 1)[-1].strip()
+            if command:
+                event.stop()
+                event.prevent_default()
+                self._run_clicked_command(command)
+            return
         if not link or not str(link).startswith("superqode://pick/"):
+            # No link under the pointer. On a picker screen the click may still
+            # have landed on a row, just on text that carries no link style.
+            if self._click_selects_picker_row(event):
+                event.stop()
+                event.prevent_default()
+                self.set_timer(0.05, self._ensure_input_focus)
             return
         raw = str(link).rsplit("/", 1)[-1]
         if not raw.isdigit():
