@@ -120,6 +120,8 @@ def test_shared_code_changes_are_limited_to_the_known_set():
         "src/superqode/app/mixins/events.py",
         "src/superqode/app/mixins/helper_startup.py",
         "src/superqode/app/mixins/dialogs.py",
+        "src/superqode/app/mixins/clickable_commands.py",
+        "tests/test_clickable_commands.py",
         "src/superqode/widgets/slash_complete.py",
         "tests/test_connect_harness_screen.py",
         "tests/test_slash_runtime.py",

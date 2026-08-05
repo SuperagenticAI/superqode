@@ -20,8 +20,14 @@ class PickerNavigationMixin:
     """navigate_*/select_highlighted_* actions and number-key selection."""
 
     @staticmethod
-    def _picker_link_style(style: str, number: int) -> str:
-        """Add a Textual/Rich link target to a picker style."""
+    def _picker_link_style(style: str, number: int, *, handle: bool = False) -> str:
+        """Add a Textual/Rich link target to a picker style.
+
+        ``handle`` marks the span a mouse user aims at. It carries no styling
+        of its own: colour alone says what is clickable, and an underline read
+        as a rule smeared across the row.
+        """
+        del handle
         return f"{style} link superqode://pick/{number}"
 
     def _append_picker_dot(self, target: Text, number: int, *, highlighted: bool) -> None:
@@ -65,8 +71,9 @@ class PickerNavigationMixin:
         - OpenCode model selection
         """
         log = self.query_one("#log", ConversationLog)
-        # While awaiting typed selection, inject digits into prompt instead of auto-selecting
-        if (
+        # While awaiting typed selection, inject digits into prompt instead of
+        # auto-selecting. A mouse click is exempt: it names the row outright.
+        if not getattr(self, "_direct_pick", False) and (
             getattr(self, "_awaiting_acp_agent_selection", False)
             or getattr(self, "_awaiting_byok_model", False)
             or getattr(self, "_awaiting_local_model", False)
@@ -289,6 +296,18 @@ class PickerNavigationMixin:
         """
         log = self.query_one("#log", ConversationLog)
 
+        # Screens without an explicit branch below fall through to
+        # _select_by_number_universal, whose first branch buffers digits into
+        # the prompt so multi-digit indexes can be typed. A click is not
+        # typing: it carries the exact target already, and buffering it put
+        # "1" and "2" in the prompt box instead of selecting anything.
+        self._direct_pick = True
+        try:
+            return self._select_picker_number_resolved(num, log)
+        finally:
+            self._direct_pick = False
+
+    def _select_picker_number_resolved(self, num: int, log) -> bool:
         if getattr(self, "_awaiting_connect_type", False):
             return bool(self._select_by_number_universal(num))
 

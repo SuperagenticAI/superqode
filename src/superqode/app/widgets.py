@@ -205,15 +205,18 @@ class ColorfulStatusBar(Static):
         # Compact branded identity, kept in the corner. Version is retained at
         # every width.
         identity = Text()
+        # The wordmark goes home, the way a site logo does. Version included:
+        # it reads as one mark, so half of it being inert would be a surprise.
+        home = command_link("home")
         super_colors = ["#a855f7", "#b366f9", "#c177fb", "#cf88fd", "#dd99ff"]
         for i, char in enumerate("Super"):
             color = super_colors[i % len(super_colors)]
-            identity.append(char, style=f"bold {color}")
+            identity.append(char, style=f"bold {color} {home}")
         qode_colors = ["#ec4899", "#f472b6", "#f97316", "#fb923c"]
         for i, char in enumerate("Qode"):
             color = qode_colors[i % len(qode_colors)]
-            identity.append(char, style=f"bold {color}")
-        identity.append(f" v{__version__}", style="#a1a1aa")
+            identity.append(char, style=f"bold {color} {home}")
+        identity.append(f" v{__version__}", style=f"#a1a1aa {home}")
 
         # Connection and model are always explicit, including before the user
         # has selected one. Long names compact, but the state never disappears.
@@ -945,15 +948,37 @@ class HintsBar(Static):
 
         # t.append("\n", style="")
 
-        # The three things a new user needs within reach of the prompt.
-        # Configuration commands are reached deliberately through :help.
-        hints = [
-            ("⏏", ":disconnect", THEME["pink"])
-            if self.connected
-            else ("🔌", ":connect", THEME["pink"]),
-            ("🏠", ":home", THEME["cyan"]),
-            ("?", ":help", THEME["purple"]),
-        ]
+        # Before connecting, the only thing that matters is connecting. Once a
+        # session is running, the bar becomes what to do with it: evaluating,
+        # optimising and memory have no entry point anywhere else in the TUI.
+        if self.connected:
+            hints = [
+                ("⏏", ":disconnect", THEME["pink"]),
+                ("🧠", ":memory", THEME["link"]),
+                ("📊", ":eval", THEME["link"]),
+                ("⚡", ":skills", THEME["link"]),
+                ("◈", ":harness", THEME["link"]),
+                ("?", ":help", THEME["link"]),
+            ]
+        else:
+            hints = [
+                ("🔌", ":connect", THEME["pink"]),
+                ("🏠", ":home", THEME["link"]),
+                ("?", ":help", THEME["link"]),
+            ]
+
+        # Trimmed from the right when the terminal is narrow: the leading
+        # entries are the session controls, the trailing ones are where to go
+        # next, and a wrapped bar costs a row of the transcript.
+        width = self.size.width or 0
+        if width:
+            while len(hints) > 2:
+                needed = sum(cell_len(f"{icon} {hint}") for icon, hint, _ in hints)
+                needed += 5 * (len(hints) - 1)
+                if needed <= width:
+                    break
+                del hints[-2]
+
         for i, (icon, hint, color) in enumerate(hints):
             if i > 0:
                 t.append("  •  ", style=THEME["dim"])

@@ -404,7 +404,7 @@ async def test_prompt_placeholder_points_at_the_first_command(monkeypatch):
         prompt = app.query_one(SelectionAwareInput)
         await pilot.pause()
 
-        assert str(prompt.placeholder) == "Get started with :connect, or :help for more options."
+        assert str(prompt.placeholder) == "Get started with :connect, or click the buttons below"
 
 
 async def test_mounted_harness_switcher_uses_keyboard_navigation(tmp_path, monkeypatch):
@@ -1907,3 +1907,109 @@ async def test_a_click_off_a_picker_row_selects_nothing(monkeypatch):
         await pilot.pause()
 
         assert app._awaiting_local_provider is True
+
+
+async def test_the_status_bar_controls_actually_fire_when_clicked(monkeypatch):
+    """A link style in the rendered text is not proof that a click works.
+
+    The bar occupies three screen rows with its content on the middle one, so
+    a test that clicks the widget's own origin misses every control.
+    """
+    from superqode.app.widgets import ColorfulStatusBar
+
+    ran: list[str] = []
+    monkeypatch.setattr(
+        SuperQodeApp, "_run_clicked_command", lambda self, command: ran.append(command)
+    )
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(120, 30)) as pilot:
+        await pilot.pause()
+        bar = app.query_one("#status-bar", ColorfulStatusBar)
+
+        from rich.cells import cell_len
+
+        line = bar._render_for_width(bar.size.width or 120)
+        columns: dict[str, int] = {}
+        for span in line.spans:
+            style = str(span.style)
+            if "superqode://cmd/" in style:
+                # Span offsets count characters; the screen counts cells, and
+                # the plug glyph occupies two of them.
+                columns.setdefault(style.rsplit("/", 1)[-1], cell_len(line.plain[: span.start]))
+        assert {"home", "connect", "exit"} <= set(columns)
+
+        row = next(
+            y
+            for y in range(bar.region.y, bar.region.y + bar.region.height)
+            if getattr(app.screen.get_style_at(bar.region.x + 2, y), "link", None)
+        )
+        for command, column in columns.items():
+            before = len(ran)
+            await pilot.click(offset=(bar.region.x + column + 1, row))
+            await pilot.pause()
+            assert len(ran) > before, f"clicking {command} did nothing"
+            assert ran[-1] == command
+
+
+async def test_clicking_the_wordmark_goes_home(monkeypatch):
+    """The logo behaves like a site logo."""
+    from superqode.app.widgets import ColorfulStatusBar
+
+    ran: list[str] = []
+    monkeypatch.setattr(
+        SuperQodeApp, "_run_clicked_command", lambda self, command: ran.append(command)
+    )
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
+
+    app = SuperQodeApp()
+    async with app.run_test(size=(120, 30)) as pilot:
+        await pilot.pause()
+        bar = app.query_one("#status-bar", ColorfulStatusBar)
+        row = next(
+            y
+            for y in range(bar.region.y, bar.region.y + bar.region.height)
+            if getattr(app.screen.get_style_at(bar.region.x + 2, y), "link", None)
+        )
+        await pilot.click(offset=(bar.region.x + 4, row))
+        await pilot.pause()
+
+    assert ran == ["home"]
+
+
+async def test_clicking_a_row_never_types_its_number_into_the_prompt(monkeypatch):
+    """A click carries its target; only typing needs digit buffering.
+
+    Provider and model pickers buffer typed digits so multi-digit indexes can
+    be entered. Clicks used to fall into that same path, so selecting a row
+    with the mouse put "1" or "2" in the prompt box and selected nothing.
+    """
+    import re
+
+    from superqode.app.inputs import SelectionAwareInput
+
+    monkeypatch.setenv("SUPERQODE_VIM_MODE", "0")
+    app = SuperQodeApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        log = app.query_one("#log", ConversationLog)
+        app._show_local_provider_picker(log)
+        await pilot.pause()
+
+        rows = [
+            (index, "".join(segment.text for segment in strip))
+            for index, strip in enumerate(log.lines)
+            if re.match(r"^\s*[▶●○]?\s*\[\s*\d+\s*\]", "".join(s.text for s in strip))
+        ]
+        assert len(rows) > 1
+
+        line_index, text = rows[1]
+        y = log.region.y + line_index - int(log.scroll_offset.y)
+        x = log.region.x + min(len(text.rstrip()) - 2, log.region.width - 2)
+        await pilot.click(offset=(x, y))
+        await pilot.pause()
+
+        assert app.query_one("#prompt-input", SelectionAwareInput).value == "", (
+            "the click was buffered as typing"
+        )
+        assert app._awaiting_local_provider is False, "the click selected nothing"

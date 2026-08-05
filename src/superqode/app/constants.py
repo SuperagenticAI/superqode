@@ -72,6 +72,9 @@ THEME = {
     # unreadable; #71717a gives 4.35:1, comfortably above the 3:1 floor
     # for non-essential text.
     "dim": "#71717a",
+    # Clickable text that carries no state of its own. A link that also carries
+    # state (ready, destructive) keeps its own colour instead.
+    "link": "#a855f7",
 }
 
 # Rich emoji set for different contexts

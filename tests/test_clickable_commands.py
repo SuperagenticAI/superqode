@@ -61,11 +61,26 @@ def test_a_leading_colon_is_accepted():
 
 
 def test_an_unknown_command_is_ignored():
-    """The link scheme must not become a way to run anything at all."""
-    app = App()
-    app._run_clicked_command("eval")
+    """The link scheme must not become a way to run anything at all.
 
-    assert app.commands == []
+    The example is derived rather than hardcoded: a literal went stale twice
+    when the command it named was later added to the allowlist, and the test
+    kept passing for the wrong reason.
+    """
+    from superqode.app.constants import COMMANDS
+
+    outsider = next(
+        command.lstrip(":")
+        for command in COMMANDS
+        if command.startswith(":")
+        and " " not in command
+        and command.lstrip(":") not in CLICKABLE_COMMANDS
+    )
+
+    app = App()
+    app._run_clicked_command(outsider)
+
+    assert app.commands == [], f":{outsider} should not be reachable by a click"
     assert app._prompts.active is None, "an unknown command must not open a prompt"
 
 
@@ -399,3 +414,155 @@ def test_connect_screens_are_recorded_as_they_are_drawn():
     ]
     assert app._navigate_back() is True
     assert app._history.previous_label == "Connect"
+
+
+# -- the connected hint set -------------------------------------------------- #
+
+
+def _hints(connected: bool, width: int = 120):
+    from unittest.mock import PropertyMock, patch
+
+    from textual.geometry import Size
+
+    bar = HintsBar()
+    bar.connected = connected
+    with patch.object(type(bar), "size", PropertyMock(return_value=Size(width, 1))):
+        return bar.render()
+
+
+def test_capability_commands_appear_only_once_connected():
+    """Evaluating and optimising mean nothing before a session exists."""
+    idle = _hints(False).plain
+    for command in (":memory", ":eval", ":skills", ":harness"):
+        assert command not in idle, f"{command} offered before connecting"
+
+    working = _hints(True).plain
+    for command in (":memory", ":eval", ":skills", ":harness"):
+        assert command in working, f"{command} missing once connected"
+
+
+def test_the_connected_bar_still_offers_the_way_out():
+    plain = _hints(True).plain
+
+    assert ":disconnect" in plain
+    assert ":connect" not in plain.replace(":disconnect", "")
+
+
+def test_every_connected_hint_is_clickable():
+    rendered = _hints(True)
+    linked = {
+        str(span.style).rsplit("/", 1)[-1]
+        for span in rendered.spans
+        if "superqode://cmd/" in str(span.style)
+    }
+    shown = {word.lstrip(":") for word in rendered.plain.split() if word.startswith(":")}
+
+    assert shown <= linked, f"not clickable: {sorted(shown - linked)}"
+    assert shown <= CLICKABLE_COMMANDS
+
+
+@pytest.mark.parametrize("width", [50, 60, 70, 80, 100, 120, 200])
+def test_the_bar_never_outgrows_the_terminal(width):
+    """A wrapped hints bar costs a row of the transcript."""
+    rendered = _hints(True, width=width)
+
+    assert cell_len(rendered.plain) <= width, f"hints bar overflowed {width}"
+    # Whatever is dropped, the way out and the way to help survive.
+    assert ":disconnect" in rendered.plain
+    assert ":help" in rendered.plain
+
+
+# -- the link convention ----------------------------------------------------- #
+#
+# Underline means clickable. Colour keeps meaning state, so a link that also
+# carries state (ready, destructive) keeps its colour and relies on the
+# underline alone; a link with no state takes THEME["link"].
+
+
+def _underlined(rendered):
+    return {
+        rendered.plain[span.start : span.end].strip()
+        for span in rendered.spans
+        if "underline" in str(span.style)
+    }
+
+
+def _clickable(rendered):
+    return {
+        rendered.plain[span.start : span.end].strip()
+        for span in rendered.spans
+        if "superqode://" in str(span.style)
+    }
+
+
+def _renderings():
+    """One of every surface that draws click targets."""
+    import sys
+    from types import SimpleNamespace
+
+    sys.path.insert(0, "tests")
+    from test_tui_smoke import FakeLog, make_app
+
+    from superqode.app.widgets import ColorfulStatusBar
+
+    idle = HintsBar()
+    idle.connected = False
+    working = HintsBar()
+    working.connected = True
+
+    status = ColorfulStatusBar()
+    status.byok_provider = "openai"
+    status.byok_model = "gpt-4o"
+    status.interaction_mode = "build"
+    status.can_go_back = True
+
+    surfaces = {
+        "hints idle": idle.render(),
+        "hints connected": working.render(),
+        "status bar": status._render_for_width(120),
+    }
+    for menu in ("root", "vendors"):
+        app = make_app()
+        log = FakeLog()
+        log.content_size = SimpleNamespace(width=110)
+        app._scroll_to_highlighted_item = lambda *a, **k: None
+        app.query_one = lambda *a, **k: log
+        app._show_connect_type_picker(log, menu=menu)
+        surfaces[f"picker {menu}"] = log.items[-1]
+    return surfaces
+
+
+def test_nothing_is_underlined():
+    """Underline was tried and rejected: it read as a rule across the row."""
+    for name, rendered in _renderings().items():
+        assert not _underlined(rendered), f"{name}: underline is back"
+
+
+def test_every_surface_offers_something_clickable():
+    for name, rendered in _renderings().items():
+        assert _clickable(rendered), f"{name}: nothing clickable at all"
+
+
+def test_the_link_colour_is_distinct_from_the_action_colours():
+    """It may share the brand purple, but never a colour that means an outcome."""
+    from superqode.app.constants import THEME
+
+    for state in ("success", "error", "warning", "pink", "gold"):
+        assert THEME["link"] != THEME[state], f"link colour collides with {state}"
+
+
+def test_a_link_carrying_state_keeps_its_state_colour():
+    """Disconnect stays destructive-coloured rather than becoming a plain link."""
+    from superqode.app.constants import THEME
+
+    bar = HintsBar()
+    bar.connected = True
+    rendered = bar.render()
+
+    styles = {
+        rendered.plain[span.start : span.end].strip(): str(span.style)
+        for span in rendered.spans
+        if "superqode://" in str(span.style)
+    }
+    assert THEME["pink"] in styles[":disconnect"]
+    assert THEME["link"] in styles[":memory"]

@@ -355,12 +355,11 @@ def test_welcome_uses_agent_engineering_positioning():
     text = render_plain(welcome)
 
     assert "AGENT ENGINEERING FOR YOUR CODE FACTORY" in text
-    assert ":connect" in text
-    # Connect first, help second. Nothing else competes with them.
-    assert ":help" in text
-    assert ":harness" not in text
-    assert ":work" not in text
-    assert ":init" not in text
+    # No command list here. The prompt placeholder names the first command and
+    # the bar under it carries them as controls, so the home screen is the
+    # product, not a menu.
+    for command in (":connect", ":help", ":harness", ":work", ":init"):
+        assert command not in text, f"{command} belongs to the prompt area"
     assert "Harnesses · Context · Memory · Tools · Evaluations · Control loops" in text
     assert "Build · Connect · Orchestrate · Evaluate · Optimize" in text
     assert "Terminal-first · Any agent or model" in text
@@ -371,9 +370,12 @@ def test_welcome_uses_agent_engineering_positioning():
     # is what the next step already says.
     assert "Not selected" not in text
     assert "Not connected" not in text
-    assert "Next step" in text
+    # The next-step block and the key list moved to the prompt area.
+    assert "Next step" not in text
     assert "[1]" not in text
-    assert "Ctrl+C" in text
+    assert "Ctrl+C" not in text
+    # What remains is the product and one line telling you how to drive it.
+    assert "Browse it like a browser" in text
     assert "Local/open models · Harnesses · ACP/MCP/A2A · BYOK/SDKs" not in text
     assert "Agentic Code Needs Super Quality Engineering" not in text
 
@@ -434,11 +436,19 @@ def test_connected_home_stays_compact_at_common_terminal_widths(width):
     assert ":explore" in text
 
 
-def test_welcome_asks_an_unconnected_workspace_to_connect():
-    text = render_plain(render_welcome([], width=100, state=WelcomeState(repository="/work/repo")))
+def test_an_unconnected_workspace_is_still_told_to_connect():
+    """The prompt area carries this now, not the home screen.
 
-    assert ":connect" in text
-    assert "choose who runs the coding loop" in text
+    A new user must be told the first command somewhere; this test follows it
+    rather than being deleted with the block that used to hold it.
+    """
+    from superqode.app.inputs import SelectionAwareInput
+
+    assert ":connect" in SelectionAwareInput.DEFAULT_PLACEHOLDER
+
+    bar = HintsBar()
+    bar.connected = False
+    assert ":connect" in bar.render().plain
 
 
 def test_welcome_compacts_for_narrow_terminals():
@@ -449,9 +459,9 @@ def test_welcome_compacts_for_narrow_terminals():
     assert "Local · ACP · MCP · A2A · BYOK · SDKs" in text
     assert "Current workspace" not in text
     assert "Build · Connect · Orchestrate · Evaluate · Optimize" not in text
-    assert ":connect" in text
-    # The narrow screen keeps the essentials only: the way in, and the keys.
-    assert "Ctrl+C exit" in text
+    # Identity only. Commands live in the prompt area at every width.
+    assert ":connect" not in text
+    assert "Ctrl+C exit" not in text
     assert "Return here anytime" not in text
 
 
@@ -510,20 +520,15 @@ def test_welcome_separates_terminal_first_from_interoperability():
     assert lines[terminal_first + 1].strip() == ""
 
 
-def test_welcome_footer_is_close_to_the_next_step():
-    """The footer must not be buried behind a wall of blank lines."""
-    from superqode.app.welcome import WelcomeState, _next_steps
-
+def test_the_closing_line_is_not_buried_behind_blank_lines():
     text = render_plain(render_welcome([], width=100))
     lines = text.splitlines()
-    step_count = len(_next_steps(WelcomeState()))
 
-    heading = next(i for i, line in enumerate(lines) if line.strip().startswith("Next step"))
-    footer = next(i for i, line in enumerate(lines) if "Ctrl+K" in line)
+    workspace = next(i for i, line in enumerate(lines) if "Current workspace" in line)
+    closing = next(i for i, line in enumerate(lines) if "Browse it like a browser" in line)
 
-    # Heading, one line per step, and at most one blank before the footer.
-    allowed = step_count + 2
-    assert footer - heading <= allowed, f"footer is {footer - heading} lines after the heading"
+    # Heading, the repository row, and at most one blank between them.
+    assert closing - workspace <= 3, f"closing line is {closing - workspace} lines below"
 
 
 def test_hints_bar_is_navigation_only():
@@ -916,7 +921,7 @@ def test_prompt_default_placeholder_points_at_the_first_command():
     """Nothing works before :connect, so the empty prompt says so."""
     assert (
         SelectionAwareInput.DEFAULT_PLACEHOLDER
-        == "Get started with :connect, or :help for more options."
+        == "Get started with :connect, or click the buttons below"
     )
 
 

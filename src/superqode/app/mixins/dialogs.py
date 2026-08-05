@@ -2336,7 +2336,16 @@ class DialogsMixin:
                 self._append_picker_dot(t, num, highlighted=is_highlighted)
                 t.append(f"[{num:2}] ", style=row)
                 t.append(f"{emoji} ", style=THEME["success"])
-                t.append(f"{agent_data['short_name']:<15}", style=row)
+                short_name = str(agent_data["short_name"])
+                t.append(
+                    short_name,
+                    style=self._picker_link_style(
+                        f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['link']}",
+                        num,
+                        handle=True,
+                    ),
+                )
+                t.append(" " * max(0, 15 - len(short_name)), style=row)
                 if is_highlighted:
                     t.append(f"{agent_data['name']}  ← SELECTED\n", style=row)
                 else:
@@ -2370,7 +2379,16 @@ class DialogsMixin:
                 self._append_picker_dot(t, num, highlighted=is_highlighted)
                 t.append(f"[{num:2}] ", style=row)
                 t.append(f"{emoji} ", style=THEME["warning"])
-                t.append(f"{agent_data['short_name']:<15}", style=row)
+                short_name = str(agent_data["short_name"])
+                t.append(
+                    short_name,
+                    style=self._picker_link_style(
+                        f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['link']}",
+                        num,
+                        handle=True,
+                    ),
+                )
+                t.append(" " * max(0, 15 - len(short_name)), style=row)
                 if is_highlighted:
                     t.append(f"{agent_data['name']:<25}  ← SELECTED\n", style=row)
                     if install_cmd:

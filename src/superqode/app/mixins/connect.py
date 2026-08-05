@@ -1796,10 +1796,11 @@ class ConnectMixin:
                 # mouse user aims at the name they are reading.
                 if is_highlighted:
                     link = self._picker_link_style(f"bold {THEME['success']}", num)
+                    handle = self._picker_link_style(f"bold {THEME['success']}", num, handle=True)
                     t.append("  ", style="")
                     self._append_picker_dot(t, num, highlighted=True)
                     t.append(f"[{num:>{number_width}}] ", style=link)
-                    t.append(profile.label, style=link)
+                    t.append(profile.label, style=handle)
                     t.append("  ← SELECTED\n", style=link)
                 else:
                     link = self._picker_link_style(THEME["dim"], num)
@@ -1808,7 +1809,7 @@ class ConnectMixin:
                     t.append(f"[{num:>{number_width}}] ", style=link)
                     t.append(
                         profile.label,
-                        style=self._picker_link_style(f"bold {THEME['text']}", num),
+                        style=self._picker_link_style(f"bold {THEME['link']}", num, handle=True),
                     )
                     t.append("\n", style="")
                 # Every row explains itself, so options can be compared at
@@ -2073,7 +2074,8 @@ class ConnectMixin:
                     t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                 row_link = self._picker_link_style(marker_style, idx)
                 t.append("✓ ", style=THEME["success"])
-                t.append(f"{pid:<15}", style=row_link)
+                t.append(pid, style=self._picker_link_style(marker_style, idx, handle=True))
+                t.append(" " * max(0, 15 - len(pid)), style=row_link)
                 t.append(
                     f"{pdef.name}",
                     style=row_link
@@ -2121,7 +2123,11 @@ class ConnectMixin:
                     )
                     row_link = self._picker_link_style(f"bold {THEME['success']}", idx)
                     t.append(f"{status} ", style=status_style)
-                    t.append(f"{pid:<15}", style=row_link)
+                    t.append(
+                        pid,
+                        style=self._picker_link_style(f"bold {THEME['success']}", idx, handle=True),
+                    )
+                    t.append(" " * max(0, 15 - len(pid)), style=row_link)
                     t.append(f"{pdef.name}", style=row_link)
                     t.append("  ← SELECTED\n", style=row_link)
                     t.append("        free", style=THEME["success"])
@@ -2136,7 +2142,11 @@ class ConnectMixin:
                 else:
                     t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                     t.append(f"{status} ", style=status_style)
-                    t.append(f"{pid:<15}", style=self._picker_link_style(THEME["text"], idx))
+                    t.append(pid, style=self._picker_link_style(THEME["link"], idx, handle=True))
+                    t.append(
+                        " " * max(0, 15 - len(pid)),
+                        style=self._picker_link_style(THEME["link"], idx),
+                    )
                     t.append(f"{pdef.name}", style=self._picker_link_style(THEME["muted"], idx))
                     t.append("\n", style="")
 
@@ -2194,7 +2204,11 @@ class ConnectMixin:
                     )
                     row_link = self._picker_link_style(f"bold {THEME['success']}", idx)
                     t.append(f"{status} ", style=status_style)
-                    t.append(f"{pid:<15}", style=row_link)
+                    t.append(
+                        pid,
+                        style=self._picker_link_style(f"bold {THEME['success']}", idx, handle=True),
+                    )
+                    t.append(" " * max(0, 15 - len(pid)), style=row_link)
                     t.append(f"{pdef.name}", style=row_link)
                     t.append("  ← SELECTED\n", style=row_link)
                     details = []
@@ -2207,7 +2221,11 @@ class ConnectMixin:
                 else:
                     t.append(f"    [{idx:2}] ", style=self._picker_link_style(THEME["dim"], idx))
                     t.append(f"{status} ", style=status_style)
-                    t.append(f"{pid:<15}", style=self._picker_link_style(THEME["text"], idx))
+                    t.append(pid, style=self._picker_link_style(THEME["link"], idx, handle=True))
+                    t.append(
+                        " " * max(0, 15 - len(pid)),
+                        style=self._picker_link_style(THEME["link"], idx),
+                    )
                     t.append(f"{pdef.name}", style=self._picker_link_style(THEME["muted"], idx))
                     t.append("\n", style="")
 

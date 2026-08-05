@@ -15,7 +15,19 @@ from superqode.app.prompt_stack import PromptSpec
 #: Commands a click may run. Anything destructive needs an entry in
 #: CONFIRM_WHILE_BUSY as well.
 CLICKABLE_COMMANDS: frozenset[str] = frozenset(
-    {"back", "connect", "disconnect", "exit", "explore", "harness", "help", "home"}
+    {
+        "back",
+        "connect",
+        "disconnect",
+        "eval",
+        "exit",
+        "explore",
+        "harness",
+        "help",
+        "home",
+        "memory",
+        "skills",
+    }
 )
 
 #: Commands that must ask before interrupting a run in progress. Nothing asks

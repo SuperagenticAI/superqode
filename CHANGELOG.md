@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.72] - 2026-08-05
+
+### Added
+
+- Once a session is running, the bar under the prompt offers what to do with
+  it: `:memory`, `:eval`, `:skills` and `:harness`, all clickable. Evaluating
+  and optimising had no entry point anywhere in the TUI.
+- Clickable text is purple, so a link is distinguishable from ordinary text.
+  Controls that end something keep their own colour.
+- The SuperQode wordmark goes home when clicked, the way a site logo does.
+
+### Fixed
+
+- Clicking a row in a provider or model picker typed its number into the
+  prompt box instead of selecting it. Those pickers buffer typed digits so
+  multi-digit indexes can be entered, and clicks were being buffered too.
+- The Copilot models row connected through the legacy BYOK route, which lists
+  what the catalogue believes Copilot offers in general rather than what a
+  plan may use. Both Copilot rows now ask the signed-in account.
+
+### Changed
+
+- The home screen drops the next-step block and the keyboard list. The prompt
+  placeholder names the first command and the bar under it carries the same
+  commands as controls, so the home screen was repeating its own chrome.
+
 ## [0.2.71] - 2026-08-05
 
 ### Fixed
@@ -18,6 +44,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Once a session is running, the bar under the prompt offers what to do with
+  it: `:memory`, `:eval`, `:skills` and `:harness`, all clickable. Evaluating
+  and optimising had no entry point anywhere in the TUI. The bar keeps
+  offering only `:connect` until something is connected, and trims from the
+  middle on a narrow terminal so the way out and `:help` always survive.
+- The home screen is the product and one line on how to drive it. The next
+  step block and the keyboard list left it: the prompt placeholder names the
+  first command and the bar under it carries them as clickable controls, so
+  the home screen was repeating its own chrome.
+- The SuperQode wordmark in the status bar goes home when clicked, the way a
+  site logo does.
 - TUI update. Connect, disconnect, back and exit are controls in the status
   bar, picker rows are clickable across their width with a click dot to aim
   at, long lists keep a uniform two-line rhythm, and the home screen and

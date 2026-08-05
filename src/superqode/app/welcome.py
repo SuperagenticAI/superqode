@@ -264,33 +264,14 @@ def render_welcome(
             state_text.append("\n")
         items.append(place(state_text))
 
-    next_text = Text(justify="left")
-    steps_heading = "Next steps" if len(_next_steps(state)) > 1 else "Next step"
-    next_text.append(f"{steps_heading}\n", style=f"bold {THEME['text']}")
-    steps = _next_steps(state)
-    command_width = max(len(command) for command, _, _ in steps)
-    for index, (command, description, color) in enumerate(steps):
-        next_text.append(f"{command:<{command_width}}", style=f"bold {color}")
-        if not narrow:
-            next_text.append("  ", style="")
-            next_text.append(description, style=THEME["muted"])
-        next_text.append("\n")
-    items.append(place(next_text))
-
-    keys_text = Text(justify=align)
-    keys_text.append("Ctrl+K", style=f"bold {THEME['cyan']}")
-    keys_text.append(" commands  •  ", style=THEME["muted"])
-    keys_text.append("Ctrl+B", style=f"bold {THEME['cyan']}")
-    keys_text.append(" sidebar  •  ", style=THEME["muted"])
-    keys_text.append("Ctrl+C", style=f"bold {THEME['cyan']}")
-    keys_text.append(" exit", style=THEME["muted"])
-    items.append(place(keys_text))
-
+    # No next step and no key list here. The prompt placeholder names the
+    # first command, and the bar directly under it carries the same commands
+    # as clickable controls, so repeating them on the home screen was noise
+    # between the product and the box the user types into.
     if not narrow:
         # Neither input style is discoverable on its own: mouse users do not
         # try clicking a terminal, and Vim users do not expect one to answer j/k.
         drive_text = Text(justify=align)
-        drive_text.append("\n", style="")
         drive_text.append("Browse it like a browser", style=f"bold {THEME['cyan']}")
         drive_text.append(" with your mouse", style=THEME["dim"])
         drive_text.append("  ·  or drive it like a pro with ", style=THEME["muted"])
