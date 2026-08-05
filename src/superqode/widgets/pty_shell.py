@@ -15,13 +15,10 @@ from __future__ import annotations
 
 import asyncio
 import os
-import pty
 import select
 import signal
 import struct
 import sys
-import termios
-import fcntl
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -35,6 +32,20 @@ from textual.reactive import reactive
 from textual.widgets import Static
 from textual.timer import Timer
 from textual import events
+
+try:
+    import pty
+    import termios
+    import fcntl
+except ImportError:  # pragma: no cover - native Windows has none of these
+    # This widget is built on pty.openpty() + os.fork(), neither of which exists
+    # on Windows. Guarding the imports keeps the module importable (it is reached
+    # through widgets.get_pty_shell()); PTYShell.start() refuses cleanly instead.
+    pty = None  # type: ignore[assignment]
+    termios = None  # type: ignore[assignment]
+    fcntl = None  # type: ignore[assignment]
+
+PTY_AVAILABLE = pty is not None and hasattr(os, "fork")
 
 
 @dataclass
@@ -128,6 +139,13 @@ class PTYShell:
         """Start the shell session."""
         if self._running:
             return True
+
+        if not PTY_AVAILABLE:  # pragma: no cover - Windows
+            raise RuntimeError(
+                "The embedded PTY shell is not available on Windows: it needs "
+                "pty.openpty() and os.fork(). Run shell commands with the "
+                "'>' prefix, or use SuperQode under WSL for an inline terminal."
+            )
 
         try:
             # Create pseudo-terminal

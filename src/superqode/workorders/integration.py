@@ -241,12 +241,18 @@ def work_order_integration_lock(store: WorkOrderStore, reference: str):
     """Serialize filesystem joins across local scheduler processes."""
     try:
         import fcntl
-    except ImportError as exc:  # pragma: no cover - native Windows is not supported yet
-        raise RuntimeError("Parallel WorkOrder integration requires POSIX file locking") from exc
+    except ImportError:  # pragma: no cover - native Windows uses msvcrt instead
+        fcntl = None  # type: ignore[assignment]
     lock_root = store.path.parent / "locks"
     lock_root.mkdir(parents=True, exist_ok=True)
     lock_path = lock_root / f"{reference}.lock"
     with lock_path.open("a+b") as handle:
+        if fcntl is None:  # pragma: no cover - Windows
+            from superqode.platform_locks import file_lock
+
+            with file_lock(handle):
+                yield
+            return
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
         try:
             yield

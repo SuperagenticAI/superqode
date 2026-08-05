@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 import os
-import pty
 import select
 import signal
 import subprocess
@@ -2182,6 +2181,11 @@ class SlashCommandMixin:
                 master_fd = None
                 use_pty = pty_supported()
                 if use_pty:
+                    # Imported here rather than at module scope: pty is POSIX-only
+                    # and a top-level import made the whole TUI unimportable on
+                    # Windows. pty_supported() already gates every use below.
+                    import pty
+
                     master_fd, slave_fd = pty.openpty()
                     try:
                         os.set_blocking(master_fd, False)

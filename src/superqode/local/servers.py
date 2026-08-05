@@ -1004,6 +1004,8 @@ def _pid_alive(pid: int) -> bool:
 
 def _terminate(pid: int, grace: float = 5.0) -> bool:
     try:
+        if os.name != "posix":  # pragma: no cover - Windows has no process groups
+            raise OSError("process groups are POSIX-only")
         os.killpg(os.getpgid(pid), signal.SIGTERM)
     except (ProcessLookupError, OSError):
         try:
@@ -1015,11 +1017,16 @@ def _terminate(pid: int, grace: float = 5.0) -> bool:
         if not _pid_alive(pid):
             return True
         time.sleep(0.2)
+    # SIGKILL does not exist on Windows; SIGTERM there already maps to an
+    # unconditional TerminateProcess, so it is the correct hard-kill signal.
+    hard_kill = getattr(signal, "SIGKILL", signal.SIGTERM)
     try:
-        os.killpg(os.getpgid(pid), signal.SIGKILL)
+        if os.name != "posix":  # pragma: no cover - Windows has no process groups
+            raise OSError("process groups are POSIX-only")
+        os.killpg(os.getpgid(pid), hard_kill)
     except (ProcessLookupError, OSError):
         try:
-            os.kill(pid, signal.SIGKILL)
+            os.kill(pid, hard_kill)
         except (ProcessLookupError, OSError):
             pass
     return True

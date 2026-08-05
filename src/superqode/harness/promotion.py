@@ -355,7 +355,12 @@ def _file_lock(handle: Any) -> Iterator[None]:
         yield
         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
     except ImportError:  # pragma: no cover - Windows fallback
-        yield
+        # Reached only when `import fcntl` above failed, i.e. before the yield,
+        # so this never swallows an ImportError raised by the caller's block.
+        from superqode.platform_locks import file_lock
+
+        with file_lock(handle):
+            yield
 
 
 def _atomic_copy(source: Path, target: Path) -> None:
