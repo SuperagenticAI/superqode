@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.73b1] - 2026-08-05
+## [0.2.74] - 2026-08-05
 
-Beta release for Windows testing. Pre-release versions are not installed by
-default, so `uv tool install superqode` and the shell installer keep resolving
-to 0.2.72. Opt in with `uv tool install superqode --prerelease=allow`.
+SuperQode runs on native Windows. Every change is guarded by a platform check,
+so the POSIX code paths are the ones that already shipped: no macOS or Linux
+behaviour changes in this release.
 
 ### Fixed
 
@@ -38,6 +38,11 @@ to 0.2.72. Opt in with `uv tool install superqode --prerelease=allow`.
   is unavailable on Windows and reports that rather than failing obscurely.
   Run shell commands with the `>` prefix, or use WSL for an inline terminal.
 - The `curl | sh` installer remains POSIX only. Install with uv on Windows.
+
+## [0.2.73b1] - 2026-08-05
+
+Pre-release used to validate the Windows fixes above on a real Windows machine
+before they reached the stable channel. Same changes as 0.2.74.
 
 ## [0.2.72] - 2026-08-05
 
