@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.73b1] - 2026-08-05
+
+Beta release for Windows testing. Pre-release versions are not installed by
+default, so `uv tool install superqode` and the shell installer keep resolving
+to 0.2.72. Opt in with `uv tool install superqode --prerelease=allow`.
+
+### Fixed
+
+- SuperQode did not start at all on native Windows. `superqode.main` imports
+  the WorkOrder queue, which imported `fcntl` at module scope, so every
+  command including `--help` failed with `ModuleNotFoundError: No module named
+  'fcntl'`. The import is now guarded, as are the POSIX-only `pty`, `termios`
+  and `fcntl` imports in the TUI slash commands and the PTY shell widget.
+- Advisory file locking works on Windows through `msvcrt.locking`. This covers
+  the WorkOrder worker lock, the channels daemon lock, WorkOrder integration
+  and harness promotion. Integration previously refused to run on Windows and
+  promotion silently skipped locking.
+- `os.uname()` in the subscription login flow raised `AttributeError` on
+  Windows. It now reads `sys.platform`.
+- Stopping a local model server used `os.killpg` and `signal.SIGKILL`, neither
+  of which exists on Windows.
+- The PiPy bash tool ran `/bin/bash -c`, which does not exist on Windows. The
+  default now falls back to the platform command processor. An explicitly
+  passed shell still wins.
+
+### Known limitations
+
+- The embedded PTY shell widget needs `pty.openpty()` and `os.fork()`, so it
+  is unavailable on Windows and reports that rather than failing obscurely.
+  Run shell commands with the `>` prefix, or use WSL for an inline terminal.
+- The `curl | sh` installer remains POSIX only. Install with uv on Windows.
+
 ## [0.2.72] - 2026-08-05
 
 ### Added
