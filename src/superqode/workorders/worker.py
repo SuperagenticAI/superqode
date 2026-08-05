@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import fcntl
 import json
 import os
 import secrets
@@ -15,6 +14,14 @@ from typing import Any, TextIO
 
 from .runner import WorkTaskExecution, execute_claimed_task
 from .store import WorkOrderStore
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - native Windows has no fcntl
+    # Guarded so that importing this module (and therefore the whole CLI, which
+    # reaches it via superqode.commands.work) does not fail on Windows. Every
+    # lock site below keeps its fcntl call and only branches when it is absent.
+    fcntl = None  # type: ignore[assignment]
 
 
 @dataclass(frozen=True)
@@ -216,7 +223,12 @@ class WorkOrderWorker:
             self._state_status = "stopped"
             self._write_snapshot()
             if self._lock is not None:
-                fcntl.flock(self._lock.fileno(), fcntl.LOCK_UN)
+                if fcntl is not None:
+                    fcntl.flock(self._lock.fileno(), fcntl.LOCK_UN)
+                else:  # pragma: no cover - Windows
+                    from superqode.platform_locks import release
+
+                    release(self._lock)
                 self._lock.close()
                 self._lock = None
 
@@ -316,7 +328,12 @@ def _acquire_worker_lock(store: WorkOrderStore, worker_id: str) -> TextIO:
     path = directory / f"{_safe_worker_id(worker_id)}.lock"
     handle = path.open("a+", encoding="utf-8")
     try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if fcntl is not None:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        else:  # pragma: no cover - Windows
+            from superqode.platform_locks import acquire_nonblocking
+
+            acquire_nonblocking(handle)
     except BlockingIOError as exc:
         handle.close()
         raise RuntimeError(f"WorkOrder worker is already running: {worker_id}") from exc

@@ -27,6 +27,11 @@ from .truncate import DEFAULT_MAX_BYTES, TruncationResult, format_size, truncate
 #: flood the event stream.
 UPDATE_THROTTLE_SECONDS = 0.1
 
+# Kept as a literal default so POSIX behaviour is byte-for-byte what it was.
+# create_bash_tool swaps in the Windows command processor only when the caller
+# left this untouched.
+DEFAULT_POSIX_SHELL = "/bin/bash"
+
 
 class OutputAccumulator:
     """Collects command output, spilling the full text to a temp file."""
@@ -107,7 +112,7 @@ def _append_status(text: str, status: str) -> str:
 def create_bash_tool(
     cwd: str | Path,
     *,
-    shell: str = "/bin/bash",
+    shell: str = DEFAULT_POSIX_SHELL,
     session_env: dict[str, str] | None = None,
 ) -> AgentTool:
     async def execute(
@@ -143,10 +148,15 @@ def create_bash_tool(
             on_update(AgentToolResult(content=[], details=None))
 
         env = {**os.environ, **(session_env or {})}
+        if os.name != "posix" and shell == DEFAULT_POSIX_SHELL:
+            # pragma: no cover - Windows has no /bin/bash and no -c flag. Only
+            # the untouched default is redirected, so an explicitly passed shell
+            # still wins.
+            argv = [os.environ.get("COMSPEC", "cmd.exe"), "/c", command]
+        else:
+            argv = [shell, "-c", command]
         process = await asyncio.create_subprocess_exec(
-            shell,
-            "-c",
-            command,
+            *argv,
             cwd=str(cwd),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,

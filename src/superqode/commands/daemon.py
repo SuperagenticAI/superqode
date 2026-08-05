@@ -46,13 +46,22 @@ def _load_dotenv(path: Path) -> int:
 
 
 def _acquire_lock(lock_path: Path, summary: str) -> Optional[TextIO]:
-    import fcntl
     import os
+
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - native Windows has no fcntl
+        fcntl = None  # type: ignore[assignment]
 
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     handle = lock_path.open("a+", encoding="utf-8")
     try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if fcntl is not None:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        else:  # pragma: no cover - Windows
+            from superqode.platform_locks import acquire_nonblocking
+
+            acquire_nonblocking(handle)
     except OSError:
         handle.close()
         return None

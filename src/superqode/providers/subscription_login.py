@@ -21,6 +21,7 @@ import asyncio
 import os
 import re
 import shutil
+import sys
 import webbrowser
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -206,7 +207,9 @@ def prefer_open_browser() -> bool:
         if not (
             os.environ.get("DISPLAY")
             or os.environ.get("WAYLAND_DISPLAY")
-            or os.uname().sysname == "Darwin"
+            # sys.platform rather than os.uname(): the latter does not exist on
+            # Windows and raised AttributeError before reaching the comparison.
+            or sys.platform == "darwin"
         ):
             return False
     return True
