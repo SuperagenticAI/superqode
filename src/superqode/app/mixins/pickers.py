@@ -42,6 +42,16 @@ class PickerNavigationMixin:
         )
         target.append("● " if highlighted else "○ ", style=style)
 
+    def _append_picker_arrow(self, target: Text, number: int) -> None:
+        """Write the open-this-row arrow that closes a picker line.
+
+        A dot in the left margin reads as a bullet, not a button. The arrow
+        sits where the eye finishes the label, points away from the text, and
+        is the one span coloured strongly enough to be found by a mouse user
+        scanning for something to click.
+        """
+        target.append(" ↗", style=self._picker_link_style(f"bold {THEME['purple']}", number))
+
     @staticmethod
     def _picker_content_width(log: object) -> int:
         """Columns a picker row actually gets.
@@ -267,12 +277,18 @@ class PickerNavigationMixin:
     #: A row opens with an optional marker, then its bracketed number.
     _PICKER_ROW = re.compile(r"^\s*[▶●○]?\s*\[\s*(\d+)\s*\]")
 
+    #: How far above a clicked line to look for the row it belongs to. A
+    #: description wraps to a handful of lines at most; scanning further would
+    #: start claiming clicks on unrelated chrome.
+    _PICKER_ROW_LOOKBACK = 8
+
     def _click_selects_picker_row(self, event) -> bool:
         """Resolve a click anywhere on a row to that row's number.
 
-        Rows carry link styles, but only over the text that was linked, and a
-        list of model names and paths invites a click on the part that was not.
-        Clicking a row should select it wherever the pointer landed.
+        Only the header line carries a link, so a click on the description
+        beneath it resolves by walking up to the nearest ``[n]`` line. That
+        keeps the whole row clickable without painting link styling across the
+        prose, which terminals underline and recolour.
         """
         if not any(getattr(self, flag, False) for flag in self._PICKER_AWAITING_FLAGS):
             return False
@@ -280,12 +296,24 @@ class PickerNavigationMixin:
             log = self.query_one("#log", ConversationLog)
             offset = event.screen_offset - log.region.offset
             index = offset.y + int(log.scroll_offset.y)
-            strip = log.lines[index]
+            lines = log.lines
+            if not (0 <= index < len(lines)):
+                return False
         except Exception:  # noqa: BLE001 - a stray click must never raise
             return False
 
-        match = self._PICKER_ROW.match("".join(segment.text for segment in strip))
-        return bool(match) and self._select_picker_number_direct(int(match.group(1)))
+        for cursor in range(index, max(-1, index - self._PICKER_ROW_LOOKBACK), -1):
+            try:
+                text = "".join(segment.text for segment in lines[cursor])
+            except Exception:  # noqa: BLE001 - a stray click must never raise
+                return False
+            match = self._PICKER_ROW.match(text)
+            if match:
+                return self._select_picker_number_direct(int(match.group(1)))
+            if cursor != index and not text.strip():
+                # A blank line ends the row: past it lies a different one.
+                return False
+        return False
 
     def _select_picker_number_direct(self, num: int) -> bool:
         """Select a picker item directly from a mouse click.
@@ -1105,6 +1133,14 @@ class PickerNavigationMixin:
             agent_id, agent_data = agent_list[current_idx]
             log = self.query_one("#log", ConversationLog)
             self._awaiting_acp_agent_selection = False
+            # Enter is its own path, so it needs the same mark the numbered and
+            # clicked routes set: what follows is a result, and back belongs on
+            # this listing rather than the category screen above it.
+            try:
+                self._history.detach()
+                self._sync_navigation_controls()
+            except Exception:  # noqa: BLE001 - chrome must never block a connect
+                pass
 
             # Check if agent is installed
             from superqode.commands.acp import check_agent_installed

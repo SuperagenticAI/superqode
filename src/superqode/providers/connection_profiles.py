@@ -36,6 +36,7 @@ BYOK or an explicit runtime command instead.
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import shutil
 from dataclasses import dataclass
@@ -232,6 +233,52 @@ def _glm_cli_ready() -> bool:
 def _devin_cli_ready() -> bool:
     """Cognition's Devin CLI is installed (it owns its own sign-in)."""
     return shutil.which("devin") is not None
+
+
+def _muse_auth_path() -> Path:
+    """Where Muse keeps its credential store, resolved as Muse itself resolves it.
+
+    The `muse` launcher reads ``MUSE_AUTH_PATH`` first, then falls back to
+    ``$XDG_CONFIG_HOME/muse/auth.json`` and finally ``~/.config/muse/auth.json``.
+    Checking only the last one reports a signed-in user as unauthenticated.
+    """
+    override = os.environ.get("MUSE_AUTH_PATH", "").strip()
+    if override:
+        return Path(override).expanduser()
+    xdg = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    base = Path(xdg).expanduser() if xdg else Path.home() / ".config"
+    return base / "muse" / "auth.json"
+
+
+def _muse_signed_in() -> bool:
+    """A stored Muse credential exists, from `muse login` or `muse auth set`.
+
+    Muse maintains this file in both directions: it writes the credential on
+    login and removes it on logout, including the automatic logout it performs
+    when the account has no payment method. An empty ``providers`` map is
+    therefore a real signed-out state, not a gap in this probe.
+
+    The file itself stays present as a ``{"schema_version": 1, "providers": {}}``
+    skeleton while signed out, so the provider map is the signal and file size
+    is not.
+    """
+    try:
+        data = json.loads(_muse_auth_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return bool(data.get("providers")) if isinstance(data, dict) else False
+
+
+def _muse_cli_ready() -> bool:
+    """Muse Code is installed and holds a credential it can actually use."""
+    if shutil.which("muse") is None:
+        return False
+    return _muse_signed_in() or _env_key_set("META_API_KEY")
+
+
+def _muse_product_present() -> bool:
+    """The user's own Muse Code install is here, signed in or not."""
+    return shutil.which("muse") is not None
 
 
 def _cursor_cli_ready() -> bool:
@@ -607,6 +654,22 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         unavailable_hint=(
             "install or update agy from https://antigravity.google/docs/cli-install "
             "(SuperQode requires 1.1.1+)"
+        ),
+    ),
+    ConnectionProfile(
+        id="muse",
+        harness_openness="closed",
+        model_openness="Muse Spark models",
+        transport="CLI",
+        label="Muse Code",
+        description="Use Meta's Muse Code agent with your Meta account sign-in",
+        connector="external-cli",
+        menu=CONNECT_MENU_VENDORS,
+        detect=_muse_cli_ready,
+        product_detect=_muse_product_present,
+        unavailable_hint=(
+            "on macOS or Linux, install with "
+            "`curl -fsSL https://dev.meta.ai/install.sh | bash`, then run `muse login`"
         ),
     ),
     ConnectionProfile(

@@ -166,6 +166,13 @@ DEFAULT_COMMANDS: list[SlashCommand] = [
     SlashCommand(":antigravity", "Show Antigravity CLI launch handoff", category="workflow"),
     SlashCommand(":antigravity status", "Check local agy CLI status", category="workflow"),
     SlashCommand(":antigravity migrate", "Show Gemini CLI migration steps", category="workflow"),
+    SlashCommand(":muse", "Show Muse Code readiness and launch handoff", category="workflow"),
+    SlashCommand(
+        ":muse login", "Sign in to Meta with the official muse login", category="workflow"
+    ),
+    SlashCommand(
+        ":muse status", "Check local Muse Code install and credential", category="workflow"
+    ),
     SlashCommand(":agy", "Alias for Antigravity CLI commands", category="workflow"),
     SlashCommand("/status", "Show runtime, model, harness, and session", category="workflow"),
     SlashCommand("/usage", "Show latest run usage and latency", category="workflow"),

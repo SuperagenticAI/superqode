@@ -786,11 +786,20 @@ class HelpersMixin(
             t.append(f"  {reason}\n\n", style=THEME["muted"])
         t.append("  SuperQode can run the official CLI login for you:\n", style=THEME["muted"])
         t.append(f"    {spec.binary} {' '.join(spec.login_args)}\n\n", style=THEME["cyan"])
-        t.append(
-            "  It prints a sign-in link and one-time code — you open the link yourself.\n"
-            "  SuperQode will not open a browser automatically.\n\n",
-            style=THEME["muted"],
-        )
+        if spec.interactive_tty:
+            # This login draws its own menu and opens the browser itself, so the
+            # user is handing over the terminal rather than copying a code.
+            t.append(
+                f"  {spec.label} runs its own sign-in screen and may open a browser.\n"
+                "  SuperQode will hand over the terminal until it finishes.\n\n",
+                style=THEME["muted"],
+            )
+        else:
+            t.append(
+                "  It prints a sign-in link and one-time code — you open the link yourself.\n"
+                "  SuperQode will not open a browser automatically.\n\n",
+                style=THEME["muted"],
+            )
         t.append("  Press ", style=THEME["muted"])
         t.append("Enter", style=f"bold {THEME['success']}")
         t.append(" to start, or type ", style=THEME["muted"])
@@ -855,15 +864,28 @@ class HelpersMixin(
         t = Text()
         t.append("\n  🔐 ", style=f"bold {THEME['cyan']}")
         t.append(f"Starting {label} sign-in…\n", style=f"bold {THEME['text']}")
-        t.append(
-            "  Open the link printed below and enter the one-time code. "
-            "Waiting up to 15 minutes.\n",
-            style=THEME["dim"],
-        )
+        if getattr(spec, "interactive_tty", False):
+            t.append(
+                "  Handing over the terminal. Return here when it finishes.\n",
+                style=THEME["dim"],
+            )
+        else:
+            t.append(
+                "  Open the link printed below and enter the one-time code. "
+                "Waiting up to 15 minutes.\n",
+                style=THEME["dim"],
+            )
         try:
             log.write_feedback(t)
         except Exception:  # noqa: BLE001
             log.write(t)
+
+        if getattr(spec, "interactive_tty", False):
+            # A menu-driven login needs the real TTY; the piped worker would
+            # starve it of input and then mistake its exit code for success.
+            self._subscription_login_busy = False
+            self._interactive_login_handoff(spec, log)
+            return True
 
         self.run_worker(self._subscription_login_worker(product, log), exclusive=False)
         return True

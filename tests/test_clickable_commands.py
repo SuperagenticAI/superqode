@@ -330,11 +330,64 @@ def test_a_whole_picker_row_is_clickable_not_only_its_number():
 
     assert any("[2]" in target for target in targets)
     assert any("ACP agents" == target for target in targets)
-    assert any("OpenCode" in target for target in targets)
+
+
+def test_descriptions_carry_no_link_style():
+    """Prose must not be a link span: terminals decorate OSC-8 themselves.
+
+    A link across a wrapped paragraph renders as an underlined, recoloured
+    block in most terminals, which turned a thirteen-row screen into a wall.
+    Clicks on these lines still select the row, resolved by position in
+    _click_selects_picker_row rather than by a style under the pointer.
+    """
+    rendered = _picker("agents")
+    targets = _click_targets(rendered, "2")
+
+    assert not any("OpenCode" in target for target in targets)
+    assert "OpenCode" in rendered.plain  # still shown, just not linked
+
+
+def test_a_click_on_a_description_still_selects_its_row():
+    """The row stays clickable across its full height, link or no link."""
+    import re
+
+    from superqode.app.mixins.pickers import PickerNavigationMixin
+
+    rendered = _picker("vendors", width=120)
+    lines = rendered.plain.splitlines()
+
+    row_index = next(i for i, line in enumerate(lines) if line.lstrip().startswith("○ ["))
+    description_index = row_index + 1
+    assert not PickerNavigationMixin._PICKER_ROW.match(lines[description_index])
+
+    # Walking up from the description reaches its own header line.
+    for cursor in range(description_index, -1, -1):
+        match = PickerNavigationMixin._PICKER_ROW.match(lines[cursor])
+        if match:
+            break
+    assert cursor == row_index
+    assert match.group(1) == re.match(r"\s*○ \[\s*(\d+)", lines[row_index]).group(1)
 
 
 def test_the_footer_says_rows_can_be_clicked():
-    assert "click or type a number" in _picker("agents").plain
+    assert "click ↗ or type a number" in _picker("agents").plain
+
+
+def test_every_row_carries_a_clickable_arrow():
+    """The dot alone read as a bullet, so nothing said "click me".
+
+    The arrow sits at the end of the label, is the only strongly coloured span
+    on the row, and is itself a link target.
+    """
+    import re
+
+    rendered = _picker("vendors", width=120)
+    rows = [line for line in rendered.plain.splitlines() if re.match(r"\s*[●○]\s+\[\s*\d+\]", line)]
+
+    assert len(rows) >= 10, "expected a long list to measure"
+    # The arrow closes the label on every row, before any trailing marker.
+    assert all(re.search(r"↗(\s|$)", line) for line in rows)
+    assert any(target == "↗" for target in _click_targets(rendered, "2"))
 
 
 def test_a_long_list_gives_every_row_the_same_height():

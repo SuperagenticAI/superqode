@@ -35,6 +35,8 @@ class TestVendorResolution:
             ("copilot-cli", "copilot"),
             ("codex-sdk", "codex"),
             ("antigravity-cli", "antigravity"),
+            ("muse-code", "muse"),
+            ("muse-cli", "muse"),
             ("GROK", "grok"),
             ("", None),
             ("not-a-vendor", None),
@@ -52,6 +54,15 @@ class TestKeyDetection:
 
     def test_no_keys_set_means_nothing_to_report(self):
         assert diverting_api_keys("grok", {"PATH": "/usr/bin"}) == []
+
+    def test_muse_strips_its_cli_key_but_never_the_byok_key(self):
+        """Muse reads META_API_KEY ahead of a login; it never reads the BYOK key.
+
+        META_MODEL_API_KEY belongs to the `meta` BYOK provider, so removing it
+        would break an unrelated route without protecting this one.
+        """
+        assert diverting_api_keys("muse", {"META_API_KEY": "k"}) == ["META_API_KEY"]
+        assert diverting_api_keys("muse", {"META_MODEL_API_KEY": "k"}) == []
 
     def test_unknown_vendor_never_strips_anything(self):
         env = {"OPENAI_API_KEY": "k"}

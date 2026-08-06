@@ -127,6 +127,7 @@ def test_registry_has_expected_profiles():
         "cursor",
         "amp",
         "antigravity",
+        "muse",
         "grok",
         "copilot",
         "devin",
@@ -326,6 +327,97 @@ def test_antigravity_profile_is_signed_in_cli_runtime_connector():
     assert "google sign-in" in antigravity.description.lower()
 
 
+def test_muse_is_an_external_cli_subscription_profile():
+    """Muse Code 0.1.0 ships no ACP server, so it connects as an external CLI."""
+    muse = get_connection_profile("muse")
+
+    assert muse.connector == "external-cli"
+    assert muse.transport == "CLI"
+    assert muse.harness_openness == "closed"
+    assert muse in list_connection_profiles(CONNECT_MENU_SUBSCRIPTIONS)
+
+
+def test_muse_is_ready_only_once_it_has_a_credential(monkeypatch, tmp_path):
+    """Owning the binary is not the same as being able to run it.
+
+    Muse accepts either a stored login or META_API_KEY, so readiness needs one
+    of them; the binary alone only makes the product 'present'.
+    """
+    import superqode.providers.connection_profiles as cp
+
+    monkeypatch.delenv("META_API_KEY", raising=False)
+    monkeypatch.setattr(
+        cp.shutil, "which", lambda name: "/usr/bin/muse" if name == "muse" else None
+    )
+    monkeypatch.setattr(cp.Path, "home", classmethod(lambda cls: tmp_path))
+
+    auth = tmp_path / ".config" / "muse"
+    auth.mkdir(parents=True)
+    auth_file = auth / "auth.json"
+
+    # Installed, never signed in: present but not ready.
+    auth_file.write_text('{"schema_version": 1, "providers": {}}', encoding="utf-8")
+    assert cp._muse_product_present() is True
+    assert cp._muse_cli_ready() is False
+
+    # A stored login makes it ready.
+    auth_file.write_text('{"schema_version": 1, "providers": {"meta": {}}}', encoding="utf-8")
+    assert cp._muse_cli_ready() is True
+
+    # So does an API key on its own.
+    auth_file.write_text('{"schema_version": 1, "providers": {}}', encoding="utf-8")
+    monkeypatch.setenv("META_API_KEY", "k")
+    assert cp._muse_cli_ready() is True
+
+
+def test_muse_auth_path_follows_the_same_env_the_launcher_reads(monkeypatch, tmp_path):
+    """Muse resolves MUSE_AUTH_PATH, then XDG_CONFIG_HOME, then ~/.config.
+
+    Reading only the last one reports a signed-in user as unauthenticated
+    whenever they relocate their config, which is what this probe is for.
+    """
+    import superqode.providers.connection_profiles as cp
+
+    monkeypatch.setattr(cp.Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.delenv("MUSE_AUTH_PATH", raising=False)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    assert cp._muse_auth_path() == tmp_path / ".config" / "muse" / "auth.json"
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    assert cp._muse_auth_path() == tmp_path / "xdg" / "muse" / "auth.json"
+
+    monkeypatch.setenv("MUSE_AUTH_PATH", str(tmp_path / "elsewhere.json"))
+    assert cp._muse_auth_path() == tmp_path / "elsewhere.json"
+
+
+def test_muse_signed_in_reads_the_relocated_store(monkeypatch, tmp_path):
+    """A credential under XDG_CONFIG_HOME must count as signed in."""
+    import superqode.providers.connection_profiles as cp
+
+    monkeypatch.delenv("MUSE_AUTH_PATH", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    store = tmp_path / "xdg" / "muse"
+    store.mkdir(parents=True)
+    (store / "auth.json").write_text(
+        '{"schema_version": 1, "providers": {"meta": {"mechanism": "oauth"}}}', encoding="utf-8"
+    )
+
+    assert cp._muse_signed_in() is True
+
+
+def test_muse_readiness_survives_a_broken_auth_file(monkeypatch, tmp_path):
+    """A corrupt or absent credential store must read as 'not signed in'."""
+    import superqode.providers.connection_profiles as cp
+
+    monkeypatch.setattr(cp.Path, "home", classmethod(lambda cls: tmp_path))
+    assert cp._muse_signed_in() is False  # file does not exist
+
+    auth = tmp_path / ".config" / "muse"
+    auth.mkdir(parents=True)
+    (auth / "auth.json").write_text("not json", encoding="utf-8")
+    assert cp._muse_signed_in() is False
+
+
 def test_antigravity_detect_requires_compatible_cli(monkeypatch):
     import superqode.providers.connection_profiles as cp
     from superqode.runtime.antigravity_status import AntigravityCLIStatus
@@ -420,6 +512,10 @@ class _DispatchStub:
 
     def _reset_connect_selection_states(self):
         self.calls.append(("reset",))
+
+    def _open_connect_screen(self, log):
+        # Every dispatch starts a fresh screen; recorded so tests can assert it.
+        self.calls.append(("clear",))
 
     def _runtime_cmd(self, name, log):
         self.calls.append(("runtime", name))
@@ -970,3 +1066,33 @@ def test_copilot_description_does_not_promise_acp():
 
     assert "acp" not in profile.description.lower()
     assert profile.connector == "copilot"
+
+
+def test_every_way_of_choosing_lands_on_a_clean_screen():
+    """Enter, a typed number and a click must all replace the list.
+
+    Only the Enter path used to clear, so choosing a subscription by clicking
+    it rendered the result underneath the list it was chosen from, and the
+    previous screen's rows stayed above the new one.
+    """
+    from superqode.app_main import SuperQodeApp
+
+    stub = _DispatchStub()
+    SuperQodeApp._dispatch_connection_profile(stub, get_connection_profile("local"), _NullLog())
+
+    assert ("clear",) in stub.calls, "dispatch must start a fresh screen"
+    assert stub.calls.index(("clear",)) < stub.calls.index(("local",))
+
+
+class _NullLog:
+    def add_info(self, message):
+        pass
+
+    def add_error(self, message):
+        pass
+
+    def write(self, renderable):
+        pass
+
+    def clear(self):
+        pass

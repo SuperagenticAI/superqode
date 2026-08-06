@@ -5808,14 +5808,16 @@ def test_connect_selection_replaces_picker_before_rendering_result():
 def picker_rows(rendered: str) -> list[tuple[int, str]]:
     """Parse a connect screen into its (number, label) rows.
 
-    Rows render as ``  ● [1] Label   badges``: a click dot, the number, then
-    the label, with badges separated by a run of spaces.
+    Rows render as ``  ● [1] Label ↗   badges``: a click dot, the number, the
+    label, then the arrow marking the row as clickable, with badges separated
+    by a run of spaces. The arrow is chrome, so it is stripped here rather than
+    written into every expected label.
     """
     rows = []
     for line in rendered.split("\n"):
         match = re.match(r"\s*(?:[▶●○]\s+)?\[(\d+)\]\s+(.+?)(?:\s{2,}.*)?$", line)
         if match:
-            rows.append((int(match.group(1)), match.group(2).strip()))
+            rows.append((int(match.group(1)), match.group(2).strip().removesuffix("↗").strip()))
     return rows
 
 
@@ -5859,7 +5861,7 @@ def test_connect_picker_explains_every_choice():
     assert "Import existing config" in first
     # Marked twice on purpose: the arrow reads at a glance, the word survives
     # a screen reader and a copied transcript.
-    assert "Connect an existing harness  ← SELECTED" in first
+    assert "Connect an existing harness ↗  ← SELECTED" in first
     assert first.count("← SELECTED") == 1
 
     # Moving the highlight changes which row is marked, not which explain.
@@ -5868,7 +5870,7 @@ def test_connect_picker_explains_every_choice():
     assert "Codex, Claude Code, Copilot, Cursor, Devin and more" in second
     assert "Core, Workbench or a preset" in second
     assert "Import existing config" in second
-    assert "Connect a harness with your model  ← SELECTED" in second
+    assert "Connect a harness with your model ↗  ← SELECTED" in second
     assert second.count("← SELECTED") == 1
 
 

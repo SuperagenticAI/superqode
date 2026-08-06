@@ -6,6 +6,7 @@ official login command the same way users do outside the TUI:
 * Codex  → ``codex login --device-auth``  (ChatGPT device code)
 * Grok   → ``grok login --device-auth``   (X/SuperGrok device code)
 * Copilot → ``copilot login``             (GitHub OAuth device flow)
+* Muse   → ``muse login``                 (Meta account browser approval)
 
 These commands print a URL + one-time code to stdout so the SuperQode TUI can
 show them and wait for the vendor CLI to store credentials in its own file or
@@ -62,6 +63,15 @@ class SubscriptionLoginSpec:
     # no portable auth file to probe. For those, a clean login-process exit is
     # the vendor's success signal.
     success_on_zero_exit: bool = False
+    # Optional readiness probe replacing the default "auth file is non-empty"
+    # test. Needed when a vendor keeps a file that exists while signed out, so
+    # size alone reports every user as already authenticated.
+    login_detect: Optional[Callable[[], bool]] = None
+    # True when the vendor login is an interactive terminal UI rather than a
+    # device-code flow that prints a URL to stdout. Piping such a login gives it
+    # no TTY, so it can never complete, and a zero exit would be read as
+    # success. These must be run through a terminal handoff instead.
+    interactive_tty: bool = False
 
     def current_auth_path(self) -> Path:
         """Resolve the vendor auth file *now* (never import-time frozen)."""
@@ -119,10 +129,47 @@ COPILOT_LOGIN = SubscriptionLoginSpec(
     success_on_zero_exit=True,
 )
 
+#: Meta requires a payment method before a Muse session is usable. Without one,
+#: Muse signs the user back out on the next run ("logged out: removed the stored
+#: Meta credential"), so a successful sign-in can still leave nothing on disk.
+MUSE_BILLING_HINT = (
+    "Meta Model API requires a payment method on your account. "
+    "Add one at https://dev.meta.ai, then log in again."
+)
+
+
+def _muse_signed_in_probe() -> bool:
+    from .connection_profiles import _muse_signed_in
+
+    return _muse_signed_in()
+
+
+MUSE_LOGIN = SubscriptionLoginSpec(
+    id="muse",
+    label="Muse Code (Meta)",
+    binary="muse",
+    # Muse maintains this file honestly in both directions: it writes the
+    # credential on login and removes it on logout (including the automatic
+    # logout it performs when the account has no payment method). So it is the
+    # authority, and `login_detect` reads the provider map rather than the file
+    # size, which stays non-zero because of the `{"providers": {}}` skeleton.
+    auth_subpath=(".config", "muse", "auth.json"),
+    login_args=("login",),
+    install_hint=("Install it (macOS/Linux): curl -fsSL https://dev.meta.ai/install.sh | bash"),
+    success_hint="Muse Code login complete.",
+    env_key_fallbacks=("META_API_KEY",),
+    login_detect=_muse_signed_in_probe,
+    # `muse login` opens a menu ("Log in with browser" / "Set an API key") and
+    # waits on arrow keys. It prints no URL to stdout, so the piped device-code
+    # flow cannot drive it and must not claim it succeeded.
+    interactive_tty=True,
+)
+
 _SPECS = {
     CODEX_LOGIN.id: CODEX_LOGIN,
     GROK_LOGIN.id: GROK_LOGIN,
     COPILOT_LOGIN.id: COPILOT_LOGIN,
+    MUSE_LOGIN.id: MUSE_LOGIN,
 }
 
 
@@ -154,7 +201,16 @@ def has_env_key(spec: SubscriptionLoginSpec) -> bool:
 
 
 def has_local_login(spec: SubscriptionLoginSpec, *, path: Optional[Path] = None) -> bool:
-    """True when the vendor auth file exists (and is non-empty)."""
+    """True when the vendor auth file exists (and is non-empty).
+
+    A spec may override the test entirely via ``login_detect`` when file size
+    cannot distinguish signed in from signed out.
+    """
+    if spec.login_detect is not None and path is None:
+        try:
+            return bool(spec.login_detect())
+        except Exception:  # noqa: BLE001 - a probe must never break the flow
+            return False
     auth = path or spec.current_auth_path()
     try:
         return auth.is_file() and auth.stat().st_size > 0
@@ -248,6 +304,17 @@ async def run_subscription_login(
         spec = get_login_spec(product)
     except KeyError as exc:
         return LoginResult(ok=False, reason=str(exc))
+
+    if spec.interactive_tty:
+        # Piping an interactive login denies it a TTY, so it can never finish,
+        # and its exit code would be mistaken for a completed sign-in.
+        return LoginResult(
+            ok=False,
+            reason=(
+                f"{spec.label} sign-in is an interactive terminal UI. "
+                "Run it through a terminal handoff, not this piped flow."
+            ),
+        )
 
     target_auth = auth_path or spec.current_auth_path()
     if not force and has_local_login(spec, path=target_auth):
@@ -384,6 +451,11 @@ async def run_subscription_login(
         )
 
     if spec.success_on_zero_exit and returncode == 0:
+        if spec.id == MUSE_LOGIN.id:
+            # Muse leaves nothing probeable behind, so a clean exit is the only
+            # evidence the sign-in happened. Record it or the user is asked to
+            # sign in again on every connect.
+            record_muse_login()
         return LoginResult(
             ok=True,
             reason="signed in",
@@ -428,6 +500,8 @@ __all__ = [
     "CODEX_LOGIN",
     "COPILOT_LOGIN",
     "GROK_LOGIN",
+    "MUSE_LOGIN",
+    "MUSE_BILLING_HINT",
     "DEFAULT_LOGIN_TIMEOUT_SECONDS",
     "LoginResult",
     "SubscriptionLoginSpec",

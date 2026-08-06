@@ -243,6 +243,7 @@ def test_every_connection_profile_has_a_sidebar_page():
         "kimi-code": "providers/kimi.md",
         "qwen-code": "providers/qwen-code.md",
         "antigravity": "providers/antigravity.md",
+        "muse": "concepts/modes.md",
         "grok": "providers/grok.md",
         "glm-cli": "providers/zai.md",
         "other-harnesses": "cli-reference/harness-commands.md",

@@ -29,7 +29,10 @@ EXPECTED_COMMAND_COUNT = 263
 # `--connect` choice list in second position, after `harness-core`.
 # `--connect` derives its choices from the profile registry, so no Click
 # command was added and the count is unchanged.
-EXPECTED_HELP_TREE_SHA256 = "71c891489cab56ce54eccc6cc88127a87bb177ea9f0665ac33cdd22fe019ecad"
+# Rebaselined for the Muse Code subscription profile, which adds `muse` to the
+# `--connect` choice list after `antigravity`. Same registry-derived mechanism,
+# so no Click command was added and the count is unchanged.
+EXPECTED_HELP_TREE_SHA256 = "44ce3902f2835816b6f994759a5ae0af2b2b46394db73215183ae87d4ccea7f7"
 
 
 def _render_help_tree() -> tuple[int, str]:

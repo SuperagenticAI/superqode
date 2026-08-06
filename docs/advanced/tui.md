@@ -177,6 +177,7 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:codex` - Connect to and manage the Codex SDK runtime
 - `:claude` - Connect to and manage the Claude Agent SDK runtime
 - `:antigravity` - Show Antigravity CLI handoff, status, and migration help
+- `:muse` (alias `:muse-code`) - Show Muse Code readiness; `:muse login` runs Meta's own browser sign-in
 - `:grok` - Grok Build (xAI's agent) on your subscription; `:grok api` runs SuperQode's harness on the same plan; also status/login/models
 - `:plan <task>` - Ask for a plan only, without native tool execution
 - `:plan approve` - Execute the last planned request with tools enabled
@@ -208,7 +209,7 @@ show status, or display its local help where supported.
 | General operation | `:help`, `:keys`, `:status`, `:health`, `:doctor`, `:doctor-current`, `:diagnostics`, `:usage`, `:summary`, `:clear`, `:update`, `:demo`, `:exit`, `:quit`, `:q` |
 | Discovery | `:explore`, `:capabilities`, `:tour` |
 | Connections and authentication | `:connect`, `:disconnect`, `:agents`, `:agent`, `:acp`, `:providers`, `:provider`, `:profiles`, `:auth`, `:models`, `:model`, `:catalog`, `:model-guide`, `:recommend`, `:hf` |
-| Vendor runtimes | `:codex`, `:copilot`, `:claude`, `:antigravity`, `:agy`, `:grok`, `:xai-grok`, `:runtime` |
+| Vendor runtimes | `:codex`, `:copilot`, `:claude`, `:antigravity`, `:agy`, `:muse`, `:muse-code`, `:grok`, `:xai-grok`, `:runtime` |
 | Agent modes and context | `:chat`, `:build`, `:mode`, `:context`, `:thinking`, `:toggle_thinking`, `:compact`, `:retry`, `:redo`, `:compare`, `:prompt`, `:log` |
 | Files and repositories | `:files`, `:find`, `:open`, `:view`, `:search`, `:workspace`, `:sidebar`, `:home`, `:attach`, `:image`, `:img`, `:paste`, `:copy`, `:select` |
 | Harness and delivery | `:harness`, `:tau`, `:pipy`, `:workflow`, `:workflows`, `:factory`, `:work`, `:policy`, `:eval`, `:evals`, `:benchmark`, `:benchmarks` |

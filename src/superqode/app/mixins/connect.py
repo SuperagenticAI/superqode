@@ -148,10 +148,10 @@ class ConnectMixin:
             idx = 0
         log = self.query_one("#log", ConversationLog)
         # A selection result replaces the picker. Appending below a long picker
-        # can leave the requested content outside the viewport.
-        log.clear()
-        log.scroll_home(animate=False)
-        log.auto_scroll = True
+        # can leave the requested content outside the viewport. Cleared here as
+        # well as in the dispatcher so the picker is gone before any connector
+        # runs, including one that returns early without rendering anything.
+        self._open_connect_screen(log)
         self._dispatch_connection_profile(profiles[idx], log)
 
     def action_connect_menu_back(self) -> bool:
@@ -361,14 +361,44 @@ class ConnectMixin:
             if hasattr(self, attr):
                 delattr(self, attr)
 
+    def _open_connect_screen(self, log: ConversationLog) -> None:
+        """Start a connect step on a clean screen.
+
+        Each step replaces the one before it. Appending under the list the user
+        just chose from leaves the previous rows above the result, so a new
+        screen reads as more of the same page and it is not obvious the choice
+        landed or that the prompt is ready.
+        """
+        if log is None:
+            return
+        try:
+            log.clear()
+            log.scroll_home(animate=False)
+            log.auto_scroll = True
+        except Exception:  # noqa: BLE001 - a log that cannot reset still renders
+            pass
+        # What lands here is a result, not a step. Marking it keeps back
+        # pointing at the list it was chosen from instead of the screen above.
+        try:
+            self._history.detach()
+            self._sync_navigation_controls()
+        except Exception:  # noqa: BLE001 - navigation chrome must never block a connect
+            pass
+
     def _dispatch_connection_profile(self, profile, log: ConversationLog) -> None:
         """Route a chosen connection profile to its connector.
 
         See ``providers/connection_profiles.py`` for the connector semantics.
         Reuses the existing per-connector handlers so the BYOK/local/ACP flows
         are unchanged.
+
+        The screen is cleared here rather than at each call site: selecting by
+        Enter used to clear while a click or typed number did not, so the same
+        choice landed on a clean screen or under the old list depending on how
+        it was made.
         """
         self._reset_connect_selection_states()
+        self._open_connect_screen(log)
         conn = profile.connector
         if getattr(profile, "id", "") == "copilot-acp" and log is not None:
             log.add_info(
@@ -460,12 +490,189 @@ class ConnectMixin:
         elif conn == "external-cli":
             if getattr(profile, "id", "") == "antigravity":
                 self._antigravity_cmd("connect", log)
+            elif getattr(profile, "id", "") == "muse":
+                self._show_muse_connect(log)
             else:
                 log.add_error(
                     f"Unsupported external CLI profile: {getattr(profile, 'id', profile)}"
                 )
         else:
             log.add_error(f"Unknown connection type: {getattr(profile, 'id', profile)}")
+
+    def _muse_cmd(self, args: str, log: ConversationLog) -> None:
+        """Handle `:muse` subcommands.
+
+        Sign-in runs Meta's own `muse login` through the shared subscription
+        login flow, so SuperQode never implements Meta's OAuth and never copies
+        the resulting token.
+        """
+        sub = (args or "").strip().split(maxsplit=1)
+        action = sub[0].lower() if sub and sub[0].strip() else "connect"
+
+        if action in {"login", "auth", "signin", "sign-in"}:
+            # Detection first: an existing session is never disturbed, and the
+            # browser is only ever launched after an explicit confirmation.
+            started = self._begin_subscription_login(
+                "muse",
+                log,
+                on_success=lambda: self._show_muse_connect(log),
+                reason="Muse Code needs a Meta account before it can call the model.",
+            )
+            if not started:
+                log.add_info("Muse Code already has a credential.")
+                self._show_muse_connect(log)
+        elif action in {"connect", "status", "doctor"}:
+            self._show_muse_connect(log)
+        elif action in {"help", "?"}:
+            log.add_info("Usage: :muse [connect|login|status|help]")
+        else:
+            log.add_error(f"Unknown muse command: {action}")
+            log.add_info("Usage: :muse [connect|login|status|help]")
+
+    def _interactive_login_handoff(self, spec, log: ConversationLog) -> None:
+        """Give a vendor's interactive sign-in the real terminal.
+
+        Some vendor logins draw their own menu, wait on keys, and open the
+        browser themselves rather than printing a device code. Piping such a
+        login denies it a TTY, so it never completes and its exit code would be
+        mistaken for success. SuperQode suspends itself and hands over instead.
+
+        Only ever reached after the consent prompt, so nothing launches a
+        browser without the user asking for it.
+        """
+        import subprocess
+
+        from superqode.providers.subscription_login import binary_path, login_command
+
+        binary = binary_path(spec)
+        if binary is None:
+            log.add_error(f"The {spec.label} CLI is not installed.")
+            for line in spec.install_hint.splitlines():
+                if line.strip():
+                    log.add_info(line)
+            return
+
+        try:
+            with self.app.suspend():
+                completed = subprocess.run(login_command(spec))
+        except Exception as exc:  # noqa: BLE001 - surface any handoff failure
+            log.add_error(f"Could not run `{spec.binary} login`: {exc}")
+            return
+
+        # The vendor's own credential store is the authority. A clean exit is
+        # not enough on its own: Muse can sign in and then revoke the session
+        # when the account has no payment method.
+        from superqode.providers.subscription_login import MUSE_BILLING_HINT, has_local_login
+
+        if has_local_login(spec):
+            log.add_info(f"Signed in to {spec.label}.")
+        else:
+            log.add_error(f"{spec.label} did not leave a usable credential.")
+            if completed.returncode != 0:
+                log.add_info(f"`{spec.binary} login` exited {completed.returncode}.")
+            if spec.id == "muse":
+                log.add_info(MUSE_BILLING_HINT)
+        if spec.id == "muse":
+            self._show_muse_connect(log)
+
+    def _show_muse_connect(self, log: ConversationLog) -> None:
+        """Report Muse Code readiness and hand the user a command to run.
+
+        Muse Code 0.1.0 exposes no ACP server, and SuperQode does not consume
+        its headless JSONL events yet, so this route stays honest: it reports
+        what is installed and signed in rather than pretending we can stream
+        its tool calls. The subscription billing rule still applies, because
+        Muse prefers META_API_KEY over the account login this route selects.
+        """
+        from superqode.providers.connection_profiles import _muse_auth_path, _muse_signed_in
+        from superqode.providers.subscription_env import diverting_api_keys
+
+        installed = shutil.which("muse") is not None
+        signed_in = _muse_signed_in()
+        env_key = bool(os.environ.get("META_API_KEY", "").strip())
+
+        t = Text()
+        t.append("\n  Muse Code\n\n", style=f"bold {THEME['text']}")
+        t.append("    Status    ", style=THEME["muted"])
+        if not installed:
+            t.append("not installed\n", style=THEME["warning"])
+        elif signed_in or env_key:
+            t.append("installed, credential found\n", style=THEME["success"])
+        else:
+            # Muse owns its credential store, so a session it keeps somewhere
+            # this probe cannot see is still a valid session. Report what was
+            # observed, never that the user is signed out.
+            t.append("installed, no credential detected\n", style=THEME["warning"])
+        t.append("    Harness   ", style=THEME["muted"])
+        t.append("Muse Code owns the loop (closed source)\n", style=THEME["text"])
+        t.append("    Model     ", style=THEME["muted"])
+        t.append("Muse Spark, managed by Muse Code\n", style=THEME["dim"])
+
+        if not installed:
+            t.append("\n  Install on macOS or Linux:\n", style=THEME["muted"])
+            t.append("    curl -fsSL https://dev.meta.ai/install.sh | bash\n", style=THEME["cyan"])
+            t.append("  Then sign in:\n", style=THEME["muted"])
+            t.append("    muse login\n", style=THEME["cyan"])
+            log.write(t)
+            return
+
+        # Muse reads META_API_KEY ahead of any stored login, so a key left in
+        # the shell silently moves an account session onto per-token billing.
+        # SuperQode does not spawn Muse here, so it cannot strip the key the way
+        # subscription_child_env does for driven routes: say what will actually
+        # happen when the user runs `muse` themselves.
+        if signed_in and diverting_api_keys("muse"):
+            t.append("\n  META_API_KEY is set in this environment.\n", style=THEME["warning"])
+            t.append(
+                "  Muse Code prefers it over your account login, so this ", style=THEME["muted"]
+            )
+            t.append("bills per token.\n", style=THEME["warning"])
+            t.append("  Unset it before running ", style=THEME["muted"])
+            t.append("muse", style=THEME["cyan"])
+            t.append(" to spend your Meta account session instead.\n", style=THEME["muted"])
+        elif env_key:
+            t.append(
+                "\n  META_API_KEY is set, so Muse Code bills per token.\n", style=THEME["warning"]
+            )
+            t.append("  Run ", style=THEME["muted"])
+            t.append("muse login", style=THEME["cyan"])
+            t.append(" to use a Meta account session instead.\n", style=THEME["muted"])
+        elif not signed_in:
+            t.append("\n  No credential found at ", style=THEME["muted"])
+            t.append(f"{_muse_auth_path()}", style=THEME["dim"])
+            t.append(".\n", style=THEME["muted"])
+            t.append("  Sign in with Meta's own CLI, in a terminal:\n", style=THEME["muted"])
+            t.append("    muse login\n", style=THEME["cyan"])
+            t.append("  Or run it from here with a confirmation first: ", style=THEME["muted"])
+            t.append(":muse login\n", style=THEME["cyan"])
+            # Signing in is not enough on its own: Muse revokes the credential
+            # it just stored when the account cannot be billed, which reads as a
+            # login that silently did nothing.
+            t.append("\n  Meta requires a payment method before a session ", style=THEME["muted"])
+            t.append("survives.\n", style=THEME["muted"])
+            t.append(
+                "  Without one, Muse signs you back out on the next run.\n", style=THEME["dim"]
+            )
+        else:
+            # Signing in proves who you are, not that Meta will serve you. An
+            # account without billing authenticates fine and still fails on the
+            # first model call, so never imply sign-in is sufficient.
+            t.append(
+                "\n  Signed in. Model calls bill to your Meta account, so a\n", style=THEME["muted"]
+            )
+            t.append(
+                "  team without billing enabled still gets refused by Meta.\n", style=THEME["muted"]
+            )
+
+        t.append(
+            "\n  SuperQode does not drive Muse Code yet. Run it directly:\n", style=THEME["muted"]
+        )
+        t.append("    muse\n", style=THEME["cyan"])
+        t.append("\n  Next:\n", style=THEME["muted"])
+        t.append("    • ", style=THEME["dim"])
+        t.append(":connect byok meta", style=THEME["cyan"])
+        t.append(" to run Muse Spark under a SuperQode harness\n", style=THEME["muted"])
+        log.write(t)
 
     async def _report_copilot_login_state(self, log: ConversationLog) -> None:
         """Say whether the Copilot CLI is signed in, so the user need not guess.
@@ -1801,32 +2008,40 @@ class ConnectMixin:
                     self._append_picker_dot(t, num, highlighted=True)
                     t.append(f"[{num:>{number_width}}] ", style=link)
                     t.append(profile.label, style=handle)
+                    self._append_picker_arrow(t, num)
                     t.append("  ← SELECTED\n", style=link)
                 else:
                     link = self._picker_link_style(THEME["dim"], num)
                     t.append("  ", style="")
                     self._append_picker_dot(t, num, highlighted=False)
                     t.append(f"[{num:>{number_width}}] ", style=link)
+                    # The coloured dot and number carry the "clickable" signal.
+                    # Colouring the name too made a thirteen-row screen one
+                    # saturated block, with nothing left to draw the eye.
                     t.append(
                         profile.label,
-                        style=self._picker_link_style(f"bold {THEME['link']}", num, handle=True),
+                        style=self._picker_link_style(f"bold {THEME['text']}", num, handle=True),
                     )
+                    self._append_picker_arrow(t, num)
                     t.append("\n", style="")
                 # Every row explains itself, so options can be compared at
                 # once. Only the row being considered spends more than one
                 # line on it: a dozen wrapped paragraphs is a wall, not a list.
+                # Prose carries no link style: terminals decorate OSC-8 spans
+                # with their own underline and colour, which turned every
+                # description into a smeared rule. Clicks on these lines still
+                # select the row, resolved by position in _click_selects_picker_row.
                 if profile.description:
-                    description_link = self._picker_link_style(THEME["muted"], num)
                     if is_highlighted:
-                        append_wrapped(profile.description, description_link)
+                        append_wrapped(profile.description, THEME["muted"])
                     else:
                         t.append(
                             f"{indent}{textwrap.shorten(profile.description, wrap_width, placeholder=' …')}\n",
-                            style=description_link,
+                            style=THEME["muted"],
                         )
                 badges = profile.badges
                 if is_highlighted and badges:
-                    append_wrapped(" · ".join(badges), self._picker_link_style(THEME["dim"], num))
+                    append_wrapped(" · ".join(badges), THEME["dim"])
                 if is_highlighted and not profile.available and profile.unavailable_hint:
                     append_wrapped(profile.unavailable_hint, THEME["warning"])
 
@@ -1842,7 +2057,8 @@ class ConnectMixin:
         # The hint is worth a word, not a wrapped second line on a narrow
         # terminal. Esc back costs ten columns, so the budget differs by menu.
         if content_width >= (70 if is_root else 80):
-            t.append("click", style=THEME["cyan"])
+            t.append("click ", style=THEME["dim"])
+            t.append("↗", style=f"bold {THEME['purple']}")
             t.append(" or type a number\n", style=THEME["dim"])
         else:
             t.append("or type a number\n", style=THEME["dim"])

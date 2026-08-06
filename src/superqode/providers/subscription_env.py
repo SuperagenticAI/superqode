@@ -34,6 +34,10 @@ VENDOR_API_KEY_ENVS: Dict[str, Tuple[str, ...]] = {
     "kimi": ("MOONSHOT_API_KEY", "KIMI_API_KEY"),
     "codex": ("OPENAI_API_KEY",),
     "antigravity": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    # Muse Code documents this precedence explicitly: META_API_KEY wins over a
+    # stored `muse login` session. META_MODEL_API_KEY is the BYOK provider key
+    # and Muse never reads it, so it is deliberately not listed here.
+    "muse": ("META_API_KEY",),
 }
 
 #: Profile ids and runtime names that mean the same vendor as a dict key above.
@@ -48,6 +52,8 @@ _VENDOR_ALIASES: Dict[str, str] = {
     "qwen-code": "qwen",
     "kimi-code": "kimi",
     "gemini-cli": "gemini",
+    "muse-code": "muse",
+    "muse-cli": "muse",
 }
 
 #: Variables a user sets to deliberately opt a subscription route into an

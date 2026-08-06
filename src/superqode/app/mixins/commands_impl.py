@@ -3879,7 +3879,12 @@ class CommandImplMixin:
         # Interactive switches only. Other subcommands end on their own
         # summary, which opening a picker would clear.
         if needs_model and sub == "switch":
-            self._prompt_model_for_harness(display_name, log, tool_count=len(entry.tools))
+            self._prompt_model_for_harness(
+                display_name,
+                log,
+                tool_count=len(entry.tools),
+                previous=_harness_display_name(previous_harness),
+            )
 
     def _write_harness_detail_card(self, entry, log) -> None:
         """Summarise tools, permissions, sandbox and MCP for a harness."""
@@ -3947,17 +3952,30 @@ class CommandImplMixin:
         except Exception:  # noqa: BLE001 - a description must never break a switch
             pass
 
-    def _prompt_model_for_harness(self, display_name: str, log, *, tool_count: int = -1) -> None:
-        """Open the model screen for a harness that has no model yet."""
+    def _prompt_model_for_harness(
+        self, display_name: str, log, *, tool_count: int = -1, previous: str = ""
+    ) -> None:
+        """Open the model screen for a harness that has no model yet.
+
+        The screen replaces the one before it, so the switch confirmation this
+        follows is restated here. ``previous`` keeps the "from X" detail that
+        would otherwise be scrolled away with it.
+        """
         from superqode.providers.connection_profiles import CONNECT_MENU_MODELS
 
-        note = f"{display_name} is active. Choose the model it should run on."
+        switched = f"Harness switched: {display_name}"
+        if previous and previous != display_name:
+            switched += f" · from {previous}"
+        note = f"{switched}. Choose the model it should run on."
         if tool_count == 0:
             # A no-tool harness cannot read or edit files; say so explicitly.
             note += " This harness has no tools: it can discuss code, not change it."
         self._connect_context_note = note
         try:
-            self._show_connect_type_picker(log, menu=CONNECT_MENU_MODELS, preserve_log=True)
+            # A clean screen, not an append: the note above carries the "X is
+            # active" confirmation into this screen's header, so nothing is
+            # lost by replacing the harness list the user just chose from.
+            self._show_connect_type_picker(log, menu=CONNECT_MENU_MODELS)
         except Exception:  # noqa: BLE001 - fall back to naming the command
             self._connect_context_note = ""
             log.add_info(

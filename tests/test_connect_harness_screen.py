@@ -43,6 +43,9 @@ class DispatchStub:
     def _reset_connect_selection_states(self):
         pass
 
+    def _open_connect_screen(self, log):
+        pass
+
     def _harness_cmd(self, args, log):
         self.harness_commands.append(args)
 
@@ -240,7 +243,31 @@ def test_the_acp_category_opens_the_original_catalogue_screen():
     assert stub.opened == 1
 
 
-def test_the_subscriptions_category_holds_all_twelve_plans_codex_first():
+def test_selecting_muse_reports_readiness_instead_of_failing():
+    """Muse is the first live user of the external-cli connector.
+
+    That branch previously matched only Antigravity and errored on anything
+    else, so a Muse row that dispatched nowhere would look broken.
+    """
+    from superqode.app_main import SuperQodeApp
+
+    class MuseStub(DispatchStub):
+        def __init__(self):
+            super().__init__()
+            self.shown = 0
+
+        def _show_muse_connect(self, log):
+            self.shown += 1
+
+    stub = MuseStub()
+    log = FakeLog()
+    SuperQodeApp._dispatch_connection_profile(stub, get_connection_profile("muse"), log)
+
+    assert stub.shown == 1
+    assert not [item for item in log.items if str(item).startswith("ERROR")]
+
+
+def test_the_subscriptions_category_holds_all_thirteen_plans_codex_first():
     """Plan order is fixed, so a product sits in the same place everywhere."""
     from superqode.providers.connection_profiles import CONNECT_MENU_VENDORS
 
@@ -249,6 +276,7 @@ def test_the_subscriptions_category_holds_all_twelve_plans_codex_first():
         "cursor",
         "amp",
         "antigravity",
+        "muse",
         "grok",
         "copilot",
         "devin",

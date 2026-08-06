@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.75] - 2026-08-07
+
+Meta's Muse Code is a supported connection. It sits under `:connect` →
+Subscriptions alongside Codex, Cursor and Copilot, and SuperQode reads the
+credential Muse already stores rather than managing Meta's authentication
+itself.
+
+### Added
+
+- Muse Code connection profile, reachable as `:connect muse` or from the
+  Subscriptions screen. Muse Code 0.1.0 exposes no ACP server, so it connects
+  as an external CLI: SuperQode reports what is installed and signed in, and
+  hands off to `muse` rather than claiming to drive its tool loop.
+- `:muse` reports readiness (`:muse status` is the same screen), and
+  `:muse login` runs Meta's own `muse login`. Sign-in is detected first, so an
+  existing session is never disturbed, and the browser only opens after an
+  explicit confirmation.
+- Readiness distinguishes owning Muse Code from being able to run it. The
+  binary alone files it as one step away; a credential is either a stored
+  `muse login` session or `META_API_KEY`.
+- `META_API_KEY` is registered with the subscription billing policy. Muse
+  reads it ahead of any account login, so a key left in the environment
+  silently moves an account session onto per-token billing, and SuperQode now
+  says so. `META_MODEL_API_KEY` is deliberately excluded: it belongs to the
+  `meta` BYOK provider, which Muse never reads.
+- Muse's credential store is resolved the way Muse resolves it, through
+  `MUSE_AUTH_PATH` and `XDG_CONFIG_HOME` before `~/.config`. Reading only the
+  last of those reported a signed-in user as unauthenticated.
+
+### Notes
+
+- Meta requires a payment method before a Muse session survives. Without one,
+  Muse removes the credential it just stored and signs the user back out on
+  the next run, which reads as a login that silently did nothing. The connect
+  screen states this up front rather than leaving it to be discovered.
+- Muse Code ships for macOS and Linux, so the profile reports as unavailable
+  on Windows instead of offering an installer that cannot run there.
+- SuperQode never implements Meta's OAuth and never copies a Muse token. The
+  vendor CLI owns its credential store throughout.
+
+### Changed
+
+- Connect screens open on a clean view for every transition, back returns to
+  the list a choice was made from, and picker rows carry a clickable arrow.
+
 ## [0.2.74] - 2026-08-05
 
 SuperQode runs on native Windows. Every change is guarded by a platform check,

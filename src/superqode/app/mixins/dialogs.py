@@ -2162,6 +2162,20 @@ class DialogsMixin:
         catalog_tier: str = "all",
     ):
         """Show the curated ACP picker or a requested catalog tier."""
+        # Recorded so back from a connected agent returns to this listing
+        # rather than skipping past it to the category screen above.
+        try:
+            self._record_screen(
+                f"connect:acp-agents:{catalog_tier}",
+                "ACP agents",
+                lambda: self._show_agents(
+                    self.query_one("#log", ConversationLog),
+                    include_all=include_all,
+                    catalog_tier=catalog_tier,
+                ),
+            )
+        except Exception:  # noqa: BLE001 - navigation chrome must never block the picker
+            pass
         # Schedule async execution
         self._show_agents_async(
             log,
@@ -2222,41 +2236,6 @@ class DialogsMixin:
                 if tier not in missing_by_tier:
                     tier = "all"
                 missing_by_tier[tier].append((agent_id, agent_data))
-
-        # ACP agent emojis (from https://agentclientprotocol.com/get-started/agents)
-        agent_emojis = {
-            "opencode": "🤖",  # Robot
-            "claude": "🧠",  # Brain (Claude Code)
-            "claude.com": "🧠",  # Brain (Claude Code)
-            "gemini": "💎",  # Gem (Gemini CLI)
-            "geminicli": "💎",  # Gem (Gemini CLI)
-            "codex": "📝",  # Memo/code
-            "codex.openai.com": "📝",  # Memo/code
-            "grok": "G",  # Grok Build
-            "x.ai": "G",  # Grok Build
-            "devin": "👷",  # Construction worker (Devin, autonomous engineer)
-            "devin.ai": "👷",  # Construction worker
-            "openclaw": "🦞",  # OpenClaw
-            "openclaw.ai": "🦞",  # OpenClaw
-            "goose": "🪿",  # Goose
-            "goose.ai": "🪿",  # Goose
-            "kimi": "🔮",  # Crystal ball (Kimi CLI)
-            "kimi.com": "🔮",  # Crystal ball
-            "augmentcode": "⚡",  # Lightning (Auggie)
-            "auggie": "⚡",  # Lightning
-            "codeassistant": "🔧",  # Wrench (Code Assistant)
-            "cagent": "🎯",  # Target
-            "fastagent": "🚀",  # Rocket (fast-agent)
-            "fast-agent": "🚀",  # Rocket
-            "llmlingagent": "🧬",  # DNA (LLMling-Agent)
-            "llmling-agent": "🧬",  # DNA
-            "stakpak": "📦",  # Package
-            "vtcode": "🎨",  # Paint palette
-            "openhands": "🤲",  # Open hands
-            "amp": "⚡",  # Lightning (Amp)
-            "ampcode": "⚡",  # Lightning
-            "ampcode.com": "⚡",  # Lightning
-        }
 
         priority_order = {
             "opencode": 0,
@@ -2325,34 +2304,27 @@ class DialogsMixin:
                 idx = num - 1
                 is_highlighted = idx == getattr(self, "_acp_highlighted_agent_index", 0)
 
-                # Get emoji for this agent
-                agent_short_name = agent_data.get("short_name", agent_id)
-                emoji = agent_emojis.get(agent_id) or agent_emojis.get(agent_short_name, "🤖")
-
                 row = self._picker_link_style(
                     f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}", num
                 )
                 t.append("  ", style="")
                 self._append_picker_dot(t, num, highlighted=is_highlighted)
                 t.append(f"[{num:2}] ", style=row)
-                t.append(f"{emoji} ", style=THEME["success"])
                 short_name = str(agent_data["short_name"])
                 t.append(
                     short_name,
                     style=self._picker_link_style(
-                        f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['link']}",
+                        f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}",
                         num,
                         handle=True,
                     ),
                 )
+                self._append_picker_arrow(t, num)
                 t.append(" " * max(0, 15 - len(short_name)), style=row)
                 if is_highlighted:
                     t.append(f"{agent_data['name']}  ← SELECTED\n", style=row)
                 else:
-                    t.append(
-                        f"{agent_data['name']}\n",
-                        style=self._picker_link_style(THEME["muted"], num),
-                    )
+                    t.append(f"{agent_data['name']}\n", style=THEME["muted"])
             t.append("\n", style="")
 
         # Show missing agents by catalog group.
@@ -2368,26 +2340,22 @@ class DialogsMixin:
                 install_info = get_agent_installation_info(agent_data)
                 install_cmd = install_info.get("command", "")
 
-                # Get emoji for this agent
-                agent_short_name = agent_data.get("short_name", agent_id)
-                emoji = agent_emojis.get(agent_id) or agent_emojis.get(agent_short_name, "🤖")
-
                 row = self._picker_link_style(
                     f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}", num
                 )
                 t.append("  ", style="")
                 self._append_picker_dot(t, num, highlighted=is_highlighted)
                 t.append(f"[{num:2}] ", style=row)
-                t.append(f"{emoji} ", style=THEME["warning"])
                 short_name = str(agent_data["short_name"])
                 t.append(
                     short_name,
                     style=self._picker_link_style(
-                        f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['link']}",
+                        f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}",
                         num,
                         handle=True,
                     ),
                 )
+                self._append_picker_arrow(t, num)
                 t.append(" " * max(0, 15 - len(short_name)), style=row)
                 if is_highlighted:
                     t.append(f"{agent_data['name']:<25}  ← SELECTED\n", style=row)
@@ -2397,10 +2365,7 @@ class DialogsMixin:
                 else:
                     # Only the row being considered spends a second line on its
                     # install command; the rest stay one line each.
-                    t.append(
-                        f"{agent_data['name']}\n",
-                        style=self._picker_link_style(THEME["muted"], num),
-                    )
+                    t.append(f"{agent_data['name']}\n", style=THEME["muted"])
             t.append("\n", style="")
             next_num += len(group_agents)
 

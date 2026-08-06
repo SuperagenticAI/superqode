@@ -125,3 +125,43 @@ def test_worker_never_opens_browser(monkeypatch):
 
     assert captured.get("open_browser") is False
     assert captured.get("product") == "grok"
+
+
+def test_interactive_login_needs_consent_before_the_browser_opens():
+    """Nothing may launch a vendor browser flow without an explicit go-ahead.
+
+    Muse opens the browser itself once its menu runs, so the confirmation has
+    to gate the terminal handoff, not just the piped runner.
+    """
+    app = _new_app()
+    app.handoffs = []
+    app._interactive_login_handoff = lambda spec, log: app.handoffs.append(spec.id)
+    log = _Log()
+
+    assert SuperQodeApp._begin_subscription_login(app, "muse", log, reason="x") is True
+    assert app.handoffs == []  # prompt only: nothing has run yet
+
+    SuperQodeApp._handle_subscription_login_input(app, "n", log)
+    assert app.handoffs == []  # cancelled: still nothing
+
+    assert SuperQodeApp._begin_subscription_login(app, "muse", log, reason="x") is True
+    SuperQodeApp._handle_subscription_login_input(app, "", log)
+
+    assert app.handoffs == ["muse"]  # confirmed: handoff, not the piped worker
+    assert app._subscription_login_busy is False
+    assert app.scheduled == []  # the piped device-code worker never ran
+
+
+def test_existing_login_is_detected_and_never_relaunched(monkeypatch):
+    """An account already signed in must not be asked to sign in again."""
+    monkeypatch.setenv("META_API_KEY", "already-authenticated")
+    assert sl.login_ready(sl.MUSE_LOGIN) is True
+
+    app = _new_app()
+    app.handoffs = []
+    app._interactive_login_handoff = lambda spec, log: app.handoffs.append(spec.id)
+
+    started = SuperQodeApp._begin_subscription_login(app, "muse", _Log(), reason="x")
+
+    assert started is False  # caller reports "already signed in"
+    assert app.handoffs == []

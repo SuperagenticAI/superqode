@@ -133,6 +133,8 @@ class SlashCommandMixin:
             self._grok_cmd(args, log)
         elif c == "antigravity":
             self._antigravity_cmd(args, log)
+        elif c in ("muse", "muse-code"):
+            self._muse_cmd(args, log)
         elif c == "agy":
             self._agy_cmd(args, log)
         elif c == "approve":
@@ -2438,6 +2440,14 @@ class SlashCommandMixin:
                 if 0 <= idx < len(self._acp_agent_list):
                     agent_id, agent_data = self._acp_agent_list[idx]
                     self._awaiting_acp_agent_selection = False
+                    # What follows is a result, not a step, so back returns to
+                    # this agent listing instead of popping it and landing on
+                    # the category screen above.
+                    try:
+                        self._history.detach()
+                        self._sync_navigation_controls()
+                    except Exception:  # noqa: BLE001 - chrome must never block a connect
+                        pass
 
                     # Check if agent is installed
                     from superqode.commands.acp import check_agent_installed

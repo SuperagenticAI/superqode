@@ -85,3 +85,56 @@ def test_clear_forgets_everything():
     history.clear()
 
     assert history.can_go_back is False
+
+
+def test_back_from_a_result_returns_to_the_list_it_was_chosen_from():
+    """Picking an agent draws a result, which is not a navigation step.
+
+    Without this, back popped the list the user had just chosen from and
+    landed them on the category screen above it, so returning to the agent
+    listing or the subscriptions list was impossible.
+    """
+    drawn: list[str] = []
+    history = NavigationHistory()
+    history.visit("root", "Connect", lambda: drawn.append("root"))
+    history.visit("agents", "Existing harnesses", lambda: drawn.append("agents"))
+    history.visit("vendors", "Subscriptions", lambda: drawn.append("vendors"))
+
+    history.detach()  # a subscription was chosen; its panel is on screen
+
+    assert history.can_go_back is True
+    assert history.previous_label == "Subscriptions"
+
+    assert history.back() is True
+    assert drawn[-1] == "vendors", "back must return to the list, not past it"
+
+    assert history.back() is True
+    assert drawn[-1] == "agents", "the list is still a step of its own"
+
+
+def test_a_recorded_screen_clears_the_detached_mark():
+    """Navigating on from a result makes the next screen a real step again."""
+    drawn: list[str] = []
+    history = NavigationHistory()
+    history.visit("root", "Connect", lambda: drawn.append("root"))
+    history.detach()
+    history.visit("agents", "Existing harnesses", lambda: drawn.append("agents"))
+
+    assert history.back() is True
+    assert drawn[-1] == "root"
+
+
+def test_detaching_during_a_restore_is_ignored():
+    """A restore redraws a screen; that redraw is not a new result."""
+    history = NavigationHistory()
+
+    def restore_that_detaches():
+        history.detach()
+
+    history.visit("root", "Connect", lambda: None)
+    history.visit("agents", "Existing harnesses", restore_that_detaches)
+    history.visit("vendors", "Subscriptions", lambda: None)
+
+    assert history.back() is True  # restores "agents", which calls detach()
+    assert history.back() is True
+    assert history.can_go_back is False, "a redraw must not add a step"
