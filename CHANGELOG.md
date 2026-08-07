@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.76] - 2026-08-07
+
+Prime Intellect's Prime Agent is a supported coding agent. It connects over ACP
+with no adapter, and `:prime` gives it the same command surface the other vendor
+agents have. Prime Agent is a Recursive Language Model harness: a persistent
+IPython kernel is the model's only tool, and sub-agents are spawned from code.
+It joins RLM Code and the recursive tools as a third RLM route, with different
+tradeoffs rather than as a replacement for either.
+
+### Added
+
+- Prime Intellect's [Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent)
+  is a connectable ACP agent. It ships in the agent catalog as
+  `prime-agent --mode acp`, so `:connect acp prime-agent` and the agent picker
+  reach it without an adapter. Prime Agent is an RLM harness whose only
+  model-facing tool is a persistent IPython kernel.
+- `:prime` command surface: `connect`, `models [search]`, `model`, `status`,
+  `login` and `help`, with `:prime-agent` as an alias. `:prime models` reads the
+  installed CLI's catalog and groups it by provider; `:prime status` reports the
+  binary, version, which provider logins exist, and any local providers, without
+  reading credentials.
+- `:prime model` pins a selection and reconnects. Prime Agent fixes its model at
+  process startup and advertises no `availableModels` over ACP, so the selection
+  travels as `--provider` and `--model` launch arguments rather than through
+  `session/set_model`.
+- `:prime agents` shows Prime's live sessions with the RLM subagent tree,
+  indented by recursion depth. `:prime schedule`, `:prime packages`,
+  `:prime doctor` and `:prime update` cover the rest of its background surface.
+- `:prime depth`, `:prime goal` and `:prime autonomous` pin the RLM settings
+  Prime only accepts at process start. Goal and autonomous become launch
+  arguments; depth has no flag and is passed as `RLM_MAX_DEPTH` on the agent
+  process. `:prime depth 0` disables recursion, which drops the sub-agent
+  instructions from Prime's system prompt.
+- ACP connections accept per-agent environment overrides, so a setting an agent
+  reads only at startup no longer requires changing SuperQode's own environment.
+  The value is part of the client cache key, so changing it starts a fresh
+  process instead of reusing one launched with the previous value.
+- Prime Agent provider documentation covering install, authentication, GitHub
+  Copilot model entitlement, local Ollama models that need no API key, the
+  unsandboxed execution model, and how the route compares with RLM Code and the
+  recursive tools.
+- RLM routes comparison covering recursion model, context strategy, execution
+  safety, self-modification and instrumentation across RLM Code, Prime Agent and
+  the recursive tools.
+
+### Fixed
+
+- ACP JSON-RPC errors keep the detail the agent supplied. Only `error.message`
+  was surfaced, so an agent reporting "No API key found for the selected model"
+  in `error.data.details` reached the user as "Internal error". Every ACP agent
+  benefits.
+- `ACPStats.stop_reason` is populated. The field existed but was never assigned,
+  so callers reading stats saw an empty string even after a clean `end_turn`.
+
 ## [0.2.75] - 2026-08-07
 
 Meta's Muse Code is a supported connection. It sits under `:connect` →

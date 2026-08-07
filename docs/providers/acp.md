@@ -131,6 +131,30 @@ BYOK). See [BYOK Providers → Grok Subscription](byok.md#grok-subscription-offi
 
 ---
 
+### Prime Agent (Prime Intellect)
+
+[Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent) is an
+open-source RLM agent with a native ACP server. A persistent IPython kernel is
+its only model-facing tool.
+
+```bash
+# Install and authenticate
+curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh
+prime-agent
+# then run /login
+
+# Connect from SuperQode
+superqode connect acp prime-agent
+```
+
+Prime Agent fixes its model at process startup, so `:prime model` pins a
+selection and reconnects rather than switching in place. Local Ollama or vLLM
+models registered in `~/.prime/agent/models.json` work without an API key. The
+IPython kernel runs with the launching user's permissions and sends no ACP
+permission requests. See [Prime Agent](prime-agent.md) for the full route.
+
+---
+
 ### Amp
 
 [Amp](https://ampcode.com) is an AI coding agent by Ampcode with full ACP support:
@@ -181,6 +205,7 @@ Representative current ACP commands include:
 | Goose | `goose acp` |
 | Grok Build | `grok agent stdio` |
 | Kimi Code | `kimi acp` |
+| Prime Agent | `prime-agent --mode acp` |
 | Kilo | `kilo acp` |
 | Qwen Code | `qwen --acp` |
 | Factory Droid | `droid exec --output-format acp-daemon` |

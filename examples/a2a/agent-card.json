@@ -12,7 +12,7 @@
     "url": "https://super-agentic.ai",
     "organization": "Superagentic AI"
   },
-  "version": "0.2.75",
+  "version": "0.2.76",
   "documentationUrl": "https://github.com/SuperagenticAI/superqode",
   "capabilities": {
     "streaming": true,

@@ -131,6 +131,8 @@ class SlashCommandMixin:
             self._claude_cmd(args, log)
         elif c in ("grok", "xai-grok"):
             self._grok_cmd(args, log)
+        elif c in ("prime", "prime-agent"):
+            self._prime_cmd(args, log)
         elif c == "antigravity":
             self._antigravity_cmd(args, log)
         elif c in ("muse", "muse-code"):

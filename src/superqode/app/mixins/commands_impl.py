@@ -3196,6 +3196,197 @@ class CommandImplMixin:
                 "status|login|help] (ACP: :connect acp grok)"
             )
 
+    # ---- Prime Intellect Prime Agent :prime command surface ----------------
+    def _prime_cmd(self, args: str, log) -> None:
+        """Handle Prime Agent (RLM) over ACP."""
+        parts = (args or "").split(maxsplit=1)
+        sub = parts[0].strip().lower() if parts and parts[0].strip() else "help"
+        rest = parts[1].strip() if len(parts) > 1 else ""
+        if sub in ("connect", "start"):
+            self._prime_connect(rest, log)
+        elif sub in ("models", "ls"):
+            self._show_prime_models(log, search=rest)
+        elif sub == "model":
+            if rest:
+                self._prime_connect(rest, log)
+            else:
+                self._show_prime_model_picker(log)
+        elif sub == "depth":
+            self._prime_depth_cmd(rest, log)
+        elif sub == "goal":
+            self._prime_goal_cmd(rest, log)
+        elif sub in ("autonomous", "auto"):
+            self._prime_autonomous_cmd(rest, log)
+        elif sub == "status":
+            self._show_prime_status(log)
+        elif sub in ("agents", "sessions", "subagents"):
+            self._show_prime_agents(log)
+        elif sub in ("doctor", "services"):
+            self._show_prime_doctor(log)
+        elif sub in ("schedule", "schedules"):
+            self._show_prime_schedules(log)
+        elif sub in ("packages", "package"):
+            self._show_prime_packages(log)
+        elif sub == "update":
+            self._prime_update(log)
+        elif sub in ("login", "auth"):
+            self._show_prime_login(log)
+        elif sub in ("help", "?"):
+            self._show_prime_help(log)
+        else:
+            log.add_error(f"Unknown prime command: {sub}")
+            log.add_info(
+                "Usage: :prime [connect [model]|model [name]|models [search]|"
+                "depth [n]|goal [text]|autonomous [gate]|agents|schedule|packages|"
+                "status|doctor|update|login|help] (ACP: :connect acp prime-agent)"
+            )
+
+    def _prime_update(self, log) -> None:
+        """Run Prime Agent's own updater."""
+        from superqode.providers import prime_agent as prime
+
+        if not prime.is_installed():
+            log.add_error("Prime Agent is not installed.")
+            log.add_info(f"  Install: {prime.INSTALL_HINT}")
+            return
+        self.run_worker(self._prime_update_async(log), exclusive=False)
+
+    async def _prime_update_async(self, log) -> None:
+        import asyncio
+
+        from superqode.providers import prime_agent as prime
+
+        log.add_info("Running prime-agent update...")
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                prime.BINARY,
+                "update",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            raw, _ = await asyncio.wait_for(proc.communicate(), timeout=600)
+        except (OSError, asyncio.TimeoutError) as exc:
+            log.add_error(f"Prime Agent update failed: {exc}")
+            return
+        for line in (raw or b"").decode(errors="replace").splitlines():
+            if line.strip():
+                log.add_info(f"  {line.rstrip()}")
+        if proc.returncode == 0:
+            log.add_success(f"Prime Agent is now {prime.version() or 'updated'}")
+        else:
+            log.add_error(f"prime-agent update exited {proc.returncode}")
+
+    def _prime_opts(self):
+        """Return the Prime Agent settings pinned for the next launch."""
+        from superqode.providers.prime_agent import PrimeLaunchOptions
+
+        current = getattr(self, "_prime_options", None)
+        if current is None:
+            current = PrimeLaunchOptions()
+            self._prime_options = current
+        return current
+
+    def _prime_set_opts(self, **changes):
+        """Replace pinned Prime settings and return the new options."""
+        import dataclasses
+
+        updated = dataclasses.replace(self._prime_opts(), **changes)
+        self._prime_options = updated
+        return updated
+
+    def _prime_connect(self, selector: str, log) -> None:
+        """Connect Prime Agent over ACP with the pinned start-time settings."""
+        from superqode.providers import prime_agent as prime
+
+        if not prime.is_installed():
+            log.add_error("Prime Agent is not installed.")
+            log.add_info(f"  Install: {prime.INSTALL_HINT}")
+            return
+        chosen = (selector or "").strip()
+        if chosen:
+            self._prime_set_opts(model=chosen)
+        opts = self._prime_opts()
+        self._connect_acp_cmd(("prime-agent " + opts.model).strip(), log)
+        pinned = opts.describe()
+        if pinned:
+            log.add_info(f"Prime Agent launch: {', '.join(pinned)}")
+
+    def _prime_depth_cmd(self, rest: str, log) -> None:
+        """Set Prime's recursion depth for the next launch."""
+        raw = (rest or "").strip()
+        if not raw:
+            current = self._prime_opts().max_depth
+            log.add_info(
+                f"Prime Agent recursion depth: {current}"
+                if current is not None
+                else "Prime Agent recursion depth: Prime default (1)"
+            )
+            log.add_info("  Set with :prime depth <n>, or :prime depth default")
+            return
+        if raw.lower() in {"default", "reset", "off"}:
+            self._prime_set_opts(max_depth=None)
+            log.add_success("Prime Agent recursion depth reset to its default")
+            return
+        try:
+            depth = int(raw)
+        except ValueError:
+            log.add_error(f"Not a depth: {raw}")
+            return
+        if depth < 0:
+            log.add_error("Recursion depth cannot be negative.")
+            return
+        self._prime_set_opts(max_depth=depth)
+        if depth == 0:
+            log.add_success("Prime Agent recursion disabled (depth 0)")
+            log.add_info("  Sub-agent instructions are dropped from its system prompt.")
+        else:
+            log.add_success(f"Prime Agent recursion depth set to {depth}")
+        log.add_info("  Applies on the next :prime connect.")
+
+    def _prime_goal_cmd(self, rest: str, log) -> None:
+        """Seed a persistent goal for the next Prime session."""
+        raw = (rest or "").strip()
+        if not raw:
+            current = self._prime_opts().goal
+            log.add_info(f"Prime Agent goal: {current}" if current else "Prime Agent goal: none")
+            log.add_info('  Set with :prime goal "<objective>", or :prime goal off')
+            return
+        if raw.lower() in {"off", "clear", "none"}:
+            self._prime_set_opts(goal="", goal_token_budget=None)
+            log.add_success("Prime Agent goal cleared")
+            return
+        self._prime_set_opts(goal=raw.strip("\"'"))
+        log.add_success(f"Prime Agent goal set: {raw.strip(chr(34) + chr(39))}")
+        log.add_info("  Applies on the next :prime connect.")
+
+    def _prime_autonomous_cmd(self, rest: str, log) -> None:
+        """Enable autonomous mode and its completion gates."""
+        raw = (rest or "").strip()
+        opts = self._prime_opts()
+        if not raw:
+            if opts.autonomous:
+                gates = ", ".join(opts.gates) if opts.gates else "no gates"
+                log.add_info(f"Prime Agent autonomous: on ({gates})")
+            else:
+                log.add_info("Prime Agent autonomous: off")
+            log.add_info(
+                '  Enable with :prime autonomous "<gate command>", or :prime autonomous off'
+            )
+            return
+        if raw.lower() in {"off", "no", "disable"}:
+            self._prime_set_opts(autonomous=False, gates=())
+            log.add_success("Prime Agent autonomous mode off")
+            return
+        if raw.lower() in {"on", "yes", "enable"}:
+            self._prime_set_opts(autonomous=True)
+            log.add_success("Prime Agent autonomous mode on")
+            log.add_info('  No gate set. Add one with :prime autonomous "<command>".')
+            return
+        gate = raw.strip("\"'")
+        updated = self._prime_set_opts(autonomous=True, gates=(*opts.gates, gate))
+        log.add_success(f"Prime Agent autonomous gate added: {gate}")
+        log.add_info(f"  {len(updated.gates)} gate(s). Applies on the next :prime connect.")
+
     def _grok_api_cmd(self, rest: str, log) -> None:
         """Connect SuperQode harness using the Grok CLI subscription session.
 

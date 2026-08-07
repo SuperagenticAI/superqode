@@ -170,7 +170,9 @@ nav:
       - 🐙 GitHub Copilot: providers/github-copilot.md
       - 🚀 Google Antigravity: providers/antigravity.md
       - ♊ Google Gemini CLI: providers/gemini.md
+      - 🎼 Meta Muse Code: providers/muse-code.md
       - ✕ xAI Grok: providers/grok.md
+      - 🌀 Prime Intellect Prime Agent: providers/prime-agent.md
       - 👷 Cognition Devin: providers/devin.md
       - 🌙 Kimi & Kimi Code: providers/kimi.md
       - Q Qwen Code: providers/qwen-code.md
@@ -203,6 +205,7 @@ nav:
     - π PiPy: advanced/pipy.md
     - 🔗 Harness Protocol v1: advanced/harness-protocol.md
     - 🌀 RLM Code Integration: advanced/rlm-code.md
+    - 🔬 RLM Routes Compared: advanced/rlm-routes.md
     - 🔌 Serve a Harness over ACP: advanced/acp-agent-server.md
     - 🔀 SuperQode and Omnigent: advanced/superqode-vs-omnigent.md
     - 🔁 Omnigent Compatibility: advanced/omnigent-compat.md

@@ -9,6 +9,8 @@ The integration keeps the responsibility boundary explicit:
 
 SuperQode does not copy RLM Code's implementation. It controls and measures it through a native adapter.
 
+RLM Code is one of three RLM routes. It runs in process, keeps recursion inside configured depth and branch budgets, sandboxes execution in Docker by default, and emits a trajectory with length-generalization metrics, which suits contained and repeatable analysis. [Prime Agent](../providers/prime-agent.md) instead spawns live sub-agent sessions and mutates its own harness state during a run, which suits long-horizon coding. [Recursive tools](../local-recursive-dynamic-coding.md) keep large artifacts outside the prompt inside SuperQode's own agent loop.
+
 ## Install
 
 Install RLM Code into the same environment as SuperQode:

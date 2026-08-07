@@ -108,6 +108,29 @@ class ACPTerminalService(Protocol):
     async def wait_for_exit(self, params: dict) -> WaitForTerminalExitResponse: ...
 
 
+def _format_jsonrpc_error(error: Any) -> str:
+    """Render a JSON-RPC error as a message worth showing a user.
+
+    Agents put the actionable part in ``error.data``: ``message`` is often just
+    "Internal error" while ``data.details`` carries the reason and the fix.
+    """
+    if not isinstance(error, dict):
+        return str(error) if error else "Unknown error"
+
+    message = str(error.get("message") or "Unknown error")
+    data = error.get("data")
+    detail: str | None = None
+    if isinstance(data, dict):
+        raw = data.get("details") or data.get("message") or data.get("error")
+        detail = str(raw) if raw else None
+    elif isinstance(data, str) and data.strip():
+        detail = data
+
+    if not detail or detail == message:
+        return message
+    return f"{message}: {detail}"
+
+
 @dataclass
 class ACPClient:
     """
@@ -129,6 +152,9 @@ class ACPClient:
     # ``stripped_api_keys`` for the caller to show the user.
     subscription_vendor: Optional[str] = None
     stripped_api_keys: List[str] = field(default_factory=list)
+    # Per-connection overrides for agents whose settings are environment-only
+    # (Prime Agent's ``RLM_MAX_DEPTH``). Never applied to SuperQode's own env.
+    extra_env: Optional[Dict[str, str]] = None
 
     # Callbacks for handling agent events
     on_message: Optional[Callable[[str], Awaitable[None]]] = None
@@ -189,6 +215,7 @@ class ACPClient:
     _config_options: List[dict] = field(default_factory=list, repr=False)
     _available_commands: List[dict] = field(default_factory=list, repr=False)
     _usage: Dict[str, Any] = field(default_factory=dict, repr=False)
+    _last_stop_reason: str = field(default="", repr=False)
     _traffic_log_resolved_path: Optional[Path] = field(default=None, repr=False)
 
     # Agent-advertised capabilities from the initialize response.
@@ -206,10 +233,12 @@ class ACPClient:
         self._start_time = monotonic()
         self._message_buffer = ""
         self._usage = {}
+        self._last_stop_reason = ""
 
     def get_stats(self) -> ACPStats:
         """Get current session stats."""
         return ACPStats(
+            stop_reason=self._last_stop_reason,
             tool_count=len(self._tool_actions),
             files_modified=self._files_modified.copy(),
             files_read=self._files_read.copy(),
@@ -263,6 +292,10 @@ class ACPClient:
 
                 env, self.stripped_api_keys = subscription_child_env(self.subscription_vendor, env)
                 env["PYTHONUNBUFFERED"] = "1"
+
+            # Applied last so a caller can override the defaults above.
+            for name, value in (self.extra_env or {}).items():
+                env[str(name)] = str(value)
 
             # OpenCode's verbose logs are useful for debugging, but expensive on
             # normal runs because every non-JSON line has to be parsed and routed
@@ -422,6 +455,7 @@ class ACPClient:
         )
 
         stop_reason = response.get("stopReason") if response else None
+        self._last_stop_reason = str(stop_reason or "")
         if response:
             usage = response.get("usage")
             if isinstance(usage, dict):
@@ -956,7 +990,7 @@ class ACPClient:
             if request_id is not None and request_id in self._pending_requests:
                 future = self._pending_requests.pop(request_id)
                 if "error" in data:
-                    future.set_exception(Exception(data["error"].get("message", "Unknown error")))
+                    future.set_exception(Exception(_format_jsonrpc_error(data["error"])))
                 else:
                     future.set_result(data.get("result", {}))
             return

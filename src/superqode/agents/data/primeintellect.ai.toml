@@ -1,0 +1,71 @@
+identity = "primeintellect.ai"
+name = "Prime Agent"
+short_name = "prime-agent"
+url = "https://github.com/PrimeIntellect-ai/prime-agent"
+protocol = "acp"
+author_name = "Prime Intellect"
+author_url = "https://www.primeintellect.ai"
+type = "coding"
+description = "Self-improving RLM agent for coding and long-running autonomous tasks. A persistent IPython kernel is the single model-facing tool."
+tags = ["open-source", "coding", "acp", "rlm"]
+run_command."*" = "prime-agent --mode acp"
+
+help = '''
+# Prime Agent
+
+Self-improving RLM agent from Prime Intellect. The model works inside a
+persistent IPython kernel as its only primary tool, spawns recursive
+sub-agents, and can refine its own harness state mid-session.
+
+## Installation
+
+```bash
+curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh
+```
+
+## Authentication
+
+Prime Agent manages its own provider credentials. Log in before connecting:
+
+```bash
+prime-agent
+/login
+```
+
+Without a provider, prompts fail with "No API key found for the selected
+model".
+
+GitHub Copilot logins only reach models enabled on the account. If a model
+reports "not supported", enable it in VS Code under Copilot Chat, model
+selector, Enable.
+
+## Local models
+
+Prime Agent reads extra providers from `~/.prime/agent/models.json`, so
+local Ollama, LM Studio, or vLLM endpoints work without an API key:
+
+```json
+{
+  "providers": {
+    "ollama": {
+      "baseUrl": "http://localhost:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "ollama",
+      "compat": { "supportsDeveloperRole": false },
+      "models": [{ "id": "qwen3.5:9b" }]
+    }
+  }
+}
+```
+
+## Notes
+
+- ACP mode hosts one session per process, so parallel work needs one
+  process per session.
+- The IPython kernel runs with the permissions of the launching user.
+  There is no sandbox and no permission prompt.
+'''
+
+[actions."*".install]
+command = "curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh"
+description = "Install Prime Agent"

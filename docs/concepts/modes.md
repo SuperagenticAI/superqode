@@ -238,7 +238,7 @@ that matches the account, runtime, and harness ownership required for the task.
 | DeepSeek | DeepSeek BYOK, local DeepSeek and DS4 model paths | `:connect byok deepseek <model>`, `:connect local ds4 <model>` |
 | Mistral AI | Mistral Vibe ACP, Mistral BYOK, local Mistral models | `:connect acp mistral-vibe`, `:connect byok mistral <model>` |
 | MiniMax | MiniMax BYOK, local MiniMax model paths | `:connect byok minimax <model>`, `:connect local <provider> <model>` |
-| Meta | Muse Code sign-in, Meta first-party BYOK, local Meta model paths | `:connect muse`, `:connect byok meta muse-spark-1.1`, `:connect local <provider> <model>` |
+| Meta | [Muse Code](../providers/muse-code.md) sign-in, Meta first-party BYOK, local Meta model paths | `:connect muse`, `:connect byok meta muse-spark-1.1`, `:connect local <provider> <model>` |
 | Cursor | Cursor subscription through Cursor CLI ACP | `:connect cursor`, `:connect acp cursor` |
 | Amp | Amp subscription through its ACP adapter | `:connect amp`, `:connect acp amp` |
 | Cline | Cline CLI ACP | `:connect acp cline` |
@@ -304,9 +304,10 @@ definitions.
 | Mistral Vibe | `mistral-vibe` | OpenClaw | `openclaw` |
 | OpenCode | `opencode` | OpenHands | `openhands` |
 | Pi | `pi` | Poolside | `poolside` |
-| Qoder CLI | `qoder` | Qwen Code | `qwen` |
-| siGit Code | `sigit` | Stakpak | `stakpak` |
-| stdio Bus | `stdio-bus` | VT Code | `vtcode` |
+| Prime Agent | `prime-agent` | Qoder CLI | `qoder` |
+| Qwen Code | `qwen` | siGit Code | `sigit` |
+| Stakpak | `stakpak` | stdio Bus | `stdio-bus` |
+| VT Code | `vtcode` | | |
 
 Inspect installation and authentication requirements:
 

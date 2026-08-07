@@ -135,6 +135,11 @@ with `META_BASE_URL`). The model list follows models.dev, so new Meta releases
 appear automatically. In the TUI, `:connect muse-spark-1.1` resolves the
 provider from the catalog.
 
+This route runs SuperQode's harness against Meta's API and uses
+`META_MODEL_API_KEY`. To run Meta's own coding agent on a Muse account instead,
+see [Meta Muse Code](muse-code.md), which uses a separate credential and owns
+its own loop.
+
 **Documentation**: [dev.meta.ai/docs](https://dev.meta.ai/docs)
 
 #### NVIDIA API Catalog

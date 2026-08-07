@@ -706,6 +706,289 @@ class DialogsMixin:
         )
         log.write(t)
 
+    def _show_prime_status(self, log) -> None:
+        """Show Prime Agent readiness. Reads provider names, never secrets."""
+        from superqode.providers import prime_agent as prime
+
+        binary = prime.binary_path()
+        t = Text()
+        t.append("\n  Prime Agent status\n\n", style=f"bold {THEME['text']}")
+        t.append("    Binary     ", style=THEME["muted"])
+        t.append(
+            f"{binary or 'not found'}\n",
+            style=THEME["success" if binary else "warning"],
+        )
+        if binary:
+            t.append("    Version    ", style=THEME["muted"])
+            t.append(f"{prime.version() or 'unknown'}\n", style=THEME["text"])
+
+        logins = prime.auth_providers()
+        t.append("    Logins     ", style=THEME["muted"])
+        t.append(
+            f"{', '.join(logins)}\n" if logins else "none: run `prime-agent`, then `/login`\n",
+            style=THEME["success" if logins else "warning"],
+        )
+
+        custom = prime.custom_providers()
+        t.append("    Local      ", style=THEME["muted"])
+        t.append(
+            f"{', '.join(custom)} (models.json)\n" if custom else "none configured\n",
+            style=THEME["success" if custom else "dim"],
+        )
+
+        opts = self._prime_opts()
+        t.append("    Model      ", style=THEME["muted"])
+        t.append(
+            f"{opts.model}\n" if opts.model else "Prime Agent default\n",
+            style=THEME["text"],
+        )
+        t.append("    Depth      ", style=THEME["muted"])
+        t.append(
+            f"{opts.max_depth} (RLM_MAX_DEPTH)\n"
+            if opts.max_depth is not None
+            else "Prime default (1)\n",
+            style=THEME["text"] if opts.max_depth is not None else THEME["dim"],
+        )
+        t.append("    Goal       ", style=THEME["muted"])
+        t.append(
+            f"{opts.goal[:52]}\n" if opts.goal else "none\n",
+            style=THEME["text"] if opts.goal else THEME["dim"],
+        )
+        t.append("    Autonomous ", style=THEME["muted"])
+        if opts.autonomous:
+            gates = f"{len(opts.gates)} gate(s)" if opts.gates else "no gates"
+            t.append(f"on, {gates}\n", style=THEME["warning"])
+            for gate in opts.gates:
+                t.append(f"      {gate}\n", style=THEME["dim"])
+        else:
+            t.append("off\n", style=THEME["dim"])
+        t.append("    Sandbox    ", style=THEME["muted"])
+        t.append("none: IPython runs with your permissions\n", style=THEME["warning"])
+
+        if not binary:
+            t.append("\n  Install:\n", style=THEME["muted"])
+            t.append(f"    {prime.INSTALL_HINT}\n", style=THEME["cyan"])
+        t.append("\n  Commands:\n", style=THEME["muted"])
+        t.append("    :prime models [search]     ", style=THEME["cyan"])
+        t.append("list the model catalog\n", style=THEME["muted"])
+        t.append("    :prime model               ", style=THEME["cyan"])
+        t.append("pick a model, then connect\n", style=THEME["muted"])
+        t.append("    :prime connect             ", style=THEME["cyan"])
+        t.append("connect over ACP\n", style=THEME["muted"])
+        log.write_feedback(t)
+
+    def _show_prime_agents(self, log) -> None:
+        """List Prime's live agent sessions, including the RLM subagent tree."""
+        from superqode.providers import prime_agent as prime
+
+        if not self._require_prime(log):
+            return
+
+        sessions = prime.list_agents()
+        t = Text()
+        t.append("\n  Prime Agent sessions\n\n", style=f"bold {THEME['text']}")
+        if not sessions:
+            t.append("  No active agents.\n\n", style=THEME["muted"])
+            t.append(
+                "  Sessions started from SuperQode over ACP run in their own\n"
+                "  process and are not held by the background service.\n",
+                style=THEME["dim"],
+            )
+            log.write_feedback(t)
+            return
+
+        for info in sessions:
+            indent = "    " + ("  " * info.rlm_depth)
+            marker = "└─ " if info.is_subagent else ""
+            t.append(f"{indent}{marker}", style=THEME["muted"])
+            t.append(f"{info.name or info.session_id[:12]:28s}", style=THEME["cyan"])
+            t.append(f"{info.lifecycle or 'unknown':12s}", style=THEME["text"])
+            state = "active" if info.active else info.activity or "idle"
+            t.append(f"{state:10s}", style=THEME["success" if info.active else "dim"])
+            if info.is_subagent:
+                t.append(f"depth {info.rlm_depth}", style=THEME["dim"])
+            t.append("\n")
+
+        roots = sum(1 for info in sessions if not info.is_subagent)
+        children = len(sessions) - roots
+        t.append(f"\n  {roots} root, {children} RLM subagent(s)\n", style=THEME["muted"])
+        log.write_feedback(t)
+
+    def _show_prime_doctor(self, log) -> None:
+        """Report Prime's background service health."""
+        from superqode.providers import prime_agent as prime
+
+        if not self._require_prime(log):
+            return
+
+        records = prime.doctor()
+        t = Text()
+        t.append("\n  Prime Agent background services\n\n", style=f"bold {THEME['text']}")
+        if not records:
+            t.append("  No background services running.\n", style=THEME["muted"])
+            log.write_feedback(t)
+            return
+
+        for record in records:
+            status = str(record.get("status") or "unknown")
+            t.append("    pid ", style=THEME["muted"])
+            t.append(f"{record.get('pid', '?')!s:8s}", style=THEME["cyan"])
+            t.append(f"{str(record.get('version') or '?'):10s}", style=THEME["text"])
+            t.append(f"{status:12s}", style=THEME["success" if status == "current" else "warning"])
+            t.append(f"{record.get('sessionCount', 0)} session(s)\n", style=THEME["dim"])
+            socket_path = record.get("socketPath")
+            if socket_path:
+                t.append(f"      {socket_path}\n", style=THEME["dim"])
+
+        t.append("\n  Clean up stale services with ", style=THEME["muted"])
+        t.append("prime-agent doctor --fix\n", style=THEME["cyan"])
+        log.write_feedback(t)
+
+    def _show_prime_schedules(self, log) -> None:
+        """List Prime's scheduled and recurring prompts."""
+        from superqode.providers import prime_agent as prime
+
+        if not self._require_prime(log):
+            return
+
+        jobs = prime.list_schedules()
+        t = Text()
+        t.append("\n  Prime Agent scheduled prompts\n\n", style=f"bold {THEME['text']}")
+        if not jobs:
+            t.append("  Nothing scheduled.\n\n", style=THEME["muted"])
+            t.append("  Add one with ", style=THEME["muted"])
+            t.append("prime-agent schedule add\n", style=THEME["cyan"])
+            log.write_feedback(t)
+            return
+
+        for job in jobs:
+            t.append("    ", style=THEME["muted"])
+            t.append(f"{str(job.get('id') or '?')[:14]:16s}", style=THEME["cyan"])
+            t.append(
+                f"{str(job.get('schedule') or job.get('cron') or ''):18s}", style=THEME["text"]
+            )
+            t.append(f"{str(job.get('status') or ''):10s}", style=THEME["dim"])
+            prompt = str(job.get("prompt") or "").replace("\n", " ")
+            t.append(f"{prompt[:40]}\n", style=THEME["dim"])
+        log.write_feedback(t)
+
+    def _show_prime_packages(self, log) -> None:
+        """List Prime's installed capability packages."""
+        from superqode.providers import prime_agent as prime
+
+        if not self._require_prime(log):
+            return
+
+        packages = prime.list_packages()
+        t = Text()
+        t.append("\n  Prime Agent capability packages\n\n", style=f"bold {THEME['text']}")
+        if not packages:
+            t.append("  No packages installed.\n\n", style=THEME["muted"])
+            t.append(
+                "  Packages provide extensions, skills, prompts and themes:\n", style=THEME["muted"]
+            )
+            t.append("    prime-agent package install <source>\n", style=THEME["cyan"])
+            log.write_feedback(t)
+            return
+
+        for line in packages:
+            t.append(f"    {line}\n", style=THEME["text"])
+        log.write_feedback(t)
+
+    def _require_prime(self, log) -> bool:
+        """Report a missing Prime install, shared by the :prime listings."""
+        from superqode.providers import prime_agent as prime
+
+        if prime.is_installed():
+            return True
+        log.add_error("Prime Agent is not installed.")
+        log.add_info(f"  Install: {prime.INSTALL_HINT}")
+        return False
+
+    def _show_prime_login(self, log) -> None:
+        """Point at Prime's own login flow; it owns its credentials."""
+        t = Text()
+        t.append("\n  Prime Agent login\n\n", style=f"bold {THEME['text']}")
+        t.append(
+            "  Prime Agent manages its own credentials. Run in a terminal:\n", style=THEME["muted"]
+        )
+        t.append("    prime-agent\n", style=THEME["cyan"])
+        t.append("    /login\n", style=THEME["cyan"])
+        t.append("\n  Subscriptions: ", style=THEME["muted"])
+        t.append("ChatGPT Plus/Pro, Claude Pro/Max, GitHub Copilot\n", style=THEME["text"])
+        t.append(
+            "\n  GitHub Copilot only serves models enabled on the account. If a model\n"
+            '  reports "not supported", enable it in VS Code under Copilot Chat,\n'
+            "  model selector, Enable.\n",
+            style=THEME["dim"],
+        )
+        t.append("\n  Free and offline: ", style=THEME["muted"])
+        t.append("register local models in ~/.prime/agent/models.json\n", style=THEME["text"])
+        t.append(
+            '    {"providers": {"ollama": {"baseUrl": "http://localhost:11434/v1",\n'
+            '      "api": "openai-completions", "apiKey": "ollama",\n'
+            '      "models": [{"id": "qwen3.5:9b"}]}}}\n',
+            style=THEME["cyan"],
+        )
+        t.append("\n  Then: ", style=THEME["muted"])
+        t.append(":prime models", style=THEME["cyan"])
+        t.append(" to confirm, ", style=THEME["muted"])
+        t.append(":prime model", style=THEME["cyan"])
+        t.append(" to choose.\n", style=THEME["muted"])
+        log.write_feedback(t)
+
+    def _show_prime_help(self, log) -> None:
+        t = Text()
+        t.append("\n  Prime Agent in SuperQode\n\n", style=f"bold {THEME['text']}")
+        t.append("  :prime connect [model]     ", style=THEME["cyan"])
+        t.append("connect Prime Agent over ACP\n", style=THEME["muted"])
+        t.append("  :prime models [search]     ", style=THEME["cyan"])
+        t.append("list the model catalog\n", style=THEME["muted"])
+        t.append("  :prime model [name]        ", style=THEME["cyan"])
+        t.append("pick a model (picker) or set provider/model\n", style=THEME["muted"])
+        t.append("  :prime depth [n]           ", style=THEME["cyan"])
+        t.append("recursion depth via RLM_MAX_DEPTH\n", style=THEME["muted"])
+        t.append("  :prime goal [text]         ", style=THEME["cyan"])
+        t.append("seed a persistent goal for the session\n", style=THEME["muted"])
+        t.append("  :prime autonomous [gate]   ", style=THEME["cyan"])
+        t.append("autonomous mode and completion gates\n", style=THEME["muted"])
+        t.append("  :prime agents              ", style=THEME["cyan"])
+        t.append("live sessions and the RLM subagent tree\n", style=THEME["muted"])
+        t.append("  :prime schedule            ", style=THEME["cyan"])
+        t.append("scheduled and recurring prompts\n", style=THEME["muted"])
+        t.append("  :prime packages            ", style=THEME["cyan"])
+        t.append("installed capability packages\n", style=THEME["muted"])
+        t.append("  :prime status              ", style=THEME["cyan"])
+        t.append("binary, version, logins, local providers\n", style=THEME["muted"])
+        t.append("  :prime doctor              ", style=THEME["cyan"])
+        t.append("background service health\n", style=THEME["muted"])
+        t.append("  :prime update              ", style=THEME["cyan"])
+        t.append("run Prime Agent's own updater\n", style=THEME["muted"])
+        t.append("  :prime login               ", style=THEME["cyan"])
+        t.append("how to authenticate, including free local models\n", style=THEME["muted"])
+        t.append("  :prime help                ", style=THEME["cyan"])
+        t.append("this help\n", style=THEME["muted"])
+        t.append(
+            "\n  Prime is an RLM agent: a persistent IPython kernel is its only\n"
+            "  model-facing tool. It fixes the model at launch, so choosing one\n"
+            "  reconnects rather than switching in place.\n",
+            style=THEME["dim"],
+        )
+        t.append(
+            "  Goal, autonomous and depth are start-time settings, so changing\n"
+            "  one applies on the next :prime connect rather than in place.\n"
+            "  /refine, /compact and /heartbeat stay in-session only: Prime\n"
+            "  advertises no ACP commands, so sending one as a prompt reaches\n"
+            "  the model as text instead of running it.\n",
+            style=THEME["dim"],
+        )
+        t.append(
+            "  The kernel runs with your permissions. There is no sandbox and no\n"
+            "  approval prompt.\n",
+            style=THEME["warning"],
+        )
+        log.write_feedback(t)
+
     def _show_grok_status(self, log) -> None:
         """Show local Grok CLI readiness without reading or displaying credentials."""
         grok_path = shutil.which("grok")

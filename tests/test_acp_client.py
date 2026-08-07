@@ -21,6 +21,7 @@ from superqode.acp.client import (
     CLIENT_NAME,
     CLIENT_VERSION,
     default_acp_traffic_log_dir,
+    _format_jsonrpc_error,
 )
 from superqode.acp.types import (
     PermissionOption,
@@ -1005,6 +1006,10 @@ class TestACPClient:
         try:
             assert await client.start() is True
             assert await client.send_prompt("run terminal smoke") == "end_turn"
+            # The stop reason must reach stats, not only the return value.
+            assert client.get_stats().stop_reason == "end_turn"
+            client.reset_stats()
+            assert client.get_stats().stop_reason == ""
         finally:
             await client.stop()
 
@@ -1017,6 +1022,45 @@ class TestACPClient:
         assert service.calls[0][1]["command"] == "echo"
         assert service.calls[1][1]["terminalId"] == "host-terminal-1"
         assert service.calls[2][1]["terminalId"] == "host-terminal-1"
+
+
+class TestFormatJsonRpcError:
+    """Tests for JSON-RPC error rendering."""
+
+    def test_message_only(self):
+        """An error without data renders its message."""
+        assert _format_jsonrpc_error({"code": -32603, "message": "Internal error"}) == (
+            "Internal error"
+        )
+
+    def test_details_are_appended(self):
+        """``data.details`` carries the actionable part and must survive."""
+        error = {
+            "code": -32603,
+            "message": "Internal error",
+            "data": {"details": "No API key found for the selected model."},
+        }
+
+        assert _format_jsonrpc_error(error) == (
+            "Internal error: No API key found for the selected model."
+        )
+
+    def test_string_data(self):
+        """Some agents put a bare string in ``data``."""
+        error = {"message": "Internal error", "data": "kernel not ready"}
+
+        assert _format_jsonrpc_error(error) == "Internal error: kernel not ready"
+
+    def test_duplicate_detail_is_not_repeated(self):
+        """A detail identical to the message renders once."""
+        error = {"message": "Boom", "data": {"details": "Boom"}}
+
+        assert _format_jsonrpc_error(error) == "Boom"
+
+    def test_missing_message(self):
+        """An empty error object still renders something usable."""
+        assert _format_jsonrpc_error({}) == "Unknown error"
+        assert _format_jsonrpc_error(None) == "Unknown error"
 
 
 class TestProtocolConstants:

@@ -177,7 +177,7 @@ Access via Command Palette (`Ctrl+K`) or Command Mode (`:`) in TUI:
 - `:codex` - Connect to and manage the Codex SDK runtime
 - `:claude` - Connect to and manage the Claude Agent SDK runtime
 - `:antigravity` - Show Antigravity CLI handoff, status, and migration help
-- `:muse` (alias `:muse-code`) - Show Muse Code readiness; `:muse login` runs Meta's own browser sign-in
+- `:muse` (alias `:muse-code`) - Show Muse Code readiness; `:muse login` runs Meta's own browser sign-in (see [Meta Muse Code](../providers/muse-code.md))
 - `:grok` - Grok Build (xAI's agent) on your subscription; `:grok api` runs SuperQode's harness on the same plan; also status/login/models
 - `:plan <task>` - Ask for a plan only, without native tool execution
 - `:plan approve` - Execute the last planned request with tools enabled
@@ -538,6 +538,32 @@ Grok subscription (official Grok CLI login):
 the same subscription instead, use `:grok api [model]`, which imports the local
 `grok login` session and routes through the CLI chat proxy (see the
 [BYOK provider docs](../providers/byok.md#grok-subscription-official-cli)).
+
+Prime Agent (Prime Intellect's RLM agent, ACP). The command root is `:prime`,
+with `:prime-agent` accepted as an alias:
+
+```text
+:prime                        # command surface
+:prime connect [model]        # connect over ACP
+:prime models [search]        # list the catalog, grouped by provider
+:prime model                  # pick a model, then connect
+:prime model ollama/qwen3.5:9b   # pin a provider and model
+:prime depth 3                # recursion depth (RLM_MAX_DEPTH) for the next launch
+:prime goal "ship the release"   # seed a persistent goal
+:prime autonomous "pytest -q"    # autonomous mode with a completion gate
+:prime agents                 # live sessions and the RLM subagent tree
+:prime schedule               # scheduled and recurring prompts
+:prime packages               # installed capability packages
+:prime status                 # binary, version, logins, local providers
+:prime doctor                 # background service health
+:prime update                 # run Prime Agent's own updater
+:prime login
+```
+
+Prime Agent fixes its model when the process starts, so `:prime model` pins the
+selection and reconnects instead of switching in place. Local models registered
+in `~/.prime/agent/models.json` need no API key. See the
+[Prime Agent provider docs](../providers/prime-agent.md).
 
 ## Optional Vim Navigation
 

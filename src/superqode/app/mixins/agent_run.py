@@ -1809,6 +1809,9 @@ class AgentRunMixin:
             message = f"{file_context}\n\n{message}"
             self._current_file_context = ""
 
+        # Environment-only settings; empty for agents configured by flags.
+        acp_extra_env: dict[str, str] = {}
+
         # Choose command and model display based on agent type
         # All 15 official ACP agents are supported
         if agent_type == "gemini":
@@ -1931,6 +1934,17 @@ class AgentRunMixin:
             command = "acp-amp"
             model_display = f"amp/{model}" if model else "amp/auto"
             # Amp handles its own authentication via `amp login`
+        elif agent_type in ("prime-agent", "prime"):
+            # Prime advertises no models over ACP, so session/set_model cannot
+            # move it. Model, goal, autonomous policy and depth are start-time
+            # only and travel as launch arguments and environment.
+            from superqode.providers import prime_agent as prime
+
+            opts = self._prime_opts()
+            selector = (model or "").strip() or opts.model
+            command = prime.acp_command(selector, options=opts)
+            acp_extra_env = opts.env()
+            model_display = f"prime/{selector}" if selector else "prime/default"
         else:
             # The chain above hardcodes commands for the agents that existed
             # when it was written, so an agent SuperQode had just connected to
@@ -2355,7 +2369,14 @@ class AgentRunMixin:
             model_id = self._normalize_acp_model_id(agent_type, model)
 
             project_root = Path.cwd()
-            client_key = (str(project_root), command, model_id or "")
+            # Environment is part of the identity: a startup-only setting would
+            # otherwise keep serving from a process launched with the old value.
+            client_key = (
+                str(project_root),
+                command,
+                model_id or "",
+                tuple(sorted((acp_extra_env or {}).items())),
+            )
             ui_terminals = getattr(self, "_acp_ui_terminals", None)
             if ui_terminals is None:
                 ui_terminals = {}
@@ -2409,6 +2430,7 @@ class AgentRunMixin:
                     project_root=project_root,
                     command=command,
                     model=model_id,
+                    extra_env=acp_extra_env or None,
                     startup_timeout=float(os.getenv("SUPERQODE_ACP_STARTUP_TIMEOUT", "15")),
                     request_timeout=float(os.getenv("SUPERQODE_ACP_REQUEST_TIMEOUT", "12")),
                     prompt_timeout=float(os.getenv("SUPERQODE_ACP_PROMPT_TIMEOUT", "180")),
