@@ -3211,6 +3211,8 @@ class CommandImplMixin:
                 self._prime_connect(rest, log)
             else:
                 self._show_prime_model_picker(log)
+        elif sub in ("local", "sync"):
+            self._prime_local_cmd(log)
         elif sub == "depth":
             self._prime_depth_cmd(rest, log)
         elif sub == "goal":
@@ -3230,7 +3232,7 @@ class CommandImplMixin:
         elif sub == "update":
             self._prime_update(log)
         elif sub in ("login", "auth"):
-            self._show_prime_login(log)
+            self._prime_login_cmd(log)
         elif sub in ("help", "?"):
             self._show_prime_help(log)
         else:
@@ -3310,6 +3312,84 @@ class CommandImplMixin:
         pinned = opts.describe()
         if pinned:
             log.add_info(f"Prime Agent launch: {', '.join(pinned)}")
+
+    def _prime_login_cmd(self, log) -> None:
+        """Hand the terminal to Prime Agent so its own ``/login`` can run.
+
+        Prime exposes no login subcommand and no authentication call over ACP
+        or RPC, so SuperQode cannot drive the OAuth itself. Suspending for the
+        vendor's own terminal is as close as its surface allows, and it keeps
+        the user inside SuperQode rather than sending them elsewhere.
+        """
+        from superqode.providers import prime_agent as prime
+
+        if not prime.is_installed():
+            log.add_error("Prime Agent is not installed.")
+            log.add_info(f"  Install: {prime.INSTALL_HINT}")
+            return
+
+        started = self._begin_subscription_login(
+            "prime-agent",
+            log,
+            on_success=lambda: self._show_prime_status(log),
+            reason=(
+                "Prime Agent needs a provider before it can call a model. "
+                "Prime has no login subcommand, so SuperQode hands over the "
+                "terminal and its full session opens. Run /login, then QUIT "
+                "Prime with /quit or Ctrl+C: SuperQode resumes only when Prime "
+                "exits."
+            ),
+        )
+        if not started:
+            log.add_info("Prime Agent already has a credential.")
+            self._show_prime_status(log)
+
+    def _prime_local_cmd(self, log) -> None:
+        """Register the local model servers SuperQode can see with Prime Agent."""
+        from superqode.providers import prime_agent as prime
+
+        if not prime.is_installed():
+            log.add_error("Prime Agent is not installed.")
+            log.add_info(f"  Install: {prime.INSTALL_HINT}")
+            return
+        self.run_worker(self._prime_local_async(log), exclusive=False)
+
+    async def _prime_local_async(self, log) -> None:
+        """Scan for local servers, then merge them into Prime's models.json."""
+        from superqode.providers import prime_agent as prime
+        from superqode.providers.local.discovery import quick_scan
+
+        log.add_info("Scanning for local model servers...")
+        try:
+            found = await quick_scan()
+        except Exception as exc:  # noqa: BLE001 - discovery is best-effort
+            log.add_error(f"Local discovery failed: {exc}")
+            return
+
+        discovered: dict[str, tuple[str, list[str]]] = {}
+        for provider in found.values():
+            name = prime.local_provider_name(getattr(provider, "provider_type", None))
+            models = [prime.local_model_id(m) for m in (getattr(provider, "models", None) or [])]
+            if not name or not models:
+                continue
+            host = str(getattr(provider, "host", "") or "").rstrip("/")
+            discovered[name] = (f"{host}/v1", models)
+
+        if not discovered:
+            log.add_error("No local model servers found.")
+            log.add_info("  Start one (for example `ollama serve`) and run :prime local again.")
+            return
+
+        providers, models, path = await asyncio.to_thread(prime.merge_local_models, discovered)
+        if not models:
+            log.add_error("Found local servers but no chat models to register.")
+            return
+        log.add_success(f"Registered {models} local model(s) from {providers} provider(s)")
+        for name, (base_url, ids) in sorted(discovered.items()):
+            usable = [m for m in ids if prime.is_chat_model(m)]
+            log.add_info(f"  {name}: {len(usable)} model(s) at {base_url}")
+        log.add_info(f"  Written to {path}")
+        log.add_info("  Run :prime models to pick one.")
 
     def _prime_depth_cmd(self, rest: str, log) -> None:
         """Set Prime's recursion depth for the next launch."""

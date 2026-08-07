@@ -46,8 +46,11 @@ class PrimeHarness(CommandImplMixin):
     def _show_prime_models(self, log, search=""):  # type: ignore[override]
         self.calls.append(("models", search))
 
-    def _show_prime_model_picker(self, log):  # type: ignore[override]
-        self.calls.append(("picker", ""))
+    def _show_prime_model_picker(self, log, search=""):  # type: ignore[override]
+        self.calls.append(("picker", search))
+
+    def _prime_local_cmd(self, log):  # type: ignore[override]
+        self.calls.append(("local", ""))
 
     def _show_prime_status(self, log):  # type: ignore[override]
         self.calls.append(("status", ""))
@@ -68,6 +71,9 @@ class PrimeHarness(CommandImplMixin):
         self.calls.append(("update", ""))
 
     def _show_prime_login(self, log):  # type: ignore[override]
+        self.calls.append(("login-help", ""))
+
+    def _prime_login_cmd(self, log):  # type: ignore[override]
         self.calls.append(("login", ""))
 
     def _show_prime_help(self, log):  # type: ignore[override]
@@ -101,6 +107,8 @@ class TestPrimeDispatch:
             ("models qwen", ("models", "qwen")),
             ("model", ("picker", "")),
             ("model gpt-4.1", ("connect", "gpt-4.1")),
+            ("local", ("local", "")),
+            ("sync", ("local", "")),
             ("depth", ("depth", "")),
             ("depth 3", ("depth", "3")),
             ("goal", ("goal", "")),
@@ -291,7 +299,7 @@ class TestPrimeCommandCompletions:
             ":prime",
             ":prime connect",
             ":prime models",
-            ":prime model",
+            ":prime local",
             ":prime depth",
             ":prime goal",
             ":prime autonomous",

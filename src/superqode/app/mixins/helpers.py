@@ -143,9 +143,16 @@ class HelpersMixin(
         try:
             from superqode.app.widgets import ColorfulStatusBar
 
-            pure = getattr(self, "_pure_mode", None)
             harness = ""
-            if pure is not None:
+            # An ACP agent owns its own loop, tools and prompt. Falling through
+            # to the native profile below labelled every vendor session "Core"
+            # in the status bar while the connection card correctly said the
+            # vendor owned it.
+            if getattr(self, "current_mode", "") == "agent":
+                harness = str(getattr(self, "current_agent", "") or "")
+
+            pure = getattr(self, "_pure_mode", None)
+            if not harness and pure is not None:
                 runtime_name = str(getattr(pure, "runtime_name", "") or "")
                 connected = bool(getattr(getattr(pure, "session", None), "connected", False))
                 if connected and runtime_name in getattr(

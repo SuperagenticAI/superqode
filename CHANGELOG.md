@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.78] - 2026-08-07
+
+### Fixed
+
+- The vendor model picker keeps the highlighted row on screen and accepts a
+  click anywhere on the row. Both were fine for a vendor with a handful of
+  models and broke on a longer catalog.
+- ACP sessions report the connected agent as the active harness in the status
+  bar instead of the native profile.
+
+### Added
+
+- `:prime local` registers the local model servers SuperQode can see with Prime
+  Agent, leaving providers it did not discover untouched.
+- `:prime login` hands the terminal to Prime Agent for its own sign-in.
+- `:prime models` opens the model picker, and `:prime model <provider/id>` sets
+  one directly.
+
 ## [0.2.77] - 2026-08-07
 
 Fixes the Prime Agent connection shipped in 0.2.76. Connecting without first

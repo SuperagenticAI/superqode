@@ -300,6 +300,89 @@ def custom_providers() -> list[str]:
 _UNSET_MODELS = {"auto", "default", "none", "-"}
 
 
+# Embedding and reranking models cannot drive an agent loop, so registering
+# them would put dead entries in the picker.
+_NON_CHAT_HINTS = ("embed", "rerank", "bge-", "nomic-")
+
+# Prime's OpenAI-compatible provider names, keyed by SuperQode's provider type.
+_LOCAL_PROVIDER_NAMES = {
+    "ollama": "ollama",
+    "lmstudio": "lmstudio",
+    "llamacpp": "llamacpp",
+    "vllm": "vllm",
+}
+
+
+def is_chat_model(model_id: str) -> bool:
+    """False for embedding and reranking models, which cannot drive an agent."""
+    lowered = str(model_id).lower()
+    return not any(hint in lowered for hint in _NON_CHAT_HINTS)
+
+
+def local_model_id(model: Any) -> str:
+    """Model id from a discovery result, which yields objects rather than ids."""
+    ident = getattr(model, "id", None)
+    return str(ident if ident else model).strip()
+
+
+def local_provider_name(provider_type: Any) -> str:
+    """Map a SuperQode local provider type onto Prime's provider name."""
+    raw = getattr(provider_type, "value", provider_type)
+    key = str(raw or "").strip().lower().replace("-", "").replace("_", "").replace(".", "")
+    return _LOCAL_PROVIDER_NAMES.get(key, "")
+
+
+def local_models_config(discovered: dict[str, Any]) -> dict[str, Any]:
+    """Build Prime's ``models.json`` provider block from discovered servers.
+
+    ``discovered`` maps a provider name to ``(base_url, [model ids])``. Prime
+    reads these as OpenAI-compatible endpoints, so the same shape covers Ollama,
+    LM Studio, llama.cpp and vLLM.
+    """
+    providers: dict[str, Any] = {}
+    for name, (base_url, model_ids) in sorted(discovered.items()):
+        models = [{"id": mid} for mid in sorted(set(model_ids)) if is_chat_model(mid)]
+        if not models:
+            continue
+        providers[name] = {
+            "baseUrl": base_url.rstrip("/"),
+            "api": "openai-completions",
+            "apiKey": name,
+            # Local servers commonly reject the developer role and the
+            # reasoning_effort field that reasoning-capable models use.
+            "compat": {"supportsDeveloperRole": False, "supportsReasoningEffort": False},
+            "models": models,
+        }
+    return {"providers": providers}
+
+
+def merge_local_models(discovered: dict[str, Any]) -> tuple[int, int, Path]:
+    """Register discovered local models in Prime's ``models.json``.
+
+    Providers SuperQode did not discover are left untouched, so a hand-written
+    entry is never dropped. Returns the provider and model counts written and
+    the file path.
+    """
+    path = agent_home() / "models.json"
+    try:
+        existing = json.loads(path.read_text())
+    except (OSError, ValueError):
+        existing = {}
+    if not isinstance(existing, dict):
+        existing = {}
+
+    providers = existing.get("providers")
+    providers = dict(providers) if isinstance(providers, dict) else {}
+    fresh = local_models_config(discovered)["providers"]
+    providers.update(fresh)
+    existing["providers"] = providers
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(existing, indent=2) + "\n")
+    model_count = sum(len(block.get("models", [])) for block in fresh.values())
+    return len(fresh), model_count, path
+
+
 def split_selector(selector: str) -> tuple[str, str]:
     """Split ``provider/model``. A bare id leaves the provider to Prime."""
     raw = (selector or "").strip()

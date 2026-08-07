@@ -952,6 +952,13 @@ class ModelCatalogMixin:
             status.update_byok_status()
             status.active_runtime = "acp"
             status.active_model = model or ""
+            # The agent owns its loop, tools and prompt, so it is the active
+            # harness. Leaving this field alone kept the startup value, which
+            # showed "h core" for every ACP session while the connection card
+            # correctly named the vendor.
+            agent = str(getattr(self, "current_agent", "") or "").strip()
+            if agent:
+                status.active_harness = agent
         except Exception:  # noqa: BLE001
             pass
 
@@ -1025,61 +1032,22 @@ class ModelCatalogMixin:
         self._show_provider_models("grok-cli", log, use_picker=False)
 
     def _show_prime_models(self, log, search: str = "") -> None:
-        """Discover Prime Agent models off the Textual event loop."""
-        self.run_worker(self._show_prime_models_async(log, search), exclusive=False)
+        """``:prime models`` opens the selectable picker, like the other agents."""
+        self._show_prime_model_picker(log, search)
 
-    async def _show_prime_models_async(self, log, search: str = "") -> None:
-        """List the models the installed Prime Agent reports for its logins."""
-        from superqode.providers import prime_agent as prime
-
-        if not prime.is_installed():
-            t = Text()
-            t.append("\n  Prime Agent is not installed\n\n", style=f"bold {THEME['warning']}")
-            t.append("  Install: ", style=THEME["muted"])
-            t.append(f"{prime.INSTALL_HINT}\n", style=THEME["cyan"])
-            log.write_feedback(t)
-            return
-
-        models = await asyncio.to_thread(prime.list_models, search)
-
-        t = Text()
-        heading = f"\n  Prime Agent models{f' matching {search!r}' if search else ''}\n\n"
-        t.append(heading, style=f"bold {THEME['text']}")
-        if not models:
-            t.append("  No models available.\n\n", style=THEME["warning"])
-            t.append("  Prime owns its own credentials. Log in first:\n", style=THEME["muted"])
-            t.append("    prime-agent\n    /login\n", style=THEME["cyan"])
-            log.write_feedback(t)
-            return
-
-        current = self._prime_opts().model
-        last_provider = ""
-        for info in models:
-            if info.provider != last_provider:
-                t.append(f"\n  {info.provider}\n", style=THEME["muted"])
-                last_provider = info.provider
-            selected = info.id == current
-            t.append("  ▸ " if selected else "    ", style=THEME["success"])
-            t.append(f"{info.model:28s}", style=THEME["cyan"])
-            t.append(f"{info.context:>6s}  ", style=THEME["muted"])
-            traits = ", ".join(
-                [n for n, on in (("thinking", info.thinking), ("images", info.images)) if on]
-            )
-            t.append(f"{traits}\n", style=THEME["dim"])
-
-        t.append("\n  Source: ", style=THEME["muted"])
-        t.append("`prime-agent model list`\n", style=THEME["text"])
-        t.append("  Select with ", style=THEME["muted"])
-        t.append(":prime model", style=THEME["cyan"])
-        t.append(" (picker) or ", style=THEME["muted"])
-        t.append(":prime model <provider/model>\n", style=THEME["cyan"])
-        log.write_feedback(t)
-
-    def _show_prime_model_picker(self, log) -> None:
+    def _show_prime_model_picker(self, log, search: str = "") -> None:
         """Interactive picker over Prime's catalog; Enter connects."""
-        self.run_worker(self._show_prime_model_picker_async(log), exclusive=False)
+        self.run_worker(self._show_prime_model_picker_async(log, search), exclusive=False)
 
-    async def _show_prime_model_picker_async(self, log) -> None:
+    def _prime_model_label(self, info) -> str:
+        """One picker row: provider, model, context, and what it supports."""
+        traits = ", ".join(
+            [name for name, on in (("thinking", info.thinking), ("images", info.images)) if on]
+        )
+        detail = f"{info.context:>6s}" + (f"  {traits}" if traits else "")
+        return f"{info.provider:16s} {info.model:30s} {detail}"
+
+    async def _show_prime_model_picker_async(self, log, search: str = "") -> None:
         """Probe the catalog off-thread, then open the vendor picker."""
         from superqode.providers import prime_agent as prime
 
@@ -1088,21 +1056,27 @@ class ModelCatalogMixin:
             log.add_info(f"  Install: {prime.INSTALL_HINT}")
             return
 
-        models = await asyncio.to_thread(prime.list_models)
+        models = await asyncio.to_thread(prime.list_models, search)
+        if not models and search:
+            log.add_info(f"No Prime Agent model matches {search!r}. Showing the full catalog.")
+            models = await asyncio.to_thread(prime.list_models, "")
         if not models:
             log.add_error("Prime Agent reported no models.")
             log.add_info("  Log in first: run `prime-agent`, then `/login`.")
+            log.add_info("  Local models need a provider in ~/.prime/agent/models.json.")
             return
 
-        entries = [(info.id, f"{info.id:44s} {info.context}") for info in models]
-        self._show_vendor_model_picker(
+        entries = [(info.id, self._prime_model_label(info)) for info in models]
+        opened = self._show_vendor_model_picker(
             log,
-            title="Select Prime Agent Model",
+            title=f"Select Prime Agent Model{f'  ({search})' if search else ''}",
             entries=entries,
             on_choose=lambda chosen: self._prime_connect(chosen, log),
             current=self._prime_opts().model,
-            retry_hint="Run :prime model to choose again.",
+            retry_hint="Run :prime models to choose again.",
         )
+        if not opened:
+            log.add_error("No Prime Agent models to choose from.")
 
     def _claude_model_cmd(self, model: str, log) -> None:
         from superqode.runtime.claude_agent_sdk import CLAUDE_MODELS

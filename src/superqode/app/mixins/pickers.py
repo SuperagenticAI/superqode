@@ -684,36 +684,51 @@ class PickerNavigationMixin:
             )
 
         highlighted = self._prompts.index
+        # Vendors with a handful of models fit on one screen; a catalog like
+        # Prime Agent's does not. Numbers are right-aligned so the rows stay a
+        # column, and the highlighted row is scrolled back into view below.
+        number_width = len(str(len(entries)))
         t = Text()
         t.append("\n  ◈ ", style=f"bold {THEME['purple']}")
-        t.append(f"{title}\n\n", style=f"bold {THEME['text']}")
+        t.append(f"{title}", style=f"bold {THEME['text']}")
+        t.append(f"   {len(entries)} models\n\n", style=THEME["muted"])
         for index, (model_id, label) in enumerate(entries):
             num = index + 1
-            if index == highlighted:
-                t.append("  ▶ ", style=f"bold {THEME['success']}")
-                t.append(
-                    f"[{num}] ", style=self._picker_link_style(f"bold {THEME['success']}", num)
-                )
-                t.append(label, style=f"bold {THEME['success']}")
-            else:
-                t.append(f"    [{num}] ", style=self._picker_link_style(THEME["dim"], num))
-                t.append(label, style=f"bold {THEME['text']}")
+            is_highlighted = index == highlighted
+            # The whole row is the click target, not just the number. A mouse
+            # user aims at the name they are reading.
+            style = f"bold {THEME['success']}" if is_highlighted else THEME["dim"]
+            link = self._picker_link_style(style, num)
+            handle = self._picker_link_style(
+                f"bold {THEME['success']}" if is_highlighted else f"bold {THEME['text']}",
+                num,
+                handle=True,
+            )
+            t.append("  ", style="")
+            self._append_picker_dot(t, num, highlighted=is_highlighted)
+            t.append(f"[{num:>{number_width}}] ", style=link)
+            t.append(label, style=handle)
             # Show the id only when it adds information beyond the label.
-            if model_id and model_id != label:
+            if model_id and model_id != label and model_id not in label:
                 t.append(f"  {model_id}", style=THEME["muted"])
             if current and model_id == current:
                 t.append("  ◀ active", style=THEME["muted"])
+            if is_highlighted:
+                self._append_picker_arrow(t, num)
             t.append("\n", style="")
         t.append("\n  💡 ", style=THEME["muted"])
         t.append("↑↓", style=THEME["cyan"])
         t.append(" navigate  ", style=THEME["dim"])
         t.append("Enter", style=THEME["cyan"])
-        t.append(" select  •  or type a number\n", style=THEME["dim"])
+        t.append(" select  •  click a row  •  or type a number\n", style=THEME["dim"])
 
         log.auto_scroll = False
         log.clear()
         log.write(t)
         log.auto_scroll = True
+        # Without this the highlight walks off the bottom of a long catalog and
+        # the user cannot see what is selected.
+        self._scroll_to_highlighted_item(log, highlighted, len(entries))
         self.set_timer(0.05, self._ensure_input_focus)
         return True
 

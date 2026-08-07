@@ -24,10 +24,15 @@ what its login buys is an upstream model on a plan you already pay for.
 `:connect prime-agent` reaches the same ACP route as `:prime connect`, and
 reports the install and login steps when Prime Agent is not ready yet.
 
-Unlike the other subscription routes, SuperQode cannot run this login for you.
-Prime Agent has no `login` subcommand; `/login` exists only inside its
-interactive terminal. Run `prime-agent`, use `/login` there, then return to
-SuperQode. SuperQode detects the stored credential and the row becomes ready.
+SuperQode cannot drive this OAuth itself. Prime Agent has no `login`
+subcommand, and neither its ACP nor its RPC mode exposes an authentication
+call; `/login` lives only in its interactive terminal.
+
+`:prime login` therefore hands the terminal over. SuperQode suspends, Prime
+Agent starts in its own interface, and after `/login` and quitting Prime the
+SuperQode session resumes and re-reads the credential store. The browser opens
+only after an explicit confirmation, and SuperQode never implements Prime
+Intellect's OAuth or copies a token.
 
 ## Install
 
@@ -92,6 +97,11 @@ The `apiKey` value is required but ignored by Ollama. Set
 `compat.supportsDeveloperRole` to `false` for servers that reject the
 `developer` role used by reasoning-capable models.
 
+Writing that file by hand is optional. `:prime local` scans for running local
+servers, registers every chat model it finds, and leaves any provider it did not
+discover untouched, so a hand-written entry is never dropped. Embedding and
+reranking models are skipped because they cannot drive an agent loop.
+
 Local providers appear in `:prime models` alongside subscription models.
 
 ## TUI commands
@@ -100,9 +110,9 @@ Local providers appear in `:prime models` alongside subscription models.
 | --- | --- |
 | `:prime` | Show the command surface |
 | `:prime connect [model]` | Connect Prime Agent over ACP |
-| `:prime models [search]` | List the catalog, grouped by provider |
-| `:prime model` | Open the model picker, then connect |
-| `:prime model <provider/model>` | Pin a model and connect |
+| `:prime models [search]` | Pick a model from the catalog, optionally filtered |
+| `:prime model <provider/model>` | Set a model directly, without the picker |
+| `:prime local` | Register local model servers with Prime Agent |
 | `:prime depth [n]` | Recursion depth for the next launch |
 | `:prime goal [text]` | Seed a persistent goal |
 | `:prime autonomous [gate]` | Autonomous mode and completion gates |

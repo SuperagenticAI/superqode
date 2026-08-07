@@ -416,6 +416,23 @@ class ConnectMixin:
                     reason="A local Grok subscription login is required.",
                 )
                 return
+            # Prime Agent has no login subcommand, so the handoff runs the
+            # binary bare and the user signs in with its own `/login`.
+            if getattr(profile, "id", "") == "prime-agent":
+                from superqode.providers import prime_agent as prime
+
+                if prime.is_installed():
+                    self._begin_subscription_login(
+                        "prime-agent",
+                        log,
+                        on_success=lambda: self._connect_acp_cmd("prime-agent", log),
+                        reason=(
+                            "Prime Agent needs a provider before it can call a model. "
+                            "SuperQode will hand over the terminal; run /login there, "
+                            "then quit."
+                        ),
+                    )
+                    return
             log.add_info(f"{profile.label} needs setup: {profile.unavailable_hint}")
             return
         if conn == "copilot":
@@ -2696,6 +2713,27 @@ class ConnectMixin:
                         self._auto_select_codex_model(model_hint, agent, log)
                     else:
                         self._show_codex_models_selection(agent, log)
+                elif self.current_agent in ("prime-agent", "prime"):
+                    # Prime fixes its model at launch, so the selection lives in
+                    # the pinned launch options rather than in the ACP session.
+                    # The generic branch below reads a "model" key the catalog
+                    # entry does not have, which left the badge empty and made a
+                    # picked model look like it had not been applied.
+                    hint = (model_hint or "").strip()
+                    if hint and hint.lower() not in {"auto", "default", "none"}:
+                        self._prime_set_opts(model=hint)
+                    opts = self._prime_opts()
+                    self.current_model = opts.model
+                    self.current_provider = "prime"
+                    self._awaiting_model_selection = False
+
+                    badge = self.query_one("#mode-badge", ModeBadge)
+                    badge.agent = self.current_agent
+                    badge.mode = ""
+                    badge.role = ""
+                    badge.model = self.current_model or "Prime default"
+                    badge.provider = self.current_provider
+                    badge.execution_mode = "acp"
                 elif self.current_agent == "grok":
                     # Grok Build owns the subscription and model catalog. Keep
                     # the default unset so its signed-in account decides; an

@@ -165,8 +165,43 @@ MUSE_LOGIN = SubscriptionLoginSpec(
     interactive_tty=True,
 )
 
+
+def _prime_agent_auth_path() -> Path:
+    from superqode.providers import prime_agent
+
+    return prime_agent.agent_home() / "auth.json"
+
+
+def _prime_agent_signed_in_probe() -> bool:
+    from superqode.providers import prime_agent
+
+    return bool(prime_agent.auth_providers())
+
+
+#: Prime Agent has no ``login`` subcommand. ``/login`` exists only inside its
+#: interactive terminal, in ``modes/interactive``, and neither its RPC nor its
+#: ACP mode exposes an authentication call. So the binary is launched bare and
+#: the user runs ``/login`` there; SuperQode suspends for the handoff and reads
+#: the credential store afterwards.
+PRIME_AGENT_LOGIN = SubscriptionLoginSpec(
+    id="prime-agent",
+    label="Prime Agent (Prime Intellect)",
+    binary="prime-agent",
+    auth_subpath=(".prime", "agent", "auth.json"),
+    auth_path_getter=_prime_agent_auth_path,
+    login_args=(),
+    install_hint=(
+        "Install it: curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh"
+    ),
+    success_hint="Prime Agent login complete.",
+    env_key_fallbacks=("PRIME_API_KEY",),
+    login_detect=_prime_agent_signed_in_probe,
+    interactive_tty=True,
+)
+
 _SPECS = {
     CODEX_LOGIN.id: CODEX_LOGIN,
+    PRIME_AGENT_LOGIN.id: PRIME_AGENT_LOGIN,
     GROK_LOGIN.id: GROK_LOGIN,
     COPILOT_LOGIN.id: COPILOT_LOGIN,
     MUSE_LOGIN.id: MUSE_LOGIN,
@@ -502,6 +537,7 @@ __all__ = [
     "GROK_LOGIN",
     "MUSE_LOGIN",
     "MUSE_BILLING_HINT",
+    "PRIME_AGENT_LOGIN",
     "DEFAULT_LOGIN_TIMEOUT_SECONDS",
     "LoginResult",
     "SubscriptionLoginSpec",

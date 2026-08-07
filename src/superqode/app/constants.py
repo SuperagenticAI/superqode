@@ -397,7 +397,7 @@ COMMANDS = [
     ":prime help",
     ":prime connect",
     ":prime models",
-    ":prime model",
+    ":prime local",
     ":prime depth",
     ":prime goal",
     ":prime autonomous",
