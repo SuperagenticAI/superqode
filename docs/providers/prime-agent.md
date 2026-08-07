@@ -19,6 +19,16 @@ SuperQode starts `prime-agent --mode acp`. Prime Agent owns the model, the
 IPython kernel, sub-agent recursion, and its continual harness state. SuperQode
 provides the terminal, model selection, session surface, and ACP events.
 
+Prime Agent also appears under `:connect` in the Subscriptions group, because
+what its login buys is an upstream model on a plan you already pay for.
+`:connect prime-agent` reaches the same ACP route as `:prime connect`, and
+reports the install and login steps when Prime Agent is not ready yet.
+
+Unlike the other subscription routes, SuperQode cannot run this login for you.
+Prime Agent has no `login` subcommand; `/login` exists only inside its
+interactive terminal. Run `prime-agent`, use `/login` there, then return to
+SuperQode. SuperQode detects the stored credential and the row becomes ready.
+
 ## Install
 
 ```bash

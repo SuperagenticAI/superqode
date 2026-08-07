@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.77] - 2026-08-07
+
+Fixes the Prime Agent connection shipped in 0.2.76. Connecting without first
+choosing a model launched the agent with a model literally named `auto`, which
+sent the session to a provider the user had never selected and failed on a
+missing key. Prime Agent also now appears in the Subscriptions group of
+`:connect`, because what its login buys is a model on a plan you already pay
+for.
+
+### Fixed
+
+- Prime Agent connects when no model has been chosen. `auto` is SuperQode's
+  internal marker for "no model selected", and the Prime route forwarded it as
+  a real model id, so every default connection ran
+  `prime-agent --mode acp --model auto` and reported "No API key found" for
+  whichever provider Prime resolved that against. The marker now resolves to
+  unset in `split_selector`, so a bare `:prime connect` starts Prime on its own
+  default and a pinned selection is still honored. `default` and `none` are
+  treated the same way, and a provider with an unset model keeps the provider.
+
+### Added
+
+- Prime Agent is listed under `:connect` in Subscriptions alongside Codex,
+  Cursor, Muse Code and Grok. It reaches the same ACP route as `:prime connect`,
+  and readiness detects the binary together with any credential, whether that is
+  Prime's own auth file, a provider key in the environment, or a local provider
+  in `models.json`.
+- Documentation states that this login cannot be run from SuperQode. Prime Agent
+  has no `login` subcommand and exposes `/login` only inside its own interactive
+  terminal, so the flow is to run `prime-agent`, sign in there, and return.
+  SuperQode then detects the stored credential.
+
+### Notes
+
+- Prime Agent is deliberately excluded from the subscription key-stripping
+  policy. That policy exists for vendors like Muse Code, where an environment
+  key silently overrides an account session. Prime Agent's auth file takes
+  priority over environment variables, so there is no billing diversion to
+  prevent, and stripping keys would break its documented environment-key route.
+
 ## [0.2.76] - 2026-08-07
 
 Prime Intellect's Prime Agent is a supported coding agent. It connects over ACP

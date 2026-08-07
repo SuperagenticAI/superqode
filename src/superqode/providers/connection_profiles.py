@@ -269,6 +269,37 @@ def _muse_signed_in() -> bool:
     return bool(data.get("providers")) if isinstance(data, dict) else False
 
 
+def _prime_agent_signed_in() -> bool:
+    """A stored Prime Agent credential exists, from its own ``/login``.
+
+    Prime reads ``~/.prime/agent/auth.json`` for both OAuth subscriptions and
+    API keys. Provider names are enough to answer this; the values are not read.
+    """
+    from superqode.providers import prime_agent
+
+    if prime_agent.auth_providers():
+        return True
+    # Prime also accepts provider keys straight from the environment, so a
+    # session can be ready with no auth file at all.
+    return any(
+        _env_key_set(name)
+        for name in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "PRIME_API_KEY")
+    ) or bool(prime_agent.custom_providers())
+
+
+def _prime_agent_ready() -> bool:
+    """Prime Agent is installed and has some way to reach a model."""
+    from superqode.providers import prime_agent
+
+    return prime_agent.is_installed() and _prime_agent_signed_in()
+
+
+def _prime_agent_present() -> bool:
+    from superqode.providers import prime_agent
+
+    return prime_agent.is_installed()
+
+
 def _muse_cli_ready() -> bool:
     """Muse Code is installed and holds a credential it can actually use."""
     if shutil.which("muse") is None:
@@ -670,6 +701,28 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         unavailable_hint=(
             "on macOS or Linux, install with "
             "`curl -fsSL https://dev.meta.ai/install.sh | bash`, then run `muse login`"
+        ),
+    ),
+    ConnectionProfile(
+        id="prime-agent",
+        harness_openness="open",
+        model_openness="multi-model",
+        transport="ACP",
+        label="Prime Agent (RLM)",
+        description=(
+            "Prime Intellect's RLM coding agent over ACP, on a provider you already "
+            "pay for (ChatGPT, Claude, GitHub Copilot) or a local model. Commands: :prime"
+        ),
+        # The agent itself is free and MIT. What the login buys is the upstream
+        # model, so this sits with the vendor accounts rather than with BYOK.
+        connector="acp",
+        menu=CONNECT_MENU_VENDORS,
+        acp_agent="prime-agent",
+        detect=_prime_agent_ready,
+        product_detect=_prime_agent_present,
+        unavailable_hint=(
+            "install with `curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh`, "
+            "then run `prime-agent` and use its `/login`"
         ),
     ),
     ConnectionProfile(

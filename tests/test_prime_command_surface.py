@@ -143,6 +143,12 @@ class TestPrimeDispatch:
 class OptionHarness(CommandImplMixin):
     """Exercises the real depth, goal and autonomous handlers."""
 
+    def __init__(self) -> None:
+        self.connect_commands: list[str] = []
+
+    def _connect_acp_cmd(self, args, log):  # type: ignore[override]
+        self.connect_commands.append(args)
+
 
 @pytest.fixture
 def opts_app():
@@ -219,6 +225,52 @@ class TestPrimeLaunchSettings:
         opts_app._prime_depth_cmd("", log)
 
         assert opts_app._prime_opts().max_depth == 5
+
+
+class TestPrimeLaunchCommandFromTui:
+    """The command the TUI actually builds when a prompt is sent.
+
+    The first release passed SuperQode's "auto" sentinel straight through as a
+    model id, so every default connection launched ``--model auto`` and failed
+    on a provider the user had never chosen. These pin the resolution that the
+    Prime branch of the agent-run path performs.
+    """
+
+    @staticmethod
+    def _command(app, model):
+        """Mirror the resolution in the agent-run Prime branch."""
+        from superqode.providers import prime_agent as prime
+
+        requested = (model or "").strip()
+        if requested.lower() in {"auto", "default", "none"}:
+            requested = ""
+        opts = app._prime_opts()
+        return prime.acp_command(requested or opts.model, options=opts)
+
+    def test_auto_produces_a_bare_launch(self, opts_app):
+        assert self._command(opts_app, "auto") == "prime-agent --mode acp"
+
+    def test_empty_model_produces_a_bare_launch(self, opts_app):
+        assert self._command(opts_app, "") == "prime-agent --mode acp"
+
+    def test_pinned_model_survives_the_auto_sentinel(self, opts_app, log):
+        """A pinned selection must not be erased by the default sentinel."""
+        opts_app._prime_connect("ollama/qwen3.5:9b", log)
+
+        assert self._command(opts_app, "auto") == (
+            "prime-agent --mode acp --provider ollama --model qwen3.5:9b"
+        )
+
+    def test_pinned_settings_reach_the_launch(self, opts_app, log):
+        opts_app._prime_depth_cmd("2", log)
+        opts_app._prime_goal_cmd("ship it", log)
+        opts_app._prime_autonomous_cmd("pytest -q", log)
+
+        command = self._command(opts_app, "auto")
+
+        assert "--goal 'ship it'" in command
+        assert "--autonomous-gate 'pytest -q'" in command
+        assert opts_app._prime_opts().env() == {"RLM_MAX_DEPTH": "2"}
 
 
 class TestPrimeCommandCompletions:

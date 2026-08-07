@@ -128,6 +128,7 @@ def test_registry_has_expected_profiles():
         "amp",
         "antigravity",
         "muse",
+        "prime-agent",
         "grok",
         "copilot",
         "devin",

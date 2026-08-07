@@ -32,7 +32,10 @@ EXPECTED_COMMAND_COUNT = 263
 # Rebaselined for the Muse Code subscription profile, which adds `muse` to the
 # `--connect` choice list after `antigravity`. Same registry-derived mechanism,
 # so no Click command was added and the count is unchanged.
-EXPECTED_HELP_TREE_SHA256 = "44ce3902f2835816b6f994759a5ae0af2b2b46394db73215183ae87d4ccea7f7"
+# Rebaselined for the Prime Agent subscription profile, which adds `prime-agent`
+# to the `--connect` choice list after `muse`. Same registry-derived mechanism,
+# so no Click command was added and the count is unchanged.
+EXPECTED_HELP_TREE_SHA256 = "2155a0365397992c0e886b27b5d5d95e4fbcfed69cf491b79a07db5edcad05ee"
 
 
 def _render_help_tree() -> tuple[int, str]:

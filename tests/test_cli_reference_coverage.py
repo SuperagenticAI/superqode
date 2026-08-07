@@ -244,6 +244,7 @@ def test_every_connection_profile_has_a_sidebar_page():
         "qwen-code": "providers/qwen-code.md",
         "antigravity": "providers/antigravity.md",
         "muse": "concepts/modes.md",
+        "prime-agent": "providers/prime-agent.md",
         "grok": "providers/grok.md",
         "glm-cli": "providers/zai.md",
         "other-harnesses": "cli-reference/harness-commands.md",

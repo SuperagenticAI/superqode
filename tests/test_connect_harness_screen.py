@@ -267,7 +267,7 @@ def test_selecting_muse_reports_readiness_instead_of_failing():
     assert not [item for item in log.items if str(item).startswith("ERROR")]
 
 
-def test_the_subscriptions_category_holds_all_thirteen_plans_codex_first():
+def test_the_subscriptions_category_holds_all_fourteen_plans_codex_first():
     """Plan order is fixed, so a product sits in the same place everywhere."""
     from superqode.providers.connection_profiles import CONNECT_MENU_VENDORS
 
@@ -277,6 +277,7 @@ def test_the_subscriptions_category_holds_all_thirteen_plans_codex_first():
         "amp",
         "antigravity",
         "muse",
+        "prime-agent",
         "grok",
         "copilot",
         "devin",

@@ -294,14 +294,22 @@ def custom_providers() -> list[str]:
     return sorted(str(k) for k in providers) if isinstance(providers, dict) else []
 
 
+# SuperQode uses these as "no model chosen" across the TUI. Passing one to
+# Prime as a real id makes it resolve against a provider the user never picked
+# and fail on a missing key, so they resolve to unset here.
+_UNSET_MODELS = {"auto", "default", "none", "-"}
+
+
 def split_selector(selector: str) -> tuple[str, str]:
     """Split ``provider/model``. A bare id leaves the provider to Prime."""
     raw = (selector or "").strip()
-    if not raw:
+    if not raw or raw.lower() in _UNSET_MODELS:
         return "", ""
     if "/" not in raw:
         return "", raw
     provider, _, model = raw.partition("/")
+    if model.strip().lower() in _UNSET_MODELS:
+        return provider.strip(), ""
     return provider.strip(), model.strip()
 
 

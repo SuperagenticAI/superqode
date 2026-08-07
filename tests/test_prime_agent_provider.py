@@ -312,6 +312,29 @@ class TestLaunchOptions:
 
         assert "--goal 'done; rm -rf /'" in command
 
+    def test_auto_sentinel_is_not_a_model(self):
+        """SuperQode passes "auto" for "no model chosen".
+
+        Forwarding it as a real id makes Prime resolve against a provider the
+        user never selected and fail with a missing key, which is what happened
+        on the first release.
+        """
+        assert prime.acp_command("auto") == "prime-agent --mode acp"
+        assert prime.acp_command("default") == "prime-agent --mode acp"
+        assert prime.acp_command("none") == "prime-agent --mode acp"
+        assert prime.split_selector("auto") == ("", "")
+
+    def test_auto_sentinel_after_a_provider(self):
+        """A provider with an unset model keeps the provider only."""
+        assert prime.acp_command("ollama/auto") == "prime-agent --mode acp --provider ollama"
+
+    def test_sentinels_are_case_insensitive(self):
+        assert prime.acp_command("AUTO") == "prime-agent --mode acp"
+
+    def test_a_real_model_named_like_a_sentinel_still_needs_a_provider(self):
+        """Only the bare sentinels are dropped, not models containing them."""
+        assert "--model autopilot" in prime.acp_command("autopilot")
+
     def test_selector_argument_overrides_pinned_model(self):
         opts = prime.PrimeLaunchOptions(model="ollama/qwen3:8b")
 

@@ -1941,7 +1941,10 @@ class AgentRunMixin:
             from superqode.providers import prime_agent as prime
 
             opts = self._prime_opts()
-            selector = (model or "").strip() or opts.model
+            requested = (model or "").strip()
+            if requested.lower() in {"auto", "default", "none"}:
+                requested = ""
+            selector = requested or opts.model
             command = prime.acp_command(selector, options=opts)
             acp_extra_env = opts.env()
             model_display = f"prime/{selector}" if selector else "prime/default"
