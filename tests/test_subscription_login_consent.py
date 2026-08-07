@@ -127,12 +127,18 @@ def test_worker_never_opens_browser(monkeypatch):
     assert captured.get("product") == "grok"
 
 
-def test_interactive_login_needs_consent_before_the_browser_opens():
+def test_interactive_login_needs_consent_before_the_browser_opens(monkeypatch, tmp_path):
     """Nothing may launch a vendor browser flow without an explicit go-ahead.
 
     Muse opens the browser itself once its menu runs, so the confirmation has
     to gate the terminal handoff, not just the piped runner.
+
+    Muse is forced installed and signed out here. Reading the real environment
+    instead passes only on a machine that happens to have the vendor CLI, and
+    reports no handoff on a clean CI runner.
     """
+    monkeypatch.setattr(sl.shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setenv("MUSE_AUTH_PATH", str(tmp_path / "missing.json"))
     app = _new_app()
     app.handoffs = []
     app._interactive_login_handoff = lambda spec, log: app.handoffs.append(spec.id)

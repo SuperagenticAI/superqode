@@ -347,6 +347,12 @@ def test_muse_is_ready_only_once_it_has_a_credential(monkeypatch, tmp_path):
     import superqode.providers.connection_profiles as cp
 
     monkeypatch.delenv("META_API_KEY", raising=False)
+    # Muse resolves its store through MUSE_AUTH_PATH and XDG_CONFIG_HOME before
+    # falling back to the home directory. Leaving either set in the environment
+    # sends the probe outside tmp_path, so patching Path.home alone is not
+    # enough: this passes on a machine with no XDG_CONFIG_HOME and fails on CI.
+    monkeypatch.delenv("MUSE_AUTH_PATH", raising=False)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.setattr(
         cp.shutil, "which", lambda name: "/usr/bin/muse" if name == "muse" else None
     )

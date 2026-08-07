@@ -253,8 +253,16 @@ class TestPrimeLaunchCommandFromTui:
     def test_empty_model_produces_a_bare_launch(self, opts_app):
         assert self._command(opts_app, "") == "prime-agent --mode acp"
 
-    def test_pinned_model_survives_the_auto_sentinel(self, opts_app, log):
-        """A pinned selection must not be erased by the default sentinel."""
+    def test_pinned_model_survives_the_auto_sentinel(self, opts_app, log, monkeypatch):
+        """A pinned selection must not be erased by the default sentinel.
+
+        ``_prime_connect`` returns early when the binary is missing, so this
+        forces it present rather than depending on the machine running the
+        tests having Prime Agent installed.
+        """
+        from superqode.providers import prime_agent as prime
+
+        monkeypatch.setattr(prime, "is_installed", lambda: True)
         opts_app._prime_connect("ollama/qwen3.5:9b", log)
 
         assert self._command(opts_app, "auto") == (
