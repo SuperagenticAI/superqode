@@ -28,14 +28,6 @@ from superqode.app.recipes import PromptCompletionCandidate
 from superqode.app.session_state import get_session
 
 
-# Connectors whose handler already explains what is missing: the dependency
-# install picker (copilot, runtime), a readiness report (external-cli), or the
-# vendor's own install hint (prime-rpc). Answering for them with the generic
-# "needs setup" line replaces guidance the user can act on with a dead end, so
-# an unavailable profile on these connectors still reaches its handler.
-SELF_GUIDED_SETUP_CONNECTORS = frozenset({"copilot", "external-cli", "prime-rpc", "runtime"})
-
-
 def _menu_history_label(menu: str) -> str:
     """Title of a connect screen, for the back control's tooltip."""
     from superqode.providers.connection_profiles import CONNECT_MENU_TITLES
@@ -441,7 +433,14 @@ class ConnectMixin:
                         ),
                     )
                     return
-            if conn not in SELF_GUIDED_SETUP_CONNECTORS:
+            # Only the ACP channel has no setup path of its own. Every other
+            # connector's handler reports what is missing and what to do about
+            # it: the dependency install picker (copilot, runtime), an API key
+            # panel (byok, grok-api), a readiness report (external-cli), or the
+            # vendor's install hint (prime-rpc). Answering here on their behalf
+            # replaces guidance the user can act on with a dead end, and the
+            # picker connectors are menus that must always open.
+            if conn == "acp":
                 log.add_info(f"{profile.label} needs setup: {profile.unavailable_hint}")
                 return
         if conn == "copilot":
