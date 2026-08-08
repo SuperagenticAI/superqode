@@ -1,0 +1,23 @@
+name: prime-agent-coder
+inherits: coding
+
+runtime:
+  backend: prime-agent
+  config:
+    prime_agent:
+      persist_session: true
+      session_dir: .superqode/prime-agent/sessions
+      request_timeout: 30
+      startup_timeout: 30
+      prompt_timeout: 900
+      check_version: true
+
+model_policy:
+  primary: github-copilot/gpt-4.1
+
+workflow:
+  mode: single
+
+metadata:
+  example: prime-agent
+  best_for: long-running coding through the native Python RPC host

@@ -23,6 +23,33 @@ uv add prime-agent-python-client
 The client never invokes a shell. A custom executable is represented as an
 argument sequence, not a command string.
 
+## Install and authenticate
+
+Install the released SuperQode application with uv:
+
+```bash
+uv tool install superqode
+```
+
+Prime Agent is a separate executable. Install it from its official release,
+then confirm both commands resolve to the versions you expect:
+
+```bash
+superqode --version
+prime-agent --version
+```
+
+Prime Agent owns provider authentication. Start it once and run `/login` to
+configure GitHub Copilot, or configure another provider using Prime Agent's
+normal provider settings:
+
+```bash
+prime-agent
+```
+
+Credentials remain in Prime Agent's configuration. SuperQode does not copy or
+translate provider tokens.
+
 ## Use the client directly
 
 ```python
@@ -58,6 +85,9 @@ new command that has not yet received a convenience method.
 
 ## Use Prime Agent from a HarnessSpec
 
+Save this as `prime-agent.yaml` in the repository you want Prime Agent to work
+in:
+
 ```yaml
 name: prime-coder
 inherits: coding
@@ -68,8 +98,39 @@ runtime:
       prompt_timeout: 900
       session_dir: .superqode/prime-agent/sessions
 model_policy:
-  primary: anthropic/claude-sonnet-4-20250514
+  primary: github-copilot/gpt-4.1
 ```
+
+The repository includes the same starting point at
+[`examples/harnesses/prime-agent.yaml`](https://github.com/SuperagenticAI/superqode/blob/main/examples/harnesses/prime-agent.yaml).
+Run the local spec:
+
+```bash
+superqode harness doctor --spec prime-agent.yaml --json
+
+superqode harness run \
+  --spec prime-agent.yaml \
+  --prompt "Explain the repository and identify the highest-risk module" \
+  --provider github-copilot \
+  --model gpt-4.1 \
+  --stream
+```
+
+Use `--json` instead of `--stream` when another program will consume the final
+result:
+
+```bash
+superqode harness run \
+  --spec prime-agent.yaml \
+  --prompt "Return a concise repository summary" \
+  --provider github-copilot \
+  --model gpt-4.1 \
+  --json
+```
+
+Normal output prints the completed response, `--stream` prints model deltas as
+they arrive, and `--json` returns the normalized harness result. The three
+modes use the same Python-hosted RPC backend.
 
 The backend emits SuperQode `model_delta`, `thinking_delta`, `tool_call`,
 `tool_update`, `tool_result`, lifecycle, usage, and error events. Every mapped
@@ -103,3 +164,42 @@ The package currently marks Prime Agent 0.7.0 and 0.7.1 as tested. Unknown
 versions are allowed because the protocol is additive, but
 `session.compatibility.tested` will be false. This makes upgrades observable
 without unnecessarily preventing experimentation.
+
+## Troubleshooting
+
+### `prime-agent` is not found
+
+Run `prime-agent --version` in the same terminal as SuperQode. If it fails, add
+the Prime Agent installation directory to `PATH`, then rerun `superqode harness
+doctor`.
+
+### Authentication or model lookup fails
+
+Launch `prime-agent` directly and complete `/login`. Verify the requested model
+works there before using the same provider and model in SuperQode. Provider
+credentials and model catalogs belong to Prime Agent, not the Python client.
+
+### The run starts but produces no streamed text
+
+Upgrade SuperQode and verify the active executable:
+
+```bash
+uv tool upgrade superqode
+superqode --version
+```
+
+SuperQode 0.2.80 and later render the normalized `model_delta` events emitted
+by the RPC backend. Use `--json` to distinguish an empty model response from a
+terminal-rendering problem.
+
+### A run times out
+
+Raise `prompt_timeout` for long coding tasks. Keep `request_timeout` lower so a
+stalled individual RPC command still fails promptly. Recent Prime Agent stderr
+is included in timeout and process-exit errors.
+
+### Session files are not wanted
+
+Set `persist_session: false`. To retain sessions somewhere explicit, keep
+`persist_session: true` and set `session_dir`. Use one directory per concurrent
+automation worker to avoid accidental session reuse.
