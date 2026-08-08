@@ -169,6 +169,11 @@ class ACPClient:
     on_available_commands: Optional[Callable[[List[dict]], Awaitable[None]]] = None
     on_mode_update: Optional[Callable[[str], Awaitable[None]]] = None
     on_usage_update: Optional[Callable[[dict], Awaitable[None]]] = None
+    # ACP agents can publish session-scoped information that has no portable
+    # first-class representation. Prime Agent uses this for goals, recursive
+    # children, refinement, autonomous mode, compaction, and agent messaging.
+    # Consumers receive the complete update, including unknown ``_meta`` data.
+    on_session_info_update: Optional[Callable[[dict], Awaitable[None]]] = None
     terminal_service: Optional[ACPTerminalService] = None
     traffic_log_path: Optional[Path] = None
     traffic_log_enabled: Optional[bool] = None
@@ -215,6 +220,7 @@ class ACPClient:
     _config_options: List[dict] = field(default_factory=list, repr=False)
     _available_commands: List[dict] = field(default_factory=list, repr=False)
     _usage: Dict[str, Any] = field(default_factory=dict, repr=False)
+    _session_info_updates: List[dict] = field(default_factory=list, repr=False)
     _last_stop_reason: str = field(default="", repr=False)
     _traffic_log_resolved_path: Optional[Path] = field(default=None, repr=False)
 
@@ -1184,6 +1190,18 @@ class ACPClient:
             self._merge_usage(usage)
             if self.on_usage_update:
                 await self.on_usage_update(dict(self._usage))
+
+        elif update_type == "session_info_update":
+            # Preserve the complete envelope. Extension metadata is explicitly
+            # open-ended in ACP and must survive even when SuperQode does not
+            # yet understand a vendor-specific field.
+            session_info = dict(update)
+            self._session_info_updates.append(session_info)
+            # Bound long-lived sessions without losing the latest state.
+            if len(self._session_info_updates) > 200:
+                del self._session_info_updates[:-200]
+            if self.on_session_info_update:
+                await self.on_session_info_update(session_info)
 
     def _content_to_text(self, content: Any) -> str:
         """Convert ACP content blocks into a displayable text string."""

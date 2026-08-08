@@ -11,6 +11,7 @@ from superqode.acp.types import (
     ToolCall,
     ToolCallUpdate,
     SessionUpdate,
+    SessionInfoUpdate,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "ToolCall",
     "ToolCallUpdate",
     "SessionUpdate",
+    "SessionInfoUpdate",
 ]

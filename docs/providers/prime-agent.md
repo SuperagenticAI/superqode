@@ -233,24 +233,30 @@ session state  →  inherited config  →  global settings  →  RLM_MAX_DEPTH  
 it as the session starts. Values that are unset are left entirely alone rather
 than sent as defaults.
 
-## In-session commands are not reachable over ACP
+## ACP commands and the Python RPC route
 
-`/goal`, `/autonomous` and `/rlm-max-depth` are covered by the launch settings
-above. The rest, including `/refine`, `/compact` and `/heartbeat`, run inside a
-Prime session and are unreachable over ACP: Prime advertises an empty command
-list at `initialize`, and its ACP mode has no command expansion. They have typed
-equivalents in RPC mode, which SuperQode does not yet speak.
+`/goal`, `/autonomous` and `/rlm-max-depth` are covered by the ACP launch
+settings above. The rest, including `/refine`, `/compact` and `/heartbeat`, run
+inside a Prime session and are unreachable over ACP: Prime advertises an empty
+command list at `initialize`, and its ACP mode has no command expansion.
+
+SuperQode also ships a native Python RPC host and a `prime-agent` HarnessSpec
+backend. That route exposes typed operations for prompting, steering,
+follow-ups, abort, state, messages, usage, model selection, compaction,
+refinement and session control. See the
+[Prime Agent Python client](../prime-agent-python-client.md).
 
 Sending one as a prompt does not fail loudly. It reaches the model as ordinary
 text, and a capable model answers as though it had run, which reads like success
-without any of the effect. Run `prime-agent` directly for those, or drive
-`prime-agent --mode rpc`, which does expose a command surface.
+without any of the effect. Use the Python RPC client or run `prime-agent`
+directly for those operations.
 
 ## Known limits
 
 - ACP mode hosts one session per process, so parallel work needs one process
   per session.
-- Token usage and cost are not reported over ACP, so Prime Agent sessions show
-  no token accounting in SuperQode.
+- Token usage and cost are not reported over ACP. The RPC harness backend does
+  collect both through `get_session_stats`.
 - Session resume is unavailable on this route because Prime Agent reports
-  `loadSession: false`.
+  `loadSession: false`. The RPC client supports `--resume`, `--continue`, and
+  `switch_session`.

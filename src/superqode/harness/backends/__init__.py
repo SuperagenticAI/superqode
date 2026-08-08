@@ -11,6 +11,11 @@ from .base import (
 from .deepagents import DeepAgentsHarnessBackend
 from .managed import ManagedAgentHarnessBackend
 from .pydanticai import PydanticAIHarnessBackend
+from .prime_agent import (
+    PrimeAgentHarnessBackend,
+    PrimeAgentSettings,
+    prime_agent_installation_status,
+)
 from .rlm_code import (
     RLMCodeHarnessBackend,
     RLMCodeSettings,
@@ -45,6 +50,8 @@ __all__ = [
     "ManagedAgentHarnessBackend",
     "OpenAIAgentsHarnessBackend",
     "PydanticAIHarnessBackend",
+    "PrimeAgentHarnessBackend",
+    "PrimeAgentSettings",
     "RLMCodeHarnessBackend",
     "RLMCodeSettings",
     "RuntimeHarnessBackend",
@@ -53,5 +60,6 @@ __all__ = [
     "create_harness_backend",
     "inspect_harness_backend",
     "known_harness_backend_names",
+    "prime_agent_installation_status",
     "rlm_code_installation_status",
 ]

@@ -8,7 +8,7 @@ on mechanism rather than on branding.
 | Route | Engine | Where it runs | Selector |
 | --- | --- | --- | --- |
 | [RLM Code](rlm-code.md) | Python, in process | Inside SuperQode | `runtime.backend: rlm-code` |
-| [Prime Agent](../providers/prime-agent.md) | TypeScript host with an IPython kernel | Separate process over ACP | `:prime connect` |
+| [Prime Agent](../providers/prime-agent.md) | TypeScript agent with an IPython kernel | Separate process over ACP or Python-hosted RPC | `:prime connect` or `runtime.backend: prime-agent` |
 | [Recursive tools](../local-recursive-dynamic-coding.md) | SuperQode agent loop | Inside SuperQode | `context_handle`, `spawn_harness` |
 
 ## Lineage
@@ -20,8 +20,9 @@ harness generalization work. Its center of gravity is the experiment.
 Prime Agent is a hard fork of the `pi` coding agent with an RLM runtime grafted
 on. Its center of gravity is the product. The Python package it ships,
 `prime-agent-runtime`, is a kernel-side client of roughly 1,500 lines; the agent
-itself is TypeScript. Python is where the model writes, not where the agent
-thinks.
+itself is TypeScript. SuperQode's native Python RPC client now owns the host
+process, correlation, event stream and lifecycle, while Prime retains the agent
+loop and tools.
 
 ## What recursion means in each
 

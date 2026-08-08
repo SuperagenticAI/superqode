@@ -14,6 +14,7 @@ from .base import (
 from .deepagents import DeepAgentsHarnessBackend
 from .managed import ManagedAgentHarnessBackend
 from .pydanticai import PydanticAIHarnessBackend
+from .prime_agent import PrimeAgentHarnessBackend, prime_agent_installation_status
 from .rlm_code import RLMCodeHarnessBackend
 from .runtime import (
     ADKHarnessBackend,
@@ -38,6 +39,7 @@ _OPTIONAL_BACKENDS = {
     "google-agent-engine",
     "pipy",
     "pydanticai",
+    "prime-agent",
     "rlm-code",
     "tau",
 }
@@ -62,6 +64,8 @@ def create_harness_backend(name: str | None) -> HarnessBackend:
         return DeepAgentsHarnessBackend()
     if resolved == "pydanticai":
         return PydanticAIHarnessBackend()
+    if resolved == "prime-agent":
+        return PrimeAgentHarnessBackend()
     if resolved == "rlm-code":
         return RLMCodeHarnessBackend()
     if resolved == "pipy":
@@ -168,6 +172,13 @@ def _with_availability(capabilities: HarnessBackendCapabilities) -> HarnessBacke
         from ..tau_adapter import tau_installation_status
 
         available, issue = tau_installation_status()
+        return replace(
+            capabilities,
+            availability="available" if available else "missing",
+            install_hint=None if available else issue,
+        )
+    if capabilities.backend == "prime-agent":
+        available, issue = prime_agent_installation_status()
         return replace(
             capabilities,
             availability="available" if available else "missing",

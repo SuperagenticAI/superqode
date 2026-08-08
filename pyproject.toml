@@ -1,6 +1,6 @@
 [project]
 name = "superqode"
-version = "0.2.78"
+version = "0.2.79"
 description = "Agent Engineering for your code factory"
 readme = "README.md"
 license = "Apache-2.0"
@@ -51,6 +51,9 @@ dependencies = [
     "jsonschema>=4.20.0",
     "python-frontmatter>=1.1.0",
     "superopt>=0.1.1",
+    # Native asyncio host for Prime Agent's public RPC mode. Kept as a small,
+    # reusable package so non-SuperQode Python applications can use it too.
+    "prime-agent-python-client>=0.1.0,<0.2.0",
 ]
 
 [project.optional-dependencies]

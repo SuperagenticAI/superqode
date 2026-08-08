@@ -166,6 +166,8 @@ _LAZY_IMPORTS = {
     "DeepAgentsHarnessBackend": (".backends", "DeepAgentsHarnessBackend"),
     "OpenAIAgentsHarnessBackend": (".backends", "OpenAIAgentsHarnessBackend"),
     "PydanticAIHarnessBackend": (".backends", "PydanticAIHarnessBackend"),
+    "PrimeAgentHarnessBackend": (".backends", "PrimeAgentHarnessBackend"),
+    "PrimeAgentSettings": (".backends", "PrimeAgentSettings"),
     "RLMCodeHarnessBackend": (".backends", "RLMCodeHarnessBackend"),
     "RLMCodeHarnessProtocolAdapter": (
         ".rlm_code_adapter",
@@ -180,6 +182,10 @@ _LAZY_IMPORTS = {
     "rlm_code_installation_status": (
         ".backends",
         "rlm_code_installation_status",
+    ),
+    "prime_agent_installation_status": (
+        ".backends",
+        "prime_agent_installation_status",
     ),
     "tau_installation_status": (
         ".tau_adapter",
@@ -423,6 +429,8 @@ __all__ = [
     "DeepAgentsHarnessBackend",
     "OpenAIAgentsHarnessBackend",
     "PydanticAIHarnessBackend",
+    "PrimeAgentHarnessBackend",
+    "PrimeAgentSettings",
     "RLMCodeHarnessBackend",
     "RLMCodeHarnessProtocolAdapter",
     "TauHarnessBackend",
@@ -501,6 +509,7 @@ __all__ = [
     "is_openai_sandbox_backend_available",
     "known_harness_backend_names",
     "rlm_code_installation_status",
+    "prime_agent_installation_status",
     "tau_installation_status",
     "list_workflow_presets",
     "load_agent_yaml",

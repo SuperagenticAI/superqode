@@ -203,6 +203,7 @@ nav:
     - 🧪 Harness Examples: examples.md
     - 🏗️ Harness System: advanced/harness-system.md
     - π PiPy: advanced/pipy.md
+    - 🐍 Prime Agent Python Client: prime-agent-python-client.md
     - 🔗 Harness Protocol v1: advanced/harness-protocol.md
     - 🌀 RLM Code Integration: advanced/rlm-code.md
     - 🔬 RLM Routes Compared: advanced/rlm-routes.md

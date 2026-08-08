@@ -150,8 +150,26 @@ class Plan(TypedDict, total=False):
     sessionUpdate: str
 
 
+class SessionInfoUpdate(TypedDict, total=False):
+    """Session-scoped state advertised by an ACP agent.
+
+    ACP extensions place vendor-specific details in ``_meta``.  Keep the
+    payload deliberately open so clients can preserve extension data they do
+    not understand yet instead of silently discarding it.
+    """
+
+    sessionUpdate: str
+    _meta: Dict[str, Any]
+
+
 SessionUpdate = Union[
-    AgentMessageChunk, AgentThoughtChunk, ToolCall, ToolCallUpdate, Plan, Dict[str, Any]
+    AgentMessageChunk,
+    AgentThoughtChunk,
+    ToolCall,
+    ToolCallUpdate,
+    Plan,
+    SessionInfoUpdate,
+    Dict[str, Any],
 ]
 
 

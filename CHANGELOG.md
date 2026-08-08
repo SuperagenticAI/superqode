@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.79] - 2026-08-08
+
+### Added
+
+- The independently reusable
+  [`prime-agent-python-client`](https://github.com/SuperagenticAI/prime-agent-python-client),
+  consumed by SuperQode as a published dependency, provides a native async
+  Python host for Prime Agent RPC mode with strict JSONL
+  framing, correlated requests, typed high-level session operations, streamed
+  events, UI responses, bounded diagnostics, version compatibility metadata,
+  cancellation, and robust subprocess shutdown.
+- A `prime-agent` HarnessSpec backend that makes the RPC client available to
+  SuperQode's CLI/TUI and normalizes Prime model, reasoning, tool, lifecycle,
+  usage, and error events without discarding their original payloads.
+
+### Fixed
+
+- ACP clients retain Prime Agent's `session_info_update` metadata so downstream
+  consumers can observe the session identity and Prime-specific capabilities.
+
 ## [0.2.78] - 2026-08-07
 
 ### Fixed

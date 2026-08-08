@@ -107,6 +107,7 @@ class TestACPClient:
         assert client.on_tool_update is None
         assert client.on_permission_request is None
         assert client.on_plan is None
+        assert client.on_session_info_update is None
 
     @pytest.mark.asyncio
     async def test_client_with_callbacks(self, tmp_path):
@@ -274,6 +275,57 @@ class TestACPClient:
         assert await client.get_current_mode() == "plan"
         assert client.get_usage()["used"] == 1000
         assert client.get_stats().cost == 0.02
+
+    @pytest.mark.asyncio
+    async def test_session_info_update_preserves_extension_metadata(self, tmp_path):
+        """Prime and other ACP extensions must not lose namespaced metadata."""
+        on_session_info = AsyncMock()
+        client = ACPClient(
+            project_root=tmp_path,
+            command="prime-agent --mode acp",
+            on_session_info_update=on_session_info,
+        )
+        update = {
+            "sessionUpdate": "session_info_update",
+            "_meta": {
+                "ai.primeintellect.prime-agent": {
+                    "goal": {"status": "active", "objective": "Ship the client"},
+                    "subagents": [{"id": "child-1", "status": "running"}],
+                    "futureField": {"kept": True},
+                }
+            },
+        }
+
+        await client._handle_session_update(update)
+
+        on_session_info.assert_awaited_once_with(update)
+        assert client._session_info_updates == [update]
+
+    @pytest.mark.asyncio
+    async def test_nested_session_info_update_is_preserved(self, tmp_path):
+        """Nested update envelopes should receive the same extension handling."""
+        on_session_info = AsyncMock()
+        client = ACPClient(
+            project_root=tmp_path,
+            command="prime-agent --mode acp",
+            on_session_info_update=on_session_info,
+        )
+        nested = {
+            "update": {
+                "sessionUpdate": "session_info_update",
+                "_meta": {
+                    "ai.primeintellect.prime-agent": {
+                        "refinement": {"status": "completed", "id": "refine-1"}
+                    }
+                },
+            }
+        }
+
+        await client._handle_session_update(nested)
+
+        expected = nested["update"]
+        on_session_info.assert_awaited_once_with(expected)
+        assert client._session_info_updates == [expected]
 
     @pytest.mark.asyncio
     async def test_new_session_captures_modes_and_models(self, tmp_path, monkeypatch):
