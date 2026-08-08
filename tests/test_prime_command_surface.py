@@ -157,6 +157,11 @@ class OptionHarness(CommandImplMixin):
     def _connect_acp_cmd(self, args, log):  # type: ignore[override]
         self.connect_commands.append(args)
 
+    def _connect_prime_rpc(self, selector, log):
+        self._prime_set_opts(model=selector)
+        self.connect_commands.append(f"python-rpc:{selector}")
+        return True
+
 
 @pytest.fixture
 def opts_app():
@@ -273,6 +278,7 @@ class TestPrimeLaunchCommandFromTui:
         monkeypatch.setattr(prime, "is_installed", lambda: True)
         opts_app._prime_connect("ollama/qwen3.5:9b", log)
 
+        assert opts_app.connect_commands == ["python-rpc:ollama/qwen3.5:9b"]
         assert self._command(opts_app, "auto") == (
             "prime-agent --mode acp --provider ollama --model qwen3.5:9b"
         )

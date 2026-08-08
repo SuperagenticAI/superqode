@@ -2,8 +2,8 @@
 
 [Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent) is Prime
 Intellect's open-source (MIT) RLM agent for coding and long-running autonomous
-tasks. It speaks the Agent Client Protocol natively, so SuperQode connects to it
-over ACP without an adapter.
+tasks. SuperQode supports it through a native Python RPC host and, separately,
+through Prime Agent's Agent Client Protocol server.
 
 Prime Agent is an RLM harness: a persistent IPython kernel is the model's only
 primary tool. Files, shell commands, skills, and recursive sub-agents are all
@@ -13,16 +13,22 @@ reached by writing Python rather than by separate tool calls.
 
 | Route | Primary command | Authentication | Harness owner |
 | --- | --- | --- | --- |
-| Prime Agent ACP | `:prime connect` | `prime-agent` then `/login` | Prime Agent |
+| Python RPC client | `:prime connect` or `:connect prime-agent` | `prime-agent` then `/login` | Prime Agent |
+| ACP | `:connect acp prime-agent` | `prime-agent` then `/login` | Prime Agent |
 
-SuperQode starts `prime-agent --mode acp`. Prime Agent owns the model, the
-IPython kernel, sub-agent recursion, and its continual harness state. SuperQode
-provides the terminal, model selection, session surface, and ACP events.
+The default subscription route uses `prime-agent-python-client`. Python owns
+the RPC process lifecycle and event stream; Prime Agent still owns the model,
+IPython kernel, tools, recursion, and continual harness state. The TUI shows
+`PY RPC` while this route is active.
 
 Prime Agent also appears under `:connect` in the Subscriptions group, because
 what its login buys is an upstream model on a plan you already pay for.
-`:connect prime-agent` reaches the same ACP route as `:prime connect`, and
+`:connect prime-agent` reaches the same Python RPC route as `:prime connect`, and
 reports the install and login steps when Prime Agent is not ready yet.
+
+The ACP server remains available explicitly with `:connect acp prime-agent`.
+That command starts `prime-agent --mode acp` and keeps the existing ACP path
+unchanged.
 
 SuperQode cannot drive this OAuth itself. Prime Agent has no `login`
 subcommand, and neither its ACP nor its RPC mode exposes an authentication
@@ -109,7 +115,7 @@ Local providers appear in `:prime models` alongside subscription models.
 | Command | Behavior |
 | --- | --- |
 | `:prime` | Show the command surface |
-| `:prime connect [model]` | Connect Prime Agent over ACP |
+| `:prime connect [model]` | Connect through `prime-agent-python-client` over RPC |
 | `:prime models [search]` | Pick a model from the catalog, optionally filtered |
 | `:prime model <provider/model>` | Set a model directly, without the picker |
 | `:prime local` | Register local model servers with Prime Agent |
@@ -141,7 +147,7 @@ as it happens. Children are indented by `rlmDepth` and counted separately:
   1 root, 2 RLM subagent(s)
 ```
 
-Sessions started from SuperQode over ACP run in their own process and are not
+Sessions started from SuperQode run in their own process and are not
 held by the background service, so they do not appear here. This view covers
 agents started with `prime-agent` directly, and the children they spawn.
 
@@ -200,7 +206,7 @@ Agent when the run has to keep going.
 ## RLM settings pinned at launch
 
 Prime reads goal, autonomous policy and recursion depth when the process
-starts. None of them is an ACP field, so SuperQode pins the values and applies
+starts. None of them is a live model field, so SuperQode pins the values and applies
 them to the next launch. Changing one reconnects rather than editing a live
 session.
 

@@ -405,10 +405,10 @@ class ConnectMixin:
                 "`:connect copilot-acp` now points at `:connect copilot-cli`. "
                 "Both drive the Copilot CLI over ACP; `:connect copilot` uses the SDK."
             )
-        if conn == "acp" and not profile.available and log is not None:
+        if not profile.available and log is not None:
             # Grok exposes a device-auth flow that SuperQode can safely relay
             # while the vendor CLI remains the credential owner.
-            if getattr(profile, "id", "") == "grok":
+            if conn == "acp" and getattr(profile, "id", "") == "grok":
                 self._begin_subscription_login(
                     "grok",
                     log,
@@ -425,7 +425,7 @@ class ConnectMixin:
                     self._begin_subscription_login(
                         "prime-agent",
                         log,
-                        on_success=lambda: self._connect_acp_cmd("prime-agent", log),
+                        on_success=lambda: self._connect_prime_rpc("", log),
                         reason=(
                             "Prime Agent needs a provider before it can call a model. "
                             "SuperQode will hand over the terminal; run /login there, "
@@ -437,6 +437,8 @@ class ConnectMixin:
             return
         if conn == "copilot":
             self._connect_copilot_subscription(profile, log)
+        elif conn == "prime-rpc":
+            self._connect_prime_rpc("", log)
         elif conn == "runtime":
             # Self-contained runtime (e.g. Codex) — auto-connects in _runtime_cmd.
             self._runtime_cmd(profile.runtime or "", log)
@@ -515,6 +517,108 @@ class ConnectMixin:
                 )
         else:
             log.add_error(f"Unknown connection type: {getattr(profile, 'id', profile)}")
+
+    def _connect_prime_rpc(
+        self,
+        selector: str,
+        log: ConversationLog,
+        *,
+        pure=None,
+        select_default: bool = True,
+        session_id: str | None = None,
+    ) -> bool:
+        """Connect Prime Agent through the native Python RPC HarnessSpec backend."""
+        from pathlib import Path
+
+        from superqode.providers import prime_agent as prime
+
+        if not prime.is_installed():
+            log.add_error("Prime Agent is not installed.")
+            log.add_info(f"Install: {prime.INSTALL_HINT}")
+            return False
+
+        chosen = (selector or "").strip()
+        if chosen and hasattr(self, "_prime_set_opts"):
+            self._prime_set_opts(model=chosen)
+        elif not chosen and hasattr(self, "_prime_opts"):
+            chosen = self._prime_opts().model
+
+        pure = pure or self._ensure_pure_mode()
+        if select_default:
+            import dataclasses
+
+            from superqode.harness import get_harness_template
+
+            spec = get_harness_template("prime-agent-python")
+            opts = self._prime_opts() if hasattr(self, "_prime_opts") else None
+            args: list[str] = []
+            environment: dict[str, str] = {}
+            if opts is not None:
+                if opts.goal:
+                    args.extend(("--goal", opts.goal))
+                    if opts.goal_token_budget and opts.goal_token_budget > 0:
+                        args.extend(("--goal-token-budget", str(opts.goal_token_budget)))
+                if opts.autonomous:
+                    args.append("--autonomous")
+                    for gate in opts.gates:
+                        if str(gate).strip():
+                            args.extend(("--autonomous-gate", str(gate).strip()))
+                environment.update(opts.env())
+            runtime = dataclasses.replace(
+                spec.runtime,
+                config={"prime_agent": {"args": args, "env": environment}},
+            )
+            pure.set_harness(dataclasses.replace(spec, runtime=runtime))
+            os.environ["SUPERQODE_HARNESS"] = "prime-agent-python"
+
+        # The subscription and ACP routes are alternatives. Stop an existing
+        # ACP process before making Python RPC authoritative for input routing.
+        if getattr(self, "_acp_client", None):
+            try:
+                if getattr(self, "_acp_loop_runner", None) is not None:
+                    self._acp_loop_runner.run(self._acp_client.stop())
+                else:
+                    asyncio.create_task(self._acp_client.stop())
+            except Exception:  # noqa: BLE001 - stale ACP teardown is best effort
+                pass
+            self._acp_client = None
+            self._acp_client_key = None
+
+        provider, model = prime.split_selector(chosen)
+        if not provider and not model:
+            provider, model = pure._resolve_harness_route()
+        pure.connect(
+            provider=provider,
+            model=model,
+            working_directory=Path.cwd(),
+            session_id=session_id,
+        )
+        self._install_pure_permission_bridge(pure, log)
+
+        session = get_session()
+        session.execution_mode = "prime-rpc"
+        self.current_mode = "agent"
+        self.current_agent = "prime-agent"
+        self.current_provider = provider or "prime"
+        self.current_model = model
+
+        try:
+            badge = self.query_one("#mode-badge", ModeBadge)
+            badge.mode = ""
+            badge.role = ""
+            badge.agent = "prime-agent"
+            badge.model = model or "Prime default"
+            badge.provider = provider or "prime"
+            badge.execution_mode = "prime-rpc"
+        except Exception:  # noqa: BLE001 - connection works without mounted chrome
+            pass
+
+        log.add_success(
+            "Prime Agent connected through prime-agent-python-client (native Python RPC)."
+        )
+        route = f"{provider}/{model}" if provider and model else model or "Prime configured default"
+        log.add_info(f"Model route: {route} · ACP alternative: :connect acp prime-agent")
+        return True
 
     def _muse_cmd(self, args: str, log: ConversationLog) -> None:
         """Handle `:muse` subcommands.

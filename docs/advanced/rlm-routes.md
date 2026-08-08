@@ -8,7 +8,7 @@ on mechanism rather than on branding.
 | Route | Engine | Where it runs | Selector |
 | --- | --- | --- | --- |
 | [RLM Code](rlm-code.md) | Python, in process | Inside SuperQode | `runtime.backend: rlm-code` |
-| [Prime Agent](../providers/prime-agent.md) | TypeScript agent with an IPython kernel | Separate process over ACP or Python-hosted RPC | `:prime connect` or `runtime.backend: prime-agent` |
+| [Prime Agent](../providers/prime-agent.md) | TypeScript agent with an IPython kernel | Separate process over Python-hosted RPC; ACP optional | `:prime connect` or `runtime.backend: prime-agent` |
 | [Recursive tools](../local-recursive-dynamic-coding.md) | SuperQode agent loop | Inside SuperQode | `context_handle`, `spawn_harness` |
 
 ## Lineage

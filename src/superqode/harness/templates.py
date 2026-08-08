@@ -196,6 +196,47 @@ def pipy_template(*, name: str = "pipy") -> HarnessSpec:
     )
 
 
+def prime_agent_python_template(*, name: str = "prime-agent-python") -> HarnessSpec:
+    """Prime Agent hosted through the native Python RPC client."""
+    return HarnessSpec(
+        name=name,
+        description=("Prime Agent RLM coding loop hosted by prime-agent-python-client over RPC."),
+        flavor=HarnessFlavor.CODING,
+        runtime=RuntimeSpec(backend="prime-agent"),
+        model_policy=ModelPolicySpec(
+            profile="prime-agent",
+            config={"tool_profile": "core"},
+        ),
+        execution_policy=ExecutionPolicySpec(
+            sandbox="none",
+            approval_profile="none",
+            allow_read=True,
+            allow_write=True,
+            allow_shell=True,
+            allow_network=True,
+        ),
+        agents=(
+            AgentSpec(
+                id="prime-agent",
+                role="implementation",
+                tools=("read", "write", "edit", "bash"),
+            ),
+        ),
+        checks=ChecksSpec(enabled=False),
+        metadata={
+            "template": "prime-agent-python",
+            "builtin_harness": True,
+            "python_client": "prime-agent-python-client",
+            "rich_stream_events": True,
+            "continuity": "exact-resume",
+            "selection_warning": (
+                "Prime Agent owns tool execution and runs with the permissions of "
+                "the SuperQode process."
+            ),
+        },
+    )
+
+
 def tau_template(*, name: str = "tau") -> HarnessSpec:
     """Read-only first-party preset for Hugging Face Tau."""
     return HarnessSpec(
@@ -518,6 +559,7 @@ BUILTIN_TEMPLATES = {
     "no-tool": no_tool_template,
     "no_tool": no_tool_template,
     "pipy": pipy_template,
+    "prime-agent-python": prime_agent_python_template,
     "tau": tau_template,
     "gemma4-coding": gemma4_coding_template,
     "gemma4-no-tool": gemma4_no_tool_template,

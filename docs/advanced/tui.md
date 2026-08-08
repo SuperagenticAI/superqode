@@ -539,12 +539,14 @@ the same subscription instead, use `:grok api [model]`, which imports the local
 `grok login` session and routes through the CLI chat proxy (see the
 [BYOK provider docs](../providers/byok.md#grok-subscription-official-cli)).
 
-Prime Agent (Prime Intellect's RLM agent, ACP). The command root is `:prime`,
+Prime Agent is available through the native Python RPC client by default. Its
+ACP server remains a separate explicit route. The command root is `:prime`,
 with `:prime-agent` accepted as an alias:
 
 ```text
 :prime                        # command surface
-:prime connect [model]        # connect over ACP
+:prime connect [model]        # connect through prime-agent-python-client
+:connect acp prime-agent      # use Prime Agent's ACP server instead
 :prime models [search]        # list the catalog, grouped by provider
 :prime model                  # pick a model, then connect
 :prime model ollama/qwen3.5:9b   # pin a provider and model
@@ -564,6 +566,16 @@ Prime Agent fixes its model when the process starts, so `:prime model` pins the
 selection and reconnects instead of switching in place. Local models registered
 in `~/.prime/agent/models.json` need no API key. See the
 [Prime Agent provider docs](../providers/prime-agent.md).
+
+A repository HarnessSpec works directly in the TUI:
+
+```bash
+superqode --harness prime-agent.yaml
+```
+
+You can also switch while the TUI is open with
+`:harness switch ./prime-agent.yaml`. Both forms connect immediately through
+the Python RPC client; the next prompt does not require `:connect`.
 
 ## Optional Vim Navigation
 

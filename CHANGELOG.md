@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.83] - 2026-08-08
+
+### Changed
+
+- The Prime Agent subscription entry and `:prime connect` now use
+  `prime-agent-python-client` over native RPC. The independent ACP route
+  remains available with `:connect acp prime-agent`.
+- Prime Agent Python RPC sessions show a `PY RPC` badge in the TUI and preserve
+  pinned model, goal, autonomous-gate, and recursion-depth launch settings.
+
+### Fixed
+
+- `superqode --harness prime-agent.yaml` now connects the selected HarnessSpec
+  before the first TUI prompt instead of reporting `Not connected`.
+- `:harness switch ./prime-agent.yaml` now activates the Python RPC backend
+  immediately rather than routing the spec's provider/model through BYOK.
+
 ## [0.2.82] - 2026-08-08
 
 ### Changed

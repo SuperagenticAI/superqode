@@ -132,6 +132,16 @@ Normal output prints the completed response, `--stream` prints model deltas as
 they arrive, and `--json` returns the normalized harness result. The three
 modes use the same Python-hosted RPC backend.
 
+The same HarnessSpec connects in the TUI without a second connection command:
+
+```bash
+superqode --harness prime-agent.yaml
+```
+
+From an open TUI, use `:harness switch ./prime-agent.yaml`. SuperQode reports
+that `prime-agent-python-client` is active and shows `PY RPC` in the mode badge.
+The separate ACP route remains available as `:connect acp prime-agent`.
+
 The backend emits SuperQode `model_delta`, `thinking_delta`, `tool_call`,
 `tool_update`, `tool_result`, lifecycle, usage, and error events. Every mapped
 event includes `prime_event`, the original Prime RPC object.

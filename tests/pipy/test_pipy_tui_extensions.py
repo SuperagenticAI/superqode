@@ -53,13 +53,13 @@ def test_pipy_carries_a_permissions_warning():
     assert "no sandbox" in items["pipy"].warning
 
 
-def test_no_other_harness_gains_a_warning():
-    """The field is generic and opt in, so nothing else changes."""
+def test_host_permission_harnesses_carry_warnings():
+    """Harnesses that delegate host tool execution warn before selection."""
     items = harness_picker_items(include_all=True)
 
     warned = {item.id for item in items if item.warning}
 
-    assert warned == {"pipy"}
+    assert warned == {"pipy", "prime-agent-python"}
 
 
 def test_pipy_appears_with_the_native_harnesses():

@@ -868,6 +868,10 @@ class ModeBadge(Static):
                 t.append(" 🔗 ", style=f"bold {THEME['cyan']}")
                 t.append("ACP", style=f"bold {THEME['cyan']} reverse")
                 t.append(" • ", style=THEME["muted"])
+            elif self.execution_mode == "prime-rpc":
+                t.append(" 🐍 ", style=f"bold {THEME['success']}")
+                t.append("PY RPC", style=f"bold {THEME['success']} reverse")
+                t.append(" • ", style=THEME["muted"])
             elif self.execution_mode == "byok":
                 t.append(" ⚡ ", style=f"bold {THEME['success']}")
                 t.append("BYOK", style=f"bold {THEME['success']} reverse")

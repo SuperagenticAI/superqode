@@ -38,6 +38,21 @@ from superqode.app.welcome import _harness_display_name
 class SlashCommandMixin:
     """_handle_* slash-command dispatch."""
 
+    def _auto_connect_configured_prime_harness(self, log: ConversationLog) -> bool:
+        """Turn a startup Prime HarnessSpec selection into a live RPC session."""
+        pure = getattr(self, "_pure_mode", None)
+        configured_harness = os.getenv("SUPERQODE_HARNESS", "").strip()
+        if pure is None and configured_harness:
+            pure = self._ensure_pure_mode()
+        spec = getattr(pure, "_harness_spec", None) if pure is not None else None
+        if (
+            pure is None
+            or pure.session.connected
+            or getattr(getattr(spec, "runtime", None), "backend", "") != "prime-agent"
+        ):
+            return False
+        return bool(self._connect_prime_rpc("", log, pure=pure, select_default=False))
+
     def _handle_command(self, cmd: str, log: ConversationLog):
         # Command aliases for Vim-friendly shortcuts. The single-letter
         # :h/:s/:i shortcuts were retired in favour of the full commands.
@@ -1509,6 +1524,12 @@ class SlashCommandMixin:
 
         # Store file context for the message
         self._current_file_context = file_context
+
+        # A HarnessSpec supplied with ``--harness`` is selected before Textual
+        # starts. Prime Agent is self-contained, so make that selection a real
+        # Python RPC connection on the first prompt instead of asking the user
+        # to run an unrelated ``:connect`` command.
+        self._auto_connect_configured_prime_harness(log)
 
         # Check if in provider mode
         if hasattr(self, "_pure_mode") and self._pure_mode.session.connected:

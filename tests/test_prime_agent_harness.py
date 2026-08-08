@@ -48,6 +48,14 @@ def test_prime_backend_is_registered() -> None:
     assert isinstance(create_harness_backend("prime-agent"), PrimeAgentHarnessBackend)
 
 
+def test_builtin_prime_python_harness_selects_rpc_backend() -> None:
+    spec = get_harness_template("prime-agent-python")
+
+    assert spec.runtime.backend == "prime-agent"
+    assert spec.metadata["python_client"] == "prime-agent-python-client"
+    assert spec.metadata["rich_stream_events"] is True
+
+
 def test_settings_keep_launch_as_argv_and_resolve_session_directory(tmp_path: Path) -> None:
     settings = PrimeAgentSettings.from_request(_request(tmp_path))
 

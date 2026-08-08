@@ -54,6 +54,15 @@ def test_agents_carry_openness_and_transport_badges():
     assert droid.transport == "ACP"
 
 
+def test_prime_subscription_uses_python_rpc_while_acp_stays_explicit():
+    profile = get_connection_profile("prime-agent")
+
+    assert profile.connector == "prime-rpc"
+    assert profile.transport == "Python RPC"
+    assert profile.acp_agent is None
+    assert ":connect acp prime-agent" in profile.description
+
+
 def test_a_product_you_already_own_is_never_filed_as_installable():
     """Owning Codex is not the same as never having installed it.
 
@@ -1059,9 +1068,13 @@ def test_subscription_descriptions_state_their_real_transport():
     for profile in _SUBSCRIPTION_PROFILES:
         if profile.connector in _BROWSE_CONNECTORS:
             continue  # "Browse all ACP agents" is a menu row, not a transport
-        mentions_acp = "acp" in profile.description.lower()
+        description = profile.description.lower()
+        mentions_acp = "acp" in description
+        presents_acp_as_transport = "over acp" in description or "via acp" in description
         goes_over_acp = profile.connector == "acp"
-        if mentions_acp != goes_over_acp:
+        if (goes_over_acp and not mentions_acp) or (
+            not goes_over_acp and presents_acp_as_transport
+        ):
             mismatched.append((profile.id, profile.connector, profile.description))
 
     assert mismatched == []

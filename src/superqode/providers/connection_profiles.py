@@ -7,6 +7,7 @@ profile declares a ``connector`` that the TUI/CLI dispatches on:
     runtime      self-contained runtime (own model+auth), e.g. codex-sdk
     copilot      one Copilot subscription entry with SDK/CLI route selection
     acp          a specific ACP agent by short_name, e.g. "claude" or "grok"
+    prime-rpc    Prime Agent hosted through prime-agent-python-client
     byok         the BYOK provider/model picker, optionally pinned to one provider
     local        the local provider/model picker
     acp-picker   the generic "pick any ACP agent" list
@@ -707,17 +708,17 @@ _AGENT_PROFILES: List[ConnectionProfile] = [
         id="prime-agent",
         harness_openness="open",
         model_openness="multi-model",
-        transport="ACP",
+        transport="Python RPC",
         label="Prime Agent (RLM)",
         description=(
-            "Prime Intellect's RLM coding agent over ACP, on a provider you already "
-            "pay for (ChatGPT, Claude, GitHub Copilot) or a local model. Commands: :prime"
+            "Prime Intellect's RLM coding agent hosted by prime-agent-python-client, "
+            "on a subscription provider or local model. ACP remains available from "
+            ":connect acp prime-agent"
         ),
         # The agent itself is free and MIT. What the login buys is the upstream
         # model, so this sits with the vendor accounts rather than with BYOK.
-        connector="acp",
+        connector="prime-rpc",
         menu=CONNECT_MENU_VENDORS,
-        acp_agent="prime-agent",
         detect=_prime_agent_ready,
         product_detect=_prime_agent_present,
         unavailable_hint=(

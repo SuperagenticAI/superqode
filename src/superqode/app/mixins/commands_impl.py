@@ -3198,7 +3198,7 @@ class CommandImplMixin:
 
     # ---- Prime Intellect Prime Agent :prime command surface ----------------
     def _prime_cmd(self, args: str, log) -> None:
-        """Handle Prime Agent (RLM) over ACP."""
+        """Handle Prime Agent (RLM) through Python RPC or explicit ACP."""
         parts = (args or "").split(maxsplit=1)
         sub = parts[0].strip().lower() if parts and parts[0].strip() else "help"
         rest = parts[1].strip() if len(parts) > 1 else ""
@@ -3297,19 +3297,10 @@ class CommandImplMixin:
         return updated
 
     def _prime_connect(self, selector: str, log) -> None:
-        """Connect Prime Agent over ACP with the pinned start-time settings."""
-        from superqode.providers import prime_agent as prime
-
-        if not prime.is_installed():
-            log.add_error("Prime Agent is not installed.")
-            log.add_info(f"  Install: {prime.INSTALL_HINT}")
+        """Connect Prime Agent with the native Python RPC client."""
+        if not self._connect_prime_rpc(selector, log):
             return
-        chosen = (selector or "").strip()
-        if chosen:
-            self._prime_set_opts(model=chosen)
-        opts = self._prime_opts()
-        self._connect_acp_cmd(("prime-agent " + opts.model).strip(), log)
-        pinned = opts.describe()
+        pinned = self._prime_opts().describe()
         if pinned:
             log.add_info(f"Prime Agent launch: {', '.join(pinned)}")
 
@@ -4047,7 +4038,18 @@ class CommandImplMixin:
 
         primary = str(entry.spec.model_policy.primary or "")
         needs_model = False
-        if "/" in primary and auto_connect:
+        if entry.runtime == "prime-agent" and auto_connect:
+            connected = self._connect_prime_rpc(
+                primary,
+                log,
+                pure=pure,
+                select_default=False,
+                session_id=previous_session_id,
+            )
+            needs_model = not connected
+            if connected:
+                log.add_meta(f"Harness {entry.id} is active through native Python RPC.")
+        elif "/" in primary and auto_connect:
             provider_id, model_id = primary.split("/", 1)
             from superqode.providers.dynamic import resolve_provider_def
             from superqode.providers.registry import ProviderCategory
