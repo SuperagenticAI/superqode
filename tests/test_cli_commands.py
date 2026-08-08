@@ -1608,6 +1608,51 @@ checks:
             assert payload["content"] == "ran:hello"
             assert payload["harness"] == "demo"
 
+    def test_harness_run_stream_prints_normalized_model_delta(self, runner, monkeypatch):
+        from superqode.harness import HarnessEvent
+
+        class FakeSession:
+            async def stream(self, *_args, **_kwargs):
+                yield HarnessEvent(type="start")
+                yield HarnessEvent(type="model_delta", data={"text": "PRIME_STREAM_OK"})
+                yield HarnessEvent(type="end")
+
+        class FakeKernel:
+            async def session(self, _session_id):
+                return FakeSession()
+
+        async def fake_init_harness(_spec, *, store):
+            assert store is not None
+            return FakeKernel()
+
+        monkeypatch.setattr("superqode.harness.init_harness", fake_init_harness)
+        with runner.isolated_filesystem():
+            init = runner.invoke(
+                cli_main,
+                ["harness", "init", "demo", "--template", "no-tool", "--output", "harness.yaml"],
+            )
+            assert init.exit_code == 0
+
+            result = runner.invoke(
+                cli_main,
+                [
+                    "harness",
+                    "run",
+                    "--spec",
+                    "harness.yaml",
+                    "--prompt",
+                    "hello",
+                    "--provider",
+                    "test",
+                    "--model",
+                    "model",
+                    "--stream",
+                ],
+            )
+
+            assert result.exit_code == 0
+            assert result.output == "PRIME_STREAM_OK\n"
+
     def test_harness_run_json_executes_non_single_workflow(self, runner, monkeypatch):
         class FakeRuntime:
             def __init__(self, **kwargs):

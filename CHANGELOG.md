@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.80] - 2026-08-08
+
+### Fixed
+
+- `superqode harness run --stream` prints normalized `model_delta` output from
+  the Prime Agent RPC backend and other rich streaming backends. The command
+  previously rendered only the legacy `delta` event name, so a successful live
+  Prime run appeared as a blank line.
+
 ## [0.2.79] - 2026-08-08
 
 ### Added

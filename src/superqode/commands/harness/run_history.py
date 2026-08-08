@@ -166,7 +166,7 @@ def harness_run(
                 events.append(item)
                 if json_output:
                     click.echo(json.dumps(item))
-                elif event.type == "delta":
+                elif event.type in {"delta", "model_delta"}:
                     click.echo(event.data.get("text", ""), nl=False)
             if json_output:
                 return None
