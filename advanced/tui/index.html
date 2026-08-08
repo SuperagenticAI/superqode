@@ -117,8 +117,9 @@ Summarize what changed.
 :grok models                  # list the signed-in CLI&#39;s model catalog
 :grok status
 :grok login
-</code></pre></div> <p><code>:connect grok</code> runs <strong>Grok Build</strong>, xAI's own coding agent, over ACP. To run <strong>SuperQode's harness</strong> on the same subscription instead, use <code>:grok api [model]</code>, which imports the local <code>grok login</code> session and routes through the CLI chat proxy (see the <a href=../../providers/byok/#grok-subscription-official-cli>BYOK provider docs</a>).</p> <p>Prime Agent (Prime Intellect's RLM agent, ACP). The command root is <code>:prime</code>, with <code>:prime-agent</code> accepted as an alias:</p> <div class=highlight><pre><span></span><code>:prime                        # command surface
-:prime connect [model]        # connect over ACP
+</code></pre></div> <p><code>:connect grok</code> runs <strong>Grok Build</strong>, xAI's own coding agent, over ACP. To run <strong>SuperQode's harness</strong> on the same subscription instead, use <code>:grok api [model]</code>, which imports the local <code>grok login</code> session and routes through the CLI chat proxy (see the <a href=../../providers/byok/#grok-subscription-official-cli>BYOK provider docs</a>).</p> <p>Prime Agent is available through the native Python RPC client by default. Its ACP server remains a separate explicit route. The command root is <code>:prime</code>, with <code>:prime-agent</code> accepted as an alias:</p> <div class=highlight><pre><span></span><code>:prime                        # command surface
+:prime connect [model]        # connect through prime-agent-python-client
+:connect acp prime-agent      # use Prime Agent&#39;s ACP server instead
 :prime models [search]        # list the catalog, grouped by provider
 :prime model                  # pick a model, then connect
 :prime model ollama/qwen3.5:9b   # pin a provider and model
@@ -132,7 +133,8 @@ Summarize what changed.
 :prime doctor                 # background service health
 :prime update                 # run Prime Agent&#39;s own updater
 :prime login
-</code></pre></div> <p>Prime Agent fixes its model when the process starts, so <code>:prime model</code> pins the selection and reconnects instead of switching in place. Local models registered in <code>~/.prime/agent/models.json</code> need no API key. See the <a href=../../providers/prime-agent/ >Prime Agent provider docs</a>.</p> <h2 id=optional-vim-navigation>Optional Vim Navigation<a class=headerlink href=#optional-vim-navigation title="Permanent link">&para;</a></h2> <p>Vim mode is optional. It adds Normal, Insert, Command, and Search states without removing the normal SuperQode command surface:</p> <div class=highlight><pre><span></span><code>:vim
+</code></pre></div> <p>Prime Agent fixes its model when the process starts, so <code>:prime model</code> pins the selection and reconnects instead of switching in place. Local models registered in <code>~/.prime/agent/models.json</code> need no API key. See the <a href=../../providers/prime-agent/ >Prime Agent provider docs</a>.</p> <p>A repository HarnessSpec works directly in the TUI:</p> <div class=highlight><pre><span></span><code>superqode<span class=w> </span>--harness<span class=w> </span>prime-agent.yaml
+</code></pre></div> <p>You can also switch while the TUI is open with <code>:harness switch ./prime-agent.yaml</code>. Both forms connect immediately through the Python RPC client; the next prompt does not require <code>:connect</code>.</p> <h2 id=optional-vim-navigation>Optional Vim Navigation<a class=headerlink href=#optional-vim-navigation title="Permanent link">&para;</a></h2> <p>Vim mode is optional. It adds Normal, Insert, Command, and Search states without removing the normal SuperQode command surface:</p> <div class=highlight><pre><span></span><code>:vim
 :vim on
 :vim off
 :vim tutor
