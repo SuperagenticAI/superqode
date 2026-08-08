@@ -119,6 +119,7 @@ superqode harness init my-coder -t qwen-coding
 | `coding` | Any model (generic full coding agent) |
 | `no-tool` | Model-only reasoning/review, no tools |
 | `tau` | Hugging Face Tau event-first harness (optional, read-only preset) |
+| `prime-agent-python` | Prime Agent RLM loop hosted by prime-agent-python-client over RPC |
 
 List them anytime with `superqode harness list-templates`.
 

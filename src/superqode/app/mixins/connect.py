@@ -28,6 +28,14 @@ from superqode.app.recipes import PromptCompletionCandidate
 from superqode.app.session_state import get_session
 
 
+# Connectors whose handler already explains what is missing: the dependency
+# install picker (copilot, runtime), a readiness report (external-cli), or the
+# vendor's own install hint (prime-rpc). Answering for them with the generic
+# "needs setup" line replaces guidance the user can act on with a dead end, so
+# an unavailable profile on these connectors still reaches its handler.
+SELF_GUIDED_SETUP_CONNECTORS = frozenset({"copilot", "external-cli", "prime-rpc", "runtime"})
+
+
 def _menu_history_label(menu: str) -> str:
     """Title of a connect screen, for the back control's tooltip."""
     from superqode.providers.connection_profiles import CONNECT_MENU_TITLES
@@ -433,8 +441,9 @@ class ConnectMixin:
                         ),
                     )
                     return
-            log.add_info(f"{profile.label} needs setup: {profile.unavailable_hint}")
-            return
+            if conn not in SELF_GUIDED_SETUP_CONNECTORS:
+                log.add_info(f"{profile.label} needs setup: {profile.unavailable_hint}")
+                return
         if conn == "copilot":
             self._connect_copilot_subscription(profile, log)
         elif conn == "prime-rpc":
