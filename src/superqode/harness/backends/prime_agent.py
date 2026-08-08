@@ -95,9 +95,7 @@ class PrimeAgentHarnessBackend:
     async def run(self, request: HarnessBackendRequest) -> HarnessBackendResult:
         events = [event async for event in self._events(request)]
         text = "".join(
-            str(event.data.get("text") or "")
-            for event in events
-            if event.type == "model_delta"
+            str(event.data.get("text") or "") for event in events if event.type == "model_delta"
         )
         stats_event = next((event for event in reversed(events) if event.type == "usage"), None)
         stats = stats_event.data if stats_event is not None else {}
