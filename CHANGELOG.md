@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.82] - 2026-08-08
+
+### Changed
+
+- SuperQode now requires `prime-agent-python-client` 0.2.x, bringing the
+  hardened Python RPC lifecycle, cancellation, capability, event-helper, and
+  structured-logging APIs into the Prime Agent harness integration.
+- Release metadata is aligned at 0.2.82 after the invalid 0.2.81 tag was
+  rejected by the release tag gate.
+
 ## [0.2.80] - 2026-08-08
 
 ### Fixed
