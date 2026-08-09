@@ -157,6 +157,7 @@ Runtime backends are interchangeable execution adapters behind the same harness 
 | `claude-agent-sdk` | optional | You want Anthropic Claude Agent SDK runtime with SuperQode harness configuration and policy |
 | `deepagents` | optional | You want DeepAgents graph, middleware, and subagent behavior for tool-capable coding harnesses |
 | `pydanticai` | optional | You want PydanticAI behavior with SuperQode tools and HarnessSpec policy |
+| `rlm` | built-in | You want a native RLM loop where the model receives one persistent Python tool and builds context through code |
 | `rlm-code` | optional | You want RLM Code v0.1.11+ recursive REPL execution, LID context isolation, and native trajectory evidence behind a HarnessSpec |
 | `pipy` | built-in | You want parallel tools, a session tree, and pure host permissions with no approval or sandbox layer |
 | `tau` | optional | You want Hugging Face Tau's event-first Python harness and native JSONL sessions behind Harness Protocol |
@@ -171,6 +172,12 @@ It is the one native harness that executes tools with the permissions of the
 process: no approvals, no sandbox, no network policy. Selecting it is opting
 into that posture, and the picker warns before you do. `core` remains the
 default harness. See [PiPy](pipy.md).
+
+The `rlm` backend is SuperQode's native recursive-language-model harness. The
+model receives one persistent Python tool; repository inspection, edits and
+commands are Python operations inside that environment rather than separate
+model tools. Its initial host-kernel profile has the permissions of the
+SuperQode process and is guarded in unattended mode. See [Native RLM](rlm.md).
 
 The `tau` backend is selectable in `:harness` after installing
 `superqode[tau]`. Its maintained preset exposes only Tau's `read` tool because

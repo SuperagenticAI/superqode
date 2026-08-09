@@ -104,6 +104,7 @@ superqode harness init my-coder -t qwen-coding
 | --- | --- |
 | `core` | Lean native harness with read, write, edit, and shell tools |
 | `workbench` | Complete native coding workbench |
+| `rlm` | Native one-tool RLM harness with a persistent Python environment |
 | `pipy` | Event-first loop, parallel tools, session tree, pure host permissions |
 | `benchmark-coding` | Autonomous headless benchmark work in an external sandbox |
 | `qwen-coding` | Qwen Coder (low temperature, native tools, long agentic sessions) |

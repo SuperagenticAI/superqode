@@ -212,7 +212,7 @@ class PiPyHarnessProtocolAdapter:
 # --------------------------------------------------------------------------- #
 
 
-def translate_event(event: Any) -> list[HarnessEvent]:
+def translate_event(event: Any, *, runtime: str = "pipy") -> list[HarnessEvent]:
     """Map one PiPy event onto zero or more protocol events.
 
     Emitted in SuperQode's runtime vocabulary rather than the canonical one, so
@@ -221,7 +221,7 @@ def translate_event(event: Any) -> list[HarnessEvent]:
     kind = getattr(event, "type", "")
 
     if kind == "agent_start":
-        return [HarnessEvent(type="run_start", data={"runtime": "pipy"})]
+        return [HarnessEvent(type="run_start", data={"runtime": runtime})]
 
     if kind == "message_update":
         delta = _delta_text(event)
@@ -253,7 +253,7 @@ def translate_event(event: Any) -> list[HarnessEvent]:
         )
 
     if kind == "tool_execution_end":
-        return [
+        translated = [
             HarnessEvent(
                 type="tool_result",
                 data={
@@ -265,6 +265,13 @@ def translate_event(event: Any) -> list[HarnessEvent]:
                 },
             )
         ]
+        details = getattr(event.result, "details", None)
+        if isinstance(details, dict):
+            for child_event in details.get("agent_events") or []:
+                mapped = _subagent_event(child_event)
+                if mapped is not None:
+                    translated.append(mapped)
+        return translated
 
     if kind == "turn_end":
         message = event.message
@@ -368,6 +375,34 @@ def _usage_dict(usage: Any) -> dict[str, Any]:
         "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
         "cost_usd": float(getattr(getattr(usage, "cost", None), "total", 0.0) or 0.0),
     }
+
+
+def _subagent_event(event: Any) -> HarnessEvent | None:
+    if not isinstance(event, dict):
+        return None
+    kind = str(event.get("type") or "")
+    agent = event.get("agent") if isinstance(event.get("agent"), dict) else {}
+    data = {
+        "agent_id": str(agent.get("id") or ""),
+        "parent_id": str(agent.get("parent_id") or ""),
+        "status": str(agent.get("status") or ""),
+        "prompt": str(agent.get("prompt") or ""),
+        "model": agent.get("model"),
+        "result": event.get("result") or agent.get("result"),
+        "error": event.get("error") or agent.get("error"),
+        "usage": dict(agent.get("usage") or {}) if isinstance(agent.get("usage"), dict) else {},
+        "source_event": kind,
+    }
+    if kind in {"agent.spawned", "agent.reattached"}:
+        return HarnessEvent(type="subagent_start", data=data)
+    if kind in {"agent.completed", "agent.failed", "agent.cancelled"}:
+        return HarnessEvent(type="subagent_result", data=data)
+    if kind == "agent.message":
+        return HarnessEvent(
+            type="subagent_message",
+            data={**data, "message": event.get("message"), "mode": event.get("mode")},
+        )
+    return None
 
 
 __all__ = ["DEFAULT_TOOLS", "PiPyHarnessProtocolAdapter", "translate_event"]

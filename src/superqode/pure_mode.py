@@ -725,6 +725,63 @@ class PureMode:
                     ),
                 )
             return ""
+        if event.type == "subagent_start":
+            if self.on_tool_call:
+                self.on_tool_call(
+                    "rlm.run",
+                    {
+                        "agent_id": event.data.get("agent_id"),
+                        "parent_id": event.data.get("parent_id"),
+                        "prompt": event.data.get("prompt"),
+                        "status": event.data.get("status"),
+                    },
+                )
+            return ""
+        if event.type == "subagent_result":
+            if self.on_tool_result:
+                success = str(event.data.get("status") or "") == "completed"
+                self.on_tool_result(
+                    "rlm.run",
+                    ToolResult(
+                        success=success,
+                        output=str(event.data.get("result") or ""),
+                        error=(str(event.data.get("error") or "") or None),
+                        metadata=dict(event.data),
+                    ),
+                )
+            return ""
+        if event.type == "autonomous_gates_start":
+            if self.on_tool_call:
+                self.on_tool_call(
+                    "rlm.gates",
+                    {
+                        "round": event.data.get("round"),
+                        "gates": event.data.get("gates") or [],
+                        "host_operation": True,
+                    },
+                )
+            return ""
+        if event.type == "autonomous_gates_result":
+            passed = bool(event.data.get("passed"))
+            results = event.data.get("results") or []
+            output = "\n".join(
+                f"{'PASS' if item.get('ok') else 'FAIL'}  {item.get('command')}"
+                for item in results
+                if isinstance(item, dict)
+            )
+            if self.on_tool_result:
+                self.on_tool_result(
+                    "rlm.gates",
+                    ToolResult(
+                        success=passed,
+                        output=output or ("All gates passed." if passed else "A gate failed."),
+                        metadata=dict(event.data) | {"host_operation": True},
+                    ),
+                )
+            return ""
+        if event.type == "error":
+            error = str(event.data.get("error") or "RLM run failed").strip()
+            return f"\n\n⚠️  {error}\n"
         if event.type == "turn_complete":
             usage = event.data.get("usage")
             if isinstance(usage, dict):

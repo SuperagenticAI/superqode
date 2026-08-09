@@ -48,6 +48,8 @@ Every `SUPERQODE_*` variable in one place. Most behavior is configurable per-har
 | `SUPERQODE_HARNESS` | path | unset | HarnessSpec YAML/JSON to load on start. |
 | `SUPERQODE_PIPY_DIR` | path | `~/.superqode/pipy` | Root for everything the PiPy harness writes. |
 | `SUPERQODE_PIPY_SESSION_DIR` | path | `<pipy dir>/sessions` | Where PiPy stores its session tree, one directory per working directory. |
+| `SUPERQODE_RLM_DIR` | path | `~/.superqode/rlm` | Root for native RLM sessions and runtime state. |
+| `SUPERQODE_RLM_SESSION_DIR` | path | `<rlm dir>/sessions` | Where the native RLM harness stores its session trees. |
 | `SUPERQODE_PURE_PERMISSIONS_HEADLESS` | `1` to allow | unset | Allow a harness with no approvals or sandbox, such as PiPy, to run headless. Unattended runs have no reviewer, so this must be set deliberately. |
 | `SUPERQODE_CONNECT` | profile name | unset | Auto-connect a connection profile when the TUI starts (set by `--connect`). |
 | `SUPERQODE_STDIN_WAIT` | seconds | `0.2` | How long a headless run waits for piped stdin before deciding none was sent. |

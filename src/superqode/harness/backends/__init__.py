@@ -21,6 +21,7 @@ from .rlm_code import (
     RLMCodeSettings,
     rlm_code_installation_status,
 )
+from .rlm import RLMHarnessBackend
 from .registry import (
     backend_capabilities,
     create_harness_backend,
@@ -54,6 +55,7 @@ __all__ = [
     "PrimeAgentSettings",
     "RLMCodeHarnessBackend",
     "RLMCodeSettings",
+    "RLMHarnessBackend",
     "RuntimeHarnessBackend",
     "TauHarnessBackend",
     "backend_capabilities",

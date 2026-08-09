@@ -16,6 +16,7 @@ from .managed import ManagedAgentHarnessBackend
 from .pydanticai import PydanticAIHarnessBackend
 from .prime_agent import PrimeAgentHarnessBackend, prime_agent_installation_status
 from .rlm_code import RLMCodeHarnessBackend
+from .rlm import RLMHarnessBackend
 from .runtime import (
     ADKHarnessBackend,
     ClaudeAgentSDKHarnessBackend,
@@ -41,6 +42,7 @@ _OPTIONAL_BACKENDS = {
     "pydanticai",
     "prime-agent",
     "rlm-code",
+    "rlm",
     "tau",
 }
 
@@ -68,6 +70,8 @@ def create_harness_backend(name: str | None) -> HarnessBackend:
         return PrimeAgentHarnessBackend()
     if resolved == "rlm-code":
         return RLMCodeHarnessBackend()
+    if resolved == "rlm":
+        return RLMHarnessBackend()
     if resolved == "pipy":
         return PiPyHarnessBackend()
     if resolved == "tau":

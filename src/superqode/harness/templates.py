@@ -196,6 +196,59 @@ def pipy_template(*, name: str = "pipy") -> HarnessSpec:
     )
 
 
+def rlm_template(*, name: str = "rlm") -> HarnessSpec:
+    """Native recursive coding harness with one persistent Python tool."""
+    return HarnessSpec(
+        name=name,
+        description="Native RLM coding harness with one persistent Python tool.",
+        flavor=HarnessFlavor.CODING,
+        runtime=RuntimeSpec(
+            backend="rlm",
+            config={
+                "max_depth": 3,
+                "max_children": 8,
+                "max_parallel": 4,
+                "durable_children": True,
+                "autonomous_max_rounds": 3,
+                "gate_timeout": 120,
+            },
+        ),
+        model_policy=ModelPolicySpec(
+            profile="rlm",
+            config={
+                "system_level": "core",
+                "tool_profile": "core",
+                "parallel_tools": False,
+            },
+        ),
+        execution_policy=ExecutionPolicySpec(
+            sandbox="none",
+            approval_profile="none",
+            allow_read=True,
+            allow_write=True,
+            allow_shell=True,
+            allow_network=True,
+        ),
+        agents=(AgentSpec(id="rlm", role="recursive-coding", tools=("python",)),),
+        checks=ChecksSpec(enabled=False),
+        metadata={
+            "template": "rlm",
+            "builtin_harness": True,
+            "model_tool_count": 1,
+            "persistent_python": True,
+            "durable_children": True,
+            "rich_stream_events": True,
+            "continuity": "context-replay",
+            "kernel_continuity": "serializable-checkpoint",
+            "pure_permissions": True,
+            "selection_warning": (
+                "Host Python permissions: RLM Python runs with the permissions of "
+                "the SuperQode process, with no approval prompts or sandbox."
+            ),
+        },
+    )
+
+
 def prime_agent_python_template(*, name: str = "prime-agent-python") -> HarnessSpec:
     """Prime Agent hosted through the native Python RPC client."""
     return HarnessSpec(
@@ -559,6 +612,7 @@ BUILTIN_TEMPLATES = {
     "no-tool": no_tool_template,
     "no_tool": no_tool_template,
     "pipy": pipy_template,
+    "rlm": rlm_template,
     "prime-agent-python": prime_agent_python_template,
     "tau": tau_template,
     "gemma4-coding": gemma4_coding_template,

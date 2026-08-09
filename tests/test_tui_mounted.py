@@ -196,7 +196,15 @@ async def test_harness_command_opens_complete_integration_switcher():
         assert app._prompt_completion_visible is False
         assert app._awaiting_harness_selection is True
         ids = [entry.id for entry in app._harness_selection_list]
-        assert ids[:6] == ["core", "pipy", "workbench", "no-tool", "codex", "claude"]
+        assert ids[:7] == [
+            "core",
+            "rlm",
+            "pipy",
+            "workbench",
+            "no-tool",
+            "codex",
+            "claude",
+        ]
         assert app._harness_highlighted_index == 0
         assert "kimi-coding" in ids
         assert "kimi-k3-coding" in ids
@@ -427,8 +435,8 @@ async def test_mounted_harness_switcher_uses_keyboard_navigation(tmp_path, monke
         await pilot.pause()
 
         assert app._awaiting_harness_selection is False
-        assert app._pure_mode.session.harness_name == "pipy"
-        assert "Harness switched: PiPy · from Core" in "\n".join(line.text for line in log.lines)
+        assert app._pure_mode.session.harness_name == "rlm"
+        assert "Harness switched: RLM · from Core" in "\n".join(line.text for line in log.lines)
 
 
 async def test_mounted_harness_switcher_toggles_catalog_and_cancels(tmp_path, monkeypatch):

@@ -22,6 +22,7 @@ from .templates import (
     core_template,
     no_tool_template,
     pipy_template,
+    rlm_template,
     tau_template,
     workbench_template,
 )
@@ -147,6 +148,7 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
     workbench = workbench_template()
     no_tool = no_tool_template(name="no-tool")
     pipy = pipy_template()
+    rlm = rlm_template()
     tau = tau_template()
     from .tau_adapter import tau_installation_status
 
@@ -162,6 +164,16 @@ def builtin_harnesses() -> tuple[HarnessDefinition, ...]:
             loop_policy=core_loop_policy(),
             aliases=("minimal",),
             default=True,
+        ),
+        HarnessDefinition(
+            id="rlm",
+            display_name="RLM",
+            description=rlm.description,
+            runtime=rlm.runtime.backend,
+            source="built-in",
+            spec=rlm,
+            loop_policy=core_loop_policy(),
+            aliases=("rlm-native",),
         ),
         HarnessDefinition(
             id="pipy",

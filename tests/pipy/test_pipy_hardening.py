@@ -193,7 +193,7 @@ async def test_harnesses_with_a_policy_stack_are_unaffected(monkeypatch):
         entry.id for entry in list_harnesses(".") if entry.spec.metadata.get("pure_permissions")
     }
 
-    assert guarded == {"pipy"}
+    assert guarded == {"pipy", "rlm"}
 
 
 # -- model catalog ----------------------------------------------------------- #

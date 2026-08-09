@@ -64,6 +64,7 @@ def discover_harness_adapters(
     if include_builtins:
         from .catalog import builtin_harnesses
         from .backends.rlm_code import rlm_code_installation_status
+        from .rlm_adapter import RLMHarnessProtocolAdapter
         from .rlm_code_adapter import RLMCodeHarnessProtocolAdapter
         from .tau_adapter import TauHarnessProtocolAdapter, tau_installation_status
 
@@ -73,7 +74,11 @@ def discover_harness_adapters(
                 # adapters below; wrapping their spec as Core would execute the
                 # wrong engine and advertise the wrong capabilities.
                 continue
-            adapter = CoreHarnessProtocolAdapter(harness.spec, adapter_id=harness.id)
+            adapter = (
+                RLMHarnessProtocolAdapter()
+                if harness.id == "rlm"
+                else CoreHarnessProtocolAdapter(harness.spec, adapter_id=harness.id)
+            )
             entries.append(
                 HarnessAdapterDefinition(
                     id=harness.id,

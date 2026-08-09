@@ -59,7 +59,7 @@ def test_host_permission_harnesses_carry_warnings():
 
     warned = {item.id for item in items if item.warning}
 
-    assert warned == {"pipy", "prime-agent-python"}
+    assert warned == {"pipy", "prime-agent-python", "rlm"}
 
 
 def test_pipy_appears_with_the_native_harnesses():

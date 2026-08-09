@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.84] - 2026-08-09
+
+### Added
+
+- A first-party `rlm` harness with exactly one model-facing tool: a persistent
+  Python environment. Repository reads, searches, edits and commands are
+  performed through Python objects rather than separate model tool schemas.
+- Native RLM Harness Protocol streaming, process-lifetime Python state,
+  workspace-scoped JSONL sessions, TUI/catalog selection, explicit host
+  permission warnings, and independent state under `~/.superqode/rlm/`.
+- Live child RLM sessions created through `rlm.run()` and `rlm.run_batch()`,
+  with parent/child ancestry, handles, bounded parallelism and recursion,
+  follow-up messages, steering, waiting, cancellation, deletion, Harness
+  Protocol lifecycle evidence, and `:rlm` TUI commands.
+- Durable RLM child journals recover completed results and mark unfinished work
+  as interrupted after a process restart. Persisted goals and bounded
+  autonomous completion gates can retry a native RLM turn from real host
+  verification while preserving `python` as the only model-facing tool.
+- Automatic RLM kernel checkpoints restore independently serializable Python
+  variables after restart while safely skipping live handles, modules, locks
+  and corrupt values that cannot cross a process boundary.
+- Real-provider child RLMs run in detached Python workers with atomic request,
+  result and control files. Supervisor journals reattach live workers after a
+  TUI restart, validate worker identity before trusting a PID, preserve global
+  recursion depth and model overrides, and route follow-up, steer and cancel
+  operations across the process boundary.
+
 ## [0.2.83] - 2026-08-08
 
 ### Changed
